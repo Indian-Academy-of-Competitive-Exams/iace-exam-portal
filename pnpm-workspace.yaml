@@ -1,0 +1,12 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10+ blocks postinstall scripts unless a package is listed here.
+# These are the ones that genuinely need to build/download binaries.
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - esbuild
+  - msgpackr-extract

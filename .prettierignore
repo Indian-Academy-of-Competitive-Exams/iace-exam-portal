@@ -1,0 +1,7 @@
+node_modules
+dist
+build
+.turbo
+pnpm-lock.yaml
+prisma/migrations
+docs/design/design-system.html
