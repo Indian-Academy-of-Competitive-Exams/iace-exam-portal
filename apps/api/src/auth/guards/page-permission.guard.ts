@@ -1,0 +1,36 @@
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { REQUIRED_PAGE_KEY } from '../decorators';
+import { type AuthenticatedUser } from '../auth.types';
+
+/**
+ * Page-level admin permissions. Each admin screen declares the `Page.code` it
+ * needs; the super admin bypasses the check entirely, which is how the seeded
+ * bootstrap account can reach everything before any grants exist.
+ *
+ * Codes are carried in the access token, so this costs nothing at request time;
+ * a permission change takes effect on the next refresh (≤ the access TTL).
+ */
+@Injectable()
+export class PagePermissionGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredPage = this.reflector.getAllAndOverride<string | undefined>(REQUIRED_PAGE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!requiredPage) return true;
+
+    const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
+    if (!user || user.actor !== 'ADMIN') {
+      throw new ForbiddenException('Admin access required');
+    }
+    if (user.isSuperAdmin) return true;
+
+    if (!user.pages.includes(requiredPage)) {
+      throw new ForbiddenException(`You do not have access to "${requiredPage}"`);
+    }
+    return true;
+  }
+}
