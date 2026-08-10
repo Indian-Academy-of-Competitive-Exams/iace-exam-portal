@@ -2,9 +2,10 @@
   "name": "iace",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.34.5",
+  "packageManager": "pnpm@11.21.0",
   "engines": {
-    "node": ">=20.11.0"
+    "node": ">=22.13.0",
+    "pnpm": ">=11.0.0"
   },
   "scripts": {
     "dev": "turbo run dev",

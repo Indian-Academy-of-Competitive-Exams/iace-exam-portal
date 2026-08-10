@@ -3,6 +3,11 @@
   "display": "IACE node (NestJS)",
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    // The API runs on Node 22 (see .nvmrc / engines), which supports ES2023 in
+    // full — so nothing needs downlevelling and `toSorted`, `findLast` and
+    // friends are available. The browser packages stay on the ES2022 baseline.
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "CommonJS",
     "moduleResolution": "Node",
     "isolatedModules": false,

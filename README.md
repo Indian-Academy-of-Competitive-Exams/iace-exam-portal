@@ -16,12 +16,15 @@ TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** fo
 
 ## Local prerequisites
 
-Node 20+ (Node 22 recommended — see *Notes* below), pnpm 10, Docker Desktop, Git. Local services (Postgres + Redis + MinIO) run via `docker compose up`.
+**Node 22 LTS** (pinned in `.nvmrc`; `nvm use` picks it up), pnpm 11 via corepack, Docker Desktop, Git. Local services (Postgres + Redis + MinIO) run via `docker compose up`.
+
+`engine-strict` is on, so an older Node fails immediately with a clear message instead of part-way through a build.
 
 ## How to run
 
 ```bash
 cp .env.example .env       # then edit if a port is already taken locally
+nvm use                    # Node 22 LTS, from .nvmrc
 corepack enable            # activates the pinned pnpm from package.json
 docker compose up -d       # postgres + redis + minio (+ one-shot bucket create)
 pnpm install
@@ -55,5 +58,5 @@ OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is pri
 
 ## Notes
 
-- **Node:** the AWS SDK v3 warns that releases after January 2027 will require Node ≥22. Node 22 also unlocks pnpm 11. Nothing is blocked today.
 - **Ports:** everything is configurable in `.env`. If `5432` is taken by another Postgres, set `POSTGRES_PORT` **and** the port inside `DATABASE_URL`.
+- **Node 22 is the floor, not a suggestion.** pnpm 11 requires it, the AWS SDK v3 requires it from January 2027, and Node 20 is out of LTS. The API compiles to ES2023 on the strength of it.

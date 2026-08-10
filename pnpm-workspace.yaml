@@ -2,11 +2,22 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
-# pnpm 10+ blocks postinstall scripts unless a package is listed here.
-# These are the ones that genuinely need to build/download binaries.
-onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
-  - prisma
-  - esbuild
-  - msgpackr-extract
+# pnpm blocks postinstall scripts unless a package is allowed here.
+# These are the ones that genuinely need to build or download binaries.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  msgpackr-extract: true
+
+# pnpm 11 holds back very recently published versions as supply-chain
+# protection. These exact versions are the ones we pinned deliberately, so
+# they are allowed through; anything else still waits out the release age.
+minimumReleaseAgeExclude:
+  - '@nestjs/common@11.1.29'
+  - '@nestjs/core@11.1.29'
+  - '@nestjs/platform-express@11.1.29'
+  - bullmq@6.0.10
+  - lucide-react@1.31.0
+  - tsx@4.23.12
