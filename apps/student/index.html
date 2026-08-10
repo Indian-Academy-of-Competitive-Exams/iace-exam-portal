@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IACE — Student</title>
+    <meta name="description" content="IACE learning platform — mock tests for government exams." />
+    <script>
+      // Applied before first paint so a dark-mode reload never flashes white.
+      (function () {
+        var stored = localStorage.getItem('iace.theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute(
+          'data-theme',
+          stored === 'dark' || stored === 'light' ? stored : prefersDark ? 'dark' : 'light',
+        );
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
