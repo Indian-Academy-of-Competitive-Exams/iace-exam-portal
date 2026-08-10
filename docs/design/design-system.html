@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IACE Design System — v0.1</title>
+<style>
+  /* ============================================================
+     DESIGN TOKENS  (light + dark via CSS variables)
+     This block IS packages/ui/tokens.css — swap the app in against roles.
+     ============================================================ */
+  :root, :root[data-theme="light"] {
+    color-scheme: light;
+
+    /* ---- Brand red ramp (primary) ---- */
+    --red-50:#FCF3F3; --red-100:#F7E4E4; --red-200:#EFC8C8; --red-300:#E2A3A3;
+    --red-400:#D07777; --red-500:#C25454; --red-600:#B83939; --red-700:#9E3030;
+    --red-800:#842A2A; --red-900:#6E2727;
+
+    /* ---- Danger ramp (crimson — deliberately cooler than brand) ---- */
+    --crimson-50:#FFF1F3; --crimson-100:#FFE4E9; --crimson-200:#FECDD6;
+    --crimson-300:#FDA4B4; --crimson-400:#FB7189; --crimson-500:#F43F5E;
+    --crimson-600:#E11D48; --crimson-700:#BE123C; --crimson-800:#9F1239;
+
+    /* ---- Neutral (slate) ramp ---- */
+    --slate-50:#F8FAFC; --slate-100:#F1F5F9; --slate-200:#E2E8F0; --slate-300:#CBD5E1;
+    --slate-400:#94A3B8; --slate-500:#64748B; --slate-600:#475569; --slate-700:#334155;
+    --slate-800:#1E293B; --slate-900:#0F172A; --slate-950:#020617;
+
+    /* ---- Semantic roles (what the app codes against) ---- */
+    --background:#F6F7F9;      /* page plane */
+    --surface:#FFFFFF;         /* cards */
+    --surface-2:#F8FAFC;       /* subtle raised */
+    --foreground:#0B0B0C;
+    --muted:#F1F5F9;
+    --muted-foreground:#64748B;
+    --border:#E2E8F0;
+    --input:#E2E8F0;
+    --ring:#B83939;
+
+    --primary:#B83939;         --primary-hover:#9E3030;  --primary-foreground:#FFFFFF;
+    --secondary:#F1F5F9;       --secondary-hover:#E2E8F0; --secondary-foreground:#0F172A;  /* CANCEL lives here */
+    --destructive:#BE123C;     --destructive-hover:#9F1239; --destructive-foreground:#FFFFFF;
+    --success:#15803D;         --success-foreground:#FFFFFF; --success-subtle:#DCFCE7; --success-ink:#166534;
+    --warning:#F59E0B;         --warning-foreground:#1F2937; --warning-subtle:#FEF3C7; --warning-ink:#92400E;
+    --info:#2563EB;            --info-foreground:#FFFFFF;    --info-subtle:#DBEAFE;    --info-ink:#1E40AF;
+
+    /* ---- Chart surface + validated categorical series (colorblind-safe) ---- */
+    --chart-surface:#FCFCFB; --chart-grid:#E1E0D9; --chart-axis:#C3C2B7; --chart-ink:#52514E;
+    --series-1:#2A78D6; --series-2:#EB6834; --series-3:#1BAF7A; --series-4:#EDA100;
+    --series-5:#E87BA4; --series-6:#008300; --series-7:#4A3AA7; --series-8:#E34948;
+
+    /* ---- Exam CBT palette (faithful to real exam — fixed convention) ---- */
+    --exam-answered:#16A34A; --exam-notanswered:#C1272D; --exam-notvisited:#E2E8F0;
+    --exam-marked:#7C3AED; --exam-marked-ink:#FFFFFF;
+
+    /* ---- Elevation ---- */
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+    --shadow-md:0 2px 6px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.06);
+    --shadow-lg:0 8px 24px rgba(15,23,42,.10);
+
+    /* ---- Radii ---- */
+    --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:16px;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --background:#0A0C10;
+    --surface:#13161C;
+    --surface-2:#181C23;
+    --foreground:#F8FAFC;
+    --muted:#1B212A;
+    --muted-foreground:#94A3B8;
+    --border:#262C35;
+    --input:#262C35;
+    --ring:#D07777;
+
+    --primary:#B83939;         --primary-hover:#C25454; --primary-foreground:#FFFFFF;
+    --secondary:#1E242C;       --secondary-hover:#262C35; --secondary-foreground:#E2E8F0;
+    --destructive:#BE123C;     --destructive-hover:#E11D48; --destructive-foreground:#FFFFFF;
+    --success:#16A34A;         --success-foreground:#04140A; --success-subtle:#0C2A17; --success-ink:#4ADE80;
+    --warning:#F59E0B;         --warning-foreground:#1F2937; --warning-subtle:#3A2A08; --warning-ink:#FBBF24;
+    --info:#3B82F6;            --info-foreground:#04122B; --info-subtle:#0E2247; --info-ink:#93C5FD;
+
+    --chart-surface:#1A1A19; --chart-grid:#2C2C2A; --chart-axis:#383835; --chart-ink:#C3C2B7;
+    --series-1:#3987E5; --series-2:#D95926; --series-3:#199E70; --series-4:#C98500;
+    --series-5:#D55181; --series-6:#008300; --series-7:#9085E9; --series-8:#E66767;
+
+    --exam-answered:#22C55E; --exam-notanswered:#EF4444; --exam-notvisited:#334155;
+    --exam-marked:#8B5CF6; --exam-marked-ink:#FFFFFF;
+
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 2px 8px rgba(0,0,0,.5);
+    --shadow-lg:0 10px 30px rgba(0,0,0,.6);
+  }
+
+  /* ============================================================ BASE ============================================================ */
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--background); color:var(--foreground);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4 { margin:0; font-weight:600; letter-spacing:-0.01em; }
+  .num { font-variant-numeric: tabular-nums; }
+  a { color:var(--primary); }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+    background:var(--muted); padding:2px 6px; border-radius:var(--radius-sm); color:var(--muted-foreground); }
+
+  /* Top bar */
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:12px;
+    padding:12px 24px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .brandmark { display:flex; align-items:center; justify-content:center; width:34px; height:34px;
+    background:var(--primary); color:#fff; font-weight:800; border-radius:var(--radius-md); letter-spacing:-0.03em; }
+  .topbar h1 { font-size:16px; }
+  .topbar .sub { color:var(--muted-foreground); font-size:12px; }
+  .spacer { flex:1; }
+
+  main { max-width:1120px; margin:0 auto; padding:28px 24px 80px; }
+  section { margin-bottom:40px; }
+  .sec-title { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted-foreground);
+    margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl);
+    box-shadow:var(--shadow-sm); }
+  .card-pad { padding:18px; }
+  .grid { display:grid; gap:14px; }
+  .muted { color:var(--muted-foreground); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .stack { display:flex; flex-direction:column; gap:6px; }
+
+  /* Color swatches */
+  .ramp { display:grid; grid-template-columns:repeat(10,1fr); border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border); }
+  .ramp > div { height:52px; display:flex; align-items:flex-end; padding:5px; font-size:10px; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .swatch { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; background:var(--surface); }
+  .swatch .chip { height:56px; }
+  .swatch .meta { padding:8px 10px; }
+  .swatch .meta b { display:block; font-size:12.5px; }
+  .swatch .meta span { font-size:11px; color:var(--muted-foreground); }
+
+  /* Buttons */
+  .btn { display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 14px; border-radius:var(--radius-md);
+    font-size:13.5px; font-weight:500; border:1px solid transparent; cursor:pointer; transition:.12s; white-space:nowrap; }
+  .btn svg { width:15px; height:15px; }
+  .btn-primary { background:var(--primary); color:var(--primary-foreground); }
+  .btn-primary:hover { background:var(--primary-hover); }
+  .btn-secondary { background:var(--secondary); color:var(--secondary-foreground); border-color:var(--border); }
+  .btn-secondary:hover { background:var(--secondary-hover); }
+  .btn-outline { background:transparent; color:var(--foreground); border-color:var(--border); }
+  .btn-outline:hover { background:var(--muted); }
+  .btn-ghost { background:transparent; color:var(--foreground); }
+  .btn-ghost:hover { background:var(--muted); }
+  .btn-destructive { background:var(--destructive); color:var(--destructive-foreground); }
+  .btn-destructive:hover { background:var(--destructive-hover); }
+  .btn-destructive-outline { background:transparent; color:var(--destructive); border-color:color-mix(in srgb,var(--destructive) 40%, transparent); }
+  .btn-destructive-outline:hover { background:color-mix(in srgb,var(--destructive) 10%, transparent); }
+  .btn-sm { height:30px; padding:0 10px; font-size:12.5px; }
+  .btn-lg { height:42px; padding:0 20px; font-size:15px; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* Inputs */
+  .field { display:flex; flex-direction:column; gap:6px; max-width:280px; }
+  .label { font-size:12.5px; font-weight:500; }
+  .input, .select { height:36px; padding:0 11px; border:1px solid var(--input); background:var(--surface);
+    color:var(--foreground); border-radius:var(--radius-md); font-size:13.5px; outline:none; }
+  .input:focus, .select:focus { border-color:var(--ring); box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 22%, transparent); }
+  .input::placeholder { color:var(--muted-foreground); }
+  .check { display:inline-flex; align-items:center; gap:8px; font-size:13.5px; }
+  .check input { width:16px; height:16px; accent-color:var(--primary); }
+
+  /* Badges / status */
+  .badge { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 9px; border-radius:999px;
+    font-size:11.5px; font-weight:600; }
+  .badge-neutral { background:var(--muted); color:var(--muted-foreground); }
+  .badge-primary { background:color-mix(in srgb,var(--primary) 14%, transparent); color:var(--primary); }
+  .badge-success { background:var(--success-subtle); color:var(--success-ink); }
+  .badge-warning { background:var(--warning-subtle); color:var(--warning-ink); }
+  .badge-danger { background:color-mix(in srgb,var(--destructive) 14%, transparent); color:var(--destructive); }
+  .badge-info { background:var(--info-subtle); color:var(--info-ink); }
+  .dot { width:7px; height:7px; border-radius:999px; }
+
+  /* Stat tiles (data-forward hero) */
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl); padding:16px; box-shadow:var(--shadow-sm); }
+  .kpi .k-label { font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted-foreground); }
+  .kpi .k-val { font-size:30px; font-weight:700; letter-spacing:-0.02em; margin-top:6px; }
+  .kpi .k-delta { font-size:12px; font-weight:600; margin-top:6px; display:inline-flex; align-items:center; gap:4px; }
+  .up { color:var(--success); } .down { color:var(--destructive); }
+  .k-accent { height:3px; border-radius:999px; margin-top:12px; }
+
+  /* Table */
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted-foreground);
+    padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600; }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tbody tr:hover { background:var(--muted); }
+  td .num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* Progress */
+  .progress { height:8px; background:var(--muted); border-radius:999px; overflow:hidden; }
+  .progress > i { display:block; height:100%; background:var(--primary); border-radius:999px; }
+
+  /* Tabs */
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); }
+  .tab { padding:9px 14px; font-size:13.5px; font-weight:500; color:var(--muted-foreground); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+  /* Alert */
+  .alert { display:flex; gap:10px; padding:12px 14px; border-radius:var(--radius-lg); border:1px solid; font-size:13px; align-items:flex-start; }
+  .alert svg { width:17px; height:17px; flex-shrink:0; margin-top:1px; }
+  .alert-info { background:var(--info-subtle); border-color:color-mix(in srgb,var(--info) 30%,transparent); color:var(--info-ink); }
+  .alert-warning { background:var(--warning-subtle); border-color:color-mix(in srgb,var(--warning) 40%,transparent); color:var(--warning-ink); }
+  .alert-danger { background:color-mix(in srgb,var(--destructive) 12%,transparent); border-color:color-mix(in srgb,var(--destructive) 35%,transparent); color:var(--destructive); }
+
+  /* Exam palette */
+  .qpalette { display:grid; grid-template-columns:repeat(8,34px); gap:8px; }
+  .qcell { width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:600;
+    border-radius:6px; font-variant-numeric:tabular-nums; }
+  .q-ans { background:var(--exam-answered); color:#fff; }
+  .q-not { background:var(--exam-notanswered); color:#fff; clip-path:polygon(0 0,100% 0,100% 78%,50% 100%,0 78%); }
+  .q-nv { background:var(--exam-notvisited); color:var(--foreground); border:1px solid var(--border); }
+  .q-mk { background:var(--exam-marked); color:var(--exam-marked-ink); border-radius:999px; }
+
+  /* type scale */
+  .type-row { display:flex; align-items:baseline; gap:16px; padding:8px 0; border-bottom:1px dashed var(--border); }
+  .type-row .tk { width:150px; color:var(--muted-foreground); font-size:12px; }
+
+  .toggle { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border:1px solid var(--border);
+    background:var(--surface); color:var(--foreground); border-radius:var(--radius-md); cursor:pointer; font-size:12.5px; font-weight:500; }
+  .note { font-size:12.5px; color:var(--muted-foreground); margin-top:8px; }
+  .callout { border-left:3px solid var(--primary); background:var(--surface); padding:12px 14px; border-radius:0 var(--radius-lg) var(--radius-lg) 0;
+    border:1px solid var(--border); border-left-width:3px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brandmark">I</div>
+    <div>
+      <h1>IACE Design System</h1>
+      <div class="sub">v0.1 · data-forward · light + dark · Tailwind + shadcn foundation</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="toggle" onclick="toggleTheme()">
+      <span id="themeIcon">🌙</span><span id="themeLabel">Dark</span>
+    </button>
+  </div>
+
+  <main>
+
+    <!-- ===== The red problem ===== -->
+    <section>
+      <div class="sec-title">The red decision — brand vs. danger</div>
+      <div class="callout">
+        Red is the <b>brand</b>, so it can't also mean "danger." Resolution:
+        <b>primary red</b> = go / confirm / brand only · <b>Cancel</b> = neutral grey (a dismissal, never red) ·
+        <b>Destructive</b> (delete / reject / un-approve) = a distinct cooler <b>crimson</b>, always with an icon + confirm.
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn btn-primary">Save test</button>
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-destructive">Delete</button>
+        <span class="muted" style="font-size:12.5px;">← primary (brand) · cancel (neutral) · destructive (crimson) side by side</span>
+      </div>
+    </section>
+
+    <!-- ===== Color ===== -->
+    <section>
+      <div class="sec-title">Color — ramps</div>
+      <div class="stack" style="gap:18px;">
+        <div>
+          <div class="label" style="margin-bottom:6px;">Brand red — <code>--primary</code> = red-600</div>
+          <div class="ramp" id="rampRed"></div>
+        </div>
+        <div>
+          <div class="label" style="margin-bottom:6px;">Danger crimson — <code>--destructive</code> = crimson-700 (cooler than brand)</div>
+          <div class="ramp" id="rampCrimson"></div>
+        </div>
+        <div>
+          <div class="label" style="margin-bottom:6px;">Neutral slate — text, surfaces, borders, <b>Cancel</b></div>
+          <div class="ramp" id="rampSlate"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-title">Color — semantic roles</div>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--primary)"></div><div class="meta"><b>primary</b><span>brand action · #B83939</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--secondary)"></div><div class="meta"><b>secondary</b><span>Cancel / neutral</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--destructive)"></div><div class="meta"><b>destructive</b><span>delete / reject · #BE123C</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="meta"><b>success</b><span>approve / correct</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--warning)"></div><div class="meta"><b>warning</b><span>caution (dark text)</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--info)"></div><div class="meta"><b>info</b><span>informational</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-title">Color — chart series (validated · colorblind-safe)</div>
+      <div class="row">
+        <span class="badge"><span class="dot" style="background:var(--series-1)"></span>1 blue</span>
+        <span class="badge"><span class="dot" style="background:var(--series-2)"></span>2 orange</span>
+        <span class="badge"><span class="dot" style="background:var(--series-3)"></span>3 aqua</span>
+        <span class="badge"><span class="dot" style="background:var(--series-4)"></span>4 yellow</span>
+        <span class="badge"><span class="dot" style="background:var(--series-5)"></span>5 magenta</span>
+        <span class="badge"><span class="dot" style="background:var(--series-6)"></span>6 green</span>
+        <span class="badge"><span class="dot" style="background:var(--series-7)"></span>7 violet</span>
+        <span class="badge"><span class="dot" style="background:var(--series-8)"></span>8 red</span>
+      </div>
+      <div class="note">Data leads with <b>blue</b>, not brand red — so "a chart" never reads as "an action." Hues are assigned in fixed order, never cycled.</div>
+    </section>
+
+    <!-- ===== Typography ===== -->
+    <section>
+      <div class="sec-title">Typography — system sans, tabular figures for numbers</div>
+      <div class="card card-pad">
+        <div class="type-row"><span class="tk">4xl / 36 / 700</span><span style="font-size:36px;font-weight:700;letter-spacing:-.02em">1,858 <span class="muted" style="font-size:14px;font-weight:400">hero figure</span></span></div>
+        <div class="type-row"><span class="tk">2xl / 22 / 600</span><span style="font-size:22px;font-weight:600">Section heading</span></div>
+        <div class="type-row"><span class="tk">lg / 16 / 600</span><span style="font-size:16px;font-weight:600">Card title</span></div>
+        <div class="type-row"><span class="tk">base / 14 / 400</span><span style="font-size:14px">Body — the default reading size for a data-forward app.</span></div>
+        <div class="type-row"><span class="tk">sm / 13 / 400</span><span style="font-size:13px" class="muted">Secondary / table cells</span></div>
+        <div class="type-row" style="border-bottom:none"><span class="tk">xs / 11.5 / 600</span><span style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em" class="muted">Labels & overlines</span></div>
+      </div>
+    </section>
+
+    <!-- ===== Spacing / radius / elevation ===== -->
+    <section>
+      <div class="sec-title">Spacing · Radius · Elevation</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="card card-pad">
+          <div class="label" style="margin-bottom:10px">Spacing (4px base)</div>
+          <div class="stack" style="gap:8px">
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">4</span><span style="height:12px;width:4px;background:var(--primary)"></span></div>
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">8</span><span style="height:12px;width:8px;background:var(--primary)"></span></div>
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">12</span><span style="height:12px;width:12px;background:var(--primary)"></span></div>
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">16</span><span style="height:12px;width:16px;background:var(--primary)"></span></div>
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">24</span><span style="height:12px;width:24px;background:var(--primary)"></span></div>
+            <div class="row" style="gap:8px"><span class="muted" style="width:34px">32</span><span style="height:12px;width:32px;background:var(--primary)"></span></div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="label" style="margin-bottom:10px">Radius</div>
+          <div class="row" style="gap:10px;align-items:flex-end">
+            <div class="stack" style="align-items:center;gap:4px"><div style="width:44px;height:44px;background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-sm)"></div><span class="muted" style="font-size:11px">4</span></div>
+            <div class="stack" style="align-items:center;gap:4px"><div style="width:44px;height:44px;background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-md)"></div><span class="muted" style="font-size:11px">6</span></div>
+            <div class="stack" style="align-items:center;gap:4px"><div style="width:44px;height:44px;background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-lg)"></div><span class="muted" style="font-size:11px">8</span></div>
+            <div class="stack" style="align-items:center;gap:4px"><div style="width:44px;height:44px;background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-xl)"></div><span class="muted" style="font-size:11px">12</span></div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="label" style="margin-bottom:10px">Elevation</div>
+          <div class="row" style="gap:14px">
+            <div style="width:60px;height:44px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)"></div>
+            <div style="width:60px;height:44px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md)"></div>
+            <div style="width:60px;height:44px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg)"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Buttons ===== -->
+    <section>
+      <div class="sec-title">Buttons</div>
+      <div class="card card-pad stack" style="gap:14px">
+        <div class="row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-secondary">Cancel</button>
+          <button class="btn btn-outline">Outline</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-destructive">Delete</button>
+          <button class="btn btn-destructive-outline">Reject</button>
+          <button class="btn btn-primary" disabled>Disabled</button>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary btn-lg">Large</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Start test</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Forms ===== -->
+    <section>
+      <div class="sec-title">Form controls</div>
+      <div class="card card-pad row" style="gap:24px;align-items:flex-start">
+        <div class="field"><label class="label">Mobile number</label><input class="input" placeholder="9876543210" /></div>
+        <div class="field"><label class="label">Exam</label>
+          <select class="select"><option>SSC CGL Tier 1</option><option>IBPS PO Prelims</option><option>RRB JE</option></select></div>
+        <div class="stack" style="gap:10px;padding-top:22px">
+          <label class="check"><input type="checkbox" checked/> Randomize options</label>
+          <label class="check"><input type="radio" name="r" checked/> Fixed paper</label>
+          <label class="check"><input type="radio" name="r"/> Pooled draw</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Badges & status ===== -->
+    <section>
+      <div class="sec-title">Badges & status</div>
+      <div class="card card-pad row">
+        <span class="badge badge-neutral">Draft</span>
+        <span class="badge badge-primary">Active</span>
+        <span class="badge badge-success"><span class="dot" style="background:var(--success)"></span>Passed</span>
+        <span class="badge badge-warning">Pending</span>
+        <span class="badge badge-danger">Rejected</span>
+        <span class="badge badge-info">Bilingual</span>
+      </div>
+    </section>
+
+    <!-- ===== Stat tiles (data-forward) ===== -->
+    <section>
+      <div class="sec-title">Stat tiles — the Report dashboard hero</div>
+      <div class="kpis">
+        <div class="kpi"><div class="k-label">Rank</div><div class="k-val num">1,519</div><div class="k-delta up">▲ 212 vs last</div><div class="k-accent" style="background:var(--series-1)"></div></div>
+        <div class="kpi"><div class="k-label">Percentile</div><div class="k-val num">18.3</div><div class="k-delta down">▼ 2.1</div><div class="k-accent" style="background:var(--series-3)"></div></div>
+        <div class="kpi"><div class="k-label">Score</div><div class="k-val num">1.5<span class="muted" style="font-size:15px">/100</span></div><div class="k-delta muted">4 attempted</div><div class="k-accent" style="background:var(--series-4)"></div></div>
+        <div class="kpi"><div class="k-label">Accuracy</div><div class="k-val num">50%</div><div class="k-delta up">▲ 8%</div><div class="k-accent" style="background:var(--success)"></div></div>
+      </div>
+    </section>
+
+    <!-- ===== Chart ===== -->
+    <section>
+      <div class="sec-title">Chart — section-wise accuracy (validated series colors)</div>
+      <div class="card card-pad" style="background:var(--chart-surface)">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <div class="label">Accuracy by section (%)</div>
+          <div class="row" style="gap:12px;font-size:11.5px">
+            <span class="badge badge-neutral"><span class="dot" style="background:var(--series-1)"></span>You</span>
+            <span class="badge badge-neutral"><span class="dot" style="background:var(--series-2)"></span>Topper</span>
+          </div>
+        </div>
+        <svg viewBox="0 0 520 180" width="100%" height="180" font-family="system-ui" font-size="11">
+          <!-- gridlines -->
+          <g stroke="var(--chart-grid)" stroke-width="1">
+            <line x1="40" y1="20" x2="510" y2="20"/><line x1="40" y1="60" x2="510" y2="60"/>
+            <line x1="40" y1="100" x2="510" y2="100"/><line x1="40" y1="140" x2="510" y2="140"/>
+          </g>
+          <g fill="var(--chart-ink)" text-anchor="end">
+            <text x="34" y="144">0</text><text x="34" y="104">50</text><text x="34" y="24">100</text>
+          </g>
+          <!-- bars: you (series-1) / topper (series-2), 2px gap, rounded ends -->
+          <g>
+            <rect x="60"  y="76" width="18" height="64" rx="4" fill="var(--series-1)"/>
+            <rect x="80"  y="44" width="18" height="96" rx="4" fill="var(--series-2)"/>
+            <rect x="170" y="60" width="18" height="80" rx="4" fill="var(--series-1)"/>
+            <rect x="190" y="36" width="18" height="104" rx="4" fill="var(--series-2)"/>
+            <rect x="280" y="96" width="18" height="44" rx="4" fill="var(--series-1)"/>
+            <rect x="300" y="52" width="18" height="88" rx="4" fill="var(--series-2)"/>
+            <rect x="390" y="40" width="18" height="100" rx="4" fill="var(--series-1)"/>
+            <rect x="410" y="28" width="18" height="112" rx="4" fill="var(--series-2)"/>
+          </g>
+          <g fill="var(--chart-ink)" text-anchor="middle">
+            <text x="79" y="158">Reasoning</text><text x="189" y="158">GA</text>
+            <text x="299" y="158">Quant</text><text x="409" y="158">English</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ===== Table ===== -->
+    <section>
+      <div class="sec-title">Table — data-forward, tabular numerics</div>
+      <div class="card" style="overflow:hidden">
+        <table>
+          <thead><tr><th>Test</th><th>Status</th><th class="num">Questions</th><th class="num">Candidates</th><th class="num">Avg %</th></tr></thead>
+          <tbody>
+            <tr><td>SSC CGL Tier 1 — MT 44</td><td><span class="badge badge-primary">Active</span></td><td class="num">100</td><td class="num">1,858</td><td class="num">42.1</td></tr>
+            <tr><td>IBPS PO Prelims — MT 20</td><td><span class="badge badge-neutral">Draft</span></td><td class="num">100</td><td class="num">0</td><td class="num">—</td></tr>
+            <tr><td>RRB JE — MT 28</td><td><span class="badge badge-success">Active</span></td><td class="num">100</td><td class="num">116</td><td class="num">38.7</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== Tabs + progress + alerts ===== -->
+    <section>
+      <div class="sec-title">Tabs · Progress · Alerts</div>
+      <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px">
+        <div class="card card-pad">
+          <div class="tabs"><div class="tab active">Score Card</div><div class="tab">Solution</div><div class="tab">Compare</div></div>
+          <div class="stack" style="gap:12px;margin-top:16px">
+            <div class="stack" style="gap:5px"><div class="row" style="justify-content:space-between;font-size:12.5px"><span>Quant</span><span class="num muted">72%</span></div><div class="progress"><i style="width:72%"></i></div></div>
+            <div class="stack" style="gap:5px"><div class="row" style="justify-content:space-between;font-size:12.5px"><span>Reasoning</span><span class="num muted">45%</span></div><div class="progress"><i style="width:45%;background:var(--series-2)"></i></div></div>
+          </div>
+        </div>
+        <div class="stack" style="gap:10px">
+          <div class="alert alert-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><div>Your batch has a new test assigned — <b>starts Sunday 10:00 AM</b>.</div></div>
+          <div class="alert alert-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg><div>Complete your profile (photo, DOB, Aadhaar, PAN) before starting.</div></div>
+          <div class="alert alert-danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg><div>Deleting this test removes it for all assigned students. This can't be undone.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Exam palette ===== -->
+    <section>
+      <div class="sec-title">Exam question palette — faithful to the real CBT (fixed convention)</div>
+      <div class="card card-pad">
+        <div class="qpalette">
+          <div class="qcell q-ans">1</div><div class="qcell q-ans">2</div><div class="qcell q-not">3</div>
+          <div class="qcell q-nv">4</div><div class="qcell q-mk">5</div><div class="qcell q-nv">6</div>
+          <div class="qcell q-nv">7</div><div class="qcell q-ans">8</div>
+        </div>
+        <div class="row" style="margin-top:14px;gap:16px;font-size:12px">
+          <span class="row" style="gap:6px"><span class="qcell q-ans" style="width:16px;height:16px"></span>Answered</span>
+          <span class="row" style="gap:6px"><span class="qcell q-not" style="width:16px;height:16px"></span>Not answered</span>
+          <span class="row" style="gap:6px"><span class="qcell q-nv" style="width:16px;height:16px"></span>Not visited</span>
+          <span class="row" style="gap:6px"><span class="qcell q-mk" style="width:16px;height:16px"></span>Marked for review</span>
+        </div>
+        <div class="note">These colors follow the real government-exam convention (green/red/grey/purple) and live only inside the CBT screen — they are intentionally separate from the app's brand semantics.</div>
+      </div>
+    </section>
+
+  </main>
+
+<script>
+  // Render ramps
+  const ramps = {
+    rampRed:['50','100','200','300','400','500','600','700','800','900'].map(s=>['--red-'+s,s]),
+    rampCrimson:['50','100','200','300','400','500','600','700','800'].map(s=>['--crimson-'+s,s]),
+    rampSlate:['50','100','200','300','400','500','600','700','800','900'].map(s=>['--slate-'+s,s]),
+  };
+  for (const [id,steps] of Object.entries(ramps)){
+    const el=document.getElementById(id); if(!el) continue;
+    el.style.gridTemplateColumns=`repeat(${steps.length},1fr)`;
+    el.innerHTML=steps.map(([v,label],i)=>{
+      const dark = i>4 ? '#fff' : '#0b0b0b';
+      return `<div style="background:var(${v});color:${dark}">${label}</div>`;
+    }).join('');
+  }
+  function toggleTheme(){
+    const r=document.documentElement;
+    const dark = r.getAttribute('data-theme')==='dark';
+    r.setAttribute('data-theme', dark?'light':'dark');
+    document.getElementById('themeIcon').textContent = dark?'🌙':'☀️';
+    document.getElementById('themeLabel').textContent = dark?'Dark':'Light';
+  }
+</script>
+</body>
+</html>

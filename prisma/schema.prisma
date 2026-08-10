@@ -1,0 +1,526 @@
+// ============================================================================
+// IACE Platform — V1 Mock-Test Feature — Prisma schema (PostgreSQL) — v2
+//
+// Rework notes (what changed and why):
+// - Student and Admin are now SEPARATE tables (different identity, login, rules).
+// - NO OTP or Device table — OTP, sessions, and device binding all live in Redis.
+// - StudentProfile (1:1) holds extended personal data; Student.profileCompleted
+//   is gated on photo + DOB + gender + Aadhaar + PAN.
+// - Permissions = a Page table (one code per page); Admin ⇄ Page is a plain
+//   many-to-many. Super admins bypass page checks in app logic.
+// - Many-to-many junctions (Student⇄Group, Test⇄TestSeries, Admin⇄Page,
+//   Test⇄Group access, Test⇄Student access) are IMPLICIT — Prisma manages the
+//   hidden join tables, so they are not models here.
+// - Question text/options are stored as localized JSON (row-per-language tables
+//   removed); option identity stays relational (stable id + isCorrect) so the
+//   answer key survives shuffling and AttemptAnswer can FK the chosen option.
+// - No media table: images live as S3 URLs inline in the localized JSON
+//   (Question.content / QuestionOption.text), next to $LaTeX$ equations.
+// - Result merged into Attempt (scored fields fill in on evaluation).
+//   totalCandidates removed — "rank out of N" is derived live from Redis.
+// - TestShareLink removed — the share link is a slug on Test, generated in UI.
+// - Marks use Decimal(6,2) for exact 0.25 / 0.33 / 0.50.
+// - "createdById" audit fields are plain Admin ids (no FK) to avoid clutter.
+// ============================================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum DifficultyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum QuestionType {
+  SINGLE_MCQ // V1. Extensible later.
+}
+
+enum QuestionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum TestUi {
+  CBT     // standard government CBT interface (primary V1 build)
+  GENERIC // lighter test screen (only if time permits)
+}
+
+enum LanguageMode {
+  SINGLE // student picks one language (optional per-question toggle)
+  DUAL   // show two languages together (e.g. English + Hindi), stem + options
+}
+
+enum TestStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum PaperQuestionStatus {
+  ACTIVE
+  DROPPED // excluded from scoring
+  BONUS   // awarded to everyone
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EVALUATED
+  EXPIRED
+}
+
+enum AnswerState {
+  NOT_VISITED
+  NOT_ANSWERED
+  ANSWERED
+  MARKED_REVIEW
+  ANSWERED_MARKED
+}
+
+enum NotificationType {
+  TEST_ASSIGNED
+  RESULT_READY
+  GENERIC
+}
+
+// ============================================================================
+// People — Student and Admin are separate
+// ============================================================================
+
+// Students log in with MOBILE + OTP (OTP + sessions + devices handled in Redis).
+model Student {
+  id                String          @id @default(cuid())
+  mobile            String          @unique // only mandatory field
+  fullName          String?
+  preferredLanguage String          @default("en")
+  // true once the completion set is present: photo + DOB + gender + Aadhaar +
+  // PAN (all in StudentProfile). Required before the first test.
+  profileCompleted  Boolean         @default(false)
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  profile           StudentProfile?
+  groups            Group[]         // implicit M:N (batch membership)
+  accessibleTests   Test[]          @relation("TestStudentAccess") // implicit M:N (individual grants)
+  attempts          Attempt[]
+  notifications     Notification[]
+}
+
+// Admins log in with EMAIL + OTP (OTP handled in Redis). A super admin is
+// seeded at bootstrap; super admins can create admins/super admins and grant
+// page access. Super admins bypass page checks in app logic.
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  fullName     String?
+  isSuperAdmin Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdById  String?  // audit: Admin who created this admin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pages        Page[]   // implicit M:N — which pages this admin may access
+}
+
+// One row per page/feature, identified by a stable code the super admin uses
+// to grant access (e.g. "questions.manage", "tests.create", "reports.view").
+model Page {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+
+  admins      Admin[] // implicit M:N
+}
+
+// Extended personal data (1:1 with Student). "Completion" — what
+// Student.profileCompleted tracks and what gates the first test — requires:
+// photo + DOB + gender + Aadhaar + PAN. The rest (email, address, education,
+// past-exam history) are optional. All uploaded documents are S3 URLs.
+model StudentProfile {
+  id               String    @id @default(cuid())
+  studentId        String    @unique
+  email            String?
+  address          String?
+  gender           Gender?
+  dob              DateTime? @db.Date
+  photoUrl         String? // completion item
+  aadhaarUrl       String? // verification record (completion item)
+  panUrl           String? // verification record (completion item)
+  educationDetails Json? // [{ level, board, institution, year, percentage }]
+  pastExamHistory  Json? // self-reported external govt-exam attempts (not platform Attempts)
+  updatedAt        DateTime  @updatedAt
+
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// Question bank
+// ============================================================================
+
+model Subject {
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  code               String?             @unique
+
+  topics             Topic[]
+  questions          Question[]
+  baseConfigSections BaseConfigSection[]
+  testSections       TestSection[]
+}
+
+model Topic {
+  id        String     @id @default(cuid())
+  subjectId String
+  name      String
+
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@unique([subjectId, name])
+}
+
+// Localized content lives in JSON: content = { "en": { "stem": "...",
+// "solution": "..." }, "hi": { ... } }. English required (validated in app).
+// Each field is rich content and may hold text, inline $LaTeX$ equations,
+// and inline S3 image URLs (a question can be image-only).
+model Question {
+  id                   String           @id @default(cuid())
+  questionCode         String?          @unique
+  type                 QuestionType     @default(SINGLE_MCQ)
+  subjectId            String
+  topicId              String?
+  difficulty           DifficultyLevel
+  defaultMarks         Decimal?         @db.Decimal(6, 2)
+  defaultNegativeMarks Decimal?         @db.Decimal(6, 2)
+  status               QuestionStatus   @default(ACTIVE)
+  content              Json // { "<lang>": { "stem": <rich>, "solution": <rich> } }
+  stemHash             String? // dedup detection
+  createdById          String? // audit (Admin id)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  subject              Subject          @relation(fields: [subjectId], references: [id])
+  topic                Topic?           @relation(fields: [topicId], references: [id])
+  options              QuestionOption[]
+  paperQuestions       PaperQuestion[]
+
+  @@index([subjectId, difficulty, status]) // auto-draw filter
+  @@index([topicId])
+  @@index([stemHash])
+}
+
+// Stable option identity; correctness keyed here (survives shuffle/edit).
+// text = { "en": <rich>, "hi": <rich> } — an option may be plain text, an
+// $LaTeX$ equation, an inline S3 image URL, or a mix (image-only options OK).
+model QuestionOption {
+  id         String          @id @default(cuid())
+  questionId String
+  position   Int // authored slot 1..n: import index + canonical order for deterministic shuffle
+  isCorrect  Boolean         @default(false)
+  text       Json
+
+  question   Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers    AttemptAnswer[]
+
+  @@unique([questionId, position])
+}
+
+// ============================================================================
+// Exam types & reusable base configs
+// ============================================================================
+
+model ExamType {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  code        String?      @unique
+  description String?
+
+  baseConfigs BaseConfig[]
+  tests       Test[]
+}
+
+model BaseConfig {
+  id                     String              @id @default(cuid())
+  examTypeId             String
+  name                   String
+  isActive               Boolean             @default(true)
+
+  totalQuestions         Int
+  totalMarks             Decimal             @db.Decimal(8, 2)
+  durationSec            Int
+  sectionalTiming        Boolean             @default(false)
+  lockedSectionSwitching Boolean             @default(false)
+  optionalSectionCount   Int?
+  calculatorEnabled      Boolean             @default(false)
+  defaultTestUi          TestUi              @default(CBT)
+  languageMode           LanguageMode        @default(SINGLE)
+  languages              String[]            @default(["en"]) // ordered; DUAL shows all of them
+  shuffleQuestions       Boolean             @default(true)
+  shuffleOptions         Boolean             @default(true)
+  marksPerQuestion       Decimal?            @db.Decimal(6, 2)
+  negativeMarks          Decimal?            @db.Decimal(6, 2)
+  defaultDifficultyMix   Json? // { "LOW": 30, "MEDIUM": 50, "HIGH": 20 }
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  examType               ExamType            @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+  sections               BaseConfigSection[]
+  tests                  Test[]
+
+  @@index([examTypeId])
+}
+
+model BaseConfigSection {
+  id               String     @id @default(cuid())
+  baseConfigId     String
+  name             String
+  order            Int
+  subjectId        String?
+  questionCount    Int
+  marksPerQuestion Decimal    @db.Decimal(6, 2)
+  negativeMarks    Decimal    @db.Decimal(6, 2)
+  durationSec      Int?
+  mandatory        Boolean    @default(true)
+  difficultyMix    Json?
+
+  baseConfig       BaseConfig @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
+  subject          Subject?   @relation(fields: [subjectId], references: [id])
+
+  @@unique([baseConfigId, order])
+  @@index([subjectId])
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+model Test {
+  id                     String          @id @default(cuid())
+  title                  String
+  examTypeId             String?
+  baseConfigId           String?
+
+  status                 TestStatus      @default(DRAFT)
+  testUi                 TestUi          @default(CBT)
+
+  totalQuestions         Int
+  totalMarks             Decimal         @db.Decimal(8, 2)
+  durationSec            Int
+  sectionalTiming        Boolean         @default(false)
+  lockedSectionSwitching Boolean         @default(false)
+  optionalSectionCount   Int?
+  calculatorEnabled      Boolean         @default(false)
+  shuffleQuestions       Boolean         @default(true)
+  shuffleOptions         Boolean         @default(true)
+  languageMode           LanguageMode    @default(SINGLE)
+  languages              String[]        @default(["en"]) // ordered; DUAL shows all of them
+
+  publishStartAt         DateTime?
+  publishEndAt           DateTime?
+  entryCutoffSec         Int?
+  extraTimeSec           Int?
+
+  isLocked               Boolean         @default(false) // true once first student starts
+  finalizedAt            DateTime?
+  shareSlug              String?         @unique // shareable link token (optional)
+  createdById            String? // audit (Admin id)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  examType               ExamType?       @relation(fields: [examTypeId], references: [id])
+  baseConfig             BaseConfig?     @relation(fields: [baseConfigId], references: [id])
+  sections               TestSection[]
+  paperQuestions         PaperQuestion[]
+  attempts               Attempt[]
+  notifications          Notification[]
+
+  series                 TestSeries[]    // implicit M:N (optional, many series)
+  accessGroups           Group[]         @relation("TestGroupAccess")   // implicit M:N
+  accessStudents         Student[]       @relation("TestStudentAccess") // implicit M:N
+
+  @@index([status])
+  @@index([publishStartAt, publishEndAt])
+  @@index([examTypeId])
+}
+
+model TestSection {
+  id               String          @id @default(cuid())
+  testId           String
+  name             String
+  order            Int
+  subjectId        String?
+  questionCount    Int
+  marksPerQuestion Decimal         @db.Decimal(6, 2)
+  negativeMarks    Decimal         @db.Decimal(6, 2)
+  durationSec      Int?
+  mandatory        Boolean         @default(true)
+  difficultyMix    Json?
+
+  test             Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  subject          Subject?        @relation(fields: [subjectId], references: [id])
+  paperQuestions   PaperQuestion[]
+
+  @@unique([testId, order])
+  @@index([subjectId])
+}
+
+// The frozen paper: fixed set of questions for a test (same for everyone).
+// Drawn once at finalize; per-student order/option shuffle from Attempt.shuffleSeed.
+model PaperQuestion {
+  id            String              @id @default(cuid())
+  testId        String
+  testSectionId String?
+  questionId    String
+  order         Int
+  marks         Decimal             @db.Decimal(6, 2)
+  negativeMarks Decimal             @db.Decimal(6, 2)
+  status        PaperQuestionStatus @default(ACTIVE) // drop/bonus corrections
+
+  test          Test                @relation(fields: [testId], references: [id], onDelete: Cascade)
+  section       TestSection?        @relation(fields: [testSectionId], references: [id])
+  question      Question            @relation(fields: [questionId], references: [id])
+  answers       AttemptAnswer[]
+
+  @@unique([testId, questionId])
+  @@unique([testId, order])
+  @@index([questionId]) // "which papers use this question" + analytics
+  @@index([testSectionId])
+}
+
+// ============================================================================
+// Attempts (holds live state AND the scored result — no separate Result table)
+// ============================================================================
+
+model Attempt {
+  id               String          @id @default(cuid())
+  testId           String
+  studentId        String
+  status           AttemptStatus   @default(IN_PROGRESS)
+
+  // lifecycle
+  startedAt        DateTime        @default(now())
+  endsAt           DateTime // server-authoritative deadline
+  submittedAt      DateTime?
+  evaluatedAt      DateTime?
+  shuffleSeed      Int
+  resumeCount      Int             @default(0)
+  locale           String          @default("en")
+  sectionState     Json? // per-section start/end/time-spent
+
+  // scored (filled on evaluation)
+  score            Decimal?        @db.Decimal(8, 2)
+  correctCount     Int?
+  wrongCount       Int?
+  unattemptedCount Int?
+  sectionScores    Json?
+  rank             Int? // last-computed snapshot; live value from Redis
+  percentile       Decimal?        @db.Decimal(5, 2)
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  test             Test            @relation(fields: [testId], references: [id])
+  student          Student         @relation(fields: [studentId], references: [id])
+  answers          AttemptAnswer[]
+
+  @@unique([testId, studentId]) // one attempt per student (no retake)
+  @@index([studentId]) // student's report dashboard: "my attempts"
+  @@index([testId, status])
+  @@index([testId, score])
+}
+
+// One row per question the student actually INTERACTED with (answered / marked /
+// visited) — not one per paper question. Untouched questions have no row;
+// "unattempted" is derived (paper size − rows) and its count is stored on Attempt.
+// Composite PK (no surrogate id) keeps the highest-volume table lean.
+model AttemptAnswer {
+  attemptId        String
+  paperQuestionId  String
+  selectedOptionId String?
+  state            AnswerState     @default(NOT_VISITED)
+
+  // analytics data points — captured from day one
+  timeSpentSec     Int             @default(0)
+  languageViewed   String?
+
+  // filled at scoring
+  isCorrect        Boolean?
+  marksAwarded     Decimal?        @db.Decimal(6, 2)
+  answeredAt       DateTime?
+
+  attempt          Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  paperQuestion    PaperQuestion   @relation(fields: [paperQuestionId], references: [id])
+  selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id])
+
+  @@id([attemptId, paperQuestionId])
+  @@index([paperQuestionId]) // question-level analytics
+}
+
+// ============================================================================
+// Groups (batches) — access to a test is granted to groups and/or individuals
+// via implicit M:N on Test (accessGroups / accessStudents). No TestAccess table.
+// ============================================================================
+
+model Group {
+  id             String    @id @default(cuid())
+  name           String    @unique
+  branch         String? // e.g. Ameerpet, Ananthapuram
+  description    String?
+  createdAt      DateTime  @default(now())
+
+  students       Student[] // implicit M:N (membership)
+  accessibleTests Test[]   @relation("TestGroupAccess") // implicit M:N (test access)
+}
+
+// ============================================================================
+// Test series (many-to-many, optional, flat) — Test⇄Series is implicit
+// ============================================================================
+
+model TestSeries {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  tests       Test[] // implicit M:N (a test can be in several series)
+}
+
+// ============================================================================
+// Notifications (in-app; e.g. "a test was assigned to your batch")
+// ============================================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  studentId String
+  type      NotificationType
+  title     String
+  body      String?
+  testId    String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  test      Test?            @relation(fields: [testId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, isRead])
+}

@@ -1,0 +1,269 @@
+%% IACE Platform — V1 Mock-Test Feature — ERD (v2, reworked)
+%% Mirrors prisma/schema.prisma. 20 models. }o--o{ = many-to-many (implicit join).
+erDiagram
+
+  %% ---------- People / auth ----------
+  Student ||--|| StudentProfile : "profile"
+  Student ||--o{ Attempt : "takes"
+  Student ||--o{ Notification : "receives"
+  Student }o--o{ Group : "member of"
+  Student }o--o{ Test : "individual access"
+  Admin }o--o{ Page : "can access"
+
+  %% ---------- Question bank ----------
+  Subject ||--o{ Topic : "has"
+  Subject ||--o{ Question : "categorizes"
+  Topic ||--o{ Question : "tags"
+  Subject ||--o{ BaseConfigSection : "maps"
+  Subject ||--o{ TestSection : "maps"
+  Question ||--o{ QuestionOption : "has"
+  Question ||--o{ PaperQuestion : "placed in"
+  QuestionOption ||--o{ AttemptAnswer : "chosen"
+
+  %% ---------- Config ----------
+  ExamType ||--o{ BaseConfig : "defines"
+  BaseConfig ||--o{ BaseConfigSection : "has"
+  ExamType ||--o{ Test : "typed"
+  BaseConfig ||--o{ Test : "instantiated"
+
+  %% ---------- Tests / paper ----------
+  Test ||--o{ TestSection : "has"
+  Test ||--o{ PaperQuestion : "frozen paper"
+  TestSection ||--o{ PaperQuestion : "groups"
+  Test ||--o{ Attempt : "attempted"
+  Test ||--o{ Notification : "about"
+  Test }o--o{ TestSeries : "in series"
+  Test }o--o{ Group : "group access"
+
+  %% ---------- Attempts ----------
+  Attempt ||--o{ AttemptAnswer : "records"
+  PaperQuestion ||--o{ AttemptAnswer : "answered"
+
+  %% ---------- Entities ----------
+  Student {
+    string id PK
+    string mobile UK "mandatory; mobile OTP via Redis"
+    string fullName
+    string preferredLanguage
+    bool profileCompleted "photo+DOB+gender+Aadhaar+PAN"
+    bool isActive
+  }
+
+  StudentProfile {
+    string id PK
+    string studentId FK "unique 1:1"
+    string email
+    string address
+    enum gender "MALE/FEMALE/OTHER"
+    date dob "completion"
+    string photoUrl "completion"
+    string aadhaarUrl "completion"
+    string panUrl "completion"
+    json educationDetails
+    json pastExamHistory
+  }
+
+  Admin {
+    string id PK
+    string email UK "email OTP via Redis"
+    string fullName
+    bool isSuperAdmin
+    bool isActive
+    string createdById "audit"
+  }
+
+  Page {
+    string id PK
+    string code UK "page access code"
+    string name
+    string description
+  }
+
+
+  Subject {
+    string id PK
+    string name UK
+    string code UK
+  }
+
+  Topic {
+    string id PK
+    string subjectId FK
+    string name
+  }
+
+  Question {
+    string id PK
+    string questionCode UK
+    enum type "SINGLE_MCQ"
+    string subjectId FK
+    string topicId FK
+    enum difficulty "LOW/MEDIUM/HIGH"
+    decimal defaultMarks
+    decimal defaultNegativeMarks
+    enum status "DRAFT/ACTIVE/ARCHIVED"
+    json content "per-lang stem+solution: text/LaTeX/image-url"
+    string stemHash "dedup"
+    string createdById "audit"
+  }
+
+  QuestionOption {
+    string id PK
+    string questionId FK
+    int position "authored slot + shuffle base"
+    bool isCorrect "answer key"
+    json text "per-lang: text/LaTeX/image-url"
+  }
+
+  ExamType {
+    string id PK
+    string name UK
+    string code UK
+    string description
+  }
+
+  BaseConfig {
+    string id PK
+    string examTypeId FK
+    string name
+    bool isActive
+    int totalQuestions
+    decimal totalMarks
+    int durationSec
+    bool sectionalTiming
+    bool lockedSectionSwitching
+    int optionalSectionCount
+    bool calculatorEnabled
+    enum defaultTestUi "CBT/GENERIC"
+    enum languageMode "SINGLE/DUAL"
+    array languages "ordered; DUAL=both"
+    bool shuffleQuestions
+    bool shuffleOptions
+    decimal marksPerQuestion
+    decimal negativeMarks
+    json defaultDifficultyMix
+  }
+
+  BaseConfigSection {
+    string id PK
+    string baseConfigId FK
+    string name
+    int order
+    string subjectId FK
+    int questionCount
+    decimal marksPerQuestion
+    decimal negativeMarks
+    int durationSec
+    bool mandatory
+    json difficultyMix
+  }
+
+  Test {
+    string id PK
+    string title
+    string examTypeId FK
+    string baseConfigId FK
+    enum status "DRAFT/ACTIVE/INACTIVE"
+    enum testUi "CBT/GENERIC"
+    int totalQuestions
+    decimal totalMarks
+    int durationSec
+    bool sectionalTiming
+    bool lockedSectionSwitching
+    int optionalSectionCount
+    bool calculatorEnabled
+    bool shuffleQuestions
+    bool shuffleOptions
+    enum languageMode "SINGLE/DUAL"
+    array languages "ordered; DUAL=both shown"
+    datetime publishStartAt
+    datetime publishEndAt
+    int entryCutoffSec
+    int extraTimeSec
+    bool isLocked
+    datetime finalizedAt
+    string shareSlug UK "share link"
+    string createdById "audit"
+  }
+
+  TestSection {
+    string id PK
+    string testId FK
+    string name
+    int order
+    string subjectId FK
+    int questionCount
+    decimal marksPerQuestion
+    decimal negativeMarks
+    int durationSec
+    bool mandatory
+    json difficultyMix
+  }
+
+  PaperQuestion {
+    string id PK
+    string testId FK
+    string testSectionId FK
+    string questionId FK
+    int order
+    decimal marks
+    decimal negativeMarks
+    enum status "ACTIVE/DROPPED/BONUS"
+  }
+
+  Attempt {
+    string id PK
+    string testId FK
+    string studentId FK
+    enum status "IN_PROGRESS/SUBMITTED/EVALUATED/EXPIRED"
+    datetime startedAt
+    datetime endsAt "server deadline"
+    datetime submittedAt
+    datetime evaluatedAt
+    int shuffleSeed
+    int resumeCount
+    string locale
+    json sectionState
+    decimal score "filled on eval"
+    int correctCount
+    int wrongCount
+    int unattemptedCount
+    json sectionScores
+    int rank "snapshot; live from Redis"
+    decimal percentile
+  }
+
+  AttemptAnswer {
+    string attemptId PK "FK Attempt"
+    string paperQuestionId PK "FK PaperQuestion"
+    string selectedOptionId FK
+    enum state "answered/marked/skipped..."
+    int timeSpentSec
+    string languageViewed
+    bool isCorrect
+    decimal marksAwarded
+    datetime answeredAt
+  }
+
+  Group {
+    string id PK
+    string name UK
+    string branch
+    string description
+  }
+
+  TestSeries {
+    string id PK
+    string name
+    string description
+  }
+
+  Notification {
+    string id PK
+    string studentId FK
+    enum type "TEST_ASSIGNED/RESULT_READY/GENERIC"
+    string title
+    string body
+    string testId FK
+    bool isRead
+  }
