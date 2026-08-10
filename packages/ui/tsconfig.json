@@ -1,0 +1,7 @@
+{
+  "extends": "@iace/config/tsconfig.react.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

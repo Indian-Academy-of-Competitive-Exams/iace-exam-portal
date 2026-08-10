@@ -1,0 +1,94 @@
+/* ============================================================================
+   IACE Design System — tokens
+   packages/ui/src/tokens.css
+   Import this ONCE at each app's entry (main.tsx). Everything else references
+   these variables (directly or through the Tailwind preset). Do not hardcode
+   colors/spacing/radii in components — extend this file instead.
+   Dark mode: set data-theme="dark" (or "light") on <html>.
+   ============================================================================ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* ---- Brand red ramp (muted brick — primary) ---- */
+  --red-50:#FCF3F3;  --red-100:#F7E4E4; --red-200:#EFC8C8; --red-300:#E2A3A3;
+  --red-400:#D07777; --red-500:#C25454; --red-600:#B83939; --red-700:#9E3030;
+  --red-800:#842A2A; --red-900:#6E2727;
+
+  /* ---- Danger ramp (crimson — cooler/more urgent than brand) ---- */
+  --crimson-50:#FFF1F3;  --crimson-100:#FFE4E9; --crimson-200:#FECDD6;
+  --crimson-300:#FDA4B4; --crimson-400:#FB7189; --crimson-500:#F43F5E;
+  --crimson-600:#E11D48; --crimson-700:#BE123C; --crimson-800:#9F1239;
+
+  /* ---- Neutral (slate) ramp ---- */
+  --slate-50:#F8FAFC;  --slate-100:#F1F5F9; --slate-200:#E2E8F0; --slate-300:#CBD5E1;
+  --slate-400:#94A3B8; --slate-500:#64748B; --slate-600:#475569; --slate-700:#334155;
+  --slate-800:#1E293B; --slate-900:#0F172A; --slate-950:#020617;
+
+  /* ---- Semantic roles (code against these) ---- */
+  --background:#F6F7F9;
+  --surface:#FFFFFF;
+  --surface-2:#F8FAFC;
+  --foreground:#0B0B0C;
+  --muted:#F1F5F9;
+  --muted-foreground:#64748B;
+  --border:#E2E8F0;
+  --input:#E2E8F0;
+  --ring:#B83939;
+
+  --primary:#B83939;      --primary-hover:#9E3030;   --primary-foreground:#FFFFFF;
+  --secondary:#F1F5F9;    --secondary-hover:#E2E8F0; --secondary-foreground:#0F172A; /* Cancel */
+  --destructive:#BE123C;  --destructive-hover:#9F1239; --destructive-foreground:#FFFFFF;
+  --success:#15803D;      --success-foreground:#FFFFFF; --success-subtle:#DCFCE7; --success-ink:#166534;
+  --warning:#F59E0B;      --warning-foreground:#1F2937; --warning-subtle:#FEF3C7; --warning-ink:#92400E;
+  --info:#2563EB;         --info-foreground:#FFFFFF;    --info-subtle:#DBEAFE;    --info-ink:#1E40AF;
+
+  /* ---- Chart surface + validated categorical series (colorblind-safe) ---- */
+  --chart-surface:#FCFCFB; --chart-grid:#E1E0D9; --chart-axis:#C3C2B7; --chart-ink:#52514E;
+  --series-1:#2A78D6; --series-2:#EB6834; --series-3:#1BAF7A; --series-4:#EDA100;
+  --series-5:#E87BA4; --series-6:#008300; --series-7:#4A3AA7; --series-8:#E34948;
+
+  /* ---- Exam CBT palette (faithful to the real exam — fixed convention) ---- */
+  --exam-answered:#16A34A; --exam-notanswered:#C1272D; --exam-notvisited:#E2E8F0;
+  --exam-marked:#7C3AED; --exam-marked-ink:#FFFFFF;
+
+  /* ---- Elevation ---- */
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow-md:0 2px 6px rgba(15,23,42,.08), 0 1px 2px rgba(15,23,42,.06);
+  --shadow-lg:0 8px 24px rgba(15,23,42,.10);
+
+  /* ---- Radii ---- */
+  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:16px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background:#0A0C10;
+  --surface:#13161C;
+  --surface-2:#181C23;
+  --foreground:#F8FAFC;
+  --muted:#1B212A;
+  --muted-foreground:#94A3B8;
+  --border:#262C35;
+  --input:#262C35;
+  --ring:#D07777;
+
+  --primary:#B83939;      --primary-hover:#C25454;   --primary-foreground:#FFFFFF;
+  --secondary:#1E242C;    --secondary-hover:#262C35; --secondary-foreground:#E2E8F0;
+  --destructive:#BE123C;  --destructive-hover:#E11D48; --destructive-foreground:#FFFFFF;
+  --success:#16A34A;      --success-foreground:#04140A; --success-subtle:#0C2A17; --success-ink:#4ADE80;
+  --warning:#F59E0B;      --warning-foreground:#1F2937; --warning-subtle:#3A2A08; --warning-ink:#FBBF24;
+  --info:#3B82F6;         --info-foreground:#04122B; --info-subtle:#0E2247; --info-ink:#93C5FD;
+
+  --chart-surface:#1A1A19; --chart-grid:#2C2C2A; --chart-axis:#383835; --chart-ink:#C3C2B7;
+  --series-1:#3987E5; --series-2:#D95926; --series-3:#199E70; --series-4:#C98500;
+  --series-5:#D55181; --series-6:#008300; --series-7:#9085E9; --series-8:#E66767;
+
+  --exam-answered:#22C55E; --exam-notanswered:#EF4444; --exam-notvisited:#334155;
+  --exam-marked:#8B5CF6; --exam-marked-ink:#FFFFFF;
+
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 2px 8px rgba(0,0,0,.5);
+  --shadow-lg:0 10px 30px rgba(0,0,0,.6);
+}
