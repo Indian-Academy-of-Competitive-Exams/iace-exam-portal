@@ -35,20 +35,20 @@ pnpm db:seed               # creates the bootstrap super admin from .env
 pnpm dev                   # api + test + admin, together
 ```
 
-| What | Where |
-|---|---|
-| API | http://localhost:3000 |
-| Health check | http://localhost:3000/health |
-| Test app | http://localhost:5173 |
-| Admin app | http://localhost:5174 |
-| MinIO console | http://localhost:9001 |
+| What          | Where                        |
+| ------------- | ---------------------------- |
+| API           | http://localhost:3000        |
+| Health check  | http://localhost:3000/health |
+| Test app      | http://localhost:5173        |
+| Admin app     | http://localhost:5174        |
+| MinIO console | http://localhost:9001        |
 
 ### Signing in
 
 OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is printed in the API log** and echoed into the login screen, so no SMS or email is sent.
 
-- **Student** — any valid 10-digit Indian mobile at :5173. The account is created on first successful verify.
-- **Admin** — the seeded `SEED_SUPER_ADMIN_EMAIL` at :5174. Admins cannot self-register.
+- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 6-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number for `PIN_LOCKOUT_SEC`.
+- **Admin** (:5174) — the seeded `SEED_SUPER_ADMIN_EMAIL`, email + OTP every time. Admins cannot self-register.
 
 ### Other scripts
 
@@ -56,7 +56,15 @@ OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is pri
 
 ## Status
 
-**Phase 0 (foundation) complete** — monorepo, local infra, design-system package, shared contracts, NestJS API (config/Prisma/Redis/BullMQ/S3/health) and mobile- and email-OTP auth with JWT + rotating refresh. No product features yet; next is the question bank + importer, per the build order in `CLAUDE.md`.
+**Phase 0 (foundation) complete** — monorepo, local infra, design-system package, shared contracts, NestJS API (config/Prisma/Redis/BullMQ/S3/health), and auth: student signup-OTP + 6-digit PIN, admin email OTP, JWT with rotating refresh. No product features yet; next is the question bank + importer, per the build order in `CLAUDE.md`.
+
+The data model is ahead of the code in three places, deliberately — the columns exist and are migrated, but nothing enforces them until the feature that owns them is built. Grep `TODO(pre-test gate)` and `TODO(access)` for the hook points.
+
+| In the schema                       | Enforced when                                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `Student.preTestReady`              | the test engine lands — a prompt for mother's/father's name + DOB on the way into a test, never a hard block       |
+| Student → Group → TestSeries → Test | the test list and attempt-start endpoints exist; there are no direct grants to check                               |
+| `BaseConfig.locked`                 | base-config editing exists — a config freezes at the first attempt on a test built from it, and evolves by cloning |
 
 ## Notes
 

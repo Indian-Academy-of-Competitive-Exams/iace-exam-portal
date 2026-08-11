@@ -5,9 +5,13 @@ import {
   type AuthSessionResponse,
   type AuthTokens,
   type OtpRequestResponse,
+  type PinSetupTicket,
+  type StudentIdentity,
 } from '@iace/contracts';
+import { type Student } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp/otp.service';
+import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { type AuthenticatedUser, type DeviceContext } from './auth.types';
@@ -17,47 +21,107 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
+    private readonly pin: PinService,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
   ) {}
 
   // ==========================================================================
-  // Students — mobile + OTP
+  // Students — OTP once at signup, a 6-digit PIN every day after
+  //
+  // An SMS per login was the vendor's habit and the students' complaint: it is
+  // slow, it costs money, and it fails exactly when the hall is full and the
+  // network is not. So the OTP proves the number once (and again if the PIN is
+  // forgotten); the PIN carries every ordinary login.
   // ==========================================================================
 
   /**
-   * Unknown mobiles are accepted: a student record is created on first
-   * successful verify (`mobile` is the only mandatory Student field). Deactivated
-   * accounts still get "sent" so the endpoint reveals nothing.
+   * Serves both signup and PIN reset. Any valid-looking mobile gets a code —
+   * registered or not, active or not — so the endpoint answers identically in
+   * every case and cannot be used to discover who has an account.
    */
   async requestStudentOtp(mobile: string): Promise<OtpRequestResponse> {
     return this.otp.request('STUDENT', mobile);
   }
 
-  async verifyStudentOtp(
-    mobile: string,
-    code: string,
-    device: DeviceContext,
-  ): Promise<AuthSessionResponse> {
+  /**
+   * Proves the number and hands back a short-lived ticket. Deliberately does
+   * NOT sign anyone in: the account does not exist until a PIN is chosen, so
+   * an abandoned signup leaves no half-made student behind.
+   */
+  async verifyStudentOtp(mobile: string, code: string): Promise<PinSetupTicket> {
     await this.otp.verify('STUDENT', mobile, code);
 
-    // Verified ownership of the number is the signup step — nothing else to fill in.
+    const student = await this.prisma.student.findUnique({
+      where: { mobile },
+      select: { pinHash: true, isActive: true },
+    });
+    if (student && !student.isActive) {
+      throw new ForbiddenException('This account has been deactivated');
+    }
+
+    return {
+      ...(await this.pin.issueSetupToken(mobile)),
+      pinAlreadySet: student?.pinHash != null,
+    };
+  }
+
+  /**
+   * Redeems the ticket. One code path for both cases — signup creates the
+   * student, a reset overwrites the hash — because they differ only in whether
+   * the row already exists.
+   */
+  async setStudentPin(
+    mobile: string,
+    setupToken: string,
+    pin: string,
+    device: DeviceContext,
+  ): Promise<AuthSessionResponse> {
+    await this.pin.consumeSetupToken(mobile, setupToken);
+
+    const pinHash = await this.pin.hash(pin);
     const student = await this.prisma.student.upsert({
       where: { mobile },
-      create: { mobile },
-      update: {},
+      create: { mobile, pinHash },
+      update: { pinHash },
     });
     if (!student.isActive) throw new ForbiddenException('This account has been deactivated');
 
-    const identity: AuthIdentity = {
-      actor: 'STUDENT',
-      id: student.id,
-      mobile: student.mobile,
-      fullName: student.fullName,
-      preferredLanguage: student.preferredLanguage,
-      profileCompleted: student.profileCompleted,
-    };
+    // A new PIN ends every session opened with the old one — that is most of
+    // the point of a reset — and clears any lockout the student hit first.
+    await this.sessions.revokeAll('STUDENT', student.id);
+    await this.pin.clearFailures(mobile);
 
+    const identity = this.studentIdentity(student);
+    return { tokens: await this.issue(identity, device), identity };
+  }
+
+  /**
+   * The everyday login. Unknown number, no PIN set and wrong PIN are one
+   * answer and one duration, so neither the message nor the clock says whether
+   * the number is registered.
+   */
+  async loginStudent(
+    mobile: string,
+    pin: string,
+    device: DeviceContext,
+  ): Promise<AuthSessionResponse> {
+    await this.pin.assertNotLocked(mobile);
+
+    const student = await this.prisma.student.findUnique({ where: { mobile } });
+    const ok = student?.pinHash
+      ? await this.pin.verify(student.pinHash, pin)
+      : await this.pin.burnVerifyTime().then(() => false);
+
+    if (!ok || !student) {
+      await this.pin.registerFailure(mobile);
+      throw new UnauthorizedException('Incorrect mobile number or PIN');
+    }
+    if (!student.isActive) throw new ForbiddenException('This account has been deactivated');
+
+    await this.pin.clearFailures(mobile);
+
+    const identity = this.studentIdentity(student);
     return { tokens: await this.issue(identity, device), identity };
   }
 
@@ -189,18 +253,29 @@ export class AuthService {
     return { accessToken, refreshToken, expiresInSec: this.tokens.accessTtlSec };
   }
 
+  /**
+   * `preTestReady` rides along on every identity read.
+   * TODO(pre-test gate): the attempt-start endpoint refuses (or rather, prompts)
+   * on `preTestReady === false` once the test engine exists — mother's name,
+   * father's name and DOB are collected there, then the flag is recomputed.
+   */
+  private studentIdentity(student: Student): StudentIdentity {
+    return {
+      actor: 'STUDENT',
+      id: student.id,
+      mobile: student.mobile,
+      fullName: student.fullName,
+      preferredLanguage: student.preferredLanguage,
+      preTestReady: student.preTestReady,
+      profileCompleted: student.profileCompleted,
+    };
+  }
+
   private async loadIdentity(actor: ActorType, id: string): Promise<AuthIdentity | null> {
     if (actor === 'STUDENT') {
       const student = await this.prisma.student.findUnique({ where: { id } });
       if (!student || !student.isActive) return null;
-      return {
-        actor: 'STUDENT',
-        id: student.id,
-        mobile: student.mobile,
-        fullName: student.fullName,
-        preferredLanguage: student.preferredLanguage,
-        profileCompleted: student.profileCompleted,
-      };
+      return this.studentIdentity(student);
     }
 
     const admin = await this.prisma.admin.findUnique({

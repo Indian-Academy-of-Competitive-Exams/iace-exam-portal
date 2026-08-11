@@ -4,6 +4,8 @@ import {
   refreshTokenSchema,
   requestAdminOtpSchema,
   requestStudentOtpSchema,
+  setStudentPinSchema,
+  studentLoginSchema,
   verifyAdminOtpSchema,
   verifyStudentOtpSchema,
   type AuthIdentity,
@@ -11,9 +13,12 @@ import {
   type AuthTokens,
   type LogoutResponse,
   type OtpRequestResponse,
+  type PinSetupTicket,
   type RefreshTokenBody,
   type RequestAdminOtpBody,
   type RequestStudentOtpBody,
+  type SetStudentPinBody,
+  type StudentLoginBody,
   type VerifyAdminOtpBody,
   type VerifyStudentOtpBody,
 } from '@iace/contracts';
@@ -26,8 +31,9 @@ import { ZodBody } from '../common/zod-validation.pipe';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  // ---- Students: mobile + OTP ------------------------------------------------
+  // ---- Students: OTP at signup / reset, then mobile + 6-digit PIN ------------
 
+  /** Step 1 of signup and of a PIN reset — the same endpoint for both. */
   @Public()
   @Post('student/otp/request')
   @HttpCode(HttpStatus.OK)
@@ -37,14 +43,41 @@ export class AuthController {
     return this.auth.requestStudentOtp(body.mobile);
   }
 
+  /** Step 2 — returns a ticket to set a PIN, not a session. */
   @Public()
   @Post('student/otp/verify')
   @HttpCode(HttpStatus.OK)
   verifyStudentOtp(
     @Body(new ZodBody(verifyStudentOtpSchema)) body: VerifyStudentOtpBody,
+  ): Promise<PinSetupTicket> {
+    return this.auth.verifyStudentOtp(body.mobile, body.code);
+  }
+
+  /** Step 3 — sets the PIN and signs in. */
+  @Public()
+  @Post('student/pin/set')
+  @HttpCode(HttpStatus.OK)
+  setStudentPin(
+    @Body(new ZodBody(setStudentPinSchema)) body: SetStudentPinBody,
     @Req() request: Request,
   ): Promise<AuthSessionResponse> {
-    return this.auth.verifyStudentOtp(body.mobile, body.code, deviceFrom(request, body.device));
+    return this.auth.setStudentPin(
+      body.mobile,
+      body.setupToken,
+      body.pin,
+      deviceFrom(request, body.device),
+    );
+  }
+
+  /** Every login after signup. No SMS involved. */
+  @Public()
+  @Post('student/login')
+  @HttpCode(HttpStatus.OK)
+  loginStudent(
+    @Body(new ZodBody(studentLoginSchema)) body: StudentLoginBody,
+    @Req() request: Request,
+  ): Promise<AuthSessionResponse> {
+    return this.auth.loginStudent(body.mobile, body.pin, deviceFrom(request, body.device));
   }
 
   // ---- Admins: email + OTP ---------------------------------------------------

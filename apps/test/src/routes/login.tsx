@@ -1,34 +1,55 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
 import {
   ApiError,
+  newPinSchema,
   otpCodeSchema,
+  pinSchema,
   requestStudentOtpSchema,
+  studentLoginSchema,
+  type AuthSessionResponse,
   type OtpRequestResponse,
+  type PinSetupTicket,
 } from '@iace/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
 
-const codeFormSchema = z.object({ code: otpCodeSchema });
+/** Why the student is going through the OTP flow — it only changes the words. */
+type OtpIntent = 'SIGNUP' | 'RESET';
 
 /**
- * Mobile + OTP, in two steps. ThinkExam used email + password; the whole point
- * of the change is that a student only ever needs their phone.
+ * Signing in is mobile + a 6-digit PIN. An OTP appears exactly twice: creating
+ * the account, and recovering a forgotten PIN — both of which land on the same
+ * three screens (mobile → code → choose a PIN).
+ *
+ * Signup and reset are separate buttons rather than a lookup on the number:
+ * asking the server "does this mobile exist?" would answer that question for
+ * anyone who asked.
  */
+type Step =
+  | { kind: 'signIn' }
+  | { kind: 'mobile'; intent: OtpIntent }
+  | { kind: 'code'; intent: OtpIntent; mobile: string; challenge: OtpRequestResponse }
+  | { kind: 'pin'; intent: OtpIntent; mobile: string; ticket: PinSetupTicket };
+
 export function LoginPage() {
   const { student, signIn } = useAuth();
   const navigate = useNavigate();
-  const [mobile, setMobile] = useState<string | null>(null);
-  const [challenge, setChallenge] = useState<OtpRequestResponse | null>(null);
+  const [step, setStep] = useState<Step>({ kind: 'signIn' });
 
   if (student) return <Navigate to="/" replace />;
+
+  const onSignedIn = (session: AuthSessionResponse) => {
+    signIn(session);
+    void navigate('/', { replace: true });
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -39,27 +60,38 @@ export function LoginPage() {
 
       <main className="flex flex-1 items-center justify-center px-4 pb-16">
         <Card className="w-full max-w-sm">
-          {mobile === null || challenge === null ? (
+          {step.kind === 'signIn' ? (
+            <SignInStep
+              onSignedIn={onSignedIn}
+              onSignUp={() => setStep({ kind: 'mobile', intent: 'SIGNUP' })}
+              onForgotPin={() => setStep({ kind: 'mobile', intent: 'RESET' })}
+            />
+          ) : null}
+
+          {step.kind === 'mobile' ? (
             <MobileStep
-              onSent={(value, response) => {
-                setMobile(value);
-                setChallenge(response);
-              }}
+              intent={step.intent}
+              onBack={() => setStep({ kind: 'signIn' })}
+              onSent={(mobile, challenge) =>
+                setStep({ kind: 'code', intent: step.intent, mobile, challenge })
+              }
             />
-          ) : (
+          ) : null}
+
+          {step.kind === 'code' ? (
             <CodeStep
-              mobile={mobile}
-              challenge={challenge}
-              onBack={() => {
-                setMobile(null);
-                setChallenge(null);
-              }}
-              onVerified={(session) => {
-                signIn(session);
-                void navigate('/', { replace: true });
-              }}
+              mobile={step.mobile}
+              challenge={step.challenge}
+              onBack={() => setStep({ kind: 'mobile', intent: step.intent })}
+              onVerified={(ticket) =>
+                setStep({ kind: 'pin', intent: step.intent, mobile: step.mobile, ticket })
+              }
             />
-          )}
+          ) : null}
+
+          {step.kind === 'pin' ? (
+            <SetPinStep mobile={step.mobile} ticket={step.ticket} onSignedIn={onSignedIn} />
+          ) : null}
         </Card>
       </main>
     </div>
@@ -68,9 +100,92 @@ export function LoginPage() {
 
 // ---------------------------------------------------------------------------
 
+function SignInStep({
+  onSignedIn,
+  onSignUp,
+  onForgotPin,
+}: {
+  onSignedIn: (session: AuthSessionResponse) => void;
+  onSignUp: () => void;
+  onForgotPin: () => void;
+}) {
+  const form = useForm({
+    resolver: zodResolver(studentLoginSchema),
+    defaultValues: { mobile: '', pin: '' },
+  });
+
+  const login = useMutation({
+    mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
+    onSuccess: onSignedIn,
+  });
+
+  return (
+    <>
+      <CardHeader>
+        <IconBadge>
+          <KeyRound className="size-5 text-primary" aria-hidden />
+        </IconBadge>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>Your mobile number and your 6-digit PIN.</CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={form.handleSubmit((values) => login.mutate(values))}
+          noValidate
+        >
+          <MobileField
+            autoFocus
+            error={form.formState.errors.mobile?.message}
+            register={form.register('mobile')}
+          />
+          <PinField
+            id="pin"
+            label="PIN"
+            autoComplete="current-password"
+            error={form.formState.errors.pin?.message}
+            register={form.register('pin')}
+          />
+
+          <RequestError error={login.error} />
+
+          <Button type="submit" disabled={login.isPending}>
+            {login.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            Sign in
+          </Button>
+
+          <div className="flex items-center justify-between pt-1 text-sm">
+            <button
+              type="button"
+              onClick={onSignUp}
+              className="font-medium text-primary hover:underline"
+            >
+              Create an account
+            </button>
+            <button
+              type="button"
+              onClick={onForgotPin}
+              className="text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Forgot PIN?
+            </button>
+          </div>
+        </form>
+      </CardContent>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function MobileStep({
+  intent,
+  onBack,
   onSent,
 }: {
+  intent: OtpIntent;
+  onBack: () => void;
   onSent: (mobile: string, response: OtpRequestResponse) => void;
 }) {
   const form = useForm({
@@ -86,12 +201,14 @@ function MobileStep({
   return (
     <>
       <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
+        <IconBadge>
           <Smartphone className="size-5 text-primary" aria-hidden />
-        </div>
-        <CardTitle>Sign in</CardTitle>
+        </IconBadge>
+        <CardTitle>{intent === 'SIGNUP' ? 'Create your account' : 'Reset your PIN'}</CardTitle>
         <CardDescription>
-          Enter your mobile number and we&apos;ll send you a one-time code.
+          {intent === 'SIGNUP'
+            ? "Enter your mobile number. We'll send a one-time code to verify it, then you'll pick a PIN."
+            : "Enter your registered mobile number and we'll send a one-time code."}
         </CardDescription>
       </CardHeader>
 
@@ -101,26 +218,11 @@ function MobileStep({
           onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
           noValidate
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="mobile" className="text-sm font-medium text-foreground">
-              Mobile number
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm tabular-nums text-muted-foreground">+91</span>
-              <Input
-                id="mobile"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                autoFocus
-                placeholder="98765 43210"
-                maxLength={13}
-                invalid={Boolean(form.formState.errors.mobile)}
-                {...form.register('mobile')}
-              />
-            </div>
-            <FieldError message={form.formState.errors.mobile?.message} />
-          </div>
+          <MobileField
+            autoFocus
+            error={form.formState.errors.mobile?.message}
+            register={form.register('mobile')}
+          />
 
           <RequestError error={requestOtp.error} />
 
@@ -128,6 +230,8 @@ function MobileStep({
             {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
             Send code
           </Button>
+
+          <BackButton onClick={onBack}>Back to sign in</BackButton>
         </form>
       </CardContent>
     </>
@@ -135,6 +239,8 @@ function MobileStep({
 }
 
 // ---------------------------------------------------------------------------
+
+const codeFormSchema = z.object({ code: otpCodeSchema });
 
 function CodeStep({
   mobile,
@@ -145,7 +251,7 @@ function CodeStep({
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
-  onVerified: (session: Awaited<ReturnType<typeof api.auth.verifyStudentOtp>>) => void;
+  onVerified: (ticket: PinSetupTicket) => void;
 }) {
   const form = useForm({
     resolver: zodResolver(codeFormSchema),
@@ -153,17 +259,16 @@ function CodeStep({
   });
 
   const verify = useMutation({
-    mutationFn: (values: { code: string }) =>
-      api.auth.verifyStudentOtp({ mobile, code: values.code }),
+    mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
   });
 
   return (
     <>
       <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
+        <IconBadge>
           <ShieldCheck className="size-5 text-primary" aria-hidden />
-        </div>
+        </IconBadge>
         <CardTitle>Enter the code</CardTitle>
         <CardDescription>
           Sent to <span className="font-medium text-foreground tabular-nums">+91 {mobile}</span>
@@ -208,9 +313,79 @@ function CodeStep({
             Verify &amp; continue
           </Button>
 
-          <Button type="button" variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft aria-hidden />
-            Use a different number
+          <BackButton onClick={onBack}>Use a different number</BackButton>
+        </form>
+      </CardContent>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const setPinFormSchema = z
+  .object({ pin: newPinSchema, confirmPin: pinSchema })
+  .refine((values) => values.pin === values.confirmPin, {
+    message: 'Both PINs must match',
+    path: ['confirmPin'],
+  });
+
+function SetPinStep({
+  mobile,
+  ticket,
+  onSignedIn,
+}: {
+  mobile: string;
+  ticket: PinSetupTicket;
+  onSignedIn: (session: AuthSessionResponse) => void;
+}) {
+  const form = useForm({
+    resolver: zodResolver(setPinFormSchema),
+    defaultValues: { pin: '', confirmPin: '' },
+  });
+
+  const setPin = useMutation({
+    mutationFn: (values: { pin: string }) =>
+      api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
+    onSuccess: onSignedIn,
+  });
+
+  return (
+    <>
+      <CardHeader>
+        <IconBadge>
+          <KeyRound className="size-5 text-primary" aria-hidden />
+        </IconBadge>
+        <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
+        <CardDescription>
+          Six digits — this is how you&apos;ll sign in from now on. No more codes.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
+          noValidate
+        >
+          <PinField
+            id="pin"
+            label="New PIN"
+            autoFocus
+            error={form.formState.errors.pin?.message}
+            register={form.register('pin')}
+          />
+          <PinField
+            id="confirmPin"
+            label="Confirm PIN"
+            error={form.formState.errors.confirmPin?.message}
+            register={form.register('confirmPin')}
+          />
+
+          <RequestError error={setPin.error} />
+
+          <Button type="submit" disabled={setPin.isPending}>
+            {setPin.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            Save PIN &amp; continue
           </Button>
         </form>
       </CardContent>
@@ -219,6 +394,96 @@ function CodeStep({
 }
 
 // ---------------------------------------------------------------------------
+// Shared bits
+// ---------------------------------------------------------------------------
+
+function IconBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
+      {children}
+    </div>
+  );
+}
+
+/** The mobile input is identical on three of the four screens. */
+function MobileField({
+  autoFocus,
+  error,
+  register,
+}: {
+  autoFocus?: boolean;
+  error?: string;
+  register: UseFormRegisterReturn;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="mobile" className="text-sm font-medium text-foreground">
+        Mobile number
+      </label>
+      <div className="flex items-center gap-2">
+        <span className="text-sm tabular-nums text-muted-foreground">+91</span>
+        <Input
+          id="mobile"
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel"
+          autoFocus={autoFocus}
+          placeholder="98765 43210"
+          maxLength={13}
+          invalid={Boolean(error)}
+          {...register}
+        />
+      </div>
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function PinField({
+  id,
+  label,
+  autoFocus,
+  autoComplete = 'new-password',
+  error,
+  register,
+}: {
+  id: string;
+  label: string;
+  autoFocus?: boolean;
+  autoComplete?: 'new-password' | 'current-password';
+  error?: string;
+  register: UseFormRegisterReturn;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </label>
+      <Input
+        id={id}
+        type="password"
+        inputMode="numeric"
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        placeholder="••••••"
+        maxLength={6}
+        className="tracking-[0.5em] tabular-nums"
+        invalid={Boolean(error)}
+        {...register}
+      />
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Button type="button" variant="ghost" size="sm" onClick={onClick}>
+      <ArrowLeft aria-hidden />
+      {children}
+    </Button>
+  );
+}
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;

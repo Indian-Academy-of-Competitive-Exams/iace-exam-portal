@@ -12,6 +12,18 @@ export const redisKeys = {
   otpCooldown: (actor: ActorType, identifier: string) =>
     `otp:cooldown:${actor.toLowerCase()}:${identifier}`,
 
+  /**
+   * A student's consecutive failed PIN attempts. Cleared on success, and by its
+   * own TTL, so an occasional typo never accumulates into a lockout.
+   */
+  pinAttempts: (mobile: string) => `pin:attempts:${mobile}`,
+
+  /** Present while a student is locked out of PIN login; TTL = time remaining. */
+  pinLock: (mobile: string) => `pin:lock:${mobile}`,
+
+  /** Hash of the single-use ticket that authorises setting a PIN after an OTP. */
+  pinSetup: (mobile: string) => `pin:setup:${mobile}`,
+
   /** One refresh session: token hash + device binding. TTL = refresh lifetime. */
   session: (actor: ActorType, subjectId: string, sessionId: string) =>
     `session:${actor.toLowerCase()}:${subjectId}:${sessionId}`,

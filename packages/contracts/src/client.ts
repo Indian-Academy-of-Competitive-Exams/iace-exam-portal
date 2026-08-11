@@ -7,13 +7,17 @@ import {
   authTokensSchema,
   logoutResponseSchema,
   otpRequestResponseSchema,
+  pinSetupTicketSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
   type LogoutResponse,
   type OtpRequestResponse,
+  type PinSetupTicket,
   type RequestAdminOtpInput,
   type RequestStudentOtpInput,
+  type SetStudentPinInput,
+  type StudentLoginInput,
   type VerifyAdminOtpInput,
   type VerifyStudentOtpInput,
 } from './auth';
@@ -142,6 +146,7 @@ export function createApiClient(options: ApiClientOptions) {
       request('/health', { schema: healthResponseSchema, anonymous: true }),
 
     auth: {
+      /** Student signup or PIN reset, step 1. */
       requestStudentOtp: (input: RequestStudentOtpInput): Promise<OtpRequestResponse> =>
         request(AUTH_ROUTES.studentOtpRequest, {
           method: 'POST',
@@ -150,8 +155,27 @@ export function createApiClient(options: ApiClientOptions) {
           anonymous: true,
         }),
 
-      verifyStudentOtp: (input: VerifyStudentOtpInput): Promise<AuthSessionResponse> =>
+      /** Step 2 — proves the number and returns a ticket, not a session. */
+      verifyStudentOtp: (input: VerifyStudentOtpInput): Promise<PinSetupTicket> =>
         request(AUTH_ROUTES.studentOtpVerify, {
+          method: 'POST',
+          body: input,
+          schema: pinSetupTicketSchema,
+          anonymous: true,
+        }),
+
+      /** Step 3 — redeems the ticket, stores the PIN and signs the student in. */
+      setStudentPin: (input: SetStudentPinInput): Promise<AuthSessionResponse> =>
+        request(AUTH_ROUTES.studentPinSet, {
+          method: 'POST',
+          body: input,
+          schema: authSessionResponseSchema,
+          anonymous: true,
+        }),
+
+      /** The everyday student login: mobile + 6-digit PIN, no OTP. */
+      loginStudent: (input: StudentLoginInput): Promise<AuthSessionResponse> =>
+        request(AUTH_ROUTES.studentLogin, {
           method: 'POST',
           body: input,
           schema: authSessionResponseSchema,

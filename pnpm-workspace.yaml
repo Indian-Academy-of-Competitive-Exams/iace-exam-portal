@@ -10,6 +10,8 @@ allowBuilds:
   prisma: true
   esbuild: true
   msgpackr-extract: true
+  # argon2 ships prebuilt binaries and only compiles if none match the platform.
+  argon2: true
 
 # pnpm 11 holds back very recently published versions as supply-chain
 # protection. These exact versions are the ones we pinned deliberately, so

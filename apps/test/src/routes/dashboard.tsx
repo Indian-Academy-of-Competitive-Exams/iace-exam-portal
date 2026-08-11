@@ -6,6 +6,12 @@ import { ThemeToggle } from '../components/theme-toggle';
 /**
  * The authed shell. In V1 this route becomes the Report dashboard — the
  * student's post-login landing page — not a raw test list.
+ *
+ * TODO(pre-test gate): when `student.preTestReady` is false, prompt for
+ * mother's name, father's name and DOB on the way into a test. A short prompt,
+ * not a wall — `profileCompleted` (the full profile) never blocks anything.
+ * TODO(access): the test list here is Student -> Group -> TestSeries -> Test;
+ * there are no direct grants to check.
  */
 export function DashboardPage() {
   const { student, signOut } = useAuth();
@@ -35,11 +41,12 @@ export function DashboardPage() {
           <CardHeader>
             <CardTitle>Your report will live here</CardTitle>
             <CardDescription>
-              Phase 0 is the foundation only — infrastructure, design system and OTP sign-in. Tests,
+              Phase 0 is the foundation only — infrastructure, design system and PIN sign-in. Tests,
               results and rank arrive with the mock-test feature.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-6 text-sm">
+            <Stat label="Test details" value={student?.preTestReady ? 'On file' : 'Needed'} />
             <Stat label="Profile" value={student?.profileCompleted ? 'Complete' : 'Incomplete'} />
             <Stat label="Language" value={student?.preferredLanguage.toUpperCase() ?? '—'} />
             <Stat label="Tests taken" value="0" />

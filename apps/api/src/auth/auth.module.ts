@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { OtpService } from './otp/otp.service';
+import { PinService } from './pin/pin.service';
 import { ConsoleOtpSender } from './otp/console-otp-sender';
 import { OTP_SENDER, type OtpSender } from './otp/otp-sender';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -41,6 +42,7 @@ function createOtpSender(config: AppConfigService, consoleSender: ConsoleOtpSend
     TokenService,
     SessionService,
     OtpService,
+    PinService,
     ConsoleOtpSender,
     {
       provide: OTP_SENDER,

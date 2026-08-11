@@ -40,6 +40,18 @@ export const envSchema = z.object({
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_SENDER: z.enum(['console', 'msg91']).default('console'),
 
+  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the
+  // attempt counters and the setup ticket live in Redis.
+  //
+  // The pepper is HMAC'd into the PIN before hashing and is NEVER stored with
+  // it. A 6-digit PIN is only a million candidates — a leaked Student table
+  // alone would fall to a laptop, so the hash is worthless without this secret.
+  // Rotating it invalidates every PIN (students recover by OTP reset).
+  PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
+  PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  PIN_LOCKOUT_SEC: z.coerce.number().int().positive().default(900),
+  PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
+
   // Object storage. ONE code path: MinIO locally, AWS S3 in production —
   // only the endpoint, credentials and path-style flag differ.
   S3_ENDPOINT: z
