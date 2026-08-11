@@ -8,5 +8,9 @@
     "noEmit": true,
     "rootDir": ".."
   },
-  "include": ["**/*.ts"]
+  // src/ is listed as well as test/ on purpose. tsx applies a tsconfig only to
+  // files matching its `include`, so without src/ here the services under test
+  // are transpiled with the defaults — and NestJS parameter decorators
+  // (`@Inject(...)`) fail to parse without `experimentalDecorators`.
+  "include": ["**/*.ts", "../src/**/*.ts"]
 }

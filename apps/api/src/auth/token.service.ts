@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'node:crypto';
 import {
   AppException,
   ErrorCodes,
@@ -46,11 +47,24 @@ export class TokenService {
     });
   }
 
+  /**
+   * `jti` is what makes each refresh token unique.
+   *
+   * Without it the payload is just {sub, actor, sid, iat, exp} — and `iat` has
+   * one-second resolution, so refreshing inside the same second as the previous
+   * signing produced a BYTE-IDENTICAL token. Rotation then stored the hash of a
+   * token equal to the old one, silently turning "every use mints a new token
+   * and invalidates the old" into a no-op, and disarming the reuse detection
+   * that depends on it.
+   */
   signRefresh(claims: RefreshTokenClaims): Promise<string> {
-    return this.jwt.signAsync(claims, {
-      secret: this.config.get('JWT_REFRESH_SECRET'),
-      expiresIn: this.refreshTtlSec,
-    });
+    return this.jwt.signAsync(
+      { ...claims, jti: randomUUID() },
+      {
+        secret: this.config.get('JWT_REFRESH_SECRET'),
+        expiresIn: this.refreshTtlSec,
+      },
+    );
   }
 
   async verifyAccess(token: string): Promise<AccessTokenClaims> {
