@@ -5,12 +5,17 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { REQUEST_ID_HEADER } from './common/request-id';
+import { registerBodyParsers } from './common/body-parsers';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  // bodyParser: false so the limits in registerBodyParsers are the only ones
+  // that apply — Nest's default parser would otherwise be installed first, and
+  // first parser wins.
+  const app = await NestFactory.create(AppModule, { bufferLogs: false, bodyParser: false });
   const config = app.get(AppConfigService);
 
   app.use(helmet());
+  registerBodyParsers(app);
 
   const origins = config.get('CORS_ORIGINS');
   app.enableCors({

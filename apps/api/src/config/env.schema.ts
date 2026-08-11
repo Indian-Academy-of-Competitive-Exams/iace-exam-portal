@@ -64,6 +64,22 @@ export const OTP_SENDERS = {
 } as const;
 export type OtpSenderChannel = (typeof OTP_SENDERS)[keyof typeof OTP_SENDERS];
 
+/**
+ * A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb.
+ * Validated here so a typo fails at boot rather than becoming a silently
+ * enormous limit — `bytes` returns null for garbage, and body-parser then
+ * treats "no limit" as the answer.
+ */
+const byteSize = (fallback: string) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v.trim() === '' ? fallback : v.trim().toLowerCase()))
+    .refine(
+      (v) => /^\d+(b|kb|mb)$/.test(v),
+      'must be a size like 256kb or 10mb (bytes, kilobytes or megabytes)',
+    );
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(NODE_ENVS).default(NODE_ENVS.DEVELOPMENT),
   API_PORT: z.coerce.number().int().positive().default(3000),
@@ -106,6 +122,14 @@ export const envSchema = z.object({
   // it immediately — this only matters to someone who keeps failing.
   PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
   PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
+
+  // Request body limits. Deliberately two: the ordinary API exchanges small
+  // JSON (a login is a few hundred bytes, a single question a few tens of KB —
+  // images are S3 URLs, never inline), so a generous global limit would only
+  // widen the surface for cheap memory-pressure attacks. The question importer
+  // is the one endpoint that legitimately receives a large payload.
+  BODY_LIMIT_DEFAULT: byteSize('256kb'),
+  BODY_LIMIT_IMPORT: byteSize('10mb'),
 
   // Object storage. ONE code path: MinIO locally, AWS S3 in production —
   // only the endpoint, credentials and path-style flag differ.

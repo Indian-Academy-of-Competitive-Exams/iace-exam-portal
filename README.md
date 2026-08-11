@@ -83,6 +83,19 @@ Steps in Verify use `if: '!cancelled()'`, so a run reports _every_ failure rathe
 
 `pnpm db:check` is the drift gate and works locally too — set `SHADOW_DATABASE_URL` to a throwaway database and it exits non-zero when `schema.prisma` has been edited without a migration.
 
+### Request size limits
+
+Two limits, not one (`BODY_LIMIT_DEFAULT`, `BODY_LIMIT_IMPORT`):
+
+| Path         | Limit     | Why                                                                                                                 |
+| ------------ | --------- | ------------------------------------------------------------------------------------------------------------------- |
+| everything   | **256kb** | a login is a few hundred bytes; a single question is tens of KB, because images are S3 URLs and never inline base64 |
+| `/imports/*` | **10mb**  | the question importer is the one endpoint that legitimately receives a large payload                                |
+
+Raising the global limit to suit the importer would hand every unauthenticated endpoint a cheap way to make the server allocate megabytes per request, so the larger limit is scoped to the path instead. Over-limit requests answer **413** in the normal envelope (`VALIDATION_ERROR`, "The request was too large") and are logged at DEBUG, not ERROR — a client sending too much is not our incident.
+
+Both are env vars: change them without touching code.
+
 ### Other scripts
 
 `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
