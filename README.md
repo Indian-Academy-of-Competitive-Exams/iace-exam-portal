@@ -72,7 +72,9 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 `pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
 
-`pnpm test` runs the Node test runner (no Jest): envelope unit + e2e tests in `apps/api/test`, typed-client tests in `packages/contracts/test`. Neither needs Postgres, Redis or S3.
+`pnpm test` runs the Node test runner (no Jest). **Nothing in the suite needs Postgres, Redis or S3** — `apps/api/test/support/fakes.ts` provides an in-memory Redis with a clock the test advances, so TTLs, OTP expiry and lockout escalation are asserted without sleeping. That is what makes the suite safe as a CI gate.
+
+Every backend feature ships with its tests in the same commit (see the guardrail in `CLAUDE.md`): the happy path, plus the failure the feature exists to prevent.
 
 ## Status
 
