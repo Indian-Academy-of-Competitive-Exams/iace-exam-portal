@@ -31,5 +31,8 @@ export const THEME_ATTRIBUTE = 'data-theme';
  */
 export const STORAGE_KEYS = {
   THEME: 'iace.theme',
-  AUTH: 'iace.student.auth',
+  // Named for the app, not the audience: the broader student portal arrives as
+  // a separate SPA later and would otherwise claim this same key on this same
+  // origin, and whichever loaded last would silently clobber the other.
+  AUTH: 'iace.test.auth',
 } as const;
