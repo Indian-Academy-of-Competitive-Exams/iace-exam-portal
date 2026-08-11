@@ -56,7 +56,14 @@
   --muted-foreground: #64748b;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #b83939;
+  /* Focus is BLUE, not brand red — a deliberate departure from the first draft
+     of this system. With the brand red and the crimson `--destructive` sitting
+     a few degrees apart, a red focus ring made a field that was merely selected
+     look exactly like a field that was wrong, and the primary button made three
+     reds on one small card. Blue leaves red to mean two things only: "this is
+     IACE" and "this is broken". (The chart palette is blue-led for the same
+     reason.) Revert by setting this to #b83939. */
+  --ring: #2563eb;
 
   --primary: #b83939;
   --primary-hover: #9e3030;
@@ -101,6 +108,15 @@
   --exam-marked: #7c3aed;
   --exam-marked-ink: #ffffff;
 
+  /* ---- Focus + invalid glows ----
+     The style guide's focus treatment is a SOFT 3px glow plus a border tint,
+     not a hard offset ring. That distinction carries real weight here: the
+     brand is red and `--destructive` is a near neighbour of it, so a hard red
+     outline on a focused field is indistinguishable from an error. The glow
+     reads as "you are here"; the crimson one reads as "this is wrong". */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);
+  --focus-ring-invalid: 0 0 0 3px color-mix(in srgb, var(--destructive) 22%, transparent);
+
   /* ---- Elevation ---- */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -124,7 +140,7 @@
   --muted-foreground: #94a3b8;
   --border: #262c35;
   --input: #262c35;
-  --ring: #d07777;
+  --ring: #60a5fa;
 
   --primary: #b83939;
   --primary-hover: #c25454;
@@ -166,6 +182,9 @@
   --exam-notvisited: #334155;
   --exam-marked: #8b5cf6;
   --exam-marked-ink: #ffffff;
+
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 30%, transparent);
+  --focus-ring-invalid: 0 0 0 3px color-mix(in srgb, var(--destructive) 32%, transparent);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);

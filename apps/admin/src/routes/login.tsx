@@ -4,9 +4,21 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, Mail, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
+import {
+  Alert,
+  Brandmark,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Field,
+  Input,
+  NumericInput,
+} from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
@@ -33,15 +45,16 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-4">
-        <span className="text-lg font-semibold tracking-tight text-foreground">
-          IACE <span className="text-muted-foreground">Admin</span>
-        </span>
+      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
+        <div className="flex items-baseline gap-2">
+          <Brandmark withWordmark />
+          <span className="text-sm font-medium text-muted-foreground">Admin</span>
+        </div>
         <ThemeToggle />
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-16">
-        <Card className="w-full max-w-sm">
+      <main className="flex flex-1 items-center justify-center px-5 pb-24">
+        <Card className="w-full max-w-[26rem] shadow-md">
           {email === null || challenge === null ? (
             <EmailStep
               onSent={(value, response) => {
@@ -86,9 +99,7 @@ function EmailStep({ onSent }: { onSent: (email: string, response: OtpRequestRes
   return (
     <>
       <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <Mail className="size-5 text-primary" aria-hidden />
-        </div>
+        <StepIcon icon={Mail} />
         <CardTitle>Admin sign in</CardTitle>
         <CardDescription>
           Enter your work email and we&apos;ll send you a one-time code.
@@ -101,21 +112,19 @@ function EmailStep({ onSent }: { onSent: (email: string, response: OtpRequestRes
           onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
           noValidate
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-sm font-medium text-foreground">
-              Email address
-            </label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              autoFocus
-              placeholder="you@iace.co.in"
-              invalid={Boolean(form.formState.errors.email)}
-              {...form.register('email')}
-            />
-            <FieldError message={form.formState.errors.email?.message} />
-          </div>
+          <Field htmlFor="email" label="Email address" error={form.formState.errors.email?.message}>
+            {(control) => (
+              <Input
+                {...control}
+                {...form.register('email')}
+                type="email"
+                autoComplete="email"
+                autoFocus
+                placeholder="you@iace.co.in"
+                invalid={Boolean(form.formState.errors.email)}
+              />
+            )}
+          </Field>
 
           <RequestError error={requestOtp.error} fields={EMAIL_FIELDS} />
 
@@ -156,9 +165,7 @@ function CodeStep({
   return (
     <>
       <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <ShieldCheck className="size-5 text-primary" aria-hidden />
-        </div>
+        <StepIcon icon={ShieldCheck} />
         <CardTitle>Enter the code</CardTitle>
         <CardDescription>
           Sent to <span className="font-medium text-foreground">{email}</span>
@@ -171,29 +178,29 @@ function CodeStep({
           onSubmit={form.handleSubmit((values) => verify.mutate(values))}
           noValidate
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="code" className="text-sm font-medium text-foreground">
-              One-time code
-            </label>
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              placeholder="••••••"
-              maxLength={8}
-              className="tracking-[0.5em] tabular-nums"
-              invalid={Boolean(form.formState.errors.code)}
-              {...form.register('code')}
-            />
-            <FieldError message={form.formState.errors.code?.message} />
-          </div>
+          <Field htmlFor="code" label="One-time code" error={form.formState.errors.code?.message}>
+            {(control) => (
+              <NumericInput
+                {...control}
+                {...form.register('code')}
+                autoFocus
+                autoComplete="one-time-code"
+                maxLength={8}
+                placeholder="••••••"
+                invalid={Boolean(form.formState.errors.code)}
+                className="text-center text-base tracking-[0.5em] tabular-nums"
+              />
+            )}
+          </Field>
 
           {challenge.devCode ? (
-            <p className="rounded-md bg-info-subtle px-3 py-2 text-xs text-info-ink">
-              Development sender: your code is{' '}
-              <span className="font-semibold tabular-nums">{challenge.devCode}</span>
-            </p>
+            <Alert variant="info">
+              <Info aria-hidden />
+              <span>
+                Development sender — your code is{' '}
+                <span className="font-semibold tabular-nums">{challenge.devCode}</span>
+              </span>
+            </Alert>
           ) : null}
 
           <RequestError error={verify.error} fields={CODE_FIELDS} />
@@ -215,22 +222,23 @@ function CodeStep({
 
 // ---------------------------------------------------------------------------
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
+/** Shows only what the field errors did not already say. */
+/** Brand-tinted accent, matching the test app. */
+function StepIcon({ icon: Icon }: { icon: typeof Mail }) {
   return (
-    <p role="alert" className="text-xs text-destructive">
-      {message}
-    </p>
+    <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
+      <Icon className="size-5 text-primary" aria-hidden />
+    </div>
   );
 }
 
-/** Shows only what the field errors did not already say. */
 function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
   const message = bannerMessage(error, fields);
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-      {message}
-    </p>
+    <Alert variant="danger">
+      <TriangleAlert aria-hidden />
+      <span>{message}</span>
+    </Alert>
   );
 }

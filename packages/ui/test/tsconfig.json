@@ -1,0 +1,13 @@
+{
+  // Mirrors apps/api/test: the package tsconfig scopes `include` to src/, and
+  // tsx applies a tsconfig only to files it matches, so src/ is listed too.
+  // `types` is re-stated because the package itself is browser-scoped — the
+  // tests are the only Node code in it.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../src/**/*.ts"]
+}

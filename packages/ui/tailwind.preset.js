@@ -6,96 +6,117 @@
    and classes like bg-primary / text-muted-foreground / border-border just work.
    ============================================================================ */
 
+/**
+ * Tailwind cannot compute an alpha channel from a bare `var(--x)`, so it
+ * silently DROPS the utility: `bg-destructive/10` emitted no CSS whatsoever,
+ * and the error banner that used it had no background at all. Nothing errored —
+ * the class simply did not exist.
+ *
+ * Wrapping each token in this keeps the hex values in tokens.css (so plain CSS
+ * and the style guide can still use `var(--primary)` directly) while making
+ * every `/alpha` modifier work through color-mix.
+ */
+const token =
+  (name) =>
+  ({ opacityValue }) =>
+    opacityValue === undefined
+      ? `var(${name})`
+      : `color-mix(in srgb, var(${name}) ${Number(opacityValue) * 100}%, transparent)`;
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        surface: { DEFAULT: 'var(--surface)', 2: 'var(--surface-2)' },
-        foreground: 'var(--foreground)',
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
+        background: token('--background'),
+        surface: { DEFAULT: token('--surface'), 2: token('--surface-2') },
+        foreground: token('--foreground'),
+        border: token('--border'),
+        input: token('--input'),
+        ring: token('--ring'),
 
         // shadcn-compatible roles
-        card: { DEFAULT: 'var(--surface)', foreground: 'var(--foreground)' },
-        popover: { DEFAULT: 'var(--surface)', foreground: 'var(--foreground)' },
-        muted: { DEFAULT: 'var(--muted)', foreground: 'var(--muted-foreground)' },
-        accent: { DEFAULT: 'var(--muted)', foreground: 'var(--foreground)' },
+        card: { DEFAULT: token('--surface'), foreground: token('--foreground') },
+        popover: { DEFAULT: token('--surface'), foreground: token('--foreground') },
+        muted: { DEFAULT: token('--muted'), foreground: token('--muted-foreground') },
+        accent: { DEFAULT: token('--muted'), foreground: token('--foreground') },
 
         primary: {
-          DEFAULT: 'var(--primary)',
-          hover: 'var(--primary-hover)',
-          foreground: 'var(--primary-foreground)',
+          DEFAULT: token('--primary'),
+          hover: token('--primary-hover'),
+          foreground: token('--primary-foreground'),
         },
         secondary: {
-          DEFAULT: 'var(--secondary)',
-          hover: 'var(--secondary-hover)',
-          foreground: 'var(--secondary-foreground)',
+          DEFAULT: token('--secondary'),
+          hover: token('--secondary-hover'),
+          foreground: token('--secondary-foreground'),
         },
         destructive: {
-          DEFAULT: 'var(--destructive)',
-          hover: 'var(--destructive-hover)',
-          foreground: 'var(--destructive-foreground)',
+          DEFAULT: token('--destructive'),
+          hover: token('--destructive-hover'),
+          foreground: token('--destructive-foreground'),
         },
         success: {
-          DEFAULT: 'var(--success)',
-          foreground: 'var(--success-foreground)',
-          subtle: 'var(--success-subtle)',
-          ink: 'var(--success-ink)',
+          DEFAULT: token('--success'),
+          foreground: token('--success-foreground'),
+          subtle: token('--success-subtle'),
+          ink: token('--success-ink'),
         },
         warning: {
-          DEFAULT: 'var(--warning)',
-          foreground: 'var(--warning-foreground)',
-          subtle: 'var(--warning-subtle)',
-          ink: 'var(--warning-ink)',
+          DEFAULT: token('--warning'),
+          foreground: token('--warning-foreground'),
+          subtle: token('--warning-subtle'),
+          ink: token('--warning-ink'),
         },
         info: {
-          DEFAULT: 'var(--info)',
-          foreground: 'var(--info-foreground)',
-          subtle: 'var(--info-subtle)',
-          ink: 'var(--info-ink)',
+          DEFAULT: token('--info'),
+          foreground: token('--info-foreground'),
+          subtle: token('--info-subtle'),
+          ink: token('--info-ink'),
         },
 
         // chart series (assign in fixed order, never cycle)
         series: {
-          1: 'var(--series-1)',
-          2: 'var(--series-2)',
-          3: 'var(--series-3)',
-          4: 'var(--series-4)',
-          5: 'var(--series-5)',
-          6: 'var(--series-6)',
-          7: 'var(--series-7)',
-          8: 'var(--series-8)',
+          1: token('--series-1'),
+          2: token('--series-2'),
+          3: token('--series-3'),
+          4: token('--series-4'),
+          5: token('--series-5'),
+          6: token('--series-6'),
+          7: token('--series-7'),
+          8: token('--series-8'),
         },
         chart: {
-          surface: 'var(--chart-surface)',
-          grid: 'var(--chart-grid)',
-          axis: 'var(--chart-axis)',
-          ink: 'var(--chart-ink)',
+          surface: token('--chart-surface'),
+          grid: token('--chart-grid'),
+          axis: token('--chart-axis'),
+          ink: token('--chart-ink'),
         },
 
         // exam CBT palette (CBT screen only — separate from brand semantics)
         exam: {
-          answered: 'var(--exam-answered)',
-          notanswered: 'var(--exam-notanswered)',
-          notvisited: 'var(--exam-notvisited)',
-          marked: 'var(--exam-marked)',
+          answered: token('--exam-answered'),
+          notanswered: token('--exam-notanswered'),
+          notvisited: token('--exam-notvisited'),
+          marked: token('--exam-marked'),
         },
       },
       borderRadius: {
-        sm: 'var(--radius-sm)',
-        md: 'var(--radius-md)',
-        lg: 'var(--radius-lg)',
-        xl: 'var(--radius-xl)',
-        '2xl': 'var(--radius-2xl)',
+        sm: token('--radius-sm'),
+        md: token('--radius-md'),
+        lg: token('--radius-lg'),
+        xl: token('--radius-xl'),
+        '2xl': token('--radius-2xl'),
       },
       boxShadow: {
-        sm: 'var(--shadow-sm)',
-        md: 'var(--shadow-md)',
-        lg: 'var(--shadow-lg)',
+        sm: token('--shadow-sm'),
+        md: token('--shadow-md'),
+        lg: token('--shadow-lg'),
+        // Focus and invalid are elevation-like tokens on purpose: a control
+        // should never hand-roll either, or the two drift into looking alike.
+        focus: token('--focus-ring'),
+        'focus-invalid': token('--focus-ring-invalid'),
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],

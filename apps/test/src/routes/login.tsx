@@ -4,10 +4,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
 import {
+  ArrowLeft,
+  Info,
+  KeyRound,
+  Loader2,
+  ShieldCheck,
+  Smartphone,
+  TriangleAlert,
+} from 'lucide-react';
+import {
+  MOBILE_DIGITS,
   PIN_LENGTH,
   newPinSchema,
+  normaliseMobile,
   otpCodeSchema,
   pinSchema,
   requestStudentOtpSchema,
@@ -16,7 +26,19 @@ import {
   type OtpRequestResponse,
   type PinSetupTicket,
 } from '@iace/contracts';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
+import {
+  Alert,
+  Brandmark,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Field,
+  NumericInput,
+  digitsOnly,
+} from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
@@ -67,13 +89,15 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-4">
-        <span className="text-lg font-semibold tracking-tight text-foreground">IACE</span>
+      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
+        <Brandmark withWordmark />
         <ThemeToggle />
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-16">
-        <Card className="w-full max-w-sm">
+      {/* pb-24 pulls the card just above the true centre: dead-centre reads as
+          low on a tall screen, and this is the only thing on the page. */}
+      <main className="flex flex-1 items-center justify-center px-5 pb-24">
+        <Card className="w-full max-w-[26rem] shadow-md">
           {step.kind === 'signIn' ? (
             <SignInStep
               onSignedIn={onSignedIn}
@@ -137,9 +161,7 @@ function SignInStep({
   return (
     <>
       <CardHeader>
-        <IconBadge>
-          <KeyRound className="size-5 text-primary" aria-hidden />
-        </IconBadge>
+        <StepIcon icon={KeyRound} />
         <CardTitle>Sign in</CardTitle>
         <CardDescription>Your mobile number and your {PIN_LENGTH}-digit PIN.</CardDescription>
       </CardHeader>
@@ -170,18 +192,20 @@ function SignInStep({
             Sign in
           </Button>
 
-          <div className="flex items-center justify-between pt-1 text-sm">
+          {/* Two peer actions, weighted the same. Styling one in brand red made
+              it compete with the primary button for the same glance. */}
+          <div className="flex items-center justify-between border-t border-border pt-4 text-sm">
             <button
               type="button"
               onClick={onSignUp}
-              className="font-medium text-primary hover:underline"
+              className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
             >
               Create an account
             </button>
             <button
               type="button"
               onClick={onForgotPin}
-              className="text-muted-foreground hover:text-foreground hover:underline"
+              className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:shadow-focus"
             >
               Forgot PIN?
             </button>
@@ -217,9 +241,7 @@ function MobileStep({
   return (
     <>
       <CardHeader>
-        <IconBadge>
-          <Smartphone className="size-5 text-primary" aria-hidden />
-        </IconBadge>
+        <StepIcon icon={Smartphone} />
         <CardTitle>
           {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
         </CardTitle>
@@ -287,9 +309,7 @@ function CodeStep({
   return (
     <>
       <CardHeader>
-        <IconBadge>
-          <ShieldCheck className="size-5 text-primary" aria-hidden />
-        </IconBadge>
+        <StepIcon icon={ShieldCheck} />
         <CardTitle>Enter the code</CardTitle>
         <CardDescription>
           Sent to <span className="font-medium text-foreground tabular-nums">+91 {mobile}</span>
@@ -302,29 +322,16 @@ function CodeStep({
           onSubmit={form.handleSubmit((values) => verify.mutate(values))}
           noValidate
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="code" className="text-sm font-medium text-foreground">
-              One-time code
-            </label>
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              placeholder="••••••"
-              maxLength={8}
-              className="tracking-[0.5em] tabular-nums"
-              invalid={Boolean(form.formState.errors.code)}
-              {...form.register('code')}
-            />
-            <FieldError message={form.formState.errors.code?.message} />
-          </div>
+          <CodeField error={form.formState.errors.code?.message} register={form.register('code')} />
 
           {challenge.devCode ? (
-            <p className="rounded-md bg-info-subtle px-3 py-2 text-xs text-info-ink">
-              Development sender: your code is{' '}
-              <span className="font-semibold tabular-nums">{challenge.devCode}</span>
-            </p>
+            <Alert variant="info">
+              <Info aria-hidden />
+              <span>
+                Development sender — your code is{' '}
+                <span className="font-semibold tabular-nums">{challenge.devCode}</span>
+              </span>
+            </Alert>
           ) : null}
 
           <RequestError error={verify.error} fields={CODE_FIELDS} />
@@ -374,9 +381,7 @@ function SetPinStep({
   return (
     <>
       <CardHeader>
-        <IconBadge>
-          <KeyRound className="size-5 text-primary" aria-hidden />
-        </IconBadge>
+        <StepIcon icon={KeyRound} />
         <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
         <CardDescription>
           {PIN_LENGTH} digits — this is how you&apos;ll sign in from now on. No more codes.
@@ -393,6 +398,7 @@ function SetPinStep({
             id="pin"
             label="New PIN"
             autoFocus
+            hint={`${PIN_LENGTH} digits — avoid 1234 or all one digit`}
             error={form.formState.errors.pin?.message}
             register={form.register('pin')}
           />
@@ -419,10 +425,15 @@ function SetPinStep({
 // Shared bits
 // ---------------------------------------------------------------------------
 
-function IconBadge({ children }: { children: React.ReactNode }) {
+/**
+ * The step's icon. Brand-tinted rather than the muted grey square it was — at
+ * 10% the tint reads as an accent, not as a filled state, and it gives each
+ * card a focal point instead of opening on a bare heading.
+ */
+function StepIcon({ icon: Icon }: { icon: typeof KeyRound }) {
   return (
-    <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
-      {children}
+    <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
+      <Icon className="size-5 text-primary" aria-hidden />
     </div>
   );
 }
@@ -438,26 +449,33 @@ function MobileField({
   register: UseFormRegisterReturn;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="mobile" className="text-sm font-medium text-foreground">
-        Mobile number
-      </label>
-      <div className="flex items-center gap-2">
-        <span className="text-sm tabular-nums text-muted-foreground">+91</span>
-        <Input
-          id="mobile"
-          type="tel"
-          inputMode="numeric"
-          autoComplete="tel"
-          autoFocus={autoFocus}
-          placeholder="98765 43210"
-          maxLength={13}
-          invalid={Boolean(error)}
+    <Field
+      htmlFor="mobile"
+      label="Mobile number"
+      error={error}
+      hint="The number you signed up with"
+    >
+      {(control) => (
+        <NumericInput
+          {...control}
           {...register}
+          autoFocus={autoFocus}
+          autoComplete="tel"
+          // Room to paste a +91-prefixed number; normaliseMobile trims it back
+          // to the ten digits we store. A flat cap of 10 would truncate the
+          // paste first and silently keep the WRONG ten digits.
+          maxLength={15}
+          // digits first, THEN normalise: normaliseMobile only strips
+          // separators and a country code, so composing the other way round
+          // let letters straight through on paste.
+          sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+          placeholder="98765 43210"
+          prefix="+91"
+          invalid={Boolean(error)}
+          className="tabular-nums"
         />
-      </div>
-      <FieldError message={error} />
-    </div>
+      )}
+    </Field>
   );
 }
 
@@ -466,6 +484,7 @@ function PinField({
   label,
   autoFocus,
   autoComplete = 'new-password',
+  hint,
   error,
   register,
 }: {
@@ -473,28 +492,45 @@ function PinField({
   label: string;
   autoFocus?: boolean;
   autoComplete?: 'new-password' | 'current-password';
+  hint?: string;
   error?: string;
   register: UseFormRegisterReturn;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
-        {label}
-      </label>
-      <Input
-        id={id}
-        type="password"
-        inputMode="numeric"
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        placeholder={'•'.repeat(PIN_LENGTH)}
-        maxLength={PIN_LENGTH}
-        className="tracking-[0.5em] tabular-nums"
-        invalid={Boolean(error)}
-        {...register}
-      />
-      <FieldError message={error} />
-    </div>
+    <Field htmlFor={id} label={label} hint={hint} error={error}>
+      {(control) => (
+        <NumericInput
+          {...control}
+          {...register}
+          masked
+          autoFocus={autoFocus}
+          autoComplete={autoComplete}
+          maxLength={PIN_LENGTH}
+          placeholder={'\u2022'.repeat(PIN_LENGTH)}
+          invalid={Boolean(error)}
+          className="tracking-[0.6em] tabular-nums"
+        />
+      )}
+    </Field>
+  );
+}
+
+function CodeField({ error, register }: { error?: string; register: UseFormRegisterReturn }) {
+  return (
+    <Field htmlFor="code" label="One-time code" error={error}>
+      {(control) => (
+        <NumericInput
+          {...control}
+          {...register}
+          autoFocus
+          autoComplete="one-time-code"
+          maxLength={8}
+          placeholder="••••••"
+          invalid={Boolean(error)}
+          className="text-center text-base tracking-[0.5em] tabular-nums"
+        />
+      )}
+    </Field>
   );
 }
 
@@ -507,15 +543,6 @@ function BackButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return (
-    <p role="alert" className="text-xs text-destructive">
-      {message}
-    </p>
-  );
-}
-
 /**
  * Shows what the field errors did not already say. When the server's whole
  * complaint has been placed on the inputs, the banner stays out of the way.
@@ -524,8 +551,9 @@ function RequestError({ error, fields }: { error: unknown; fields?: readonly str
   const message = bannerMessage(error, fields);
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-      {message}
-    </p>
+    <Alert variant="danger">
+      <TriangleAlert aria-hidden />
+      <span>{message}</span>
+    </Alert>
   );
 }
