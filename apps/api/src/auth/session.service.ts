@@ -1,6 +1,6 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { type ActorType } from '@iace/contracts';
+import { AppException, type ActorType } from '@iace/contracts';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { type DeviceContext, type StoredSession } from './auth.types';
@@ -76,18 +76,18 @@ export class SessionService {
   ): Promise<void> {
     const key = redisKeys.session(actor, subjectId, sessionId);
     const session = await this.redis.getJson<StoredSession>(key);
-    if (!session) throw new UnauthorizedException('Session has expired — sign in again');
+    if (!session) throw new AppException('UNAUTHENTICATED', 'Session has expired — sign in again');
 
     if (!this.matches(presentedToken, session.refreshTokenHash)) {
       await this.revoke(actor, subjectId, sessionId);
       this.logger.warn(`Refresh token reuse detected for ${actor} ${subjectId}; session revoked`);
-      throw new UnauthorizedException('Session is no longer valid — sign in again');
+      throw new AppException('UNAUTHENTICATED', 'Session is no longer valid — sign in again');
     }
 
     // Device binding: the session stays tied to the device that created it.
     if (session.deviceId && device.deviceId && session.deviceId !== device.deviceId) {
       await this.revoke(actor, subjectId, sessionId);
-      throw new UnauthorizedException('Session is bound to a different device');
+      throw new AppException('UNAUTHENTICATED', 'Session is bound to a different device');
     }
 
     await this.redis.setJson(

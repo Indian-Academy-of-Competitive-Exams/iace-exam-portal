@@ -62,10 +62,5 @@ export const newPinSchema = pinSchema
   .refine((v) => !/^(\d)\1{5}$/.test(v), 'Avoid a PIN that is all one digit')
   .refine((v) => !SEQUENTIAL_PINS.has(v), 'Avoid a PIN in counting order');
 
-/** Shape every non-2xx API response takes (NestJS HttpException body). */
-export const apiErrorSchema = z.object({
-  statusCode: z.number().int(),
-  message: z.union([z.string(), z.array(z.string())]),
-  error: z.string().optional(),
-});
-export type ApiErrorBody = z.infer<typeof apiErrorSchema>;
+// The failure shape lives in ./envelope — there is one response envelope for
+// the whole API, and NestJS's default error body is not it.

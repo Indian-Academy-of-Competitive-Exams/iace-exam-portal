@@ -1,6 +1,7 @@
-import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as argon2 from 'argon2';
+import { AppException } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
@@ -89,13 +90,14 @@ export class PinService {
   // Attempt limiting — the real defence for a 6-digit secret
   // ==========================================================================
 
-  /** Call before checking a PIN. Throws 429 while the number is locked out. */
+  /** Call before checking a PIN. Throws PIN_LOCKED while the number is locked. */
   async assertNotLocked(mobile: string): Promise<void> {
     const remaining = await this.redis.ttl(redisKeys.pinLock(mobile));
     if (remaining > 0) {
-      throw new HttpException(
+      throw new AppException(
+        'PIN_LOCKED',
         `Too many incorrect attempts. Try again in ${Math.ceil(remaining / 60)} minute(s), or reset your PIN.`,
-        HttpStatus.TOO_MANY_REQUESTS,
+        { details: { retryAfterSec: remaining } },
       );
     }
   }
@@ -146,7 +148,12 @@ export class PinService {
     const key = redisKeys.pinSetup(mobile);
     const stored = await this.redis.client.get(key);
     if (!stored || !this.digestMatches(setupToken, stored)) {
-      throw new UnauthorizedException('This link has expired — verify your mobile number again');
+      // The ticket is the OTP's continuation, so an expired one sends the
+      // student back to the same place a stale code would.
+      throw new AppException(
+        'OTP_EXPIRED',
+        'This step has expired — verify your mobile number again',
+      );
     }
     await this.redis.del(key);
   }

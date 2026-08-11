@@ -1,5 +1,12 @@
 import { type ZodType } from 'zod';
-import { apiErrorSchema } from './common';
+import {
+  AppException,
+  apiFailureSchema,
+  apiSuccessSchema,
+  errorCodeForStatus,
+  type ApiSuccess,
+  type Paginated,
+} from './envelope';
 import {
   AUTH_ROUTES,
   authSessionResponseSchema,
@@ -23,25 +30,6 @@ import {
 } from './auth';
 import { healthResponseSchema, type HealthResponse } from './health';
 
-/** Thrown for any non-2xx response. Carries the parsed NestJS error body. */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly body?: unknown,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-
-  static fromBody(status: number, body: unknown): ApiError {
-    const parsed = apiErrorSchema.safeParse(body);
-    if (!parsed.success) return new ApiError(status, `Request failed (${status})`, body);
-    const { message } = parsed.data;
-    return new ApiError(status, Array.isArray(message) ? message.join(', ') : message, body);
-  }
-}
-
 export interface ApiClientOptions {
   baseUrl: string;
   /** Current access token, or null when signed out. */
@@ -63,6 +51,12 @@ interface RequestOptions<T> {
   anonymous?: boolean;
 }
 
+/**
+ * The client half of the response envelope. Callers never see it: every method
+ * returns unwrapped `data`, or throws an `AppException` carrying the server's
+ * `code`, `message` and `fieldErrors`. React Query therefore has exactly one
+ * error type to handle, everywhere.
+ */
 export function createApiClient(options: ApiClientOptions) {
   const {
     baseUrl,
@@ -79,51 +73,105 @@ export function createApiClient(options: ApiClientOptions) {
   let refreshInFlight: Promise<AuthTokens | null> | null = null;
 
   async function send(path: string, method: string, body: unknown, token: string | null) {
-    return fetchImpl(url(path), {
-      method,
-      headers: {
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    try {
+      return await fetchImpl(url(path), {
+        method,
+        headers: {
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    } catch (cause) {
+      // The request never landed — offline, DNS, CORS, a dead API. Same typed
+      // error as everything else, so callers need no second code path.
+      throw new AppException('INTERNAL', 'Cannot reach the server. Check your connection.', {
+        httpStatus: 0,
+        cause,
+      });
+    }
   }
 
-  async function parse<T>(response: Response, schema: ZodType<T>): Promise<T> {
+  /**
+   * Turns a response into either the parsed success envelope or a throw. Both
+   * halves of the envelope are validated: a body that is neither is itself a
+   * failure, because an unrecognised shape must never reach a caller typed as
+   * if it were data.
+   */
+  async function parse<T>(response: Response, schema: ZodType<T>): Promise<ApiSuccess<T>> {
     const text = await response.text();
-    const payload: unknown = text.length > 0 ? JSON.parse(text) : undefined;
-    if (!response.ok) throw ApiError.fromBody(response.status, payload);
 
-    const parsed = schema.safeParse(payload);
-    if (!parsed.success) {
-      throw new ApiError(response.status, 'Unexpected response shape from API', parsed.error);
+    let payload: unknown;
+    try {
+      payload = text.length > 0 ? JSON.parse(text) : undefined;
+    } catch {
+      throw new AppException(
+        errorCodeForStatus(response.status),
+        'The server sent a malformed response',
+        {
+          httpStatus: response.status,
+        },
+      );
     }
-    return parsed.data;
+
+    const failure = apiFailureSchema.safeParse(payload);
+    if (failure.success) throw AppException.fromFailure(failure.data, response.status);
+
+    if (!response.ok) {
+      // A non-2xx that is not our envelope came from something in front of the
+      // API — a proxy, a gateway, a framework default we do not control.
+      throw new AppException(
+        errorCodeForStatus(response.status),
+        `Request failed (${response.status})`,
+        {
+          httpStatus: response.status,
+        },
+      );
+    }
+
+    const success = apiSuccessSchema(schema).safeParse(payload);
+    if (!success.success) {
+      throw new AppException('INTERNAL', 'Unexpected response shape from API', {
+        httpStatus: response.status,
+        details: success.error.issues,
+      });
+    }
+    return success.data as ApiSuccess<T>;
   }
 
   async function refreshTokens(): Promise<AuthTokens | null> {
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
 
-    const response = await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null);
-    if (!response.ok) return null;
-
-    const tokens = authTokensSchema.safeParse(await response.json());
-    if (!tokens.success) return null;
-
-    onTokensRefreshed?.(tokens.data);
-    return tokens.data;
+    try {
+      const envelope = await parse(
+        await send(AUTH_ROUTES.refresh, 'POST', { refreshToken }, null),
+        authTokensSchema,
+      );
+      onTokensRefreshed?.(envelope.data);
+      return envelope.data;
+    } catch {
+      // Refresh failing is a normal end-of-session, not an error to propagate.
+      return null;
+    }
   }
 
-  async function request<T>(path: string, opts: RequestOptions<T>): Promise<T> {
+  async function envelopeOf<T>(path: string, opts: RequestOptions<T>): Promise<ApiSuccess<T>> {
     const { method = 'GET', body, schema, anonymous = false } = opts;
 
     if (anonymous) return parse(await send(path, method, body, null), schema);
 
-    let response = await send(path, method, body, getAccessToken());
+    const response = await send(path, method, body, getAccessToken());
     if (response.status !== 401) return parse(response, schema);
 
-    // Access token expired — refresh once, then replay the original request.
+    // Only an expired/absent session is worth retrying. A 401 that means
+    // "wrong PIN" or "bad OTP" must surface as itself — refreshing would hide
+    // the real code and, worse, could sign a valid session out.
+    const peeked = await peekFailure(response);
+    if (peeked && peeked.error.code !== 'UNAUTHENTICATED') {
+      throw AppException.fromFailure(peeked, response.status);
+    }
+
     refreshInFlight ??= refreshTokens().finally(() => {
       refreshInFlight = null;
     });
@@ -131,16 +179,51 @@ export function createApiClient(options: ApiClientOptions) {
 
     if (!refreshed) {
       onUnauthorized?.();
-      return parse(response, schema);
+      throw peeked
+        ? AppException.fromFailure(peeked, 401)
+        : new AppException('UNAUTHENTICATED', undefined, { httpStatus: 401 });
     }
 
-    response = await send(path, method, body, refreshed.accessToken);
-    if (response.status === 401) onUnauthorized?.();
-    return parse(response, schema);
+    const retried = await send(path, method, body, refreshed.accessToken);
+    if (retried.status === 401) onUnauthorized?.();
+    return parse(retried, schema);
+  }
+
+  /** Reads a failure body without consuming the caller's error path. */
+  async function peekFailure(response: Response) {
+    try {
+      const parsed = apiFailureSchema.safeParse(await response.clone().json());
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The everyday call: returns `data`, throws `AppException`. */
+  async function request<T>(path: string, opts: RequestOptions<T>): Promise<T> {
+    return (await envelopeOf(path, opts)).data;
+  }
+
+  /**
+   * For list endpoints: recombines `data` with the pagination that travels in
+   * `meta`, so callers work with one whole page object.
+   */
+  async function requestPaginated<T>(
+    path: string,
+    opts: RequestOptions<T[]>,
+  ): Promise<Paginated<T>> {
+    const { data, meta } = await envelopeOf(path, opts);
+    return {
+      items: data,
+      page: meta.page ?? 1,
+      pageSize: meta.pageSize ?? data.length,
+      total: meta.total ?? data.length,
+    };
   }
 
   return {
     request,
+    requestPaginated,
 
     health: (): Promise<HealthResponse> =>
       request('/health', { schema: healthResponseSchema, anonymous: true }),

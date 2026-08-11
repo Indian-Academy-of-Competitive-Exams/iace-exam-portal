@@ -1,0 +1,10 @@
+{
+  // The package tsconfig scopes `include` to src/ so `tsc` emits only the
+  // library. Tests get their own project, which is what typechecks them.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["**/*.ts"]
+}

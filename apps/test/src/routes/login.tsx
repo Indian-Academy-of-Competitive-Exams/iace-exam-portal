@@ -6,7 +6,6 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { ArrowLeft, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
 import {
-  ApiError,
   newPinSchema,
   otpCodeSchema,
   pinSchema,
@@ -18,11 +17,20 @@ import {
 } from '@iace/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
 import { api } from '../lib/api';
+import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
 
 /** Why the student is going through the OTP flow — it only changes the words. */
 type OtpIntent = 'SIGNUP' | 'RESET';
+
+// The fields each form owns. The server keys `fieldErrors` by the same names
+// (it validates with the same schemas), so a message lands on the input that
+// caused it; anything keyed otherwise falls back to the banner.
+const SIGN_IN_FIELDS = ['mobile', 'pin'] as const;
+const MOBILE_FIELDS = ['mobile'] as const;
+const CODE_FIELDS = ['code'] as const;
+const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
 
 /**
  * Signing in is mobile + a 6-digit PIN. An OTP appears exactly twice: creating
@@ -117,6 +125,7 @@ function SignInStep({
   const login = useMutation({
     mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
     onSuccess: onSignedIn,
+    onError: (error) => applyFieldErrors(error, form.setError, SIGN_IN_FIELDS),
   });
 
   return (
@@ -148,7 +157,7 @@ function SignInStep({
             register={form.register('pin')}
           />
 
-          <RequestError error={login.error} />
+          <RequestError error={login.error} fields={SIGN_IN_FIELDS} />
 
           <Button type="submit" disabled={login.isPending}>
             {login.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -196,6 +205,7 @@ function MobileStep({
   const requestOtp = useMutation({
     mutationFn: (values: { mobile: string }) => api.auth.requestStudentOtp(values),
     onSuccess: (response, values) => onSent(values.mobile, response),
+    onError: (error) => applyFieldErrors(error, form.setError, MOBILE_FIELDS),
   });
 
   return (
@@ -224,7 +234,7 @@ function MobileStep({
             register={form.register('mobile')}
           />
 
-          <RequestError error={requestOtp.error} />
+          <RequestError error={requestOtp.error} fields={MOBILE_FIELDS} />
 
           <Button type="submit" disabled={requestOtp.isPending}>
             {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -261,6 +271,9 @@ function CodeStep({
   const verify = useMutation({
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
+    // A wrong code comes back as OTP_INVALID with fieldErrors.code — it belongs
+    // under the input the student is about to retype, not in a banner.
+    onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
   });
 
   return (
@@ -306,7 +319,7 @@ function CodeStep({
             </p>
           ) : null}
 
-          <RequestError error={verify.error} />
+          <RequestError error={verify.error} fields={CODE_FIELDS} />
 
           <Button type="submit" disabled={verify.isPending}>
             {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -347,6 +360,7 @@ function SetPinStep({
     mutationFn: (values: { pin: string }) =>
       api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
     onSuccess: onSignedIn,
+    onError: (error) => applyFieldErrors(error, form.setError, SET_PIN_FIELDS),
   });
 
   return (
@@ -381,7 +395,7 @@ function SetPinStep({
             register={form.register('confirmPin')}
           />
 
-          <RequestError error={setPin.error} />
+          <RequestError error={setPin.error} fields={SET_PIN_FIELDS} />
 
           <Button type="submit" disabled={setPin.isPending}>
             {setPin.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -494,10 +508,13 @@ function FieldError({ message }: { message?: string }) {
   );
 }
 
-function RequestError({ error }: { error: unknown }) {
-  if (!error) return null;
-  const message =
-    error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
+/**
+ * Shows what the field errors did not already say. When the server's whole
+ * complaint has been placed on the inputs, the banner stays out of the way.
+ */
+function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
+  const message = bannerMessage(error, fields);
+  if (!message) return null;
   return (
     <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
       {message}

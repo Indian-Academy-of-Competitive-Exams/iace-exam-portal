@@ -1,0 +1,12 @@
+{
+  // The app's tsconfig scopes `include` to src/, so that `nest build` never
+  // emits a test into dist. Tests therefore need their own project — this one —
+  // which is what typechecks them AND what tsx reads for `experimentalDecorators`
+  // when it transpiles the e2e module's Nest decorators.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["**/*.ts"]
+}

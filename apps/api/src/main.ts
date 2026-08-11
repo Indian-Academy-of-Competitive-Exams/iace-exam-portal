@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
+import { REQUEST_ID_HEADER } from './common/request-id';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
@@ -15,6 +16,9 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: origins.length > 0 ? origins : true,
     credentials: true,
+    // Without this the browser hides the header, and the SPA could not report
+    // the request id for a response it never got to parse.
+    exposedHeaders: [REQUEST_ID_HEADER],
   });
 
   // Ensures Prisma disconnects and Redis quits cleanly on SIGTERM — containers

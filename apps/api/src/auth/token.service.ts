@@ -1,6 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { accessTokenClaimsSchema, type AccessTokenClaims, type ActorType } from '@iace/contracts';
+import {
+  AppException,
+  accessTokenClaimsSchema,
+  type AccessTokenClaims,
+  type ActorType,
+} from '@iace/contracts';
 import { AppConfigService } from '../config/app-config.service';
 import { durationToSeconds } from '../common/duration';
 
@@ -50,7 +55,7 @@ export class TokenService {
   async verifyAccess(token: string): Promise<AccessTokenClaims> {
     const payload = await this.verify(token, this.config.get('JWT_ACCESS_SECRET'));
     const parsed = accessTokenClaimsSchema.safeParse(payload);
-    if (!parsed.success) throw new UnauthorizedException('Malformed token');
+    if (!parsed.success) throw new AppException('UNAUTHENTICATED', 'Malformed token');
     return parsed.data;
   }
 
@@ -59,7 +64,7 @@ export class TokenService {
     const parsed = accessTokenClaimsSchema
       .pick({ sub: true, actor: true, sid: true })
       .safeParse(payload);
-    if (!parsed.success) throw new UnauthorizedException('Malformed refresh token');
+    if (!parsed.success) throw new AppException('UNAUTHENTICATED', 'Malformed refresh token');
     return parsed.data;
   }
 
@@ -68,7 +73,7 @@ export class TokenService {
       return await this.jwt.verifyAsync(token, { secret });
     } catch {
       // Expired and tampered are the same answer to the client, on purpose.
-      throw new UnauthorizedException('Invalid or expired token');
+      throw new AppException('UNAUTHENTICATED', 'Invalid or expired token');
     }
   }
 }

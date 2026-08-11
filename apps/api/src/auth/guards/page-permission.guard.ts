@@ -1,5 +1,6 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { AppException } from '@iace/contracts';
 import { REQUIRED_PAGE_KEY } from '../decorators';
 import { type AuthenticatedUser } from '../auth.types';
 
@@ -24,12 +25,12 @@ export class PagePermissionGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
     if (!user || user.actor !== 'ADMIN') {
-      throw new ForbiddenException('Admin access required');
+      throw new AppException('FORBIDDEN', 'Admin access required');
     }
     if (user.isSuperAdmin) return true;
 
     if (!user.pages.includes(requiredPage)) {
-      throw new ForbiddenException(`You do not have access to "${requiredPage}"`);
+      throw new AppException('FORBIDDEN', `You do not have access to "${requiredPage}"`);
     }
     return true;
   }

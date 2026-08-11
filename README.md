@@ -50,9 +50,28 @@ OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is pri
 - **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 6-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number for `PIN_LOCKOUT_SEC`.
 - **Admin** (:5174) — the seeded `SEED_SUPER_ADMIN_EMAIL`, email + OTP every time. Admins cannot self-register.
 
+### The API response envelope
+
+Every response has one of two shapes, and no endpoint can produce a third:
+
+```jsonc
+{ "success": true,  "data": { … }, "meta": { "requestId": "…" } }          // 2xx
+{ "success": false, "error": { "code": "PIN_LOCKED", "message": "…" },      // 4xx/5xx
+  "meta": { "requestId": "…" } }
+```
+
+Controllers return plain data (or `{ items, page, pageSize, total }` for a list, whose counts move into `meta`) and throw `AppException`; a global interceptor wraps the returns and a global exception filter converts everything thrown. Types live in `packages/contracts/src/envelope.ts`.
+
+- **Branch on `error.code`, never on `message`** — the codes are the contract, the wording is not.
+- `fieldErrors` (`{ field: [messages] }`) feeds react-hook-form directly.
+- `meta.requestId` is also the `X-Request-Id` header and the id in the server log line for that request.
+- The typed client unwraps `data` and throws `AppException`, so React Query sees plain data or one error type.
+
 ### Other scripts
 
-`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm format` · `pnpm db:generate` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
+`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
+
+`pnpm test` runs the Node test runner (no Jest): envelope unit + e2e tests in `apps/api/test`, typed-client tests in `packages/contracts/test`. Neither needs Postgres, Redis or S3.
 
 ## Status
 

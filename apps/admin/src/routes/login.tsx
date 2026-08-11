@@ -5,18 +5,18 @@ import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { ArrowLeft, Loader2, Mail, ShieldCheck } from 'lucide-react';
-import {
-  ApiError,
-  otpCodeSchema,
-  requestAdminOtpSchema,
-  type OtpRequestResponse,
-} from '@iace/contracts';
+import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
 import { api } from '../lib/api';
+import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
 
 const codeFormSchema = z.object({ code: otpCodeSchema });
+
+// Same names the server keys `fieldErrors` by — it validates with the same schemas.
+const EMAIL_FIELDS = ['email'] as const;
+const CODE_FIELDS = ['code'] as const;
 
 /**
  * Email + OTP. There is no admin self-signup — the account must already exist
@@ -79,6 +79,7 @@ function EmailStep({ onSent }: { onSent: (email: string, response: OtpRequestRes
   const requestOtp = useMutation({
     mutationFn: (values: { email: string }) => api.auth.requestAdminOtp(values),
     onSuccess: (response, values) => onSent(values.email, response),
+    onError: (error) => applyFieldErrors(error, form.setError, EMAIL_FIELDS),
   });
 
   return (
@@ -115,7 +116,7 @@ function EmailStep({ onSent }: { onSent: (email: string, response: OtpRequestRes
             <FieldError message={form.formState.errors.email?.message} />
           </div>
 
-          <RequestError error={requestOtp.error} />
+          <RequestError error={requestOtp.error} fields={EMAIL_FIELDS} />
 
           <Button type="submit" disabled={requestOtp.isPending}>
             {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -148,6 +149,7 @@ function CodeStep({
   const verify = useMutation({
     mutationFn: (values: { code: string }) => api.auth.verifyAdminOtp({ email, code: values.code }),
     onSuccess: onVerified,
+    onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
   });
 
   return (
@@ -193,7 +195,7 @@ function CodeStep({
             </p>
           ) : null}
 
-          <RequestError error={verify.error} />
+          <RequestError error={verify.error} fields={CODE_FIELDS} />
 
           <Button type="submit" disabled={verify.isPending}>
             {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -221,10 +223,10 @@ function FieldError({ message }: { message?: string }) {
   );
 }
 
-function RequestError({ error }: { error: unknown }) {
-  if (!error) return null;
-  const message =
-    error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
+/** Shows only what the field errors did not already say. */
+function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
+  const message = bannerMessage(error, fields);
+  if (!message) return null;
   return (
     <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
       {message}
