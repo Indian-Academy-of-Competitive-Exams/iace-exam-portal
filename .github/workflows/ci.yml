@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes the one before it on the same branch. main is excluded
+# so a merge is never cancelled halfway by the next merge.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  # Prisma reads this to validate the datasource block. `prisma generate` never
+  # connects, so an unreachable URL is correct here — the database job below is
+  # where a real one is used.
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:1/unused
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  # Everything that needs no infrastructure. The test suite deliberately has no
+  # Postgres, Redis or S3 dependency (see apps/api/test/support/fakes.ts), which
+  # is what keeps this job a couple of minutes rather than a couple of services.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pinned version from package.json#packageManager, so CI and a
+      # developer's machine cannot drift onto different pnpm releases.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # --frozen-lockfile: fail rather than silently resolve something new. A
+      # lockfile that does not match package.json is a broken commit, not a
+      # thing for CI to fix on the fly.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The API imports generated Prisma types, so this must precede typecheck.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # Ordered cheapest-first, so an obvious failure reports in seconds. Each
+      # step runs even if an earlier one failed, so one push reports every
+      # problem instead of one problem per push.
+      - name: Format
+        if: '!cancelled()'
+        run: pnpm format:check
+
+      - name: Lint
+        if: '!cancelled()'
+        run: pnpm lint
+
+      - name: Typecheck
+        if: '!cancelled()'
+        run: pnpm typecheck
+
+      - name: Test
+        if: '!cancelled()'
+        run: pnpm test
+
+      - name: Build
+        if: '!cancelled()'
+        run: pnpm build
+
+  # The one thing that genuinely needs a database: proving the migrations in the
+  # repo still produce the schema in the repo. Nothing else here touches Postgres.
+  database:
+    name: Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: iace_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/iace_ci
+      SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/iace_ci_shadow
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Create shadow database
+        run: |
+          PGPASSWORD=ci psql -h localhost -U ci -d iace_ci \
+            -c 'CREATE DATABASE iace_ci_shadow;'
+
+      # Applies every migration to an empty database, exactly as a deploy does.
+      # Catches a migration that is malformed or depends on state only a
+      # developer's machine has.
+      - name: Apply migrations from scratch
+        run: pnpm db:migrate:deploy
+
+      # Catches the other half: a schema.prisma edited without a migration. The
+      # two checks together are what make "migrations are the source of the
+      # database" true rather than aspirational.
+      - name: Check migrations still match the schema
+        run: pnpm db:check
+
+      # The seed is the only way into the admin app, so a broken one is a broken
+      # environment. It is idempotent, so running it twice proves that too.
+      - name: Seed, twice (it must be idempotent)
+        env:
+          SEED_SUPER_ADMIN_EMAIL: ci@iace.co.in
+        run: |
+          pnpm db:seed
+          pnpm db:seed

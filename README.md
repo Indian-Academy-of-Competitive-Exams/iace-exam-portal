@@ -68,9 +68,24 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 - `meta.requestId` is also the `X-Request-Id` header and the id in the server log line for that request.
 - The typed client unwraps `data` and throws `AppException`, so React Query sees plain data or one error type.
 
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
+
+| Job            | What it proves                                                                                                                   | Needs                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **Verify**     | `format:check` · `lint` · `typecheck` · `test` · `build`                                                                         | nothing — no Postgres, Redis or S3 |
+| **Migrations** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and the seed is idempotent | a Postgres service container       |
+
+The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only to check the migrations — the one thing that genuinely cannot be verified without one.
+
+Steps in Verify use `if: '!cancelled()'`, so a run reports _every_ failure rather than stopping at the first.
+
+`pnpm db:check` is the drift gate and works locally too — set `SHADOW_DATABASE_URL` to a throwaway database and it exits non-zero when `schema.prisma` has been edited without a migration.
+
 ### Other scripts
 
-`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
+`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
 
 `pnpm test` runs the Node test runner (no Jest). **Nothing in the suite needs Postgres, Redis or S3** — `apps/api/test/support/fakes.ts` provides an in-memory Redis with a clock the test advances, so TTLs, OTP expiry and lockout escalation are asserted without sleeping. That is what makes the suite safe as a CI gate.
 
