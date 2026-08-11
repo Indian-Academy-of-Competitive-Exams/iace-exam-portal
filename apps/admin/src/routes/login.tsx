@@ -222,7 +222,6 @@ function CodeStep({
 
 // ---------------------------------------------------------------------------
 
-/** Shows only what the field errors did not already say. */
 /** Brand-tinted accent, matching the test app. */
 function StepIcon({ icon: Icon }: { icon: typeof Mail }) {
   return (
@@ -232,6 +231,7 @@ function StepIcon({ icon: Icon }: { icon: typeof Mail }) {
   );
 }
 
+/** Shows only what the field errors did not already say. */
 function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
   const message = bannerMessage(error, fields);
   if (!message) return null;

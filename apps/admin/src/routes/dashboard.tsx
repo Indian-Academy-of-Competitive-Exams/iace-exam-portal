@@ -1,5 +1,13 @@
 import { LogOut, ShieldCheck } from 'lucide-react';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@iace/ui';
+import {
+  Brandmark,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@iace/ui';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
 
@@ -14,9 +22,10 @@ export function DashboardPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            IACE <span className="text-muted-foreground">Admin</span>
-          </span>
+          <div className="flex items-baseline gap-2">
+            <Brandmark withWordmark />
+            <span className="text-sm font-medium text-muted-foreground">Admin</span>
+          </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
