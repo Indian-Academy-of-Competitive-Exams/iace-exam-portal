@@ -108,6 +108,12 @@ export const metaSchema = z.object({
 export type Meta = z.infer<typeof metaSchema>;
 
 /**
+ * The key `fieldErrors` uses for problems that belong to the request as a whole
+ * rather than one input — the API writes it, a form shows it as a summary.
+ */
+export const FORM_LEVEL_FIELD = '_';
+
+/**
  * `fieldErrors` is keyed by form field name and feeds react-hook-form directly.
  * `details` is free-form context for the client (never internals — see the
  * exception filter).

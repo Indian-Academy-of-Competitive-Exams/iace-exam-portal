@@ -18,8 +18,27 @@ const csv = z
       .filter(Boolean),
   );
 
+/** The environments the API knows about. `isProduction` etc. compare against these. */
+export const NODE_ENVS = {
+  DEVELOPMENT: 'development',
+  TEST: 'test',
+  PRODUCTION: 'production',
+} as const;
+export type NodeEnv = (typeof NODE_ENVS)[keyof typeof NODE_ENVS];
+
+/**
+ * OTP delivery channels. CONSOLE prints the code to the API log and is refused
+ * outright in production (see AuthModule); MSG91 is the DLT-registered SMS
+ * sender that replaces it.
+ */
+export const OTP_SENDERS = {
+  CONSOLE: 'console',
+  MSG91: 'msg91',
+} as const;
+export type OtpSenderChannel = (typeof OTP_SENDERS)[keyof typeof OTP_SENDERS];
+
 export const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z.enum(NODE_ENVS).default(NODE_ENVS.DEVELOPMENT),
   API_PORT: z.coerce.number().int().positive().default(3000),
   CORS_ORIGINS: csv,
 
@@ -38,7 +57,7 @@ export const envSchema = z.object({
   OTP_TTL_SEC: z.coerce.number().int().positive().default(300),
   OTP_RESEND_COOLDOWN_SEC: z.coerce.number().int().nonnegative().default(45),
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  OTP_SENDER: z.enum(['console', 'msg91']).default('console'),
+  OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
   // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the
   // attempt counters and the setup ticket live in Redis.

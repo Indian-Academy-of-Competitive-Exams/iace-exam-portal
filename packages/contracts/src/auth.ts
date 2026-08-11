@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ActorTypes,
   actorTypeSchema,
   emailSchema,
   mobileSchema,
@@ -121,7 +122,7 @@ export const authTokensSchema = z.object({
 export type AuthTokens = z.infer<typeof authTokensSchema>;
 
 export const studentIdentitySchema = z.object({
-  actor: z.literal('STUDENT'),
+  actor: z.literal(ActorTypes.STUDENT),
   id: z.string(),
   mobile: z.string(),
   fullName: z.string().nullable(),
@@ -139,7 +140,7 @@ export const studentIdentitySchema = z.object({
 export type StudentIdentity = z.infer<typeof studentIdentitySchema>;
 
 export const adminIdentitySchema = z.object({
-  actor: z.literal('ADMIN'),
+  actor: z.literal(ActorTypes.ADMIN),
   id: z.string(),
   email: z.string(),
   fullName: z.string().nullable(),

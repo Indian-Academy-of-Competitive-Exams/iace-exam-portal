@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Env } from './env.schema';
+import { NODE_ENVS, type Env } from './env.schema';
 
 /**
  * Typed accessor over the zod-validated env. Inject this, not ConfigService —
@@ -15,10 +15,10 @@ export class AppConfigService {
   }
 
   get isProduction(): boolean {
-    return this.get('NODE_ENV') === 'production';
+    return this.get('NODE_ENV') === NODE_ENVS.PRODUCTION;
   }
 
   get isDevelopment(): boolean {
-    return this.get('NODE_ENV') === 'development';
+    return this.get('NODE_ENV') === NODE_ENVS.DEVELOPMENT;
   }
 }

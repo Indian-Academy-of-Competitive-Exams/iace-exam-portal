@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AppConfigService } from '../config/app-config.service';
+import { OTP_SENDERS } from '../config/env.schema';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
@@ -24,7 +25,7 @@ import { PagePermissionGuard } from './guards/page-permission.guard';
 function createOtpSender(config: AppConfigService, consoleSender: ConsoleOtpSender): OtpSender {
   const channel = config.get('OTP_SENDER');
 
-  if (channel === 'console') {
+  if (channel === OTP_SENDERS.CONSOLE) {
     if (config.isProduction) {
       throw new Error('OTP_SENDER=console is not allowed in production — configure MSG91.');
     }

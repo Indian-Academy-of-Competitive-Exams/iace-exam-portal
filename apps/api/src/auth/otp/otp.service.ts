@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { AppException, ErrorCodes, type ActorType, type OtpRequestResponse } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
+import { OTP_SENDERS } from '../../config/env.schema';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
 import { type StoredOtp } from '../auth.types';
@@ -65,7 +66,7 @@ export class OtpService {
       resendAfterSec: cooldownSec,
       // Convenience for local development only — never with a real sender,
       // and never outside development.
-      ...(this.config.get('OTP_SENDER') === 'console' && this.config.isDevelopment
+      ...(this.config.get('OTP_SENDER') === OTP_SENDERS.CONSOLE && this.config.isDevelopment
         ? { devCode: code }
         : {}),
     };

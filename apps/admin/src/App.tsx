@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
 import { ProtectedRoute } from './routes/protected-route';
@@ -11,11 +12,11 @@ import { ProtectedRoute } from './routes/protected-route';
 export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path={ROUTES.HOME} element={<DashboardPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );
 }

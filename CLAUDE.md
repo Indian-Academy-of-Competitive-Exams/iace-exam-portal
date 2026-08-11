@@ -26,7 +26,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 - **Storage:** **S3, via the AWS S3 SDK, in every environment.** Local dev runs **MinIO** (S3-compatible) in docker-compose; only the endpoint/credentials differ via env. **There is exactly one upload code path — never branch it by environment.**
 - **No WebSockets** (client timer + periodic HTTP autosave + Redis is enough).
 - **Payments:** handled in a separate portal — NOT in V1.
-- **Infra:** chosen at the *end*, AWS-leaning. Build cloud-agnostic (Docker + env). Everything containerized.
+- **Infra:** chosen at the _end_, AWS-leaning. Build cloud-agnostic (Docker + env). Everything containerized.
 
 ## Monorepo layout
 
@@ -47,6 +47,7 @@ docker-compose.yml   # postgres + redis + minio (local)
 ## The scaling rule that must not be broken
 
 Live timed tests are the hard part. Keep Postgres off the hot path:
+
 - Timer is **client-side**; server owns authoritative `startedAt`/`endsAt`.
 - Answers **autosave to Redis** (~20–30s), not to Postgres per keystroke.
 - On submit, enqueue a **BullMQ** scoring job; workers evaluate, update the **Redis leaderboard** (sorted set), and write the durable scored fields. A spike of thousands of submits becomes a draining queue, not thousands of synchronous DB writes.
@@ -103,4 +104,5 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - The importer must be **forgiving**: preview + row-level errors, commit only valid rows.
 - No secrets in code; use env / AWS Secrets Manager. Commit a `.env.example`, never real secrets.
 - **One API response envelope** (types in `packages/contracts`). Success (2xx): `{ success: true, data, meta }`. Failure (4xx/5xx): `{ success: false, error: { code, message, fieldErrors? }, meta }`. Enforced by a NestJS **response interceptor** (wraps success) + **global exception filter** (maps every thrown error — Http/Prisma/zod — to the envelope with the right status); controllers just return data or throw, never build the envelope. The typed client unwraps `data` and throws a typed error on `success:false`, so React Query error handling is uniform. `error.code` is a **stable enum** (react to the code, never string-match `message`); `fieldErrors` (`{ field: [msgs] }`) feeds react-hook-form; `meta.requestId` rides on every response for tracing; list endpoints add `meta.page/pageSize/total`.
+- **No magic strings.** Any string that appears in more than one place, or that a typo would break silently, is declared once as a `SCREAMING_SNAKE_CASE` const object (`as const`, with the type derived from it) and referenced everywhere — never re-typed inline. Cross-app vocabularies live in `packages/contracts` (`ErrorCodes`, `ActorTypes`, `FORM_LEVEL_FIELD`); server-only ones next to their owner (`QUEUE_NAMES`, `NODE_ENVS`, `OTP_SENDERS`, `PRISMA_ERROR_CODES`, `redisKeys`, `AUTH_ROUTES`); per-SPA ones in `apps/<app>/src/lib/constants.ts` (`ROUTES`, `THEMES`, `STORAGE_KEYS`). Where the value is dictated by something external (a Prisma `P2002`, a header name), keep the literal as the value and name the constant. **Exempt:** user-facing copy and log messages — those are prose, not identifiers.
 - **Always throw with the `ErrorCodes` constant, never a bare string** — `throw new AppException(ErrorCodes.PIN_LOCKED, '…')`, not `new AppException('PIN_LOCKED', …)`. Both compile (the type is a union of literals), but only the constant breaks at the call site when a code is renamed and is findable by "go to references". Same for any `code:` written into an error object. A new code is added **once**, to `ErrorCodes` in `packages/contracts/src/envelope.ts` — its status and default message are declared beside it, and `Record<ErrorCode, …>` makes a missing entry a compile error. **Every new endpoint follows this: return data, throw `AppException(ErrorCodes.X, …)`, never build an envelope or hand-write a status.**

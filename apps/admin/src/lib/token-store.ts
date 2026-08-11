@@ -1,6 +1,5 @@
 import { type AuthTokens } from '@iace/contracts';
-
-const STORAGE_KEY = 'iace.admin.auth';
+import { STORAGE_KEYS } from './constants';
 
 interface StoredTokens {
   accessToken: string;
@@ -14,7 +13,7 @@ interface StoredTokens {
 export const tokenStore = {
   get(): StoredTokens | null {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEYS.AUTH);
       return raw ? (JSON.parse(raw) as StoredTokens) : null;
     } catch {
       return null;
@@ -23,13 +22,13 @@ export const tokenStore = {
 
   set(tokens: AuthTokens): void {
     localStorage.setItem(
-      STORAGE_KEY,
+      STORAGE_KEYS.AUTH,
       JSON.stringify({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
     );
   },
 
   clear(): void {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEYS.AUTH);
   },
 };
 

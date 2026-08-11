@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  ActorTypes,
   AppException,
   ErrorCodes,
   type ActorType,
@@ -43,7 +44,7 @@ export class AuthService {
    * every case and cannot be used to discover who has an account.
    */
   async requestStudentOtp(mobile: string): Promise<OtpRequestResponse> {
-    return this.otp.request('STUDENT', mobile);
+    return this.otp.request(ActorTypes.STUDENT, mobile);
   }
 
   /**
@@ -52,7 +53,7 @@ export class AuthService {
    * an abandoned signup leaves no half-made student behind.
    */
   async verifyStudentOtp(mobile: string, code: string): Promise<PinSetupTicket> {
-    await this.otp.verify('STUDENT', mobile, code);
+    await this.otp.verify(ActorTypes.STUDENT, mobile, code);
 
     const student = await this.prisma.student.findUnique({
       where: { mobile },
@@ -92,7 +93,7 @@ export class AuthService {
 
     // A new PIN ends every session opened with the old one — that is most of
     // the point of a reset — and clears any lockout the student hit first.
-    await this.sessions.revokeAll('STUDENT', student.id);
+    await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
     await this.pin.clearFailures(mobile);
 
     const identity = this.studentIdentity(student);
@@ -147,7 +148,7 @@ export class AuthService {
         resendAfterSec: this.otpCooldownPlaceholder,
       };
     }
-    return this.otp.request('ADMIN', email);
+    return this.otp.request(ActorTypes.ADMIN, email);
   }
 
   async verifyAdminOtp(
@@ -155,7 +156,7 @@ export class AuthService {
     code: string,
     device: DeviceContext,
   ): Promise<AuthSessionResponse> {
-    await this.otp.verify('ADMIN', email, code);
+    await this.otp.verify(ActorTypes.ADMIN, email, code);
 
     const admin = await this.prisma.admin.findUnique({
       where: { email },
@@ -165,7 +166,7 @@ export class AuthService {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
 
     const identity: AuthIdentity = {
-      actor: 'ADMIN',
+      actor: ActorTypes.ADMIN,
       id: admin.id,
       email: admin.email,
       fullName: admin.fullName,
@@ -207,7 +208,7 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: claims.sid,
-      ...(identity.actor === 'ADMIN'
+      ...(identity.actor === ActorTypes.ADMIN
         ? { isSuperAdmin: identity.isSuperAdmin, pages: identity.pages }
         : {}),
     });
@@ -238,7 +239,7 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: sessionId,
-      ...(identity.actor === 'ADMIN'
+      ...(identity.actor === ActorTypes.ADMIN
         ? { isSuperAdmin: identity.isSuperAdmin, pages: identity.pages }
         : {}),
     });
@@ -268,7 +269,7 @@ export class AuthService {
    */
   private studentIdentity(student: Student): StudentIdentity {
     return {
-      actor: 'STUDENT',
+      actor: ActorTypes.STUDENT,
       id: student.id,
       mobile: student.mobile,
       fullName: student.fullName,
@@ -279,7 +280,7 @@ export class AuthService {
   }
 
   private async loadIdentity(actor: ActorType, id: string): Promise<AuthIdentity | null> {
-    if (actor === 'STUDENT') {
+    if (actor === ActorTypes.STUDENT) {
       const student = await this.prisma.student.findUnique({ where: { id } });
       if (!student || !student.isActive) return null;
       return this.studentIdentity(student);
@@ -291,7 +292,7 @@ export class AuthService {
     });
     if (!admin || !admin.isActive) return null;
     return {
-      actor: 'ADMIN',
+      actor: ActorTypes.ADMIN,
       id: admin.id,
       email: admin.email,
       fullName: admin.fullName,

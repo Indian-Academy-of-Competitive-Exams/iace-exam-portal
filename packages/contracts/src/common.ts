@@ -1,8 +1,21 @@
 import { z } from 'zod';
 
-/** Which identity table a token belongs to. Students and Admins are separate. */
-export const actorTypeSchema = z.enum(['STUDENT', 'ADMIN']);
-export type ActorType = z.infer<typeof actorTypeSchema>;
+/**
+ * Which identity table a token belongs to. Students and Admins are separate
+ * tables with separate login rules, so this is not cosmetic — it decides which
+ * table is read, which Redis keyspace is used, and which routes are reachable.
+ *
+ * Reference it as `ActorTypes.STUDENT`, never as the bare string. Same rule as
+ * `ErrorCodes` in ./envelope, and for the same reasons.
+ */
+export const ActorTypes = {
+  STUDENT: 'STUDENT',
+  ADMIN: 'ADMIN',
+} as const;
+
+export type ActorType = (typeof ActorTypes)[keyof typeof ActorTypes];
+
+export const actorTypeSchema = z.enum(ActorTypes);
 
 /**
  * Indian mobile number: 10 digits, leading 6-9. `+91` / `91` / `0` prefixes and

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type AuthSessionResponse, type StudentIdentity } from '@iace/contracts';
+import { ActorTypes, type AuthSessionResponse, type StudentIdentity } from '@iace/contracts';
 import { api } from '../lib/api';
 import { SIGNED_OUT_EVENT, tokenStore } from '../lib/token-store';
 import { AuthContext, ME_QUERY_KEY, type AuthContextValue } from './auth-context';
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // This app only ever holds a student token; anything else is not a session
     // here, and the server enforces the same split.
     const student: StudentIdentity | null =
-      data !== undefined && data.actor === 'STUDENT' ? data : null;
+      data !== undefined && data.actor === ActorTypes.STUDENT ? data : null;
 
     return {
       student,

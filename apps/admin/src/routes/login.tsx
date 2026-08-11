@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, Mail, ShieldCheck } from 'lucide-react';
 import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
 import { api } from '../lib/api';
+import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
@@ -28,7 +29,7 @@ export function LoginPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<OtpRequestResponse | null>(null);
 
-  if (admin) return <Navigate to="/" replace />;
+  if (admin) return <Navigate to={ROUTES.HOME} replace />;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -58,7 +59,7 @@ export function LoginPage() {
               }}
               onVerified={(session) => {
                 signIn(session);
-                void navigate('/', { replace: true });
+                void navigate(ROUTES.HOME, { replace: true });
               }}
             />
           )}

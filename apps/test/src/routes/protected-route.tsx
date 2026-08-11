@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth-context';
 
 export function ProtectedRoute() {
@@ -14,7 +15,7 @@ export function ProtectedRoute() {
     );
   }
 
-  if (!student) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!student) return <Navigate to={ROUTES.LOGIN} replace state={{ from: location.pathname }} />;
 
   return <Outlet />;
 }

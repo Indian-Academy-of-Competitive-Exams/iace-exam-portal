@@ -17,12 +17,17 @@ import {
 } from '@iace/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@iace/ui';
 import { api } from '../lib/api';
+import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 import { useAuth } from '../providers/auth-context';
 import { ThemeToggle } from '../components/theme-toggle';
 
 /** Why the student is going through the OTP flow — it only changes the words. */
-type OtpIntent = 'SIGNUP' | 'RESET';
+const OTP_INTENTS = {
+  SIGNUP: 'SIGNUP',
+  RESET: 'RESET',
+} as const;
+type OtpIntent = (typeof OTP_INTENTS)[keyof typeof OTP_INTENTS];
 
 // The fields each form owns. The server keys `fieldErrors` by the same names
 // (it validates with the same schemas), so a message lands on the input that
@@ -52,11 +57,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'signIn' });
 
-  if (student) return <Navigate to="/" replace />;
+  if (student) return <Navigate to={ROUTES.HOME} replace />;
 
   const onSignedIn = (session: AuthSessionResponse) => {
     signIn(session);
-    void navigate('/', { replace: true });
+    void navigate(ROUTES.HOME, { replace: true });
   };
 
   return (
@@ -71,8 +76,8 @@ export function LoginPage() {
           {step.kind === 'signIn' ? (
             <SignInStep
               onSignedIn={onSignedIn}
-              onSignUp={() => setStep({ kind: 'mobile', intent: 'SIGNUP' })}
-              onForgotPin={() => setStep({ kind: 'mobile', intent: 'RESET' })}
+              onSignUp={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.SIGNUP })}
+              onForgotPin={() => setStep({ kind: 'mobile', intent: OTP_INTENTS.RESET })}
             />
           ) : null}
 
@@ -214,9 +219,11 @@ function MobileStep({
         <IconBadge>
           <Smartphone className="size-5 text-primary" aria-hidden />
         </IconBadge>
-        <CardTitle>{intent === 'SIGNUP' ? 'Create your account' : 'Reset your PIN'}</CardTitle>
+        <CardTitle>
+          {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
+        </CardTitle>
         <CardDescription>
-          {intent === 'SIGNUP'
+          {intent === OTP_INTENTS.SIGNUP
             ? "Enter your mobile number. We'll send a one-time code to verify it, then you'll pick a PIN."
             : "Enter your registered mobile number and we'll send a one-time code."}
         </CardDescription>

@@ -11,6 +11,7 @@ import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  FORM_LEVEL_FIELD,
   ErrorCodes,
   ERROR_CODE_STATUS,
   errorCodeForStatus,
@@ -18,6 +19,16 @@ import {
   type ApiFailure,
 } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
+
+/**
+ * The Prisma failures that mean something to a user rather than to us. Every
+ * other P-code is our bug and is reported as INTERNAL.
+ * https://www.prisma.io/docs/orm/reference/error-reference
+ */
+const PRISMA_ERROR_CODES = {
+  UNIQUE_CONSTRAINT_VIOLATION: 'P2002',
+  RECORD_NOT_FOUND: 'P2025',
+} as const;
 
 /**
  * The single exit for everything thrown anywhere in the API — controllers,
@@ -96,7 +107,7 @@ function translate(exception: unknown): Translated {
   // 3. Prisma's constraint failures are the two that mean something to a user;
   //    the rest are our bug, not theirs.
   if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-    if (exception.code === 'P2002') {
+    if (exception.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION) {
       return {
         status: ERROR_CODE_STATUS.CONFLICT,
         error: {
@@ -106,7 +117,7 @@ function translate(exception: unknown): Translated {
         },
       };
     }
-    if (exception.code === 'P2025') {
+    if (exception.code === PRISMA_ERROR_CODES.RECORD_NOT_FOUND) {
       return {
         status: ERROR_CODE_STATUS.NOT_FOUND,
         error: { code: ErrorCodes.NOT_FOUND, message: 'Not found' },
@@ -150,7 +161,7 @@ export function fieldErrorsFrom(error: ZodError): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
 
   for (const issue of error.issues) {
-    const field = issue.path.length > 0 ? String(issue.path[0]) : '_';
+    const field = issue.path.length > 0 ? String(issue.path[0]) : FORM_LEVEL_FIELD;
     (fieldErrors[field] ??= []).push(issue.message);
   }
 
