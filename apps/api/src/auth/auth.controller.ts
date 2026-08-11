@@ -11,7 +11,6 @@ import {
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
-  type LogoutResponse,
   type OtpRequestResponse,
   type PinSetupTicket,
   type RefreshTokenBody,
@@ -113,11 +112,11 @@ export class AuthController {
     return this.auth.refresh(body.refreshToken, deviceFrom(request));
   }
 
+  /** Returns no payload: the envelope's `success` is the entire answer. */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser() user: AuthenticatedUser): Promise<LogoutResponse> {
-    await this.auth.logout(user);
-    return { success: true };
+  logout(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    return this.auth.logout(user);
   }
 
   @Get('me')

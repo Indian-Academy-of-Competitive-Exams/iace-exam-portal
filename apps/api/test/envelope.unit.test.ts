@@ -182,6 +182,34 @@ describe('AllExceptionsFilter', () => {
     assert.ok(!JSON.stringify(failure).includes('5432'));
   });
 
+  it('maps an Express-style client error instead of blaming itself', () => {
+    // What body-parser throws for an oversized body: a plain Error with a
+    // numeric status, not an HttpException. Before this branch it fell through
+    // to INTERNAL, so the client saw a 500 and we logged a stack at ERROR for
+    // something the client did — trivially triggerable alert noise.
+    const tooLarge = Object.assign(new Error('request entity too large'), {
+      status: 413,
+      statusCode: 413,
+      type: 'entity.too.large',
+    });
+
+    const { status, failure } = capture(filter, tooLarge);
+
+    assert.equal(status, 413);
+    assert.equal(failure.error.code, 'VALIDATION_ERROR');
+    assert.equal(failure.error.message, 'The request was too large');
+  });
+
+  it('still treats a middleware 5xx as our bug, not the client problem', () => {
+    const upstream = Object.assign(new Error('socket hang up'), { status: 502 });
+
+    const { status, failure } = capture(filter, upstream);
+
+    assert.equal(status, 500);
+    assert.equal(failure.error.code, 'INTERNAL');
+    assert.ok(!JSON.stringify(failure).includes('socket hang up'));
+  });
+
   it('mints a request id even when the middleware never ran', () => {
     const { failure } = capture(filter, new AppException(ErrorCodes.NOT_FOUND));
     assert.match(failure.meta.requestId, /^[0-9a-f-]{36}$/);

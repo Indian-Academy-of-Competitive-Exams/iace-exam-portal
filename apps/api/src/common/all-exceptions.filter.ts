@@ -136,9 +136,45 @@ function translate(exception: unknown): Translated {
     };
   }
 
-  // 5. Anything else is a bug.
+  // 5. Express-style errors. body-parser and friends throw plain Errors
+  //    decorated with a numeric status rather than HttpExceptions, so without
+  //    this an oversized body answers 500 — blaming us for what the client did,
+  //    and logging a stack at ERROR that anyone can trigger at will.
+  const status = expressStatusOf(exception);
+  if (status !== null) {
+    return {
+      status,
+      error: {
+        code: errorCodeForStatus(status),
+        message: CLIENT_ERROR_MESSAGES[status] ?? DEFAULT_CLIENT_ERROR,
+      },
+    };
+  }
+
+  // 6. Anything else is a bug.
   return internal();
 }
+
+/**
+ * The numeric status an Express middleware error carries, if it is a client
+ * error. 5xx is deliberately excluded: a middleware failing on our side is our
+ * bug and belongs in the INTERNAL path, stack and all.
+ */
+function expressStatusOf(exception: unknown): number | null {
+  if (typeof exception !== 'object' || exception === null) return null;
+  const { status, statusCode } = exception as { status?: unknown; statusCode?: unknown };
+  const value = typeof status === 'number' ? status : statusCode;
+
+  return typeof value === 'number' && value >= 400 && value < 500 ? value : null;
+}
+
+const DEFAULT_CLIENT_ERROR = 'The request could not be accepted';
+
+/** Wording we choose ourselves — a middleware's own message is not ours to trust. */
+const CLIENT_ERROR_MESSAGES: Record<number, string> = {
+  [HttpStatus.PAYLOAD_TOO_LARGE]: 'The request was too large',
+  [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: 'That content type is not supported',
+};
 
 function internal(): Translated {
   return {

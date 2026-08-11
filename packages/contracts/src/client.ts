@@ -5,7 +5,9 @@ import {
   apiFailureSchema,
   apiSuccessSchema,
   errorCodeForStatus,
+  noContentSchema,
   type ApiSuccess,
+  type NoContent,
   type Paginated,
 } from './envelope';
 import {
@@ -13,13 +15,11 @@ import {
   authSessionResponseSchema,
   authIdentitySchema,
   authTokensSchema,
-  logoutResponseSchema,
   otpRequestResponseSchema,
   pinSetupTicketSchema,
   type AuthIdentity,
   type AuthSessionResponse,
   type AuthTokens,
-  type LogoutResponse,
   type OtpRequestResponse,
   type PinSetupTicket,
   type RequestAdminOtpInput,
@@ -288,8 +288,9 @@ export function createApiClient(options: ApiClientOptions) {
 
       me: (): Promise<AuthIdentity> => request(AUTH_ROUTES.me, { schema: authIdentitySchema }),
 
-      logout: (): Promise<LogoutResponse> =>
-        request(AUTH_ROUTES.logout, { method: 'POST', schema: logoutResponseSchema }),
+      /** The envelope's `success` is the whole answer; there is no payload. */
+      logout: (): Promise<NoContent> =>
+        request(AUTH_ROUTES.logout, { method: 'POST', schema: noContentSchema }),
     },
   };
 }

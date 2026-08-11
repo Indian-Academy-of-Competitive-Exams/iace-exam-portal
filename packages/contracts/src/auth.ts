@@ -171,9 +171,6 @@ export const refreshTokenSchema = z.object({
 });
 export type RefreshTokenBody = z.infer<typeof refreshTokenSchema>;
 
-export const logoutResponseSchema = z.object({ success: z.literal(true) });
-export type LogoutResponse = z.infer<typeof logoutResponseSchema>;
-
 /** Claims carried in the access token. Kept small on purpose. */
 export const accessTokenClaimsSchema = z.object({
   sub: z.string(),

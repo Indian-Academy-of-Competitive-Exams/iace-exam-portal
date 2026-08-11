@@ -48,9 +48,6 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-/** Every code, in declaration order — for exhaustive checks and docs. */
-export const ERROR_CODES = Object.values(ErrorCodes);
-
 export const errorCodeSchema = z.enum(ErrorCodes);
 
 /**
@@ -133,13 +130,18 @@ export const apiFailureSchema = z.object({
 });
 export type ApiFailure = z.infer<typeof apiFailureSchema>;
 
+/**
+ * For endpoints whose whole answer is "it worked". `success: true` already says
+ * that, so the payload is `null` rather than a second success flag inside it.
+ */
+export const noContentSchema = z.null();
+export type NoContent = z.infer<typeof noContentSchema>;
+
 export interface ApiSuccess<T> {
   success: true;
   data: T;
   meta: Meta;
 }
-
-export type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 
 /** Builds the success schema for one payload type — used to validate responses. */
 export function apiSuccessSchema<T extends ZodType>(
