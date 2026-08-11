@@ -31,7 +31,7 @@ import { ZodBody } from '../common/zod-validation.pipe';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  // ---- Students: OTP at signup / reset, then mobile + 6-digit PIN ------------
+  // ---- Students: OTP at signup / reset, then mobile + 4-digit PIN ------------
 
   /** Step 1 of signup and of a PIN reset — the same endpoint for both. */
   @Public()

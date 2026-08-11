@@ -12,7 +12,7 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 ## Stack
 
-TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live leaderboards, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 6-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live leaderboards, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 4-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
 
 `apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
@@ -47,7 +47,7 @@ pnpm dev                   # api + test + admin, together
 
 OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is printed in the API log** and echoed into the login screen, so no SMS or email is sent.
 
-- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 6-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number for `PIN_LOCKOUT_SEC`.
+- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 4-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number for `PIN_LOCKOUT_SEC`.
 - **Admin** (:5174) — the seeded `SEED_SUPER_ADMIN_EMAIL`, email + OTP every time. Admins cannot self-register.
 
 ### The API response envelope
@@ -76,7 +76,7 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 ## Status
 
-**Phase 0 (foundation) complete** — monorepo, local infra, design-system package, shared contracts, NestJS API (config/Prisma/Redis/BullMQ/S3/health), and auth: student signup-OTP + 6-digit PIN, admin email OTP, JWT with rotating refresh. No product features yet; next is the question bank + importer, per the build order in `CLAUDE.md`.
+**Phase 0 (foundation) complete** — monorepo, local infra, design-system package, shared contracts, NestJS API (config/Prisma/Redis/BullMQ/S3/health), and auth: student signup-OTP + 4-digit PIN, admin email OTP, JWT with rotating refresh. No product features yet; next is the question bank + importer, per the build order in `CLAUDE.md`.
 
 The data model is ahead of the code in three places, deliberately — the columns exist and are migrated, but nothing enforces them until the feature that owns them is built. Grep `TODO(pre-test gate)` and `TODO(access)` for the hook points.
 

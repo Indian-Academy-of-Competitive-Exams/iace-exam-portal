@@ -6,6 +6,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { ArrowLeft, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
 import {
+  PIN_LENGTH,
   newPinSchema,
   otpCodeSchema,
   pinSchema,
@@ -38,7 +39,7 @@ const CODE_FIELDS = ['code'] as const;
 const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
 
 /**
- * Signing in is mobile + a 6-digit PIN. An OTP appears exactly twice: creating
+ * Signing in is mobile + a 4-digit PIN. An OTP appears exactly twice: creating
  * the account, and recovering a forgotten PIN — both of which land on the same
  * three screens (mobile → code → choose a PIN).
  *
@@ -140,7 +141,7 @@ function SignInStep({
           <KeyRound className="size-5 text-primary" aria-hidden />
         </IconBadge>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>Your mobile number and your 6-digit PIN.</CardDescription>
+        <CardDescription>Your mobile number and your {PIN_LENGTH}-digit PIN.</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -378,7 +379,7 @@ function SetPinStep({
         </IconBadge>
         <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
         <CardDescription>
-          Six digits — this is how you&apos;ll sign in from now on. No more codes.
+          {PIN_LENGTH} digits — this is how you&apos;ll sign in from now on. No more codes.
         </CardDescription>
       </CardHeader>
 
@@ -486,8 +487,8 @@ function PinField({
         inputMode="numeric"
         autoComplete={autoComplete}
         autoFocus={autoFocus}
-        placeholder="••••••"
-        maxLength={6}
+        placeholder={'•'.repeat(PIN_LENGTH)}
+        maxLength={PIN_LENGTH}
         className="tracking-[0.5em] tabular-nums"
         invalid={Boolean(error)}
         {...register}

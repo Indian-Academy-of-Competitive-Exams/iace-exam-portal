@@ -22,7 +22,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 - **Mobile (post-V1):** React Native + Expo (reuses the same TS, types, and API).
 - **DB:** PostgreSQL via **Prisma** (`prisma/schema.prisma`).
 - **Redis:** in-progress test state, live leaderboards, **OTP, sessions, device binding**, rate limiting. **Jobs:** BullMQ (scoring queue, imports) on Redis.
-- **Auth:** self-built JWT + refresh. **Students:** mobile + OTP **at signup**, then a **6-digit PIN** for later logins (OTP resets a forgotten PIN; rate-limit / lock PIN attempts in Redis). **Admins:** email + OTP. OTP, sessions, and device binding all live in **Redis — never the DB**. A super admin is seeded; admins get page-level permissions.
+- **Auth:** self-built JWT + refresh. **Students:** mobile + OTP **at signup**, then a **4-digit PIN** for later logins (not unique across students — it is only ever checked against the one student a mobile resolves to) (OTP resets a forgotten PIN; rate-limit / lock PIN attempts in Redis). **Admins:** email + OTP. OTP, sessions, and device binding all live in **Redis — never the DB**. A super admin is seeded; admins get page-level permissions.
 - **Storage:** **S3, via the AWS S3 SDK, in every environment.** Local dev runs **MinIO** (S3-compatible) in docker-compose; only the endpoint/credentials differ via env. **There is exactly one upload code path — never branch it by environment.**
 - **No WebSockets** (client timer + periodic HTTP autosave + Redis is enough).
 - **Payments:** handled in a separate portal — NOT in V1.

@@ -105,13 +105,16 @@ enum NotificationType {
 // People — Student and Admin are separate
 // ============================================================================
 
-// Signup: MOBILE + OTP (verifies the number). Every later login: a 6-digit PIN
+// Signup: MOBILE + OTP (verifies the number). Every later login: a 4-digit PIN
 // (pinHash). OTP also resets a forgotten PIN. OTP + sessions + device binding all
 // live in Redis. Rate-limit / lock PIN attempts in Redis.
 model Student {
   id                String          @id @default(cuid())
   mobile            String          @unique // only mandatory field
-  pinHash           String? // 6-digit login PIN (hashed), set after signup OTP
+  // 4-digit login PIN, argon2id-hashed with a server-side pepper. NOT unique:
+  // it is only ever checked against the one student a mobile number resolves to,
+  // so two students sharing a PIN is unremarkable and invisible to both.
+  pinHash           String?
   fullName          String?
   preferredLanguage String          @default("en")
   // preTestReady: minimal details present (mother's name + father's name + DOB) —

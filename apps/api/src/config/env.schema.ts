@@ -63,8 +63,8 @@ export const envSchema = z.object({
   // attempt counters and the setup ticket live in Redis.
   //
   // The pepper is HMAC'd into the PIN before hashing and is NEVER stored with
-  // it. A 6-digit PIN is only a million candidates — a leaked Student table
-  // alone would fall to a laptop, so the hash is worthless without this secret.
+  // it. A 4-digit PIN is only 10,000 candidates — a leaked Student table alone
+  // would fall in under a second, so the hash is worthless without this secret.
   // Rotating it invalidates every PIN (students recover by OTP reset).
   PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),

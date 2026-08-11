@@ -30,7 +30,7 @@ export class AuthService {
   ) {}
 
   // ==========================================================================
-  // Students — OTP once at signup, a 6-digit PIN every day after
+  // Students — OTP once at signup, a 4-digit PIN every day after
   //
   // An SMS per login was the vendor's habit and the students' complaint: it is
   // slow, it costs money, and it fails exactly when the hall is full and the

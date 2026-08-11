@@ -42,37 +42,43 @@ export const otpCodeSchema = z
   .transform((v) => v.trim())
   .pipe(z.string().regex(/^\d{4,8}$/, 'Enter the code sent to you'));
 
+/** The one place the PIN length is decided. Everything else derives from it. */
+export const PIN_LENGTH = 4;
+
 /**
- * The student login PIN: exactly 6 digits. Used when *entering* an existing PIN —
- * shape only, no strength rules, because an old PIN is verified against a hash
- * and extra rules here would only reject accounts that already exist.
+ * The student login PIN: exactly PIN_LENGTH digits. Used when *entering* an
+ * existing PIN — shape only, no strength rules, because an old PIN is verified
+ * against a hash and extra rules here would only reject accounts that already
+ * exist.
+ *
+ * The PIN is NOT unique across students and is never expected to be: it is
+ * salted-and-hashed per student, and a login is only ever checked against the
+ * hash belonging to the one student that mobile number resolves to. Two
+ * students sharing the PIN 4813 is unremarkable and invisible to both.
  */
 export const pinSchema = z
   .string()
   .transform((v) => v.trim())
-  .pipe(z.string().regex(/^\d{6}$/, 'Enter your 6-digit PIN'));
+  .pipe(z.string().regex(new RegExp(`^\\d{${PIN_LENGTH}}$`), `Enter your ${PIN_LENGTH}-digit PIN`));
 
 /** Straight runs in either direction — the other half of the obvious guesses. */
-const SEQUENTIAL_PINS = new Set([
-  '012345',
-  '123456',
-  '234567',
-  '345678',
-  '456789',
-  '987654',
-  '876543',
-  '765432',
-  '654321',
-  '543210',
-]);
+const SEQUENTIAL_PINS = new Set(
+  Array.from({ length: 10 - PIN_LENGTH + 1 }, (_, start) => {
+    const run = Array.from({ length: PIN_LENGTH }, (_, i) => start + i).join('');
+    return [run, [...run].reverse().join('')];
+  }).flat(),
+);
 
 /**
- * Used when *choosing* a PIN. A 6-digit secret is small enough that the Redis
- * attempt lockout is the real defence, but there is no reason to hand an
- * attacker `000000` or `123456` — the two shapes they try first.
+ * Used when *choosing* a PIN. Four digits is only 10,000 possibilities, so the
+ * Redis attempt lockout is what actually protects it — but there is no reason
+ * to hand an attacker `0000` or `1234`, which are the first things tried.
  */
 export const newPinSchema = pinSchema
-  .refine((v) => !/^(\d)\1{5}$/.test(v), 'Avoid a PIN that is all one digit')
+  .refine(
+    (v) => !new RegExp(`^(\\d)\\1{${PIN_LENGTH - 1}}$`).test(v),
+    'Avoid a PIN that is all one digit',
+  )
   .refine((v) => !SEQUENTIAL_PINS.has(v), 'Avoid a PIN in counting order');
 
 // The failure shape lives in ./envelope — there is one response envelope for

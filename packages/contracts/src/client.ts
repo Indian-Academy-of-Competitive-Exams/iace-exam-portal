@@ -261,7 +261,7 @@ export function createApiClient(options: ApiClientOptions) {
           anonymous: true,
         }),
 
-      /** The everyday student login: mobile + 6-digit PIN, no OTP. */
+      /** The everyday student login: mobile + 4-digit PIN, no OTP. */
       loginStudent: (input: StudentLoginInput): Promise<AuthSessionResponse> =>
         request(AUTH_ROUTES.studentLogin, {
           method: 'POST',

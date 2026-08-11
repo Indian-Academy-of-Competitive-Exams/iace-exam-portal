@@ -13,7 +13,7 @@ import {
 // OTP request
 //
 // Students meet an OTP exactly twice: at signup, and if they forget their PIN.
-// Every ordinary login is mobile + 6-digit PIN. Admins are unchanged — email +
+// Every ordinary login is mobile + 4-digit PIN. Admins are unchanged — email +
 // OTP, every time.
 // ============================================================================
 

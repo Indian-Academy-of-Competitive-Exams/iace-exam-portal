@@ -19,14 +19,15 @@ const ARGON2_OPTIONS = {
 } as const;
 
 /**
- * The 6-digit student login PIN.
+ * The 4-digit student login PIN.
  *
- * Two things carry the security here, because six digits is a small secret:
+ * Two things carry the security here, because four digits is a very small
+ * secret — 10,000 possibilities, not a million:
  *
  *  1. A PEPPER — the PIN is HMAC'd with a server-side secret before it is
  *     hashed. The pepper lives in the environment, never beside the hash, so a
- *     stolen Student table cannot be brute-forced offline (a million candidates
- *     is otherwise minutes of work).
+ *     stolen Student table cannot be brute-forced offline (10,000 candidates
+ *     is otherwise a fraction of a second's work).
  *  2. A LOCKOUT — consecutive failures are counted in Redis and the number is
  *     locked out for a cooldown once the cap is hit, which is what actually
  *     stops online guessing.
@@ -82,12 +83,12 @@ export class PinService {
    * registered.
    */
   async burnVerifyTime(): Promise<void> {
-    this.decoyHash ??= this.hash('000000');
-    await this.verify(await this.decoyHash, '000001');
+    this.decoyHash ??= this.hash('0000');
+    await this.verify(await this.decoyHash, '0001');
   }
 
   // ==========================================================================
-  // Attempt limiting — the real defence for a 6-digit secret
+  // Attempt limiting — the real defence for a 4-digit secret
   // ==========================================================================
 
   /** Call before checking a PIN. Throws PIN_LOCKED while the number is locked. */
