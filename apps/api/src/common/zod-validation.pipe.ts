@@ -1,5 +1,5 @@
 import { type PipeTransform } from '@nestjs/common';
-import { AppException } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { type ZodType } from 'zod';
 import { fieldErrorsFrom } from './all-exceptions.filter';
 
@@ -19,7 +19,7 @@ export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
     const result = this.schema.safeParse(value);
     if (result.success) return result.data;
 
-    throw new AppException('VALIDATION_ERROR', 'Some of the details are not valid', {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Some of the details are not valid', {
       fieldErrors: fieldErrorsFrom(result.error),
     });
   }

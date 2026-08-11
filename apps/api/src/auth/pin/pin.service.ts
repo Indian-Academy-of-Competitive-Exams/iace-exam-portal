@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as argon2 from 'argon2';
-import { AppException } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
@@ -95,7 +95,7 @@ export class PinService {
     const remaining = await this.redis.ttl(redisKeys.pinLock(mobile));
     if (remaining > 0) {
       throw new AppException(
-        'PIN_LOCKED',
+        ErrorCodes.PIN_LOCKED,
         `Too many incorrect attempts. Try again in ${Math.ceil(remaining / 60)} minute(s), or reset your PIN.`,
         { details: { retryAfterSec: remaining } },
       );
@@ -151,7 +151,7 @@ export class PinService {
       // The ticket is the OTP's continuation, so an expired one sends the
       // student back to the same place a stale code would.
       throw new AppException(
-        'OTP_EXPIRED',
+        ErrorCodes.OTP_EXPIRED,
         'This step has expired — verify your mobile number again',
       );
     }

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
-import { AppException, type ActorType, type OtpRequestResponse } from '@iace/contracts';
+import { AppException, ErrorCodes, type ActorType, type OtpRequestResponse } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
@@ -37,7 +37,7 @@ export class OtpService {
     const remaining = await this.redis.ttl(cooldownKey);
     if (remaining > 0) {
       throw new AppException(
-        'RATE_LIMITED',
+        ErrorCodes.RATE_LIMITED,
         `Please wait ${remaining}s before requesting another code`,
         { details: { retryAfterSec: remaining } },
       );
@@ -79,7 +79,8 @@ export class OtpService {
   async verify(actor: ActorType, identifier: string, code: string): Promise<void> {
     const key = redisKeys.otp(actor, identifier);
     const stored = await this.redis.getJson<StoredOtp>(key);
-    if (!stored) throw new AppException('OTP_EXPIRED', 'Code has expired — request a new one');
+    if (!stored)
+      throw new AppException(ErrorCodes.OTP_EXPIRED, 'Code has expired — request a new one');
 
     if (!this.matches(code, stored.codeHash)) {
       const attempts = stored.attempts + 1;
@@ -87,11 +88,14 @@ export class OtpService {
         await this.redis.del(key);
         // The challenge is burnt, not just wrong — a different code, because
         // the client's next step is "request a new one", not "try again".
-        throw new AppException('RATE_LIMITED', 'Too many incorrect attempts — request a new code');
+        throw new AppException(
+          ErrorCodes.RATE_LIMITED,
+          'Too many incorrect attempts — request a new code',
+        );
       }
       const ttl = await this.redis.ttl(key);
       await this.redis.setJson(key, { ...stored, attempts }, ttl > 0 ? ttl : 1);
-      throw new AppException('OTP_INVALID', 'Incorrect code', {
+      throw new AppException(ErrorCodes.OTP_INVALID, 'Incorrect code', {
         fieldErrors: { code: ['Incorrect code'] },
         details: { attemptsRemaining: this.config.get('OTP_MAX_VERIFY_ATTEMPTS') - attempts },
       });

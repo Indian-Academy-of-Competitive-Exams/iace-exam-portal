@@ -1,6 +1,7 @@
 import { type ZodType } from 'zod';
 import {
   AppException,
+  ErrorCodes,
   apiFailureSchema,
   apiSuccessSchema,
   errorCodeForStatus,
@@ -85,10 +86,14 @@ export function createApiClient(options: ApiClientOptions) {
     } catch (cause) {
       // The request never landed — offline, DNS, CORS, a dead API. Same typed
       // error as everything else, so callers need no second code path.
-      throw new AppException('INTERNAL', 'Cannot reach the server. Check your connection.', {
-        httpStatus: 0,
-        cause,
-      });
+      throw new AppException(
+        ErrorCodes.INTERNAL,
+        'Cannot reach the server. Check your connection.',
+        {
+          httpStatus: 0,
+          cause,
+        },
+      );
     }
   }
 
@@ -131,7 +136,7 @@ export function createApiClient(options: ApiClientOptions) {
 
     const success = apiSuccessSchema(schema).safeParse(payload);
     if (!success.success) {
-      throw new AppException('INTERNAL', 'Unexpected response shape from API', {
+      throw new AppException(ErrorCodes.INTERNAL, 'Unexpected response shape from API', {
         httpStatus: response.status,
         details: success.error.issues,
       });
@@ -181,7 +186,7 @@ export function createApiClient(options: ApiClientOptions) {
       onUnauthorized?.();
       throw peeked
         ? AppException.fromFailure(peeked, 401)
-        : new AppException('UNAUTHENTICATED', undefined, { httpStatus: 401 });
+        : new AppException(ErrorCodes.UNAUTHENTICATED, undefined, { httpStatus: 401 });
     }
 
     const retried = await send(path, method, body, refreshed.accessToken);

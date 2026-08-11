@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
+  ErrorCodes,
   type ActorType,
   type AuthIdentity,
   type AuthSessionResponse,
@@ -58,7 +59,7 @@ export class AuthService {
       select: { pinHash: true, isActive: true },
     });
     if (student && !student.isActive) {
-      throw new AppException('FORBIDDEN', 'This account has been deactivated');
+      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
     }
 
     return {
@@ -86,7 +87,8 @@ export class AuthService {
       create: { mobile, pinHash },
       update: { pinHash },
     });
-    if (!student.isActive) throw new AppException('FORBIDDEN', 'This account has been deactivated');
+    if (!student.isActive)
+      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
     // A new PIN ends every session opened with the old one — that is most of
     // the point of a reset — and clears any lockout the student hit first.
@@ -116,9 +118,10 @@ export class AuthService {
 
     if (!ok || !student) {
       await this.pin.registerFailure(mobile);
-      throw new AppException('PIN_INVALID', 'Incorrect mobile number or PIN');
+      throw new AppException(ErrorCodes.PIN_INVALID, 'Incorrect mobile number or PIN');
     }
-    if (!student.isActive) throw new AppException('FORBIDDEN', 'This account has been deactivated');
+    if (!student.isActive)
+      throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
     await this.pin.clearFailures(mobile);
 
@@ -158,7 +161,8 @@ export class AuthService {
       where: { email },
       include: { pages: { select: { code: true } } },
     });
-    if (!admin || !admin.isActive) throw new AppException('UNAUTHENTICATED', 'Invalid credentials');
+    if (!admin || !admin.isActive)
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
 
     const identity: AuthIdentity = {
       actor: 'ADMIN',
@@ -180,7 +184,8 @@ export class AuthService {
   async refresh(refreshToken: string, device: DeviceContext): Promise<AuthTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken);
     const identity = await this.loadIdentity(claims.actor, claims.sub);
-    if (!identity) throw new AppException('UNAUTHENTICATED', 'Account is no longer available');
+    if (!identity)
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Account is no longer available');
 
     const nextRefresh = await this.tokens.signRefresh({
       sub: claims.sub,
@@ -217,7 +222,8 @@ export class AuthService {
   /** Read fresh from Postgres, so a permission change lands without re-login. */
   async me(user: AuthenticatedUser): Promise<AuthIdentity> {
     const identity = await this.loadIdentity(user.actor, user.id);
-    if (!identity) throw new AppException('UNAUTHENTICATED', 'Account is no longer available');
+    if (!identity)
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Account is no longer available');
     return identity;
   }
 

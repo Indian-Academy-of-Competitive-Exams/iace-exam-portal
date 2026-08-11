@@ -9,11 +9,17 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { AppException, apiFailureSchema, apiSuccessSchema } from '@iace/contracts';
+import { AppException, ErrorCodes, apiFailureSchema, apiSuccessSchema } from '@iace/contracts';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ZodBody } from '../src/common/zod-validation.pipe';
 
+// Note the asymmetry below: errors are CONSTRUCTED with `ErrorCodes.X`, but
+// assertions compare against the literal string on purpose. Asserting against
+// the constant would be tautological — it would still pass if someone changed
+// the constant's value, which is exactly the wire-contract break these tests
+// exist to catch.
+//
 // ---------------------------------------------------------------------------
 // Test doubles. Nest only ever asks these objects for the few things the
 // interceptor and the filter actually use.
@@ -100,7 +106,7 @@ describe('AllExceptionsFilter', () => {
   it('passes an AppException through with its code and status', () => {
     const { status, failure } = capture(
       filter,
-      new AppException('PIN_LOCKED', 'Try again in 15 minute(s)'),
+      new AppException(ErrorCodes.PIN_LOCKED, 'Try again in 15 minute(s)'),
     );
 
     assert.equal(status, 429);
@@ -113,7 +119,7 @@ describe('AllExceptionsFilter', () => {
   it('carries fieldErrors from a validation failure', () => {
     const { status, failure } = capture(
       filter,
-      new AppException('VALIDATION_ERROR', 'Some of the details are not valid', {
+      new AppException(ErrorCodes.VALIDATION_ERROR, 'Some of the details are not valid', {
         fieldErrors: { mobile: ['Enter a valid 10-digit mobile number'] },
       }),
     );
@@ -177,7 +183,7 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('mints a request id even when the middleware never ran', () => {
-    const { failure } = capture(filter, new AppException('NOT_FOUND'));
+    const { failure } = capture(filter, new AppException(ErrorCodes.NOT_FOUND));
     assert.match(failure.meta.requestId, /^[0-9a-f-]{36}$/);
   });
 });

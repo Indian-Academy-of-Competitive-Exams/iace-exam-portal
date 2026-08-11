@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
-import { createApiClient, AppException, type ApiFailure, type Meta } from '../src/index';
+import {
+  createApiClient,
+  AppException,
+  ErrorCodes,
+  type ApiFailure,
+  type Meta,
+} from '../src/index';
 
 /**
  * The client half of the envelope. The API guarantees the shape; these check
@@ -168,7 +174,7 @@ describe('typed client — 401 handling', () => {
 
 describe('AppException', () => {
   it('round-trips through the wire form', () => {
-    const original = new AppException('CONFLICT', 'That already exists', {
+    const original = new AppException(ErrorCodes.CONFLICT, 'That already exists', {
       fieldErrors: { mobile: ['Already registered'] },
     });
 
@@ -195,7 +201,7 @@ describe('AppException', () => {
   });
 
   it('defaults status and message from the code', () => {
-    const error = new AppException('NOT_FOUND');
+    const error = new AppException(ErrorCodes.NOT_FOUND);
 
     assert.equal(error.httpStatus, 404);
     assert.equal(error.message, 'Not found');

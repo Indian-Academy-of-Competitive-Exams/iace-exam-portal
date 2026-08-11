@@ -18,58 +18,75 @@ import { z, type ZodType } from 'zod';
 // contract, the wording is not.
 // ============================================================================
 
-/** The stable error vocabulary. Add to it; never repurpose an existing member. */
-export const ERROR_CODES = [
-  'VALIDATION_ERROR',
-  'UNAUTHENTICATED',
-  'FORBIDDEN',
-  'NOT_FOUND',
-  'CONFLICT',
-  'RATE_LIMITED',
-  'OTP_INVALID',
-  'OTP_EXPIRED',
-  'PIN_LOCKED',
-  'PIN_INVALID',
-  'INTERNAL',
-] as const;
+/**
+ * The stable error vocabulary, declared once. Add to it; never repurpose an
+ * existing member — a code that changes meaning breaks every client that was
+ * branching on it, silently.
+ *
+ * ALWAYS throw with the constant, never the bare string:
+ *
+ *     throw new AppException(ErrorCodes.PIN_LOCKED, '…');   // yes
+ *     throw new AppException('PIN_LOCKED', '…');            // no
+ *
+ * Both compile — the type is a union of literals — but only the first fails at
+ * the call site when a code is renamed, and only the first is findable by
+ * "go to references" when you need every place a code is raised.
+ */
+export const ErrorCodes = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  UNAUTHENTICATED: 'UNAUTHENTICATED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  OTP_INVALID: 'OTP_INVALID',
+  OTP_EXPIRED: 'OTP_EXPIRED',
+  PIN_LOCKED: 'PIN_LOCKED',
+  PIN_INVALID: 'PIN_INVALID',
+  INTERNAL: 'INTERNAL',
+} as const;
 
-export const errorCodeSchema = z.enum(ERROR_CODES);
-export type ErrorCode = z.infer<typeof errorCodeSchema>;
+export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
+
+/** Every code, in declaration order — for exhaustive checks and docs. */
+export const ERROR_CODES = Object.values(ErrorCodes);
+
+export const errorCodeSchema = z.enum(ErrorCodes);
 
 /**
  * The HTTP status each code answers with. Callers should branch on the code,
  * but the status still has to be right for proxies, caches and the browser.
  */
 export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
-  VALIDATION_ERROR: 400,
-  UNAUTHENTICATED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  RATE_LIMITED: 429,
+  [ErrorCodes.VALIDATION_ERROR]: 400,
+  [ErrorCodes.UNAUTHENTICATED]: 401,
+  [ErrorCodes.FORBIDDEN]: 403,
+  [ErrorCodes.NOT_FOUND]: 404,
+  [ErrorCodes.CONFLICT]: 409,
+  [ErrorCodes.RATE_LIMITED]: 429,
   // A wrong or stale credential is an authentication failure, not a malformed
   // request — the body was perfectly well-formed.
-  OTP_INVALID: 401,
-  OTP_EXPIRED: 401,
-  PIN_INVALID: 401,
+  [ErrorCodes.OTP_INVALID]: 401,
+  [ErrorCodes.OTP_EXPIRED]: 401,
+  [ErrorCodes.PIN_INVALID]: 401,
   // Locked is a throttle, and 429 is what tells a client to back off.
-  PIN_LOCKED: 429,
-  INTERNAL: 500,
+  [ErrorCodes.PIN_LOCKED]: 429,
+  [ErrorCodes.INTERNAL]: 500,
 };
 
-/** Fallback wording, so `throw new AppException('NOT_FOUND')` reads fine. */
+/** Fallback wording, so `throw new AppException(ErrorCodes.NOT_FOUND)` reads fine. */
 const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
-  VALIDATION_ERROR: 'Some of the details are not valid',
-  UNAUTHENTICATED: 'Please sign in to continue',
-  FORBIDDEN: 'You do not have access to this',
-  NOT_FOUND: 'Not found',
-  CONFLICT: 'That already exists',
-  RATE_LIMITED: 'Too many requests — please wait a moment',
-  OTP_INVALID: 'Incorrect code',
-  OTP_EXPIRED: 'That code has expired — request a new one',
-  PIN_INVALID: 'Incorrect mobile number or PIN',
-  PIN_LOCKED: 'Too many incorrect attempts — try again later',
-  INTERNAL: 'Something went wrong. Please try again.',
+  [ErrorCodes.VALIDATION_ERROR]: 'Some of the details are not valid',
+  [ErrorCodes.UNAUTHENTICATED]: 'Please sign in to continue',
+  [ErrorCodes.FORBIDDEN]: 'You do not have access to this',
+  [ErrorCodes.NOT_FOUND]: 'Not found',
+  [ErrorCodes.CONFLICT]: 'That already exists',
+  [ErrorCodes.RATE_LIMITED]: 'Too many requests — please wait a moment',
+  [ErrorCodes.OTP_INVALID]: 'Incorrect code',
+  [ErrorCodes.OTP_EXPIRED]: 'That code has expired — request a new one',
+  [ErrorCodes.PIN_INVALID]: 'Incorrect mobile number or PIN',
+  [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts — try again later',
+  [ErrorCodes.INTERNAL]: 'Something went wrong. Please try again.',
 };
 
 // ============================================================================
@@ -222,12 +239,12 @@ export class AppException extends Error {
 // ============================================================================
 
 const STATUS_TO_CODE: Record<number, ErrorCode> = {
-  400: 'VALIDATION_ERROR',
-  401: 'UNAUTHENTICATED',
-  403: 'FORBIDDEN',
-  404: 'NOT_FOUND',
-  409: 'CONFLICT',
-  429: 'RATE_LIMITED',
+  400: ErrorCodes.VALIDATION_ERROR,
+  401: ErrorCodes.UNAUTHENTICATED,
+  403: ErrorCodes.FORBIDDEN,
+  404: ErrorCodes.NOT_FOUND,
+  409: ErrorCodes.CONFLICT,
+  429: ErrorCodes.RATE_LIMITED,
 };
 
 /**
@@ -236,5 +253,7 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
  * other unmapped 4xx means the request itself was unacceptable.
  */
 export function errorCodeForStatus(status: number): ErrorCode {
-  return STATUS_TO_CODE[status] ?? (status >= 500 ? 'INTERNAL' : 'VALIDATION_ERROR');
+  return (
+    STATUS_TO_CODE[status] ?? (status >= 500 ? ErrorCodes.INTERNAL : ErrorCodes.VALIDATION_ERROR)
+  );
 }

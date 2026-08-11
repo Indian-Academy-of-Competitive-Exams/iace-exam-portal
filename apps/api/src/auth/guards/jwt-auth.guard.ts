@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { type Request } from 'express';
-import { AppException } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { TokenService } from '../token.service';
 import { SessionService } from '../session.service';
 import { IS_PUBLIC_KEY } from '../decorators';
@@ -32,12 +32,12 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
     const token = extractBearerToken(request.headers.authorization);
-    if (!token) throw new AppException('UNAUTHENTICATED', 'Missing access token');
+    if (!token) throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Missing access token');
 
     const claims = await this.tokens.verifyAccess(token);
 
     if (!(await this.sessions.exists(claims.actor, claims.sub, claims.sid))) {
-      throw new AppException('UNAUTHENTICATED', 'Session has ended — sign in again');
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Session has ended — sign in again');
     }
 
     request.user = {

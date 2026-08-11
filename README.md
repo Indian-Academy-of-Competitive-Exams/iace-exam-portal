@@ -63,6 +63,7 @@ Every response has one of two shapes, and no endpoint can produce a third:
 Controllers return plain data (or `{ items, page, pageSize, total }` for a list, whose counts move into `meta`) and throw `AppException`; a global interceptor wraps the returns and a global exception filter converts everything thrown. Types live in `packages/contracts/src/envelope.ts`.
 
 - **Branch on `error.code`, never on `message`** — the codes are the contract, the wording is not.
+- **Throw with the constant**: `throw new AppException(ErrorCodes.PIN_LOCKED, '…')`. A bare `'PIN_LOCKED'` also compiles, but survives a rename silently and cannot be found by "go to references". A new code is added once, to `ErrorCodes`, where its status and default message sit beside it.
 - `fieldErrors` (`{ field: [messages] }`) feeds react-hook-form directly.
 - `meta.requestId` is also the `X-Request-Id` header and the id in the server log line for that request.
 - The typed client unwraps `data` and throws `AppException`, so React Query sees plain data or one error type.

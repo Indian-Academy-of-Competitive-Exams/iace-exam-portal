@@ -13,7 +13,7 @@ import {
 import { APP_FILTER, APP_INTERCEPTOR, NestFactory } from '@nestjs/core';
 import type { INestApplication } from '@nestjs/common';
 import { z } from 'zod';
-import { AppException } from '@iace/contracts';
+import { AppException, ErrorCodes } from '@iace/contracts';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { RequestIdMiddleware, REQUEST_ID_HEADER } from '../src/common/request-id';
@@ -50,7 +50,7 @@ class ProbeController {
 
   @Get('app-exception')
   appException(): never {
-    throw new AppException('OTP_INVALID', 'Incorrect code', {
+    throw new AppException(ErrorCodes.OTP_INVALID, 'Incorrect code', {
       fieldErrors: { code: ['Incorrect code'] },
     });
   }

@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AppException, type ActorType } from '@iace/contracts';
+import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
 import { ACTORS_KEY } from '../decorators';
 import { type AuthenticatedUser } from '../auth.types';
 
@@ -22,7 +22,10 @@ export class ActorGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
     if (!user || !allowed.includes(user.actor)) {
-      throw new AppException('FORBIDDEN', 'This area is not available for your account type');
+      throw new AppException(
+        ErrorCodes.FORBIDDEN,
+        'This area is not available for your account type',
+      );
     }
     return true;
   }

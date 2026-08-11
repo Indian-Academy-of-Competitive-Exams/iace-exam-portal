@@ -11,6 +11,7 @@ import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  ErrorCodes,
   ERROR_CODE_STATUS,
   errorCodeForStatus,
   type ApiError,
@@ -85,7 +86,7 @@ function translate(exception: unknown): Translated {
     return {
       status: ERROR_CODE_STATUS.VALIDATION_ERROR,
       error: {
-        code: 'VALIDATION_ERROR',
+        code: ErrorCodes.VALIDATION_ERROR,
         message: 'Some of the details are not valid',
         fieldErrors: fieldErrorsFrom(exception),
       },
@@ -98,13 +99,17 @@ function translate(exception: unknown): Translated {
     if (exception.code === 'P2002') {
       return {
         status: ERROR_CODE_STATUS.CONFLICT,
-        error: { code: 'CONFLICT', message: 'That already exists', details: targetOf(exception) },
+        error: {
+          code: ErrorCodes.CONFLICT,
+          message: 'That already exists',
+          details: targetOf(exception),
+        },
       };
     }
     if (exception.code === 'P2025') {
       return {
         status: ERROR_CODE_STATUS.NOT_FOUND,
-        error: { code: 'NOT_FOUND', message: 'Not found' },
+        error: { code: ErrorCodes.NOT_FOUND, message: 'Not found' },
       };
     }
     return internal();
@@ -129,7 +134,7 @@ function internal(): Translated {
     status: ERROR_CODE_STATUS.INTERNAL,
     // Generic on purpose: an unhandled error's message is as likely to be a
     // connection string as anything a user could act on.
-    error: { code: 'INTERNAL', message: 'Something went wrong. Please try again.' },
+    error: { code: ErrorCodes.INTERNAL, message: 'Something went wrong. Please try again.' },
   };
 }
 
