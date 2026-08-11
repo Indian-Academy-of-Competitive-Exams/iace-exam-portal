@@ -12,7 +12,9 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 ## Stack
 
-TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both student & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live leaderboards, OTP/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT + OTP auth (students mobile, admins email) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** for both the test & admin SPAs · TanStack Query · **Tailwind + shadcn/ui** design system in `packages/ui` · PostgreSQL + Prisma · Redis (BullMQ, live leaderboards, OTP/PIN/sessions) · **S3 via the AWS SDK in every env (MinIO locally)** · self-built JWT auth (students: signup OTP then a 6-digit PIN; admins: email OTP) · React Native later. No SSR, no WebSockets. Infra chosen at the end, AWS-leaning.
+
+`apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
 ## Local prerequisites
 
@@ -30,14 +32,14 @@ docker compose up -d       # postgres + redis + minio (+ one-shot bucket create)
 pnpm install
 pnpm db:migrate            # applies prisma/migrations
 pnpm db:seed               # creates the bootstrap super admin from .env
-pnpm dev                   # api + student + admin, together
+pnpm dev                   # api + test + admin, together
 ```
 
 | What | Where |
 |---|---|
 | API | http://localhost:3000 |
 | Health check | http://localhost:3000/health |
-| Student app | http://localhost:5173 |
+| Test app | http://localhost:5173 |
 | Admin app | http://localhost:5174 |
 | MinIO console | http://localhost:9001 |
 
