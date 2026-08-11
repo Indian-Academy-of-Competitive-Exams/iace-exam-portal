@@ -1,13 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env", "prisma/schema.prisma"],
-  "globalEnv": [
-    "NODE_ENV",
-    "DATABASE_URL",
-    "REDIS_URL",
-    "JWT_ACCESS_SECRET",
-    "JWT_REFRESH_SECRET"
-  ],
+  "globalEnv": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

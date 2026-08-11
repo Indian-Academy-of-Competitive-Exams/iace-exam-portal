@@ -8,7 +8,7 @@ Foundation: **Tailwind CSS + shadcn/ui**, driven by CSS-variable tokens.
 
 - `src/tokens.css` — every design token as CSS variables, light + dark. The one place values are defined.
 - `tailwind.preset.js` — maps Tailwind color/radius/shadow names to those variables.
-- `src/components/` — the shadcn-based primitives (Button, Input, Card, Tabs, Table, Badge, StatTile, QuestionPalette, …). *(added during scaffolding)*
+- `src/components/` — the shadcn-based primitives (Button, Input, Card, Tabs, Table, Badge, StatTile, QuestionPalette, …). _(added during scaffolding)_
 
 ## Usage in an app
 

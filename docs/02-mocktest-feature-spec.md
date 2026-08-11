@@ -2,7 +2,7 @@
 
 **Purpose:** Define the first feature of the IACE platform — online mock tests — built to replace ThinkExam and fix what it does badly.
 **Basis:** Direct study of your live ThinkExam admin + student portals (examprep.iace.co.in), plus your design decisions.
-**Companion doc:** *IACE Learning Platform — V1 Architecture & Build Plan* (stack, scaling, AWS, 45-day roadmap).
+**Companion doc:** _IACE Learning Platform — V1 Architecture & Build Plan_ (stack, scaling, AWS, 45-day roadmap).
 **Last updated:** 2026-08-10
 
 ---
@@ -22,20 +22,20 @@ Everything below serves those four fixes.
 
 ## 2. Replicate / Simplify / Upgrade / Discard
 
-| Area | Decision | Detail |
-|---|---|---|
-| Real-exam student UI (timer, palette, sections, per-question language) | **Replicate** | This is the student's #1 expectation. Rebuild the standard government-CBT layout faithfully. |
-| Test-taking UI | **Simplify → two variants** | Replace ThinkExam's theme gallery with just **two** test-screen UIs, chosen per test: the **standard government CBT interface** (all our exam formats share it; V1 focus) and a **generic test UI** for lighter types (daily/sectional/quiz). See §14. |
-| Category / series buckets (nested tree) | **Replicate** | Your tests already live in a nested Category tree (SBI & IBPS PO Prelims, Banking Mains 100 Days, Sectionwise Tests…). Keep it as the series/bucket layer. |
-| Access model | **Simplify** | Two ways only to grant a test: to a whole **batch/group**, or to **individual students** via a paginated picker (off by default). Plus a shareable generated link. **No products, no access-code system.** |
-| Student portal UI | **Upgrade (don't copy)** | The current portal is too naive for today. Rebuild it snappy, uncluttered, with proper icons and a repeatable **tour**; make **Report the landing dashboard**. The in-*exam* screen still mirrors the real government exam. |
-| 6-step creation wizard | **Simplify** | Collapse to a short, saveable flow; a base config pre-fills almost everything. |
-| Question → test mapping | **Simplify → Upgrade** | Replace the flat manual list with **blueprint auto-draw** (subject + difficulty %) plus an easy manual picker. |
-| Candidate creation (many required fields) | **Simplify** | Mobile number is the only mandatory field; details completed after signup. |
-| Rank & result generation | **Upgrade** | Fully automatic, always-live via Redis leaderboard. No Generate/Regenerate buttons. |
-| Question import | **Upgrade** | Forgiving importer: preview, row-by-row error report, handles text + image + equation. One central import screen. |
-| Certificates | **Discard** | No "Create Certificate" step in V1. |
-| Long tail of test settings (bio break, typing test, OMR, essay/AI eval, open-book whitelisting, proctoring) | **Discard for V1** | Keep only what our exams use. |
+| Area                                                                                                        | Decision                    | Detail                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Real-exam student UI (timer, palette, sections, per-question language)                                      | **Replicate**               | This is the student's #1 expectation. Rebuild the standard government-CBT layout faithfully.                                                                                                                                                           |
+| Test-taking UI                                                                                              | **Simplify → two variants** | Replace ThinkExam's theme gallery with just **two** test-screen UIs, chosen per test: the **standard government CBT interface** (all our exam formats share it; V1 focus) and a **generic test UI** for lighter types (daily/sectional/quiz). See §14. |
+| Category / series buckets (nested tree)                                                                     | **Replicate**               | Your tests already live in a nested Category tree (SBI & IBPS PO Prelims, Banking Mains 100 Days, Sectionwise Tests…). Keep it as the series/bucket layer.                                                                                             |
+| Access model                                                                                                | **Simplify**                | Two ways only to grant a test: to a whole **batch/group**, or to **individual students** via a paginated picker (off by default). Plus a shareable generated link. **No products, no access-code system.**                                             |
+| Student portal UI                                                                                           | **Upgrade (don't copy)**    | The current portal is too naive for today. Rebuild it snappy, uncluttered, with proper icons and a repeatable **tour**; make **Report the landing dashboard**. The in-_exam_ screen still mirrors the real government exam.                            |
+| 6-step creation wizard                                                                                      | **Simplify**                | Collapse to a short, saveable flow; a base config pre-fills almost everything.                                                                                                                                                                         |
+| Question → test mapping                                                                                     | **Simplify → Upgrade**      | Replace the flat manual list with **blueprint auto-draw** (subject + difficulty %) plus an easy manual picker.                                                                                                                                         |
+| Candidate creation (many required fields)                                                                   | **Simplify**                | Mobile number is the only mandatory field; details completed after signup.                                                                                                                                                                             |
+| Rank & result generation                                                                                    | **Upgrade**                 | Fully automatic, always-live via Redis leaderboard. No Generate/Regenerate buttons.                                                                                                                                                                    |
+| Question import                                                                                             | **Upgrade**                 | Forgiving importer: preview, row-by-row error report, handles text + image + equation. One central import screen.                                                                                                                                      |
+| Certificates                                                                                                | **Discard**                 | No "Create Certificate" step in V1.                                                                                                                                                                                                                    |
+| Long tail of test settings (bio break, typing test, OMR, essay/AI eval, open-book whitelisting, proctoring) | **Discard for V1**          | Keep only what our exams use.                                                                                                                                                                                                                          |
 
 ---
 
@@ -49,6 +49,7 @@ A library of base configs keyed by exam type (SSC CGL, IBPS PO Prelims, RRB JE, 
 **Step 1 — Create test.** Name it, pick a base config → everything pre-fills. Admin overrides only if this test differs. (Replaces ThinkExam's Step 1 + most of Step 2.)
 
 **Step 2 — Fill with questions (two modes).**
+
 - **Auto (blueprint draw):** from the base config's subjects and the difficulty split (a test-wide default with **per-section override**), the system auto-draws matching questions from the central bank into each section. The draw happens **once at finalize**, producing a **fixed paper every student shares** (fair ranking). Order and options are shuffled **per student** via a stored seed.
 - **Manual:** a fast search/filter UI over the bank; admin cherry-picks questions and assigns them into sections.
 
@@ -57,6 +58,7 @@ A library of base configs keyed by exam type (SSC CGL, IBPS PO Prelims, RRB JE, 
 **No certificate step.**
 
 **After creation — management actions (separate from the creation flow):**
+
 - **Activate / Inactivate** the test (status toggle).
 - **Assign access** — to a batch/group, or to individual students (§7).
 - **Assign to test series** — **optional and many-to-many**: a test can be standalone (attempted individually), in one series, or in several. Kept deliberately **out of creation** as its own flow; series membership can be decided anytime, later.
@@ -77,7 +79,7 @@ From ThinkExam's Step 2 (Shuffle, Test Options, Time Setting, Generate Rank, Att
 
 ## 5. Student experience — enhance, don't copy
 
-We keep the *journey* ThinkExam established, but its portal UI is too naive for today — so we rebuild it **snappy, uncluttered, icon-driven, and easy to scan**, with a **tour the student can replay anytime**. The one thing we replicate faithfully is the **in-exam screen** (students expect it to match the real government CBT). Everything around it, we modernize.
+We keep the _journey_ ThinkExam established, but its portal UI is too naive for today — so we rebuild it **snappy, uncluttered, icon-driven, and easy to scan**, with a **tour the student can replay anytime**. The one thing we replicate faithfully is the **in-exam screen** (students expect it to match the real government CBT). Everything around it, we modernize.
 
 **Landing = Report dashboard.** After login the student lands on **Report as a friendly dashboard** (not a raw test list) — performance, progress, and next actions at a glance.
 
@@ -85,7 +87,7 @@ We keep the *journey* ThinkExam established, but its portal UI is too naive for 
 
 **Pre-exam.** A lightweight system check (ThinkExam runs a 4-step Browser/User/Test/CORS check — we keep a slim version), then instructions with the palette legend and a language selector, then a declaration checkbox and "I am ready to begin."
 
-**Live exam UI (the core to replicate faithfully):** section tabs; server-authoritative **countdown timer**; per-question **type + marks/negative**; per-question **"View In" language** dropdown; full-screen; the question body (renders text, images, and **equations**); radio options; right rail with **status counters** (Answered / Not Answered / Not Visited / Marked for Review / Answered+Marked) and the **Questions Palette** grid; bottom bar **Mark for Review & Next / Clear Response / Save & Next**; Submit. *(This is the CBT variant, used for full-length mocks; lighter test types use the generic test UI — see §14.)*
+**Live exam UI (the core to replicate faithfully):** section tabs; server-authoritative **countdown timer**; per-question **type + marks/negative**; per-question **"View In" language** dropdown; full-screen; the question body (renders text, images, and **equations**); radio options; right rail with **status counters** (Answered / Not Answered / Not Visited / Marked for Review / Answered+Marked) and the **Questions Palette** grid; bottom bar **Mark for Review & Next / Clear Response / Save & Next**; Submit. _(This is the CBT variant, used for full-length mocks; lighter test types use the generic test UI — see §14.)_
 
 ---
 
@@ -143,7 +145,7 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 - **Base config locks once used** — once any test created from a base config is attempted, the config + its sections become read-only; to change it, clone into a new config. (Tests are snapshots, so existing ones are unaffected regardless.)
 - Rank/result = always live (Redis), never a manual regenerate.
 - Central question bank with one forgiving import screen; text + image + equation.
-- Students: mobile + OTP **at signup**, then a **6-digit PIN** for later logins (OTP resets it; rate-limit in Redis). Admins: email + OTP. OTP/sessions/devices in Redis. **Pre-test gate is minimal** — mother's name + father's name + DOB; the full profile is optional and gently prompted.
+- Students: mobile + OTP **at signup**, then a **4-digit PIN** for later logins (OTP resets it; rate-limit in Redis). Admins: email + OTP. OTP/sessions/devices in Redis. **Pre-test gate is minimal** — mother's name + father's name + DOB; the full profile is optional and gently prompted.
 - No certificates in V1; trimmed settings.
 - Access = **Student → Group → TestSeries → Test** (no direct student/test grants). A student is always in ≥1 group; groups link to series; series contain tests. A shareSlug link for edge cases. No products/access-codes.
 - **Three portals:** Student (future broad platform), **Test** (this build, `apps/test`), Admin. V1 = Test + Admin. Internal IACE students first, general public later.
@@ -185,6 +187,7 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 `question_code | language | subject | topic | difficulty | question | option_1 | option_2 | option_3 | option_4 | correct_option | marks | negative_marks | solution | tags`
 
 Choices that fix the pain:
+
 - **Correct answer by option index (1–4)**, converted to a **stable option ID** on ingest — so later shuffling or editing never breaks the key.
 - **Multilingual by rows** (not 32 option columns) → English default; Hindi/Telugu/any language just add rows, no schema change. Serves the multi-language goal directly.
 - **Equations** inline as `$…$` (KaTeX); **images** as `[[img:filename]]` placeholders resolved from an uploaded image **ZIP** → clean image-only and equation questions.

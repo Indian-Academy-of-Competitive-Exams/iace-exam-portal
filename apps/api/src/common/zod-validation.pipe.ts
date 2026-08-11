@@ -24,6 +24,3 @@ export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
     });
   }
 }
-
-/** The same, for `@Query()`. Query strings arrive as strings — coerce in the schema. */
-export class ZodQuery<TOut> extends ZodBody<TOut> {}

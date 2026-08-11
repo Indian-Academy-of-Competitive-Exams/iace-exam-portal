@@ -51,7 +51,7 @@ export class JwtAuthGuard implements CanActivate {
   }
 }
 
-export function extractBearerToken(header: string | undefined): string | null {
+function extractBearerToken(header: string | undefined): string | null {
   if (!header) return null;
   const [scheme, value] = header.split(' ');
   return scheme?.toLowerCase() === 'bearer' && value ? value : null;

@@ -10,7 +10,10 @@
     "./lib/utils": "./src/lib/utils.ts",
     "./components/*": "./src/components/ui/*.tsx"
   },
-  "files": ["src", "tailwind.preset.js"],
+  "files": [
+    "src",
+    "tailwind.preset.js"
+  ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",

@@ -15,7 +15,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 
 - **Monorepo:** Turborepo + pnpm workspaces. **TypeScript everywhere.**
 - **API:** NestJS (Node + TS) — one decoupled API for web now, mobile later.
-- **Frontend:** **Vite + React + TypeScript SPAs** — `apps/student` and `apps/admin`. No Next.js, no SSR. (A public marketing site, if ever needed, is a separate small thing.)
+- **Frontend:** **Vite + React + TypeScript SPAs** — `apps/test` and `apps/admin` (`apps/student` comes later). No Next.js, no SSR. (A public marketing site, if ever needed, is a separate small thing.)
 - **Server data:** TanStack Query (React Query) over a typed client generated from `packages/contracts`.
 - **Design system:** Tailwind CSS + shadcn/ui with tokens in **`packages/ui`** — the single source for color, type, spacing, radii, elevation, and components. **Never redefine design values at the component level.** Brand primary = muted brick **`#B83939`**; **Cancel = neutral grey**; **destructive = crimson `#BE123C`**; chart palette is the validated colorblind-safe set (blue-led, never brand red). Light + dark via CSS variables. Living style guide: `docs/design/design-system.html`.
 - **Forms:** react-hook-form + zod. **Icons:** lucide-react. **Routing:** React Router. **Client state:** Zustand only where React Query doesn't fit.
@@ -32,9 +32,10 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 
 ```
 apps/
-  student/     Vite + React + TS SPA
+  test/        Vite + React + TS SPA — the test-taking portal (V1)
   admin/       Vite + React + TS SPA
   api/         NestJS
+  (student/    the broader student platform — a separate SPA, later)
 packages/
   ui/          design tokens + shadcn components (the shared design system)
   contracts/   shared types + typed API client
@@ -70,7 +71,7 @@ Live timed tests are the hard part. Keep Postgres off the hot path:
 
 The **standard government CBT interface** (primary V1 build; all exam formats share it, config-driven) and a **generic test UI** (secondary — only if time permits). The portal/admin shell is the shared modern design system. The in-exam CBT screen stays **faithful to the real exam**.
 
-**Language display is per test** (`Test.languageMode`, defaulted from base config): **SINGLE** (student picks one language, optional per-question toggle) or **DUAL** (both languages render together — stem *and* options — no toggle). `Test.languages` is the ordered list. All content is already in the JSON, so this is purely a render mode. SSC CGL defaults to DUAL (English + Hindi).
+**Language display is per test** (`Test.languageMode`, defaulted from base config): **SINGLE** (student picks one language, optional per-question toggle) or **DUAL** (both languages render together — stem _and_ options — no toggle). `Test.languages` is the ordered list. All content is already in the JSON, so this is purely a render mode. SSC CGL defaults to DUAL (English + Hindi).
 
 ## Results
 

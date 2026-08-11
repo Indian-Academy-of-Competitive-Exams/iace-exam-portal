@@ -26,22 +26,22 @@ Claude handles: scaffolding, boilerplate, schema/migrations, API endpoints, the 
 
 Everything is **TypeScript, end to end**, in a single monorepo so types are shared between backend and every client.
 
-| Layer | Choice | Why (for a solo, 45-day build) |
-|---|---|---|
-| **Monorepo** | Turborepo + pnpm workspaces | Share a `types`/`contracts` package across API, web, admin, and (later) mobile. Change an API shape once, every client sees it. |
-| **Backend API** | NestJS (Node + TS) | One decoupled API serves web now and mobile later. Structure (modules, DI, guards, validation) keeps a solo codebase from turning to mud. |
-| **Frontend (student + admin)** | Vite + React + TypeScript SPAs | Both apps are SPAs behind login — no SSR needed. One build tool, one mental model for a solo dev. |
-| **Server data / caching** | TanStack Query (React Query) | One way to fetch, cache, and invalidate; typed client from `packages/contracts`. |
-| **Design system** | Tailwind CSS + shadcn/ui, tokens in `packages/ui` | Single source for color/type/spacing/components — never redefined per component. Brand `#B83939`, distinct crimson destructive, validated chart palette, light + dark. |
-| **Mobile (post-V1)** | React Native + Expo | Reuses the same TypeScript, types, and API — mobile is just another client. |
-| **Database** | PostgreSQL, via **Prisma** | Highly relational (students, tests, questions, attempts). `prisma/schema.prisma` is the source of truth. |
-| **Cache / queue / state** | Redis + BullMQ | In-progress test state, live leaderboards, OTP/sessions/devices, rate limiting; scoring + import jobs. |
-| **Auth** | Self-built JWT + refresh; students **mobile-OTP**, admins **email-OTP** | OTP, sessions, and device binding all live in Redis — never the DB. |
-| **SMS / email OTP** | MSG91 (SMS, DLT) + email provider | Student mobile OTP via MSG91; admin email OTP. Start DLT registration early (lead time). |
-| **Storage** | **S3 via the AWS SDK — every environment** | Local dev = MinIO (S3-compatible) in docker-compose; prod = S3 (+ CloudFront later). One upload path, never branched by env. |
-| **Realtime** | None — no WebSockets | Client timer + periodic HTTP autosave + Redis is enough. |
-| **Payments** | Separate portal — **not in V1** | Handled elsewhere; the platform only reads entitlements later. |
-| **Infra / hosting** | Decided at the **end**, AWS-leaning | Build cloud-agnostic (Docker + env); everything containerized. |
+| Layer                          | Choice                                                                  | Why (for a solo, 45-day build)                                                                                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Monorepo**                   | Turborepo + pnpm workspaces                                             | Share a `types`/`contracts` package across API, web, admin, and (later) mobile. Change an API shape once, every client sees it.                                        |
+| **Backend API**                | NestJS (Node + TS)                                                      | One decoupled API serves web now and mobile later. Structure (modules, DI, guards, validation) keeps a solo codebase from turning to mud.                              |
+| **Frontend (student + admin)** | Vite + React + TypeScript SPAs                                          | Both apps are SPAs behind login — no SSR needed. One build tool, one mental model for a solo dev.                                                                      |
+| **Server data / caching**      | TanStack Query (React Query)                                            | One way to fetch, cache, and invalidate; typed client from `packages/contracts`.                                                                                       |
+| **Design system**              | Tailwind CSS + shadcn/ui, tokens in `packages/ui`                       | Single source for color/type/spacing/components — never redefined per component. Brand `#B83939`, distinct crimson destructive, validated chart palette, light + dark. |
+| **Mobile (post-V1)**           | React Native + Expo                                                     | Reuses the same TypeScript, types, and API — mobile is just another client.                                                                                            |
+| **Database**                   | PostgreSQL, via **Prisma**                                              | Highly relational (students, tests, questions, attempts). `prisma/schema.prisma` is the source of truth.                                                               |
+| **Cache / queue / state**      | Redis + BullMQ                                                          | In-progress test state, live leaderboards, OTP/sessions/devices, rate limiting; scoring + import jobs.                                                                 |
+| **Auth**                       | Self-built JWT + refresh; students **mobile-OTP**, admins **email-OTP** | OTP, sessions, and device binding all live in Redis — never the DB.                                                                                                    |
+| **SMS / email OTP**            | MSG91 (SMS, DLT) + email provider                                       | Student mobile OTP via MSG91; admin email OTP. Start DLT registration early (lead time).                                                                               |
+| **Storage**                    | **S3 via the AWS SDK — every environment**                              | Local dev = MinIO (S3-compatible) in docker-compose; prod = S3 (+ CloudFront later). One upload path, never branched by env.                                           |
+| **Realtime**                   | None — no WebSockets                                                    | Client timer + periodic HTTP autosave + Redis is enough.                                                                                                               |
+| **Payments**                   | Separate portal — **not in V1**                                         | Handled elsewhere; the platform only reads entitlements later.                                                                                                         |
+| **Infra / hosting**            | Decided at the **end**, AWS-leaning                                     | Build cloud-agnostic (Docker + env); everything containerized.                                                                                                         |
 
 **Deliberately deferred** (not in V1, but the schema won't block them): deep per-question time/accuracy analytics, multiple question types beyond single-answer MCQ, Word/PDF question import, native mobile apps, live proctoring.
 
@@ -53,11 +53,11 @@ Everything is **TypeScript, end to end**, in a single monorepo so types are shar
 
 ### In scope for V1
 
-- **Bilingual/multilingual questions (English + Hindi default)** with a **per-test language display mode**: SINGLE (student picks one language, optional per-question toggle) or DUAL (both languages shown together — stem *and* options). Defaulted from the base config; SSC CGL defaults to DUAL.
+- **Bilingual/multilingual questions (English + Hindi default)** with a **per-test language display mode**: SINGLE (student picks one language, optional per-question toggle) or DUAL (both languages shown together — stem _and_ options). Defaulted from the base config; SSC CGL defaults to DUAL.
 - **Single-answer MCQ** only (schema designed so other types can be added later without migration pain).
 - **Images in questions** (figures/tables/diagrams for Reasoning & Quant), supported in both the manual editor and the bulk import.
-- **Sign-in**: students sign up with mobile + OTP, then log in with a **6-digit PIN** (OTP resets it); admins use email + OTP. SMS via MSG91.
-- **Sectional structure with sectional timing** (IBPS/SBI style), plus an overall test. (Sectional *cutoffs* and score normalization are deferred to V2.)
+- **Sign-in**: students sign up with mobile + OTP, then log in with a **4-digit PIN** (OTP resets it); admins use email + OTP. SMS via MSG91.
+- **Sectional structure with sectional timing** (IBPS/SBI style), plus an overall test. (Sectional _cutoffs_ and score normalization are deferred to V2.)
 - **Negative marking**, configurable per section (e.g. −0.25, −0.5).
 - **Question bank** with **bulk import from Excel/CSV** plus a **manual question editor**.
 - **Test builder** in the admin panel (base config → auto-draw or manual questions → schedule; timing, marks, negative marking). Series assignment is a separate flow.
@@ -70,7 +70,7 @@ Everything is **TypeScript, end to end**, in a single monorepo so types are shar
 
 Deep time-per-question and topic-accuracy analytics; multi-select / numerical / comprehension question types; importing questions from Word/PDF; native mobile apps; proctoring; discussion/community; adaptive practice.
 
-> **Note on a mixed answer:** you selected instant results, rank/percentile, *and* "just score + solutions" together. Resolution: **V1 ships score + solutions + rank/percentile** (rank is cheap because we already run Redis and it's a real differentiator). **Detailed time/accuracy analytics is deferred to V2**, and the schema is built so it can be added without migrations.
+> **Note on a mixed answer:** you selected instant results, rank/percentile, _and_ "just score + solutions" together. Resolution: **V1 ships score + solutions + rank/percentile** (rank is cheap because we already run Redis and it's a real differentiator). **Detailed time/accuracy analytics is deferred to V2**, and the schema is built so it can be added without migrations.
 
 ---
 
@@ -121,7 +121,7 @@ The API is stateless, so we can run 1→N identical containers behind a load bal
 
 ### The shape (schema is authoritative)
 
-- **Student** and **Admin** are separate tables (student = mobile OTP at signup + 6-digit PIN login; admin = email OTP; OTP/sessions/devices in Redis, not the DB). **StudentProfile** (1:1) holds personal data; the **pre-test gate is minimal** (mother's name + father's name + DOB), full profile optional and gently prompted.
+- **Student** and **Admin** are separate tables (student = mobile OTP at signup + 4-digit PIN login; admin = email OTP; OTP/sessions/devices in Redis, not the DB). **StudentProfile** (1:1) holds personal data; the **pre-test gate is minimal** (mother's name + father's name + DOB), full profile optional and gently prompted.
 - **Question / QuestionOption** — options carry a stable `id` + `isCorrect` (shuffle-safe answer key); localized content is **JSON** per language (text / `$LaTeX$` / inline S3 image URLs), tagged by subject, topic, difficulty.
 - **ExamType → BaseConfig (+ sections)** is the reusable blueprint; a **Test** copies + overrides it and carries `languageMode` (SINGLE/DUAL), status, and schedule. Finalizing draws a fixed **PaperQuestion** paper shared by all students; per-student order/option shuffle via `Attempt.shuffleSeed`; `PaperQuestion.status` handles drop/bonus.
 - **Attempt** holds live state **and** the scored fields (no separate Result table). **AttemptAnswer** stores only interacted questions (composite PK) with the analytics data points.
@@ -135,7 +135,7 @@ Two choices worth calling out: **localized content as JSON** keeps the bank mult
 
 Thousands of concurrent users (our ~2K normal / 4K required / 5K target) are very achievable on this stack **only if** the mock-test flow is designed to keep Postgres out of the hot path. The naive version — every browser syncing a timer to the server each second and writing every answer straight to the DB — is what melts these platforms. Instead:
 
-**Timer is client-side; server owns the truth.** When a student starts a test, we compute `startedAt` and `endsAt` and store them in **Redis** (and the Attempt row). The countdown *renders* on the client, but every submit is validated against the server's `endsAt` — no per-second server chatter, and no way to cheat the clock.
+**Timer is client-side; server owns the truth.** When a student starts a test, we compute `startedAt` and `endsAt` and store them in **Redis** (and the Attempt row). The countdown _renders_ on the client, but every submit is validated against the server's `endsAt` — no per-second server chatter, and no way to cheat the clock.
 
 **Answers autosave to Redis, not Postgres.** As the student answers, the client autosaves the in-progress answer sheet to Redis every ~20–30 seconds (and on each answer for safety). Redis absorbs this churn effortlessly. Postgres never sees a write until submit.
 
@@ -151,17 +151,17 @@ Thousands of concurrent users (our ~2K normal / 4K required / 5K target) are ver
 
 Kept as simple as possible for someone new to AWS. V1 runs on a handful of managed services:
 
-| Service | Role | Notes |
-|---|---|---|
-| **App Runner** *or* **ECS Fargate** | Runs the API container | Start with App Runner for simplicity; move to Fargate if we need finer control. Auto-scales on CPU/requests. |
-| **RDS (PostgreSQL)** | Durable data | Single instance for V1. Add a read replica only when reads actually strain it. Automated backups on. |
-| **ElastiCache (Redis)** | Test state, queue, leaderboards | Single node for V1. |
-| **S3** | Question images, content, CSV import files | Private buckets; presigned URLs for uploads/downloads. |
-| **CloudFront** | CDN for static assets, question images & (later) video | Sits in front of S3 and the web apps. |
-| **Amplify / S3 + CloudFront** | Hosts student web + admin | Frontends on AWS too — one console. |
-| **Route 53 + ACM** | DNS + TLS certificates | HTTPS everywhere. |
-| **Secrets Manager / SSM Parameter Store** | DB/Redis/S3/MSG91 secrets | No secrets in code or env files committed to git. |
-| **MSG91** (external) | OTP + transactional SMS | Not AWS, but the India-standard, DLT-compliant choice for OTP login. |
+| Service                                   | Role                                                   | Notes                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **App Runner** _or_ **ECS Fargate**       | Runs the API container                                 | Start with App Runner for simplicity; move to Fargate if we need finer control. Auto-scales on CPU/requests. |
+| **RDS (PostgreSQL)**                      | Durable data                                           | Single instance for V1. Add a read replica only when reads actually strain it. Automated backups on.         |
+| **ElastiCache (Redis)**                   | Test state, queue, leaderboards                        | Single node for V1.                                                                                          |
+| **S3**                                    | Question images, content, CSV import files             | Private buckets; presigned URLs for uploads/downloads.                                                       |
+| **CloudFront**                            | CDN for static assets, question images & (later) video | Sits in front of S3 and the web apps.                                                                        |
+| **Amplify / S3 + CloudFront**             | Hosts student web + admin                              | Frontends on AWS too — one console.                                                                          |
+| **Route 53 + ACM**                        | DNS + TLS certificates                                 | HTTPS everywhere.                                                                                            |
+| **Secrets Manager / SSM Parameter Store** | DB/Redis/S3/MSG91 secrets                              | No secrets in code or env files committed to git.                                                            |
+| **MSG91** (external)                      | OTP + transactional SMS                                | Not AWS, but the India-standard, DLT-compliant choice for OTP login.                                         |
 
 Everything is containerized with Docker so nothing is tied to a single host. Frontends and backend all live in the AWS console for one billing and ops model.
 
@@ -172,22 +172,22 @@ Everything is containerized with Docker so nothing is tied to a single host. Fro
 Six phases. Each ends with something demonstrable. Dates are relative to day 1.
 
 **Phase 0 — Foundation (Days 1–5)**
-Monorepo (Turborepo + pnpm), NestJS API skeleton, **Vite + React** student & admin app shells wired to the `packages/ui` design system, Prisma against Postgres, Redis + BullMQ, **docker-compose (Postgres + Redis + MinIO)**, and CI. Auth: student **signup mobile-OTP → 6-digit PIN login**; admin **email-OTP** (OTP in Redis) + JWT/refresh, guards. *Milestone: a student signs up by OTP and logs in with a PIN; an admin logs in by email OTP.*
+Monorepo (Turborepo + pnpm), NestJS API skeleton, **Vite + React** student & admin app shells wired to the `packages/ui` design system, Prisma against Postgres, Redis + BullMQ, **docker-compose (Postgres + Redis + MinIO)**, and CI. Auth: student **signup mobile-OTP → 4-digit PIN login**; admin **email-OTP** (OTP in Redis) + JWT/refresh, guards. _Milestone: a student signs up by OTP and logs in with a PIN; an admin logs in by email OTP._
 
 **Phase 1 — Question bank (Days 6–13)**
-Question + Topic models with **bilingual text and images**. Manual bilingual question editor (with image upload to S3) in admin. Excel/CSV bulk-import pipeline (upload to S3 → BullMQ worker parses & validates → rows land as questions, image references resolved, with an error report). *Milestone: a few hundred real questions — including image-based ones — imported and browsable/editable in admin.*
+Question + Topic models with **bilingual text and images**. Manual bilingual question editor (with image upload to S3) in admin. Excel/CSV bulk-import pipeline (upload to S3 → BullMQ worker parses & validates → rows land as questions, image references resolved, with an error report). _Milestone: a few hundred real questions — including image-based ones — imported and browsable/editable in admin._
 
 **Phase 2 — Base configs + test builder (Days 14–21)**
-Exam-type **base configs** (seed SSC CGL Tier 1), then config-driven test creation: pick a config → **auto-draw** by subject + difficulty % (or manual pick) → schedule. Sectional timing, marks, negative marking, `languageMode`. Status/access/series are separate post-creation actions. (No cutoffs in V1.) *Milestone: a publishable bilingual mock test assembled from the bank exists.*
+Exam-type **base configs** (seed SSC CGL Tier 1), then config-driven test creation: pick a config → **auto-draw** by subject + difficulty % (or manual pick) → schedule. Sectional timing, marks, negative marking, `languageMode`. Status/access/series are separate post-creation actions. (No cutoffs in V1.) _Milestone: a publishable bilingual mock test assembled from the bank exists._
 
 **Phase 3 — Test engine (Days 22–32) — the core**
-The student test-taking experience: instructions screen, section navigation, **language display (single or dual)**, question palette (answered/marked/skipped), client timer, Redis autosave, server-authoritative start/end, and safe submit + auto-submit. This is the heaviest phase — budget accordingly. *Milestone: a student can take a full bilingual sectional-timed test start to finish.*
+The student test-taking experience: instructions screen, section navigation, **language display (single or dual)**, question palette (answered/marked/skipped), client timer, Redis autosave, server-authoritative start/end, and safe submit + auto-submit. This is the heaviest phase — budget accordingly. _Milestone: a student can take a full bilingual sectional-timed test start to finish._
 
 **Phase 4 — Results, rank & access (Days 33–40)**
-BullMQ scoring workers (marks + negative marking), scored fields on `Attempt`, Score Card + Solution Report, live Redis leaderboard for rank/percentile. Access: assign to group/individual + shareable link + in-app notification. *Milestone: a student takes an assigned test and sees a ranked result with solutions.*
+BullMQ scoring workers (marks + negative marking), scored fields on `Attempt`, Score Card + Solution Report, live Redis leaderboard for rank/percentile. Access: assign to group/individual + shareable link + in-app notification. _Milestone: a student takes an assigned test and sees a ranked result with solutions._
 
 **Phase 5 — Hardening & launch (Days 41–45)**
-Load test the live-test path at target concurrency, fix bottlenecks, error monitoring, backups verified, security pass (rate limits, input validation, secrets), basic admin operational dashboard, deploy to production. *Milestone: production launch of V1.*
+Load test the live-test path at target concurrency, fix bottlenecks, error monitoring, backups verified, security pass (rate limits, input validation, secrets), basic admin operational dashboard, deploy to production. _Milestone: production launch of V1._
 
 This is achievable but tight; Phase 3 is the risk. If we slip, the first things to trim are admin polish, the generic test UI, and the analytics screen — never the test-engine correctness or the scaling design.
 
@@ -196,6 +196,7 @@ This is achievable but tight; Phase 3 is the risk. If we slip, the first things 
 ## 9. Open decisions & risks
 
 **Resolved:**
+
 - **Frontend:** Vite + React SPAs; Tailwind + shadcn/ui design system in `packages/ui`; TanStack Query. No SSR, no WebSockets.
 - **Results scope:** V1 ships score + solutions + rank/percentile; deep analytics deferred (data captured day one).
 - **Auth:** student mobile-OTP + admin email-OTP; OTP/sessions/devices in Redis.
@@ -204,10 +205,12 @@ This is achievable but tight; Phase 3 is the risk. If we slip, the first things 
 - **Infra/hosting:** decided at the end, AWS-leaning; build cloud-agnostic.
 
 **Still open (none block starting):**
+
 - Email provider (admin email OTP now; receipts/reminders later) — pick when needed.
 - **Start MSG91 + DLT sender-ID registration early** — India SMS approval has real lead time.
 
 **Top risks:**
+
 - **Phase 3 (test engine) overrun** — it's the most complex piece; we protect its timeline by keeping Phases 1–2 lean.
 - **Question content readiness** — the platform is only as good as the question bank; importing real, verified bilingual questions needs to start early (Phase 1) and run in parallel.
 - **First-time AWS ops** — we mitigate by using the most managed services possible and scripting infra so it's reproducible.
