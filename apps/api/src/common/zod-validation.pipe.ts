@@ -24,3 +24,10 @@ export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
     });
   }
 }
+
+/**
+ * The same, for `@Query()`. Query strings arrive as strings, so the schema must
+ * coerce — see `paginationQuerySchema`, where page and pageSize are numbers on
+ * the far side of a `z.coerce`.
+ */
+export class ZodQuery<TOut> extends ZodBody<TOut> {}

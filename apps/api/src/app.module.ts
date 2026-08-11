@@ -7,6 +7,7 @@ import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { StudentsModule } from './students/students.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { PagePermissionGuard } from './auth/guards/page-permission.guard';
@@ -33,6 +34,7 @@ import { RequestIdMiddleware } from './common/request-id';
     QueueModule,
     StorageModule,
     AuthModule,
+    StudentsModule,
     HealthModule,
   ],
   providers: [

@@ -158,6 +158,22 @@ export function apiSuccessSchema<T extends ZodType>(
 // ends speak in whole pages and only the wire format is split.
 // ============================================================================
 
+/** Defaults every list endpoint shares, so paging behaves the same everywhere. */
+export const PAGE_SIZE_DEFAULT = 20;
+export const PAGE_SIZE_MAX = 100;
+
+/**
+ * Query params every list endpoint accepts. `pageSize` is capped rather than
+ * trusted: an uncapped page size turns any list into a way to pull the whole
+ * table in one request.
+ */
+export const paginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(PAGE_SIZE_MAX).default(PAGE_SIZE_DEFAULT),
+});
+export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
+export type PaginationQueryInput = z.input<typeof paginationQuerySchema>;
+
 export interface Paginated<T> {
   items: T[];
   page: number;
