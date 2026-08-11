@@ -17,20 +17,47 @@ export type ActorType = (typeof ActorTypes)[keyof typeof ActorTypes];
 
 export const actorTypeSchema = z.enum(ActorTypes);
 
+/** An Indian mobile number, once normalised: 10 digits, leading 6-9. */
+export const MOBILE_DIGITS = 10;
+
+/** Country/trunk prefixes a student might type, longest first. */
+const MOBILE_PREFIXES = ['+91', '0091', '91', '0'] as const;
+
 /**
- * Indian mobile number: 10 digits, leading 6-9. `+91` / `91` / `0` prefixes and
- * separators are stripped first, so clients may send any of the usual forms and
- * the stored value is always the bare 10 digits.
+ * Reduces any of the usual forms to the bare 10 digits we store.
+ *
+ * A prefix is only stripped when doing so leaves exactly 10 digits. Stripping
+ * it unconditionally corrupts real numbers: `9123456789` is a live series, and
+ * blindly removing its leading "91" leaves 8 digits — so the owner of a
+ * perfectly valid number is told their number is invalid and cannot sign up at
+ * all. The length check is the whole fix.
+ */
+export function normaliseMobile(raw: string): string {
+  const compact = raw.trim().replace(/[\s()-]/g, '');
+
+  for (const prefix of MOBILE_PREFIXES) {
+    if (compact.startsWith(prefix) && compact.length === prefix.length + MOBILE_DIGITS) {
+      return compact.slice(prefix.length);
+    }
+  }
+  return compact;
+}
+
+/**
+ * Indian mobile number: 10 digits, leading 6-9. Accepts `+91`, `0091`, `91` and
+ * `0` prefixes plus spaces, hyphens and parentheses; stores the bare digits.
  */
 export const mobileSchema = z
   .string()
-  .transform((v) =>
-    v
-      .trim()
-      .replace(/[\s()-]/g, '')
-      .replace(/^(\+91|91|0)/, ''),
-  )
-  .pipe(z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'));
+  .transform(normaliseMobile)
+  .pipe(
+    z
+      .string()
+      .regex(
+        new RegExp(`^[6-9]\\d{${MOBILE_DIGITS - 1}}$`),
+        'Enter a valid 10-digit mobile number',
+      ),
+  );
 
 export const emailSchema = z
   .string()
