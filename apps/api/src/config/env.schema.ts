@@ -8,6 +8,33 @@ const boolFromEnv = (fallback: boolean) =>
     .optional()
     .transform((v) => (v === undefined || v === '' ? fallback : v === 'true' || v === '1'));
 
+/**
+ * A comma-separated ladder of positive second counts, e.g. "900,3600,86400".
+ * Must not descend — a lockout ladder that gets shorter is a config mistake,
+ * and one that silently "works" would quietly weaken the account it protects.
+ */
+const secondsLadder = (fallback: number[]) =>
+  z
+    .string()
+    .optional()
+    .transform((v) =>
+      v === undefined || v.trim() === ''
+        ? fallback
+        : v
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(Number),
+    )
+    .refine(
+      (steps) => steps.length > 0 && steps.every((n) => Number.isInteger(n) && n > 0),
+      'must be a comma-separated list of positive whole seconds, e.g. 900,3600,86400',
+    )
+    .refine(
+      (steps) => steps.every((n, i) => i === 0 || n >= (steps[i - 1] ?? 0)),
+      'must not decrease — each lockout step should be at least as long as the one before',
+    );
+
 const csv = z
   .string()
   .optional()
@@ -68,7 +95,16 @@ export const envSchema = z.object({
   // Rotating it invalidates every PIN (students recover by OTP reset).
   PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  PIN_LOCKOUT_SEC: z.coerce.number().int().positive().default(900),
+  // Escalating lockout. Each time a number is locked out again it climbs one
+  // rung; the last rung repeats forever. Four digits is only 10,000 guesses, so
+  // a flat 15 minutes leaves ~480 tries a day — enough to exhaust the space in
+  // about three weeks. Climbing to a day cuts that to a handful of tries.
+  // The FIRST step doubles as the window the wrong-attempt counter lives in.
+  PIN_LOCKOUT_STEPS_SEC: secondsLadder([900, 3600, 86400]),
+  // How long a number must go without being locked out before the ladder drops
+  // back to the first rung. Signing in correctly, or resetting the PIN, clears
+  // it immediately — this only matters to someone who keeps failing.
+  PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
   PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
 
   // Object storage. ONE code path: MinIO locally, AWS S3 in production —

@@ -47,7 +47,7 @@ pnpm dev                   # api + test + admin, together
 
 OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is printed in the API log** and echoed into the login screen, so no SMS or email is sent.
 
-- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 4-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number for `PIN_LOCKOUT_SEC`.
+- **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 4-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number, and each repeat lockout lasts longer — 15 minutes, then an hour, then a day (`PIN_LOCKOUT_STEPS_SEC`). Signing in or resetting the PIN clears the ladder.
 - **Admin** (:5174) — the seeded `SEED_SUPER_ADMIN_EMAIL`, email + OTP every time. Admins cannot self-register.
 
 ### The API response envelope

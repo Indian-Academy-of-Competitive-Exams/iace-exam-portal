@@ -5,6 +5,18 @@ import { AppException, ErrorCodes } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
+import { secondsToHuman } from '../../common/duration';
+
+/**
+ * Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and
+ * anything past the end of the ladder stays on the last one. Pure, so the
+ * escalation can be tested without Redis.
+ */
+export function lockoutDurationFor(steps: number[], lockoutCount: number): number {
+  const index = Math.min(Math.max(lockoutCount, 1), steps.length) - 1;
+  // steps is validated non-empty at boot; the fallback keeps the type honest.
+  return steps[index] ?? steps[steps.length - 1] ?? 900;
+}
 
 /**
  * OWASP's low-memory argon2id profile (19 MiB, t=2, p=1). It costs ~20ms per
@@ -28,9 +40,12 @@ const ARGON2_OPTIONS = {
  *     hashed. The pepper lives in the environment, never beside the hash, so a
  *     stolen Student table cannot be brute-forced offline (10,000 candidates
  *     is otherwise a fraction of a second's work).
- *  2. A LOCKOUT — consecutive failures are counted in Redis and the number is
- *     locked out for a cooldown once the cap is hit, which is what actually
- *     stops online guessing.
+ *  2. An ESCALATING LOCKOUT — consecutive failures are counted in Redis and the
+ *     number is locked out once the cap is hit, for LONGER each time it
+ *     happens again (15 minutes → 1 hour → 1 day). This is what actually stops
+ *     online guessing: a fixed cooldown can simply be waited out, and at five
+ *     tries per quarter-hour the whole 10,000-PIN space falls in about three
+ *     weeks.
  *
  * Every counter, lock and setup ticket is Redis-only with a TTL: nothing to
  * expire by hand, nothing mirrored into Postgres.
@@ -49,8 +64,21 @@ export class PinService {
     return this.config.get('PIN_MAX_ATTEMPTS');
   }
 
-  get lockoutSec(): number {
-    return this.config.get('PIN_LOCKOUT_SEC');
+  /** The escalation ladder, in seconds. The last rung repeats forever. */
+  get lockoutSteps(): number[] {
+    return this.config.get('PIN_LOCKOUT_STEPS_SEC');
+  }
+
+  /**
+   * How long the wrong-attempt counter lives. The first rung doubles as this
+   * window, so an isolated typo today never joins forces with one next week.
+   */
+  get attemptWindowSec(): number {
+    return lockoutDurationFor(this.lockoutSteps, 1);
+  }
+
+  get lockoutDecaySec(): number {
+    return this.config.get('PIN_LOCKOUT_DECAY_SEC');
   }
 
   get setupTtlSec(): number {
@@ -97,31 +125,52 @@ export class PinService {
     if (remaining > 0) {
       throw new AppException(
         ErrorCodes.PIN_LOCKED,
-        `Too many incorrect attempts. Try again in ${Math.ceil(remaining / 60)} minute(s), or reset your PIN.`,
+        `Too many incorrect attempts. Try again in ${secondsToHuman(remaining)}, or reset your PIN.`,
         { details: { retryAfterSec: remaining } },
       );
     }
   }
 
   /**
-   * Records a wrong PIN and locks the number once the cap is reached. The
-   * counter window is the lockout duration, so isolated typos age out instead
-   * of stacking up over days.
+   * Records a wrong PIN and locks the number once the cap is reached — each
+   * time for LONGER than the last.
+   *
+   * Waiting out a fixed 15 minutes and starting again is a viable attack on a
+   * 4-digit PIN: five tries a quarter-hour is ~480 a day, and the whole space
+   * is 10,000. Climbing to an hour and then a day turns that into a handful of
+   * guesses a day, while a student who mistypes twice in a morning never
+   * notices the ladder exists.
    */
   async registerFailure(mobile: string): Promise<void> {
     const key = redisKeys.pinAttempts(mobile);
     const attempts = await this.redis.client.incr(key);
-    if (attempts === 1) await this.redis.client.expire(key, this.lockoutSec);
+    if (attempts === 1) await this.redis.client.expire(key, this.attemptWindowSec);
+    if (attempts < this.maxAttempts) return;
 
-    if (attempts >= this.maxAttempts) {
-      await this.redis.client.set(redisKeys.pinLock(mobile), '1', 'EX', this.lockoutSec);
-      await this.redis.del(key);
-    }
+    // Nth lockout for this number → Nth rung. The counter outlives the lockout
+    // it causes (plus the decay window), so waiting one out and starting over
+    // climbs instead of resetting.
+    const lockoutsKey = redisKeys.pinLockouts(mobile);
+    const lockouts = await this.redis.client.incr(lockoutsKey);
+    const lockoutSec = lockoutDurationFor(this.lockoutSteps, lockouts);
+
+    await this.redis.client.expire(lockoutsKey, lockoutSec + this.lockoutDecaySec);
+    await this.redis.client.set(redisKeys.pinLock(mobile), '1', 'EX', lockoutSec);
+    await this.redis.del(key);
   }
 
-  /** A correct PIN (or a fresh one) wipes the slate. */
+  /**
+   * A correct PIN (or a fresh one) wipes the slate, ladder included: whoever
+   * did that holds the PIN or has just proved they hold the number, and both
+   * are the owner. It is also what stops the escalation from punishing a
+   * student who simply forgot and reset.
+   */
   async clearFailures(mobile: string): Promise<void> {
-    await this.redis.del(redisKeys.pinAttempts(mobile), redisKeys.pinLock(mobile));
+    await this.redis.del(
+      redisKeys.pinAttempts(mobile),
+      redisKeys.pinLock(mobile),
+      redisKeys.pinLockouts(mobile),
+    );
   }
 
   // ==========================================================================

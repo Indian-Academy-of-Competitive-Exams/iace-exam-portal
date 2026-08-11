@@ -21,6 +21,13 @@ export const redisKeys = {
   /** Present while a student is locked out of PIN login; TTL = time remaining. */
   pinLock: (mobile: string) => `pin:lock:${mobile}`,
 
+  /**
+   * How many times this number has been locked out recently — the rung of the
+   * escalation ladder. Outlives the lockout itself so the next one knows it is
+   * the Nth, and expires after a quiet spell so the ladder resets on its own.
+   */
+  pinLockouts: (mobile: string) => `pin:lockouts:${mobile}`,
+
   /** Hash of the single-use ticket that authorises setting a PIN after an OTP. */
   pinSetup: (mobile: string) => `pin:setup:${mobile}`,
 
