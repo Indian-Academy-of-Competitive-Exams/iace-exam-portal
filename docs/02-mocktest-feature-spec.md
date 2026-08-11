@@ -103,16 +103,17 @@ Verified on the live report. We ship the core in V1 and fast-follow the rest.
 
 ---
 
-## 7. Access model (deliberately minimal)
+## 7. Access model — Student → Group → Test Series → Test
 
-We do **not** copy ThinkExam's entitlement machinery. There is **no product concept**. Granting a test has exactly two options:
+There is **no product concept** and **no direct student↔test or student↔series link**. Access flows entirely through groups:
 
-1. **Assign to a batch/group** — grant (and notify) all students in a specified group. A group has many students; this is the default, one-click path.
-2. **Assign to individual students** — a **toggle (off by default)** that reveals a **paginated student picker**, so access can also be given to specific students.
+1. A **student is always in ≥1 group** (batch) — that's how students are organized.
+2. A **group is linked to test series** (many-to-many).
+3. A **test series contains tests** (many-to-many).
 
-Plus: the admin can **copy/share a generated link** to the test — convenient, but not the core path.
+So a student can access exactly the tests that sit in the series linked to their groups. To give a batch a set of tests, link their group to the series; to give one person access, put them in the right group. A `shareSlug` link exists for edge cases (public / one-off). In-app `Notification` on assignment.
 
-That's the whole model. It's fed by admin now; a later integration can grant group/individual access programmatically when payments move in.
+This scales cleanly to the general-public rollout: everyone belongs to a group (even a default "public" group), and access is managed at the **series** level — never per test or per student.
 
 ---
 
@@ -139,11 +140,13 @@ That's the whole model. It's fed by admin now; a later integration can grant gro
 - Fixed paper for all students; per-student shuffle of order & options via seed.
 - Difficulty split = test-wide default with per-section override.
 - Post-start corrections = drop/bonus with automatic recompute; otherwise locked.
+- **Base config locks once used** — once any test created from a base config is attempted, the config + its sections become read-only; to change it, clone into a new config. (Tests are snapshots, so existing ones are unaffected regardless.)
 - Rank/result = always live (Redis), never a manual regenerate.
 - Central question bank with one forgiving import screen; text + image + equation.
-- Students: mobile + OTP (mobile the only mandatory field). Admins: email + OTP. OTP/sessions/devices in Redis. Profile completion (photo + DOB + gender + Aadhaar + PAN) required before the first test.
+- Students: mobile + OTP **at signup**, then a **6-digit PIN** for later logins (OTP resets it; rate-limit in Redis). Admins: email + OTP. OTP/sessions/devices in Redis. **Pre-test gate is minimal** — mother's name + father's name + DOB; the full profile is optional and gently prompted.
 - No certificates in V1; trimmed settings.
-- Access = assign to a batch/group **or** to individual students (paginated picker, off by default) + a shareable link. No products, no access-code system.
+- Access = **Student → Group → TestSeries → Test** (no direct student/test grants). A student is always in ≥1 group; groups link to series; series contain tests. A shareSlug link for edge cases. No products/access-codes.
+- **Three portals:** Student (future broad platform), **Test** (this build, `apps/test`), Admin. V1 = Test + Admin. Internal IACE students first, general public later.
 - Student portal is **enhanced, not copied**: snappy, uncluttered, icon-driven, with a replayable tour; **Report is the post-login landing dashboard**; Test and Report tabs get the most UX care. The in-exam screen still mirrors the real exam.
 - All analytics data points captured from day one; per-test analytics screen built this phase if quick, else fast-follow.
 - Category/test series is **decoupled from creation** — optional, many-to-many, assigned as a separate flow; a test can be attempted individually.

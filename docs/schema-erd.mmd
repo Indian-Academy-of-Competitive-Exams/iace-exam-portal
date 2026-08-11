@@ -7,7 +7,6 @@ erDiagram
   Student ||--o{ Attempt : "takes"
   Student ||--o{ Notification : "receives"
   Student }o--o{ Group : "member of"
-  Student }o--o{ Test : "individual access"
   Admin }o--o{ Page : "can access"
 
   %% ---------- Question bank ----------
@@ -33,7 +32,7 @@ erDiagram
   Test ||--o{ Attempt : "attempted"
   Test ||--o{ Notification : "about"
   Test }o--o{ TestSeries : "in series"
-  Test }o--o{ Group : "group access"
+  Group }o--o{ TestSeries : "linked (grants access)"
 
   %% ---------- Attempts ----------
   Attempt ||--o{ AttemptAnswer : "records"
@@ -42,23 +41,27 @@ erDiagram
   %% ---------- Entities ----------
   Student {
     string id PK
-    string mobile UK "mandatory; mobile OTP via Redis"
+    string mobile UK "mandatory; OTP at signup"
+    string pinHash "4-digit login PIN"
     string fullName
     string preferredLanguage
-    bool profileCompleted "photo+DOB+gender+Aadhaar+PAN"
+    bool preTestReady "mother+father+DOB"
+    bool profileCompleted "full profile (optional)"
     bool isActive
   }
 
   StudentProfile {
     string id PK
     string studentId FK "unique 1:1"
+    string motherName "pre-test"
+    string fatherName "pre-test"
+    date dob "pre-test"
     string email
     string address
     enum gender "MALE/FEMALE/OTHER"
-    date dob "completion"
-    string photoUrl "completion"
-    string aadhaarUrl "completion"
-    string panUrl "completion"
+    string photoUrl
+    string aadhaarUrl
+    string panUrl
     json educationDetails
     json pastExamHistory
   }
@@ -127,6 +130,7 @@ erDiagram
     string examTypeId FK
     string name
     bool isActive
+    bool locked "read-only once attempted"
     int totalQuestions
     decimal totalMarks
     int durationSec

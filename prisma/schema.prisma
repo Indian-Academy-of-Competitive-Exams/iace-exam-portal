@@ -105,22 +105,27 @@ enum NotificationType {
 // People — Student and Admin are separate
 // ============================================================================
 
-// Students log in with MOBILE + OTP (OTP + sessions + devices handled in Redis).
+// Signup: MOBILE + OTP (verifies the number). Every later login: a 6-digit PIN
+// (pinHash). OTP also resets a forgotten PIN. OTP + sessions + device binding all
+// live in Redis. Rate-limit / lock PIN attempts in Redis.
 model Student {
   id                String          @id @default(cuid())
   mobile            String          @unique // only mandatory field
+  pinHash           String? // 6-digit login PIN (hashed), set after signup OTP
   fullName          String?
   preferredLanguage String          @default("en")
-  // true once the completion set is present: photo + DOB + gender + Aadhaar +
-  // PAN (all in StudentProfile). Required before the first test.
+  // preTestReady: minimal details present (mother's name + father's name + DOB) —
+  // the light gate asked before starting a test. profileCompleted: the FULL
+  // profile (photo, gender, Aadhaar, PAN, address, education…) — optional, only
+  // drives a gentle "complete your profile" prompt, never blocks.
+  preTestReady      Boolean         @default(false)
   profileCompleted  Boolean         @default(false)
   isActive          Boolean         @default(true)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
   profile           StudentProfile?
-  groups            Group[]         // implicit M:N (batch membership)
-  accessibleTests   Test[]          @relation("TestStudentAccess") // implicit M:N (individual grants)
+  groups            Group[]         // implicit M:N (batch membership) — access flows via groups
   attempts          Attempt[]
   notifications     Notification[]
 }
@@ -152,20 +157,23 @@ model Page {
   admins      Admin[] // implicit M:N
 }
 
-// Extended personal data (1:1 with Student). "Completion" — what
-// Student.profileCompleted tracks and what gates the first test — requires:
-// photo + DOB + gender + Aadhaar + PAN. The rest (email, address, education,
-// past-exam history) are optional. All uploaded documents are S3 URLs.
+// Extended personal data (1:1 with Student). The only PRE-TEST required fields
+// are motherName + fatherName + dob (drive Student.preTestReady). Everything
+// else — photo, gender, Aadhaar, PAN, address, education, past-exam history — is
+// optional, filled whenever the student wants (a gentle prompt, not a gate).
+// All uploaded documents are S3 URLs.
 model StudentProfile {
   id               String    @id @default(cuid())
   studentId        String    @unique
+  motherName       String? // pre-test minimal
+  fatherName       String? // pre-test minimal
+  dob              DateTime? @db.Date // pre-test minimal
   email            String?
   address          String?
   gender           Gender?
-  dob              DateTime? @db.Date
-  photoUrl         String? // completion item
-  aadhaarUrl       String? // verification record (completion item)
-  panUrl           String? // verification record (completion item)
+  photoUrl         String?
+  aadhaarUrl       String? // verification record
+  panUrl           String? // verification record
   educationDetails Json? // [{ level, board, institution, year, percentage }]
   pastExamHistory  Json? // self-reported external govt-exam attempts (not platform Attempts)
   updatedAt        DateTime  @updatedAt
@@ -264,6 +272,10 @@ model BaseConfig {
   examTypeId             String
   name                   String
   isActive               Boolean             @default(true)
+  // Set true once ANY test created from this config has its first attempt.
+  // While locked, the config and its sections are read-only — to change it, the
+  // admin CLONES it into a new config. (Existing tests are snapshots, unaffected.)
+  locked                 Boolean             @default(false)
 
   totalQuestions         Int
   totalMarks             Decimal             @db.Decimal(8, 2)
@@ -354,9 +366,7 @@ model Test {
   attempts               Attempt[]
   notifications          Notification[]
 
-  series                 TestSeries[]    // implicit M:N (optional, many series)
-  accessGroups           Group[]         @relation("TestGroupAccess")   // implicit M:N
-  accessStudents         Student[]       @relation("TestStudentAccess") // implicit M:N
+  series                 TestSeries[]    // implicit M:N — access reaches students via series↔group
 
   @@index([status])
   @@index([publishStartAt, publishEndAt])
@@ -477,8 +487,9 @@ model AttemptAnswer {
 }
 
 // ============================================================================
-// Groups (batches) — access to a test is granted to groups and/or individuals
-// via implicit M:N on Test (accessGroups / accessStudents). No TestAccess table.
+// Groups (batches) — the access unit. A student is always in >=1 group; a group
+// is linked to test series; a student's access = the tests in the series linked
+// to their groups. Student -> Group -> TestSeries -> Test. No direct grants.
 // ============================================================================
 
 model Group {
@@ -488,8 +499,8 @@ model Group {
   description    String?
   createdAt      DateTime  @default(now())
 
-  students       Student[] // implicit M:N (membership)
-  accessibleTests Test[]   @relation("TestGroupAccess") // implicit M:N (test access)
+  students       Student[]    // implicit M:N (membership)
+  testSeries     TestSeries[] // implicit M:N — grants access to these series' tests
 }
 
 // ============================================================================
@@ -502,7 +513,8 @@ model TestSeries {
   description String?
   createdAt   DateTime @default(now())
 
-  tests       Test[] // implicit M:N (a test can be in several series)
+  tests       Test[]  // implicit M:N (a test can be in several series)
+  groups      Group[] // implicit M:N — groups linked to this series get access
 }
 
 // ============================================================================

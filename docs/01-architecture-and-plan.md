@@ -49,19 +49,21 @@ Everything is **TypeScript, end to end**, in a single monorepo so types are shar
 
 ## 3. V1 scope — what "mock tests" means for us
 
+> **Portals:** three — Student (future broad platform), **Test** (this build; test-taking + report, `apps/test`), and Admin. V1 ships the **Test portal + Admin**. Rollout: internal IACE students first (group-based), general public later.
+
 ### In scope for V1
 
 - **Bilingual/multilingual questions (English + Hindi default)** with a **per-test language display mode**: SINGLE (student picks one language, optional per-question toggle) or DUAL (both languages shown together — stem *and* options). Defaulted from the base config; SSC CGL defaults to DUAL.
 - **Single-answer MCQ** only (schema designed so other types can be added later without migration pain).
 - **Images in questions** (figures/tables/diagrams for Reasoning & Quant), supported in both the manual editor and the bulk import.
-- **Phone-OTP login** (mobile number + OTP) as the primary sign-in, via MSG91.
+- **Sign-in**: students sign up with mobile + OTP, then log in with a **6-digit PIN** (OTP resets it); admins use email + OTP. SMS via MSG91.
 - **Sectional structure with sectional timing** (IBPS/SBI style), plus an overall test. (Sectional *cutoffs* and score normalization are deferred to V2.)
 - **Negative marking**, configurable per section (e.g. −0.25, −0.5).
 - **Question bank** with **bulk import from Excel/CSV** plus a **manual question editor**.
 - **Test builder** in the admin panel (base config → auto-draw or manual questions → schedule; timing, marks, negative marking). Series assignment is a separate flow.
 - **The live test engine**: client-side timer, server-authoritative start/end, periodic autosave, safe submit under load.
 - **Instant results**: score, correct/wrong/unattempted breakdown, **full solutions per question**, and **cohort rank + percentile**.
-- **Access control**: assign a test to a **group/batch** or to **individual students** (+ a shareable link). Payments live in a **separate portal** — not in V1; the platform reads entitlements later.
+- **Access control**: Student → Group → Test Series → Test. Students belong to groups; groups link to series; series contain tests. No direct student/test grants (a share link covers edge cases). Payments live in a **separate portal** — not in V1.
 - **Admin panel**: manage questions, tests, series, students, access grants, and view basic operational overview.
 
 ### Explicitly out of V1 (planned later)
@@ -119,11 +121,11 @@ The API is stateless, so we can run 1→N identical containers behind a load bal
 
 ### The shape (schema is authoritative)
 
-- **Student** and **Admin** are separate tables (mobile-OTP vs email-OTP; OTP/sessions/devices in Redis, not the DB). **StudentProfile** (1:1) holds personal data; `profileCompleted` gates the first test (photo + DOB + gender + Aadhaar + PAN).
+- **Student** and **Admin** are separate tables (student = mobile OTP at signup + 6-digit PIN login; admin = email OTP; OTP/sessions/devices in Redis, not the DB). **StudentProfile** (1:1) holds personal data; the **pre-test gate is minimal** (mother's name + father's name + DOB), full profile optional and gently prompted.
 - **Question / QuestionOption** — options carry a stable `id` + `isCorrect` (shuffle-safe answer key); localized content is **JSON** per language (text / `$LaTeX$` / inline S3 image URLs), tagged by subject, topic, difficulty.
 - **ExamType → BaseConfig (+ sections)** is the reusable blueprint; a **Test** copies + overrides it and carries `languageMode` (SINGLE/DUAL), status, and schedule. Finalizing draws a fixed **PaperQuestion** paper shared by all students; per-student order/option shuffle via `Attempt.shuffleSeed`; `PaperQuestion.status` handles drop/bonus.
 - **Attempt** holds live state **and** the scored fields (no separate Result table). **AttemptAnswer** stores only interacted questions (composite PK) with the analytics data points.
-- **Access** = groups and/or individual students (implicit M:N on Test) + a `shareSlug`. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
+- **Access** = **Student → Group → TestSeries → Test** (groups link to series; no direct student/test grants); `shareSlug` for edge cases. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
 
 Two choices worth calling out: **localized content as JSON** keeps the bank multilingual with zero migration to add a language, while option identity stays relational (stable id + `isCorrect`) so the answer key survives shuffling; and **access is a plain group/individual grant** — no paywall entity, since payments live in a separate portal.
 
@@ -170,7 +172,7 @@ Everything is containerized with Docker so nothing is tied to a single host. Fro
 Six phases. Each ends with something demonstrable. Dates are relative to day 1.
 
 **Phase 0 — Foundation (Days 1–5)**
-Monorepo (Turborepo + pnpm), NestJS API skeleton, **Vite + React** student & admin app shells wired to the `packages/ui` design system, Prisma against Postgres, Redis + BullMQ, **docker-compose (Postgres + Redis + MinIO)**, and CI. Auth: student **mobile-OTP** + admin **email-OTP** (OTP in Redis) + JWT/refresh, guards. *Milestone: a student logs in by mobile OTP; an admin logs in by email OTP.*
+Monorepo (Turborepo + pnpm), NestJS API skeleton, **Vite + React** student & admin app shells wired to the `packages/ui` design system, Prisma against Postgres, Redis + BullMQ, **docker-compose (Postgres + Redis + MinIO)**, and CI. Auth: student **signup mobile-OTP → 6-digit PIN login**; admin **email-OTP** (OTP in Redis) + JWT/refresh, guards. *Milestone: a student signs up by OTP and logs in with a PIN; an admin logs in by email OTP.*
 
 **Phase 1 — Question bank (Days 6–13)**
 Question + Topic models with **bilingual text and images**. Manual bilingual question editor (with image upload to S3) in admin. Excel/CSV bulk-import pipeline (upload to S3 → BullMQ worker parses & validates → rows land as questions, image references resolved, with an error report). *Milestone: a few hundred real questions — including image-based ones — imported and browsable/editable in admin.*

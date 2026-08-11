@@ -9,6 +9,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 - **Team:** one developer + AI pair. **V1 timeline:** ~45 days.
 - **Scale target:** ~2K concurrent normal, must handle 4K, 5K with minor infra additions (NOT 10K).
 - **North star:** keep what ThinkExam does well, simplify the friction, upgrade the three things that hurt — slow admin, brittle question import, manual rank/result.
+- **Portals (three):** **Student** (future broad platform — courses, performance), **Test** (test-taking + report — the app under `apps/test`), and **Admin**. **V1 builds the Test portal + Admin**; the full student platform comes later. Rollout: internal IACE students first (group-based), general public later.
 
 ## Tech stack (locked)
 
@@ -21,7 +22,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 - **Mobile (post-V1):** React Native + Expo (reuses the same TS, types, and API).
 - **DB:** PostgreSQL via **Prisma** (`prisma/schema.prisma`).
 - **Redis:** in-progress test state, live leaderboards, **OTP, sessions, device binding**, rate limiting. **Jobs:** BullMQ (scoring queue, imports) on Redis.
-- **Auth:** self-built JWT + refresh. **Students: mobile + OTP. Admins: email + OTP.** OTP, sessions, and device binding all live in **Redis — never the DB**. A super admin is seeded; admins get page-level permissions.
+- **Auth:** self-built JWT + refresh. **Students:** mobile + OTP **at signup**, then a **6-digit PIN** for later logins (OTP resets a forgotten PIN; rate-limit / lock PIN attempts in Redis). **Admins:** email + OTP. OTP, sessions, and device binding all live in **Redis — never the DB**. A super admin is seeded; admins get page-level permissions.
 - **Storage:** **S3, via the AWS S3 SDK, in every environment.** Local dev runs **MinIO** (S3-compatible) in docker-compose; only the endpoint/credentials differ via env. **There is exactly one upload code path — never branch it by environment.**
 - **No WebSockets** (client timer + periodic HTTP autosave + Redis is enough).
 - **Payments:** handled in a separate portal — NOT in V1.
@@ -54,13 +55,13 @@ Live timed tests are the hard part. Keep Postgres off the hot path:
 ## Data model (summary — schema is authoritative)
 
 - **Student** and **Admin** are separate tables. Student: `mobile` is the only mandatory field. Admin: `email`, `isSuperAdmin`, page-level permissions (`Page` + implicit M:N).
-- **StudentProfile** (1:1): email, address, gender, dob, photo, Aadhaar/PAN links, education + past-exam history (JSON). **`Student.profileCompleted`** gates the first test and is true once **photo + DOB + gender + Aadhaar + PAN** are present.
+- **StudentProfile** (1:1): mother/father name, dob, plus optional email, address, gender, photo, Aadhaar/PAN links, education + past-exam history (JSON). **The pre-test gate is minimal** — `Student.preTestReady` = mother's name + father's name + DOB, prompted gently before a test. `profileCompleted` (the full profile) is optional and only drives a nudge — it never blocks.
 - **Question bank:** `Question` + `QuestionOption` (stable `id` + `isCorrect` — the answer key survives shuffling/editing). Localized content is **JSON** (`Question.content`, `QuestionOption.text`) keyed by language; each field is rich (text, `$LaTeX$`, inline **S3 image URLs**). English default. Imported on **one central screen**, forgiving (preview + row-level errors).
-- **Exam-type base configs** (`BaseConfig` + `BaseConfigSection`) are reusable blueprints; a `Test` copies + overrides them (intentional denormalized snapshot). First config: **SSC CGL Tier 1**.
+- **Exam-type base configs** (`BaseConfig` + `BaseConfigSection`) are reusable blueprints; a `Test` copies + overrides them (intentional denormalized snapshot). First config: **SSC CGL Tier 1**. **A base config `locked`s** once any test created from it is first attempted — then it (and its sections) are read-only; to evolve it, the admin **clones** it into a new config. (Existing tests are snapshots, so they're never affected either way.)
 - **Auto-draw (blueprint):** subjects + difficulty % (test default + per-section override). Draw happens **once at finalize** → a **fixed `PaperQuestion` paper every student shares** (fair ranking). Per-student order/option shuffle via `Attempt.shuffleSeed`. Manual pick from the bank also supported.
 - **Lock on first attempt.** Only permitted post-start change: mark a `PaperQuestion` **DROPPED/BONUS** → auto-recompute.
 - **`Attempt`** holds live state **and** the scored fields (no separate Result table). **`AttemptAnswer`** stores only questions the student interacted with (composite PK) plus analytics data points (time, option, state).
-- **Access = two options:** assign to a **group/batch** or to **individual students** (implicit M:N on `Test`) + a `shareSlug` link. **No products, no access codes.** In-app `Notification` on assignment.
+- **Access = Student → Group → TestSeries → Test.** A student is always in ≥1 **group**; groups are linked to **test series**; a student can access the tests in the series linked to their groups. **No direct student/test grants, no products, no access codes.** A `shareSlug` link exists for edge cases. In-app `Notification` on assignment.
 - **Series ↔ test:** many-to-many, optional, **flat** (`TestSeries` + implicit M:N). A test can be attempted standalone.
 - Marks use `Decimal(6,2)`. **No certificates in V1.**
 
