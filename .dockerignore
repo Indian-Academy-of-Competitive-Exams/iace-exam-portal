@@ -1,0 +1,57 @@
+# What `docker build` must NOT copy into the build context.
+#
+# There is no Dockerfile yet — this file exists first on purpose. The default
+# without it is to copy the entire working tree, and the two entries that matter
+# most (.env and node_modules) are mistakes you only notice much later: a secret
+# baked into an image layer survives being deleted in a later layer, and a
+# host-built native module fails at runtime on a different platform.
+
+# Secrets. `.env` in an image layer is readable by anyone who can pull it, and
+# `docker history` will still show it after a later RUN deletes the file.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+
+# Dependencies must be installed INSIDE the image, never copied in. argon2 is a
+# native module: a macOS-built binary copied into a Linux image does not merely
+# bloat it, it crashes on first hash.
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build output — the image builds its own, and stale local output silently
+# shadowing a fresh build is a genuinely confusing failure.
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+*.tsbuildinfo
+
+# History and tooling: large, and never needed at runtime.
+.git
+.github
+.vscode
+.idea
+.claude
+
+# Local-only
+docker-compose.yml
+docker-data
+coverage
+test-results
+playwright-report
+*.log
+.DS_Store
+
+# Docs and design assets are not part of any runtime image.
+docs
+README.md
+CLAUDE.md

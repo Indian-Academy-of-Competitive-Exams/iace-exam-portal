@@ -2,22 +2,53 @@
 node_modules/
 .pnp
 .pnp.js
+.pnpm-store/
+*.tgz
 
 # Builds / outputs
+# Sourcemaps live inside dist/ and are covered here. They are deliberately
+# PRODUCED (the API runs with --enable-source-maps, so a production stack trace
+# points at the .ts line) — they are just never committed. Vite emits none for
+# the SPAs by default, which is what keeps our source off the public web.
 dist/
 build/
 out/
 .next/
 .turbo/
 *.tsbuildinfo
+# Vite rewrites its config to a temp file next to the original during some runs.
+vite.config.*.timestamp-*.mjs
 
-# Prisma
+# Caches
+.eslintcache
+.cache/
+
+# Prisma / local databases
 prisma/migrations/dev.db*
+*.sqlite
+*.sqlite3
 
 # Env / secrets
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Keys and certificates. Nothing here should ever hold one, which is exactly
+# why a stray file must not be one `git add .` away from being published.
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+
+# Data dumps and backups. NOT `*.sql` — prisma/migrations/**/migration.sql is
+# source and must stay tracked.
+*.sql.gz
+*.dump
+dump.rdb
+backups/
 
 # Logs
 *.log
@@ -27,13 +58,32 @@ pnpm-debug.log*
 # Test / coverage
 coverage/
 .nyc_output/
+*.lcov
+test-results/
+playwright-report/
 
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
 .idea/
+.zed/
+.history/
+*.swp
+*.swo
 .DS_Store
+._*
+.AppleDouble
 Thumbs.db
+
+# Merge / patch leftovers
+*.orig
+*.rej
+
+# Agent tooling. Project-level .claude config may be shared; the local override
+# holds machine-specific permission grants and must not be. Until now this was
+# only saved by one developer's GLOBAL gitignore — invisible protection that
+# does not exist on a fresh clone or in CI.
+.claude/settings.local.json
 
 # Docker / local data
 docker-data/
