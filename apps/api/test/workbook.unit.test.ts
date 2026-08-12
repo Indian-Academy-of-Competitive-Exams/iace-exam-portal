@@ -1,0 +1,181 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import ExcelJS from 'exceljs';
+import { AppException } from '@iace/contracts';
+import {
+  buildStudentTemplate,
+  looksLikeWorkbook,
+  readUploadedTable,
+} from '../src/imports/workbook';
+
+/** Builds a real .xlsx in memory — no fixture files, no disk. */
+async function workbook(rows: unknown[][], sheetName = 'Students'): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet(sheetName);
+  for (const row of rows) sheet.addRow(row);
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+describe('readUploadedTable — Excel', () => {
+  it('reads a sheet into headers and rows', async () => {
+    const table = await readUploadedTable(
+      await workbook([
+        ['mobile', 'fullName', 'groups'],
+        ['9876543210', 'Asha Kumari', 'SSC CGL MORNING'],
+      ]),
+    );
+
+    assert.deepEqual(table.headers, ['mobile', 'fullname', 'groups']);
+    assert.deepEqual(table.rows[0]?.values, {
+      mobile: '9876543210',
+      fullname: 'Asha Kumari',
+      groups: 'SSC CGL MORNING',
+    });
+  });
+
+  /**
+   * The failure this exists to prevent. Excel stores a bare 9876543210 as a
+   * NUMBER, and the obvious String(value) yields "9876543210" for some and
+   * "9.87654321e+9" for others depending on how it was entered. Either way a
+   * whole column of numbers becomes unimportable and the admin is told their
+   * mobile numbers are invalid.
+   */
+  it('reads a mobile stored as a number as plain digits', async () => {
+    const table = await readUploadedTable(
+      await workbook([
+        ['mobile', 'fullName'],
+        [9876543210, 'Asha'],
+      ]),
+    );
+
+    assert.equal(table.rows[0]?.values.mobile, '9876543210');
+  });
+
+  it('matches headers however they were capitalised or spaced', async () => {
+    const table = await readUploadedTable(
+      await workbook([
+        ['Mobile', 'Full Name', ' GROUPS '],
+        ['9876543210', 'Asha', 'X'],
+      ]),
+    );
+
+    assert.deepEqual(table.headers, ['mobile', 'fullname', 'groups']);
+  });
+
+  /**
+   * Row numbers must be the ones Excel shows. An error saying "line 7" that
+   * means the 7th non-empty row sends the admin to the wrong row of a 400-row
+   * sheet — which is worse than no line number at all.
+   */
+  it('reports the sheet row number, not a count of the rows it kept', async () => {
+    const table = await readUploadedTable(
+      await workbook([['mobile'], ['9876543210'], [''], ['9876543211']]),
+    );
+
+    assert.deepEqual(
+      table.rows.map((row) => row.line),
+      [2, 4],
+    );
+  });
+
+  it('drops a wholly empty row rather than reporting it as broken', async () => {
+    const table = await readUploadedTable(
+      await workbook([
+        ['mobile', 'fullName'],
+        ['9876543210', 'Asha'],
+        ['', ''],
+      ]),
+    );
+
+    assert.equal(table.rows.length, 1);
+  });
+
+  it('takes the first sheet whatever it is called', async () => {
+    const table = await readUploadedTable(
+      await workbook([['mobile'], ['9876543210']], 'Sheet renamed by someone'),
+    );
+
+    assert.equal(table.rows.length, 1);
+  });
+});
+
+describe('readUploadedTable — what it accepts', () => {
+  /**
+   * Sniffed from the bytes, not the filename: a .csv renamed to .xlsx is still
+   * a CSV, and the spreadsheet reader's error for one is unreadable.
+   */
+  it('still reads a CSV, whatever it was called', async () => {
+    const table = await readUploadedTable(Buffer.from('mobile,fullName\n9876543210,Asha\n'));
+
+    assert.deepEqual(table.headers, ['mobile', 'fullname']);
+    assert.equal(table.rows[0]?.values.mobile, '9876543210');
+  });
+
+  it('tells a workbook from anything else by its bytes', async () => {
+    assert.equal(looksLikeWorkbook(await workbook([['mobile']])), true);
+    assert.equal(looksLikeWorkbook(Buffer.from('mobile,fullName\n')), false);
+  });
+
+  it('refuses an empty upload with a message rather than a crash', async () => {
+    await assert.rejects(
+      () => readUploadedTable(Buffer.alloc(0)),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /empty/i);
+        return true;
+      },
+    );
+  });
+
+  /**
+   * A JPEG named .xlsx used to reach the CSV reader and come back as
+   * `needs a "mobile" column. Found: ����notanexcel` — the wrong problem,
+   * described in unreadable characters.
+   */
+  it('refuses another binary format wearing an .xlsx name', async () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+
+    await assert.rejects(
+      () => readUploadedTable(jpeg),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /not a spreadsheet/i);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a corrupt workbook with a message an admin can act on', async () => {
+    // ZIP magic, then nothing a reader can use.
+    const broken = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(64)]);
+
+    await assert.rejects(
+      () => readUploadedTable(broken),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /\.xlsx/);
+        return true;
+      },
+    );
+  });
+});
+
+describe('buildStudentTemplate', () => {
+  /**
+   * The sample is generated from the same column list the parser matches on.
+   * This is what holds that true: a sample documenting a format the importer
+   * rejects is worse than none, because every admin downloads it once and
+   * keeps using their copy.
+   */
+  it('produces a file this importer can actually read back', async () => {
+    const table = await readUploadedTable(await buildStudentTemplate());
+
+    assert.deepEqual(table.headers, ['mobile', 'fullname', 'groups']);
+    assert.ok(table.rows.length > 0, 'the sample must show at least one example row');
+    assert.equal(table.rows[0]?.values.mobile, '9876543210');
+  });
+
+  it('is a workbook, not a CSV with a misleading name', async () => {
+    assert.equal(looksLikeWorkbook(await buildStudentTemplate()), true);
+  });
+});

@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { type StudentImportPlan, type StudentImportResult } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { planStudentImport, type ImportContext, type ImportGroup } from './student-import';
-import { readCsvTable } from './csv';
+import { type CsvTable } from './csv';
+import { readUploadedTable } from './workbook';
 import { mobileSchema } from '@iace/contracts';
 
 @Injectable()
@@ -10,8 +11,9 @@ export class ImportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** What the file would do. Writes nothing. */
-  async previewStudents(csv: string): Promise<StudentImportPlan> {
-    return planStudentImport(csv, await this.contextFor(csv));
+  async previewStudents(file: Buffer): Promise<StudentImportPlan> {
+    const table = await readUploadedTable(file);
+    return planStudentImport(table, await this.contextFor(table));
   }
 
   /**
@@ -21,8 +23,8 @@ export class ImportsService {
    *
    * Only valid rows are written. One bad number must not cost the other 399.
    */
-  async commitStudents(csv: string): Promise<StudentImportResult> {
-    const plan = await this.previewStudents(csv);
+  async commitStudents(file: Buffer): Promise<StudentImportResult> {
+    const plan = await this.previewStudents(file);
 
     let created = 0;
     let updated = 0;
@@ -66,9 +68,7 @@ export class ImportsService {
    * it names — rather than the whole table, so a 5,000-row roster is two
    * bounded queries and not a table scan per line.
    */
-  private async contextFor(csv: string): Promise<ImportContext> {
-    const table = readCsvTable(csv);
-
+  private async contextFor(table: CsvTable): Promise<ImportContext> {
     const mobiles = new Set<string>();
     const groupNames = new Set<string>();
     for (const row of table.rows) {

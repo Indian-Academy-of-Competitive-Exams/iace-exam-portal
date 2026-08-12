@@ -127,7 +127,7 @@ const context = (): ImportContext => ({
 describe('planStudentImport', () => {
   it('plans a create for a new number and an update for a known one', () => {
     const plan = planStudentImport(
-      'mobile,fullName\n9876543210,Asha\n9000000001,Renamed',
+      readCsvTable('mobile,fullName\n9876543210,Asha\n9000000001,Renamed'),
       context(),
     );
 
@@ -139,7 +139,7 @@ describe('planStudentImport', () => {
 
   it('resolves group names, several to a cell', () => {
     const plan = planStudentImport(
-      'mobile,groups\n9876543210,AMEERPET / SSC CGL MORNING;SSC CGL EVENING',
+      readCsvTable('mobile,groups\n9876543210,AMEERPET / SSC CGL MORNING;SSC CGL EVENING'),
       context(),
     );
 
@@ -148,14 +148,17 @@ describe('planStudentImport', () => {
   });
 
   it('matches a group name however it was typed', () => {
-    const plan = planStudentImport('mobile,groups\n9876543210,ssc cgl  Evening', context());
+    const plan = planStudentImport(
+      readCsvTable('mobile,groups\n9876543210,ssc cgl  Evening'),
+      context(),
+    );
     assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
   });
 
   it('refuses an unknown group instead of creating one', () => {
     // A typo would otherwise become a real group that grants nothing, and the
     // students in it would quietly see no tests.
-    const plan = planStudentImport('mobile,groups\n9876543210,SSC Mornig', context());
+    const plan = planStudentImport(readCsvTable('mobile,groups\n9876543210,SSC Mornig'), context());
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC MORNIG"/);
@@ -167,7 +170,10 @@ describe('planStudentImport', () => {
    * Nothing about that looks wrong afterwards.
    */
   it('refuses a name that exists in more than one branch, and names them', () => {
-    const plan = planStudentImport('mobile,groups\n9876543210,SSC CGL MORNING', context());
+    const plan = planStudentImport(
+      readCsvTable('mobile,groups\n9876543210,SSC CGL MORNING'),
+      context(),
+    );
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.deepEqual(plan.rows[0]?.groupIds, []);
@@ -180,13 +186,16 @@ describe('planStudentImport', () => {
   });
 
   it('accepts the qualified form for a name that is not ambiguous at all', () => {
-    const plan = planStudentImport('mobile,groups\n9876543210,GLOBAL / ALL STUDENTS', context());
+    const plan = planStudentImport(
+      readCsvTable('mobile,groups\n9876543210,GLOBAL / ALL STUDENTS'),
+      context(),
+    );
     assert.deepEqual(plan.rows[0]?.groupIds, ['g_all']);
   });
 
   it('reports a qualified name whose branch does not have that group', () => {
     const plan = planStudentImport(
-      'mobile,groups\n9876543210,KUKATPALLY / SSC CGL EVENING',
+      readCsvTable('mobile,groups\n9876543210,KUKATPALLY / SSC CGL EVENING'),
       context(),
     );
 
@@ -201,7 +210,7 @@ describe('planStudentImport', () => {
     // The whole point of "forgiving": one bad number must not cost the other
     // two rows.
     const plan = planStudentImport(
-      'mobile,fullName\n9876543210,Good\nnot-a-number,Bad\n9876543211,Also good',
+      readCsvTable('mobile,fullName\n9876543210,Good\nnot-a-number,Bad\n9876543211,Also good'),
       context(),
     );
 
@@ -211,7 +220,7 @@ describe('planStudentImport', () => {
   });
 
   it('reports an empty mobile cell differently from an invalid one', () => {
-    const plan = planStudentImport('mobile,fullName\n,Asha\nabcdef,Ravi', context());
+    const plan = planStudentImport(readCsvTable('mobile,fullName\n,Asha\nabcdef,Ravi'), context());
 
     assert.match(plan.rows[0]?.errors[0] ?? '', /No mobile number/);
     assert.match(plan.rows[1]?.errors[0] ?? '', /valid 10-digit/);
@@ -220,7 +229,7 @@ describe('planStudentImport', () => {
   it('catches the same number twice in one file, naming the earlier line', () => {
     // Two "creates" for one number would pass preview and then collide on the
     // unique index halfway through the commit.
-    const plan = planStudentImport('mobile\n9876543210\n9876543210', context());
+    const plan = planStudentImport(readCsvTable('mobile\n9876543210\n9876543210'), context());
 
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[1]?.action, 'skip');
@@ -229,14 +238,14 @@ describe('planStudentImport', () => {
   });
 
   it('treats +91 and spacing as the same number as the bare digits', () => {
-    const plan = planStudentImport('mobile\n+91 90000 00001', context());
+    const plan = planStudentImport(readCsvTable('mobile\n+91 90000 00001'), context());
 
     assert.equal(plan.rows[0]?.action, 'update');
     assert.equal(plan.rows[0]?.mobile, '9000000001');
   });
 
   it('reports a missing required column against the FILE, not every row', () => {
-    const plan = planStudentImport('name,groups\nAsha,SSC CGL EVENING', context());
+    const plan = planStudentImport(readCsvTable('name,groups\nAsha,SSC CGL EVENING'), context());
 
     assert.deepEqual(plan.rows, []);
     assert.equal(plan.fileErrors.length, 1);
@@ -244,14 +253,14 @@ describe('planStudentImport', () => {
   });
 
   it('handles an empty upload without throwing', () => {
-    const plan = planStudentImport('', context());
+    const plan = planStudentImport(readCsvTable(''), context());
 
     assert.deepEqual(plan.summary, { total: 0, willCreate: 0, willUpdate: 0, invalid: 0 });
     assert.match(plan.fileErrors[0] ?? '', /empty/);
   });
 
   it('accepts a header-only file as nothing to do, not an error', () => {
-    const plan = planStudentImport('mobile,fullName', context());
+    const plan = planStudentImport(readCsvTable('mobile,fullName'), context());
 
     assert.equal(plan.summary.total, 0);
     assert.deepEqual(plan.fileErrors, []);
@@ -260,6 +269,9 @@ describe('planStudentImport', () => {
   it('is deterministic — preview and commit run this same function', () => {
     const csv = 'mobile,fullName,groups\n9876543210,Asha,SSC CGL EVENING\nbad,X,';
 
-    assert.deepEqual(planStudentImport(csv, context()), planStudentImport(csv, context()));
+    assert.deepEqual(
+      planStudentImport(readCsvTable(csv), context()),
+      planStudentImport(readCsvTable(csv), context()),
+    );
   });
 });

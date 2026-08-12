@@ -50,28 +50,32 @@ export const studentImportResultSchema = studentImportSummarySchema.extend({
 });
 export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 
-/** The CSV itself, as text. Sent to /imports, where the larger body limit lives. */
-export const studentImportSchema = z.object({
-  csv: z.string().min(1, 'Nothing to import'),
-});
-export type StudentImportInput = z.input<typeof studentImportSchema>;
-export type StudentImportBody = z.infer<typeof studentImportSchema>;
-
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
+  /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
+  studentsTemplate: '/imports/students/template',
 } as const;
 
-/** The header row an admin should start from. */
+/** What the sample file is called when it lands in the admin's downloads. */
+export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
+
+/** The multipart field the upload arrives under. Server and client must agree. */
+export const IMPORT_FILE_FIELD = 'file';
+
+/** What the upload control accepts, and what the server will read. */
+export const IMPORT_ACCEPTED_EXTENSIONS = ['.xlsx', '.csv'] as const;
+
 /**
- * Shown as the textarea's placeholder, so it doubles as the format's
- * documentation. The second row is the qualified form: a group name is unique
- * only within its branch, and writing the branch is how you say which one you
- * meant when two centres run the same batch.
+ * The columns, in order — the ONE definition of the format.
+ *
+ * The sample workbook is generated from this and the parser matches on it, so
+ * the file an admin downloads cannot document a format the importer will not
+ * accept. A hand-written sample drifts the first time a column is renamed, and
+ * takes everyone who already downloaded it with it.
  */
-export const STUDENT_IMPORT_TEMPLATE = [
-  'mobile,fullName,groups',
-  '9876543210,Asha Kumari,SSC CGL MORNING',
-  '9876543211,Ravi Teja,AMEERPET / SSC CGL MORNING;GLOBAL / ALL STUDENTS',
-  '',
-].join('\n');
+export const STUDENT_IMPORT_COLUMNS = [
+  { header: 'mobile', width: 16, required: true },
+  { header: 'fullName', width: 28, required: false },
+  { header: 'groups', width: 52, required: false },
+] as const;

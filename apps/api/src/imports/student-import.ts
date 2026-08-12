@@ -5,7 +5,7 @@ import {
   type StudentImportRow,
   type StudentImportPlan,
 } from '@iace/contracts';
-import { readCsvTable, type CsvRow } from './csv';
+import { type CsvRow, type CsvTable } from './csv';
 
 /**
  * Decides what a roster file WOULD do, without doing any of it.
@@ -82,9 +82,7 @@ export function resolveGroup(
   };
 }
 
-export function planStudentImport(csv: string, context: ImportContext): StudentImportPlan {
-  const table = readCsvTable(csv);
-
+export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
   if (table.rows.length === 0) {
     return {
       rows: [],

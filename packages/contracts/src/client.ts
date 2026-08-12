@@ -60,10 +60,10 @@ import {
   type UpdateGroupInput,
 } from './groups';
 import {
+  IMPORT_FILE_FIELD,
   IMPORT_ROUTES,
   studentImportPlanSchema,
   studentImportResultSchema,
-  type StudentImportInput,
   type StudentImportPlan,
   type StudentImportResult,
 } from './imports';
@@ -125,14 +125,19 @@ export function createApiClient(options: ApiClientOptions) {
   let refreshInFlight: Promise<AuthTokens | null> | null = null;
 
   async function send(path: string, method: string, body: unknown, token: string | null) {
+    // A file upload is FormData, and the browser must set its own Content-Type:
+    // the multipart boundary is generated per request, so a hand-written header
+    // produces a body the server cannot split apart.
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
     try {
       return await fetchImpl(url(path), {
         method,
         headers: {
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(body === undefined || isFormData ? {} : { 'Content-Type': 'application/json' }),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : { body: isFormData ? body : JSON.stringify(body) }),
       });
     } catch (cause) {
       // The request never landed — offline, DNS, CORS, a dead API. Same typed
@@ -277,9 +282,44 @@ export function createApiClient(options: ApiClientOptions) {
     };
   }
 
+  /**
+   * A binary download, still authenticated and still refresh-aware.
+   *
+   * It cannot go through `parse`: there is no envelope to unwrap, and reading
+   * the body as text to look for one would corrupt the file. A FAILURE still
+   * arrives as an envelope though, so an error is read the normal way and the
+   * caller gets the same typed exception as everywhere else.
+   */
+  async function requestBlob(path: string): Promise<Blob> {
+    let response = await send(path, 'GET', undefined, getAccessToken());
+
+    if (response.status === 401) {
+      const refreshed = await refreshTokens();
+      if (!refreshed) {
+        onUnauthorized?.();
+        throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Your session has expired', {
+          httpStatus: 401,
+        });
+      }
+      response = await send(path, 'GET', undefined, refreshed.accessToken);
+    }
+
+    if (!response.ok) {
+      const failure = await peekFailure(response);
+      throw new AppException(
+        failure?.error.code ?? errorCodeForStatus(response.status),
+        failure?.error.message ?? 'That file could not be downloaded',
+        { httpStatus: response.status },
+      );
+    }
+
+    return response.blob();
+  }
+
   return {
     request,
     requestPaginated,
+    requestBlob,
 
     health: (): Promise<HealthResponse> =>
       request('/health', { schema: healthResponseSchema, anonymous: true }),
@@ -442,18 +482,24 @@ export function createApiClient(options: ApiClientOptions) {
       },
 
       imports: {
+        /**
+         * The sample workbook. A Blob rather than an envelope: it is a file,
+         * and there is nothing to unwrap.
+         */
+        studentTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.studentsTemplate),
+
         /** Writes nothing — this is what the admin reads before committing. */
-        previewStudents: (input: StudentImportInput): Promise<StudentImportPlan> =>
+        previewStudents: (file: File): Promise<StudentImportPlan> =>
           request(IMPORT_ROUTES.studentsPreview, {
             method: 'POST',
-            body: input,
+            body: fileBody(file),
             schema: studentImportPlanSchema,
           }),
 
-        commitStudents: (input: StudentImportInput): Promise<StudentImportResult> =>
+        commitStudents: (file: File): Promise<StudentImportResult> =>
           request(IMPORT_ROUTES.studentsCommit, {
             method: 'POST',
-            body: input,
+            body: fileBody(file),
             schema: studentImportResultSchema,
           }),
       },
@@ -462,3 +508,10 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+/** One field, named once, so the server knows what to look for. */
+function fileBody(file: File): FormData {
+  const form = new FormData();
+  form.append(IMPORT_FILE_FIELD, file);
+  return form;
+}

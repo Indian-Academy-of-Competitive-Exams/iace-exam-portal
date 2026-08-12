@@ -1,15 +1,42 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { type Response } from 'express';
 import {
   ADMIN_PAGES,
   ActorTypes,
-  studentImportSchema,
-  type StudentImportBody,
+  AppException,
+  ErrorCodes,
+  IMPORT_FILE_FIELD,
+  STUDENT_IMPORT_TEMPLATE_FILENAME,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
 import { Actors, RequiresPage } from '../auth/decorators';
-import { ZodBody } from '../common/zod-validation.pipe';
+import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
+import { buildStudentTemplate, XLSX_CONTENT_TYPE } from './workbook';
+
+/**
+ * The two fields we use off a multipart upload.
+ *
+ * Declared rather than imported: @types/multer no longer augments the global
+ * Express namespace, and depending on an ambient type from a transitive package
+ * is how a dependency bump becomes a compile error in unrelated code.
+ */
+interface UploadedFileLike {
+  buffer: Buffer;
+  size: number;
+}
 
 /**
  * Mounted under /imports, which is the one path with the larger body limit —
@@ -19,22 +46,60 @@ import { ImportsService } from './imports.service';
 @Actors(ActorTypes.ADMIN)
 @RequiresPage(ADMIN_PAGES.STUDENTS_MANAGE)
 export class ImportsController {
-  constructor(private readonly imports: ImportsService) {}
+  constructor(
+    private readonly imports: ImportsService,
+    private readonly config: AppConfigService,
+  ) {}
+
+  /**
+   * The sample file. Generated on request from the same column list the parser
+   * matches on, so it can never document a format the importer will not accept.
+   */
+  @Get('template')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', `attachment; filename="${STUDENT_IMPORT_TEMPLATE_FILENAME}"`)
+  // Not cached: it is generated from code that changes with the format, and a
+  // stale copy in a proxy is a sample that quietly documents last month's rules.
+  @Header('Cache-Control', 'no-store')
+  async template(@Res() response: Response): Promise<void> {
+    response.send(await buildStudentTemplate());
+  }
 
   /** Writes nothing — this is what the admin reads before committing. */
   @Post('preview')
   @HttpCode(HttpStatus.OK)
-  preview(
-    @Body(new ZodBody(studentImportSchema)) body: StudentImportBody,
-  ): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(body.csv);
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(this.bufferOf(file));
   }
 
   @Post('commit')
   @HttpCode(HttpStatus.OK)
-  commit(
-    @Body(new ZodBody(studentImportSchema)) body: StudentImportBody,
-  ): Promise<StudentImportResult> {
-    return this.imports.commitStudents(body.csv);
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  commit(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportResult> {
+    return this.imports.commitStudents(this.bufferOf(file));
+  }
+
+  /**
+   * Multer holds the upload in memory, so the size check is ours to make —
+   * `BODY_LIMIT_IMPORT` bounds the JSON parser, and multipart never reaches it.
+   */
+  private bufferOf(file: UploadedFileLike | undefined): Buffer {
+    if (!file) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to import', {
+        fieldErrors: { file: ['Choose a file to import'] },
+      });
+    }
+
+    const limit = this.config.importLimitBytes;
+    if (file.size > limit) {
+      throw new AppException(
+        ErrorCodes.VALIDATION_ERROR,
+        `That file is larger than ${Math.round(limit / 1024 / 1024)}MB. Split it and import in parts.`,
+        { fieldErrors: { file: ['That file is too large'] } },
+      );
+    }
+
+    return file.buffer;
   }
 }
