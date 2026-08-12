@@ -11,16 +11,70 @@ import { studentDetailSchema, updateStudentSchema } from './students';
 // ============================================================================
 
 /**
+ * What a student may upload, and what each one is for.
+ *
+ * The kind is in the PATH rather than the body, so a request cannot ask to
+ * overwrite a field it did not name — and the server decides which column each
+ * kind writes to, not the client.
+ */
+export const DOCUMENT_KINDS = {
+  PHOTO: 'photo',
+  AADHAAR: 'aadhaar',
+  PAN: 'pan',
+} as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[keyof typeof DOCUMENT_KINDS];
+export const DOCUMENT_KIND_VALUES = Object.values(DOCUMENT_KINDS) as [
+  DocumentKind,
+  ...DocumentKind[],
+];
+
+export const documentKindSchema = z.enum(DOCUMENT_KIND_VALUES);
+
+/**
+ * 5MB. A phone photo of an Aadhaar card is comfortably under it, and the limit
+ * is a product rule rather than an environment one — every deployment should
+ * refuse the same file.
+ */
+export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+/** What a browser may send. Checked server-side; the picker mirrors it. */
+export const DOCUMENT_ACCEPTED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+
+/** A photo has to BE a photo — a PDF headshot is not one. */
+export const PHOTO_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+export function acceptedTypesFor(kind: DocumentKind): readonly string[] {
+  return kind === DOCUMENT_KINDS.PHOTO ? PHOTO_ACCEPTED_TYPES : DOCUMENT_ACCEPTED_TYPES;
+}
+
+/**
  * The student's own record.
  *
- * Deliberately the same shape the admin sees, which means it also omits the
- * Aadhaar and PAN links. That is a limit worth naming: the student SHOULD be
- * able to see their own documents, and this will need its own schema the moment
- * uploading them exists. Sharing it today avoids two definitions that agree on
- * everything.
+ * Unlike the admin's view, this one CARRIES the identity documents: they are
+ * the student's own, and a screen that asks someone to upload their Aadhaar
+ * without ever showing whether it arrived is asking them to guess.
+ *
+ * The values are short-lived signed URLs, not stored paths. The bucket is
+ * private, so a stored path would be unopenable — and putting a permanent
+ * public URL to somebody's Aadhaar in a JSON response is exactly the thing not
+ * to do.
  */
-export const meSchema = studentDetailSchema;
+export const meProfileSchema = studentDetailSchema.shape.profile.unwrap().extend({
+  photoUrl: z.string().nullable(),
+  aadhaarUrl: z.string().nullable(),
+  panUrl: z.string().nullable(),
+});
+
+export const meSchema = studentDetailSchema.extend({
+  profile: meProfileSchema.nullable(),
+});
 export type Me = z.infer<typeof meSchema>;
+export type MeProfile = z.infer<typeof meProfileSchema>;
 
 /**
  * What a student may change about themselves.
@@ -62,4 +116,9 @@ export const ME_ROUTES = {
   profile: '/me',
   update: '/me',
   changePin: '/me/pin',
+  /** The kind is in the path — see DOCUMENT_KINDS. */
+  document: (kind: DocumentKind) => `/me/documents/${kind}`,
 } as const;
+
+/** The multipart field an upload arrives under. Server and client must agree. */
+export const DOCUMENT_FILE_FIELD = 'file';

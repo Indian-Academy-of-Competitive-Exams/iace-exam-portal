@@ -5,6 +5,7 @@ import { DashboardPage } from './routes/dashboard';
 import { AppShell } from './components/app-shell';
 import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
+import { ProfileViewPage } from './routes/profile-view';
 import { ProtectedRoute } from './routes/protected-route';
 
 /**
@@ -19,7 +20,8 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
-          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+          <Route path={ROUTES.PROFILE} element={<ProfileViewPage />} />
+          <Route path={ROUTES.PROFILE_EDIT} element={<ProfilePage />} />
           <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
         </Route>
       </Route>

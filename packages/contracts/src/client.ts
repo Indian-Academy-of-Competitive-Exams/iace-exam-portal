@@ -30,7 +30,15 @@ import {
   type VerifyStudentOtpInput,
 } from './auth';
 import { healthResponseSchema, type HealthResponse } from './health';
-import { ME_ROUTES, meSchema, type ChangePinInput, type Me, type UpdateMeInput } from './me';
+import {
+  DOCUMENT_FILE_FIELD,
+  ME_ROUTES,
+  meSchema,
+  type ChangePinInput,
+  type DocumentKind,
+  type Me,
+  type UpdateMeInput,
+} from './me';
 import {
   ADMIN_BRANCH_ROUTES,
   branchSchema,
@@ -394,6 +402,17 @@ export function createApiClient(options: ApiClientOptions) {
         request(ME_ROUTES.update, { method: 'PATCH', body: input, schema: meSchema }),
 
       /** Returns a FRESH session — the caller must store these tokens. */
+      /** A photo or an identity document. Returns the refreshed profile. */
+      uploadDocument: (kind: DocumentKind, file: File): Promise<Me> => {
+        const form = new FormData();
+        form.append(DOCUMENT_FILE_FIELD, file);
+        return request(ME_ROUTES.document(kind), {
+          method: 'POST',
+          body: form,
+          schema: meSchema,
+        });
+      },
+
       changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
         request(ME_ROUTES.changePin, {
           method: 'POST',

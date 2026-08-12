@@ -1,0 +1,191 @@
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Check, Loader2, Pencil } from 'lucide-react';
+import { type Me } from '@iace/contracts';
+import { bannerMessage } from '@iace/app-kit';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@iace/ui';
+import { PageHeader } from '../components/app-shell';
+import { DocumentCard } from '../components/document-card';
+import { PreTestPrompt } from '../components/pre-test-prompt';
+import { api } from '../lib/api';
+import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
+
+/**
+ * The student's profile, as it stands.
+ *
+ * A read-only view first, and editing behind a button. A form is the right tool
+ * for changing things and the wrong one for checking them — a student who wants
+ * to know whether their photo went through should not have to read it out of an
+ * input box.
+ */
+export function ProfileViewPage() {
+  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
+
+  if (me.isPending) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        Loading…
+      </p>
+    );
+  }
+
+  if (me.error || !me.data) {
+    return <Alert variant="danger">{bannerMessage(me.error)}</Alert>;
+  }
+
+  const profile = me.data.profile;
+
+  return (
+    <>
+      <PageHeader
+        title="Your profile"
+        description="What we hold about you, and what is still missing."
+        action={
+          <Button variant="outline" size="sm" asChild>
+            <Link to={ROUTES.PROFILE_EDIT}>
+              <Pencil aria-hidden />
+              Edit details
+            </Link>
+          </Button>
+        }
+      />
+
+      <PreTestPrompt preTestReady={me.data.preTestReady} />
+
+      <div className="flex flex-col gap-5">
+        <Completion me={me.data} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+            <Detail label="Name" value={me.data.fullName} />
+            <Detail label="Mobile" value={`+91 ${me.data.mobile}`} />
+            <Detail label="Mother's name" value={profile?.motherName} />
+            <Detail label="Father's name" value={profile?.fatherName} />
+            <Detail label="Date of birth" value={profile?.dob} />
+            <Detail label="Gender" value={titleCase(profile?.gender)} />
+            <Detail label="Email" value={profile?.email} />
+            <Detail label="Address" value={profile?.address} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Photo and documents</CardTitle>
+            <CardDescription>
+              Only you and the institute can see these. Each replaces the last — nothing is shared
+              anywhere else.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-3">
+            <DocumentCard kind="photo" label="Passport photo" url={profile?.photoUrl ?? null} />
+            <DocumentCard kind="aadhaar" label="Aadhaar" url={profile?.aadhaarUrl ?? null} />
+            <DocumentCard kind="pan" label="PAN" url={profile?.panUrl ?? null} />
+          </CardContent>
+        </Card>
+
+        {me.data.groups.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Your groups</CardTitle>
+              <CardDescription>Your tests come through these.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {me.data.groups.map((group) => (
+                <Badge key={group.id} variant="primary">
+                  {group.branchName} / {group.name}
+                </Badge>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+/**
+ * What is left to do, as a list rather than a percentage.
+ *
+ * "60% complete" tells a student they are not finished without telling them
+ * what to do about it. Each line names one thing and links to where it is
+ * filled in.
+ */
+function Completion({ me }: Readonly<{ me: Me }>) {
+  const profile = me.profile;
+  const items = [
+    { label: "Mother's name", done: Boolean(profile?.motherName), preTest: true },
+    { label: "Father's name", done: Boolean(profile?.fatherName), preTest: true },
+    { label: 'Date of birth', done: Boolean(profile?.dob), preTest: true },
+    { label: 'Gender', done: Boolean(profile?.gender), preTest: false },
+    { label: 'Passport photo', done: Boolean(profile?.photoUrl), preTest: false },
+    { label: 'Aadhaar', done: Boolean(profile?.aadhaarUrl), preTest: false },
+    { label: 'PAN', done: Boolean(profile?.panUrl), preTest: false },
+  ];
+  const outstanding = items.filter((item) => !item.done);
+
+  if (outstanding.length === 0) {
+    return (
+      <Alert variant="success">
+        <span className="flex items-center gap-2">
+          <Check className="size-4" aria-hidden />
+          Your profile is complete. Nothing else needed.
+        </span>
+      </Alert>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Still to add</CardTitle>
+        <CardDescription>
+          {/* The three pre-test fields are the only ones that hold anything up. */}
+          Only the ones marked <strong>needed before a test</strong> hold anything up. The rest are
+          optional.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {outstanding.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-foreground">{item.label}</span>
+            {item.preTest ? (
+              <Badge variant="warning">Needed before a test</Badge>
+            ) : (
+              <Badge variant="neutral">Optional</Badge>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Detail({ label, value }: Readonly<{ label: string; value: string | null | undefined }>) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">
+        {value ? value : <span className="text-muted-foreground">Not added yet</span>}
+      </span>
+    </div>
+  );
+}
+
+/** MALE -> Male. The enum is shouted; a profile page should not be. */
+function titleCase(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.charAt(0) + value.slice(1).toLowerCase();
+}

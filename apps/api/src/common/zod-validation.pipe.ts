@@ -31,3 +31,12 @@ export class ZodBody<TOut> implements PipeTransform<unknown, TOut> {
  * the far side of a `z.coerce`.
  */
 export class ZodQuery<TOut> extends ZodBody<TOut> {}
+
+/**
+ * A route parameter, validated against a schema.
+ *
+ * Same machinery as the body — the point is that a path segment reaches the
+ * handler already narrowed to the values the code handles, rather than as a
+ * string somebody remembered to check.
+ */
+export class ZodParam<TOut> extends ZodBody<TOut> {}

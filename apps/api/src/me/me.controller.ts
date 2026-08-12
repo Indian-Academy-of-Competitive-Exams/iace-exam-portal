@@ -1,9 +1,25 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { type Request } from 'express';
 import {
   ActorTypes,
+  DOCUMENT_FILE_FIELD,
   changePinSchema,
+  documentKindSchema,
   updateMeSchema,
+  type DocumentKind,
   type ChangePinBody,
   type AuthSessionResponse,
   type Me,
@@ -11,7 +27,7 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser } from '../auth/decorators';
 import { type AuthenticatedUser } from '../auth/auth.types';
-import { ZodBody } from '../common/zod-validation.pipe';
+import { ZodBody, ZodParam } from '../common/zod-validation.pipe';
 import { AuthService } from '../auth/auth.service';
 import { deviceFrom } from '../auth/device';
 import { MeService } from './me.service';
@@ -27,6 +43,13 @@ import { MeService } from './me.service';
  * is the whole authorisation rule here, and it is the one that matters — an
  * admin token must not be able to call these either.
  */
+/** The two fields we use off a multipart upload — see imports.controller.ts. */
+interface UploadedFileLike {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+}
+
 @Controller('me')
 @Actors(ActorTypes.STUDENT)
 export class MeController {
@@ -46,6 +69,24 @@ export class MeController {
     @Body(new ZodBody(updateMeSchema)) body: UpdateMeBody,
   ): Promise<Me> {
     return this.me.update(user.id, body);
+  }
+
+  /**
+   * A photo or an identity document.
+   *
+   * The KIND is in the path and validated against a fixed list, so a request
+   * cannot name the column it writes to. The file is checked for type and size
+   * before it reaches storage — see documents.ts.
+   */
+  @Post('documents/:kind')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(DOCUMENT_FILE_FIELD))
+  uploadDocument(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('kind', new ZodParam(documentKindSchema)) kind: DocumentKind,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<Me> {
+    return this.me.saveDocument(user.id, kind, file);
   }
 
   /**

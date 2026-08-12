@@ -10,6 +10,7 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
   PROFILE: '/profile',
+  PROFILE_EDIT: '/profile/edit',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
@@ -21,9 +22,16 @@ export const ROUTES = {
  */
 export const NAV_ITEMS = [
   { to: ROUTES.HOME, label: 'Home' },
-  { to: ROUTES.PROFILE, label: 'Your details' },
+  { to: ROUTES.PROFILE, label: 'Profile' },
   { to: ROUTES.ACCOUNT, label: 'Sign-in' },
 ] as const;
+
+/**
+ * The student's own record. Shared so the profile screens and every upload
+ * write to the same cache entry — two keys would mean a photo that uploaded
+ * successfully and a page that still says it is missing.
+ */
+export const ME_QUERY_KEY = ['me'] as const;
 
 /**
  * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing
