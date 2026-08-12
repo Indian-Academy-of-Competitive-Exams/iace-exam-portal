@@ -6,8 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, Loader2, Search, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
   MOBILE_DIGITS,
-  PAGE_SIZE_OPTIONS,
   PAGE_SIZE_MAX,
+  PAGE_SIZE_OPTIONS,
   STUDENT_SORTS,
   todayISO,
   createStudentSchema,
@@ -31,6 +31,7 @@ import {
   NumericInput,
   Select,
   digitsOnly,
+  Combobox,
   Table,
   TableBody,
   TableCell,
@@ -51,7 +52,7 @@ import { GroupPicker } from '../components/group-picker';
 import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { usePageSize } from '@iace/app-kit';
+import { useInfinitePages, usePageSize } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
@@ -117,14 +118,34 @@ export function StudentsPage() {
   const branches = useBranches();
   const branch = branches.find((candidate) => candidate.id === branchId);
 
-  // Narrowed by the chosen branch, so picking a branch first makes the group
-  // list short enough to read rather than every group in the institute.
-  const groupsForPicker = useQuery({
-    queryKey: ['admin', 'groups', 'filter', branchId],
-    queryFn: () =>
-      api.admin.groups.list({ pageSize: PAGE_SIZE_MAX, branchId: branchId || undefined }),
+  // Declared before the group list, which uses it to decide whether to fetch.
+  const extraCount = filters.activeCount(EXTRA_FILTERS);
+  const filtersOpen = showAll || extraCount > 0;
+
+  /**
+   * Every group, a page at a time.
+   *
+   * A plain select over one capped request ends at the first hundred and looks
+   * complete — a multi-branch institute's later groups would simply not exist
+   * as far as this filter is concerned. The search is server-side for the same
+   * reason: filtering what happens to be loaded is not filtering.
+   */
+  const [groupSearch, setGroupSearch] = useState('');
+  const groupPages = useInfinitePages({
+    queryKey: ['admin', 'groups', 'filter', branchId, groupSearch],
+    fetchPage: (page) =>
+      // PAGE_SIZE_MAX per request — the cap stays what it was; what changed is
+      // that reaching the end of one page now fetches the next instead of
+      // being where the list quietly stops.
+      api.admin.groups.list({
+        page,
+        pageSize: PAGE_SIZE_MAX,
+        q: groupSearch,
+        branchId: branchId || undefined,
+      }),
+    // Only while the dropdown can be opened — the panel is folded away by default.
+    enabled: filtersOpen,
   });
-  const groupOptions = groupsForPicker.data?.items ?? [];
 
   const group = useQuery({
     queryKey: ['admin', 'group', groupId],
@@ -157,8 +178,6 @@ export function StudentsPage() {
     filters.set(changes);
     setPage(1);
   };
-
-  const extraCount = filters.activeCount(EXTRA_FILTERS);
 
   return (
     <>
@@ -267,7 +286,7 @@ export function StudentsPage() {
           </Button>
         </div>
 
-        {showAll || extraCount > 0 ? (
+        {filtersOpen ? (
           <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field htmlFor="filter-branch" label="Branch">
               {(control) => (
@@ -290,18 +309,31 @@ export function StudentsPage() {
 
             <Field htmlFor="filter-group" label="Group">
               {(control) => (
-                <Select
+                <Combobox
                   {...control}
                   value={groupId}
-                  onChange={(event) => set({ groupId: event.target.value })}
-                >
-                  <option value="">Any group</option>
-                  {groupOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.branch.name} / {option.name}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(next) => set({ groupId: next })}
+                  // The chosen group is very often outside the page that
+                  // happens to be loaded; without this the control would look
+                  // like it had lost the selection.
+                  selectedLabel={
+                    group.data ? `${group.data.branch.name} / ${group.data.name}` : undefined
+                  }
+                  items={groupPages.items.map((option) => ({
+                    value: option.id,
+                    label: option.name,
+                    hint: option.branch.name,
+                  }))}
+                  placeholder="Any group"
+                  search={groupSearch}
+                  onSearchChange={setGroupSearch}
+                  searchPlaceholder="Search groups"
+                  hasMore={groupPages.hasMore}
+                  onLoadMore={groupPages.loadMore}
+                  isLoading={groupPages.isLoading}
+                  isLoadingMore={groupPages.isLoadingMore}
+                  emptyLabel="No group matches that"
+                />
               )}
             </Field>
 
