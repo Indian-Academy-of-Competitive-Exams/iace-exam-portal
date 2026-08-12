@@ -1,7 +1,9 @@
 import { LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
-import { NAV_ITEMS } from '../lib/constants';
+import { useQuery } from '@tanstack/react-query';
+import { Avatar, Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
+import { api } from '../lib/api';
+import { ME_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
 import { useAuth } from '../providers/auth-context';
 import { ChangePinCard } from '../routes/account';
 
@@ -14,6 +16,9 @@ import { ChangePinCard } from '../routes/account';
  */
 export function AppShell() {
   const { student, signOut } = useAuth();
+  // Shared cache entry with the profile screens, so a new photo shows in the
+  // header the moment it uploads rather than on the next reload.
+  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
 
   return (
     <div className="min-h-screen bg-background">
@@ -22,8 +27,16 @@ export function AppShell() {
           <Brandmark withWordmark />
 
           <div className="flex items-center gap-2">
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              {student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
+            <span className="hidden items-center gap-2 sm:inline-flex">
+              <Avatar
+                src={me.data?.profile?.photoUrl}
+                name={student?.fullName}
+                fallback={student?.mobile}
+                size="sm"
+              />
+              <span className="text-sm text-muted-foreground">
+                {student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
+              </span>
             </span>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>

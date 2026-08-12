@@ -102,6 +102,43 @@ export const studentSummarySchema = z.object({
 });
 export type StudentSummary = z.infer<typeof studentSummarySchema>;
 
+/**
+ * Schooling so far. Stored as JSON because the shape varies by board and level
+ * and none of it is ever queried — it is read back as a block on one screen.
+ */
+export const educationEntrySchema = z.object({
+  level: z.string().trim().min(1, 'Which qualification?').max(60),
+  board: z.string().trim().max(80).optional(),
+  institution: z.string().trim().max(120).optional(),
+  year: z
+    .union([z.literal(''), z.coerce.number().int().min(EARLIEST_BIRTH_YEAR).max(2100)])
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+  percentage: z
+    .union([z.literal(''), z.coerce.number().min(0).max(100)])
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+});
+export type EducationEntry = z.infer<typeof educationEntrySchema>;
+
+/**
+ * Government exams the student has sat ELSEWHERE — not attempts on this
+ * platform, which are the Attempt table. Self-reported and never verified, so
+ * nothing is allowed to depend on it.
+ */
+export const pastExamEntrySchema = z.object({
+  exam: z.string().trim().min(1, 'Which exam?').max(80),
+  year: z
+    .union([z.literal(''), z.coerce.number().int().min(EARLIEST_BIRTH_YEAR).max(2100)])
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+  result: z.string().trim().max(80).optional(),
+});
+export type PastExamEntry = z.infer<typeof pastExamEntrySchema>;
+
+/** How many rows either list may hold. A profile is not a CV. */
+export const PROFILE_LIST_MAX = 12;
+
 /** Everything the admin may see — note what is NOT here (see the file header). */
 export const studentProfileSchema = z.object({
   motherName: z.string().nullable(),
@@ -111,8 +148,21 @@ export const studentProfileSchema = z.object({
   address: z.string().nullable(),
   gender: genderSchema.nullable(),
   photoUrl: z.string().nullable(),
-  educationDetails: z.unknown().nullable(),
-  pastExamHistory: z.unknown().nullable(),
+  /**
+   * The identity documents.
+   *
+   * These were once withheld from admins deliberately. That was reversed: the
+   * institute verifies these records, and an admin who cannot see the Aadhaar
+   * a student uploaded cannot do the checking they are responsible for.
+   *
+   * They are short-lived SIGNED URLs, never stored paths — the bucket is
+   * private, and a permanent link to somebody's Aadhaar is not something to put
+   * in a JSON response whoever is reading it.
+   */
+  aadhaarUrl: z.string().nullable(),
+  panUrl: z.string().nullable(),
+  educationDetails: z.array(educationEntrySchema).nullable(),
+  pastExamHistory: z.array(pastExamEntrySchema).nullable(),
 });
 export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
@@ -232,6 +282,8 @@ export const updateStudentProfileSchema = z.object({
   email: z.string().trim().max(160).nullish(),
   address: z.string().trim().max(500).nullish(),
   gender: genderSchema.nullish(),
+  educationDetails: z.array(educationEntrySchema).max(PROFILE_LIST_MAX).optional(),
+  pastExamHistory: z.array(pastExamEntrySchema).max(PROFILE_LIST_MAX).optional(),
 });
 
 export const updateStudentSchema = z.object({

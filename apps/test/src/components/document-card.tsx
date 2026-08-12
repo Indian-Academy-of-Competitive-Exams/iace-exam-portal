@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, FileText, Loader2, Upload } from 'lucide-react';
-import { acceptedTypesFor, type DocumentKind, type Me } from '@iace/contracts';
+import { DOCUMENT_MAX_BYTES, acceptedTypesFor, type DocumentKind, type Me } from '@iace/contracts';
 import { bannerMessage } from '@iace/app-kit';
 import { Alert, Button, linkVariants } from '@iace/ui';
 import { api } from '../lib/api';
@@ -35,7 +35,17 @@ export function DocumentCard({
     },
   });
 
-  const accept = acceptedTypesFor(kind).join(',');
+  const accepted = acceptedTypesFor(kind);
+  const accept = accepted.join(',');
+
+  /**
+   * Said before they choose, not after it is refused.
+   *
+   * The limit and the accepted types were only enforced server-side, so the
+   * first a student heard of either was an error message about a file they had
+   * already waited to upload.
+   */
+  const rules = `${accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ')} · up to ${Math.round(DOCUMENT_MAX_BYTES / 1024 / 1024)}MB`;
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
@@ -95,8 +105,12 @@ export function DocumentCard({
         ) : (
           <Upload aria-hidden />
         )}
-        {url ? 'Replace' : 'Upload'}
+        {/* Named for what it does to what is already there — "Upload" over an
+            existing document reads as "add a second one". */}
+        {url ? 'Replace this' : 'Upload'}
       </Button>
+
+      <p className="text-[11px] leading-tight text-muted-foreground">{rules}</p>
 
       {upload.error ? <Alert variant="danger">{bannerMessage(upload.error)}</Alert> : null}
       {justSaved && !upload.error ? <Alert variant="success">Saved.</Alert> : null}

@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  educationEntrySchema,
+  pastExamEntrySchema,
+  type Gender,
   type CreateStudentBody,
   type Paginated,
   type StudentDetail,
@@ -11,6 +14,10 @@ import {
   type UpdateStudentBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+
+/** How long a signed link to somebody's identity document stays usable. */
+const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted } from './student-flags';
 
@@ -26,7 +33,10 @@ const STUDENT_INCLUDE = {
 
 @Injectable()
 export class StudentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ==========================================================================
   // Reading
@@ -69,23 +79,59 @@ export class StudentsService {
       ...this.toSummary(student),
       preferredLanguage: student.preferredLanguage,
       updatedAt: student.updatedAt.toISOString(),
-      profile: student.profile
-        ? {
-            motherName: student.profile.motherName,
-            fatherName: student.profile.fatherName,
-            dob: student.profile.dob ? toDateOnly(student.profile.dob) : null,
-            email: student.profile.email,
-            address: student.profile.address,
-            gender: student.profile.gender,
-            photoUrl: student.profile.photoUrl,
-            educationDetails: student.profile.educationDetails ?? null,
-            pastExamHistory: student.profile.pastExamHistory ?? null,
-            // aadhaarUrl / panUrl are NOT read here. The contract has no room
-            // for them, and reading a field only to drop it is how it ends up
-            // in a log line or a debug response later.
-          }
-        : null,
+      profile: student.profile ? await this.toProfileView(student.profile) : null,
     };
+  }
+
+  /**
+   * A stored profile as the API returns it.
+   *
+   * The three document columns hold object KEYS, not URLs. The bucket is
+   * private, so a key is unopenable by a browser — every read swaps them for
+   * short-lived signed links, and nothing anywhere holds a permanent URL to
+   * somebody's Aadhaar.
+   */
+  private async toProfileView(profile: {
+    motherName: string | null;
+    fatherName: string | null;
+    dob: Date | null;
+    email: string | null;
+    address: string | null;
+    gender: Gender | null;
+    photoUrl: string | null;
+    aadhaarUrl: string | null;
+    panUrl: string | null;
+    educationDetails: unknown;
+    pastExamHistory: unknown;
+  }): Promise<StudentDetail['profile']> {
+    const [photoUrl, aadhaarUrl, panUrl] = await Promise.all([
+      this.signed(profile.photoUrl),
+      this.signed(profile.aadhaarUrl),
+      this.signed(profile.panUrl),
+    ]);
+
+    return {
+      motherName: profile.motherName,
+      fatherName: profile.fatherName,
+      dob: profile.dob ? toDateOnly(profile.dob) : null,
+      email: profile.email,
+      address: profile.address,
+      gender: profile.gender,
+      photoUrl,
+      aadhaarUrl,
+      panUrl,
+      // Parsed rather than cast: this is JSON written by an older build or by
+      // hand, and a malformed row should read as "nothing recorded" rather than
+      // reach a screen that assumes an array.
+      educationDetails:
+        educationEntrySchema.array().safeParse(profile.educationDetails).data ?? null,
+      pastExamHistory: pastExamEntrySchema.array().safeParse(profile.pastExamHistory).data ?? null,
+    };
+  }
+
+  private async signed(key: string | null): Promise<string | null> {
+    if (!key) return null;
+    return this.storage.createDownloadUrl(key, DOCUMENT_URL_TTL_SEC);
   }
 
   // ==========================================================================

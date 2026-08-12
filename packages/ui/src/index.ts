@@ -6,6 +6,7 @@ export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
 export { Alert, alertVariants, type AlertProps } from './components/ui/alert';
 export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
+export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export { Select, type SelectProps } from './components/ui/select';

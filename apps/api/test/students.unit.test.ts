@@ -82,7 +82,7 @@ describe('isProfileCompleted', () => {
   });
 });
 
-describe('admin student contracts — the privacy boundary', () => {
+describe('admin student contracts', () => {
   const profile = {
     motherName: 'Lakshmi',
     fatherName: 'Ravi',
@@ -91,6 +91,8 @@ describe('admin student contracts — the privacy boundary', () => {
     address: null,
     gender: 'FEMALE',
     photoUrl: null,
+    aadhaarUrl: null,
+    panUrl: null,
     educationDetails: null,
     pastExamHistory: null,
   };
@@ -114,22 +116,50 @@ describe('admin student contracts — the privacy boundary', () => {
     assert.ok(studentDetailSchema.safeParse(detail).success);
   });
 
-  it('STRIPS aadhaarUrl and panUrl even if a handler somehow supplies them', () => {
-    // The contract is the enforcement: admins were scoped to everything except
-    // the identity documents, so the response schema has no room for them and
-    // zod drops them on the way out. A future careless `include: { profile:
-    // true }` therefore cannot leak them.
-    const leaky = {
+  /**
+   * Admins DO see the identity documents. They were once withheld, deliberately;
+   * that was reversed because the institute verifies these records and an admin
+   * who cannot see the Aadhaar a student uploaded cannot do that checking.
+   *
+   * What has not changed is that the value is a short-lived signed link rather
+   * than a stored path — see StudentsService.toProfileView.
+   */
+  it('carries the identity documents', () => {
+    const withDocs = {
       ...detail,
-      profile: { ...profile, aadhaarUrl: 'https://s3/aadhaar.pdf', panUrl: 'https://s3/pan.pdf' },
+      profile: { ...profile, aadhaarUrl: 'https://s3/aadhaar.pdf?sig=x', panUrl: null },
     };
 
-    const parsed = studentDetailSchema.parse(leaky);
+    const parsed = studentDetailSchema.parse(withDocs);
 
-    assert.ok(parsed.profile);
-    assert.ok(!('aadhaarUrl' in parsed.profile), 'aadhaarUrl must not survive parsing');
-    assert.ok(!('panUrl' in parsed.profile), 'panUrl must not survive parsing');
-    assert.ok(!JSON.stringify(parsed).includes('aadhaar'));
+    assert.equal(parsed.profile?.aadhaarUrl, 'https://s3/aadhaar.pdf?sig=x');
+    assert.equal(parsed.profile?.panUrl, null);
+  });
+
+  /**
+   * A malformed JSON column reads as "nothing recorded" rather than reaching a
+   * screen that assumes an array — these are written by hand and by older
+   * builds, and a crash on someone else's data is not the student's problem.
+   */
+  it('refuses education history that is not a list of entries', () => {
+    const junk = { ...detail, profile: { ...profile, educationDetails: 'BSc' } };
+
+    assert.equal(studentDetailSchema.safeParse(junk).success, false);
+  });
+
+  it('accepts well-formed education and exam history', () => {
+    const filled = {
+      ...detail,
+      profile: {
+        ...profile,
+        educationDetails: [{ level: 'Class 12', board: 'CBSE', year: 2021, percentage: 88.5 }],
+        pastExamHistory: [{ exam: 'SSC CGL 2024', year: 2024, result: 'Tier 1 cleared' }],
+      },
+    };
+
+    const parsed = studentDetailSchema.parse(filled);
+    assert.equal(parsed.profile?.educationDetails?.[0]?.level, 'Class 12');
+    assert.equal(parsed.profile?.pastExamHistory?.[0]?.exam, 'SSC CGL 2024');
   });
 
   it('never carries the PIN hash, only whether one exists', () => {

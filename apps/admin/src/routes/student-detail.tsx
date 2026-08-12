@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, Save } from 'lucide-react';
 import { todayISO, type Gender, type StudentDetail } from '@iace/contracts';
 import {
   Alert,
+  Avatar,
   Badge,
   Button,
   Card,
@@ -59,6 +60,28 @@ function toFormValues(student: StudentDetail): FormValues {
     gender: student.profile?.gender ?? '',
     groupIds: student.groups.map((group) => group.id),
   };
+}
+
+/**
+ * One uploaded document, if it exists.
+ *
+ * Opens in a new tab: these are signed links with a short life, and navigating
+ * the admin away from the record they were reading to look at a PDF means
+ * finding their way back.
+ */
+function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | null }>) {
+  if (!url) {
+    return <Badge variant="neutral">{label} — not uploaded</Badge>;
+  }
+
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <a href={url} target="_blank" rel="noreferrer">
+        <FileText aria-hidden />
+        {label}
+      </a>
+    </Button>
+  );
 }
 
 /** The three sign-in states, listed. Mirrors SignInStatus on the roster. */
@@ -177,7 +200,13 @@ export function StudentDetailPage() {
         }
       />
 
-      <div className="mb-5 flex flex-wrap gap-2">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <Avatar
+          src={detail.profile?.photoUrl}
+          name={detail.fullName}
+          fallback={detail.mobile}
+          size="md"
+        />
         {!detail.isActive ? <Badge variant="danger">Deactivated</Badge> : null}
         <SignInBadge detail={detail} />
         <Badge variant={detail.preTestReady ? 'success' : 'neutral'}>
@@ -193,6 +222,20 @@ export function StudentDetailPage() {
           {bannerMessage(setActive.error)}
         </Alert>
       ) : null}
+
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>Documents the student has uploaded</CardTitle>
+          <CardDescription>
+            Read-only here — only the student can replace them. Links expire after a few minutes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
+          <DocumentLink label="Aadhaar" url={detail.profile?.aadhaarUrl} />
+          <DocumentLink label="PAN" url={detail.profile?.panUrl} />
+        </CardContent>
+      </Card>
 
       <form
         className="grid gap-5 lg:grid-cols-2"

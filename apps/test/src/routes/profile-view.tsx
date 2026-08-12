@@ -96,6 +96,30 @@ export function ProfileViewPage() {
           </CardContent>
         </Card>
 
+        <HistoryList
+          title="Education"
+          empty="No qualifications added yet."
+          rows={(profile?.educationDetails ?? []).map((entry) => ({
+            key: `${entry.level}-${entry.year ?? ''}`,
+            main: entry.level,
+            detail: [entry.board, entry.institution].filter(Boolean).join(' · '),
+            trailing: [entry.year, entry.percentage ? `${entry.percentage}%` : null]
+              .filter(Boolean)
+              .join(' · '),
+          }))}
+        />
+
+        <HistoryList
+          title="Exams sat elsewhere"
+          empty="No previous exams added yet."
+          rows={(profile?.pastExamHistory ?? []).map((entry) => ({
+            key: `${entry.exam}-${entry.year ?? ''}`,
+            main: entry.exam,
+            detail: entry.result ?? '',
+            trailing: entry.year ? String(entry.year) : '',
+          }))}
+        />
+
         {me.data.groups.length > 0 ? (
           <Card>
             <CardHeader>
@@ -166,6 +190,39 @@ function Completion({ me }: Readonly<{ me: Me }>) {
             ) : (
               <Badge variant="neutral">Optional</Badge>
             )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Education and past exams read the same way, so they render the same way. */
+function HistoryList({
+  title,
+  empty,
+  rows,
+}: Readonly<{
+  title: string;
+  empty: string;
+  rows: readonly { key: string; main: string; detail: string; trailing: string }[];
+}>) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
+        {rows.map((row) => (
+          <div key={row.key} className="flex items-baseline justify-between gap-4 text-sm">
+            <span className="min-w-0">
+              <span className="block font-medium text-foreground">{row.main}</span>
+              {row.detail ? (
+                <span className="block text-xs text-muted-foreground">{row.detail}</span>
+              ) : null}
+            </span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{row.trailing}</span>
           </div>
         ))}
       </CardContent>

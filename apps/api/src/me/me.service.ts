@@ -4,7 +4,6 @@ import {
   ErrorCodes,
   type DocumentKind,
   type Me,
-  type StudentDetail,
   type UpdateMeBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,9 +11,6 @@ import { StorageService } from '../storage/storage.service';
 import { StudentsService } from '../students/students.service';
 import { isProfileCompleted } from '../students/student-flags';
 import { checkDocument, columnFor, documentKey } from './documents';
-
-/** How long a signed link to somebody's Aadhaar stays usable. */
-const DOCUMENT_URL_TTL_SEC = 300;
 
 /**
  * The student's own account.
@@ -39,15 +35,13 @@ export class MeService {
     private readonly storage: StorageService,
   ) {}
 
-  async profile(studentId: string): Promise<Me> {
-    const detail = await this.students.detail(studentId);
-    return { ...detail, profile: await this.withDocumentUrls(studentId, detail.profile) };
+  profile(studentId: string): Promise<Me> {
+    return this.students.detail(studentId);
   }
 
   /** `groupIds` cannot arrive here — see updateMeSchema for why. */
-  async update(studentId: string, input: UpdateMeBody): Promise<Me> {
-    const updated = await this.students.update(studentId, input);
-    return { ...updated, profile: await this.withDocumentUrls(studentId, updated.profile) };
+  update(studentId: string, input: UpdateMeBody): Promise<Me> {
+    return this.students.update(studentId, input);
   }
 
   /**
@@ -93,38 +87,5 @@ export class MeService {
     });
 
     return this.profile(studentId);
-  }
-
-  /**
-   * Swaps stored object KEYS for short-lived signed URLs.
-   *
-   * The bucket is private, so the stored key is not openable by a browser — and
-   * a permanent public URL to somebody's Aadhaar is precisely the thing not to
-   * put in a JSON response.
-   */
-  private async withDocumentUrls(
-    studentId: string,
-    // The ADMIN's profile shape on the way in — it has no document fields, which
-    // is exactly what this adds.
-    profile: StudentDetail['profile'],
-  ): Promise<Me['profile']> {
-    if (!profile) return null;
-
-    const stored = await this.prisma.studentProfile.findUnique({
-      where: { studentId },
-      select: { photoUrl: true, aadhaarUrl: true, panUrl: true },
-    });
-
-    return {
-      ...profile,
-      photoUrl: await this.signed(stored?.photoUrl),
-      aadhaarUrl: await this.signed(stored?.aadhaarUrl),
-      panUrl: await this.signed(stored?.panUrl),
-    };
-  }
-
-  private async signed(key: string | null | undefined): Promise<string | null> {
-    if (!key) return null;
-    return this.storage.createDownloadUrl(key, DOCUMENT_URL_TTL_SEC);
   }
 }

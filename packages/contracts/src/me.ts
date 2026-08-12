@@ -55,26 +55,12 @@ export function acceptedTypesFor(kind: DocumentKind): readonly string[] {
 /**
  * The student's own record.
  *
- * Unlike the admin's view, this one CARRIES the identity documents: they are
- * the student's own, and a screen that asks someone to upload their Aadhaar
- * without ever showing whether it arrived is asking them to guess.
- *
- * The values are short-lived signed URLs, not stored paths. The bucket is
- * private, so a stored path would be unopenable — and putting a permanent
- * public URL to somebody's Aadhaar in a JSON response is exactly the thing not
- * to do.
+ * The same shape the admin sees, documents included. It was briefly two
+ * schemas, back when admins were kept away from the identity documents — that
+ * rule is gone, so one definition is right again.
  */
-export const meProfileSchema = studentDetailSchema.shape.profile.unwrap().extend({
-  photoUrl: z.string().nullable(),
-  aadhaarUrl: z.string().nullable(),
-  panUrl: z.string().nullable(),
-});
-
-export const meSchema = studentDetailSchema.extend({
-  profile: meProfileSchema.nullable(),
-});
+export const meSchema = studentDetailSchema;
 export type Me = z.infer<typeof meSchema>;
-export type MeProfile = z.infer<typeof meProfileSchema>;
 
 /**
  * What a student may change about themselves.

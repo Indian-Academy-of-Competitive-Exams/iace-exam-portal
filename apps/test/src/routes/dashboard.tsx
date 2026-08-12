@@ -1,74 +1,67 @@
-import { LogOut } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
-  Brandmark,
+  Avatar,
   Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-  ThemeToggle,
 } from '@iace/ui';
+import { PreTestPrompt } from '../components/pre-test-prompt';
+import { api } from '../lib/api';
+import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth-context';
+
 /**
- * The authed shell. In V1 this route becomes the Report dashboard — the
- * student's post-login landing page — not a raw test list.
+ * Where a student lands.
  *
- * TODO(pre-test gate): when `student.preTestReady` is false, prompt for
- * mother's name, father's name and DOB on the way into a test. A short prompt,
- * not a wall — `profileCompleted` (the full profile) never blocks anything.
+ * Deliberately almost empty. In V1 this becomes the Report dashboard — rank,
+ * percentile, the last paper — and anything put here now is something that has
+ * to be taken away then. It carries no header of its own: the shell already has
+ * one, and having both drew two navbars down the page.
+ *
  * TODO(access): the test list here is Student -> Group -> TestSeries -> Test;
  * there are no direct grants to check.
  */
 export function DashboardPage() {
-  const { student, signOut } = useAuth();
+  const { student } = useAuth();
+  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Brandmark withWordmark />
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              <LogOut aria-hidden />
-              Sign out
-            </Button>
-          </div>
+    <>
+      <div className="mb-6 flex items-center gap-4">
+        <Avatar
+          src={me.data?.profile?.photoUrl}
+          name={student?.fullName}
+          fallback={student?.mobile}
+          size="lg"
+        />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
+          </h1>
+          <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">+91 {student?.mobile}</p>
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground tabular-nums">+91 {student?.mobile}</p>
+      <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>Your report will live here</CardTitle>
-            <CardDescription>
-              Phase 0 is the foundation only — infrastructure, design system and PIN sign-in. Tests,
-              results and rank arrive with the mock-test feature.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-6 text-sm">
-            <Stat label="Test details" value={student?.preTestReady ? 'On file' : 'Needed'} />
-            <Stat label="Profile" value={student?.profileCompleted ? 'Complete' : 'Incomplete'} />
-            <Stat label="Language" value={student?.preferredLanguage.toUpperCase() ?? '—'} />
-            <Stat label="Tests taken" value="0" />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
-  );
-}
-
-function Stat({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="text-base font-medium text-foreground">{value}</span>
-    </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Your tests will appear here</CardTitle>
+          <CardDescription>
+            Nothing scheduled yet. When your batch is given a test, it shows up on this page along
+            with your result once it has been marked.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={ROUTES.PROFILE}>View your profile</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </>
   );
 }

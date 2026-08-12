@@ -20,6 +20,7 @@ import {
   Textarea,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
+import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
 import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
@@ -56,7 +57,7 @@ export function ProfilePage() {
 
   const form = useForm<UpdateMeInput>({
     resolver: zodResolver(updateMeSchema),
-    defaultValues: { fullName: '', profile: {} },
+    defaultValues: { fullName: '', profile: { educationDetails: [], pastExamHistory: [] } },
   });
 
   // Filled once the record arrives. `reset` rather than defaultValues, because
@@ -73,6 +74,8 @@ export function ProfilePage() {
         email: me.data.profile?.email ?? '',
         address: me.data.profile?.address ?? '',
         gender: me.data.profile?.gender ?? undefined,
+        educationDetails: me.data.profile?.educationDetails ?? [],
+        pastExamHistory: me.data.profile?.pastExamHistory ?? [],
       },
     });
   }, [me.data, reset]);
@@ -217,6 +220,36 @@ export function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          <HistoryEditor
+            control={form.control}
+            name="profile.educationDetails"
+            title="Education"
+            description="Schooling and degrees so far. All optional."
+            addLabel="Add a qualification"
+            columns={[
+              { key: 'level', label: 'Qualification' },
+              { key: 'board', label: 'Board / University' },
+              { key: 'institution', label: 'Institution' },
+              { key: 'year', label: 'Year', type: 'number', width: 'basis-24' },
+              { key: 'percentage', label: '%', type: 'number', width: 'basis-20' },
+            ]}
+            emptyRow={{ level: '', board: '', institution: '', year: '', percentage: '' }}
+          />
+
+          <HistoryEditor
+            control={form.control}
+            name="profile.pastExamHistory"
+            title="Exams sat elsewhere"
+            description="Government exams you have attempted before. Nothing here affects your tests on IACE."
+            addLabel="Add an exam"
+            columns={[
+              { key: 'exam', label: 'Exam' },
+              { key: 'year', label: 'Year', type: 'number', width: 'basis-24' },
+              { key: 'result', label: 'Result' },
+            ]}
+            emptyRow={{ exam: '', year: '', result: '' }}
+          />
 
           {banner ? <Alert variant="danger">{banner}</Alert> : null}
           {save.isSuccess && !form.formState.isDirty ? (
