@@ -230,11 +230,11 @@ export function ProfilePage() {
             description="Schooling and degrees so far. All optional."
             addLabel="Add a qualification"
             columns={[
-              { key: 'level', label: 'Qualification' },
-              { key: 'board', label: 'Board / University' },
-              { key: 'institution', label: 'Institution' },
-              { key: 'year', label: 'Year', type: 'number', width: 'basis-24' },
-              { key: 'percentage', label: '%', type: 'number', width: 'basis-20' },
+              { key: 'level', label: 'Qualification', span: 3 },
+              { key: 'board', label: 'Board / University', span: 3 },
+              { key: 'institution', label: 'Institution', span: 3 },
+              { key: 'year', label: 'Year', type: 'number', span: 1.4 },
+              { key: 'percentage', label: '%', type: 'number', span: 1 },
             ]}
             emptyRow={{ level: '', board: '', institution: '', year: '', percentage: '' }}
           />
@@ -246,9 +246,9 @@ export function ProfilePage() {
             description="Government exams you have attempted before. Nothing here affects your tests on IACE."
             addLabel="Add an exam"
             columns={[
-              { key: 'exam', label: 'Exam' },
-              { key: 'year', label: 'Year', type: 'number', width: 'basis-24' },
-              { key: 'result', label: 'Result' },
+              { key: 'exam', label: 'Exam', span: 3 },
+              { key: 'year', label: 'Year', type: 'number', span: 1.4 },
+              { key: 'result', label: 'Result', span: 3 },
             ]}
             emptyRow={{ exam: '', year: '', result: '' }}
           />

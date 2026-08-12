@@ -1,7 +1,16 @@
 import { useFieldArray, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@iace/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from '@iace/ui';
 
 /**
  * A list of rows a student adds to: schooling, or exams sat elsewhere.
@@ -13,6 +22,11 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } fro
  * Every field inside a row is optional except the first. A student who
  * remembers sitting SSC CGL but not the year should be able to record that
  * rather than being stopped by a form that wants all of it.
+ *
+ * The row is a GRID, not a flex line. Flex sizes each row to its own contents,
+ * so a long institution name in one row pushed that row's Year box out of line
+ * with the Year box above it. A grid template makes the columns a property of
+ * the list rather than of whichever row happens to be widest.
  */
 export function HistoryEditor<T extends FieldValues>({
   control,
@@ -28,11 +42,15 @@ export function HistoryEditor<T extends FieldValues>({
   title: string;
   description: string;
   addLabel: string;
-  /** Rendered left to right. `width` is a Tailwind basis class. */
-  columns: readonly { key: string; label: string; type?: 'text' | 'number'; width?: string }[];
+  /** `span` is a fraction of the row; they need not add up to anything. */
+  columns: readonly { key: string; label: string; type?: 'text' | 'number'; span?: number }[];
   emptyRow: Record<string, string>;
 }>) {
   const { fields, append, remove } = useFieldArray({ control, name: name as never });
+
+  // The delete button gets a fixed column of its own, so it lands under itself
+  // on every row instead of wherever the last input left it.
+  const template = `${columns.map((c) => `minmax(0, ${c.span ?? 1}fr)`).join(' ')} auto`;
 
   return (
     <Card>
@@ -41,26 +59,39 @@ export function HistoryEditor<T extends FieldValues>({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-4">
         {fields.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing added yet.</p>
         ) : null}
 
         {fields.map((field, index) => (
-          <div key={field.id} className="flex flex-wrap items-end gap-2">
-            {columns.map((column) => (
-              <label key={column.key} className={`flex flex-col gap-1 ${column.width ?? 'flex-1'}`}>
-                <span className="text-xs text-muted-foreground">{column.label}</span>
-                <input
-                  type={column.type ?? 'text'}
-                  // The design-system Input takes a Field wrapper; a row of
-                  // eight labelled boxes would be a wall, so these are plain
-                  // inputs carrying the same token classes.
-                  className="h-9 w-full rounded-md border border-input bg-surface px-2 text-sm shadow-sm transition-[box-shadow,border-color] focus:border-ring focus:shadow-focus focus:outline-none"
-                  {...control.register(`${name}.${index}.${column.key}` as Path<T>)}
-                />
-              </label>
-            ))}
+          <div
+            key={field.id}
+            // items-end so the controls sit on one baseline whatever their
+            // labels wrapped to, and the delete button lines up with them.
+            className="grid items-end gap-2"
+            style={{ gridTemplateColumns: template }}
+          >
+            {columns.map((column) => {
+              const id = `${name}.${index}.${column.key}`;
+              return (
+                <div key={column.key} className="flex min-w-0 flex-col gap-1.5">
+                  {/* Labelled on the first row only: repeating "Year" down a
+                      column says nothing the header did not already. */}
+                  {index === 0 ? (
+                    <Label htmlFor={id} className="text-xs font-normal text-muted-foreground">
+                      {column.label}
+                    </Label>
+                  ) : null}
+                  <Input
+                    id={id}
+                    type={column.type ?? 'text'}
+                    aria-label={column.label}
+                    {...control.register(id as Path<T>)}
+                  />
+                </div>
+              );
+            })}
 
             <Button
               type="button"
