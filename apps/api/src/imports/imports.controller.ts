@@ -20,6 +20,7 @@ import {
   GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
+  XLSX_CONTENT_TYPE,
   type GroupMemberImportPlan,
   type GroupMemberImportResult,
   type StudentImportPlan,
@@ -28,7 +29,7 @@ import {
 import { Actors, RequiresPage } from '../auth/decorators';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildGroupMemberTemplate, buildStudentTemplate, XLSX_CONTENT_TYPE } from './workbook';
+import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';
 
 /**
  * The two fields we use off a multipart upload.
@@ -121,8 +122,10 @@ export class ImportsController {
   }
 
   /**
-   * Multer holds the upload in memory, so the size check is ours to make —
-   * `BODY_LIMIT_IMPORT` bounds the JSON parser, and multipart never reaches it.
+   * A second line of defence, and only that: MulterModule already aborts the
+   * stream at the same limit (see imports.module.ts), so reaching this means
+   * something upstream let a large body through. Kept because the two are
+   * enforced in different places and only one of them is ours to guarantee.
    */
   private bufferOf(file: UploadedFileLike | undefined): Buffer {
     if (!file) {

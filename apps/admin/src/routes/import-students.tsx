@@ -5,6 +5,7 @@ import { ArrowLeft, Download, FileUp, Loader2, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
+  XLSX_CONTENT_TYPE,
   type StudentImportPlan,
   type StudentImportRow,
 } from '@iace/contracts';
@@ -190,7 +191,7 @@ export function ImportStudentsPage() {
                 </span>
                 <input
                   type="file"
-                  accept={`${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_MIME}`}
+                  accept={`${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`}
                   className="sr-only"
                   onChange={(event) => {
                     choose(event.target.files?.[0]);
@@ -286,6 +287,3 @@ function ImportRow({ row }: { row: StudentImportRow }) {
     </TableRow>
   );
 }
-
-/** What the file picker offers alongside the extensions. */
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

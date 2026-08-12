@@ -25,6 +25,12 @@ import {
 import { type CsvTable } from './csv';
 import { readUploadedTable } from './workbook';
 
+/**
+ * How many PINs to hash at once. Node's default libuv threadpool is 4 threads,
+ * so more would queue anyway while multiplying the transient memory.
+ */
+const HASH_CONCURRENCY = 4;
+
 @Injectable()
 export class ImportsService {
   constructor(
@@ -48,6 +54,15 @@ export class ImportsService {
   async commitStudents(file: Buffer): Promise<StudentImportResult> {
     const plan = await this.previewStudents(file);
 
+    // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so
+    // doing it inside the write loop made a 1,000-row roster thirteen seconds
+    // of a single request sitting idle on one core. Node runs argon2 on the
+    // libuv threadpool, so a handful at a time is most of the win for none of
+    // the memory (each hash allocates ~19MB while it runs).
+    const pinHashes = await this.hashStartingPins(
+      plan.rows.filter((row) => row.willReceiveDefaultPin && row.mobile).map((row) => row.mobile!),
+    );
+
     let created = 0;
     let updated = 0;
 
@@ -64,10 +79,7 @@ export class ImportsService {
             // import must never reset a PIN somebody chose, or re-importing a
             // roster would quietly hand every one of them back to the sheet.
             ...(row.willReceiveDefaultPin
-              ? {
-                  pinHash: await this.pin.hash(defaultPinFor(row.mobile)),
-                  pinIsDefault: true,
-                }
+              ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
               : {}),
             // Groups are added, never replaced: a roster for one group must not
             // remove a student from the others they are already in.
@@ -84,7 +96,7 @@ export class ImportsService {
             fullName: row.fullName,
             // A starting PIN, so an uploaded roster can sign in the same day —
             // marked as ours, not theirs. See default-pin.ts for the trade.
-            pinHash: await this.pin.hash(defaultPinFor(row.mobile)),
+            pinHash: pinHashes.get(row.mobile),
             pinIsDefault: true,
             ...(row.groupIds.length
               ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
@@ -96,6 +108,24 @@ export class ImportsService {
     }
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+  }
+
+  /**
+   * Mobile → the hash of that student's starting PIN.
+   *
+   * Bounded concurrency rather than Promise.all over the whole file: argon2 is
+   * memory-hard by design, and a thousand at once would ask for ~19GB.
+   */
+  private async hashStartingPins(mobiles: string[]): Promise<Map<string, string>> {
+    const hashes = new Map<string, string>();
+
+    for (let start = 0; start < mobiles.length; start += HASH_CONCURRENCY) {
+      const batch = mobiles.slice(start, start + HASH_CONCURRENCY);
+      const hashed = await Promise.all(batch.map((m) => this.pin.hash(defaultPinFor(m))));
+      batch.forEach((mobile, index) => hashes.set(mobile, hashed[index]!));
+    }
+
+    return hashes;
   }
 
   // ==========================================================================

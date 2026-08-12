@@ -1,4 +1,5 @@
 import {
+  IMPORT_MAX_ROWS,
   STUDENT_IMPORT_COLUMNS,
   canonicalName,
   mobileSchema,
@@ -144,7 +145,7 @@ export function planStudentImport(table: CsvTable, context: ImportContext): Stud
     };
   }
 
-  const fileErrors = missingHeaders(table.headers);
+  const fileErrors = [...missingHeaders(table.headers), ...tooManyRows(table)];
   if (fileErrors.length > 0) {
     return {
       rows: [],
@@ -181,6 +182,19 @@ function missingHeaders(headers: string[]): string[] {
   return [
     `The first row must name the columns. This file needs ${wanted}. ` +
       `Download the sample file to see the format.`,
+  ];
+}
+
+/**
+ * Refused up front rather than part-way through. See IMPORT_MAX_ROWS: the cost
+ * is the per-student PIN hash, and a file this size would time out mid-write
+ * leaving the admin unable to tell what had applied.
+ */
+function tooManyRows(table: CsvTable): string[] {
+  if (table.rows.length <= IMPORT_MAX_ROWS) return [];
+  return [
+    `That file has ${table.rows.length} rows. Import at most ${IMPORT_MAX_ROWS} at a time — ` +
+      `split it and upload the parts.`,
   ];
 }
 

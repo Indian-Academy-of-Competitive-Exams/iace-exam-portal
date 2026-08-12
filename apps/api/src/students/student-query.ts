@@ -9,46 +9,60 @@ import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/co
  * stop combining, both look like a working screen showing the wrong people.
  * Testing it needs no database.
  *
+ * Every condition is pushed onto an AND list rather than merged into one
+ * object. That is not a style choice — it is the fix for a real bug. Three of
+ * these filters describe `groups` and two describe `OR`, and in an object
+ * literal the last spread silently wins: filtering "never signed in" and then
+ * typing a name dropped the status filter entirely, and the roster showed
+ * everyone while looking exactly right. A list cannot overwrite itself.
+ *
  * Every filter is ABSENT-OR-APPLIED — never "false means don't care". A
  * three-state control (any / yes / no) has to be able to ask for `false`.
  */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
-  const search = query.q?.trim();
+  const and: Prisma.StudentWhereInput[] = [];
+  const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
 
-  return {
-    ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
-    ...(query.preTestReady === undefined ? {} : { preTestReady: query.preTestReady }),
-    ...(query.profileCompleted === undefined ? {} : { profileCompleted: query.profileCompleted }),
+  if (query.isActive !== undefined) add({ isActive: query.isActive });
+  if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
+  if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
-    // A student's route to a test runs through their groups, so both of these
-    // ask about membership rather than a column on the student.
-    ...(query.groupId ? { groups: { some: { id: query.groupId } } } : {}),
-    ...(query.branchId ? { groups: { some: { branchId: query.branchId } } } : {}),
-    ...(query.ungrouped === undefined
-      ? {}
-      : { groups: query.ungrouped ? { none: {} } : { some: {} } }),
+  // A student's route to a test runs through their groups, so all three of
+  // these ask about membership rather than a column on the student.
+  if (query.groupId) add({ groups: { some: { id: query.groupId } } });
+  if (query.branchId) add({ groups: { some: { branchId: query.branchId } } });
+  if (query.ungrouped !== undefined) {
+    add({ groups: query.ungrouped ? { none: {} } : { some: {} } });
+  }
 
-    // Matches `hasSignedIn` exactly — a PIN the institute set does not count,
-    // or the filter and the badge beside it would disagree.
-    ...(query.neverSignedIn === undefined
-      ? {}
-      : query.neverSignedIn
+  // Matches `hasSignedIn` exactly — a PIN the institute set does not count, or
+  // the filter and the badge beside it would disagree.
+  if (query.neverSignedIn !== undefined) {
+    add(
+      query.neverSignedIn
         ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
-        : { pinHash: { not: null }, pinIsDefault: false }),
+        : { pinHash: { not: null }, pinIsDefault: false },
+    );
+  }
 
-    ...(query.hasDefaultPin === undefined ? {} : { pinIsDefault: query.hasDefaultPin }),
+  if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
 
-    ...dateRange(query.joinedFrom, query.joinedTo),
+  const joined = dateRange(query.joinedFrom, query.joinedTo);
+  if (joined) add(joined);
 
-    ...(search
-      ? {
-          OR: [
-            { mobile: { contains: search } },
-            { fullName: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {}),
-  };
+  const search = query.q?.trim();
+  if (search) {
+    add({
+      OR: [
+        { mobile: { contains: search } },
+        { fullName: { contains: search, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  // An empty AND is a valid Prisma filter, but returning {} keeps "no filters"
+  // obvious to anyone reading a log or a test.
+  return and.length === 0 ? {} : { AND: and };
 }
 
 /**
@@ -58,8 +72,11 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
  * matched nothing because everyone enrolled after 00:00 is the kind of empty
  * table an admin reads as "there are none".
  */
-function dateRange(from: string | undefined, to: string | undefined): Prisma.StudentWhereInput {
-  if (!from && !to) return {};
+function dateRange(
+  from: string | undefined,
+  to: string | undefined,
+): Prisma.StudentWhereInput | null {
+  if (!from && !to) return null;
 
   return {
     createdAt: {

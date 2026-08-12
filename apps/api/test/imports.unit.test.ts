@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
 import { parseCsv, readCsvTable, normaliseHeader } from '../src/imports/csv';
 import {
@@ -389,5 +390,35 @@ describe('what the import looks up before it plans', () => {
     const table = readCsvTable('Mobile Number,Groups\n9876543210,A / B;C');
 
     assert.deepEqual(groupEntriesIn(table), ['A / B', 'C']);
+  });
+});
+
+/**
+ * Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by
+ * design. A 5,000-row roster is over a minute of hashing before a single row
+ * is written: the request times out and the admin cannot tell how much of it
+ * applied. Refusing up front, with a number and an instruction, is the better
+ * answer.
+ */
+describe('how big a file may be', () => {
+  const fileOf = (rows: number) =>
+    [
+      'Mobile Number',
+      ...Array.from({ length: rows }, (_, i) => `98765${String(i).padStart(5, '0')}`),
+    ].join('\n');
+
+  it('accepts a file at the limit', () => {
+    const plan = planStudentImport(readCsvTable(fileOf(IMPORT_MAX_ROWS)), context());
+
+    assert.deepEqual(plan.fileErrors, []);
+    assert.equal(plan.summary.total, IMPORT_MAX_ROWS);
+  });
+
+  it('refuses one over it, before planning anything', () => {
+    const plan = planStudentImport(readCsvTable(fileOf(IMPORT_MAX_ROWS + 1)), context());
+
+    assert.deepEqual(plan.rows, [], 'nothing should be planned');
+    assert.match(plan.fileErrors[0] ?? '', new RegExp(`${IMPORT_MAX_ROWS + 1} rows`));
+    assert.match(plan.fileErrors[0] ?? '', /split it/);
   });
 });

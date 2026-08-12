@@ -70,6 +70,25 @@ export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
 /** The multipart field the upload arrives under. Server and client must agree. */
 export const IMPORT_FILE_FIELD = 'file';
 
+/**
+ * The most rows one import may carry.
+ *
+ * Not an arbitrary round number: every NEW student is given a starting PIN, and
+ * hashing a PIN with argon2 deliberately costs ~13ms. A 5,000-row roster is
+ * over a minute of hashing on one request before a single row is written — it
+ * would time out, and the admin would have no idea how much of it had applied.
+ * A refusal that says "split it" is a far better answer than a hang.
+ */
+export const IMPORT_MAX_ROWS = 1000;
+
+/**
+ * The .xlsx media type. Named once because it is the kind of string a typo
+ * breaks silently — the API sends it as a Content-Type, the file picker offers
+ * it, and neither would complain about a wrong one.
+ */
+export const XLSX_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 /** What the upload control accepts, and what the server will read. */
 export const IMPORT_ACCEPTED_EXTENSIONS = ['.xlsx', '.csv'] as const;
 

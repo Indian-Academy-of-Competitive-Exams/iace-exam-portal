@@ -15,9 +15,6 @@ import { normaliseHeader, readCsvTable, type CsvTable } from './csv';
  * in Excel anyway, and refusing one would be a rule with no purpose behind it.
  */
 
-export const XLSX_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
 /** A workbook is a ZIP; every .xlsx starts with the local file header "PK". */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 

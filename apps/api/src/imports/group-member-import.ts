@@ -1,5 +1,6 @@
 import {
   GROUP_MEMBER_IMPORT_COLUMNS,
+  IMPORT_MAX_ROWS,
   mobileSchema,
   type GroupMemberImportPlan,
   type GroupMemberImportRow,
@@ -37,7 +38,7 @@ export function planGroupMemberImport(
     return { group: context.group, rows: [], summary: empty, fileErrors: ['That file is empty'] };
   }
 
-  const fileErrors = missingHeaders(table.headers);
+  const fileErrors = [...missingHeaders(table.headers), ...tooManyRows(table)];
   if (fileErrors.length > 0) {
     return { group: context.group, rows: [], summary: empty, fileErrors };
   }
@@ -69,6 +70,15 @@ function missingHeaders(headers: string[]): string[] {
   return [
     `The first row must name the column. This file needs "${missing[0]?.header ?? ''}". ` +
       `Download the sample file to see the format.`,
+  ];
+}
+
+/** The same ceiling as the student import, for one predictable answer. */
+function tooManyRows(table: CsvTable): string[] {
+  if (table.rows.length <= IMPORT_MAX_ROWS) return [];
+  return [
+    `That file has ${table.rows.length} rows. Import at most ${IMPORT_MAX_ROWS} at a time — ` +
+      `split it and upload the parts.`,
   ];
 }
 

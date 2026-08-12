@@ -11,6 +11,13 @@ import { useSearchParams } from 'react-router-dom';
  *
  * It also means a filtered roster can be sent to someone, and the back button
  * returns to what you were looking at instead of an unfiltered list.
+ *
+ * The PAGE is not kept here. Every filter change has to reset it — page 4 of
+ * the old result set is usually past the end of the new one, and an empty table
+ * reads as "there are none" rather than "you are too far in" — and that reset
+ * belongs with the page state itself, which each screen owns. This once
+ * deleted a `page` param that was never written, which read as a guarantee it
+ * was not making.
  */
 export function useFilters<K extends string>(): {
   get: (key: K) => string;
@@ -29,10 +36,6 @@ export function useFilters<K extends string>(): {
         if (value === undefined || value === '') next.delete(key);
         else next.set(key, String(value));
       }
-      // Any filter change invalidates the page number: page 4 of the old
-      // result set is usually past the end of the new one, and an empty table
-      // reads as "there are none" rather than "you are too far in".
-      next.delete('page');
       setParams(next, { replace: true });
     },
     [params, setParams],
