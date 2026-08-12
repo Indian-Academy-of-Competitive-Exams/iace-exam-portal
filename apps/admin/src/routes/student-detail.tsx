@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import { type Gender, type StudentDetail } from '@iace/contracts';
 import {
@@ -83,6 +83,11 @@ export function StudentDetailPage() {
       groupIds: [],
     },
   });
+
+  // useWatch rather than form.watch(): the latter returns a fresh function each
+  // render and cannot be memoized, so it re-renders the picker on every keystroke
+  // anywhere in the form.
+  const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
 
   // The form is created before the student arrives, so seed it on load — and
   // only when the id changes, or an in-progress edit would be wiped by a
@@ -255,7 +260,7 @@ export function StudentDetailPage() {
               <GroupPicker
                 idPrefix="group"
                 register={form.register('groupIds')}
-                selectedIds={form.watch('groupIds')}
+                selectedIds={selectedGroupIds}
                 known={detail.groups}
                 error={form.formState.errors.groupIds?.message}
               />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
@@ -43,34 +43,27 @@ export function GroupPicker({
   const results = groups.data?.items ?? [];
 
   /**
-   * Every group seen so far, accumulated across searches.
+   * Names for the groups that can be pinned: the ones the student already
+   * belongs to, plus any the admin has ticked in this session.
    *
-   * Pinning cannot work off the CURRENT results alone: a group ticked in this
-   * session and then searched away is in neither `known` nor the new results,
-   * so it would vanish — which is indistinguishable from having been
-   * unticked, while the count still says it is selected.
+   * Recorded when a box is TICKED rather than accumulated from every search
+   * result — that is the only moment a name becomes worth remembering, and it
+   * keeps this a plain event-handler update instead of state derived from a
+   * query inside an effect.
+   *
+   * Pinning cannot work off the current results alone: a group ticked and then
+   * searched away is in neither `known` nor the new results, so it would
+   * vanish — indistinguishable from having been unticked, while the counter
+   * still insists one is selected.
    */
-  const [seen, setSeen] = useState<Map<string, string>>(
+  const [namesById, setNamesById] = useState<Map<string, string>>(
     () => new Map(known.map((group) => [group.id, group.name])),
   );
 
-  useEffect(() => {
-    const items = groups.data?.items;
-    if (!items?.length) return;
-    setSeen((previous) => {
-      const next = new Map(previous);
-      let added = false;
-      for (const group of items) {
-        if (!next.has(group.id)) {
-          next.set(group.id, group.name);
-          added = true;
-        }
-      }
-      return added ? next : previous;
-    });
-  }, [groups.data]);
-
-  const namesById = seen;
+  const remember = (group: { id: string; name: string }) =>
+    setNamesById((previous) =>
+      previous.has(group.id) ? previous : new Map(previous).set(group.id, group.name),
+    );
 
   // Selected first, then whatever the search turned up, minus the duplicates.
   const pinned = selectedIds.filter((id) => namesById.has(id));
@@ -113,6 +106,10 @@ export function GroupPicker({
                 hint={group.branch ?? undefined}
                 value={group.id}
                 {...register}
+                onChange={(event) => {
+                  remember(group);
+                  void register.onChange(event);
+                }}
               />
             ))}
 

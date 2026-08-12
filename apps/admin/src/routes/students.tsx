@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Search, Upload, UserPlus, X } from 'lucide-react';
 import {
@@ -272,6 +272,8 @@ function NewStudentCard({ onClose }: { onClose: () => void }) {
     defaultValues: { mobile: '', fullName: '', groupIds: [] },
   });
 
+  const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
+
   const create = useMutation({
     mutationFn: (values: CreateStudentInput) =>
       api.admin.students.create({
@@ -342,7 +344,7 @@ function NewStudentCard({ onClose }: { onClose: () => void }) {
             <GroupPicker
               idPrefix="new-group"
               register={form.register('groupIds')}
-              selectedIds={form.watch('groupIds') ?? []}
+              selectedIds={selectedGroupIds}
               known={[]}
               error={form.formState.errors.groupIds?.message}
             />
