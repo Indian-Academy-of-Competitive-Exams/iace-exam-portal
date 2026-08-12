@@ -25,8 +25,8 @@ export interface RawCsvRow {
  */
 export function parseCsvRows(input: string): RawCsvRow[] {
   // Excel prefixes UTF-8 files with a BOM; left in place it becomes part of the
-  // first header name, and "﻿mobile" matches nothing.
-  const text = input.replace(/^﻿/, '');
+  // first header name, so the "mobile" column matches nothing.
+  const text = input.replace(/^\uFEFF/, '');
 
   const rows: RawCsvRow[] = [];
   let row: string[] = [];

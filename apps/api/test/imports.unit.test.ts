@@ -21,7 +21,7 @@ describe('parseCsv', () => {
   it('survives the BOM Excel writes in front of UTF-8 files', () => {
     // Left in place it becomes part of the first header, and "mobile" matches
     // nothing — the whole file then reports a missing column.
-    const [header] = parseCsv('﻿mobile,fullName\n9876543210,Asha');
+    const [header] = parseCsv('\uFEFFmobile,fullName\n9876543210,Asha');
     assert.deepEqual(header, ['mobile', 'fullName']);
   });
 
