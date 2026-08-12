@@ -42,20 +42,24 @@ import { saveBlob } from '../lib/save-blob';
  * Add only. Removing someone takes away their route to a test, which is a
  * single visible act on that student, not something a spreadsheet does quietly.
  */
-export function ImportGroupMembersPage() {
-  const { id = '' } = useParams();
+/**
+ * The three requests this screen makes, and the file they act on.
+ *
+ * Lifted out of the component because the component's job is layout — reading
+ * the wiring and the markup as one thing is what made it hard to follow.
+ */
+function useMemberImport(groupId: string) {
   const queryClient = useQueryClient();
-
   const [file, setFile] = useState<File | null>(null);
   const [plan, setPlan] = useState<GroupMemberImportPlan | null>(null);
 
   const preview = useMutation({
-    mutationFn: (chosen: File) => api.admin.imports.previewGroupMembers(id, chosen),
+    mutationFn: (chosen: File) => api.admin.imports.previewGroupMembers(groupId, chosen),
     onSuccess: setPlan,
   });
 
   const commit = useMutation({
-    mutationFn: (chosen: File) => api.admin.imports.commitGroupMembers(id, chosen),
+    mutationFn: (chosen: File) => api.admin.imports.commitGroupMembers(groupId, chosen),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
       void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
@@ -67,6 +71,7 @@ export function ImportGroupMembersPage() {
     onSuccess: (blob) => saveBlob(blob, GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME),
   });
 
+  /** Choosing a file previews it at once — that is why they chose it. */
   const choose = (chosen: File | undefined) => {
     if (!chosen) return;
     setFile(chosen);
@@ -76,7 +81,20 @@ export function ImportGroupMembersPage() {
     preview.mutate(chosen);
   };
 
-  const canCommit = file !== null && (plan?.summary.willAdd ?? 0) > 0;
+  return {
+    file,
+    plan,
+    preview,
+    commit,
+    sample,
+    choose,
+    canCommit: file !== null && (plan?.summary.willAdd ?? 0) > 0,
+  };
+}
+
+export function ImportGroupMembersPage() {
+  const { id = '' } = useParams();
+  const { file, plan, preview, commit, sample, choose, canCommit } = useMemberImport(id);
 
   return (
     <>
@@ -105,36 +123,12 @@ export function ImportGroupMembersPage() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="order-2 p-4 lg:order-1">
-          {plan?.fileErrors.length ? (
-            <Alert variant="danger" className="mb-4">
-              <span>{plan.fileErrors.join(' ')}</span>
-            </Alert>
-          ) : null}
-
-          {commit.data ? (
-            <Alert variant="success" className="mb-4">
-              <span>
-                Added {commit.data.added} student{commit.data.added === 1 ? '' : 's'}.{' '}
-                <Link
-                  to={`${ROUTES.STUDENTS}?groupId=${id}`}
-                  className={linkVariants({ variant: 'inline' })}
-                >
-                  View the group
-                </Link>
-              </span>
-            </Alert>
-          ) : null}
-
-          {preview.error ? (
-            <Alert variant="danger" className="mb-4">
-              {bannerMessage(preview.error)}
-            </Alert>
-          ) : null}
-          {commit.error ? (
-            <Alert variant="danger" className="mb-4">
-              {bannerMessage(commit.error)}
-            </Alert>
-          ) : null}
+          <ImportBanners
+            groupId={id}
+            fileErrors={plan?.fileErrors ?? []}
+            added={commit.data?.added}
+            error={preview.error ?? commit.error}
+          />
 
           <Table>
             <TableHeader>
@@ -257,12 +251,77 @@ export function ImportGroupMembersPage() {
   );
 }
 
+/**
+ * Everything this screen has to say above the preview table: what was wrong
+ * with the file, what the import did, and what failed.
+ *
+ * Together in one place because they are one question — "did that work?" — and
+ * four separate conditionals in the middle of the layout answered it in four
+ * places nobody read as a set.
+ */
+function ImportBanners({
+  groupId,
+  fileErrors,
+  added,
+  error,
+}: Readonly<{
+  groupId: string;
+  fileErrors: readonly string[];
+  added: number | undefined;
+  error: unknown;
+}>) {
+  return (
+    <>
+      {fileErrors.length > 0 && (
+        <Alert variant="danger" className="mb-4">
+          <span>{fileErrors.join(' ')}</span>
+        </Alert>
+      )}
+
+      {added !== undefined && (
+        <Alert variant="success" className="mb-4">
+          <span>
+            Added {added} student{added === 1 ? '' : 's'}.{' '}
+            <Link
+              to={`${ROUTES.STUDENTS}?groupId=${groupId}`}
+              className={linkVariants({ variant: 'inline' })}
+            >
+              View the group
+            </Link>
+          </span>
+        </Alert>
+      )}
+
+      {Boolean(error) && (
+        <Alert variant="danger" className="mb-4">
+          {bannerMessage(error)}
+        </Alert>
+      )}
+    </>
+  );
+}
+
 function Summary({ label, value }: Readonly<{ label: string; value: number }>) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium tabular-nums text-foreground">{value}</span>
     </div>
+  );
+}
+
+/** What one line does. Three outcomes, listed rather than chained. */
+function MemberOutcome({ row }: Readonly<{ row: GroupMemberImportRow }>) {
+  if (row.action === 'add') return <Badge variant="success">Add</Badge>;
+  // Not an error: re-uploading a list with a few new numbers on the end is the
+  // normal way this gets used.
+  if (row.action === 'already') return <Badge variant="neutral">Already in this group</Badge>;
+
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <Badge variant="danger">Skip</Badge>
+      <span className="text-xs text-destructive">{row.errors.join('; ')}</span>
+    </span>
   );
 }
 
@@ -275,18 +334,7 @@ function MemberRow({ row }: Readonly<{ row: GroupMemberImportRow }>) {
       <TableCell className="tabular-nums">{row.mobile ?? '—'}</TableCell>
       <TableCell>{row.studentName ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell>
-        {row.action === 'add' ? (
-          <Badge variant="success">Add</Badge>
-        ) : row.action === 'already' ? (
-          // Not an error: re-uploading a list with a few new numbers on the end
-          // is the normal way this gets used.
-          <Badge variant="neutral">Already in this group</Badge>
-        ) : (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="danger">Skip</Badge>
-            <span className="text-xs text-destructive">{row.errors.join('; ')}</span>
-          </span>
-        )}
+        <MemberOutcome row={row} />
       </TableCell>
     </TableRow>
   );

@@ -204,52 +204,100 @@ function actionFor(errorCount: number, exists: boolean): StudentImportRow['actio
   return exists ? 'update' : 'create';
 }
 
-function planRow(
+/**
+ * The name column, or the reason it is not usable.
+ *
+ * A blank name is absent, not invalid — plenty of rosters have numbers before
+ * they have names. "Kumari, Asha" is a spreadsheet artefact, and letting it
+ * through means it greets the student that way forever.
+ */
+function readName(row: CsvRow): { fullName: string | null; error?: string } {
+  const raw = columnValue(row, 'fullName').trim();
+  if (raw === '') return { fullName: null };
+
+  const parsed = personNameSchema.safeParse(raw);
+  if (parsed.success) return { fullName: parsed.data };
+  return { fullName: null, error: parsed.error.issues[0]?.message ?? 'That name is not valid' };
+}
+
+/**
+ * The mobile column, or the reason it is not usable.
+ *
+ * Also records the number against its line, so the SECOND appearance of a
+ * number in one file is reported rather than counted as another student.
+ */
+function readMobile(
   row: CsvRow,
-  context: ImportContext,
   seenInFile: Map<string, number>,
-): StudentImportRow {
-  const errors: string[] = [];
-  const rawMobile = columnValue(row, 'mobile');
-  const rawName = columnValue(row, 'fullName').trim();
-  let fullName: string | null = null;
-  if (rawName !== '') {
-    const parsedName = personNameSchema.safeParse(rawName);
-    if (parsedName.success) fullName = parsedName.data;
-    // Reported rather than imported: "Kumari, Asha" is a spreadsheet artefact,
-    // and letting it through means it greets the student that way forever.
-    else errors.push(parsedName.error.issues[0]?.message ?? 'That name is not valid');
+): { mobile: string | null; error?: string } {
+  const raw = columnValue(row, 'mobile');
+  const parsed = mobileSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return {
+      mobile: null,
+      error:
+        raw.trim() === ''
+          ? 'No mobile number in this row'
+          : (parsed.error.issues[0]?.message ?? 'That is not a valid mobile number'),
+    };
   }
 
-  const parsedMobile = mobileSchema.safeParse(rawMobile);
-  const mobile = parsedMobile.success ? parsedMobile.data : null;
-
-  if (!parsedMobile.success) {
-    errors.push(
-      rawMobile.trim() === ''
-        ? 'No mobile number in this row'
-        : (parsedMobile.error.issues[0]?.message ?? 'That is not a valid mobile number'),
-    );
-  } else {
-    const firstSeen = seenInFile.get(parsedMobile.data);
-    if (firstSeen !== undefined) {
-      errors.push(`Same number as line ${firstSeen}`);
-    } else {
-      seenInFile.set(parsedMobile.data, row.line);
-    }
+  const firstSeen = seenInFile.get(parsed.data);
+  if (firstSeen !== undefined) {
+    return { mobile: parsed.data, error: `Same number as line ${firstSeen}` };
   }
 
+  seenInFile.set(parsed.data, row.line);
+  return { mobile: parsed.data };
+}
+
+/** Every group the cell names, resolved — or the reasons they could not be. */
+function readGroups(
+  row: CsvRow,
+  groupsByName: ImportContext['groupsByName'],
+): { groupNames: string[]; groupIds: string[]; errors: string[] } {
   const groupNames = columnValue(row, 'groups')
     .split(GROUP_SEPARATOR)
     .map((name) => name.trim())
     .filter(Boolean);
 
   const groupIds: string[] = [];
+  const errors: string[] = [];
+
   for (const entry of groupNames) {
-    const resolved = resolveGroup(entry, context.groupsByName);
+    const resolved = resolveGroup(entry, groupsByName);
     if ('error' in resolved) errors.push(resolved.error);
     else groupIds.push(resolved.group.id);
   }
+
+  return { groupNames, groupIds, errors };
+}
+
+/**
+ * One row's plan.
+ *
+ * Each column is read by its own function above. They were inline, and between
+ * them made a function nobody could check against the rules it was supposed to
+ * be applying — which for the thing that decides who gets enrolled is the wrong
+ * place to save a few lines.
+ */
+function planRow(
+  row: CsvRow,
+  context: ImportContext,
+  seenInFile: Map<string, number>,
+): StudentImportRow {
+  const name = readName(row);
+  const number = readMobile(row, seenInFile);
+  const groups = readGroups(row, context.groupsByName);
+
+  const errors = [name.error, number.error, ...groups.errors].filter(
+    (error): error is string => error !== undefined,
+  );
+
+  const { fullName } = name;
+  const { mobile } = number;
+  const { groupNames, groupIds } = groups;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
   const action = actionFor(errors.length, Boolean(existing));

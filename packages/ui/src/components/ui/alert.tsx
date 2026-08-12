@@ -25,15 +25,31 @@ const alertVariants = cva(
 export interface AlertProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {}
 
+/**
+ * Two elements, because they announce differently and that difference matters.
+ *
+ * `danger` is a <div role="alert"> — assertive, interrupting whatever a screen
+ * reader was saying, which is right for "this did not save". Everything else is
+ * an <output>: a polite live region whose native meaning is "the result of a
+ * user action", which is exactly what a success or info banner is. <output> is
+ * inline by default, hence the explicit block.
+ */
 const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant, ...props }, ref) => (
-    <div
-      ref={ref}
-      role={variant === 'danger' || variant === undefined ? 'alert' : 'status'}
-      className={cn(alertVariants({ variant }), className)}
-      {...props}
-    />
-  ),
+  ({ className, variant, ...props }, ref) => {
+    const classes = cn(alertVariants({ variant }), className);
+
+    if (variant === 'danger' || variant === undefined) {
+      return <div ref={ref} role="alert" className={classes} {...props} />;
+    }
+
+    return (
+      <output
+        ref={ref as React.Ref<HTMLOutputElement>}
+        className={cn('block', classes)}
+        {...(props as React.OutputHTMLAttributes<HTMLOutputElement>)}
+      />
+    );
+  },
 );
 Alert.displayName = 'Alert';
 

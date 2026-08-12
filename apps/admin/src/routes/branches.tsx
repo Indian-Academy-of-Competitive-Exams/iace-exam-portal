@@ -185,6 +185,64 @@ function NewBranchCard({
 
 // ---------------------------------------------------------------------------
 
+/**
+ * What a row lets you do: nothing, confirm a delete, or the ordinary actions.
+ *
+ * A component rather than a conditional chain because the first state is
+ * "render nothing" — flattening that into a ternary once put the Retire and
+ * Delete buttons in front of admins who are not allowed to press them.
+ */
+function BranchActions({
+  branch,
+  canEdit,
+  busy,
+  confirming,
+  onConfirm,
+  onCancel,
+  onDelete,
+  onToggleActive,
+}: Readonly<{
+  branch: Branch;
+  canEdit: boolean;
+  busy: boolean;
+  confirming: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  onToggleActive: () => void;
+}>) {
+  // GLOBAL is never editable, whoever is looking.
+  if (!canEdit || branch.isGlobal) return null;
+
+  if (confirming) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Delete?</span>
+        <Button size="sm" variant="destructive" disabled={busy} onClick={onDelete}>
+          Yes, delete
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button size="sm" variant="outline" disabled={busy} onClick={onToggleActive}>
+        <Power aria-hidden />
+        {branch.isActive ? 'Retire' : 'Reactivate'}
+      </Button>
+      {/* Deleting is refused server-side while any group still sits here. */}
+      <Button size="sm" variant="ghost" disabled={busy} onClick={onConfirm}>
+        <Trash2 aria-hidden />
+        Delete
+      </Button>
+    </span>
+  );
+}
+
 /** Three states, listed. See SignInStatus in students.tsx for the reasoning. */
 function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
   if (branch.isGlobal) return <Badge variant="info">System</Badge>;
@@ -258,39 +316,16 @@ function BranchRow({
         </TableCell>
 
         <TableCell className="text-right">
-          {!canEdit || branch.isGlobal ? null : confirming ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Delete?</span>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={busy}
-                onClick={() => remove.mutate()}
-              >
-                Yes, delete
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => setConfirming(false)}>
-                Cancel
-              </Button>
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => setActive.mutate(!branch.isActive)}
-              >
-                <Power aria-hidden />
-                {branch.isActive ? 'Retire' : 'Reactivate'}
-              </Button>
-              {/* Deleting is refused server-side while any group still sits here. */}
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(true)}>
-                <Trash2 aria-hidden />
-                Delete
-              </Button>
-            </span>
-          )}
+          <BranchActions
+            branch={branch}
+            canEdit={canEdit}
+            busy={busy}
+            confirming={confirming}
+            onConfirm={() => setConfirming(true)}
+            onCancel={() => setConfirming(false)}
+            onDelete={() => remove.mutate()}
+            onToggleActive={() => setActive.mutate(!branch.isActive)}
+          />
         </TableCell>
       </TableRow>
 

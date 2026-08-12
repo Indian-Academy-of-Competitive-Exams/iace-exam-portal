@@ -35,7 +35,7 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableEmpty,
+  TableState,
   TableHead,
   TableHeader,
   TableRow,
@@ -439,22 +439,23 @@ export function StudentsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students.isPending ? (
-              <TableEmpty colSpan={5}>Loading…</TableEmpty>
-            ) : students.data?.items.length ? (
-              students.data.items.map((student) => (
-                <StudentRow key={student.id} student={student} />
-              ))
-            ) : (
-              <TableEmpty colSpan={5}>
-                {/* "None match" and "there are none" are different facts, and
-                    telling an admin the wrong one sends them looking in the
-                    wrong place. Any filter at all means the former. */}
-                {filters.activeCount(ALL_FILTERS) > 0
+            {/* "None match" and "there are none" are different facts, and
+                telling an admin the wrong one sends them looking in the wrong
+                place. Any filter at all means the former. */}
+            <TableState
+              isLoading={students.isPending}
+              isEmpty={!students.data?.items.length}
+              colSpan={5}
+              empty={
+                filters.activeCount(ALL_FILTERS) > 0
                   ? 'No students match those filters.'
-                  : 'No students yet. Add one, or import a roster.'}
-              </TableEmpty>
-            )}
+                  : 'No students yet. Add one, or import a roster.'
+              }
+            >
+              {students.data?.items.map((student) => (
+                <StudentRow key={student.id} student={student} />
+              ))}
+            </TableState>
           </TableBody>
         </Table>
 

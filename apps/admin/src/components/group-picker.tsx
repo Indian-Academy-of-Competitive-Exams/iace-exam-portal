@@ -18,6 +18,13 @@ import { ROUTES } from '../lib/constants';
  * already selected is pinned above the results and stays visible whatever the
  * search says.
  */
+/** What the counter under the list says. */
+function selectionSummary(count: number, search: string): string {
+  if (count === 0) return 'None selected';
+  if (search) return `${count} selected · selected groups stay listed while you search`;
+  return `${count} selected`;
+}
+
 export function GroupPicker({
   register,
   selectedIds,
@@ -81,64 +88,48 @@ export function GroupPicker({
         onChange={(event) => setSearch(event.target.value)}
       />
 
-      {hasAnyGroups ? (
-        <>
-          <div className="max-h-56 overflow-y-auto rounded-md border border-border p-1">
-            {pinned.map((id) => (
-              <Checkbox
-                key={id}
-                id={`${idPrefix}-${id}`}
-                label={namesById.get(id) ?? id}
-                value={id}
-                {...register}
-              />
-            ))}
+      <GroupPickerBody hasAnyGroups={hasAnyGroups} isPending={groups.isPending}>
+        <div className="max-h-56 overflow-y-auto rounded-md border border-border p-1">
+          {pinned.map((id) => (
+            <Checkbox
+              key={id}
+              id={`${idPrefix}-${id}`}
+              label={namesById.get(id) ?? id}
+              value={id}
+              {...register}
+            />
+          ))}
 
-            {pinned.length > 0 && rest.length > 0 ? (
-              <div className="my-1 border-t border-border" />
-            ) : null}
+          {pinned.length > 0 && rest.length > 0 ? (
+            <div className="my-1 border-t border-border" />
+          ) : null}
 
-            {rest.map((group) => (
-              <Checkbox
-                key={group.id}
-                id={`${idPrefix}-${group.id}`}
-                label={group.name}
-                hint={group.branch.name}
-                value={group.id}
-                {...register}
-                onChange={(event) => {
-                  remember({ id: group.id, label: `${group.branch.name} / ${group.name}` });
-                  void register.onChange(event);
-                }}
-              />
-            ))}
+          {rest.map((group) => (
+            <Checkbox
+              key={group.id}
+              id={`${idPrefix}-${group.id}`}
+              label={group.name}
+              hint={group.branch.name}
+              value={group.id}
+              {...register}
+              onChange={(event) => {
+                remember({ id: group.id, label: `${group.branch.name} / ${group.name}` });
+                void register.onChange(event);
+              }}
+            />
+          ))}
 
-            {rest.length === 0 && search !== '' ? (
-              <p className="px-2 py-3 text-sm text-muted-foreground">
-                No other group matches “{search}”.
-              </p>
-            ) : null}
-          </div>
+          {rest.length === 0 && search !== '' ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">
+              No other group matches “{search}”.
+            </p>
+          ) : null}
+        </div>
 
-          <p className="text-xs text-muted-foreground">
-            {selectedIds.length === 0
-              ? 'None selected'
-              : `${selectedIds.length} selected${search ? ' · selected groups stay listed while you search' : ''}`}
-          </p>
-        </>
-      ) : groups.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
-        <Alert variant="warning">
-          <span>
-            No groups yet — a student reaches tests only through one.{' '}
-            <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
-              Create a group
-            </Link>
-            .
-          </span>
-        </Alert>
-      )}
+        <p className="text-xs text-muted-foreground">
+          {selectionSummary(selectedIds.length, search)}
+        </p>
+      </GroupPickerBody>
 
       {error ? (
         <p role="alert" className="text-xs text-destructive">
@@ -146,6 +137,34 @@ export function GroupPicker({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What the picker shows: the list, a loading line, or the reason it is empty.
+ *
+ * Three states, and the empty one is not "no results" — it means the institute
+ * has no groups at all, which a student cannot reach a single test without. It
+ * says so, and links to where you fix it.
+ */
+function GroupPickerBody({
+  hasAnyGroups,
+  isPending,
+  children,
+}: Readonly<{ hasAnyGroups: boolean; isPending: boolean; children: React.ReactNode }>) {
+  if (hasAnyGroups) return <>{children}</>;
+  if (isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  return (
+    <Alert variant="warning">
+      <span>
+        No groups yet — a student reaches tests only through one.{' '}
+        <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
+          Create a group
+        </Link>
+        .
+      </span>
+    </Alert>
   );
 }
 
