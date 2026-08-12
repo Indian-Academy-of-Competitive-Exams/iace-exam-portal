@@ -115,6 +115,26 @@ export const studentDetailSchema = studentSummarySchema.extend({
 });
 export type StudentDetail = z.infer<typeof studentDetailSchema>;
 
+/**
+ * How a list is ordered. Named rather than free-form so a column the database
+ * cannot serve cheaply never becomes a sort someone relies on.
+ */
+export const STUDENT_SORTS = {
+  RECENT: 'recent',
+  OLDEST: 'oldest',
+  NAME: 'name',
+  MOBILE: 'mobile',
+} as const;
+export type StudentSort = (typeof STUDENT_SORTS)[keyof typeof STUDENT_SORTS];
+export const STUDENT_SORT_VALUES = Object.values(STUDENT_SORTS) as [StudentSort, ...StudentSort[]];
+
+/** A query param that is present-or-absent, never "false means don't care". */
+const optionalBoolean = () =>
+  z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true'));
+
 export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Matches a mobile number or a name, case-insensitively. */
   q: z
@@ -124,15 +144,24 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
   groupId: z.string().optional(),
-  isActive: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /**
+   * Everyone in ANY group under this branch. Students reach tests through
+   * groups, and groups belong to branches, so "who does this centre teach" is
+   * a question the roster has to be able to answer directly.
+   */
+  branchId: z.string().optional(),
+  isActive: optionalBoolean(),
   /** Admin-created students who have never set a PIN. */
-  neverSignedIn: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  neverSignedIn: optionalBoolean(),
+  /** Mother's name, father's name and DOB — what a student needs before a test. */
+  preTestReady: optionalBoolean(),
+  profileCompleted: optionalBoolean(),
+  /** Students with no group at all: they can reach no test, so they are a to-do list. */
+  ungrouped: optionalBoolean(),
+  /** Enrolled on or after / on or before. Inclusive at both ends. */
+  joinedFrom: dateOnlySchema.optional(),
+  joinedTo: dateOnlySchema.optional(),
+  sort: z.enum(STUDENT_SORT_VALUES).optional().default(STUDENT_SORTS.RECENT),
 });
 export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
 export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;

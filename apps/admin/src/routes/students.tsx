@@ -3,14 +3,18 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Search, Upload, UserPlus, X } from 'lucide-react';
+import { ChevronDown, Loader2, Search, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PAGE_SIZE_OPTIONS,
+  PAGE_SIZE_MAX,
+  STUDENT_SORTS,
+  todayISO,
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
   type GroupRef,
+  type StudentSort,
   type StudentSummary,
 } from '@iace/contracts';
 import {
@@ -48,9 +52,39 @@ import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { usePageSize } from '@iace/app-kit';
+import { useBranches } from '../lib/use-branches';
+import { useFilters } from '../lib/use-filters';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited';
+
+/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
+const ALL_FILTERS = [
+  'q',
+  'status',
+  'sort',
+  'branchId',
+  'groupId',
+  'preTestReady',
+  'profileCompleted',
+  'ungrouped',
+  'joinedFrom',
+  'joinedTo',
+] as const;
+type FilterKey = (typeof ALL_FILTERS)[number];
+
+/** The ones behind the "Filters" fold — what the count on the button counts. */
+const EXTRA_FILTERS = ALL_FILTERS.filter(
+  (key) => !['q', 'status', 'sort'].includes(key),
+) as readonly FilterKey[];
+
+/**
+ * The query params take 'true' | 'false' — a filter is absent or applied, and
+ * `false` is a question ("not ready yet") rather than "don't care".
+ */
+function asBooleanParam(value: string): 'true' | 'false' | undefined {
+  return value === 'true' || value === 'false' ? value : undefined;
+}
 
 /** Each filter is one query shape; keeping them together stops them contradicting. */
 const STATUS_QUERY: Record<StatusFilter, { isActive?: 'true' | 'false'; neverSignedIn?: 'true' }> =
@@ -62,37 +96,66 @@ const STATUS_QUERY: Record<StatusFilter, { isActive?: 'true' | 'false'; neverSig
   };
 
 export function StudentsPage() {
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize();
+  const [showAll, setShowAll] = useState(false);
 
-  // Set when arriving from a group. Group members are this list filtered, not a
-  // second screen that would drift from it.
+  // Every filter lives in the URL, so a link into this screen — from a group,
+  // from a branch — and the controls on it are the same state. See useFilters.
+  const filters = useFilters<FilterKey>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const groupId = searchParams.get('groupId') ?? undefined;
   // The "Add student" button links here; reading it is what makes it work.
   const creating = searchParams.get('new') === '1';
 
+  const groupId = filters.get('groupId');
+  const branchId = filters.get('branchId');
+  const status = (filters.get('status') || 'all') as StatusFilter;
+
+  const branches = useBranches();
+  const branch = branches.find((candidate) => candidate.id === branchId);
+
+  // Narrowed by the chosen branch, so picking a branch first makes the group
+  // list short enough to read rather than every group in the institute.
+  const groupsForPicker = useQuery({
+    queryKey: ['admin', 'groups', 'filter', branchId],
+    queryFn: () =>
+      api.admin.groups.list({ pageSize: PAGE_SIZE_MAX, branchId: branchId || undefined }),
+  });
+  const groupOptions = groupsForPicker.data?.items ?? [];
+
   const group = useQuery({
     queryKey: ['admin', 'group', groupId],
-    queryFn: () => api.admin.groups.detail(groupId ?? ''),
-    enabled: Boolean(groupId),
+    queryFn: () => api.admin.groups.detail(groupId),
+    enabled: groupId !== '',
   });
 
+  const query = {
+    q: filters.get('q') || undefined,
+    groupId: groupId || undefined,
+    branchId: branchId || undefined,
+    preTestReady: asBooleanParam(filters.get('preTestReady')),
+    profileCompleted: asBooleanParam(filters.get('profileCompleted')),
+    ungrouped: asBooleanParam(filters.get('ungrouped')),
+    joinedFrom: filters.get('joinedFrom') || undefined,
+    joinedTo: filters.get('joinedTo') || undefined,
+    sort: (filters.get('sort') || undefined) as StudentSort | undefined,
+    ...STATUS_QUERY[status],
+  };
+
   const students = useQuery({
-    queryKey: ['admin', 'students', { search, status, page, pageSize, groupId }],
-    queryFn: () =>
-      api.admin.students.list({ q: search, page, pageSize, groupId, ...STATUS_QUERY[status] }),
+    queryKey: ['admin', 'students', { ...query, page, pageSize }],
+    queryFn: () => api.admin.students.list({ ...query, page, pageSize }),
     // Without this the table empties on every keystroke and the page jumps;
     // holding the previous page keeps the rows still while the next arrives.
     placeholderData: keepPreviousData,
   });
 
-  const reset = (next: () => void) => {
-    next();
+  const set = (changes: Partial<Record<FilterKey, string | undefined>>) => {
+    filters.set(changes);
     setPage(1);
   };
+
+  const extraCount = filters.activeCount(EXTRA_FILTERS);
 
   return (
     <>
@@ -127,39 +190,41 @@ export function StudentsPage() {
       ) : null}
 
       <Card className="p-4">
-        {groupId ? (
-          <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Showing the group</span>
-            <Badge variant="primary">{group.data?.name ?? '…'}</Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearchParams({});
-                setPage(1);
-              }}
-            >
+        {/* Arrived from somewhere: say where, and offer the way back out. */}
+        {group.data || branch ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Showing</span>
+            {branch ? (
+              <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
+            ) : null}
+            {group.data ? (
+              <Badge variant="primary">
+                {group.data.branch.name} / {group.data.name}
+              </Badge>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => set({ groupId: '', branchId: '' })}>
               <X aria-hidden />
               Clear
             </Button>
           </div>
         ) : null}
 
-        <div className="mb-4 flex flex-wrap gap-3">
+        <div className="mb-3 flex flex-wrap gap-3">
           <div className="min-w-56 flex-1">
             <Input
               aria-label="Search students"
               placeholder="Search by name or mobile"
-              value={search}
+              value={filters.get('q')}
               prefix={<Search className="size-4" aria-hidden />}
-              onChange={(event) => reset(() => setSearch(event.target.value))}
+              onChange={(event) => set({ q: event.target.value })}
             />
           </div>
+
           <div className="w-44">
             <Select
               aria-label="Filter by status"
               value={status}
-              onChange={(event) => reset(() => setStatus(event.target.value as StatusFilter))}
+              onChange={(event) => set({ status: event.target.value })}
             >
               <option value="all">All students</option>
               <option value="active">Active</option>
@@ -167,7 +232,161 @@ export function StudentsPage() {
               <option value="invited">Never signed in</option>
             </Select>
           </div>
+
+          <div className="w-44">
+            <Select
+              aria-label="Sort by"
+              value={filters.get('sort') || STUDENT_SORTS.RECENT}
+              onChange={(event) => set({ sort: event.target.value })}
+            >
+              <option value={STUDENT_SORTS.RECENT}>Newest first</option>
+              <option value={STUDENT_SORTS.OLDEST}>Oldest first</option>
+              <option value={STUDENT_SORTS.NAME}>Name (A–Z)</option>
+              <option value={STUDENT_SORTS.MOBILE}>Mobile number</option>
+            </Select>
+          </div>
+
+          {/*
+            The rest are folded away by default. Seven controls across the top
+            of the roster is a wall to read past every time you only wanted to
+            search a name — but the count keeps a hidden filter from being a
+            silent one.
+          */}
+          <Button variant="outline" onClick={() => setShowAll((open) => !open)}>
+            <SlidersHorizontal aria-hidden />
+            Filters
+            {extraCount > 0 ? <Badge variant="primary">{extraCount}</Badge> : null}
+            <ChevronDown
+              aria-hidden
+              className={cn('transition-transform', showAll && 'rotate-180')}
+            />
+          </Button>
         </div>
+
+        {showAll || extraCount > 0 ? (
+          <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field htmlFor="filter-branch" label="Branch">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={branchId}
+                  // Clearing the group too: a group belongs to one branch, so
+                  // keeping both would usually mean asking for an empty set.
+                  onChange={(event) => set({ branchId: event.target.value, groupId: '' })}
+                >
+                  <option value="">Any branch</option>
+                  {branches.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+
+            <Field htmlFor="filter-group" label="Group">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={groupId}
+                  onChange={(event) => set({ groupId: event.target.value })}
+                >
+                  <option value="">Any group</option>
+                  {groupOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.branch.name} / {option.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+
+            <Field htmlFor="filter-pretest" label="Pre-test details">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={filters.get('preTestReady')}
+                  onChange={(event) => set({ preTestReady: event.target.value })}
+                >
+                  <option value="">Any</option>
+                  <option value="true">On file</option>
+                  <option value="false">Needed</option>
+                </Select>
+              )}
+            </Field>
+
+            <Field htmlFor="filter-profile" label="Full profile">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={filters.get('profileCompleted')}
+                  onChange={(event) => set({ profileCompleted: event.target.value })}
+                >
+                  <option value="">Any</option>
+                  <option value="true">Complete</option>
+                  <option value="false">Incomplete</option>
+                </Select>
+              )}
+            </Field>
+
+            <Field
+              htmlFor="filter-ungrouped"
+              label="Group membership"
+              hint="A student in no group can reach no test."
+            >
+              {(control) => (
+                <Select
+                  {...control}
+                  value={filters.get('ungrouped')}
+                  onChange={(event) => set({ ungrouped: event.target.value })}
+                >
+                  <option value="">Any</option>
+                  <option value="true">In no group</option>
+                  <option value="false">In at least one</option>
+                </Select>
+              )}
+            </Field>
+
+            <Field htmlFor="filter-from" label="Enrolled from">
+              {(control) => (
+                <Input
+                  {...control}
+                  type="date"
+                  max={todayISO()}
+                  value={filters.get('joinedFrom')}
+                  onChange={(event) => set({ joinedFrom: event.target.value })}
+                />
+              )}
+            </Field>
+
+            <Field htmlFor="filter-to" label="Enrolled until">
+              {(control) => (
+                <Input
+                  {...control}
+                  type="date"
+                  max={todayISO()}
+                  value={filters.get('joinedTo')}
+                  onChange={(event) => set({ joinedTo: event.target.value })}
+                />
+              )}
+            </Field>
+
+            <div className="flex items-end">
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled={filters.activeCount(ALL_FILTERS) === 0}
+                onClick={() => {
+                  filters.clear();
+                  setPage(1);
+                }}
+              >
+                <X aria-hidden />
+                Clear all filters
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {students.error ? (
           <Alert variant="danger" className="mb-4">
@@ -194,8 +413,11 @@ export function StudentsPage() {
               ))
             ) : (
               <TableEmpty colSpan={5}>
-                {search || status !== 'all' || groupId
-                  ? 'No students match that.'
+                {/* "None match" and "there are none" are different facts, and
+                    telling an admin the wrong one sends them looking in the
+                    wrong place. Any filter at all means the former. */}
+                {filters.activeCount(ALL_FILTERS) > 0
+                  ? 'No students match those filters.'
                   : 'No students yet. Add one, or import a roster.'}
               </TableEmpty>
             )}

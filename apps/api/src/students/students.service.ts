@@ -11,6 +11,7 @@ import {
   type UpdateStudentBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted } from './student-flags';
 
 /** Exactly what the summary and detail views need — nothing else is read. */
@@ -32,7 +33,7 @@ export class StudentsService {
   // ==========================================================================
 
   async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
-    const where = this.whereFrom(query);
+    const where = studentWhere(query);
     const skip = (query.page - 1) * query.pageSize;
 
     // One round trip for the rows and one for the count. The count is what
@@ -42,7 +43,7 @@ export class StudentsService {
       this.prisma.student.findMany({
         where,
         include: STUDENT_INCLUDE,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: studentOrderBy(query.sort),
         skip,
         take: query.pageSize,
       }),
@@ -196,26 +197,6 @@ export class StudentsService {
   // ==========================================================================
   // Internals
   // ==========================================================================
-
-  private whereFrom(query: StudentListQuery): Prisma.StudentWhereInput {
-    const search = query.q?.trim();
-
-    return {
-      ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
-      ...(query.groupId ? { groups: { some: { id: query.groupId } } } : {}),
-      ...(query.neverSignedIn === undefined
-        ? {}
-        : { pinHash: query.neverSignedIn ? null : { not: null } }),
-      ...(search
-        ? {
-            OR: [
-              { mobile: { contains: search } },
-              { fullName: { contains: search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
-  }
 
   private async assertGroupsExist(groupIds: string[] | undefined): Promise<void> {
     if (!groupIds?.length) return;

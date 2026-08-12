@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import {
   PAGE_SIZE_OPTIONS,
   createGroupSchema,
@@ -37,15 +37,19 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { usePageSize } from '@iace/app-kit';
+import { useFilters } from '../lib/use-filters';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
 export function GroupsPage() {
   const [creating, setCreating] = useState(false);
-  const [search, setSearch] = useState('');
-  const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
+
+  // In the URL, not in state: this is where the Branches page lands.
+  const filters = useFilters<'q' | 'branchId'>();
+  const search = filters.get('q');
+  const branchId = filters.get('branchId');
   const [pageSize, setPageSize] = usePageSize();
   const queryClient = useQueryClient();
 
@@ -59,6 +63,7 @@ export function GroupsPage() {
   });
 
   const allBranches = useBranches();
+  const branch = allBranches.find((candidate) => candidate.id === branchId);
 
   return (
     <>
@@ -84,6 +89,25 @@ export function GroupsPage() {
       ) : null}
 
       <Card className="p-4">
+        {/* Arrived from a branch: say so, and offer the way back out. */}
+        {branch ? (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Showing the branch</span>
+            <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                filters.set({ branchId: undefined });
+                setPage(1);
+              }}
+            >
+              <X aria-hidden />
+              Clear
+            </Button>
+          </div>
+        ) : null}
+
         <div className="mb-4 flex flex-wrap gap-3">
           <div className="min-w-56 flex-1">
             <Input
@@ -92,7 +116,7 @@ export function GroupsPage() {
               value={search}
               prefix={<Search className="size-4" aria-hidden />}
               onChange={(event) => {
-                setSearch(event.target.value);
+                filters.set({ q: event.target.value });
                 setPage(1);
               }}
             />
@@ -102,7 +126,7 @@ export function GroupsPage() {
               aria-label="Filter by branch"
               value={branchId}
               onChange={(event) => {
-                setBranchId(event.target.value);
+                filters.set({ branchId: event.target.value });
                 setPage(1);
               }}
             >

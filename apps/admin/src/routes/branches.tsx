@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Loader2, Plus, Power, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Power, Trash2, Users } from 'lucide-react';
 import { createBranchSchema, type Branch, type CreateBranchInput } from '@iace/contracts';
 import {
   Alert,
@@ -91,13 +91,14 @@ export function BranchesPage() {
             <TableRow>
               <TableHead>Branch</TableHead>
               <TableHead numeric>Groups</TableHead>
+              <TableHead />
               <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {branches.length === 0 ? (
-              <TableEmpty colSpan={4}>No branches yet.</TableEmpty>
+              <TableEmpty colSpan={5}>No branches yet.</TableEmpty>
             ) : (
               branches.map((branch) => (
                 <BranchRow
@@ -221,7 +222,26 @@ function BranchRow({
           )}
         </TableCell>
 
-        <TableCell numeric>{branch.groupCount}</TableCell>
+        <TableCell numeric>
+          {branch.groupCount > 0 ? (
+            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+              {branch.groupCount}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">0</span>
+          )}
+        </TableCell>
+
+        <TableCell>
+          {/* A branch answers two questions — which groups, and which students
+              those groups reach. Both are the existing screen filtered. */}
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+              <Users aria-hidden />
+              Students
+            </Link>
+          </Button>
+        </TableCell>
 
         <TableCell>
           {branch.isGlobal ? (
@@ -272,7 +292,7 @@ function BranchRow({
 
       {error ? (
         <TableRow>
-          <TableCell colSpan={4}>
+          <TableCell colSpan={5}>
             <Alert variant="danger">{bannerMessage(error)}</Alert>
           </TableCell>
         </TableRow>
