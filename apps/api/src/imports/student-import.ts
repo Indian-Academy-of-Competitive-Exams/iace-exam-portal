@@ -17,13 +17,13 @@ import { readCsvTable, type CsvRow } from './csv';
 export const REQUIRED_HEADERS = ['mobile'] as const;
 export const OPTIONAL_HEADERS = ['fullname', 'groups'] as const;
 
-/** Several batches in one cell, because a comma is already the column separator. */
+/** Several groups in one cell, because a comma is already the column separator. */
 const GROUP_SEPARATOR = /[;|]/;
 
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<string, { id: string; fullName: string | null }>;
-  /** Lowercased batch name → id. */
+  /** Lowercased group name → id. */
   groupsByName: Map<string, { id: string; name: string }>;
 }
 
@@ -110,9 +110,9 @@ function planRow(
   const groupIds: string[] = [];
   for (const name of groupNames) {
     const group = context.groupsByName.get(name.toLowerCase());
-    // Batches are never created implicitly: a typo would otherwise silently
-    // become a real batch that grants nothing and nobody notices.
-    if (!group) errors.push(`No batch called "${name}"`);
+    // Groups are never created implicitly: a typo would otherwise silently
+    // become a real group that grants nothing and nobody notices.
+    if (!group) errors.push(`No group called "${name}"`);
     else groupIds.push(group.id);
   }
 

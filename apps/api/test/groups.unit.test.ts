@@ -20,12 +20,12 @@ import {
  */
 
 describe('groupDeletionBlocker', () => {
-  it('allows deleting a batch nothing depends on', () => {
+  it('allows deleting a group nothing depends on', () => {
     assert.equal(groupDeletionBlocker({ studentCount: 0, testSeriesCount: 0 }), null);
   });
 
   it('refuses while students are still in it, and says how many', () => {
-    // Deleting a populated batch strips every member's route to their tests —
+    // Deleting a populated group strips every member's route to their tests —
     // and since a student must stay in at least one, could leave them able to
     // reach nothing at all.
     const blocker = groupDeletionBlocker({ studentCount: 12, testSeriesCount: 0 });
@@ -51,12 +51,12 @@ describe('groupDeletionBlocker', () => {
 });
 
 describe('canRemoveFromGroup', () => {
-  it('allows removal while the student has another batch', () => {
+  it('allows removal while the student has another group', () => {
     assert.equal(canRemoveFromGroup(2), true);
     assert.equal(canRemoveFromGroup(9), true);
   });
 
-  it('refuses to take a student out of their LAST batch', () => {
+  it('refuses to take a student out of their LAST group', () => {
     // Dropping to zero groups reads to the student as "everything vanished"
     // and to the admin as a successful click.
     assert.equal(canRemoveFromGroup(1), false);
@@ -77,15 +77,15 @@ describe("emptying a student's batches", () => {
   const refuses = (currentCount: number, requested: string[]) =>
     requested.length === 0 && currentCount > 0;
 
-  it('refuses to empty the batches of a student who has one', () => {
+  it('refuses to empty the groups of a student who has one', () => {
     assert.equal(refuses(1, []), true);
     assert.equal(refuses(3, []), true);
   });
 
   it('allows an empty set for a student who already has none — the regression', () => {
-    // Self-signed-up students have no batch until an admin assigns one, and
+    // Self-signed-up students have no group until an admin assigns one, and
     // refusing unconditionally made their record unsaveable: an admin could
-    // not correct a name without first picking a batch they may not know.
+    // not correct a name without first picking a group they may not know.
     assert.equal(refuses(0, []), false);
   });
 
@@ -96,7 +96,7 @@ describe("emptying a student's batches", () => {
 });
 
 describe('group contracts', () => {
-  it('requires a usable batch name', () => {
+  it('requires a usable group name', () => {
     assert.equal(createGroupSchema.safeParse({ name: 'SSC Morning' }).success, true);
     assert.equal(createGroupSchema.safeParse({ name: 'A' }).success, false);
     assert.equal(createGroupSchema.safeParse({ name: '   ' }).success, false);
@@ -131,7 +131,7 @@ describe('group contracts', () => {
     assert.equal(groupListQuerySchema.parse({}).pageSize, 20);
   });
 
-  it('carries the counts a batch list is opened to see', () => {
+  it('carries the counts a group list is opened to see', () => {
     const summary = {
       id: 'g1',
       name: 'SSC Morning',

@@ -30,7 +30,7 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { GroupsService } from './groups.service';
 
 /**
- * Batches. Members are READ through `/admin/students?groupId=…`, which already
+ * Groups. Members are READ through `/admin/students?groupId=…`, which already
  * pages, searches and filters — a second member-list endpoint would be the same
  * query with its own bugs.
  */
@@ -65,7 +65,7 @@ export class GroupsController {
     return this.groups.update(id, body);
   }
 
-  /** Refused while anything still depends on the batch. */
+  /** Refused while anything still depends on the group. */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id') id: string): Promise<void> {

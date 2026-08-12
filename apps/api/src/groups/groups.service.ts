@@ -63,7 +63,7 @@ export class GroupsService {
 
   async detail(id: string): Promise<GroupSummary> {
     const group = await this.prisma.group.findUnique({ where: { id }, include: GROUP_INCLUDE });
-    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such batch');
+    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
     return toSummary(group);
   }
 
@@ -83,7 +83,7 @@ export class GroupsService {
 
   async update(id: string, input: UpdateGroupBody): Promise<GroupSummary> {
     const group = await this.prisma.group.findUnique({ where: { id } });
-    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such batch');
+    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
     if (input.name !== undefined && input.name !== group.name)
       await this.assertNameFree(input.name);
@@ -100,10 +100,10 @@ export class GroupsService {
     return toSummary(updated);
   }
 
-  /** Only ever deletes a batch nothing depends on — see group-rules.ts. */
+  /** Only ever deletes a group nothing depends on — see group-rules.ts. */
   async remove(id: string): Promise<void> {
     const group = await this.prisma.group.findUnique({ where: { id }, include: GROUP_INCLUDE });
-    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such batch');
+    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
     const blocker = groupDeletionBlocker({
       studentCount: group._count.students,
@@ -119,7 +119,7 @@ export class GroupsService {
   // ==========================================================================
 
   /**
-   * Adding is a set operation: a student already in the batch is left alone
+   * Adding is a set operation: a student already in the group is left alone
    * rather than treated as an error, because selecting a whole page and adding
    * it is the normal way this gets used.
    */
@@ -128,7 +128,7 @@ export class GroupsService {
       where: { id },
       include: { students: { select: { id: true } } },
     });
-    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such batch');
+    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
     const wanted = [...new Set(studentIds)];
     const found = await this.prisma.student.findMany({
@@ -158,7 +158,7 @@ export class GroupsService {
     return { added: toAdd.length, alreadyMembers: wanted.length - toAdd.length };
   }
 
-  /** Refuses to take a student out of their last batch — see group-rules.ts. */
+  /** Refuses to take a student out of their last group — see group-rules.ts. */
   async removeMember(id: string, studentId: string): Promise<void> {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
@@ -168,7 +168,7 @@ export class GroupsService {
 
     const isMember = student.groups.some((group) => group.id === id);
     if (!isMember)
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That student is not in this batch');
+      throw new AppException(ErrorCodes.NOT_FOUND, 'That student is not in this group');
 
     if (!canRemoveFromGroup(student.groups.length)) {
       throw new AppException(ErrorCodes.CONFLICT, LAST_GROUP_MESSAGE);
@@ -185,7 +185,7 @@ export class GroupsService {
   private async assertNameFree(name: string): Promise<void> {
     const clash = await this.prisma.group.findUnique({ where: { name } });
     if (clash) {
-      throw new AppException(ErrorCodes.CONFLICT, 'A batch with that name already exists', {
+      throw new AppException(ErrorCodes.CONFLICT, 'A group with that name already exists', {
         fieldErrors: { name: ['That name is taken'] },
       });
     }

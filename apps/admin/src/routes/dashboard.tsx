@@ -17,7 +17,7 @@ export function DashboardPage() {
         <CardHeader>
           <CardTitle>Where to start</CardTitle>
           <CardDescription>
-            Create batches first — a student can only reach tests through one — then add or import
+            Create groups first — a student can only reach tests through one — then add or import
             students into them.
           </CardDescription>
         </CardHeader>

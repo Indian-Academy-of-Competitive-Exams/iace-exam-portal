@@ -21,10 +21,10 @@ export interface GroupUsage {
  */
 export function groupDeletionBlocker(usage: GroupUsage): string | null {
   if (usage.studentCount > 0) {
-    return `This batch still has ${usage.studentCount} student${usage.studentCount === 1 ? '' : 's'}. Move them to another batch first.`;
+    return `This group still has ${usage.studentCount} student${usage.studentCount === 1 ? '' : 's'}. Move them to another group first.`;
   }
   if (usage.testSeriesCount > 0) {
-    return 'This batch is still linked to a test series. Unlink it first.';
+    return 'This group is still linked to a test series. Unlink it first.';
   }
   return null;
 }
@@ -41,4 +41,4 @@ export function canRemoveFromGroup(groupCount: number): boolean {
 }
 
 export const LAST_GROUP_MESSAGE =
-  'This is the student’s only batch. Add them to another one before removing this.';
+  'This is the student’s only group. Add them to another one before removing this.';

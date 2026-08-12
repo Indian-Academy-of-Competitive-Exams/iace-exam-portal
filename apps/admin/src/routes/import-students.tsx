@@ -68,7 +68,7 @@ export function ImportStudentsPage() {
 
       <PageHeader
         title="Import students"
-        description="A mobile column is required; fullName and groups are optional. Batches must already exist — a name that does not match is reported rather than created."
+        description="A mobile column is required; fullName and groups are optional. Groups must already exist — a name that does not match is reported rather than created."
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -108,7 +108,7 @@ export function ImportStudentsPage() {
                 <TableHead numeric>Line</TableHead>
                 <TableHead>Mobile</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Batches</TableHead>
+                <TableHead>Groups</TableHead>
                 <TableHead>What happens</TableHead>
               </TableRow>
             </TableHeader>

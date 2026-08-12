@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
-import { PAGE_SIZE_MAX, type Gender, type StudentDetail } from '@iace/contracts';
+import { type Gender, type StudentDetail } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -13,12 +13,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Checkbox,
   Field,
   Input,
   Select,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
+import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
@@ -69,13 +69,6 @@ export function StudentDetailPage() {
   const student = useQuery({
     queryKey: ['admin', 'student', id],
     queryFn: () => api.admin.students.detail(id),
-  });
-
-  // Every batch, so membership can be edited without a second search box. The
-  // count is small by nature — batches are branches and timings, not students.
-  const batches = useQuery({
-    queryKey: ['admin', 'groups', 'all'],
-    queryFn: () => api.admin.groups.list({ pageSize: PAGE_SIZE_MAX }),
   });
 
   const form = useForm<FormValues>({
@@ -253,39 +246,19 @@ export function StudentDetailPage() {
         <div className="flex flex-col gap-5">
           <Card>
             <CardHeader>
-              <CardTitle>Batches</CardTitle>
+              <CardTitle>Groups</CardTitle>
               <CardDescription>
-                A student reaches tests only through a batch, so they must stay in at least one.
+                A student reaches tests only through a group, so they must stay in at least one.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {batches.data?.items.length ? (
-                <div className="max-h-72 overflow-y-auto">
-                  {batches.data.items.map((batch) => (
-                    <Checkbox
-                      key={batch.id}
-                      id={`batch-${batch.id}`}
-                      label={batch.name}
-                      hint={batch.branch ?? undefined}
-                      value={batch.id}
-                      {...form.register('groupIds')}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No batches yet.{' '}
-                  <Link to={ROUTES.BATCHES} className="text-foreground underline">
-                    Create one
-                  </Link>
-                  .
-                </p>
-              )}
-              {form.formState.errors.groupIds ? (
-                <p role="alert" className="mt-2 text-xs text-destructive">
-                  {form.formState.errors.groupIds.message}
-                </p>
-              ) : null}
+              <GroupPicker
+                idPrefix="group"
+                register={form.register('groupIds')}
+                selectedIds={form.watch('groupIds')}
+                known={detail.groups}
+                error={form.formState.errors.groupIds?.message}
+              />
             </CardContent>
           </Card>
 

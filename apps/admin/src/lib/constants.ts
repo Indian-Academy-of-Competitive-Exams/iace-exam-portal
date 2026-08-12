@@ -12,7 +12,7 @@ export const ROUTES = {
   STUDENTS: '/students',
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
-  BATCHES: '/batches',
+  GROUPS: '/groups',
   IMPORT_STUDENTS: '/students/import',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
@@ -22,7 +22,7 @@ export const ROUTES = {
 export const NAV_ITEMS = [
   { to: ROUTES.HOME, label: 'Overview' },
   { to: ROUTES.STUDENTS, label: 'Students' },
-  { to: ROUTES.BATCHES, label: 'Batches' },
+  { to: ROUTES.GROUPS, label: 'Groups' },
 ] as const;
 
 export const THEMES = {

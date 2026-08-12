@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { paginationQuerySchema } from './envelope';
 
 // ============================================================================
-// Groups (batches) — the access unit.
+// Groups — the access unit.
 //
 // Access runs Student → Group → TestSeries → Test, so a group is not a label:
 // it is the only thing that decides which tests a student can reach. Two rules
@@ -38,7 +38,7 @@ export type GroupListQuery = z.infer<typeof groupListQuerySchema>;
 export type GroupListQueryInput = z.input<typeof groupListQuerySchema>;
 
 export const createGroupSchema = z.object({
-  name: z.string().trim().min(2, 'Give the batch a name').max(80),
+  name: z.string().trim().min(2, 'Give the group a name').max(80),
   branch: z.string().trim().max(80).nullish(),
   description: z.string().trim().max(500).nullish(),
 });

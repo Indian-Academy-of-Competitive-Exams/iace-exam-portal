@@ -40,7 +40,7 @@ export const studentSummarySchema = z.object({
   isActive: z.boolean(),
   /**
    * Whether a PIN has ever been set. An admin-created student exists but has
-   * never signed in, and a batch list that cannot tell the two apart is the
+   * never signed in, and a group list that cannot tell the two apart is the
    * first thing anyone asks about.
    */
   hasSignedIn: z.boolean(),

@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Search, Upload, UserPlus, X } from 'lucide-react';
 import {
   MOBILE_DIGITS,
-  PAGE_SIZE_MAX,
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
@@ -21,7 +20,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Checkbox,
   Field,
   Input,
   NumericInput,
@@ -36,6 +34,7 @@ import {
   TableRow,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
+import { GroupPicker } from '../components/group-picker';
 import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -57,14 +56,14 @@ export function StudentsPage() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
 
-  // Set when arriving from a batch. Batch members are this list filtered, not a
+  // Set when arriving from a group. Group members are this list filtered, not a
   // second screen that would drift from it.
   const [searchParams, setSearchParams] = useSearchParams();
   const groupId = searchParams.get('groupId') ?? undefined;
   // The "Add student" button links here; reading it is what makes it work.
   const creating = searchParams.get('new') === '1';
 
-  const batch = useQuery({
+  const group = useQuery({
     queryKey: ['admin', 'group', groupId],
     queryFn: () => api.admin.groups.detail(groupId ?? ''),
     enabled: Boolean(groupId),
@@ -118,8 +117,8 @@ export function StudentsPage() {
       <Card className="p-4">
         {groupId ? (
           <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Showing the batch</span>
-            <Badge variant="primary">{batch.data?.name ?? '…'}</Badge>
+            <span className="text-sm text-muted-foreground">Showing the group</span>
+            <Badge variant="primary">{group.data?.name ?? '…'}</Badge>
             <Button
               variant="ghost"
               size="sm"
@@ -169,7 +168,7 @@ export function StudentsPage() {
             <TableRow>
               <TableHead>Student</TableHead>
               <TableHead>Mobile</TableHead>
-              <TableHead>Batches</TableHead>
+              <TableHead>Groups</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Pre-test details</TableHead>
             </TableRow>
@@ -220,9 +219,9 @@ function StudentRow({ student }: { student: StudentSummary }) {
 
       <TableCell>
         {student.groups.length === 0 ? (
-          // A student in no batch can reach no test, so this is a problem to
+          // A student in no group can reach no test, so this is a problem to
           // show rather than an empty cell.
-          <Badge variant="warning">No batch</Badge>
+          <Badge variant="warning">No group</Badge>
         ) : (
           <div className="flex flex-wrap gap-1">
             {student.groups.map((group) => (
@@ -261,17 +260,12 @@ const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'groupIds'] as const;
  * Adds a student before they have signed up.
  *
  * The mobile number is the join key: when they later sign up with it, the OTP
- * flow upserts onto THIS row, so the batches picked here are already in place
+ * flow upserts onto THIS row, so the groups picked here are already in place
  * rather than lost to a duplicate.
  */
 function NewStudentCard({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const batches = useQuery({
-    queryKey: ['admin', 'groups', 'all'],
-    queryFn: () => api.admin.groups.list({ pageSize: PAGE_SIZE_MAX }),
-  });
 
   const form = useForm<CreateStudentInput>({
     resolver: zodResolver(createStudentSchema),
@@ -343,33 +337,16 @@ function NewStudentCard({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {batches.data?.items.length ? (
-            <fieldset>
-              <legend className="mb-1.5 text-sm font-medium text-foreground">Batches</legend>
-              <div className="max-h-44 overflow-y-auto rounded-md border border-border p-1">
-                {batches.data.items.map((batch) => (
-                  <Checkbox
-                    key={batch.id}
-                    id={`new-batch-${batch.id}`}
-                    label={batch.name}
-                    hint={batch.branch ?? undefined}
-                    value={batch.id}
-                    {...form.register('groupIds')}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          ) : (
-            <Alert variant="warning">
-              <span>
-                No batches yet — a student reaches tests only through one.{' '}
-                <Link to={ROUTES.BATCHES} className="underline underline-offset-4">
-                  Create a batch
-                </Link>{' '}
-                first, or add them now and assign later.
-              </span>
-            </Alert>
-          )}
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-medium text-foreground">Groups</legend>
+            <GroupPicker
+              idPrefix="new-group"
+              register={form.register('groupIds')}
+              selectedIds={form.watch('groupIds') ?? []}
+              known={[]}
+              error={form.formState.errors.groupIds?.message}
+            />
+          </fieldset>
 
           {create.error ? (
             <Alert variant="danger">{bannerMessage(create.error, NEW_STUDENT_FIELDS)}</Alert>

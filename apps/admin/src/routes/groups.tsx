@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
 import {
   Alert,
@@ -24,36 +24,42 @@ import {
   TableRow,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
+import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 
-const NEW_BATCH_FIELDS = ['name', 'branch'] as const;
+const NEW_GROUP_FIELDS = ['name', 'branch'] as const;
 
-export function BatchesPage() {
+export function GroupsPage() {
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const batches = useQuery({
-    queryKey: ['admin', 'groups'],
-    queryFn: () => api.admin.groups.list({ pageSize: 100 }),
+  const groups = useQuery({
+    queryKey: ['admin', 'groups', { search, page }],
+    queryFn: () => api.admin.groups.list({ q: search, page }),
+    // Holds the rows still while the next page arrives, instead of blanking
+    // the table on every keystroke.
+    placeholderData: keepPreviousData,
   });
 
   return (
     <>
       <PageHeader
-        title="Batches"
-        description="The unit that grants access: a student reaches a test through the batch they are in."
+        title="Groups"
+        description="The unit that grants access: a student reaches a test through the group they are in."
         action={
           <Button size="sm" onClick={() => setCreating((open) => !open)}>
             <Plus aria-hidden />
-            New batch
+            New group
           </Button>
         }
       />
 
       {creating ? (
-        <NewBatchCard
+        <NewGroupCard
           onDone={() => {
             setCreating(false);
             void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
@@ -63,16 +69,29 @@ export function BatchesPage() {
       ) : null}
 
       <Card className="p-4">
-        {batches.error ? (
+        <div className="mb-4 max-w-sm">
+          <Input
+            aria-label="Search groups"
+            placeholder="Search by name or branch"
+            value={search}
+            prefix={<Search className="size-4" aria-hidden />}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+
+        {groups.error ? (
           <Alert variant="danger" className="mb-4">
-            {bannerMessage(batches.error)}
+            {bannerMessage(groups.error)}
           </Alert>
         ) : null}
 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Batch</TableHead>
+              <TableHead>Group</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead numeric>Students</TableHead>
               <TableHead numeric>Test series</TableHead>
@@ -80,17 +99,28 @@ export function BatchesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {batches.isPending ? (
+            {groups.isPending ? (
               <TableEmpty colSpan={5}>Loading…</TableEmpty>
-            ) : batches.data?.items.length ? (
-              batches.data.items.map((batch) => <BatchRow key={batch.id} batch={batch} />)
+            ) : groups.data?.items.length ? (
+              groups.data.items.map((group) => <GroupRow key={group.id} group={group} />)
             ) : (
               <TableEmpty colSpan={5}>
-                No batches yet. Create one before adding students.
+                {search
+                  ? `No group matches “${search}”.`
+                  : 'No groups yet. Create one before adding students.'}
               </TableEmpty>
             )}
           </TableBody>
         </Table>
+
+        {groups.data ? (
+          <Pagination
+            page={groups.data.page}
+            pageSize={groups.data.pageSize}
+            total={groups.data.total}
+            onPageChange={setPage}
+          />
+        ) : null}
       </Card>
     </>
   );
@@ -98,7 +128,7 @@ export function BatchesPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewBatchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const form = useForm<CreateGroupInput>({
     resolver: zodResolver(createGroupSchema),
     defaultValues: { name: '', branch: '' },
@@ -107,13 +137,13 @@ function NewBatchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
   const create = useMutation({
     mutationFn: (values: CreateGroupInput) => api.admin.groups.create(values),
     onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, NEW_BATCH_FIELDS),
+    onError: (error) => applyFieldErrors(error, form.setError, NEW_GROUP_FIELDS),
   });
 
   return (
     <Card className="mb-5">
       <CardHeader>
-        <CardTitle>New batch</CardTitle>
+        <CardTitle>New group</CardTitle>
         <CardDescription>
           Name it the way the branch refers to it — that is what admins will search for.
         </CardDescription>
@@ -125,7 +155,7 @@ function NewBatchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
           noValidate
         >
           <div className="min-w-56 flex-1">
-            <Field htmlFor="name" label="Batch name" error={form.formState.errors.name?.message}>
+            <Field htmlFor="name" label="Group name" error={form.formState.errors.name?.message}>
               {(control) => (
                 <Input
                   {...control}
@@ -157,7 +187,7 @@ function NewBatchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
 
           {create.error ? (
             <div className="w-full">
-              <Alert variant="danger">{bannerMessage(create.error, NEW_BATCH_FIELDS)}</Alert>
+              <Alert variant="danger">{bannerMessage(create.error, NEW_GROUP_FIELDS)}</Alert>
             </div>
           ) : null}
         </form>
@@ -168,12 +198,12 @@ function NewBatchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
 
 // ---------------------------------------------------------------------------
 
-function BatchRow({ batch }: { batch: GroupSummary }) {
+function GroupRow({ group }: { group: GroupSummary }) {
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
 
   const remove = useMutation({
-    mutationFn: () => api.admin.groups.remove(batch.id),
+    mutationFn: () => api.admin.groups.remove(group.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] }),
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
@@ -186,15 +216,15 @@ function BatchRow({ batch }: { batch: GroupSummary }) {
         <TableCell className="font-medium">
           {/* Members are the student list filtered — the same screen, not a copy. */}
           <Link
-            to={`${ROUTES.STUDENTS}?groupId=${batch.id}`}
+            to={`${ROUTES.STUDENTS}?groupId=${group.id}`}
             className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
           >
-            {batch.name}
+            {group.name}
           </Link>
         </TableCell>
-        <TableCell className="text-muted-foreground">{batch.branch ?? '—'}</TableCell>
-        <TableCell numeric>{batch.studentCount}</TableCell>
-        <TableCell numeric>{batch.testSeriesCount}</TableCell>
+        <TableCell className="text-muted-foreground">{group.branch ?? '—'}</TableCell>
+        <TableCell numeric>{group.studentCount}</TableCell>
+        <TableCell numeric>{group.testSeriesCount}</TableCell>
         <TableCell className="text-right">
           {confirming ? (
             <span className="inline-flex items-center gap-2">
@@ -215,9 +245,9 @@ function BatchRow({ batch }: { batch: GroupSummary }) {
             <Button
               size="sm"
               variant="ghost"
-              aria-label={`Delete ${batch.name}`}
+              aria-label={`Delete ${group.name}`}
               onClick={() => {
-                // Clear the last refusal: it described the batch as it was
+                // Clear the last refusal: it described the group as it was
                 // before the admin went and moved the students.
                 remove.reset();
                 setConfirming(true);

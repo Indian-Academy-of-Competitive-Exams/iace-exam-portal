@@ -131,16 +131,16 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     if (input.groupIds) {
-      // The rule is "do not strip a student's LAST batch", not "every student
+      // The rule is "do not strip a student's LAST group", not "every student
       // must have one". A self-signed-up student has none until an admin
       // assigns them, and refusing unconditionally made their record
       // unsaveable — an admin could not even correct their name without
-      // picking a batch they may not know yet.
+      // picking a group they may not know yet.
       if (input.groupIds.length === 0 && student.groups.length > 0) {
         throw new AppException(
           ErrorCodes.VALIDATION_ERROR,
-          'A student must stay in at least one batch',
-          { fieldErrors: { groupIds: ['Pick at least one batch'] } },
+          'A student must stay in at least one group',
+          { fieldErrors: { groupIds: ['Pick at least one group'] } },
         );
       }
       await this.assertGroupsExist(input.groupIds);

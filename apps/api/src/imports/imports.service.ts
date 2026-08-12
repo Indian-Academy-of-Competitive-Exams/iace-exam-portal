@@ -36,7 +36,7 @@ export class ImportsService {
           data: {
             // An empty name column means "no opinion", not "clear the name".
             ...(row.fullName === null ? {} : { fullName: row.fullName }),
-            // Batches are added, never replaced: a roster for one batch must not
+            // Groups are added, never replaced: a roster for one group must not
             // remove a student from the others they are already in.
             ...(row.groupIds.length
               ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
@@ -62,7 +62,7 @@ export class ImportsService {
   }
 
   /**
-   * Loads only what this file refers to — the mobiles it lists and the batches
+   * Loads only what this file refers to — the mobiles it lists and the groups
    * it names — rather than the whole table, so a 5,000-row roster is two
    * bounded queries and not a table scan per line.
    */

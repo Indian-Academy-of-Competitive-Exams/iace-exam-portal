@@ -128,7 +128,7 @@ describe('planStudentImport', () => {
     assert.equal(plan.rows[1]?.existingStudentId, 'stu_existing');
   });
 
-  it('resolves batch names, several to a cell', () => {
+  it('resolves group names, several to a cell', () => {
     const plan = planStudentImport(
       'mobile,groups\n9876543210,SSC CGL Morning;SSC CGL Evening',
       context(),
@@ -138,18 +138,18 @@ describe('planStudentImport', () => {
     assert.equal(plan.rows[0]?.action, 'create');
   });
 
-  it('matches a batch name case-insensitively', () => {
+  it('matches a group name case-insensitively', () => {
     const plan = planStudentImport('mobile,groups\n9876543210,ssc cgl MORNING', context());
     assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning']);
   });
 
-  it('refuses an unknown batch instead of creating one', () => {
-    // A typo would otherwise become a real batch that grants nothing, and the
+  it('refuses an unknown group instead of creating one', () => {
+    // A typo would otherwise become a real group that grants nothing, and the
     // students in it would quietly see no tests.
     const plan = planStudentImport('mobile,groups\n9876543210,SSC Mornig', context());
 
     assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /No batch called "SSC Mornig"/);
+    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC Mornig"/);
   });
 
   it('skips a bad row and keeps the rest of the file', () => {
