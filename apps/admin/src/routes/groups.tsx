@@ -11,7 +11,6 @@ import {
   type GroupSummary,
 } from '@iace/contracts';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -36,7 +35,7 @@ import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { applyFieldErrors, bannerMessage, usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, usePageSize } from '@iace/app-kit';
 import { useFilters } from '../lib/use-filters';
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
@@ -137,12 +136,6 @@ export function GroupsPage() {
             </Select>
           </div>
         </div>
-
-        {groups.error ? (
-          <Alert variant="danger" className="mb-4">
-            {bannerMessage(groups.error)}
-          </Alert>
-        ) : null}
 
         <Table>
           <TableHeader>

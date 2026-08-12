@@ -4,15 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import {
-  ArrowLeft,
-  Info,
-  KeyRound,
-  Loader2,
-  ShieldCheck,
-  Smartphone,
-  TriangleAlert,
-} from 'lucide-react';
+import { ArrowLeft, Info, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PIN_LENGTH,
@@ -42,7 +34,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 import { useAuth } from '../providers/auth-context';
 /** Why the student is going through the OTP flow — it only changes the words. */
 const OTP_INTENTS = {
@@ -152,6 +144,10 @@ function SignInStep({
   });
 
   const login = useMutation({
+    // `fields` so a wrong code or PIN lands ONLY on the input the reader is
+    // about to retype — without it the same complaint arrives twice, once on
+    // the field and once in a toast.
+    meta: { fields: SIGN_IN_FIELDS },
     mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
     onSuccess: onSignedIn,
     onError: (error) => applyFieldErrors(error, form.setError, SIGN_IN_FIELDS),
@@ -183,8 +179,6 @@ function SignInStep({
             error={form.formState.errors.pin?.message}
             register={form.register('pin')}
           />
-
-          <RequestError error={login.error} fields={SIGN_IN_FIELDS} />
 
           <Button type="submit" disabled={login.isPending}>
             {login.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -232,6 +226,7 @@ function MobileStep({
   });
 
   const requestOtp = useMutation({
+    meta: { fields: MOBILE_FIELDS },
     mutationFn: (values: { mobile: string }) => api.auth.requestStudentOtp(values),
     onSuccess: (response, values) => onSent(values.mobile, response),
     onError: (error) => applyFieldErrors(error, form.setError, MOBILE_FIELDS),
@@ -262,8 +257,6 @@ function MobileStep({
             error={form.formState.errors.mobile?.message}
             register={form.register('mobile')}
           />
-
-          <RequestError error={requestOtp.error} fields={MOBILE_FIELDS} />
 
           <Button type="submit" disabled={requestOtp.isPending}>
             {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -298,6 +291,7 @@ function CodeStep({
   });
 
   const verify = useMutation({
+    meta: { fields: CODE_FIELDS },
     mutationFn: (values: { code: string }) => api.auth.verifyStudentOtp({ mobile, ...values }),
     onSuccess: onVerified,
     // A wrong code comes back as OTP_INVALID with fieldErrors.code — it belongs
@@ -332,8 +326,6 @@ function CodeStep({
               </span>
             </Alert>
           ) : null}
-
-          <RequestError error={verify.error} fields={CODE_FIELDS} />
 
           <Button type="submit" disabled={verify.isPending}>
             {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -371,6 +363,7 @@ function SetPinStep({
   });
 
   const setPin = useMutation({
+    meta: { fields: SET_PIN_FIELDS },
     mutationFn: (values: { pin: string }) =>
       api.auth.setStudentPin({ mobile, setupToken: ticket.setupToken, pin: values.pin }),
     onSuccess: onSignedIn,
@@ -407,8 +400,6 @@ function SetPinStep({
             error={form.formState.errors.confirmPin?.message}
             register={form.register('confirmPin')}
           />
-
-          <RequestError error={setPin.error} fields={SET_PIN_FIELDS} />
 
           <Button type="submit" disabled={setPin.isPending}>
             {setPin.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -545,20 +536,5 @@ function BackButton({
       <ArrowLeft aria-hidden />
       {children}
     </Button>
-  );
-}
-
-/**
- * Shows what the field errors did not already say. When the server's whole
- * complaint has been placed on the inputs, the banner stays out of the way.
- */
-function RequestError({ error, fields }: Readonly<{ error: unknown; fields?: readonly string[] }>) {
-  const message = bannerMessage(error, fields);
-  if (!message) return null;
-  return (
-    <Alert variant="danger">
-      <TriangleAlert aria-hidden />
-      <span>{message}</span>
-    </Alert>
   );
 }

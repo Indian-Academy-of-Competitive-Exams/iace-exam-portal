@@ -18,7 +18,6 @@ import {
   type StudentSummary,
 } from '@iace/contracts';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -52,7 +51,7 @@ import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage, useInfinitePages, usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, useInfinitePages, usePageSize } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
@@ -420,12 +419,6 @@ export function StudentsPage() {
               </Button>
             </div>
           </div>
-        ) : null}
-
-        {students.error ? (
-          <Alert variant="danger" className="mb-4">
-            {bannerMessage(students.error)}
-          </Alert>
         ) : null}
 
         <Table>

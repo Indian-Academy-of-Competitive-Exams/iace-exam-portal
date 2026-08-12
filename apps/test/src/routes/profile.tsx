@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { GENDERS, todayISO, updateMeSchema, type UpdateMeInput } from '@iace/contracts';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
   Button,
@@ -118,7 +118,7 @@ export function ProfilePage() {
           Loading…
         </p>
       )}
-      {me.error && <Alert variant="danger">{bannerMessage(me.error)}</Alert>}
+      {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {!me.isPending && !me.error && (
         <form
           className="flex flex-col gap-5"

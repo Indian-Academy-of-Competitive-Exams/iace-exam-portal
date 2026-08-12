@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Loader2, Pencil } from 'lucide-react';
 import { type Me } from '@iace/contracts';
-import { bannerMessage } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -40,7 +39,8 @@ export function ProfileViewPage() {
   }
 
   if (me.error || !me.data) {
-    return <Alert variant="danger">{bannerMessage(me.error)}</Alert>;
+    // The reason is on the toast; this only has to stop the page being blank.
+    return <Alert variant="danger">Could not load your profile.</Alert>;
   }
 
   const profile = me.data.profile;

@@ -1,4 +1,4 @@
-import { MutationCache, QueryClient, type Mutation } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, type Mutation } from '@tanstack/react-query';
 import { bannerMessage } from './form-errors';
 
 /**
@@ -8,6 +8,11 @@ import { bannerMessage } from './form-errors';
  * "Saved" and "Added 12 students to SSC CGL MORNING" are both confirmations and
  * only one of them is worth reading.
  */
+/** What a query may declare. `silent` opts out of the central reporting. */
+export interface AppQueryMeta {
+  silent?: boolean;
+}
+
 export interface AppMutationMeta {
   /** Announced when it succeeds. Omit for mutations nobody needs told about. */
   success?: string | ((data: unknown) => string);
@@ -40,6 +45,23 @@ export function createAppQueryClient(options: { notify?: Notifier } = {}): Query
   const { notify } = options;
 
   return new QueryClient({
+    /**
+     * Reads that fail are announced here too, so NOTHING is left to a component
+     * to report. It fires once, after the retry below is exhausted — not on
+     * every attempt — and a screen whose data did not arrive still shows a
+     * neutral "could not load" in place of its content, because a toast that
+     * fades leaves a blank page behind it.
+     */
+    queryCache: new QueryCache({
+      onError: (error, query) => {
+        const meta = (query.meta ?? {}) as AppQueryMeta;
+        if (!notify || meta.silent) return;
+
+        const message = bannerMessage(error);
+        if (message) notify.error(message);
+      },
+    }),
+
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => {
         const meta = metaOf(mutation);

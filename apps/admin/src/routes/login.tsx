@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Info, Loader2, Mail, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, Mail, ShieldCheck } from 'lucide-react';
 import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import {
   Alert,
@@ -22,7 +22,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 import { useAuth } from '../providers/auth-context';
 const codeFormSchema = z.object({ code: otpCodeSchema });
 
@@ -92,6 +92,10 @@ function EmailStep({
   });
 
   const requestOtp = useMutation({
+    // `fields` so a wrong code or PIN lands ONLY on the input the reader is
+    // about to retype — without it the same complaint arrives twice, once on
+    // the field and once in a toast.
+    meta: { fields: EMAIL_FIELDS },
     mutationFn: (values: { email: string }) => api.auth.requestAdminOtp(values),
     onSuccess: (response, values) => onSent(values.email, response),
     onError: (error) => applyFieldErrors(error, form.setError, EMAIL_FIELDS),
@@ -127,8 +131,6 @@ function EmailStep({
             )}
           </Field>
 
-          <RequestError error={requestOtp.error} fields={EMAIL_FIELDS} />
-
           <Button type="submit" disabled={requestOtp.isPending}>
             {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
             Send code
@@ -158,6 +160,7 @@ function CodeStep({
   });
 
   const verify = useMutation({
+    meta: { fields: CODE_FIELDS },
     mutationFn: (values: { code: string }) => api.auth.verifyAdminOtp({ email, code: values.code }),
     onSuccess: onVerified,
     onError: (error) => applyFieldErrors(error, form.setError, CODE_FIELDS),
@@ -204,8 +207,6 @@ function CodeStep({
             </Alert>
           ) : null}
 
-          <RequestError error={verify.error} fields={CODE_FIELDS} />
-
           <Button type="submit" disabled={verify.isPending}>
             {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
             Verify &amp; continue
@@ -229,17 +230,5 @@ function StepIcon({ icon: Icon }: Readonly<{ icon: typeof Mail }>) {
     <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
       <Icon className="size-5 text-primary" aria-hidden />
     </div>
-  );
-}
-
-/** Shows only what the field errors did not already say. */
-function RequestError({ error, fields }: Readonly<{ error: unknown; fields?: readonly string[] }>) {
-  const message = bannerMessage(error, fields);
-  if (!message) return null;
-  return (
-    <Alert variant="danger">
-      <TriangleAlert aria-hidden />
-      <span>{message}</span>
-    </Alert>
   );
 }

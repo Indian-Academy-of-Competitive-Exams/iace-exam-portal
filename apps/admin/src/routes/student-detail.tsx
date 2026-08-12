@@ -22,7 +22,7 @@ import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 
 interface FormValues {
   fullName: string;
@@ -175,7 +175,8 @@ export function StudentDetailPage() {
 
   if (student.isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (student.error || !student.data) {
-    return <Alert variant="danger">{bannerMessage(student.error) ?? 'No such student'}</Alert>;
+    // The reason is on the toast; this only has to stop the page being blank.
+    return <Alert variant="danger">Could not load this student.</Alert>;
   }
 
   const detail = student.data;
@@ -333,10 +334,7 @@ export function StudentDetailPage() {
                 // clicked. When every detail is already on a field, that field
                 // may be a card away and off screen, and a save that reports
                 // nothing where you are looking reads as a dead button.
-                <Alert variant="danger">
-                  {bannerMessage(save.error, FORM_FIELDS) ??
-                    'Could not save — check the highlighted fields above.'}
-                </Alert>
+                <Alert variant="danger">Check the highlighted fields above.</Alert>
               ) : null}
               {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
 

@@ -138,10 +138,10 @@ module.exports = {
           from: { opacity: '0', transform: 'scale(0.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
-        // Rises from where it sits rather than flying in from off-screen: a
-        // toast is a remark, not an arrival.
+        // Settles down from the top edge it is anchored to. Six pixels, not
+        // sixty: a toast is a remark, not an arrival.
         'toast-in': {
-          from: { opacity: '0', transform: 'translateY(6px)' },
+          from: { opacity: '0', transform: 'translateY(-6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
       },
