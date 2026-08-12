@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { StudentsModule } from './students/students.module';
 import { GroupsModule } from './groups/groups.module';
+import { ImportsModule } from './imports/imports.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { PagePermissionGuard } from './auth/guards/page-permission.guard';
@@ -37,6 +38,7 @@ import { RequestIdMiddleware } from './common/request-id';
     AuthModule,
     StudentsModule,
     GroupsModule,
+    ImportsModule,
     HealthModule,
   ],
   providers: [
