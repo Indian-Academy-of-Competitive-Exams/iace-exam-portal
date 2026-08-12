@@ -7,21 +7,32 @@
    ============================================================================ */
 
 /**
- * Tailwind cannot compute an alpha channel from a bare `var(--x)`, so it
- * silently DROPS the utility: `bg-destructive/10` emitted no CSS whatsoever,
- * and the error banner that used it had no background at all. Nothing errored —
- * the class simply did not exist.
+ * Wraps a CSS-variable colour so BOTH call shapes work.
  *
- * Wrapping each token in this keeps the hex values in tokens.css (so plain CSS
- * and the style guide can still use `var(--primary)` directly) while making
- * every `/alpha` modifier work through color-mix.
+ * Tailwind asks for a colour twice over, and the two are easy to conflate:
+ *
+ *   - with no alpha modifier it passes `opacityValue` as the STRING
+ *     "var(--tw-bg-opacity)", part of its own opacity mechanism;
+ *   - with `/14` it passes the number 0.14.
+ *
+ * Treating the first as a number yields `color-mix(... NaN%, transparent)`,
+ * which is invalid, so the browser drops the declaration entirely. That is
+ * silent: in light mode the fallbacks happen to look like the intended theme,
+ * and only a badge that refused to show a background gave it away.
+ *
+ * So: plain `var()` unless a real number arrives, and color-mix only then.
  */
 const token =
   (name) =>
-  ({ opacityValue }) =>
-    opacityValue === undefined
+  ({ opacityValue }) => {
+    const isNumericAlpha =
+      typeof opacityValue === 'number' || /^[\d.]+$/.test(String(opacityValue));
+    return opacityValue === undefined || !isNumericAlpha
       ? `var(${name})`
-      : `color-mix(in srgb, var(${name}) ${Number(opacityValue) * 100}%, transparent)`;
+      : // Rounded: 0.14 * 100 is 14.000000000000002 in binary floating point,
+        // and that lands verbatim in the generated CSS.
+        `color-mix(in srgb, var(${name}) ${Number((Number(opacityValue) * 100).toFixed(4))}%, transparent)`;
+  };
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {

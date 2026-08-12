@@ -9,9 +9,21 @@
 export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
+  STUDENTS: '/students',
+  STUDENT: (id: string) => `/students/${id}`,
+  STUDENT_PATTERN: '/students/:id',
+  BATCHES: '/batches',
+  IMPORT_STUDENTS: '/students/import',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
+
+/** The left-hand nav, in the order an admin works through them. */
+export const NAV_ITEMS = [
+  { to: ROUTES.HOME, label: 'Overview' },
+  { to: ROUTES.STUDENTS, label: 'Students' },
+  { to: ROUTES.BATCHES, label: 'Batches' },
+] as const;
 
 export const THEMES = {
   LIGHT: 'light',

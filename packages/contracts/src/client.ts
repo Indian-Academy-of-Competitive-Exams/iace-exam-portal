@@ -30,6 +30,49 @@ import {
   type VerifyStudentOtpInput,
 } from './auth';
 import { healthResponseSchema, type HealthResponse } from './health';
+import {
+  ADMIN_STUDENT_ROUTES,
+  studentDetailSchema,
+  studentSummarySchema,
+  type CreateStudentInput,
+  type StudentDetail,
+  type StudentListQueryInput,
+  type StudentSummary,
+  type UpdateStudentInput,
+} from './students';
+import {
+  ADMIN_GROUP_ROUTES,
+  addGroupMembersResultSchema,
+  groupSummarySchema,
+  type AddGroupMembersInput,
+  type AddGroupMembersResult,
+  type CreateGroupInput,
+  type GroupListQueryInput,
+  type GroupSummary,
+  type UpdateGroupInput,
+} from './groups';
+import {
+  IMPORT_ROUTES,
+  studentImportPlanSchema,
+  studentImportResultSchema,
+  type StudentImportInput,
+  type StudentImportPlan,
+  type StudentImportResult,
+} from './imports';
+
+/**
+ * Drops empty and undefined keys, so an unset filter never becomes
+ * `?q=undefined` — which the server would then dutifully search for.
+ */
+function queryString(params: Record<string, unknown>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -291,6 +334,97 @@ export function createApiClient(options: ApiClientOptions) {
       /** The envelope's `success` is the whole answer; there is no payload. */
       logout: (): Promise<NoContent> =>
         request(AUTH_ROUTES.logout, { method: 'POST', schema: noContentSchema }),
+    },
+
+    /** Admin-only. A student token gets 403 from every one of these. */
+    admin: {
+      students: {
+        list: (query: StudentListQueryInput = {}): Promise<Paginated<StudentSummary>> =>
+          requestPaginated(`${ADMIN_STUDENT_ROUTES.list}${queryString({ ...query })}`, {
+            schema: studentSummarySchema.array(),
+          }),
+
+        detail: (id: string): Promise<StudentDetail> =>
+          request(ADMIN_STUDENT_ROUTES.detail(id), { schema: studentDetailSchema }),
+
+        create: (input: CreateStudentInput): Promise<StudentDetail> =>
+          request(ADMIN_STUDENT_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: studentDetailSchema,
+          }),
+
+        update: (id: string, input: UpdateStudentInput): Promise<StudentDetail> =>
+          request(ADMIN_STUDENT_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: studentDetailSchema,
+          }),
+
+        setActive: (id: string, isActive: boolean): Promise<StudentDetail> =>
+          request(ADMIN_STUDENT_ROUTES.setActive(id), {
+            method: 'PATCH',
+            body: { isActive },
+            schema: studentDetailSchema,
+          }),
+      },
+
+      groups: {
+        list: (query: GroupListQueryInput = {}): Promise<Paginated<GroupSummary>> =>
+          requestPaginated(`${ADMIN_GROUP_ROUTES.list}${queryString({ ...query })}`, {
+            schema: groupSummarySchema.array(),
+          }),
+
+        detail: (id: string): Promise<GroupSummary> =>
+          request(ADMIN_GROUP_ROUTES.detail(id), { schema: groupSummarySchema }),
+
+        create: (input: CreateGroupInput): Promise<GroupSummary> =>
+          request(ADMIN_GROUP_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: groupSummarySchema,
+          }),
+
+        update: (id: string, input: UpdateGroupInput): Promise<GroupSummary> =>
+          request(ADMIN_GROUP_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: groupSummarySchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_GROUP_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        addMembers: (id: string, input: AddGroupMembersInput): Promise<AddGroupMembersResult> =>
+          request(ADMIN_GROUP_ROUTES.addMembers(id), {
+            method: 'POST',
+            body: input,
+            schema: addGroupMembersResultSchema,
+          }),
+
+        removeMember: (id: string, studentId: string): Promise<NoContent> =>
+          request(ADMIN_GROUP_ROUTES.removeMember(id, studentId), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+      },
+
+      imports: {
+        /** Writes nothing — this is what the admin reads before committing. */
+        previewStudents: (input: StudentImportInput): Promise<StudentImportPlan> =>
+          request(IMPORT_ROUTES.studentsPreview, {
+            method: 'POST',
+            body: input,
+            schema: studentImportPlanSchema,
+          }),
+
+        commitStudents: (input: StudentImportInput): Promise<StudentImportResult> =>
+          request(IMPORT_ROUTES.studentsCommit, {
+            method: 'POST',
+            body: input,
+            schema: studentImportResultSchema,
+          }),
+      },
     },
   };
 }
