@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
-import { type Gender, type StudentDetail } from '@iace/contracts';
+import { todayISO, type Gender, type StudentDetail } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -119,7 +119,16 @@ export function StudentDetailPage() {
       form.reset(toFormValues(updated));
       setSaved(true);
     },
-    onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
+    onError: (error) => {
+      applyFieldErrors(error, form.setError, FORM_FIELDS);
+      // Bring the offending field into view; on a long form the message can
+      // otherwise land above the fold.
+      requestAnimationFrame(() => {
+        document
+          .querySelector('[aria-invalid="true"], [role="alert"]')
+          ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    },
   });
 
   const setActive = useMutation({
@@ -224,7 +233,11 @@ export function StudentDetailPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field htmlFor="dob" label="Date of birth" error={form.formState.errors.dob?.message}>
-                {(control) => <Input {...control} type="date" {...form.register('dob')} />}
+                {/* The browser's own picker refuses a future date too, so the
+                    rule is visible before it is enforced. */}
+                {(control) => (
+                  <Input {...control} type="date" max={todayISO()} {...form.register('dob')} />
+                )}
               </Field>
               <Field htmlFor="gender" label="Gender" error={form.formState.errors.gender?.message}>
                 {(control) => (
@@ -270,7 +283,14 @@ export function StudentDetailPage() {
           <Card>
             <CardContent className="flex flex-col gap-3 pt-6">
               {save.error ? (
-                <Alert variant="danger">{bannerMessage(save.error, FORM_FIELDS)}</Alert>
+                // Always says something HERE, beside the button that was just
+                // clicked. When every detail is already on a field, that field
+                // may be a card away and off screen, and a save that reports
+                // nothing where you are looking reads as a dead button.
+                <Alert variant="danger">
+                  {bannerMessage(save.error, FORM_FIELDS) ??
+                    'Could not save — check the highlighted fields above.'}
+                </Alert>
               ) : null}
               {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
 

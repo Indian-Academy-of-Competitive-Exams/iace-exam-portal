@@ -1,4 +1,9 @@
-import { mobileSchema, type StudentImportRow, type StudentImportPlan } from '@iace/contracts';
+import {
+  mobileSchema,
+  personNameSchema,
+  type StudentImportRow,
+  type StudentImportPlan,
+} from '@iace/contracts';
 import { readCsvTable, type CsvRow } from './csv';
 
 /**
@@ -82,7 +87,15 @@ function planRow(
 ): StudentImportRow {
   const errors: string[] = [];
   const rawMobile = row.values.mobile ?? '';
-  const fullName = row.values.fullname?.trim() || null;
+  const rawName = row.values.fullname?.trim() ?? '';
+  let fullName: string | null = null;
+  if (rawName !== '') {
+    const parsedName = personNameSchema.safeParse(rawName);
+    if (parsedName.success) fullName = parsedName.data;
+    // Reported rather than imported: "Kumari, Asha" is a spreadsheet artefact,
+    // and letting it through means it greets the student that way forever.
+    else errors.push(parsedName.error.issues[0]?.message ?? 'That name is not valid');
+  }
 
   const parsedMobile = mobileSchema.safeParse(rawMobile);
   const mobile = parsedMobile.success ? parsedMobile.data : null;

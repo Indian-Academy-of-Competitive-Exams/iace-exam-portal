@@ -186,18 +186,19 @@ function internal(): Translated {
 }
 
 /**
- * The flattened form of a ZodError: keyed by the first path segment, which is
- * exactly the field name react-hook-form registers. Issues about the body as a
- * whole have no path and land under `_`, where a form shows them as a summary.
+ * A ZodError keyed by its FULL dotted path — `profile.dob`, not `profile`.
  *
- * This is `z.flattenError`'s grouping, written out because that helper loses
- * its types on an unparameterised `ZodError`.
+ * The first segment alone was not enough: every problem inside a nested object
+ * collapsed onto the object's name, so a bad date of birth and a bad mother's
+ * name were indistinguishable, and neither could be shown against the input
+ * that caused it. Issues about the body as a whole have no path and land under
+ * `_`, where a form shows them as a summary.
  */
 export function fieldErrorsFrom(error: ZodError): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
 
   for (const issue of error.issues) {
-    const field = issue.path.length > 0 ? String(issue.path[0]) : FORM_LEVEL_FIELD;
+    const field = issue.path.length > 0 ? issue.path.join('.') : FORM_LEVEL_FIELD;
     (fieldErrors[field] ??= []).push(issue.message);
   }
 

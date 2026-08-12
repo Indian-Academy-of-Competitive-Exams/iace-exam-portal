@@ -23,6 +23,47 @@ export const dateOnlySchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD')
   .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), 'That is not a real date');
 
+/** The earliest birth year worth accepting — anything older is a typo. */
+export const EARLIEST_BIRTH_YEAR = 1900;
+
+/**
+ * A date of birth: a real date, in the past, and this side of plausible.
+ *
+ * The future half matters most. A DOB is one of the three fields the pre-test
+ * gate collects, so a mistyped year does not just sit in a profile — it marks a
+ * student ready for a test on data that cannot be true.
+ */
+export const dobSchema = dateOnlySchema
+  .refine((value) => value <= todayISO(), 'A date of birth cannot be in the future')
+  .refine(
+    (value) => Number(value.slice(0, 4)) >= EARLIEST_BIRTH_YEAR,
+    `That year looks like a typo — use ${EARLIEST_BIRTH_YEAR} or later`,
+  );
+
+/** Today, as YYYY-MM-DD. Also what a date input should cap itself at. */
+export function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * A person's name: letters, and the few marks that appear INSIDE real names.
+ *
+ * Digits, commas and symbols are refused. A comma is the specific one that
+ * prompted this — "Kumari, Asha" is a spreadsheet artefact, not a name, and it
+ * sorts and greets wrongly wherever it is shown.
+ *
+ * A dot, apostrophe and hyphen are kept deliberately: "K. Ravi Kumar",
+ * "D'Souza" and double-barrelled names are ordinary here, and rejecting them
+ * would send admins looking for workarounds. Tighten to `\p{L}` and spaces
+ * alone if that turns out to be the wrong call.
+ */
+export const personNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^\p{L}[\p{L}\p{M}\s.'-]*$/u, 'Use letters only — no digits, commas or other characters');
+
 // ============================================================================
 // Reading
 // ============================================================================
@@ -99,6 +140,34 @@ export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;
 // ============================================================================
 
 /**
+ * A box holding nothing but spaces is empty to the person who left it. Folding
+ * it away BEFORE the value reaches its real schema is what stops it tripping a
+ * minimum length, or a letters-only rule, it was never meant to meet.
+ *
+ * These pipe rather than `z.preprocess`, which types its input as `unknown` and
+ * would leave every form field that uses one untyped.
+ */
+const isBlank = (value: unknown) => typeof value === 'string' && value.trim() === '';
+
+/** Blank or absent → absent. Used where an empty box means "not known yet". */
+function blankIsAbsent<S extends z.ZodType<unknown, string>>(schema: S) {
+  return z
+    .string()
+    .optional()
+    .transform((value) => (isBlank(value) ? undefined : value))
+    .pipe(schema.optional());
+}
+
+/** Blank → null. Used on a patch, where clearing a box must clear the field. */
+function blankClears<S extends z.ZodType<unknown, string>>(schema: S) {
+  return z
+    .union([z.string(), z.null()])
+    .optional()
+    .transform((value) => (isBlank(value) ? null : value))
+    .pipe(schema.nullable().optional());
+}
+
+/**
  * Creating a student ahead of their first login. Only the mobile is required —
  * the same field the student would have signed up with, so when they do, the
  * OTP flow finds this row instead of making a second one.
@@ -108,31 +177,17 @@ export const createStudentSchema = z.object({
   // An empty box means "not known yet", not an invalid name. `.min(1).optional()`
   // rejected '' — optional permits undefined, never the empty string — so a form
   // whose name field was simply left alone could not be submitted at all.
-  fullName: optionalText(120),
+  fullName: blankIsAbsent(personNameSchema),
   groupIds: z.array(z.string()).optional(),
 });
 export type CreateStudentInput = z.input<typeof createStudentSchema>;
 export type CreateStudentBody = z.infer<typeof createStudentSchema>;
 
-/**
- * An optional free-text field: absent, or text. An empty string is neither, so
- * it is folded into "absent" rather than failing a length rule the admin never
- * meant to trip.
- */
-function optionalText(max: number) {
-  return z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => (value === '' ? undefined : value));
-}
-
 /** Every field optional: this is a patch, and an omitted key means "leave it". */
 export const updateStudentProfileSchema = z.object({
-  motherName: z.string().trim().max(120).nullish(),
-  fatherName: z.string().trim().max(120).nullish(),
-  dob: dateOnlySchema.nullish(),
+  motherName: blankClears(personNameSchema),
+  fatherName: blankClears(personNameSchema),
+  dob: blankClears(dobSchema),
   email: z.string().trim().max(160).nullish(),
   address: z.string().trim().max(500).nullish(),
   gender: genderSchema.nullish(),
@@ -140,12 +195,7 @@ export const updateStudentProfileSchema = z.object({
 
 export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
-  fullName: z
-    .string()
-    .trim()
-    .max(120)
-    .nullish()
-    .transform((value) => (value === '' ? null : value)),
+  fullName: blankClears(personNameSchema),
   preferredLanguage: z.string().trim().min(2).max(8).optional(),
   /** Replaces membership wholesale. A student must stay in at least one group. */
   groupIds: z.array(z.string()).optional(),
