@@ -33,6 +33,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TruncatedText,
+  useTruncation,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
@@ -208,12 +213,7 @@ function StudentRow({ student }: { student: StudentSummary }) {
   return (
     <TableRow>
       <TableCell>
-        <Link
-          to={ROUTES.STUDENT(student.id)}
-          className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-        >
-          {student.fullName ?? <span className="text-muted-foreground">No name yet</span>}
-        </Link>
+        <StudentNameCell student={student} />
       </TableCell>
 
       <TableCell className="tabular-nums text-muted-foreground">{student.mobile}</TableCell>
@@ -250,14 +250,41 @@ function StudentRow({ student }: { student: StudentSummary }) {
 }
 
 /**
+ * The student's name, capped so one long name cannot widen the column.
+ *
+ * The tooltip hangs off the link rather than a span inside it, so the same
+ * thing that reveals the full name on hover reveals it on keyboard focus —
+ * there is one target, not a focusable link wrapping a hoverable span.
+ */
+function StudentNameCell({ student }: { student: StudentSummary }) {
+  const name = student.fullName;
+  const { ref, truncated } = useTruncation<HTMLAnchorElement>(name);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          ref={ref}
+          to={ROUTES.STUDENT(student.id)}
+          className="block max-w-[15rem] truncate rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {name ?? <span className="text-muted-foreground">No name yet</span>}
+        </Link>
+      </TooltipTrigger>
+      {truncated && name ? <TooltipContent>{name}</TooltipContent> : null}
+    </Tooltip>
+  );
+}
+
+/**
  * A student's groups, in exactly one line however many there are.
  *
  * Listing them all wrapped the cell over several lines and let one long,
  * admin-typed group name widen the column until the rest of the table was
  * pushed sideways — the row height stopped matching its neighbours and the
  * columns stopped lining up. So: the first name, truncated to the column, and a
- * count standing in for the rest. Both carry the full names in a tooltip, and
- * the group filter above the table is the way to actually see who is in what.
+ * count standing in for the rest. Hovering either reveals what was cut, and the
+ * group filter above the table is the way to actually see who is in what.
  */
 function GroupsCell({ groups }: { groups: GroupRef[] }) {
   const [first, ...rest] = groups;
@@ -265,13 +292,21 @@ function GroupsCell({ groups }: { groups: GroupRef[] }) {
 
   return (
     <div className="flex max-w-[12rem] items-center gap-1">
-      <Badge className="min-w-0 shrink" title={first.name}>
-        <span className="truncate">{first.name}</span>
+      <Badge className="min-w-0 shrink">
+        <TruncatedText>{first.name}</TruncatedText>
       </Badge>
+
       {rest.length > 0 ? (
-        <Badge variant="neutral" title={rest.map((group) => group.name).join('\n')}>
-          +{rest.length}
-        </Badge>
+        // Not a truncation: these names are hidden however wide the column
+        // gets, so this one always has something to say.
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="neutral" tabIndex={0} className="focus-visible:shadow-focus">
+              +{rest.length}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>{rest.map((group) => group.name).join('\n')}</TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   );

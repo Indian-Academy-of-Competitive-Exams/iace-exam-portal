@@ -129,6 +129,17 @@ module.exports = {
         focus: token('--focus-ring'),
         'focus-invalid': token('--focus-ring-invalid'),
       },
+      keyframes: {
+        // Short enough to feel like the tooltip was already there, long enough
+        // not to snap. Lives here so no component hand-rolls its own timing.
+        'tooltip-in': {
+          from: { opacity: '0', transform: 'scale(0.96)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        'tooltip-in': 'tooltip-in 120ms ease-out',
+      },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
       },

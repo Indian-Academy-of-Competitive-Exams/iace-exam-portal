@@ -10,6 +10,12 @@ export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export { Select, type SelectProps } from './components/ui/select';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
+export {
+  TruncatedText,
+  useTruncation,
+  type TruncatedTextProps,
+} from './components/ui/truncated-text';
 export {
   Table,
   TableHeader,
