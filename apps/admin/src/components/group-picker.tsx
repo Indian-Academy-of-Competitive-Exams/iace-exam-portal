@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { PAGE_SIZE_MAX, type GroupRef } from '@iace/contracts';
-import { Alert, Checkbox, Input } from '@iace/ui';
+import { Alert, Checkbox, Input, linkVariants } from '@iace/ui';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -132,7 +132,7 @@ export function GroupPicker({
         <Alert variant="warning">
           <span>
             No groups yet — a student reaches tests only through one.{' '}
-            <Link to={ROUTES.GROUPS} className="underline underline-offset-4">
+            <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
               Create a group
             </Link>
             .

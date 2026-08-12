@@ -23,6 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  linkVariants,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
 import { useAuth } from '../providers/auth-context';
@@ -212,10 +213,7 @@ function BranchRow({
       <TableRow>
         <TableCell className="font-medium">
           {branch.groupCount > 0 ? (
-            <Link
-              to={`${ROUTES.GROUPS}?branchId=${branch.id}`}
-              className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-            >
+            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
               {branch.name}
             </Link>
           ) : (

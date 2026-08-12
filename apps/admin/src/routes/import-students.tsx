@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  linkVariants,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
@@ -84,7 +85,7 @@ export function ImportStudentsPage() {
               <span>
                 Imported: {commit.data.created} created, {commit.data.updated} updated,{' '}
                 {commit.data.skipped} skipped.{' '}
-                <Link to={ROUTES.STUDENTS} className="underline underline-offset-4">
+                <Link to={ROUTES.STUDENTS} className={linkVariants({ variant: 'inline' })}>
                   View students
                 </Link>
               </span>

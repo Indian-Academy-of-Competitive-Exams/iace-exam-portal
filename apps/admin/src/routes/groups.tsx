@@ -29,6 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  linkVariants,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
 import { Pagination } from '@iace/ui';
@@ -273,10 +274,7 @@ function GroupRow({ group }: { group: GroupSummary }) {
       <TableRow>
         <TableCell className="font-medium">
           {/* Members are the student list filtered — the same screen, not a copy. */}
-          <Link
-            to={`${ROUTES.STUDENTS}?groupId=${group.id}`}
-            className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-          >
+          <Link to={`${ROUTES.STUDENTS}?groupId=${group.id}`} className={linkVariants()}>
             {group.name}
           </Link>
         </TableCell>

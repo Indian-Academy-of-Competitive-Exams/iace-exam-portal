@@ -38,6 +38,8 @@ import {
   TooltipContent,
   TooltipTrigger,
   TruncatedText,
+  cn,
+  linkVariants,
   useTruncation,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
@@ -277,7 +279,7 @@ function StudentNameCell({ student }: { student: StudentSummary }) {
         <Link
           ref={ref}
           to={ROUTES.STUDENT(student.id)}
-          className="block max-w-[15rem] truncate rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+          className={cn(linkVariants(), 'block max-w-[15rem] truncate')}
         >
           {name ?? <span className="text-muted-foreground">No name yet</span>}
         </Link>
