@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Search, Upload, UserPlus } from 'lucide-react';
+import { Search, Upload, UserPlus, X } from 'lucide-react';
 import { type StudentSummary } from '@iace/contracts';
 import {
   Alert,
@@ -40,9 +40,20 @@ export function StudentsPage() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
 
+  // Set when arriving from a batch. Batch members are this list filtered, not a
+  // second screen that would drift from it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const groupId = searchParams.get('groupId') ?? undefined;
+
+  const batch = useQuery({
+    queryKey: ['admin', 'group', groupId],
+    queryFn: () => api.admin.groups.detail(groupId ?? ''),
+    enabled: Boolean(groupId),
+  });
+
   const students = useQuery({
-    queryKey: ['admin', 'students', { search, status, page }],
-    queryFn: () => api.admin.students.list({ q: search, page, ...STATUS_QUERY[status] }),
+    queryKey: ['admin', 'students', { search, status, page, groupId }],
+    queryFn: () => api.admin.students.list({ q: search, page, groupId, ...STATUS_QUERY[status] }),
     // Without this the table empties on every keystroke and the page jumps;
     // holding the previous page keeps the rows still while the next arrives.
     placeholderData: keepPreviousData,
@@ -77,6 +88,24 @@ export function StudentsPage() {
       />
 
       <Card className="p-4">
+        {groupId ? (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Showing the batch</span>
+            <Badge variant="primary">{batch.data?.name ?? '…'}</Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchParams({});
+                setPage(1);
+              }}
+            >
+              <X aria-hidden />
+              Clear
+            </Button>
+          </div>
+        ) : null}
+
         <div className="mb-4 flex flex-wrap gap-3">
           <div className="min-w-56 flex-1">
             <Input
@@ -126,7 +155,7 @@ export function StudentsPage() {
               ))
             ) : (
               <TableEmpty colSpan={5}>
-                {search || status !== 'all'
+                {search || status !== 'all' || groupId
                   ? 'No students match that.'
                   : 'No students yet. Add one, or import a roster.'}
               </TableEmpty>

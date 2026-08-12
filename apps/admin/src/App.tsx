@@ -3,6 +3,9 @@ import { AppShell } from './components/app-shell';
 import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
+import { StudentDetailPage } from './routes/student-detail';
+import { BatchesPage } from './routes/batches';
+import { ImportStudentsPage } from './routes/import-students';
 import { ProtectedRoute } from './routes/protected-route';
 import { ROUTES } from './lib/constants';
 
@@ -18,6 +21,10 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.STUDENTS} element={<StudentsPage />} />
+          {/* Before the :id route, or "import" would be read as a student id. */}
+          <Route path={ROUTES.IMPORT_STUDENTS} element={<ImportStudentsPage />} />
+          <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
+          <Route path={ROUTES.BATCHES} element={<BatchesPage />} />
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
