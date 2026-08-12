@@ -98,14 +98,14 @@ export function ProfilePage() {
 
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
 
-      {me.isPending ? (
+      {me.isPending && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
           Loading…
         </p>
-      ) : me.error ? (
-        <Alert variant="danger">{bannerMessage(me.error)}</Alert>
-      ) : (
+      )}
+      {me.error && <Alert variant="danger">{bannerMessage(me.error)}</Alert>}
+      {!me.isPending && !me.error && (
         <form
           className="flex flex-col gap-5"
           onSubmit={form.handleSubmit((values) => save.mutate(values))}

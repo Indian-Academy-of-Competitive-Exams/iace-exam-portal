@@ -15,7 +15,7 @@ import { secondsToHuman } from '../../common/duration';
 export function lockoutDurationFor(steps: number[], lockoutCount: number): number {
   const index = Math.min(Math.max(lockoutCount, 1), steps.length) - 1;
   // steps is validated non-empty at boot; the fallback keeps the type honest.
-  return steps[index] ?? steps[steps.length - 1] ?? 900;
+  return steps[index] ?? steps.at(-1) ?? 900;
 }
 
 /**

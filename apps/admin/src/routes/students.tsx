@@ -26,12 +26,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Combobox,
   Field,
   Input,
   NumericInput,
+  Pagination,
   Select,
-  digitsOnly,
-  Combobox,
   Table,
   TableBody,
   TableCell,
@@ -44,19 +44,17 @@ import {
   TooltipTrigger,
   TruncatedText,
   cn,
+  digitsOnly,
   linkVariants,
   useTruncation,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
-import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { useInfinitePages, usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage, useInfinitePages, usePageSize } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
-
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
@@ -480,7 +478,7 @@ export function StudentsPage() {
   );
 }
 
-function StudentRow({ student }: { student: StudentSummary }) {
+function StudentRow({ student }: Readonly<{ student: StudentSummary }>) {
   return (
     <TableRow>
       <TableCell>
@@ -500,28 +498,32 @@ function StudentRow({ student }: { student: StudentSummary }) {
       </TableCell>
 
       <TableCell>
-        {!student.isActive ? (
-          <Badge variant="danger">Deactivated</Badge>
-        ) : student.hasSignedIn ? (
-          <Badge variant="success">Active</Badge>
-        ) : student.hasDefaultPin ? (
-          // Worth its own state: they CAN sign in, but on a PIN anyone holding
-          // the roster can work out. "Never signed in" would hide that.
-          <Badge variant="warning">Default PIN</Badge>
-        ) : (
-          <Badge variant="info">Never signed in</Badge>
-        )}
+        <SignInStatus student={student} />
       </TableCell>
 
       <TableCell>
-        {student.preTestReady ? (
-          <Badge variant="success">On file</Badge>
-        ) : (
-          <Badge variant="neutral">Needed</Badge>
-        )}
+        <Badge variant={student.preTestReady ? 'success' : 'neutral'}>
+          {student.preTestReady ? 'On file' : 'Needed'}
+        </Badge>
       </TableCell>
     </TableRow>
   );
+}
+
+/**
+ * Where a student is with signing in — four states, in the order they matter.
+ *
+ * Written as a list rather than a chain of ternaries because that is what it
+ * is: adding a fifth state to a nested conditional means finding the right rung
+ * of the ladder, and putting it on the wrong one silently hides another.
+ */
+function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
+  if (!student.isActive) return <Badge variant="danger">Deactivated</Badge>;
+  if (student.hasSignedIn) return <Badge variant="success">Active</Badge>;
+  // Its own state on purpose: they CAN sign in, but on a PIN anyone holding the
+  // roster can work out. "Never signed in" would hide that.
+  if (student.hasDefaultPin) return <Badge variant="warning">Default PIN</Badge>;
+  return <Badge variant="info">Never signed in</Badge>;
 }
 
 /**
@@ -531,7 +533,7 @@ function StudentRow({ student }: { student: StudentSummary }) {
  * thing that reveals the full name on hover reveals it on keyboard focus —
  * there is one target, not a focusable link wrapping a hoverable span.
  */
-function StudentNameCell({ student }: { student: StudentSummary }) {
+function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
   const name = student.fullName;
   const { ref, truncated } = useTruncation<HTMLAnchorElement>(name);
 
@@ -561,7 +563,7 @@ function StudentNameCell({ student }: { student: StudentSummary }) {
  * count standing in for the rest. Hovering either reveals what was cut, and the
  * group filter above the table is the way to actually see who is in what.
  */
-function GroupsCell({ groups }: { groups: GroupRef[] }) {
+function GroupsCell({ groups }: Readonly<{ groups: GroupRef[] }>) {
   const [first, ...rest] = groups;
   if (!first) return null;
 
@@ -598,7 +600,7 @@ const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'groupIds'] as const;
  * flow upserts onto THIS row, so the groups picked here are already in place
  * rather than lost to a duplicate.
  */
-function NewStudentCard({ onClose }: { onClose: () => void }) {
+function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 

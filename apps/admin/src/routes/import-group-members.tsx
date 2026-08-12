@@ -21,7 +21,7 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableEmpty,
+  TableState,
   TableHead,
   TableHeader,
   TableRow,
@@ -146,16 +146,20 @@ export function ImportGroupMembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {plan === null ? (
-                <TableEmpty colSpan={4}>
-                  Choose a file of mobile numbers to see exactly who would be added. Nothing changes
-                  until you press Add.
-                </TableEmpty>
-              ) : plan.rows.length === 0 ? (
-                <TableEmpty colSpan={4}>No rows in that file.</TableEmpty>
-              ) : (
-                plan.rows.map((row) => <MemberRow key={row.line} row={row} />)
-              )}
+              <TableState
+                isLoading={false}
+                isEmpty={plan === null || plan.rows.length === 0}
+                colSpan={4}
+                empty={
+                  plan === null
+                    ? 'Choose a file of mobile numbers to see exactly who would be added. Nothing changes until you press Add.'
+                    : 'No rows in that file.'
+                }
+              >
+                {plan?.rows.map((row) => (
+                  <MemberRow key={row.line} row={row} />
+                ))}
+              </TableState>
             </TableBody>
           </Table>
         </Card>
@@ -253,7 +257,7 @@ export function ImportGroupMembersPage() {
   );
 }
 
-function Summary({ label, value }: { label: string; value: number }) {
+function Summary({ label, value }: Readonly<{ label: string; value: number }>) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
@@ -262,7 +266,7 @@ function Summary({ label, value }: { label: string; value: number }) {
   );
 }
 
-function MemberRow({ row }: { row: GroupMemberImportRow }) {
+function MemberRow({ row }: Readonly<{ row: GroupMemberImportRow }>) {
   return (
     <TableRow>
       <TableCell numeric className="text-muted-foreground">

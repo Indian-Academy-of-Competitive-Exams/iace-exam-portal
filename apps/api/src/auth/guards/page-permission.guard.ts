@@ -24,7 +24,7 @@ export class PagePermissionGuard implements CanActivate {
     if (!requiredPage) return true;
 
     const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
-    if (!user || user.actor !== ActorTypes.ADMIN) {
+    if (user?.actor !== ActorTypes.ADMIN) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Admin access required');
     }
     if (user.isSuperAdmin) return true;

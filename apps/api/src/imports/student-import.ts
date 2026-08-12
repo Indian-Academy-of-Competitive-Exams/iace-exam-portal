@@ -198,6 +198,12 @@ function tooManyRows(table: CsvTable): string[] {
   ];
 }
 
+/** What a row does, in the order the decisions are actually made. */
+function actionFor(errorCount: number, exists: boolean): StudentImportRow['action'] {
+  if (errorCount > 0) return 'skip';
+  return exists ? 'update' : 'create';
+}
+
 function planRow(
   row: CsvRow,
   context: ImportContext,
@@ -246,7 +252,7 @@ function planRow(
   }
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
-  const action = errors.length > 0 ? 'skip' : existing ? 'update' : 'create';
+  const action = actionFor(errors.length, Boolean(existing));
 
   return {
     line: row.line,

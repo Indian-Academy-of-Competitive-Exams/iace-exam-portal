@@ -165,6 +165,7 @@ describe('OtpService — verify', () => {
 
     // ~100s left, not a fresh 300 — otherwise guessing would renew the window.
     const ttl = await redis.ttl(`otp:student:${MOBILE}`);
-    assert.ok(ttl > 0 && ttl <= 100, `expected <=100s left, got ${ttl}`);
+    assert.ok(ttl > 0, `the key should still exist, got ttl ${ttl}`);
+    assert.ok(ttl <= 100, `expected <=100s left, got ${ttl}`);
   });
 });

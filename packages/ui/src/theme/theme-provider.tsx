@@ -8,8 +8,8 @@ function readInitialTheme(): Theme {
   return attr === THEMES.DARK ? THEMES.DARK : THEMES.LIGHT;
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(readInitialTheme);
+export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [theme, setTheme] = useState<Theme>(readInitialTheme);
 
   useEffect(() => {
     // The tokens do all the work — never hand-flip individual colours.
@@ -17,13 +17,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
-  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
+  const choose = useCallback((next: Theme) => setTheme(next), []);
   const toggle = useCallback(
-    () => setThemeState((current) => (current === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK)),
+    () => setTheme((current) => (current === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK)),
     [],
   );
 
-  const value = useMemo(() => ({ theme, toggle, setTheme }), [theme, toggle, setTheme]);
+  const value = useMemo(() => ({ theme, toggle, setTheme: choose }), [theme, toggle, choose]);
 
   return <ThemeContext value={value}>{children}</ThemeContext>;
 }

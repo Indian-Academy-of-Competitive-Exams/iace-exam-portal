@@ -31,53 +31,92 @@ export function parseCsvRows(input: string): RawCsvRow[] {
   const rows: RawCsvRow[] = [];
   let row: string[] = [];
   let cell = '';
-  let quoted = false;
-  // The line this row STARTED on — a quoted field may span several.
   let line = 1;
-  let lineOfRowStart = 1;
+  // The line this row STARTED on — a quoted field may span several.
+  let rowStartedOn = 1;
 
-  for (let i = 0; i < text.length; i++) {
+  /** Ends the current row, keeping it only if it holds something. */
+  const endRow = () => {
+    row.push(cell);
+    cell = '';
+    if (row.some((value) => value.trim() !== '')) rows.push({ line: rowStartedOn, cells: row });
+    row = [];
+  };
+
+  // A `while` rather than a `for`: a quoted field and a CRLF both consume more
+  // than one character, and a loop that advances its own cursor is clearer than
+  // one whose counter is reassigned from inside the body.
+  let i = 0;
+  while (i < text.length) {
     const char = text[i];
 
-    if (quoted) {
-      if (char === '"') {
-        // "" inside a quoted field is a literal quote, not the end of it.
-        if (text[i + 1] === '"') {
-          cell += '"';
-          i++;
-        } else {
-          quoted = false;
-        }
-      } else {
-        if (char === '\n') line++;
-        cell += char;
-      }
+    // A quote only opens a field at the START of one; anywhere else it is data.
+    if (char === '"' && cell === '') {
+      const field = readQuotedField(text, i);
+      cell += field.value;
+      line += field.newlines;
+      i = field.endsAt + 1;
       continue;
     }
 
-    if (char === '"' && cell === '') {
-      quoted = true;
-    } else if (char === ',') {
+    if (char === ',') {
       row.push(cell);
       cell = '';
     } else if (char === '\n' || char === '\r') {
       // Swallow the \n of a CRLF so it does not open a second, empty row.
       if (char === '\r' && text[i + 1] === '\n') i++;
-      row.push(cell);
-      cell = '';
-      if (row.some((value) => value.trim() !== '')) rows.push({ line: lineOfRowStart, cells: row });
-      row = [];
+      endRow();
       line++;
-      lineOfRowStart = line;
+      rowStartedOn = line;
     } else {
       cell += char;
     }
+
+    i++;
   }
 
-  row.push(cell);
-  if (row.some((value) => value.trim() !== '')) rows.push({ line: lineOfRowStart, cells: row });
-
+  endRow();
   return rows;
+}
+
+/**
+ * Reads one quoted field, from its opening quote to its closing one.
+ *
+ * Pulled out of the loop above because it carried its own state — a `quoted`
+ * flag, an escape case and a newline count — and interleaving that with the
+ * unquoted path made a scanner nobody could hold in their head. `newlines` is
+ * returned rather than counted by the caller: a quoted field may span lines,
+ * and losing that count is how every error after it points at the wrong row.
+ *
+ * An unterminated field (a stray quote in a hand-edited file) runs to the end
+ * of the input and stops there, which keeps whatever the author typed rather
+ * than throwing away the rest of their file.
+ */
+function readQuotedField(
+  text: string,
+  openingQuote: number,
+): { value: string; endsAt: number; newlines: number } {
+  let value = '';
+  let newlines = 0;
+
+  for (let i = openingQuote + 1; i < text.length; i++) {
+    const char = text[i];
+
+    if (char === '"') {
+      // "" inside a quoted field is a literal quote, not the end of it.
+      if (text[i + 1] === '"') {
+        value += '"';
+        i++;
+        continue;
+      }
+      return { value, endsAt: i, newlines };
+    }
+
+    if (char === '\n') newlines++;
+    value += char;
+  }
+
+  return { value, endsAt: text.length, newlines };
 }
 
 /** The cells alone, where the line numbers are not needed. */

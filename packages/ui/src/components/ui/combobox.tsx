@@ -82,11 +82,11 @@ export function Combobox({
   id,
   'aria-label': ariaLabel,
   className,
-}: ComboboxProps) {
+}: Readonly<ComboboxProps>) {
   const [open, setOpen] = React.useState(false);
 
   const selected = items.find((item) => item.value === value);
-  const triggerLabel = selected?.label ?? selectedLabel ?? (value ? value : placeholder);
+  const triggerLabel = selected?.label ?? selectedLabel ?? value ?? placeholder;
 
   /**
    * Ask for the next page as the reader nears the bottom.
@@ -206,13 +206,13 @@ function Option({
   selected,
   muted,
   onSelect,
-}: {
+}: Readonly<{
   label: string;
   hint?: string;
   selected: boolean;
   muted?: boolean;
   onSelect: () => void;
-}) {
+}>) {
   return (
     <button
       type="button"
@@ -234,6 +234,6 @@ function Option({
   );
 }
 
-function Status({ children }: { children: React.ReactNode }) {
+function Status({ children }: Readonly<{ children: React.ReactNode }>) {
   return <p className="px-2 py-3 text-sm text-muted-foreground">{children}</p>;
 }

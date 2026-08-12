@@ -61,6 +61,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /** Remaining TTL in seconds, or 0 when the key is gone / has no expiry. */
   async ttl(key: string): Promise<number> {
     const ttl = await this.client.ttl(key);
-    return ttl > 0 ? ttl : 0;
+    return Math.max(ttl, 0);
   }
 }

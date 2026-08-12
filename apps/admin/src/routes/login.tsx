@@ -18,13 +18,12 @@ import {
   Field,
   Input,
   NumericInput,
+  ThemeToggle,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from '@iace/ui';
-
 const codeFormSchema = z.object({ code: otpCodeSchema });
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
@@ -84,7 +83,9 @@ export function LoginPage() {
 
 // ---------------------------------------------------------------------------
 
-function EmailStep({ onSent }: { onSent: (email: string, response: OtpRequestResponse) => void }) {
+function EmailStep({
+  onSent,
+}: Readonly<{ onSent: (email: string, response: OtpRequestResponse) => void }>) {
   const form = useForm({
     resolver: zodResolver(requestAdminOtpSchema),
     defaultValues: { email: '' },
@@ -145,12 +146,12 @@ function CodeStep({
   challenge,
   onBack,
   onVerified,
-}: {
+}: Readonly<{
   email: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
   onVerified: (session: Awaited<ReturnType<typeof api.auth.verifyAdminOtp>>) => void;
-}) {
+}>) {
   const form = useForm({
     resolver: zodResolver(codeFormSchema),
     defaultValues: { code: '' },
@@ -223,7 +224,7 @@ function CodeStep({
 // ---------------------------------------------------------------------------
 
 /** Brand-tinted accent, matching the test app. */
-function StepIcon({ icon: Icon }: { icon: typeof Mail }) {
+function StepIcon({ icon: Icon }: Readonly<{ icon: typeof Mail }>) {
   return (
     <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
       <Icon className="size-5 text-primary" aria-hidden />
@@ -232,7 +233,7 @@ function StepIcon({ icon: Icon }: { icon: typeof Mail }) {
 }
 
 /** Shows only what the field errors did not already say. */
-function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
+function RequestError({ error, fields }: Readonly<{ error: unknown; fields?: readonly string[] }>) {
   const message = bannerMessage(error, fields);
   if (!message) return null;
   return (

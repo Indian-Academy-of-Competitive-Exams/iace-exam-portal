@@ -6,7 +6,7 @@ import { AuthProvider } from './auth-provider';
 
 const queryClient = createAppQueryClient();
 
-export function AppProviders({ children }: { children: React.ReactNode }) {
+export function AppProviders({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

@@ -61,6 +61,13 @@ function toFormValues(student: StudentDetail): FormValues {
   };
 }
 
+/** The three sign-in states, listed. Mirrors SignInStatus on the roster. */
+function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
+  if (detail.hasSignedIn) return <Badge variant="success">Has signed in</Badge>;
+  if (detail.hasDefaultPin) return <Badge variant="warning">Default PIN — not yet changed</Badge>;
+  return <Badge variant="info">Never signed in</Badge>;
+}
+
 export function StudentDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
@@ -172,13 +179,7 @@ export function StudentDetailPage() {
 
       <div className="mb-5 flex flex-wrap gap-2">
         {!detail.isActive ? <Badge variant="danger">Deactivated</Badge> : null}
-        <Badge variant={detail.hasSignedIn ? 'success' : detail.hasDefaultPin ? 'warning' : 'info'}>
-          {detail.hasSignedIn
-            ? 'Has signed in'
-            : detail.hasDefaultPin
-              ? 'Default PIN — not yet changed'
-              : 'Never signed in'}
-        </Badge>
+        <SignInBadge detail={detail} />
         <Badge variant={detail.preTestReady ? 'success' : 'neutral'}>
           Pre-test details {detail.preTestReady ? 'on file' : 'needed'}
         </Badge>

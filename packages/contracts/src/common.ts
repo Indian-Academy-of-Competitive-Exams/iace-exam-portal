@@ -54,7 +54,7 @@ export const mobileSchema = z
     z
       .string()
       .regex(
-        new RegExp(`^[6-9]\\d{${MOBILE_DIGITS - 1}}$`),
+        new RegExp(String.raw`^[6-9]\d{${MOBILE_DIGITS - 1}}$`),
         'Enter a valid 10-digit mobile number',
       ),
   );
@@ -86,7 +86,11 @@ export const PIN_LENGTH = 4;
 export const pinSchema = z
   .string()
   .transform((v) => v.trim())
-  .pipe(z.string().regex(new RegExp(`^\\d{${PIN_LENGTH}}$`), `Enter your ${PIN_LENGTH}-digit PIN`));
+  .pipe(
+    z
+      .string()
+      .regex(new RegExp(String.raw`^\d{${PIN_LENGTH}}$`), `Enter your ${PIN_LENGTH}-digit PIN`),
+  );
 
 /** Straight runs in either direction — the other half of the obvious guesses. */
 const SEQUENTIAL_PINS = new Set(
@@ -103,7 +107,7 @@ const SEQUENTIAL_PINS = new Set(
  */
 export const newPinSchema = pinSchema
   .refine(
-    (v) => !new RegExp(`^(\\d)\\1{${PIN_LENGTH - 1}}$`).test(v),
+    (v) => !new RegExp(String.raw`^(\d)\1{${PIN_LENGTH - 1}}$`).test(v),
     'Avoid a PIN that is all one digit',
   )
   .refine((v) => !SEQUENTIAL_PINS.has(v), 'Avoid a PIN in counting order');

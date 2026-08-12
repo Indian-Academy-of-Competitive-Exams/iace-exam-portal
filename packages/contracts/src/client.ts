@@ -82,7 +82,12 @@ function queryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === '') continue;
-    search.set(key, String(value));
+    // Primitives only, each named. An object would become "[object Object]" in
+    // the URL — a filter the server cannot read and nobody can see is wrong.
+    if (typeof value === 'string') search.set(key, value);
+    else if (typeof value === 'number' || typeof value === 'boolean') {
+      search.set(key, String(value));
+    }
   }
   const query = search.toString();
   return query ? `?${query}` : '';
@@ -254,16 +259,6 @@ export function createApiClient(options: ApiClientOptions) {
     const retried = await send(path, method, body, refreshed.accessToken);
     if (retried.status === 401) onUnauthorized?.();
     return parse(retried, schema);
-  }
-
-  /** Reads a failure body without consuming the caller's error path. */
-  async function peekFailure(response: Response) {
-    try {
-      const parsed = apiFailureSchema.safeParse(await response.clone().json());
-      return parsed.success ? parsed.data : null;
-    } catch {
-      return null;
-    }
   }
 
   /** The everyday call: returns `data`, throws `AppException`. */
@@ -553,4 +548,20 @@ function fileBody(file: File): FormData {
   const form = new FormData();
   form.append(IMPORT_FILE_FIELD, file);
   return form;
+}
+
+/**
+ * Reads a failure body without consuming the caller's error path.
+ *
+ * Outside the client factory because it closes over nothing — leaving it inside
+ * meant a fresh copy per client, for no reason.
+ */
+async function peekFailure(response: Response) {
+  try {
+    const parsed = apiFailureSchema.safeParse(await response.clone().json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    // A body that is not JSON at all is simply not an envelope.
+    return null;
+  }
 }

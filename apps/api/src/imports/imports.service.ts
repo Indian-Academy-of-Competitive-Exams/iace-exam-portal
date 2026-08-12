@@ -69,39 +69,34 @@ export class ImportsService {
     for (const row of plan.rows) {
       if (row.action === 'skip' || !row.mobile) continue;
 
+      // A starting PIN, so an uploaded roster can sign in the same day — marked
+      // as ours, not theirs. See default-pin.ts for the trade.
+      const startingPin = row.willReceiveDefaultPin
+        ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
+        : {};
+
+      // Groups are added, never replaced: a roster for one group must not
+      // remove a student from the others they are already in.
+      const groups = row.groupIds.length
+        ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
+        : {};
+
       if (row.existingStudentId) {
         await this.prisma.student.update({
           where: { id: row.existingStudentId },
           data: {
-            // An empty name column means "no opinion", not "clear the name".
+            // An empty name column means "no opinion", not "clear the name". An
+            // existing student also keeps whatever PIN they have — see the
+            // planner: `willReceiveDefaultPin` is false once they chose one.
             ...(row.fullName === null ? {} : { fullName: row.fullName }),
-            // A student already in the system keeps whatever PIN they have. An
-            // import must never reset a PIN somebody chose, or re-importing a
-            // roster would quietly hand every one of them back to the sheet.
-            ...(row.willReceiveDefaultPin
-              ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
-              : {}),
-            // Groups are added, never replaced: a roster for one group must not
-            // remove a student from the others they are already in.
-            ...(row.groupIds.length
-              ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
-              : {}),
+            ...startingPin,
+            ...groups,
           },
         });
         updated += 1;
       } else {
         await this.prisma.student.create({
-          data: {
-            mobile: row.mobile,
-            fullName: row.fullName,
-            // A starting PIN, so an uploaded roster can sign in the same day —
-            // marked as ours, not theirs. See default-pin.ts for the trade.
-            pinHash: pinHashes.get(row.mobile),
-            pinIsDefault: true,
-            ...(row.groupIds.length
-              ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
-              : {}),
-          },
+          data: { mobile: row.mobile, fullName: row.fullName, ...startingPin, ...groups },
         });
         created += 1;
       }

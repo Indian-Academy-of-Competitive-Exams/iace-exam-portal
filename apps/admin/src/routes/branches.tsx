@@ -118,7 +118,10 @@ export function BranchesPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewBranchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function NewBranchCard({
+  onDone,
+  onCancel,
+}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateBranchInput>({
     resolver: zodResolver(createBranchSchema),
     defaultValues: { name: '' },
@@ -182,15 +185,22 @@ function NewBranchCard({ onDone, onCancel }: { onDone: () => void; onCancel: () 
 
 // ---------------------------------------------------------------------------
 
+/** Three states, listed. See SignInStatus in students.tsx for the reasoning. */
+function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
+  if (branch.isGlobal) return <Badge variant="info">System</Badge>;
+  if (branch.isActive) return <Badge variant="success">Active</Badge>;
+  return <Badge variant="neutral">Retired</Badge>;
+}
+
 function BranchRow({
   branch,
   canEdit,
   onChanged,
-}: {
+}: Readonly<{
   branch: Branch;
   canEdit: boolean;
   onChanged: () => void;
-}) {
+}>) {
   const [confirming, setConfirming] = useState(false);
 
   const remove = useMutation({
@@ -244,13 +254,7 @@ function BranchRow({
         </TableCell>
 
         <TableCell>
-          {branch.isGlobal ? (
-            <Badge variant="info">System</Badge>
-          ) : branch.isActive ? (
-            <Badge variant="success">Active</Badge>
-          ) : (
-            <Badge variant="neutral">Retired</Badge>
-          )}
+          <BranchStatus branch={branch} />
         </TableCell>
 
         <TableCell className="text-right">

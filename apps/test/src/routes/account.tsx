@@ -42,7 +42,7 @@ export function AccountPage() {
   );
 }
 
-export function ChangePinCard({ onDefaultPin }: { onDefaultPin: boolean }) {
+export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean }>) {
   const { signIn } = useAuth();
 
   const form = useForm<ChangePinInput>({

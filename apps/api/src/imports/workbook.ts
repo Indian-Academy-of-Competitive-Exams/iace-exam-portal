@@ -122,20 +122,50 @@ function cellText(cell: ExcelJS.Cell): string {
   if (typeof value === 'number') return numberText(value);
   if (typeof value === 'boolean') return String(value);
   if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'object') return objectCellText(value);
 
-  if (typeof value === 'object') {
-    if ('richText' in value && Array.isArray(value.richText)) {
-      return value.richText.map((part: { text?: string }) => part.text ?? '').join('');
-    }
-    if ('text' in value) return String((value as { text: unknown }).text ?? '');
-    if ('result' in value) {
-      const result: unknown = (value as { result: unknown }).result;
-      return typeof result === 'number' ? numberText(result) : String(result ?? '');
-    }
-    if ('hyperlink' in value) return String((value as { hyperlink: unknown }).hyperlink ?? '');
+  return scalarText(value);
+}
+
+/**
+ * The shapes ExcelJS hands back for a cell that is not a plain scalar.
+ *
+ * Split from `cellText` because the two are different questions — "what kind of
+ * value is this" and "which of ExcelJS's wrappers is this" — and reading them
+ * as one nested chain is what made the original hard to check.
+ */
+function objectCellText(value: object): string {
+  // Styled text arrives in fragments, one per run of formatting.
+  if ('richText' in value && Array.isArray(value.richText)) {
+    return value.richText.map((part: { text?: string }) => part.text ?? '').join('');
   }
+  if ('text' in value) return scalarText((value as { text: unknown }).text);
+  if ('result' in value) {
+    // A formula: what the sheet shows is its result, not the formula itself.
+    const result: unknown = (value as { result: unknown }).result;
+    return typeof result === 'number' ? numberText(result) : scalarText(result);
+  }
+  if ('hyperlink' in value) return scalarText((value as { hyperlink: unknown }).hyperlink);
 
-  return String(value);
+  // An ExcelJS shape we do not know. Empty rather than String(value), which
+  // yields the literal text "[object Object]" — that then fails validation with
+  // a message about the wrong thing entirely.
+  return '';
+}
+
+/**
+ * A value ExcelJS handed back inside a wrapper.
+ *
+ * Only primitives become text. Anything else reads as empty rather than as the
+ * literal "[object Object]", which would travel on into validation and be
+ * reported as a bad mobile number instead of an unreadable cell.
+ */
+function scalarText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return numberText(value);
+  if (typeof value === 'boolean') return String(value);
+  // null, undefined, and any object shape we do not recognise.
+  return '';
 }
 
 /** No exponent notation, no thousands separator — a mobile number is digits. */

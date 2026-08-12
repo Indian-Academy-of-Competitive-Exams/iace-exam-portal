@@ -9,11 +9,12 @@
       // Applied before first paint so a dark-mode reload never flashes white.
       (function () {
         var stored = localStorage.getItem('iace.theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.setAttribute(
-          'data-theme',
-          stored === 'dark' || stored === 'light' ? stored : prefersDark ? 'dark' : 'light',
-        );
+        var theme = stored === 'dark' || stored === 'light' ? stored : null;
+        if (theme === null) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        // `dataset.theme` is the same `data-theme` attribute @iace/ui keys off.
+        document.documentElement.dataset.theme = theme;
       })();
     </script>
   </head>

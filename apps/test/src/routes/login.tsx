@@ -37,14 +37,13 @@ import {
   CardTitle,
   Field,
   NumericInput,
+  ThemeToggle,
   digitsOnly,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from '@iace/ui';
-
 /** Why the student is going through the OTP flow — it only changes the words. */
 const OTP_INTENTS = {
   SIGNUP: 'SIGNUP',
@@ -142,11 +141,11 @@ function SignInStep({
   onSignedIn,
   onSignUp,
   onForgotPin,
-}: {
+}: Readonly<{
   onSignedIn: (session: AuthSessionResponse) => void;
   onSignUp: () => void;
   onForgotPin: () => void;
-}) {
+}>) {
   const form = useForm({
     resolver: zodResolver(studentLoginSchema),
     defaultValues: { mobile: '', pin: '' },
@@ -222,11 +221,11 @@ function MobileStep({
   intent,
   onBack,
   onSent,
-}: {
+}: Readonly<{
   intent: OtpIntent;
   onBack: () => void;
   onSent: (mobile: string, response: OtpRequestResponse) => void;
-}) {
+}>) {
   const form = useForm({
     resolver: zodResolver(requestStudentOtpSchema),
     defaultValues: { mobile: '' },
@@ -287,12 +286,12 @@ function CodeStep({
   challenge,
   onBack,
   onVerified,
-}: {
+}: Readonly<{
   mobile: string;
   challenge: OtpRequestResponse;
   onBack: () => void;
   onVerified: (ticket: PinSetupTicket) => void;
-}) {
+}>) {
   const form = useForm({
     resolver: zodResolver(codeFormSchema),
     defaultValues: { code: '' },
@@ -361,11 +360,11 @@ function SetPinStep({
   mobile,
   ticket,
   onSignedIn,
-}: {
+}: Readonly<{
   mobile: string;
   ticket: PinSetupTicket;
   onSignedIn: (session: AuthSessionResponse) => void;
-}) {
+}>) {
   const form = useForm({
     resolver: zodResolver(setPinFormSchema),
     defaultValues: { pin: '', confirmPin: '' },
@@ -430,7 +429,7 @@ function SetPinStep({
  * 10% the tint reads as an accent, not as a filled state, and it gives each
  * card a focal point instead of opening on a bare heading.
  */
-function StepIcon({ icon: Icon }: { icon: typeof KeyRound }) {
+function StepIcon({ icon: Icon }: Readonly<{ icon: typeof KeyRound }>) {
   return (
     <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
       <Icon className="size-5 text-primary" aria-hidden />
@@ -443,11 +442,11 @@ function MobileField({
   autoFocus,
   error,
   register,
-}: {
+}: Readonly<{
   autoFocus?: boolean;
   error?: string;
   register: UseFormRegisterReturn;
-}) {
+}>) {
   return (
     <Field
       htmlFor="mobile"
@@ -487,7 +486,7 @@ function PinField({
   hint,
   error,
   register,
-}: {
+}: Readonly<{
   id: string;
   label: string;
   autoFocus?: boolean;
@@ -495,7 +494,7 @@ function PinField({
   hint?: string;
   error?: string;
   register: UseFormRegisterReturn;
-}) {
+}>) {
   return (
     <Field htmlFor={id} label={label} hint={hint} error={error}>
       {(control) => (
@@ -515,7 +514,10 @@ function PinField({
   );
 }
 
-function CodeField({ error, register }: { error?: string; register: UseFormRegisterReturn }) {
+function CodeField({
+  error,
+  register,
+}: Readonly<{ error?: string; register: UseFormRegisterReturn }>) {
   return (
     <Field htmlFor="code" label="One-time code" error={error}>
       {(control) => (
@@ -534,7 +536,10 @@ function CodeField({ error, register }: { error?: string; register: UseFormRegis
   );
 }
 
-function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function BackButton({
+  onClick,
+  children,
+}: Readonly<{ onClick: () => void; children: React.ReactNode }>) {
   return (
     <Button type="button" variant="ghost" size="sm" onClick={onClick}>
       <ArrowLeft aria-hidden />
@@ -547,7 +552,7 @@ function BackButton({ onClick, children }: { onClick: () => void; children: Reac
  * Shows what the field errors did not already say. When the server's whole
  * complaint has been placed on the inputs, the banner stays out of the way.
  */
-function RequestError({ error, fields }: { error: unknown; fields?: readonly string[] }) {
+function RequestError({ error, fields }: Readonly<{ error: unknown; fields?: readonly string[] }>) {
   const message = bannerMessage(error, fields);
   if (!message) return null;
   return (

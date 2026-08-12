@@ -12,34 +12,32 @@ import {
 } from '@iace/contracts';
 import {
   Alert,
+  Badge,
   Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-  Badge,
   Field,
   Input,
+  Pagination,
   Select,
   Table,
   TableBody,
   TableCell,
-  TableEmpty,
+  TableState,
   TableHead,
   TableHeader,
   TableRow,
   linkVariants,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
-import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage, usePageSize } from '@iace/app-kit';
 import { useFilters } from '../lib/use-filters';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
-
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
 export function GroupsPage() {
@@ -157,17 +155,20 @@ export function GroupsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {groups.isPending ? (
-              <TableEmpty colSpan={5}>Loading…</TableEmpty>
-            ) : groups.data?.items.length ? (
-              groups.data.items.map((group) => <GroupRow key={group.id} group={group} />)
-            ) : (
-              <TableEmpty colSpan={5}>
-                {search
+            <TableState
+              isLoading={groups.isPending}
+              isEmpty={!groups.data?.items.length}
+              colSpan={5}
+              empty={
+                search
                   ? `No group matches “${search}”.`
-                  : 'No groups yet. Create one before adding students.'}
-              </TableEmpty>
-            )}
+                  : 'No groups yet. Create one before adding students.'
+              }
+            >
+              {groups.data?.items.map((group) => (
+                <GroupRow key={group.id} group={group} />
+              ))}
+            </TableState>
           </TableBody>
         </Table>
 
@@ -191,7 +192,10 @@ export function GroupsPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function NewGroupCard({
+  onDone,
+  onCancel,
+}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateGroupInput>({
     resolver: zodResolver(createGroupSchema),
     defaultValues: { name: '', branchId: '' },
@@ -281,7 +285,7 @@ function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
 
 // ---------------------------------------------------------------------------
 
-function GroupRow({ group }: { group: GroupSummary }) {
+function GroupRow({ group }: Readonly<{ group: GroupSummary }>) {
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
 

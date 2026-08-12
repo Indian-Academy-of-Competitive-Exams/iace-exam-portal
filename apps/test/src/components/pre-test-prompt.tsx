@@ -18,7 +18,7 @@ import { ROUTES } from '../lib/constants';
  * TODO(exam engine): render this on the way into a test as well as here, and
  * carry the student back to where they were once they have filled it in.
  */
-export function PreTestPrompt({ preTestReady }: { preTestReady: boolean }) {
+export function PreTestPrompt({ preTestReady }: Readonly<{ preTestReady: boolean }>) {
   if (preTestReady) return null;
 
   return (

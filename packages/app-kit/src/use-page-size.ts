@@ -15,16 +15,15 @@ import { PAGE_SIZE_DEFAULT, isPageSizeOption, type PageSizeOption } from '@iace/
  * stop being re-invented.)
  */
 export function usePageSize(): [PageSizeOption, (size: number) => void] {
-  const [pageSize, setStored] = useState<PageSizeOption>(PAGE_SIZE_DEFAULT);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(PAGE_SIZE_DEFAULT);
 
   // Takes a plain number because the control that calls it is a design-system
   // component that knows nothing about which sizes this platform allows. The
   // check below is the one place that knows, so an unsupported size is refused
   // here rather than travelling on to the API as a request it would reject.
-  const setPageSize = useCallback((size: number) => {
-    if (!isPageSizeOption(size)) return;
-    setStored(size);
+  const choose = useCallback((size: number) => {
+    if (isPageSizeOption(size)) setPageSize(size);
   }, []);
 
-  return [pageSize, setPageSize];
+  return [pageSize, choose];
 }

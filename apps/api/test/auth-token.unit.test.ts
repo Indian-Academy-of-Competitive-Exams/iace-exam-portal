@@ -85,7 +85,10 @@ describe('TokenService', () => {
       'base64url',
     );
 
-    assert.ok(header && payload && signature);
+    // Split so a malformed token says WHICH part was missing.
+    assert.ok(header, 'no header segment');
+    assert.ok(payload, 'no payload segment');
+    assert.ok(signature, 'no signature segment');
     await assert.rejects(
       () => tokens.verifyAccess(`${header}.${forged}.${signature}`),
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',

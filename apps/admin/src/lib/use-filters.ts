@@ -32,9 +32,10 @@ export function useFilters<K extends string>(): {
   const set = useCallback(
     (changes: Partial<Record<K, string | undefined>>) => {
       const next = new URLSearchParams(params);
-      for (const [key, value] of Object.entries(changes)) {
+      for (const key of Object.keys(changes) as K[]) {
+        const value = changes[key];
         if (value === undefined || value === '') next.delete(key);
-        else next.set(key, String(value));
+        else next.set(key, value);
       }
       setParams(next, { replace: true });
     },

@@ -138,7 +138,7 @@ export class FakeRedis {
 
   async ttl(key: string): Promise<number> {
     const ttl = await this.client.ttl(key);
-    return ttl > 0 ? ttl : 0;
+    return Math.max(ttl, 0);
   }
 
   asService(): RedisService {
@@ -263,6 +263,7 @@ export class FakePrisma {
   constructor(
     readonly students: FakeStudent[] = [],
     readonly admins: FakeAdmin[] = [],
+    readonly branches: FakeBranch[] = [],
   ) {}
 
   readonly student = {
@@ -299,9 +300,72 @@ export class FakePrisma {
       ),
   };
 
+  /**
+   * Branches, with the group counts the service reads through `_count`.
+   *
+   * Enough of Prisma's shape for BranchesService to run unchanged — the point
+   * is to exercise the RULES (GLOBAL is protected, a branch with groups cannot
+   * be deleted, a duplicate name is refused) without a database. Anything the
+   * service does not call is deliberately absent rather than stubbed.
+   */
+  readonly branch = {
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
+      Promise.resolve(
+        this.branches.find((b) => (where.id ? b.id === where.id : b.name === where.name)) ?? null,
+      ),
+
+    findMany: () => Promise.resolve([...this.branches]),
+
+    count: () => Promise.resolve(this.branches.length),
+
+    create: ({ data }: { data: { name: string } }) => {
+      const created = makeBranch({ ...data, id: `br_new_${this.nextId++}` });
+      this.branches.push(created);
+      return Promise.resolve(created);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const branch = this.branches.find((b) => b.id === where.id);
+      if (!branch) throw new Error(`no branch ${where.id}`);
+      Object.assign(branch, data);
+      return Promise.resolve(branch);
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.branches.findIndex((b) => b.id === where.id);
+      const [removed] = this.branches.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  /** The service reads and counts in one transaction; order is preserved. */
+  $transaction = (operations: Promise<unknown>[]) => Promise.all(operations);
+
   asService(): PrismaService {
     return this as unknown as PrismaService;
   }
+}
+
+export interface FakeBranch {
+  id: string;
+  name: string;
+  isGlobal: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  _count: { groups: number };
+}
+
+export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
+  return {
+    id: 'br_1',
+    name: 'AMEERPET',
+    isGlobal: false,
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+    // After the spread, so a caller passing only some fields still gets a count.
+    _count: { groups: overrides._count?.groups ?? 0 },
+  };
 }
 
 /**

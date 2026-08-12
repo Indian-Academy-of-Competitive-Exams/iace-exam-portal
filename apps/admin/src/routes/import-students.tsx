@@ -21,7 +21,7 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableEmpty,
+  TableState,
   TableHead,
   TableHeader,
   TableRow,
@@ -129,16 +129,20 @@ export function ImportStudentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {plan === null ? (
-                <TableEmpty colSpan={5}>
-                  Choose an Excel file to see exactly what it would do. Nothing is written until you
-                  press Import.
-                </TableEmpty>
-              ) : plan.rows.length === 0 ? (
-                <TableEmpty colSpan={5}>No rows in that file.</TableEmpty>
-              ) : (
-                plan.rows.map((row) => <ImportRow key={row.line} row={row} />)
-              )}
+              <TableState
+                isLoading={false}
+                isEmpty={plan === null || plan.rows.length === 0}
+                colSpan={5}
+                empty={
+                  plan === null
+                    ? 'Choose an Excel file to see exactly what it would do. Nothing is written until you press Import.'
+                    : 'No rows in that file.'
+                }
+              >
+                {plan?.rows.map((row) => (
+                  <ImportRow key={row.line} row={row} />
+                ))}
+              </TableState>
             </TableBody>
           </Table>
         </Card>
@@ -246,7 +250,7 @@ export function ImportStudentsPage() {
   );
 }
 
-function Summary({ label, value }: { label: string; value: number }) {
+function Summary({ label, value }: Readonly<{ label: string; value: number }>) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
@@ -255,7 +259,7 @@ function Summary({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ImportRow({ row }: { row: StudentImportRow }) {
+function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
   return (
     <TableRow>
       <TableCell numeric className="text-muted-foreground">
@@ -267,14 +271,11 @@ function ImportRow({ row }: { row: StudentImportRow }) {
         {row.groupNames.length ? row.groupNames.join(', ') : '—'}
       </TableCell>
       <TableCell>
-        {row.action === 'create' ? (
+        {row.action !== 'skip' ? (
           <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="success">Create</Badge>
-            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
-          </span>
-        ) : row.action === 'update' ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="info">Update</Badge>
+            <Badge variant={row.action === 'create' ? 'success' : 'info'}>
+              {row.action === 'create' ? 'Create' : 'Update'}
+            </Badge>
             {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
           </span>
         ) : (

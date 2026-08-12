@@ -9,7 +9,7 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader
-        title={`Welcome${admin?.fullName ? `, ${admin.fullName}` : ''}`}
+        title={admin?.fullName ? `Welcome, ${admin.fullName}` : 'Welcome'}
         description="User management is live. Question bank and tests come next."
       />
 

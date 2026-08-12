@@ -198,7 +198,7 @@ export class AuthService {
    */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin || !admin.isActive) {
+    if (!admin?.isActive) {
       return {
         sent: true,
         expiresInSec: this.otpTtlPlaceholder,
@@ -219,8 +219,7 @@ export class AuthService {
       where: { email },
       include: { pages: { select: { code: true } } },
     });
-    if (!admin || !admin.isActive)
-      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
+    if (!admin?.isActive) throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
 
     const identity: AuthIdentity = {
       actor: ActorTypes.ADMIN,
@@ -340,7 +339,7 @@ export class AuthService {
   private async loadIdentity(actor: ActorType, id: string): Promise<AuthIdentity | null> {
     if (actor === ActorTypes.STUDENT) {
       const student = await this.prisma.student.findUnique({ where: { id } });
-      if (!student || !student.isActive) return null;
+      if (!student?.isActive) return null;
       return this.studentIdentity(student);
     }
 
@@ -348,7 +347,7 @@ export class AuthService {
       where: { id },
       include: { pages: { select: { code: true } } },
     });
-    if (!admin || !admin.isActive) return null;
+    if (!admin?.isActive) return null;
     return {
       actor: ActorTypes.ADMIN,
       id: admin.id,

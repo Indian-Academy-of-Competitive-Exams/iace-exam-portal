@@ -74,7 +74,10 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
 TableCell.displayName = 'TableCell';
 
 /** What a table shows instead of a bare header when there is nothing to list. */
-function TableEmpty({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {
+function TableEmpty({
+  colSpan,
+  children,
+}: Readonly<{ colSpan: number; children: React.ReactNode }>) {
   return (
     <tr>
       <td colSpan={colSpan} className="px-3 py-10 text-center text-sm text-muted-foreground">
@@ -85,3 +88,35 @@ function TableEmpty({ colSpan, children }: { colSpan: number; children: React.Re
 }
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty };
+
+/**
+ * A table body's three states: loading, empty, or rows.
+ *
+ * Every list screen wrote this as a nested ternary — `isPending ? … : rows.length
+ * ? … : …` — which is both hard to read and easy to get subtly different from
+ * the screen next door. One of them said "No rows" while another said nothing at
+ * all, and neither was a decision anybody made.
+ *
+ * `empty` is the message for "nothing matches", which is a different fact from
+ * "there is nothing yet" — the caller decides which it is, because only the
+ * caller knows whether a filter is set.
+ */
+export function TableState({
+  isLoading,
+  isEmpty,
+  colSpan,
+  empty,
+  loading = 'Loading…',
+  children,
+}: Readonly<{
+  isLoading: boolean;
+  isEmpty: boolean;
+  colSpan: number;
+  empty: React.ReactNode;
+  loading?: React.ReactNode;
+  children: React.ReactNode;
+}>) {
+  if (isLoading) return <TableEmpty colSpan={colSpan}>{loading}</TableEmpty>;
+  if (isEmpty) return <TableEmpty colSpan={colSpan}>{empty}</TableEmpty>;
+  return <>{children}</>;
+}

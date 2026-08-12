@@ -19,7 +19,7 @@ export function Pagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions,
-}: {
+}: Readonly<{
   page: number;
   pageSize: number;
   total: number;
@@ -27,7 +27,7 @@ export function Pagination({
   /** Omit to hide the rows-per-page control entirely. */
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: readonly number[];
-}) {
+}>) {
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);

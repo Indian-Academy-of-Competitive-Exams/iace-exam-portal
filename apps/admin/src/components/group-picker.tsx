@@ -24,14 +24,14 @@ export function GroupPicker({
   known,
   idPrefix,
   error,
-}: {
+}: Readonly<{
   register: UseFormRegisterReturn;
   selectedIds: string[];
   /** Groups the student already belongs to, so their names render before any search. */
   known: GroupRef[];
   idPrefix: string;
   error?: string;
-}) {
+}>) {
   const [search, setSearch] = useState('');
 
   const groups = useQuery({

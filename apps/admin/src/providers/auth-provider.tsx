@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActorTypes, type AdminIdentity, type AuthSessionResponse } from '@iace/contracts';
-import { api } from '../lib/api';
+import { api, tokenStore } from '../lib/api';
 import { SIGNED_OUT_EVENT } from '@iace/app-kit';
-import { tokenStore } from '../lib/api';
 import { AuthContext, ME_QUERY_KEY, type AuthContextValue } from './auth-context';
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({

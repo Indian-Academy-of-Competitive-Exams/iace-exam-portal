@@ -14,6 +14,5 @@ export class ScoringProcessor extends WorkerHost {
 
   async process(job: Job<ScoringJobData>): Promise<void> {
     this.logger.log(`Scoring job ${job.id} received for attempt ${job.data.attemptId} (no-op)`);
-    return Promise.resolve();
   }
 }

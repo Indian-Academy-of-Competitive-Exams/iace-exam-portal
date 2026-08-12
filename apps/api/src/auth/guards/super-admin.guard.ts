@@ -27,7 +27,7 @@ export class SuperAdminGuard implements CanActivate {
     if (!required) return true;
 
     const { user } = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>();
-    if (!user || user.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
+    if (user?.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin can change this');
     }
     return true;

@@ -7,10 +7,9 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ThemeToggle,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from '@iace/ui';
-
 /**
  * The authed shell. In V1 this route becomes the Report dashboard — the
  * student's post-login landing page — not a raw test list.
@@ -41,7 +40,7 @@ export function DashboardPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Welcome{student?.fullName ? `, ${student.fullName}` : ''}
+          {student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground tabular-nums">+91 {student?.mobile}</p>
 
@@ -65,7 +64,7 @@ export function DashboardPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>

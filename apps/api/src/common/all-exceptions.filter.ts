@@ -199,7 +199,8 @@ export function fieldErrorsFrom(error: ZodError): Record<string, string[]> {
 
   for (const issue of error.issues) {
     const field = issue.path.length > 0 ? issue.path.join('.') : FORM_LEVEL_FIELD;
-    (fieldErrors[field] ??= []).push(issue.message);
+    fieldErrors[field] ??= [];
+    fieldErrors[field].push(issue.message);
   }
 
   return fieldErrors;

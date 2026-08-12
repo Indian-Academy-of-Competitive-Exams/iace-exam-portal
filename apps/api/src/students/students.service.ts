@@ -153,8 +153,10 @@ export class StudentsService {
     }
 
     const profilePatch = input.profile;
+    // Spread of the EXISTING profile then the patch: readiness is decided on
+    // the merged result, not on the handful of fields this request touched.
     const nextProfile = profilePatch
-      ? { ...(student.profile ?? {}), ...stripUndefined(profilePatch) }
+      ? { ...student.profile, ...stripUndefined(profilePatch) }
       : student.profile;
 
     await this.prisma.student.update({

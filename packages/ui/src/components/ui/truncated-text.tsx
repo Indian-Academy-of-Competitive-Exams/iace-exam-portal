@@ -40,7 +40,7 @@ export interface TruncatedTextProps extends React.HTMLAttributes<HTMLSpanElement
 }
 
 /** One line, cut to fit, with a tooltip only when there is something to reveal. */
-export function TruncatedText({ children, className, ...props }: TruncatedTextProps) {
+export function TruncatedText({ children, className, ...props }: Readonly<TruncatedTextProps>) {
   const { ref, truncated } = useTruncation<HTMLSpanElement>(children);
 
   return (

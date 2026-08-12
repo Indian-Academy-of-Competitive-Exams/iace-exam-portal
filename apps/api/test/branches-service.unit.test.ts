@@ -1,0 +1,192 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import {
+  AppException,
+  ErrorCodes,
+  branchListQuerySchema,
+  type BranchListQuery,
+} from '@iace/contracts';
+import { BranchesService } from '../src/branches/branches.service';
+import { FakePrisma, makeBranch } from './support/fakes';
+
+/**
+ * The branch list, exercised through the service rather than its rule helpers.
+ *
+ * `branch-rules.ts` was already tested, but nothing ever loaded the service
+ * that CALLS it — so a rule could have been correct and simply not consulted,
+ * and every test would still have passed. These run against a fake Prisma: no
+ * database, no container, same code path.
+ */
+function serviceWith(branches = [makeBranch()]) {
+  const prisma = new FakePrisma([], [], branches);
+  return { service: new BranchesService(prisma.asService()), prisma };
+}
+
+/** A parsed query, the way the controller's pipe would hand one over. */
+const listQuery = (over: Partial<BranchListQuery> = {}): BranchListQuery =>
+  branchListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
+
+const GLOBAL = makeBranch({ id: 'br_global', name: 'GLOBAL', isGlobal: true });
+
+describe('BranchesService — listing', () => {
+  it('reports the group count each branch carries', async () => {
+    const { service } = serviceWith([makeBranch({ _count: { groups: 4 } })]);
+
+    const page = await service.list(listQuery());
+
+    assert.equal(page.items[0]?.groupCount, 4);
+    assert.equal(page.total, 1);
+  });
+
+  it('returns dates as strings, never Date objects', async () => {
+    const { service } = serviceWith();
+
+    const page = await service.list(listQuery());
+
+    // The contract says string. A Date would serialise to the same thing over
+    // HTTP and then fail the client's schema on the way back in.
+    assert.equal(typeof page.items[0]?.createdAt, 'string');
+  });
+});
+
+describe('BranchesService — creating', () => {
+  it('creates a branch that does not exist yet', async () => {
+    const { service, prisma } = serviceWith([]);
+
+    const created = await service.create({ name: 'KUKATPALLY' });
+
+    assert.equal(created.name, 'KUKATPALLY');
+    assert.equal(prisma.branches.length, 1);
+  });
+
+  /**
+   * Names arrive canonical from the schema, so this catches the REAL duplicate
+   * rather than a differently-typed one — and it must be a CONFLICT the form
+   * can show against the name field, not a 500 from the unique index.
+   */
+  it('refuses a duplicate name, against the field', async () => {
+    const { service } = serviceWith([makeBranch({ name: 'AMEERPET' })]);
+
+    await assert.rejects(
+      () => service.create({ name: 'AMEERPET' }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.CONFLICT);
+        assert.ok(error.fieldErrors?.name);
+        return true;
+      },
+    );
+  });
+});
+
+describe('BranchesService — GLOBAL is protected', () => {
+  /**
+   * The failure these prevent: GLOBAL holds every group tied to no centre, and
+   * nothing re-creates it. Losing it is not recoverable from the UI.
+   */
+  it('refuses to delete GLOBAL, even with no groups under it', async () => {
+    const { service } = serviceWith([GLOBAL]);
+
+    await assert.rejects(
+      () => service.remove('br_global'),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.CONFLICT);
+        assert.match(error.message, /GLOBAL/);
+        return true;
+      },
+    );
+  });
+
+  it('refuses to rename GLOBAL', async () => {
+    const { service } = serviceWith([GLOBAL]);
+
+    await assert.rejects(() => service.update('br_global', { name: 'EVERYONE' }), AppException.is);
+  });
+
+  it('refuses to deactivate GLOBAL', async () => {
+    const { service } = serviceWith([GLOBAL]);
+
+    await assert.rejects(() => service.update('br_global', { isActive: false }), AppException.is);
+  });
+});
+
+describe('BranchesService — deleting', () => {
+  it('deletes a branch nothing depends on', async () => {
+    const { service, prisma } = serviceWith([makeBranch({ id: 'br_1' })]);
+
+    await service.remove('br_1');
+
+    assert.equal(prisma.branches.length, 0);
+  });
+
+  /**
+   * Deleting a branch with groups would take its students' route to every test
+   * with it — and the click would look like it worked.
+   */
+  it('refuses a branch that still has groups, and says how many', async () => {
+    const { service, prisma } = serviceWith([makeBranch({ id: 'br_1', _count: { groups: 3 } })]);
+
+    await assert.rejects(
+      () => service.remove('br_1'),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /3 groups/);
+        return true;
+      },
+    );
+    assert.equal(prisma.branches.length, 1, 'nothing should have been deleted');
+  });
+
+  it('answers NOT_FOUND for a branch that is not there', async () => {
+    const { service } = serviceWith([]);
+
+    await assert.rejects(
+      () => service.remove('nope'),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.NOT_FOUND);
+        return true;
+      },
+    );
+  });
+});
+
+describe('BranchesService — updating', () => {
+  it('renames an ordinary branch', async () => {
+    const { service } = serviceWith([makeBranch({ id: 'br_1', name: 'AMEERPET' })]);
+
+    const updated = await service.update('br_1', { name: 'AMEERPET WEST' });
+
+    assert.equal(updated.name, 'AMEERPET WEST');
+  });
+
+  it('retires and reactivates one', async () => {
+    const { service } = serviceWith([makeBranch({ id: 'br_1' })]);
+
+    assert.equal((await service.update('br_1', { isActive: false })).isActive, false);
+    assert.equal((await service.update('br_1', { isActive: true })).isActive, true);
+  });
+
+  it('refuses a rename onto a name another branch already has', async () => {
+    const { service } = serviceWith([
+      makeBranch({ id: 'br_1', name: 'AMEERPET' }),
+      makeBranch({ id: 'br_2', name: 'KUKATPALLY' }),
+    ]);
+
+    await assert.rejects(
+      () => service.update('br_2', { name: 'AMEERPET' }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.CONFLICT);
+        return true;
+      },
+    );
+  });
+
+  it('allows a no-op rename to the branch’s own name', async () => {
+    const { service } = serviceWith([makeBranch({ id: 'br_1', name: 'AMEERPET' })]);
+
+    assert.equal((await service.update('br_1', { name: 'AMEERPET' })).name, 'AMEERPET');
+  });
+});

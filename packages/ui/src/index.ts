@@ -27,6 +27,7 @@ export {
   TableHead,
   TableCell,
   TableEmpty,
+  TableState,
   type TableCellProps,
 } from './components/ui/table';
 export {
