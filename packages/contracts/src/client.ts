@@ -31,6 +31,14 @@ import {
 } from './auth';
 import { healthResponseSchema, type HealthResponse } from './health';
 import {
+  ADMIN_BRANCH_ROUTES,
+  branchSchema,
+  type Branch,
+  type BranchListQueryInput,
+  type CreateBranchInput,
+  type UpdateBranchInput,
+} from './branches';
+import {
   ADMIN_STUDENT_ROUTES,
   studentDetailSchema,
   studentSummarySchema,
@@ -367,6 +375,30 @@ export function createApiClient(options: ApiClientOptions) {
             body: { isActive },
             schema: studentDetailSchema,
           }),
+      },
+
+      branches: {
+        list: (query: BranchListQueryInput = {}): Promise<Paginated<Branch>> =>
+          requestPaginated(`${ADMIN_BRANCH_ROUTES.list}${queryString({ ...query })}`, {
+            schema: branchSchema.array(),
+          }),
+
+        create: (input: CreateBranchInput): Promise<Branch> =>
+          request(ADMIN_BRANCH_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: branchSchema,
+          }),
+
+        update: (id: string, input: UpdateBranchInput): Promise<Branch> =>
+          request(ADMIN_BRANCH_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: branchSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_BRANCH_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
       },
 
       groups: {

@@ -6,6 +6,7 @@ import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
 import { GroupsPage } from './routes/groups';
 import { ImportStudentsPage } from './routes/import-students';
+import { BranchesPage } from './routes/branches';
 import { ProtectedRoute } from './routes/protected-route';
 import { ROUTES } from './lib/constants';
 
@@ -25,6 +26,7 @@ export function App() {
           <Route path={ROUTES.IMPORT_STUDENTS} element={<ImportStudentsPage />} />
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
           <Route path={ROUTES.GROUPS} element={<GroupsPage />} />
+          <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />

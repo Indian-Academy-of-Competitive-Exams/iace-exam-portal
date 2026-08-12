@@ -1,5 +1,5 @@
 %% IACE Platform — V1 Mock-Test Feature — ERD (v2, reworked)
-%% Mirrors prisma/schema.prisma. 20 models. }o--o{ = many-to-many (implicit join).
+%% Mirrors prisma/schema.prisma. 21 models. }o--o{ = many-to-many (implicit join).
 erDiagram
 
   %% ---------- People / auth ----------
@@ -7,6 +7,7 @@ erDiagram
   Student ||--o{ Attempt : "takes"
   Student ||--o{ Notification : "receives"
   Student }o--o{ Group : "member of"
+  Branch ||--o{ Group : "holds"
   Admin }o--o{ Page : "can access"
 
   %% ---------- Question bank ----------
@@ -249,10 +250,17 @@ erDiagram
     datetime answeredAt
   }
 
-  Group {
+  Branch {
     string id PK
     string name UK
-    string branch
+    boolean isGlobal
+    boolean isActive
+  }
+
+  Group {
+    string id PK
+    string name
+    string branchId FK
     string description
   }
 

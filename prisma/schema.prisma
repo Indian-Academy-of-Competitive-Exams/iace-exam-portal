@@ -490,20 +490,53 @@ model AttemptAnswer {
 }
 
 // ============================================================================
+// Branches — a fixed, slow-moving list only a super admin may add to.
+//
+// It exists because `Group.branch` was free text, and free text is how you end
+// up with "Ameerpet", "ameerpet" and "Ameerpet " as three branches. An admin
+// creating a group now PICKS a branch instead of assuming one.
+//
+// Exactly one row is GLOBAL: the branch for groups that are not tied to any
+// physical centre (ALL STUDENTS, SCHOLARSHIP 2026). It is seeded and protected
+// from deletion; `isGlobal` marks it so nothing has to match on its name.
+// ============================================================================
+
+model Branch {
+  id        String   @id @default(cuid())
+  /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
+  name      String   @unique
+  isGlobal  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  groups    Group[]
+}
+
+// ============================================================================
 // Groups (batches) — the access unit. A student is always in >=1 group; a group
 // is linked to test series; a student's access = the tests in the series linked
 // to their groups. Student -> Group -> TestSeries -> Test. No direct grants.
+//
+// A group belongs to exactly one branch, and its name is unique WITHIN that
+// branch — two centres both running "SSC CGL MORNING" is normal, and forcing
+// one of them to invent a different name is what produced the drifting,
+// near-duplicate names in the first place.
 // ============================================================================
 
 model Group {
   id             String    @id @default(cuid())
-  name           String    @unique
-  branch         String? // e.g. Ameerpet, Ananthapuram
+  /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
+  name           String
+  branchId       String
   description    String?
   createdAt      DateTime  @default(now())
 
+  branch         Branch       @relation(fields: [branchId], references: [id])
   students       Student[]    // implicit M:N (membership)
   testSeries     TestSeries[] // implicit M:N — grants access to these series' tests
+
+  @@unique([branchId, name])
+  @@index([branchId])
 }
 
 // ============================================================================

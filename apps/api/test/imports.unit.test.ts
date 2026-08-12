@@ -109,9 +109,18 @@ describe('readCsvTable', () => {
 
 const context = (): ImportContext => ({
   existingByMobile: new Map([['9000000001', { id: 'stu_existing', fullName: 'Already Here' }]]),
+  // Names are canonical in the database, and a name can belong to several
+  // branches — "SSC CGL MORNING" runs at two centres here on purpose.
   groupsByName: new Map([
-    ['ssc cgl morning', { id: 'g_morning', name: 'SSC CGL Morning' }],
-    ['ssc cgl evening', { id: 'g_evening', name: 'SSC CGL Evening' }],
+    [
+      'SSC CGL MORNING',
+      [
+        { id: 'g_morning_am', name: 'SSC CGL MORNING', branchName: 'AMEERPET' },
+        { id: 'g_morning_kp', name: 'SSC CGL MORNING', branchName: 'KUKATPALLY' },
+      ],
+    ],
+    ['SSC CGL EVENING', [{ id: 'g_evening', name: 'SSC CGL EVENING', branchName: 'AMEERPET' }]],
+    ['ALL STUDENTS', [{ id: 'g_all', name: 'ALL STUDENTS', branchName: 'GLOBAL' }]],
   ]),
 });
 
@@ -130,17 +139,17 @@ describe('planStudentImport', () => {
 
   it('resolves group names, several to a cell', () => {
     const plan = planStudentImport(
-      'mobile,groups\n9876543210,SSC CGL Morning;SSC CGL Evening',
+      'mobile,groups\n9876543210,AMEERPET / SSC CGL MORNING;SSC CGL EVENING',
       context(),
     );
 
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning', 'g_evening']);
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning_am', 'g_evening']);
     assert.equal(plan.rows[0]?.action, 'create');
   });
 
-  it('matches a group name case-insensitively', () => {
-    const plan = planStudentImport('mobile,groups\n9876543210,ssc cgl MORNING', context());
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning']);
+  it('matches a group name however it was typed', () => {
+    const plan = planStudentImport('mobile,groups\n9876543210,ssc cgl  Evening', context());
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
   });
 
   it('refuses an unknown group instead of creating one', () => {
@@ -149,7 +158,43 @@ describe('planStudentImport', () => {
     const plan = planStudentImport('mobile,groups\n9876543210,SSC Mornig', context());
 
     assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC Mornig"/);
+    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC MORNIG"/);
+  });
+
+  /**
+   * The failure this prevents: a name that two centres share is resolved by
+   * picking the first, and a Kukatpally roster quietly enrols into Ameerpet.
+   * Nothing about that looks wrong afterwards.
+   */
+  it('refuses a name that exists in more than one branch, and names them', () => {
+    const plan = planStudentImport('mobile,groups\n9876543210,SSC CGL MORNING', context());
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.deepEqual(plan.rows[0]?.groupIds, []);
+    const error = plan.rows[0]?.errors[0] ?? '';
+    assert.match(error, /more than one branch/);
+    assert.match(error, /AMEERPET/);
+    assert.match(error, /KUKATPALLY/);
+    // and it shows the form that would have worked
+    assert.match(error, /AMEERPET \/ SSC CGL MORNING/);
+  });
+
+  it('accepts the qualified form for a name that is not ambiguous at all', () => {
+    const plan = planStudentImport('mobile,groups\n9876543210,GLOBAL / ALL STUDENTS', context());
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_all']);
+  });
+
+  it('reports a qualified name whose branch does not have that group', () => {
+    const plan = planStudentImport(
+      'mobile,groups\n9876543210,KUKATPALLY / SSC CGL EVENING',
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(
+      plan.rows[0]?.errors[0] ?? '',
+      /No group called "SSC CGL EVENING" in branch "KUKATPALLY"/,
+    );
   });
 
   it('skips a bad row and keeps the rest of the file', () => {
@@ -191,7 +236,7 @@ describe('planStudentImport', () => {
   });
 
   it('reports a missing required column against the FILE, not every row', () => {
-    const plan = planStudentImport('name,groups\nAsha,SSC CGL Morning', context());
+    const plan = planStudentImport('name,groups\nAsha,SSC CGL EVENING', context());
 
     assert.deepEqual(plan.rows, []);
     assert.equal(plan.fileErrors.length, 1);
@@ -213,7 +258,7 @@ describe('planStudentImport', () => {
   });
 
   it('is deterministic — preview and commit run this same function', () => {
-    const csv = 'mobile,fullName,groups\n9876543210,Asha,SSC CGL Morning\nbad,X,';
+    const csv = 'mobile,fullName,groups\n9876543210,Asha,SSC CGL EVENING\nbad,X,';
 
     assert.deepEqual(planStudentImport(csv, context()), planStudentImport(csv, context()));
   });

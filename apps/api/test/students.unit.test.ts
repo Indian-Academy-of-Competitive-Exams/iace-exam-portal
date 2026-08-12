@@ -102,7 +102,7 @@ describe('admin student contracts — the privacy boundary', () => {
     hasSignedIn: true,
     preTestReady: true,
     profileCompleted: false,
-    groups: [{ id: 'g1', name: 'SSC Morning' }],
+    groups: [{ id: 'g1', name: 'SSC MORNING', branchName: 'AMEERPET' }],
     createdAt: new Date().toISOString(),
     preferredLanguage: 'en',
     updatedAt: new Date().toISOString(),

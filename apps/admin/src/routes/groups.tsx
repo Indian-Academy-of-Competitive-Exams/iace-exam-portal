@@ -13,8 +13,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Badge,
   Field,
   Input,
+  Select,
   Table,
   TableBody,
   TableCell,
@@ -27,23 +29,27 @@ import { PageHeader } from '../components/app-shell';
 import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
+import { useBranches } from '../lib/use-branches';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 
-const NEW_GROUP_FIELDS = ['name', 'branch'] as const;
+const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
 export function GroupsPage() {
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
+  const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const groups = useQuery({
-    queryKey: ['admin', 'groups', { search, page }],
-    queryFn: () => api.admin.groups.list({ q: search, page }),
+    queryKey: ['admin', 'groups', { search, branchId, page }],
+    queryFn: () => api.admin.groups.list({ q: search, page, branchId: branchId || undefined }),
     // Holds the rows still while the next page arrives, instead of blanking
     // the table on every keystroke.
     placeholderData: keepPreviousData,
   });
+
+  const allBranches = useBranches();
 
   return (
     <>
@@ -69,17 +75,36 @@ export function GroupsPage() {
       ) : null}
 
       <Card className="p-4">
-        <div className="mb-4 max-w-sm">
-          <Input
-            aria-label="Search groups"
-            placeholder="Search by name or branch"
-            value={search}
-            prefix={<Search className="size-4" aria-hidden />}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-          />
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className="min-w-56 flex-1">
+            <Input
+              aria-label="Search groups"
+              placeholder="Search by name or branch"
+              value={search}
+              prefix={<Search className="size-4" aria-hidden />}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="w-52">
+            <Select
+              aria-label="Filter by branch"
+              value={branchId}
+              onChange={(event) => {
+                setBranchId(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All branches</option>
+              {allBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         {groups.error ? (
@@ -131,8 +156,12 @@ export function GroupsPage() {
 function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const form = useForm<CreateGroupInput>({
     resolver: zodResolver(createGroupSchema),
-    defaultValues: { name: '', branch: '' },
+    defaultValues: { name: '', branchId: '' },
   });
+
+  // Only ACTIVE branches: a closed centre stays in the list for the groups that
+  // already reference it, but nothing new is created under one.
+  const branches = useBranches({ activeOnly: true });
 
   const create = useMutation({
     mutationFn: (values: CreateGroupInput) => api.admin.groups.create(values),
@@ -145,7 +174,9 @@ function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
       <CardHeader>
         <CardTitle>New group</CardTitle>
         <CardDescription>
-          Name it the way the branch refers to it — that is what admins will search for.
+          Pick the branch, then name the group. Names are stored in capitals, so &ldquo;SSC CGL
+          Morning&rdquo; and &ldquo;ssc cgl morning&rdquo; are the same group and cannot both exist
+          in one branch.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -154,22 +185,36 @@ function NewGroupCard({ onDone, onCancel }: { onDone: () => void; onCancel: () =
           onSubmit={form.handleSubmit((values) => create.mutate(values))}
           noValidate
         >
-          <div className="min-w-56 flex-1">
-            <Field htmlFor="name" label="Group name" error={form.formState.errors.name?.message}>
+          <div className="min-w-48 flex-1">
+            <Field
+              htmlFor="branchId"
+              label="Branch"
+              error={form.formState.errors.branchId?.message}
+              hint="Only a super admin can add a branch."
+            >
               {(control) => (
-                <Input
-                  {...control}
-                  {...form.register('name')}
-                  placeholder="SSC CGL Morning"
-                  autoFocus
-                />
+                <Select {...control} {...form.register('branchId')} autoFocus>
+                  <option value="">Pick a branch…</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </Select>
               )}
             </Field>
           </div>
-          <div className="min-w-48 flex-1">
-            <Field htmlFor="branch" label="Branch" error={form.formState.errors.branch?.message}>
+          <div className="min-w-56 flex-1">
+            <Field htmlFor="name" label="Group name" error={form.formState.errors.name?.message}>
               {(control) => (
-                <Input {...control} {...form.register('branch')} placeholder="Ameerpet" />
+                // Shown in capitals as it is typed, because that is what will be
+                // stored — the preview would otherwise disagree with the result.
+                <Input
+                  {...control}
+                  {...form.register('name')}
+                  className="uppercase placeholder:normal-case"
+                  placeholder="SSC CGL MORNING"
+                />
               )}
             </Field>
           </div>
@@ -222,7 +267,13 @@ function GroupRow({ group }: { group: GroupSummary }) {
             {group.name}
           </Link>
         </TableCell>
-        <TableCell className="text-muted-foreground">{group.branch ?? '—'}</TableCell>
+        <TableCell>
+          {group.branch.isGlobal ? (
+            <Badge variant="info">{group.branch.name}</Badge>
+          ) : (
+            <span className="text-muted-foreground">{group.branch.name}</span>
+          )}
+        </TableCell>
         <TableCell numeric>{group.studentCount}</TableCell>
         <TableCell numeric>{group.testSeriesCount}</TableCell>
         <TableCell className="text-right">

@@ -1,4 +1,5 @@
 import {
+  canonicalName,
   mobileSchema,
   personNameSchema,
   type StudentImportRow,
@@ -25,11 +26,60 @@ export const OPTIONAL_HEADERS = ['fullname', 'groups'] as const;
 /** Several groups in one cell, because a comma is already the column separator. */
 const GROUP_SEPARATOR = /[;|]/;
 
+/** How a cell names the branch a group is in: "AMEERPET / SSC CGL MORNING". */
+const BRANCH_QUALIFIER = '/';
+
+export interface ImportGroup {
+  id: string;
+  name: string;
+  branchName: string;
+}
+
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<string, { id: string; fullName: string | null }>;
-  /** Lowercased group name → id. */
-  groupsByName: Map<string, { id: string; name: string }>;
+  /**
+   * Canonical group name → every group with that name, one per branch.
+   *
+   * A list rather than a single group, because a name is only unique WITHIN a
+   * branch. An unqualified name that matches two of them is a question, not a
+   * guess — see `resolveGroup`.
+   */
+  groupsByName: Map<string, ImportGroup[]>;
+}
+
+/**
+ * Turns one cell entry into a group, or into the reason it could not be one.
+ *
+ * Groups are never created implicitly: a typo would otherwise become a real
+ * group that grants access to nothing and that nobody notices. And an
+ * ambiguous name is never resolved by picking the first — that would put a
+ * student in the wrong centre's batch, which reads as success everywhere.
+ */
+export function resolveGroup(
+  entry: string,
+  groupsByName: Map<string, ImportGroup[]>,
+): { group: ImportGroup } | { error: string } {
+  const separator = entry.indexOf(BRANCH_QUALIFIER);
+  const branchName = separator === -1 ? null : canonicalName(entry.slice(0, separator));
+  const name = canonicalName(separator === -1 ? entry : entry.slice(separator + 1));
+
+  const matches = groupsByName.get(name) ?? [];
+
+  if (branchName !== null) {
+    const match = matches.find((group) => group.branchName === branchName);
+    return match
+      ? { group: match }
+      : { error: `No group called "${name}" in branch "${branchName}"` };
+  }
+
+  if (matches.length === 0) return { error: `No group called "${name}"` };
+  if (matches.length === 1) return { group: matches[0]! };
+
+  const branches = matches.map((group) => group.branchName).join(', ');
+  return {
+    error: `"${name}" exists in more than one branch (${branches}) — write it as "${matches[0]!.branchName} ${BRANCH_QUALIFIER} ${name}"`,
+  };
 }
 
 export function planStudentImport(csv: string, context: ImportContext): StudentImportPlan {
@@ -121,12 +171,10 @@ function planRow(
     .filter(Boolean);
 
   const groupIds: string[] = [];
-  for (const name of groupNames) {
-    const group = context.groupsByName.get(name.toLowerCase());
-    // Groups are never created implicitly: a typo would otherwise silently
-    // become a real group that grants nothing and nobody notices.
-    if (!group) errors.push(`No group called "${name}"`);
-    else groupIds.push(group.id);
+  for (const entry of groupNames) {
+    const resolved = resolveGroup(entry, context.groupsByName);
+    if ('error' in resolved) errors.push(resolved.error);
+    else groupIds.push(resolved.group.id);
   }
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;

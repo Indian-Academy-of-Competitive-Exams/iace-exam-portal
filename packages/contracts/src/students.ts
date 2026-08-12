@@ -71,6 +71,8 @@ export const personNameSchema = z
 export const groupRefSchema = z.object({
   id: z.string(),
   name: z.string(),
+  /** Two branches may both run a "SSC CGL MORNING" — the name alone is ambiguous. */
+  branchName: z.string(),
 });
 export type GroupRef = z.infer<typeof groupRefSchema>;
 

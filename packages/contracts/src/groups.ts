@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { branchRefSchema } from './branches';
 import { paginationQuerySchema } from './envelope';
+import { groupNameSchema } from './naming';
 
 // ============================================================================
 // Groups — the access unit.
@@ -11,12 +13,16 @@ import { paginationQuerySchema } from './envelope';
 //   - a student must remain in at least one group, or they can reach nothing;
 //   - a group that still has students, or is still linked to a test series,
 //     cannot be deleted — removing it would revoke access silently.
+//
+// A group belongs to exactly one branch, chosen from the fixed list, and its
+// name is unique within that branch. Names are canonical (see ./naming), so
+// "SSC CGL Morning" and "ssc cgl  morning" are the same group, not two.
 // ============================================================================
 
 export const groupSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
-  branch: z.string().nullable(),
+  branch: branchRefSchema,
   description: z.string().nullable(),
   studentCount: z.number().int(),
   /** How many test series this group grants — 0 means it grants nothing yet. */
@@ -33,19 +39,25 @@ export const groupListQuerySchema = paginationQuerySchema.extend({
     .max(64)
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
+  branchId: z.string().optional(),
 });
 export type GroupListQuery = z.infer<typeof groupListQuerySchema>;
 export type GroupListQueryInput = z.input<typeof groupListQuerySchema>;
 
 export const createGroupSchema = z.object({
-  name: z.string().trim().min(2, 'Give the group a name').max(80),
-  branch: z.string().trim().max(80).nullish(),
+  name: groupNameSchema,
+  branchId: z.string().min(1, 'Pick a branch'),
   description: z.string().trim().max(500).nullish(),
 });
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export type CreateGroupBody = z.infer<typeof createGroupSchema>;
 
-export const updateGroupSchema = createGroupSchema.partial();
+/**
+ * A group can be renamed and re-described, but NOT moved between branches:
+ * its branch is half of its identity and half of its uniqueness, and moving it
+ * silently changes which name it collides with.
+ */
+export const updateGroupSchema = createGroupSchema.omit({ branchId: true }).partial();
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 export type UpdateGroupBody = z.infer<typeof updateGroupSchema>;
 

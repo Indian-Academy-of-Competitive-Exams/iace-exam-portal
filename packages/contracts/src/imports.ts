@@ -63,5 +63,15 @@ export const IMPORT_ROUTES = {
 } as const;
 
 /** The header row an admin should start from. */
-export const STUDENT_IMPORT_TEMPLATE =
-  'mobile,fullName,groups\n9876543210,Asha Kumari,SSC CGL Morning\n';
+/**
+ * Shown as the textarea's placeholder, so it doubles as the format's
+ * documentation. The second row is the qualified form: a group name is unique
+ * only within its branch, and writing the branch is how you say which one you
+ * meant when two centres run the same batch.
+ */
+export const STUDENT_IMPORT_TEMPLATE = [
+  'mobile,fullName,groups',
+  '9876543210,Asha Kumari,SSC CGL MORNING',
+  '9876543211,Ravi Teja,AMEERPET / SSC CGL MORNING;GLOBAL / ALL STUDENTS',
+  '',
+].join('\n');

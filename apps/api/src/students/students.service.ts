@@ -15,7 +15,12 @@ import { isPreTestReady, isProfileCompleted } from './student-flags';
 
 /** Exactly what the summary and detail views need — nothing else is read. */
 const STUDENT_INCLUDE = {
-  groups: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
+  groups: {
+    // The branch comes with the group: a group name is unique only within its
+    // branch, so on its own it does not say which group this is.
+    select: { id: true, name: true, branch: { select: { name: true } } },
+    orderBy: [{ branch: { name: 'asc' } }, { name: 'asc' }],
+  },
 } as const satisfies Prisma.StudentInclude;
 
 @Injectable()
@@ -232,7 +237,7 @@ export class StudentsService {
     preTestReady: boolean;
     profileCompleted: boolean;
     createdAt: Date;
-    groups: { id: string; name: string }[];
+    groups: { id: string; name: string; branch: { name: string } }[];
   }): StudentSummary {
     return {
       id: row.id,
@@ -243,7 +248,11 @@ export class StudentsService {
       hasSignedIn: row.pinHash !== null,
       preTestReady: row.preTestReady,
       profileCompleted: row.profileCompleted,
-      groups: row.groups,
+      groups: row.groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        branchName: group.branch.name,
+      })),
       createdAt: row.createdAt.toISOString(),
     };
   }

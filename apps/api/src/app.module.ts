@@ -8,11 +8,13 @@ import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { StudentsModule } from './students/students.module';
+import { BranchesModule } from './branches/branches.module';
 import { GroupsModule } from './groups/groups.module';
 import { ImportsModule } from './imports/imports.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { PagePermissionGuard } from './auth/guards/page-permission.guard';
+import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { RequestIdMiddleware } from './common/request-id';
@@ -37,6 +39,7 @@ import { RequestIdMiddleware } from './common/request-id';
     StorageModule,
     AuthModule,
     StudentsModule,
+    BranchesModule,
     GroupsModule,
     ImportsModule,
     HealthModule,
@@ -47,6 +50,7 @@ import { RequestIdMiddleware } from './common/request-id';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ActorGuard },
     { provide: APP_GUARD, useClass: PagePermissionGuard },
+    { provide: APP_GUARD, useClass: SuperAdminGuard },
   ],
 })
 export class AppModule implements NestModule {

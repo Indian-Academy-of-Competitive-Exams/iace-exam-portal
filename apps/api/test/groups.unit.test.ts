@@ -97,15 +97,38 @@ describe("emptying a student's batches", () => {
 
 describe('group contracts', () => {
   it('requires a usable group name', () => {
-    assert.equal(createGroupSchema.safeParse({ name: 'SSC Morning' }).success, true);
-    assert.equal(createGroupSchema.safeParse({ name: 'A' }).success, false);
-    assert.equal(createGroupSchema.safeParse({ name: '   ' }).success, false);
-    assert.equal(createGroupSchema.safeParse({}).success, false);
+    assert.equal(
+      createGroupSchema.safeParse({ name: 'SSC Morning', branchId: 'b1' }).success,
+      true,
+    );
+    assert.equal(createGroupSchema.safeParse({ name: 'A', branchId: 'b1' }).success, false);
+    assert.equal(createGroupSchema.safeParse({ name: '   ', branchId: 'b1' }).success, false);
+    assert.equal(createGroupSchema.safeParse({ branchId: 'b1' }).success, false);
   });
 
-  it('trims a name, so "SSC " and "SSC" cannot both exist', () => {
-    const parsed = createGroupSchema.parse({ name: '  SSC Morning  ' });
-    assert.equal(parsed.name, 'SSC Morning');
+  /** A group is only reachable through a branch, so there is no group without one. */
+  it('requires a branch', () => {
+    assert.equal(createGroupSchema.safeParse({ name: 'SSC MORNING' }).success, false);
+    assert.equal(createGroupSchema.safeParse({ name: 'SSC MORNING', branchId: '' }).success, false);
+  });
+
+  it('canonicalises the name, so "SSC " and "ssc" cannot both exist', () => {
+    assert.equal(
+      createGroupSchema.parse({ name: '  SSC Morning  ', branchId: 'b1' }).name,
+      'SSC MORNING',
+    );
+    assert.equal(
+      createGroupSchema.parse({ name: 'ssc   morning', branchId: 'b1' }).name,
+      'SSC MORNING',
+    );
+  });
+
+  /**
+   * A group's branch is half of its identity AND half of its uniqueness.
+   * Moving it would silently change which name it collides with.
+   */
+  it('refuses to move a group between branches on update', () => {
+    assert.equal('branchId' in updateGroupSchema.parse({ branchId: 'b2' } as never), false);
   });
 
   it('treats update as a patch — an empty body is valid and changes nothing', () => {
@@ -134,8 +157,8 @@ describe('group contracts', () => {
   it('carries the counts a group list is opened to see', () => {
     const summary = {
       id: 'g1',
-      name: 'SSC Morning',
-      branch: 'Ameerpet',
+      name: 'SSC MORNING',
+      branch: { id: 'b1', name: 'AMEERPET', isGlobal: false },
       description: null,
       studentCount: 42,
       testSeriesCount: 2,

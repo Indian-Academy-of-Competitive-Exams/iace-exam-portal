@@ -10,18 +10,20 @@ import {
   type Paginated,
   type UpdateGroupBody,
 } from '@iace/contracts';
+import { INACTIVE_BRANCH_MESSAGE } from '../branches/branch-rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { canRemoveFromGroup, groupDeletionBlocker, LAST_GROUP_MESSAGE } from './group-rules';
 
 /** Counts come from the relation, so a list never issues a query per row. */
 const GROUP_INCLUDE = {
+  branch: { select: { id: true, name: true, isGlobal: true } },
   _count: { select: { students: true, testSeries: true } },
 } as const satisfies Prisma.GroupInclude;
 
 interface GroupRow {
   id: string;
   name: string;
-  branch: string | null;
+  branch: { id: string; name: string; isGlobal: boolean };
   description: string | null;
   createdAt: Date;
   _count: { students: number; testSeries: number };
@@ -33,20 +35,24 @@ export class GroupsService {
 
   async list(query: GroupListQuery): Promise<Paginated<GroupSummary>> {
     const search = query.q?.trim();
-    const where: Prisma.GroupWhereInput = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { branch: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {};
+    const where: Prisma.GroupWhereInput = {
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { branch: { name: { contains: search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.group.findMany({
         where,
         include: GROUP_INCLUDE,
-        orderBy: [{ name: 'asc' }],
+        // Grouped by branch, because that is how an admin looks for one.
+        orderBy: [{ branch: { name: 'asc' } }, { name: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
@@ -68,12 +74,13 @@ export class GroupsService {
   }
 
   async create(input: CreateGroupBody): Promise<GroupSummary> {
-    await this.assertNameFree(input.name);
+    await this.assertBranchUsable(input.branchId);
+    await this.assertNameFree(input.branchId, input.name);
 
     const group = await this.prisma.group.create({
       data: {
         name: input.name,
-        branch: input.branch ?? null,
+        branchId: input.branchId,
         description: input.description ?? null,
       },
       include: GROUP_INCLUDE,
@@ -85,14 +92,15 @@ export class GroupsService {
     const group = await this.prisma.group.findUnique({ where: { id } });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
+    // A group never moves branch (see updateGroupSchema), so the name only
+    // ever has to be free where it already lives.
     if (input.name !== undefined && input.name !== group.name)
-      await this.assertNameFree(input.name);
+      await this.assertNameFree(group.branchId, input.name);
 
     const updated = await this.prisma.group.update({
       where: { id },
       data: {
         ...(input.name === undefined ? {} : { name: input.name }),
-        ...(input.branch === undefined ? {} : { branch: input.branch }),
         ...(input.description === undefined ? {} : { description: input.description }),
       },
       include: GROUP_INCLUDE,
@@ -182,11 +190,36 @@ export class GroupsService {
 
   // ==========================================================================
 
-  private async assertNameFree(name: string): Promise<void> {
-    const clash = await this.prisma.group.findUnique({ where: { name } });
+  /**
+   * Names are canonical by the time they arrive, so this compares the real
+   * thing: "SSC CGL Morning" and "ssc cgl  morning" are both SSC CGL MORNING
+   * and the second one is caught here rather than created beside the first.
+   */
+  private async assertNameFree(branchId: string, name: string): Promise<void> {
+    const clash = await this.prisma.group.findUnique({
+      where: { branchId_name: { branchId, name } },
+    });
     if (clash) {
-      throw new AppException(ErrorCodes.CONFLICT, 'A group with that name already exists', {
-        fieldErrors: { name: ['That name is taken'] },
+      throw new AppException(
+        ErrorCodes.CONFLICT,
+        'That branch already has a group with this name',
+        {
+          fieldErrors: { name: ['That branch already has a group with this name'] },
+        },
+      );
+    }
+  }
+
+  private async assertBranchUsable(branchId: string): Promise<void> {
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+    if (!branch) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such branch', {
+        fieldErrors: { branchId: ['Pick a branch'] },
+      });
+    }
+    if (!branch.isActive) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
+        fieldErrors: { branchId: [INACTIVE_BRANCH_MESSAGE] },
       });
     }
   }

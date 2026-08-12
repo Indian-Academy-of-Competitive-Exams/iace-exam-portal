@@ -57,12 +57,12 @@ export function GroupPicker({
    * still insists one is selected.
    */
   const [namesById, setNamesById] = useState<Map<string, string>>(
-    () => new Map(known.map((group) => [group.id, group.name])),
+    () => new Map(known.map((group) => [group.id, labelFor(group)])),
   );
 
-  const remember = (group: { id: string; name: string }) =>
+  const remember = (group: { id: string; label: string }) =>
     setNamesById((previous) =>
-      previous.has(group.id) ? previous : new Map(previous).set(group.id, group.name),
+      previous.has(group.id) ? previous : new Map(previous).set(group.id, group.label),
     );
 
   // Selected first, then whatever the search turned up, minus the duplicates.
@@ -103,11 +103,11 @@ export function GroupPicker({
                 key={group.id}
                 id={`${idPrefix}-${group.id}`}
                 label={group.name}
-                hint={group.branch ?? undefined}
+                hint={group.branch.name}
                 value={group.id}
                 {...register}
                 onChange={(event) => {
-                  remember(group);
+                  remember({ id: group.id, label: `${group.branch.name} / ${group.name}` });
                   void register.onChange(event);
                 }}
               />
@@ -147,4 +147,13 @@ export function GroupPicker({
       ) : null}
     </div>
   );
+}
+
+/**
+ * A group is named by its branch as well as itself: two centres may both run a
+ * "SSC CGL MORNING", and a pinned checkbox showing only the name would not say
+ * which one is ticked.
+ */
+function labelFor(group: GroupRef): string {
+  return `${group.branchName} / ${group.name}`;
 }
