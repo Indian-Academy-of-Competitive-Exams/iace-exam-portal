@@ -9,9 +9,21 @@
 export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
+  PROFILE: '/profile',
+  ACCOUNT: '/account',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
+
+/**
+ * The nav, in the order a student needs them. Deliberately short — they came
+ * here to take a test, not to administer an account.
+ */
+export const NAV_ITEMS = [
+  { to: ROUTES.HOME, label: 'Home' },
+  { to: ROUTES.PROFILE, label: 'Your details' },
+  { to: ROUTES.ACCOUNT, label: 'Sign-in' },
+] as const;
 
 /**
  * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing

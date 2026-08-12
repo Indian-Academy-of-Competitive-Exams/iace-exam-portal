@@ -114,3 +114,16 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - **Every backend feature ships with its tests, in the same commit.** A PR that adds or changes API behaviour without a corresponding `apps/api/test/*.test.ts` (or `packages/contracts/test/*.test.ts` for shared contracts) is not finished. Name files after the unit — `auth-pin.unit.test.ts`, `auth-service.unit.test.ts`, `envelope.e2e.test.ts`. Each feature covers, at minimum: **the happy path**, and **the failure the feature exists to prevent** (the lockout that stops guessing, the reuse detection that catches a stolen token, the answer that refuses to reveal whether an account exists). Assert the guarantee, not the implementation. **Tests must need no running infrastructure** — no Postgres, Redis or S3; use the fakes in `apps/api/test/support/fakes.ts` (in-memory Redis with a clock you advance, so TTL and expiry are tested without sleeping) and add to them rather than reaching for a real service. `pnpm test` is a release gate and must stay green.
 - **No magic strings.** Any string that appears in more than one place, or that a typo would break silently, is declared once as a `SCREAMING_SNAKE_CASE` const object (`as const`, with the type derived from it) and referenced everywhere — never re-typed inline. Cross-app vocabularies live in `packages/contracts` (`ErrorCodes`, `ActorTypes`, `FORM_LEVEL_FIELD`); server-only ones next to their owner (`QUEUE_NAMES`, `NODE_ENVS`, `OTP_SENDERS`, `PRISMA_ERROR_CODES`, `redisKeys`, `AUTH_ROUTES`); per-SPA ones in `apps/<app>/src/lib/constants.ts` (`ROUTES`, `THEMES`, `STORAGE_KEYS`). Where the value is dictated by something external (a Prisma `P2002`, a header name), keep the literal as the value and name the constant. **Exempt:** user-facing copy and log messages — those are prose, not identifiers.
 - **Always throw with the `ErrorCodes` constant, never a bare string** — `throw new AppException(ErrorCodes.PIN_LOCKED, '…')`, not `new AppException('PIN_LOCKED', …)`. Both compile (the type is a union of literals), but only the constant breaks at the call site when a code is renamed and is findable by "go to references". Same for any `code:` written into an error object. A new code is added **once**, to `ErrorCodes` in `packages/contracts/src/envelope.ts` — its status and default message are declared beside it, and `Record<ErrorCode, …>` makes a missing entry a compile error. **Every new endpoint follows this: return data, throw `AppException(ErrorCodes.X, …)`, never build an envelope or hand-write a status.**
+
+## SonarQube verification (before any commit)
+
+After generating or modifying code, the task is not done until:
+
+1. Reload the files you touched.
+2. Analyze them via the SonarQube MCP tools. Project key: `my-app`.
+3. For every BLOCKER/CRITICAL/MAJOR finding, look up the rule, understand why it
+   fired, fix the cause. No `// NOSONAR` without asking me.
+4. Re-analyze until clean.
+5. Report findings and fixes by rule ID.
+
+Never mark an issue false-positive or won't-fix in SonarQube without asking me.

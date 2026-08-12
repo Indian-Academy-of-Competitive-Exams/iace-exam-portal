@@ -23,7 +23,8 @@ import {
 } from '@iace/contracts';
 import { AuthService } from './auth.service';
 import { CurrentUser, Public } from './decorators';
-import { type AuthenticatedUser, type DeviceContext } from './auth.types';
+import { type AuthenticatedUser } from './auth.types';
+import { deviceFrom } from './device';
 import { ZodBody } from '../common/zod-validation.pipe';
 
 @Controller('auth')
@@ -123,17 +124,4 @@ export class AuthController {
   me(@CurrentUser() user: AuthenticatedUser): Promise<AuthIdentity> {
     return this.auth.me(user);
   }
-}
-
-/** Device binding context: what the client claims, plus what we can observe. */
-function deviceFrom(
-  request: Request,
-  claimed?: { deviceId?: string; deviceName?: string },
-): DeviceContext {
-  return {
-    deviceId: claimed?.deviceId ?? null,
-    deviceName: claimed?.deviceName ?? null,
-    ip: request.ip ?? null,
-    userAgent: request.headers['user-agent'] ?? null,
-  };
 }

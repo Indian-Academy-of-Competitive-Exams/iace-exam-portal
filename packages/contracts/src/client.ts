@@ -30,6 +30,7 @@ import {
   type VerifyStudentOtpInput,
 } from './auth';
 import { healthResponseSchema, type HealthResponse } from './health';
+import { ME_ROUTES, meSchema, type ChangePinInput, type Me, type UpdateMeInput } from './me';
 import {
   ADMIN_BRANCH_ROUTES,
   branchSchema,
@@ -390,6 +391,22 @@ export function createApiClient(options: ApiClientOptions) {
     },
 
     /** Admin-only. A student token gets 403 from every one of these. */
+    /** The signed-in student's own account. No ids — the token is the subject. */
+    me: {
+      profile: (): Promise<Me> => request(ME_ROUTES.profile, { schema: meSchema }),
+
+      update: (input: UpdateMeInput): Promise<Me> =>
+        request(ME_ROUTES.update, { method: 'PATCH', body: input, schema: meSchema }),
+
+      /** Returns a FRESH session — the caller must store these tokens. */
+      changePin: (input: ChangePinInput): Promise<AuthSessionResponse> =>
+        request(ME_ROUTES.changePin, {
+          method: 'POST',
+          body: input,
+          schema: authSessionResponseSchema,
+        }),
+    },
+
     admin: {
       students: {
         list: (query: StudentListQueryInput = {}): Promise<Paginated<StudentSummary>> =>

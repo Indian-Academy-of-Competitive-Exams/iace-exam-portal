@@ -15,6 +15,8 @@ import { paginationQuerySchema } from './envelope';
 
 export const genderSchema = z.enum(['MALE', 'FEMALE', 'OTHER']);
 export type Gender = z.infer<typeof genderSchema>;
+/** The same values as a list, for building a picker without restating them. */
+export const GENDERS = genderSchema.options;
 
 /** `YYYY-MM-DD`. The column is a DATE, so a timestamp would imply a precision
  *  (and a timezone) that a date of birth does not have. */

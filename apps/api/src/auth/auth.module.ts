@@ -55,6 +55,10 @@ function createOtpSender(config: AppConfigService, consoleSender: ConsoleOtpSend
     PagePermissionGuard,
   ],
   exports: [
+    // AuthService for the student's own PIN change: it owns verification, the
+    // lockout ladder, session revocation and token issuance, and MeController
+    // must not reimplement any of the four.
+    AuthService,
     TokenService,
     SessionService,
     PinService,

@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { StudentsModule } from './students/students.module';
 import { BranchesModule } from './branches/branches.module';
+import { MeModule } from './me/me.module';
 import { GroupsModule } from './groups/groups.module';
 import { ImportsModule } from './imports/imports.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -39,6 +40,7 @@ import { RequestIdMiddleware } from './common/request-id';
     StorageModule,
     AuthModule,
     StudentsModule,
+    MeModule,
     BranchesModule,
     GroupsModule,
     ImportsModule,

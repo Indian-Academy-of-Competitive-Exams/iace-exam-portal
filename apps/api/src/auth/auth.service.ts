@@ -104,6 +104,60 @@ export class AuthService {
   }
 
   /**
+   * Replacing a PIN the student already knows.
+   *
+   * The current one is checked even though the caller holds a valid session: an
+   * open session on a shared machine — a library, a friend's phone — would
+   * otherwise be enough to lock the real owner out of their own account. Wrong
+   * attempts climb the same lockout ladder as login, so this cannot be used as
+   * an unlimited oracle for guessing a PIN that login refuses to let you guess.
+   *
+   * Returns a FRESH session. Every other one dies with the old PIN — that is
+   * most of the point — but signing the student out of the device they are
+   * standing at, as a punishment for doing the safe thing, is not.
+   */
+  async changeStudentPin(
+    studentId: string,
+    currentPin: string,
+    newPin: string,
+    device: DeviceContext,
+  ): Promise<AuthSessionResponse> {
+    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    await this.pin.assertNotLocked(student.mobile);
+
+    // Burns the same time when there is no PIN to check against, so the clock
+    // never says whether one is set.
+    const ok = student.pinHash
+      ? await this.pin.verify(student.pinHash, currentPin)
+      : await this.pin.burnVerifyTime().then(() => false);
+
+    if (!ok) {
+      await this.pin.registerFailure(student.mobile);
+      throw new AppException(ErrorCodes.PIN_INVALID, 'That is not your current PIN', {
+        fieldErrors: { currentPin: ['That is not your current PIN'] },
+      });
+    }
+
+    const updated = await this.prisma.student.update({
+      where: { id: studentId },
+      data: {
+        pinHash: await this.pin.hash(newPin),
+        // Theirs now, whatever it was before. This is what stops an imported
+        // student being asked to change a PIN they have just chosen.
+        pinIsDefault: false,
+      },
+    });
+
+    await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
+    await this.pin.clearFailures(student.mobile);
+
+    const identity = this.studentIdentity(updated);
+    return { tokens: await this.issue(identity, device), identity };
+  }
+
+  /**
    * The everyday login. Unknown number, no PIN set and wrong PIN are one
    * answer and one duration, so neither the message nor the clock says whether
    * the number is registered.
@@ -279,6 +333,7 @@ export class AuthService {
       preferredLanguage: student.preferredLanguage,
       preTestReady: student.preTestReady,
       profileCompleted: student.profileCompleted,
+      hasDefaultPin: student.pinIsDefault,
     };
   }
 

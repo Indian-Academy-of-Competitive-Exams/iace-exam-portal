@@ -133,6 +133,16 @@ export const studentIdentitySchema = z.object({
    * starts when this is false — a short prompt, never a hard block.
    */
   preTestReady: z.boolean(),
+  /**
+   * Still on the PIN an import gave them — the first four digits of their own
+   * number, which anyone holding the roster can work out.
+   *
+   * It rides on the identity rather than needing its own request because the
+   * app has to decide, on the very first render after sign-in, whether to make
+   * them replace it. A second fetch would mean a frame where they are inside
+   * the app on a credential the institute knows.
+   */
+  hasDefaultPin: z.boolean(),
   /** The FULL optional profile (photo, gender, Aadhaar, PAN, address,
    *  education). Drives a gentle nudge only — it never gates anything. */
   profileCompleted: z.boolean(),

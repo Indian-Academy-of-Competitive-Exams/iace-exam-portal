@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
+import { AppShell } from './components/app-shell';
+import { AccountPage } from './routes/account';
+import { ProfilePage } from './routes/profile';
 import { ProtectedRoute } from './routes/protected-route';
 
 /**
@@ -14,7 +17,11 @@ export function App() {
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
-        <Route path={ROUTES.HOME} element={<DashboardPage />} />
+        <Route element={<AppShell />}>
+          <Route path={ROUTES.HOME} element={<DashboardPage />} />
+          <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
+          <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
+        </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>

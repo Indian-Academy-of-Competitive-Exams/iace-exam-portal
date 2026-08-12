@@ -3,6 +3,7 @@ export * from './envelope';
 export * from './auth';
 export * from './naming';
 export * from './students';
+export * from './me';
 export * from './branches';
 export * from './groups';
 export * from './imports';
