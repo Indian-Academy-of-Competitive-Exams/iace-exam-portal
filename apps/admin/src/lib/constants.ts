@@ -46,4 +46,5 @@ export const THEME_ATTRIBUTE = 'data-theme';
 export const STORAGE_KEYS = {
   THEME: 'iace.theme',
   AUTH: 'iace.admin.auth',
+  PAGE_SIZE: 'iace.admin.pageSize',
 } as const;

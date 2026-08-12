@@ -163,6 +163,22 @@ export const PAGE_SIZE_DEFAULT = 20;
 export const PAGE_SIZE_MAX = 100;
 
 /**
+ * The sizes a list offers the reader.
+ *
+ * Shared rather than per-screen so every table asks the same question, and
+ * declared beside the cap so an option can never exceed what the API accepts —
+ * a picker offering a size the server rejects is a broken control, not a
+ * generous one. Guarded by a test.
+ */
+export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
+
+/** True for a value this app is willing to page by. */
+export function isPageSizeOption(value: unknown): value is PageSizeOption {
+  return PAGE_SIZE_OPTIONS.includes(value as PageSizeOption);
+}
+
+/**
  * Query params every list endpoint accepts. `pageSize` is capped rather than
  * trusted: an uncapped page size turns any list into a way to pull the whole
  * table in one request.

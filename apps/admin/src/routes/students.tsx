@@ -44,6 +44,7 @@ import { GroupPicker } from '../components/group-picker';
 import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
+import { usePageSize } from '../lib/use-page-size';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited';
@@ -61,6 +62,7 @@ export function StudentsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize();
 
   // Set when arriving from a group. Group members are this list filtered, not a
   // second screen that would drift from it.
@@ -76,8 +78,9 @@ export function StudentsPage() {
   });
 
   const students = useQuery({
-    queryKey: ['admin', 'students', { search, status, page, groupId }],
-    queryFn: () => api.admin.students.list({ q: search, page, groupId, ...STATUS_QUERY[status] }),
+    queryKey: ['admin', 'students', { search, status, page, pageSize, groupId }],
+    queryFn: () =>
+      api.admin.students.list({ q: search, page, pageSize, groupId, ...STATUS_QUERY[status] }),
     // Without this the table empties on every keystroke and the page jumps;
     // holding the previous page keeps the rows still while the next arrives.
     placeholderData: keepPreviousData,
@@ -202,6 +205,12 @@ export function StudentsPage() {
             pageSize={students.data.pageSize}
             total={students.data.total}
             onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              // Page 9 of 20-per-page may not exist at 100 per page, and
+              // landing on an empty table reads as "the rows are gone".
+              setPage(1);
+            }}
           />
         ) : null}
       </Card>

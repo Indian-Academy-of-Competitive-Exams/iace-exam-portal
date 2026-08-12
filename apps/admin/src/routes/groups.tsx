@@ -30,6 +30,7 @@ import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
+import { usePageSize } from '../lib/use-page-size';
 import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
@@ -39,11 +40,13 @@ export function GroupsPage() {
   const [search, setSearch] = useState('');
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize();
   const queryClient = useQueryClient();
 
   const groups = useQuery({
-    queryKey: ['admin', 'groups', { search, branchId, page }],
-    queryFn: () => api.admin.groups.list({ q: search, page, branchId: branchId || undefined }),
+    queryKey: ['admin', 'groups', { search, branchId, page, pageSize }],
+    queryFn: () =>
+      api.admin.groups.list({ q: search, page, pageSize, branchId: branchId || undefined }),
     // Holds the rows still while the next page arrives, instead of blanking
     // the table on every keystroke.
     placeholderData: keepPreviousData,
@@ -144,6 +147,10 @@ export function GroupsPage() {
             pageSize={groups.data.pageSize}
             total={groups.data.total}
             onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
           />
         ) : null}
       </Card>
