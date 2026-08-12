@@ -9,6 +9,7 @@ import {
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
+  type GroupRef,
   type StudentSummary,
 } from '@iace/contracts';
 import {
@@ -223,11 +224,7 @@ function StudentRow({ student }: { student: StudentSummary }) {
           // show rather than an empty cell.
           <Badge variant="warning">No group</Badge>
         ) : (
-          <div className="flex flex-wrap gap-1">
-            {student.groups.map((group) => (
-              <Badge key={group.id}>{group.name}</Badge>
-            ))}
-          </div>
+          <GroupsCell groups={student.groups} />
         )}
       </TableCell>
 
@@ -249,6 +246,34 @@ function StudentRow({ student }: { student: StudentSummary }) {
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * A student's groups, in exactly one line however many there are.
+ *
+ * Listing them all wrapped the cell over several lines and let one long,
+ * admin-typed group name widen the column until the rest of the table was
+ * pushed sideways — the row height stopped matching its neighbours and the
+ * columns stopped lining up. So: the first name, truncated to the column, and a
+ * count standing in for the rest. Both carry the full names in a tooltip, and
+ * the group filter above the table is the way to actually see who is in what.
+ */
+function GroupsCell({ groups }: { groups: GroupRef[] }) {
+  const [first, ...rest] = groups;
+  if (!first) return null;
+
+  return (
+    <div className="flex max-w-[12rem] items-center gap-1">
+      <Badge className="min-w-0 shrink" title={first.name}>
+        <span className="truncate">{first.name}</span>
+      </Badge>
+      {rest.length > 0 ? (
+        <Badge variant="neutral" title={rest.map((group) => group.name).join('\n')}>
+          +{rest.length}
+        </Badge>
+      ) : null}
+    </div>
   );
 }
 
