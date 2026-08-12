@@ -126,20 +126,21 @@ export class StudentsService {
   async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
     const student = await this.prisma.student.findUnique({
       where: { id },
-      include: { profile: true },
+      include: { profile: true, groups: { select: { id: true } } },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     if (input.groupIds) {
-      if (input.groupIds.length === 0) {
-        // Access flows Student -> Group -> TestSeries -> Test, so a student in
-        // no group can reach nothing. Refusing here beats a silent dead end.
+      // The rule is "do not strip a student's LAST batch", not "every student
+      // must have one". A self-signed-up student has none until an admin
+      // assigns them, and refusing unconditionally made their record
+      // unsaveable — an admin could not even correct their name without
+      // picking a batch they may not know yet.
+      if (input.groupIds.length === 0 && student.groups.length > 0) {
         throw new AppException(
           ErrorCodes.VALIDATION_ERROR,
-          'A student must stay in at least one group',
-          {
-            fieldErrors: { groupIds: ['Pick at least one group'] },
-          },
+          'A student must stay in at least one batch',
+          { fieldErrors: { groupIds: ['Pick at least one batch'] } },
         );
       }
       await this.assertGroupsExist(input.groupIds);

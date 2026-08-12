@@ -102,7 +102,10 @@ export function StudentDetailPage() {
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
-        groupIds: values.groupIds,
+        // Only send membership when it actually changed: an omitted key means
+        // "leave it alone", which is the truthful thing to say about a set of
+        // checkboxes nobody touched.
+        ...(form.formState.dirtyFields.groupIds ? { groupIds: values.groupIds } : {}),
         profile: {
           motherName: orNull(values.motherName),
           fatherName: orNull(values.fatherName),

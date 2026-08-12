@@ -175,6 +175,9 @@ function BatchRow({ batch }: { batch: GroupSummary }) {
   const remove = useMutation({
     mutationFn: () => api.admin.groups.remove(batch.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] }),
+    // Drop out of the confirm on failure, or the row is left asking a question
+    // that has already been answered.
+    onError: () => setConfirming(false),
   });
 
   return (
@@ -213,7 +216,12 @@ function BatchRow({ batch }: { batch: GroupSummary }) {
               size="sm"
               variant="ghost"
               aria-label={`Delete ${batch.name}`}
-              onClick={() => setConfirming(true)}
+              onClick={() => {
+                // Clear the last refusal: it described the batch as it was
+                // before the admin went and moved the students.
+                remove.reset();
+                setConfirming(true);
+              }}
             >
               <Trash2 aria-hidden />
             </Button>

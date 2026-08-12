@@ -72,6 +72,29 @@ describe('canRemoveFromGroup', () => {
   });
 });
 
+describe("emptying a student's batches", () => {
+  /** Mirrors StudentsService.update: refuse only when something is taken away. */
+  const refuses = (currentCount: number, requested: string[]) =>
+    requested.length === 0 && currentCount > 0;
+
+  it('refuses to empty the batches of a student who has one', () => {
+    assert.equal(refuses(1, []), true);
+    assert.equal(refuses(3, []), true);
+  });
+
+  it('allows an empty set for a student who already has none — the regression', () => {
+    // Self-signed-up students have no batch until an admin assigns one, and
+    // refusing unconditionally made their record unsaveable: an admin could
+    // not correct a name without first picking a batch they may not know.
+    assert.equal(refuses(0, []), false);
+  });
+
+  it('never refuses when batches are actually being set', () => {
+    assert.equal(refuses(0, ['g1']), false);
+    assert.equal(refuses(2, ['g1']), false);
+  });
+});
+
 describe('group contracts', () => {
   it('requires a usable batch name', () => {
     assert.equal(createGroupSchema.safeParse({ name: 'SSC Morning' }).success, true);
