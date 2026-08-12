@@ -1,8 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { type StudentImportPlan, type StudentImportResult } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  type GroupMemberImportPlan,
+  type GroupMemberImportResult,
+  type StudentImportPlan,
+  type StudentImportResult,
+} from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { PinService } from '../auth/pin/pin.service';
 import { defaultPinFor } from './default-pin';
+import {
+  mobilesInMemberFile,
+  planGroupMemberImport,
+  type GroupMemberContext,
+} from './group-member-import';
 import {
   groupEntriesIn,
   mobilesIn,
@@ -84,6 +96,75 @@ export class ImportsService {
     }
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+  }
+
+  // ==========================================================================
+  // Adding students to one group
+  // ==========================================================================
+
+  /** What the file would add to this group. Writes nothing. */
+  async previewGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportPlan> {
+    const table = await readUploadedTable(file);
+    return planGroupMemberImport(table, await this.groupContextFor(groupId, table));
+  }
+
+  /**
+   * Applies it. Re-plans from the file rather than trusting a plan the client
+   * sends back, for the same reason the student import does: the file may have
+   * changed, and a client that can hand us a plan can hand us any plan.
+   */
+  async commitGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportResult> {
+    const plan = await this.previewGroupMembers(groupId, file);
+
+    const toAdd = plan.rows
+      .filter((row) => row.action === 'add' && row.studentId)
+      .map((row) => ({ id: row.studentId as string }));
+
+    if (toAdd.length > 0) {
+      // One connect for the whole file: membership is a set, so this is a
+      // single statement rather than a round trip per student.
+      await this.prisma.group.update({
+        where: { id: groupId },
+        data: { students: { connect: toAdd } },
+      });
+    }
+
+    return { ...plan.summary, added: toAdd.length };
+  }
+
+  private async groupContextFor(groupId: string, table: CsvTable): Promise<GroupMemberContext> {
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: { branch: { select: { name: true } } },
+    });
+    if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
+
+    const mobiles = mobilesInMemberFile(table);
+
+    const [students, members] = await Promise.all([
+      mobiles.length
+        ? this.prisma.student.findMany({
+            where: { mobile: { in: mobiles } },
+            select: { id: true, mobile: true, fullName: true },
+          })
+        : Promise.resolve([]),
+      // Only the members this file could possibly mention, not the whole group:
+      // a batch of 2,000 must not be loaded to add ten people to it.
+      mobiles.length
+        ? this.prisma.student.findMany({
+            where: { mobile: { in: mobiles }, groups: { some: { id: groupId } } },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return {
+      group: { id: group.id, name: group.name, branchName: group.branch.name },
+      studentsByMobile: new Map(
+        students.map((student) => [student.mobile, { id: student.id, fullName: student.fullName }]),
+      ),
+      memberIds: new Set(members.map((member) => member.id)),
+    };
   }
 
   /**

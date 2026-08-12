@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
 import {
   PAGE_SIZE_OPTIONS,
   createGroupSchema,
@@ -328,19 +328,29 @@ function GroupRow({ group }: { group: GroupSummary }) {
               </Button>
             </span>
           ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label={`Delete ${group.name}`}
-              onClick={() => {
-                // Clear the last refusal: it described the group as it was
-                // before the admin went and moved the students.
-                remove.reset();
-                setConfirming(true);
-              }}
-            >
-              <Trash2 aria-hidden />
-            </Button>
+            <span className="inline-flex items-center gap-1">
+              {/* Bulk membership lives on the group, not on a sheet: the group
+                  is the screen you are already on, so it cannot be mistyped. */}
+              <Button size="sm" variant="outline" asChild>
+                <Link to={ROUTES.IMPORT_GROUP_MEMBERS(group.id)}>
+                  <UserPlus aria-hidden />
+                  Add students
+                </Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Delete ${group.name}`}
+                onClick={() => {
+                  // Clear the last refusal: it described the group as it was
+                  // before the admin went and moved the students.
+                  remove.reset();
+                  setConfirming(true);
+                }}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            </span>
           )}
         </TableCell>
       </TableRow>

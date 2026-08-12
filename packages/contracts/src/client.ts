@@ -60,8 +60,13 @@ import {
   type UpdateGroupInput,
 } from './groups';
 import {
+  GROUP_IMPORT_ROUTES,
   IMPORT_FILE_FIELD,
   IMPORT_ROUTES,
+  groupMemberImportPlanSchema,
+  groupMemberImportResultSchema,
+  type GroupMemberImportPlan,
+  type GroupMemberImportResult,
   studentImportPlanSchema,
   studentImportResultSchema,
   type StudentImportPlan,
@@ -501,6 +506,23 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: fileBody(file),
             schema: studentImportResultSchema,
+          }),
+
+        /** Adding existing students to ONE group — the group is in the path. */
+        groupMemberTemplate: (): Promise<Blob> => requestBlob(GROUP_IMPORT_ROUTES.membersTemplate),
+
+        previewGroupMembers: (groupId: string, file: File): Promise<GroupMemberImportPlan> =>
+          request(GROUP_IMPORT_ROUTES.membersPreview(groupId), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: groupMemberImportPlanSchema,
+          }),
+
+        commitGroupMembers: (groupId: string, file: File): Promise<GroupMemberImportResult> =>
+          request(GROUP_IMPORT_ROUTES.membersCommit(groupId), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: groupMemberImportResultSchema,
           }),
       },
     },

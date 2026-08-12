@@ -127,3 +127,72 @@ export const STUDENT_IMPORT_COLUMNS = [
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
+
+// ============================================================================
+// Adding students to ONE group, in bulk.
+//
+// A separate, deliberately smaller thing than the student import. The question
+// it answers is "put these people in this batch", the answer is a list of
+// mobile numbers, and the group is the screen you are already on rather than a
+// column in the sheet — so it cannot be typed wrong, and one file cannot
+// scatter students across batches nobody checked.
+//
+// Add only. Removing someone is a single, visible act on that student: it takes
+// away their route to a test, and a sheet is the wrong way to do that quietly.
+// ============================================================================
+
+/** The one column a membership sheet needs. */
+export const GROUP_MEMBER_IMPORT_COLUMNS = [
+  STUDENT_IMPORT_COLUMNS[0],
+] as const satisfies readonly StudentImportColumn[];
+
+export const GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME = 'iace-group-members-template.xlsx';
+
+/**
+ * What one line does.
+ *
+ * `add` — a student who exists and is not in the group yet.
+ * `already` — in it already. Not an error: re-uploading last week's list with
+ *   ten new numbers on the end is the normal way this gets used.
+ * `skip` — the number is unreadable, repeated, or belongs to nobody.
+ */
+export const groupMemberImportActionSchema = z.enum(['add', 'already', 'skip']);
+export type GroupMemberImportAction = z.infer<typeof groupMemberImportActionSchema>;
+
+export const groupMemberImportRowSchema = z.object({
+  line: z.number().int(),
+  mobile: z.string().nullable(),
+  /** The student that number resolves to, when it resolves to one. */
+  studentId: z.string().nullable(),
+  studentName: z.string().nullable(),
+  action: groupMemberImportActionSchema,
+  errors: z.array(z.string()),
+});
+export type GroupMemberImportRow = z.infer<typeof groupMemberImportRowSchema>;
+
+export const groupMemberImportSummarySchema = z.object({
+  total: z.number().int(),
+  willAdd: z.number().int(),
+  alreadyMembers: z.number().int(),
+  invalid: z.number().int(),
+});
+export type GroupMemberImportSummary = z.infer<typeof groupMemberImportSummarySchema>;
+
+export const groupMemberImportPlanSchema = z.object({
+  group: z.object({ id: z.string(), name: z.string(), branchName: z.string() }),
+  rows: z.array(groupMemberImportRowSchema),
+  summary: groupMemberImportSummarySchema,
+  fileErrors: z.array(z.string()),
+});
+export type GroupMemberImportPlan = z.infer<typeof groupMemberImportPlanSchema>;
+
+export const groupMemberImportResultSchema = groupMemberImportSummarySchema.extend({
+  added: z.number().int(),
+});
+export type GroupMemberImportResult = z.infer<typeof groupMemberImportResultSchema>;
+
+export const GROUP_IMPORT_ROUTES = {
+  membersPreview: (groupId: string) => `/imports/groups/${groupId}/members/preview`,
+  membersCommit: (groupId: string) => `/imports/groups/${groupId}/members/commit`,
+  membersTemplate: '/imports/groups/members/template',
+} as const;

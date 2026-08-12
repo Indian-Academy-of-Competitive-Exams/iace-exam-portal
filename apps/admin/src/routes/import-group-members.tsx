@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Download, FileUp, Loader2, Upload } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Download, FileUp, Loader2, UserPlus } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
-  STUDENT_IMPORT_TEMPLATE_FILENAME,
-  type StudentImportPlan,
-  type StudentImportRow,
+  GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
+  type GroupMemberImportPlan,
+  type GroupMemberImportRow,
 } from '@iace/contracts';
+import { bannerMessage } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -30,36 +31,42 @@ import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
-import { bannerMessage } from '@iace/app-kit';
 
 /**
- * Preview, then commit. Nothing is written until the admin has seen exactly
- * what would happen — and a file with three bad rows still imports the other
- * 397 rather than being refused whole.
+ * Adding students to ONE group from a list of mobile numbers.
+ *
+ * The group comes from the URL rather than a column in the sheet: it is the
+ * group the admin came from, so it cannot be mistyped, and one file cannot
+ * scatter students across batches nobody looked at.
+ *
+ * Add only. Removing someone takes away their route to a test, which is a
+ * single visible act on that student, not something a spreadsheet does quietly.
  */
-export function ImportStudentsPage() {
+export function ImportGroupMembersPage() {
+  const { id = '' } = useParams();
+  const queryClient = useQueryClient();
+
   const [file, setFile] = useState<File | null>(null);
-  const [plan, setPlan] = useState<StudentImportPlan | null>(null);
+  const [plan, setPlan] = useState<GroupMemberImportPlan | null>(null);
 
   const preview = useMutation({
-    mutationFn: (chosen: File) => api.admin.imports.previewStudents(chosen),
+    mutationFn: (chosen: File) => api.admin.imports.previewGroupMembers(id, chosen),
     onSuccess: setPlan,
   });
 
   const commit = useMutation({
-    mutationFn: (chosen: File) => api.admin.imports.commitStudents(chosen),
+    mutationFn: (chosen: File) => api.admin.imports.commitGroupMembers(id, chosen),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+    },
   });
 
   const sample = useMutation({
-    mutationFn: () => api.admin.imports.studentTemplate(),
-    onSuccess: (blob) => saveBlob(blob, STUDENT_IMPORT_TEMPLATE_FILENAME),
+    mutationFn: () => api.admin.imports.groupMemberTemplate(),
+    onSuccess: (blob) => saveBlob(blob, GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME),
   });
 
-  /**
-   * Choosing a file previews it immediately. The two-step "choose, then press
-   * Preview" was a button that did nothing an admin had asked for — they
-   * picked the file BECAUSE they wanted to see it.
-   */
   const choose = (chosen: File | undefined) => {
     if (!chosen) return;
     setFile(chosen);
@@ -69,22 +76,32 @@ export function ImportStudentsPage() {
     preview.mutate(chosen);
   };
 
-  const canCommit =
-    file !== null && plan !== null && plan.summary.willCreate + plan.summary.willUpdate > 0;
+  const canCommit = file !== null && (plan?.summary.willAdd ?? 0) > 0;
 
   return (
     <>
-      <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
-        <Link to={ROUTES.STUDENTS}>
+      <Button variant="ghost" size="sm" className="-ml-2 mb-3" asChild>
+        <Link to={ROUTES.GROUPS}>
           <ArrowLeft aria-hidden />
-          All students
+          All groups
         </Link>
       </Button>
 
       <PageHeader
-        title="Import students"
-        description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
+        title="Add students to a group"
+        description="One column of mobile numbers. Everyone on the list joins this group — nobody is removed, and nobody is enrolled who is not already a student."
       />
+
+      {plan ? (
+        <Alert variant="info" className="mb-5">
+          <span>
+            Adding to{' '}
+            <strong>
+              {plan.group.branchName} / {plan.group.name}
+            </strong>
+          </span>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="order-2 p-4 lg:order-1">
@@ -97,10 +114,12 @@ export function ImportStudentsPage() {
           {commit.data ? (
             <Alert variant="success" className="mb-4">
               <span>
-                Imported: {commit.data.created} created, {commit.data.updated} updated,{' '}
-                {commit.data.skipped} skipped.{' '}
-                <Link to={ROUTES.STUDENTS} className={linkVariants({ variant: 'inline' })}>
-                  View students
+                Added {commit.data.added} student{commit.data.added === 1 ? '' : 's'}.{' '}
+                <Link
+                  to={`${ROUTES.STUDENTS}?groupId=${id}`}
+                  className={linkVariants({ variant: 'inline' })}
+                >
+                  View the group
                 </Link>
               </span>
             </Alert>
@@ -122,39 +141,32 @@ export function ImportStudentsPage() {
               <TableRow>
                 <TableHead numeric>Line</TableHead>
                 <TableHead>Mobile</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Groups</TableHead>
+                <TableHead>Student</TableHead>
                 <TableHead>What happens</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {plan === null ? (
-                <TableEmpty colSpan={5}>
-                  Choose an Excel file to see exactly what it would do. Nothing is written until you
-                  press Import.
+                <TableEmpty colSpan={4}>
+                  Choose a file of mobile numbers to see exactly who would be added. Nothing changes
+                  until you press Add.
                 </TableEmpty>
               ) : plan.rows.length === 0 ? (
-                <TableEmpty colSpan={5}>No rows in that file.</TableEmpty>
+                <TableEmpty colSpan={4}>No rows in that file.</TableEmpty>
               ) : (
-                plan.rows.map((row) => <ImportRow key={row.line} row={row} />)
+                plan.rows.map((row) => <MemberRow key={row.line} row={row} />)
               )}
             </TableBody>
           </Table>
         </Card>
 
         <div className="order-1 flex flex-col gap-4 lg:order-2">
-          {/*
-            The sample comes first. An admin who has never done this before
-            needs the shape of the file before they need anywhere to put one,
-            and it is generated by the API from the columns the parser matches
-            on — so it cannot describe a format the importer would reject.
-          */}
           <Card>
             <CardHeader>
               <CardTitle>Start from the sample</CardTitle>
               <CardDescription>
-                An Excel file with the right columns, an example row, and a sheet explaining each
-                one. Fill it in and upload it below.
+                One column: Mobile Number. The group is not in the file — it is the one you came
+                from.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
@@ -172,7 +184,7 @@ export function ImportStudentsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Your file</CardTitle>
+              <CardTitle>Your list</CardTitle>
               <CardDescription>
                 Excel (.xlsx). A .csv exported from another system works too.
               </CardDescription>
@@ -190,7 +202,7 @@ export function ImportStudentsPage() {
                 </span>
                 <input
                   type="file"
-                  accept={`${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_MIME}`}
+                  accept={IMPORT_ACCEPTED_EXTENSIONS.join(',')}
                   className="sr-only"
                   onChange={(event) => {
                     choose(event.target.files?.[0]);
@@ -215,9 +227,9 @@ export function ImportStudentsPage() {
                 {commit.isPending ? (
                   <Loader2 className="animate-spin" aria-hidden />
                 ) : (
-                  <Upload aria-hidden />
+                  <UserPlus aria-hidden />
                 )}
-                Import {plan ? `${plan.summary.willCreate + plan.summary.willUpdate} rows` : ''}
+                Add {plan ? `${plan.summary.willAdd} students` : 'students'}
               </Button>
             </CardContent>
           </Card>
@@ -228,14 +240,10 @@ export function ImportStudentsPage() {
                 <CardTitle>What this would do</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
-                <Summary label="Rows read" value={plan.summary.total} />
-                <Summary label="New students" value={plan.summary.willCreate} />
-                <Summary label="Existing students updated" value={plan.summary.willUpdate} />
+                <Summary label="Numbers read" value={plan.summary.total} />
+                <Summary label="Will be added" value={plan.summary.willAdd} />
+                <Summary label="Already in this group" value={plan.summary.alreadyMembers} />
                 <Summary label="Skipped (have errors)" value={plan.summary.invalid} />
-                <Summary
-                  label="Given a starting PIN"
-                  value={plan.rows.filter((row) => row.willReceiveDefaultPin).length}
-                />
               </CardContent>
             </Card>
           ) : null}
@@ -254,28 +262,21 @@ function Summary({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ImportRow({ row }: { row: StudentImportRow }) {
+function MemberRow({ row }: { row: GroupMemberImportRow }) {
   return (
     <TableRow>
       <TableCell numeric className="text-muted-foreground">
         {row.line}
       </TableCell>
       <TableCell className="tabular-nums">{row.mobile ?? '—'}</TableCell>
-      <TableCell>{row.fullName ?? <span className="text-muted-foreground">—</span>}</TableCell>
-      <TableCell className="text-muted-foreground">
-        {row.groupNames.length ? row.groupNames.join(', ') : '—'}
-      </TableCell>
+      <TableCell>{row.studentName ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell>
-        {row.action === 'create' ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="success">Create</Badge>
-            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
-          </span>
-        ) : row.action === 'update' ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="info">Update</Badge>
-            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
-          </span>
+        {row.action === 'add' ? (
+          <Badge variant="success">Add</Badge>
+        ) : row.action === 'already' ? (
+          // Not an error: re-uploading a list with a few new numbers on the end
+          // is the normal way this gets used.
+          <Badge variant="neutral">Already in this group</Badge>
         ) : (
           <span className="flex flex-wrap items-center gap-1.5">
             <Badge variant="danger">Skip</Badge>
@@ -286,6 +287,3 @@ function ImportRow({ row }: { row: StudentImportRow }) {
     </TableRow>
   );
 }
-
-/** What the file picker offers alongside the extensions. */
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

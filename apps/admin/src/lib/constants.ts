@@ -14,6 +14,9 @@ export const ROUTES = {
   STUDENT_PATTERN: '/students/:id',
   GROUPS: '/groups',
   BRANCHES: '/branches',
+  /** Adding students to ONE group: the group is in the path, not in the file. */
+  IMPORT_GROUP_MEMBERS: (id: string) => `/groups/${id}/students/import`,
+  IMPORT_GROUP_MEMBERS_PATTERN: '/groups/:id/students/import',
   IMPORT_STUDENTS: '/students/import',
   /** React Router's catch-all. */
   NOT_FOUND: '*',

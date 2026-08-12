@@ -1,5 +1,10 @@
 import ExcelJS from 'exceljs';
-import { AppException, ErrorCodes, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  GROUP_MEMBER_IMPORT_COLUMNS,
+  STUDENT_IMPORT_COLUMNS,
+} from '@iace/contracts';
 import { normaliseHeader, readCsvTable, type CsvTable } from './csv';
 
 /**
@@ -149,12 +154,38 @@ function numberText(value: number): string {
  * first time a column is renamed, and takes every admin who downloaded it with
  * it.
  */
-export async function buildStudentTemplate(): Promise<Buffer> {
+export function buildStudentTemplate(): Promise<Buffer> {
+  return buildTemplate({
+    sheetName: 'Students',
+    columns: STUDENT_IMPORT_COLUMNS,
+    examples: STUDENT_IMPORT_EXAMPLES,
+    notes: STUDENT_IMPORT_NOTES,
+  });
+}
+
+/** The membership sheet: one column, because the group is not in the file. */
+export function buildGroupMemberTemplate(): Promise<Buffer> {
+  return buildTemplate({
+    sheetName: 'Members',
+    columns: GROUP_MEMBER_IMPORT_COLUMNS,
+    examples: [['9876543210'], ['9876543211'], ['9876543212']],
+    notes: GROUP_MEMBER_IMPORT_NOTES,
+  });
+}
+
+async function buildTemplate(options: {
+  sheetName: string;
+  columns: readonly { key: string; header: string; width: number }[];
+  examples: unknown[][];
+  notes: string[][];
+}): Promise<Buffer> {
+  const { sheetName, columns, examples, notes: noteLines } = options;
+
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'IACE';
-  const sheet = workbook.addWorksheet('Students');
+  const sheet = workbook.addWorksheet(sheetName);
 
-  sheet.columns = STUDENT_IMPORT_COLUMNS.map((column) => ({
+  sheet.columns = columns.map((column) => ({
     header: column.header,
     key: column.key,
     width: column.width,
@@ -166,7 +197,7 @@ export async function buildStudentTemplate(): Promise<Buffer> {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
   });
 
-  for (const example of STUDENT_IMPORT_EXAMPLES) sheet.addRow(example);
+  for (const example of examples) sheet.addRow(example);
 
   // Mobile numbers are text, not numbers: left as numeric, Excel drops a
   // leading zero and shows long ones in exponent form, and the file that comes
@@ -175,7 +206,7 @@ export async function buildStudentTemplate(): Promise<Buffer> {
 
   const notes = workbook.addWorksheet('How to use');
   notes.getColumn(1).width = 100;
-  for (const line of STUDENT_IMPORT_NOTES) notes.addRow([line]);
+  for (const line of noteLines) notes.addRow(line);
   notes.getRow(1).font = { bold: true };
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -207,4 +238,22 @@ const STUDENT_IMPORT_NOTES = [
   [''],
   ['Nothing is written until you press Import. The preview shows exactly what would'],
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],
+];
+
+const GROUP_MEMBER_IMPORT_NOTES = [
+  ['How to fill this in'],
+  [''],
+  ['One column: the mobile number of each student to add to this group.'],
+  ['The group is the one you are on in the admin — it is not written in the file,'],
+  ['so a sheet cannot put students into a batch nobody checked.'],
+  [''],
+  ['A number that already belongs to this group is left alone rather than reported'],
+  ['as a problem: re-uploading last week’s list with ten new numbers on the end is'],
+  ['the normal way to use this.'],
+  [''],
+  ['A number that belongs to NO student is reported. Nobody is enrolled from this'],
+  ['sheet — import them on the Students screen first, then add them here.'],
+  [''],
+  ['Removing someone is done on the student, one at a time. It takes away their'],
+  ['route to a test, which is not something a spreadsheet should do quietly.'],
 ];

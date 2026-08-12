@@ -4,6 +4,7 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Res,
   UploadedFile,
@@ -16,15 +17,18 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
+  type GroupMemberImportPlan,
+  type GroupMemberImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
 import { Actors, RequiresPage } from '../auth/decorators';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildStudentTemplate, XLSX_CONTENT_TYPE } from './workbook';
+import { buildGroupMemberTemplate, buildStudentTemplate, XLSX_CONTENT_TYPE } from './workbook';
 
 /**
  * The two fields we use off a multipart upload.
@@ -42,7 +46,7 @@ interface UploadedFileLike {
  * Mounted under /imports, which is the one path with the larger body limit —
  * see common/body-parsers.ts. Everything else on the API is capped far lower.
  */
-@Controller('imports/students')
+@Controller('imports')
 @Actors(ActorTypes.ADMIN)
 @RequiresPage(ADMIN_PAGES.STUDENTS_MANAGE)
 export class ImportsController {
@@ -55,7 +59,7 @@ export class ImportsController {
    * The sample file. Generated on request from the same column list the parser
    * matches on, so it can never document a format the importer will not accept.
    */
-  @Get('template')
+  @Get('students/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${STUDENT_IMPORT_TEMPLATE_FILENAME}"`)
   // Not cached: it is generated from code that changes with the format, and a
@@ -66,18 +70,54 @@ export class ImportsController {
   }
 
   /** Writes nothing — this is what the admin reads before committing. */
-  @Post('preview')
+  @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
     return this.imports.previewStudents(this.bufferOf(file));
   }
 
-  @Post('commit')
+  @Post('students/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   commit(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportResult> {
     return this.imports.commitStudents(this.bufferOf(file));
+  }
+
+  // ==========================================================================
+  // Adding students to one group
+  //
+  // The group is in the PATH, not in the file: it is the screen the admin is
+  // on, so it cannot be mistyped, and one sheet cannot scatter students across
+  // batches nobody checked.
+  // ==========================================================================
+
+  @Get('groups/members/template')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', `attachment; filename="${GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME}"`)
+  @Header('Cache-Control', 'no-store')
+  async groupMemberTemplate(@Res() response: Response): Promise<void> {
+    response.send(await buildGroupMemberTemplate());
+  }
+
+  @Post('groups/:groupId/members/preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  previewGroupMembers(
+    @Param('groupId') groupId: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<GroupMemberImportPlan> {
+    return this.imports.previewGroupMembers(groupId, this.bufferOf(file));
+  }
+
+  @Post('groups/:groupId/members/commit')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  commitGroupMembers(
+    @Param('groupId') groupId: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<GroupMemberImportResult> {
+    return this.imports.commitGroupMembers(groupId, this.bufferOf(file));
   }
 
   /**
