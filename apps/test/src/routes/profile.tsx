@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { GENDERS, todayISO, updateMeSchema, type UpdateMeInput } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import {
@@ -81,6 +81,10 @@ export function ProfilePage() {
   }, [me.data, reset]);
 
   const save = useMutation({
+    // The central handler announces the outcome — see createAppQueryClient.
+    // `fields` is what keeps a validation failure OFF the toast and on the
+    // input that caused it.
+    meta: { success: 'Your details have been saved.', fields: FORM_FIELDS },
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {
       queryClient.setQueryData(ME_QUERY_KEY, updated);
@@ -91,8 +95,6 @@ export function ProfilePage() {
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
   });
-
-  const banner = save.error ? bannerMessage(save.error, FORM_FIELDS) : null;
 
   return (
     <>
@@ -250,16 +252,6 @@ export function ProfilePage() {
             ]}
             emptyRow={{ exam: '', year: '', result: '' }}
           />
-
-          {banner ? <Alert variant="danger">{banner}</Alert> : null}
-          {save.isSuccess && !form.formState.isDirty ? (
-            <Alert variant="success">
-              <span className="flex items-center gap-2">
-                <Check className="size-4" aria-hidden />
-                Saved.
-              </span>
-            </Alert>
-          ) : null}
 
           <div className="flex gap-2">
             <Button type="submit" disabled={save.isPending || !form.formState.isDirty}>

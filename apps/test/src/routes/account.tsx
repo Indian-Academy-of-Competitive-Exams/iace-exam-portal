@@ -1,11 +1,10 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { Check, KeyRound, Loader2 } from 'lucide-react';
+import { KeyRound, Loader2 } from 'lucide-react';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 import {
-  Alert,
   Button,
   Card,
   CardContent,
@@ -51,6 +50,7 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
   });
 
   const change = useMutation({
+    meta: { success: 'Your PIN has been changed.', fields: FORM_FIELDS },
     mutationFn: (values: ChangePinInput) => api.me.changePin(values),
     onSuccess: (session) => {
       form.reset();
@@ -63,8 +63,6 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
   });
-
-  const banner = change.error ? bannerMessage(change.error, FORM_FIELDS) : null;
 
   return (
     <Card>
@@ -122,16 +120,6 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
               />
             )}
           </Field>
-
-          {banner ? <Alert variant="danger">{banner}</Alert> : null}
-          {change.isSuccess ? (
-            <Alert variant="success">
-              <span className="flex items-center gap-2">
-                <Check className="size-4" aria-hidden />
-                Your PIN has been changed.
-              </span>
-            </Alert>
-          ) : null}
 
           <Button type="submit" disabled={change.isPending}>
             {change.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}

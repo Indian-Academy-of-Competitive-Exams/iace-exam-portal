@@ -1,4 +1,25 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient, type Mutation } from '@tanstack/react-query';
+import { bannerMessage } from './form-errors';
+
+/**
+ * What a mutation may declare about itself, for the central handler below.
+ *
+ * `success` is a string rather than a boolean because the message is the point:
+ * "Saved" and "Added 12 students to SSC CGL MORNING" are both confirmations and
+ * only one of them is worth reading.
+ */
+export interface AppMutationMeta {
+  /** Announced when it succeeds. Omit for mutations nobody needs told about. */
+  success?: string | ((data: unknown) => string);
+  /**
+   * Fields this mutation's form owns. A failure whose messages ALL land on
+   * those fields is not announced — the inputs already say it, and a toast
+   * repeating it makes the reader look in two places.
+   */
+  fields?: readonly string[];
+  /** Opt out entirely: the screen handles its own reporting. */
+  silent?: boolean;
+}
 
 /**
  * The fetching policy every IACE SPA runs on.
@@ -10,11 +31,33 @@ import { QueryClient } from '@tanstack/react-query';
  * off for the same reason — a student tabbing back mid-test should not trigger
  * a burst of requests.
  *
- * Kept here so the two app roots cannot drift into slightly different answers,
- * which is a difference nobody would ever have chosen deliberately.
+ * It also catches EVERY mutation failure in one place. Without this, each form
+ * grows its own error banner, they drift, and the one that was forgotten fails
+ * in silence — which is the failure nobody reports because it looks like
+ * nothing happened.
  */
-export function createAppQueryClient(): QueryClient {
+export function createAppQueryClient(options: { notify?: Notifier } = {}): QueryClient {
+  const { notify } = options;
+
   return new QueryClient({
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _context, mutation) => {
+        const meta = metaOf(mutation);
+        if (!notify || meta.silent) return;
+
+        // Null when every message is already on a field — see bannerMessage.
+        const message = bannerMessage(error, meta.fields ?? []);
+        if (message) notify.error(message);
+      },
+
+      onSuccess: (data, _variables, _context, mutation) => {
+        const meta = metaOf(mutation);
+        if (!notify || meta.silent || !meta.success) return;
+
+        notify.success(typeof meta.success === 'function' ? meta.success(data) : meta.success);
+      },
+    }),
+
     defaultOptions: {
       queries: {
         retry: 1,
@@ -23,4 +66,16 @@ export function createAppQueryClient(): QueryClient {
       },
     },
   });
+}
+
+/** What the client needs to announce something. Kept tiny so @iace/ui owns the look. */
+export interface Notifier {
+  success: (message: string) => void;
+  error: (message: string) => void;
+}
+
+function metaOf(
+  mutation: Mutation<unknown, unknown, unknown, unknown> | undefined,
+): AppMutationMeta {
+  return (mutation?.options.meta ?? {}) as AppMutationMeta;
 }

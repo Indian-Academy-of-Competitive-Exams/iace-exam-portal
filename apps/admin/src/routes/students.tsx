@@ -613,6 +613,10 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
   const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
 
   const create = useMutation({
+    meta: {
+      success: 'Student added.',
+      fields: NEW_STUDENT_FIELDS,
+    },
     mutationFn: (values: CreateStudentInput) =>
       api.admin.students.create({
         mobile: values.mobile,
@@ -687,10 +691,6 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
               error={form.formState.errors.groupIds?.message}
             />
           </fieldset>
-
-          {create.error ? (
-            <Alert variant="danger">{bannerMessage(create.error, NEW_STUDENT_FIELDS)}</Alert>
-          ) : null}
 
           <div className="flex gap-2">
             <Button type="submit" disabled={create.isPending}>

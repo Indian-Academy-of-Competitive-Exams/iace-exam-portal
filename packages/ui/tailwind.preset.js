@@ -138,9 +138,16 @@ module.exports = {
           from: { opacity: '0', transform: 'scale(0.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
+        // Rises from where it sits rather than flying in from off-screen: a
+        // toast is a remark, not an arrival.
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'tooltip-in': 'tooltip-in 120ms ease-out',
+        'toast-in': 'toast-in 160ms ease-out',
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],

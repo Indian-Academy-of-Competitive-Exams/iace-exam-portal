@@ -206,6 +206,7 @@ function NewGroupCard({
   const branches = useBranches({ activeOnly: true });
 
   const create = useMutation({
+    meta: { success: 'Group created.', fields: NEW_GROUP_FIELDS },
     mutationFn: (values: CreateGroupInput) => api.admin.groups.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, NEW_GROUP_FIELDS),
@@ -271,12 +272,6 @@ function NewGroupCard({
               Cancel
             </Button>
           </div>
-
-          {create.error ? (
-            <div className="w-full">
-              <Alert variant="danger">{bannerMessage(create.error, NEW_GROUP_FIELDS)}</Alert>
-            </div>
-          ) : null}
         </form>
       </CardContent>
     </Card>
@@ -290,6 +285,7 @@ function GroupRow({ group }: Readonly<{ group: GroupSummary }>) {
   const queryClient = useQueryClient();
 
   const remove = useMutation({
+    meta: { success: `${group.name} deleted.` },
     mutationFn: () => api.admin.groups.remove(group.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] }),
     // Drop out of the confirm on failure, or the row is left asking a question
@@ -358,16 +354,6 @@ function GroupRow({ group }: Readonly<{ group: GroupSummary }>) {
           )}
         </TableCell>
       </TableRow>
-
-      {remove.error ? (
-        <tr>
-          <TableCell colSpan={5} className="pt-0">
-            {/* The server refuses while students or a series still depend on it,
-                and its message says what to do first. */}
-            <Alert variant="danger">{bannerMessage(remove.error)}</Alert>
-          </TableCell>
-        </tr>
-      ) : null}
     </>
   );
 }

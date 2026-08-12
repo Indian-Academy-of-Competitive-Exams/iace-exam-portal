@@ -30,7 +30,7 @@ import { useAuth } from '../providers/auth-context';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors } from '@iace/app-kit';
 
 const NEW_BRANCH_FIELDS = ['name'] as const;
 
@@ -128,6 +128,7 @@ function NewBranchCard({
   });
 
   const create = useMutation({
+    meta: { success: 'Branch created.', fields: NEW_BRANCH_FIELDS },
     mutationFn: (values: CreateBranchInput) => api.admin.branches.create(values),
     onSuccess: onDone,
     onError: (error) => applyFieldErrors(error, form.setError, NEW_BRANCH_FIELDS),
@@ -171,12 +172,6 @@ function NewBranchCard({
               Cancel
             </Button>
           </div>
-
-          {create.error ? (
-            <div className="w-full">
-              <Alert variant="danger">{bannerMessage(create.error, NEW_BRANCH_FIELDS)}</Alert>
-            </div>
-          ) : null}
         </form>
       </CardContent>
     </Card>
@@ -262,6 +257,7 @@ function BranchRow({
   const [confirming, setConfirming] = useState(false);
 
   const remove = useMutation({
+    meta: { success: `${branch.name} deleted.` },
     mutationFn: () => api.admin.branches.remove(branch.id),
     onSuccess: onChanged,
     // Drop out of the confirm on failure, or the row is left asking a question
@@ -270,12 +266,12 @@ function BranchRow({
   });
 
   const setActive = useMutation({
+    meta: { success: (): string => `${branch.name} updated.` },
     mutationFn: (isActive: boolean) => api.admin.branches.update(branch.id, { isActive }),
     onSuccess: onChanged,
   });
 
   const busy = remove.isPending || setActive.isPending;
-  const error = remove.error ?? setActive.error;
 
   return (
     <>
@@ -328,14 +324,6 @@ function BranchRow({
           />
         </TableCell>
       </TableRow>
-
-      {error ? (
-        <TableRow>
-          <TableCell colSpan={5}>
-            <Alert variant="danger">{bannerMessage(error)}</Alert>
-          </TableCell>
-        </TableRow>
-      ) : null}
     </>
   );
 }

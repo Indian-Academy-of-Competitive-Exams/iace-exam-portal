@@ -1,9 +1,8 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, FileText, Loader2, Upload } from 'lucide-react';
 import { DOCUMENT_MAX_BYTES, acceptedTypesFor, type DocumentKind, type Me } from '@iace/contracts';
-import { bannerMessage } from '@iace/app-kit';
-import { Alert, Button, linkVariants } from '@iace/ui';
+import { Button, linkVariants } from '@iace/ui';
 import { api } from '../lib/api';
 import { ME_QUERY_KEY } from '../lib/constants';
 
@@ -21,9 +20,9 @@ export function DocumentCard({
 }: Readonly<{ kind: DocumentKind; label: string; url: string | null }>) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [justSaved, setJustSaved] = useState(false);
 
   const upload = useMutation({
+    meta: { success: `${label} saved.` },
     mutationFn: (file: File) => api.me.uploadDocument(kind, file),
     onSuccess: (me: Me) => {
       // The response IS the refreshed profile, so the card can show the new
@@ -31,7 +30,6 @@ export function DocumentCard({
       // profileCompleted, which this upload may have just changed.
       queryClient.setQueryData(ME_QUERY_KEY, me);
       void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      setJustSaved(true);
     },
   });
 
@@ -87,10 +85,7 @@ export function DocumentCard({
           // Cleared so choosing the SAME file again still fires — a student who
           // just rotated the photo and saved over it expects it to re-upload.
           event.target.value = '';
-          if (file) {
-            setJustSaved(false);
-            upload.mutate(file);
-          }
+          if (file) upload.mutate(file);
         }}
       />
 
@@ -111,9 +106,6 @@ export function DocumentCard({
       </Button>
 
       <p className="text-[11px] leading-tight text-muted-foreground">{rules}</p>
-
-      {upload.error ? <Alert variant="danger">{bannerMessage(upload.error)}</Alert> : null}
-      {justSaved && !upload.error ? <Alert variant="success">Saved.</Alert> : null}
     </div>
   );
 }

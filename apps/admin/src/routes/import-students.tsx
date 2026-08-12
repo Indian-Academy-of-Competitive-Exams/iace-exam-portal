@@ -31,7 +31,6 @@ import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
-import { bannerMessage } from '@iace/app-kit';
 
 /**
  * Preview, then commit. Nothing is written until the admin has seen exactly
@@ -48,6 +47,12 @@ export function ImportStudentsPage() {
   });
 
   const commit = useMutation({
+    meta: {
+      success: (data: unknown): string => {
+        const result = data as { created: number; updated: number; skipped: number };
+        return `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`;
+      },
+    },
     mutationFn: (chosen: File) => api.admin.imports.commitStudents(chosen),
   });
 
@@ -107,17 +112,6 @@ export function ImportStudentsPage() {
             </Alert>
           ) : null}
 
-          {preview.error ? (
-            <Alert variant="danger" className="mb-4">
-              {bannerMessage(preview.error)}
-            </Alert>
-          ) : null}
-          {commit.error ? (
-            <Alert variant="danger" className="mb-4">
-              {bannerMessage(commit.error)}
-            </Alert>
-          ) : null}
-
           <Table>
             <TableHeader>
               <TableRow>
@@ -171,7 +165,6 @@ export function ImportStudentsPage() {
                 )}
                 Download sample file
               </Button>
-              {sample.error ? <Alert variant="danger">{bannerMessage(sample.error)}</Alert> : null}
             </CardContent>
           </Card>
 

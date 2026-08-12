@@ -11,6 +11,14 @@ export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export { Select, type SelectProps } from './components/ui/select';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
+export {
+  Toaster,
+  toast,
+  dismissToast,
+  TOAST_VARIANTS,
+  type Toast,
+  type ToastVariant,
+} from './components/ui/toast';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
 export { linkVariants, type LinkVariants } from './components/ui/link';

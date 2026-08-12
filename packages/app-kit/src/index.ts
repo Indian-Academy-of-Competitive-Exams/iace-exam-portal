@@ -5,7 +5,7 @@ export {
   type TokenStore,
 } from './token-store';
 export { createBrowserApiClient } from './api-client';
-export { createAppQueryClient } from './query-client';
+export { createAppQueryClient, type AppMutationMeta, type Notifier } from './query-client';
 export { applyFieldErrors, bannerMessage, errorCodeOf, isFullyFieldMapped } from './form-errors';
 export { usePageSize } from './use-page-size';
 export { useInfinitePages, nextPageParam } from './use-infinite-pages';

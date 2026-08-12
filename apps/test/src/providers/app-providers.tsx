@@ -1,10 +1,18 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider, TooltipProvider } from '@iace/ui';
+import { ThemeProvider, Toaster, TooltipProvider, toast } from '@iace/ui';
 import { createAppQueryClient } from '@iace/app-kit';
 import { AuthProvider } from './auth-provider';
 
-const queryClient = createAppQueryClient();
+/**
+ * One client, one place every mutation failure is announced.
+ *
+ * `toast` is a module-level store, so it works from here — outside any
+ * component — which is what lets the catch-all live in the client rather than
+ * in each form. Field-level messages still land on their fields; this only sees
+ * what has nowhere else to go.
+ */
+const queryClient = createAppQueryClient({ notify: toast });
 
 export function AppProviders({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -15,6 +23,7 @@ export function AppProviders({ children }: Readonly<{ children: React.ReactNode 
           <BrowserRouter>
             <AuthProvider>{children}</AuthProvider>
           </BrowserRouter>
+          <Toaster />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

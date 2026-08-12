@@ -8,7 +8,6 @@ import {
   type GroupMemberImportPlan,
   type GroupMemberImportRow,
 } from '@iace/contracts';
-import { bannerMessage } from '@iace/app-kit';
 import {
   Alert,
   Badge,
@@ -59,6 +58,12 @@ function useMemberImport(groupId: string) {
   });
 
   const commit = useMutation({
+    meta: {
+      success: (data: unknown): string => {
+        const result = data as { added: number };
+        return `Added ${result.added} student${result.added === 1 ? '' : 's'} to the group.`;
+      },
+    },
     mutationFn: (chosen: File) => api.admin.imports.commitGroupMembers(groupId, chosen),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
@@ -127,7 +132,6 @@ export function ImportGroupMembersPage() {
             groupId={id}
             fileErrors={plan?.fileErrors ?? []}
             added={commit.data?.added}
-            error={preview.error ?? commit.error}
           />
 
           <Table>
@@ -176,7 +180,6 @@ export function ImportGroupMembersPage() {
                 )}
                 Download sample file
               </Button>
-              {sample.error ? <Alert variant="danger">{bannerMessage(sample.error)}</Alert> : null}
             </CardContent>
           </Card>
 
@@ -252,23 +255,20 @@ export function ImportGroupMembersPage() {
 }
 
 /**
- * Everything this screen has to say above the preview table: what was wrong
- * with the file, what the import did, and what failed.
+ * What is wrong with the FILE, and what the import did to it.
  *
- * Together in one place because they are one question — "did that work?" — and
- * four separate conditionals in the middle of the layout answered it in four
- * places nobody read as a set.
+ * Request failures are not here — those go to a toast, from the one handler in
+ * createAppQueryClient. What stays is the file's own report: a missing column is
+ * a fact about the thing on screen, not news about a request.
  */
 function ImportBanners({
   groupId,
   fileErrors,
   added,
-  error,
 }: Readonly<{
   groupId: string;
   fileErrors: readonly string[];
   added: number | undefined;
-  error: unknown;
 }>) {
   return (
     <>
@@ -289,12 +289,6 @@ function ImportBanners({
               View the group
             </Link>
           </span>
-        </Alert>
-      )}
-
-      {Boolean(error) && (
-        <Alert variant="danger" className="mb-4">
-          {bannerMessage(error)}
         </Alert>
       )}
     </>

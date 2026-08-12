@@ -127,6 +127,7 @@ export function StudentDetailPage() {
   }, [student.data?.id]);
 
   const save = useMutation({
+    meta: { success: 'Saved.', fields: FORM_FIELDS },
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
@@ -162,6 +163,9 @@ export function StudentDetailPage() {
   });
 
   const setActive = useMutation({
+    meta: {
+      success: (): string => (detail?.isActive ? 'Student deactivated.' : 'Student reactivated.'),
+    },
     mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
     onSuccess: (updated) => {
       queryClient.setQueryData(['admin', 'student', id], updated);
@@ -216,12 +220,6 @@ export function StudentDetailPage() {
           Full profile {detail.profileCompleted ? 'complete' : 'incomplete'}
         </Badge>
       </div>
-
-      {setActive.error ? (
-        <Alert variant="danger" className="mb-4">
-          {bannerMessage(setActive.error)}
-        </Alert>
-      ) : null}
 
       <Card className="mb-5">
         <CardHeader>
