@@ -1,9 +1,8 @@
 import { LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Badge, Brandmark, Button, cn } from '@iace/ui';
+import { Badge, Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
 import { NAV_ITEMS } from '../lib/constants';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from './theme-toggle';
 
 /**
  * The authed shell: one header, one nav, and the page below it. Every admin

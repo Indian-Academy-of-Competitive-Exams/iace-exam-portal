@@ -41,9 +41,9 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
+import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from '../components/theme-toggle';
+import { ThemeToggle } from '@iace/ui';
 
 /** Why the student is going through the OTP flow — it only changes the words. */
 const OTP_INTENTS = {

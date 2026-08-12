@@ -21,7 +21,7 @@ import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
+import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
 interface FormValues {
   fullName: string;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ThemeContext, type Theme } from './theme-context';
-import { STORAGE_KEYS, THEME_ATTRIBUTE, THEMES } from '../lib/constants';
+import { ThemeContext } from './theme-context';
+import { THEME_ATTRIBUTE, THEME_STORAGE_KEY, THEMES, type Theme } from './theme';
 
 function readInitialTheme(): Theme {
   // index.html already resolved this before first paint; mirror its decision.
@@ -14,7 +14,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // The tokens do all the work — never hand-flip individual colours.
     document.documentElement.setAttribute(THEME_ATTRIBUTE, theme);
-    localStorage.setItem(STORAGE_KEYS.THEME, theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => setThemeState(next), []);

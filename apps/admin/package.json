@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "5.7.1",
+    "@iace/app-kit": "workspace:*",
     "@iace/contracts": "workspace:*",
     "@iace/ui": "workspace:*",
     "@tanstack/react-query": "5.101.4",

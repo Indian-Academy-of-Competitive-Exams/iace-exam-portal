@@ -4,7 +4,12 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Plus, Search, Trash2 } from 'lucide-react';
-import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
+import {
+  PAGE_SIZE_OPTIONS,
+  createGroupSchema,
+  type CreateGroupInput,
+  type GroupSummary,
+} from '@iace/contracts';
 import {
   Alert,
   Button,
@@ -26,12 +31,12 @@ import {
   TableRow,
 } from '@iace/ui';
 import { PageHeader } from '../components/app-shell';
-import { Pagination } from '../components/pagination';
+import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { ROUTES, STORAGE_KEYS } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { usePageSize } from '../lib/use-page-size';
-import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
+import { usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
@@ -40,7 +45,7 @@ export function GroupsPage() {
   const [search, setSearch] = useState('');
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = usePageSize();
+  const [pageSize, setPageSize] = usePageSize(STORAGE_KEYS.PAGE_SIZE);
   const queryClient = useQueryClient();
 
   const groups = useQuery({
@@ -147,6 +152,7 @@ export function GroupsPage() {
             pageSize={groups.data.pageSize}
             total={groups.data.total}
             onPageChange={setPage}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
             onPageSizeChange={(size) => {
               setPageSize(size);
               setPage(1);

@@ -27,24 +27,15 @@ export const NAV_ITEMS = [
   { to: ROUTES.BRANCHES, label: 'Branches' },
 ] as const;
 
-export const THEMES = {
-  LIGHT: 'light',
-  DARK: 'dark',
-} as const;
-
-/** The attribute the design-system tokens key off, on <html>. */
-export const THEME_ATTRIBUTE = 'data-theme';
-
 /**
- * localStorage keys. Namespaced per app so the two SPAs on localhost:5173 and
- * :5174 never read each other's session.
+ * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing
+ * one origin never read each other's session.
  *
- * NOTE: index.html applies the stored theme before first paint, so it repeats
- * THEME and THEME_ATTRIBUTE as literals — it runs before this bundle exists.
- * Change one, change the other.
+ * The theme key is deliberately absent: it belongs to the design system
+ * (`THEME_STORAGE_KEY` in @iace/ui) and is shared on purpose — one person, one
+ * origin, one choice of palette.
  */
 export const STORAGE_KEYS = {
-  THEME: 'iace.theme',
   AUTH: 'iace.admin.auth',
   PAGE_SIZE: 'iace.admin.pageSize',
 } as const;

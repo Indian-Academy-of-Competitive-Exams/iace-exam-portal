@@ -6,6 +6,8 @@
    and classes like bg-primary / text-muted-foreground / border-border just work.
    ============================================================================ */
 
+const plugin = require('tailwindcss/plugin');
+
 /**
  * Wraps a CSS-variable colour so BOTH call shapes work.
  *
@@ -148,5 +150,27 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    /**
+     * The base layer every app renders on.
+     *
+     * It lived in each app's index.css, byte-identical, which made the default
+     * border colour and the page's own background an app decision — exactly the
+     * kind of value that drifts once and is then wrong in one place forever.
+     * Delivered through the preset rather than a CSS file so apps need no
+     * @import machinery: they keep only the three @tailwind directives.
+     */
+    plugin(({ addBase }) => {
+      addBase({
+        '*': { borderColor: 'var(--border)' },
+        body: {
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          '-webkit-font-smoothing': 'antialiased',
+          '-moz-osx-font-smoothing': 'grayscale',
+          fontFeatureSettings: "'rlig' 1, 'calt' 1",
+        },
+      });
+    }),
+  ],
 };

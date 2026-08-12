@@ -1,20 +1,13 @@
-import { createApiClient } from '@iace/contracts';
-import { SIGNED_OUT_EVENT, tokenStore } from './token-store';
-
-const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+import { createBrowserApiClient, createTokenStore } from '@iace/app-kit';
+import { STORAGE_KEYS } from './constants';
 
 /**
- * One client for the whole app, typed end to end by @iace/contracts. It
- * refreshes expired access tokens transparently and tells the app to sign out
- * when the refresh token is gone too.
+ * This app's session and its API client. The storage key is what keeps the
+ * admin and test sessions apart on a shared origin — see `createTokenStore`.
  */
-export const api = createApiClient({
-  baseUrl,
-  getAccessToken: () => tokenStore.get()?.accessToken ?? null,
-  getRefreshToken: () => tokenStore.get()?.refreshToken ?? null,
-  onTokensRefreshed: (tokens) => tokenStore.set(tokens),
-  onUnauthorized: () => {
-    tokenStore.clear();
-    window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
-  },
+export const tokenStore = createTokenStore(STORAGE_KEYS.AUTH);
+
+export const api = createBrowserApiClient({
+  baseUrl: import.meta.env.VITE_API_URL ?? 'http://localhost:3000',
+  tokenStore,
 });

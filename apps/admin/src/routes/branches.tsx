@@ -29,7 +29,7 @@ import { useAuth } from '../providers/auth-context';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
+import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
 const NEW_BRANCH_FIELDS = ['name'] as const;
 

@@ -11,6 +11,7 @@ export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export { Select, type SelectProps } from './components/ui/select';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
+export { Pagination } from './components/ui/pagination';
 export {
   TruncatedText,
   useTruncation,
@@ -34,3 +35,10 @@ export {
   CardContent,
   CardFooter,
 } from './components/ui/card';
+
+// The active token set. Lives here because `data-theme` is what tokens.css
+// keys off — an app that spelled it differently would render the wrong palette.
+export { THEMES, THEME_ATTRIBUTE, THEME_STORAGE_KEY, type Theme } from './theme/theme';
+export { ThemeContext, useTheme, type ThemeContextValue } from './theme/theme-context';
+export { ThemeProvider } from './theme/theme-provider';
+export { ThemeToggle } from './theme/theme-toggle';

@@ -28,7 +28,7 @@ import {
 import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { bannerMessage } from '../lib/form-errors';
+import { bannerMessage } from '@iace/app-kit';
 
 /**
  * Preview, then commit. Nothing is written until the admin has seen exactly

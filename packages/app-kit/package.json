@@ -1,0 +1,37 @@
+{
+  "name": "@iace/app-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json",
+    "lint": "eslint .",
+    "clean": "rm -rf .turbo",
+    "test": "node --import tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@iace/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-hook-form": "^7.0.0",
+    "@tanstack/react-query": "^5.0.0"
+  },
+  "devDependencies": {
+    "@iace/config": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "eslint": "10.8.1",
+    "react": "19.2.8",
+    "react-hook-form": "7.85.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  }
+}

@@ -17,6 +17,7 @@ A full-stack learning platform for **IACE**, a government-exam coaching institut
 - **API:** NestJS (Node + TS) — one decoupled API for web now, mobile later.
 - **Frontend:** **Vite + React + TypeScript SPAs** — `apps/test` and `apps/admin` (`apps/student` comes later). No Next.js, no SSR. (A public marketing site, if ever needed, is a separate small thing.)
 - **Server data:** TanStack Query (React Query) over a typed client generated from `packages/contracts`.
+- **Anything both SPAs need lives in a package, never twice in `apps/`.** Which package is decided by what the thing _is_: **`packages/ui`** for design (components, the theme provider/toggle, `Pagination`, the base layer — delivered via the Tailwind preset, not an app's `index.css`); **`packages/app-kit`** for React plumbing that is not design (`createTokenStore`, `createBrowserApiClient`, `createAppQueryClient`, the `fieldErrors`→react-hook-form bridge, `usePageSize`); **`packages/contracts`** for types, schemas and the typed client. `packages/ui` must stay free of domain knowledge — `Pagination` takes its page sizes as a prop rather than importing `PAGE_SIZE_OPTIONS`. What stays in an app is only its own wiring: routes, nav, its `STORAGE_KEYS`, its shell.
 - **Design system:** Tailwind CSS + shadcn/ui with tokens in **`packages/ui`** — the single source for color, type, spacing, radii, elevation, and components. **Never redefine design values at the component level.** Brand primary = muted brick **`#B83939`**; **Cancel = neutral grey**; **destructive = crimson `#BE123C`**; chart palette is the validated colorblind-safe set (blue-led, never brand red). Light + dark via CSS variables. Living style guide: `docs/design/design-system.html`.
 - **Forms:** react-hook-form + zod. **Icons:** lucide-react. **Routing:** React Router. **Client state:** Zustand only where React Query doesn't fit.
 - **Mobile (post-V1):** React Native + Expo (reuses the same TS, types, and API).
@@ -38,6 +39,7 @@ apps/
   (student/    the broader student platform — a separate SPA, later)
 packages/
   ui/          design tokens + shadcn components (the shared design system)
+  app-kit/     shared SPA plumbing that is NOT design (see below)
   contracts/   shared types + typed API client
   config/      tailwind preset, tsconfig, eslint
 prisma/
@@ -86,6 +88,7 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - `docs/schema-erd.mmd` — ER diagram of the data model.
 - `docs/design/design-system.html` — living style guide (open it to see the system).
 - `packages/ui/` — the design tokens + Tailwind preset that back it.
+- `packages/app-kit/` — shared SPA plumbing (tokens/session, API client, form errors, page size).
 - `prisma/schema.prisma` — **the data model (source of truth).**
 
 ## Build order (mock-test feature)

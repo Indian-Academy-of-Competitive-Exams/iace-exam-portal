@@ -9,10 +9,32 @@ import { cn } from '../../lib/utils';
  * exists nowhere else — it does not survive touch, print, or a screen reader
  * that never hovers. Anything a decision depends on belongs on the page.
  *
- * `TooltipProvider` goes once, high in the app: it owns the shared open delay,
- * which is what stops a row of them flickering as the pointer crosses a table.
+ * `TooltipProvider` goes once, high in the app. It owns the shared open delay,
+ * which is what stops a row of them flickering as the pointer crosses a table,
+ * and it carries the tuning below so no app has to restate it — two app roots
+ * with slightly different tooltip timing is a difference nobody chose.
  */
-const TooltipProvider = TooltipPrimitive.Provider;
+function TooltipProvider({
+  delayDuration = 300,
+  skipDelayDuration = 200,
+  /**
+   * Ours only ever hold text. Radix otherwise keeps a grace area alive between
+   * trigger and content so a pointer can travel into it, and while it believes
+   * the pointer is in transit the NEXT trigger will not open — moving from a
+   * truncated name to the "+N" beside it showed nothing at all.
+   */
+  disableHoverableContent = true,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Provider>) {
+  return (
+    <TooltipPrimitive.Provider
+      delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
+      disableHoverableContent={disableHoverableContent}
+      {...props}
+    />
+  );
+}
 const Tooltip = TooltipPrimitive.Root;
 const TooltipTrigger = TooltipPrimitive.Trigger;
 

@@ -1,7 +1,5 @@
 import { createContext, use } from 'react';
-import { type THEMES } from '../lib/constants';
-
-export type Theme = (typeof THEMES)[keyof typeof THEMES];
+import { type Theme } from './theme';
 
 export interface ThemeContextValue {
   theme: Theme;

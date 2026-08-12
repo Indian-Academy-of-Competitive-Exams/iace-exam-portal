@@ -2,17 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Values live in @iace/ui/tokens.css (imported in main.tsx). This file only
-   wires Tailwind's layers — never define a colour or spacing value here. */
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings:
-      'rlig' 1,
-      'calt' 1;
-  }
-}
+/* Nothing else belongs here. Values live in @iace/ui/tokens.css and the base
+   layer they paint comes from @iace/ui/tailwind.preset — never define a colour
+   or a spacing value in an app. */

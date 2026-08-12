@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth-context';
-import { ThemeToggle } from '../components/theme-toggle';
+import { ThemeToggle } from '@iace/ui';
 
 /**
  * The authed shell. In V1 this route becomes the Report dashboard — the
