@@ -1,14 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { type StudentImportPlan, type StudentImportResult } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { planStudentImport, type ImportContext, type ImportGroup } from './student-import';
+import { PinService } from '../auth/pin/pin.service';
+import { defaultPinFor } from './default-pin';
+import {
+  groupEntriesIn,
+  mobilesIn,
+  planStudentImport,
+  type ImportContext,
+  type ImportGroup,
+} from './student-import';
 import { type CsvTable } from './csv';
 import { readUploadedTable } from './workbook';
-import { mobileSchema } from '@iace/contracts';
 
 @Injectable()
 export class ImportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pin: PinService,
+  ) {}
 
   /** What the file would do. Writes nothing. */
   async previewStudents(file: Buffer): Promise<StudentImportPlan> {
@@ -38,6 +48,15 @@ export class ImportsService {
           data: {
             // An empty name column means "no opinion", not "clear the name".
             ...(row.fullName === null ? {} : { fullName: row.fullName }),
+            // A student already in the system keeps whatever PIN they have. An
+            // import must never reset a PIN somebody chose, or re-importing a
+            // roster would quietly hand every one of them back to the sheet.
+            ...(row.willReceiveDefaultPin
+              ? {
+                  pinHash: await this.pin.hash(defaultPinFor(row.mobile)),
+                  pinIsDefault: true,
+                }
+              : {}),
             // Groups are added, never replaced: a roster for one group must not
             // remove a student from the others they are already in.
             ...(row.groupIds.length
@@ -51,6 +70,10 @@ export class ImportsService {
           data: {
             mobile: row.mobile,
             fullName: row.fullName,
+            // A starting PIN, so an uploaded roster can sign in the same day —
+            // marked as ours, not theirs. See default-pin.ts for the trade.
+            pinHash: await this.pin.hash(defaultPinFor(row.mobile)),
+            pinIsDefault: true,
             ...(row.groupIds.length
               ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
               : {}),
@@ -69,24 +92,17 @@ export class ImportsService {
    * bounded queries and not a table scan per line.
    */
   private async contextFor(table: CsvTable): Promise<ImportContext> {
-    const mobiles = new Set<string>();
-    const groupNames = new Set<string>();
-    for (const row of table.rows) {
-      const parsed = mobileSchema.safeParse(row.values.mobile ?? '');
-      if (parsed.success) mobiles.add(parsed.data);
-      for (const entry of (row.values.groups ?? '').split(/[;|]/)) {
-        if (entry.trim()) groupNames.add(entry);
-      }
-    }
+    const mobiles = mobilesIn(table);
+    const groupNames = groupEntriesIn(table);
 
     const [students, groups] = await Promise.all([
-      mobiles.size
+      mobiles.length
         ? this.prisma.student.findMany({
-            where: { mobile: { in: [...mobiles] } },
-            select: { id: true, mobile: true, fullName: true },
+            where: { mobile: { in: mobiles } },
+            select: { id: true, mobile: true, fullName: true, pinHash: true },
           })
         : Promise.resolve([]),
-      groupNames.size
+      groupNames.length
         ? this.prisma.group.findMany({
             select: { id: true, name: true, branch: { select: { name: true } } },
           })
@@ -95,7 +111,10 @@ export class ImportsService {
 
     return {
       existingByMobile: new Map(
-        students.map((s) => [s.mobile, { id: s.id, fullName: s.fullName }]),
+        students.map((s) => [
+          s.mobile,
+          { id: s.id, fullName: s.fullName, hasPin: s.pinHash !== null },
+        ]),
       ),
       groupsByName: groupsByCanonicalName(groups),
     };

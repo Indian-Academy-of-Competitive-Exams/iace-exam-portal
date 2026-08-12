@@ -115,6 +115,12 @@ model Student {
   // it is only ever checked against the one student a mobile number resolves to,
   // so two students sharing a PIN is unremarkable and invisible to both.
   pinHash           String?
+  // True while the PIN is one the INSTITUTE set, not one the student chose —
+  // bulk imports seed the first four digits of the mobile number so a roster
+  // can sign in on day one. It is guessable by anyone who knows the number, so
+  // it is tracked rather than forgotten: "has signed in" means a PIN of their
+  // own, and the student is prompted to replace this one.
+  pinIsDefault      Boolean         @default(false)
   fullName          String?
   preferredLanguage String          @default("en")
   // preTestReady: minimal details present (mother's name + father's name + DOB) —

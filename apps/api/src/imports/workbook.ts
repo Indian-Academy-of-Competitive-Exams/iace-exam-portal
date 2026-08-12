@@ -156,7 +156,7 @@ export async function buildStudentTemplate(): Promise<Buffer> {
 
   sheet.columns = STUDENT_IMPORT_COLUMNS.map((column) => ({
     header: column.header,
-    key: column.header,
+    key: column.key,
     width: column.width,
   }));
 
@@ -190,13 +190,17 @@ const STUDENT_IMPORT_EXAMPLES = [
 const STUDENT_IMPORT_NOTES = [
   ['How to fill this in'],
   [''],
-  ['mobile — required. 10 digits. This is what identifies a student: if the number'],
-  ['already exists, that student is updated rather than duplicated.'],
+  ['Mobile Number — required. 10 digits. This is what identifies a student: if the'],
+  ['number already exists, that student is updated rather than duplicated.'],
   [''],
-  ['fullName — optional. Letters, spaces and . ’ - only. Leave it blank if you'],
+  ['Each new student is given a starting PIN: the FIRST FOUR DIGITS of their own'],
+  ['mobile number. Tell them to change it when they first sign in — anyone holding'],
+  ['this sheet can work it out. A student who has already chosen a PIN keeps it.'],
+  [''],
+  ['Full Name — optional. Letters, spaces and . ’ - only. Leave it blank if you'],
   ['do not know it yet; it can be filled in later.'],
   [''],
-  ['groups — optional. Separate several with a semicolon (;).'],
+  ['Groups — optional. Separate several with a semicolon (;).'],
   ['A group name is unique only WITHIN its branch, so if two branches run the same'],
   ['batch, write the branch too: AMEERPET / SSC CGL MORNING'],
   ['Groups are never created by an import — a name that matches nothing is reported.'],

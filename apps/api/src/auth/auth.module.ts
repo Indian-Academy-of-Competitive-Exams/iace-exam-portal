@@ -54,6 +54,13 @@ function createOtpSender(config: AppConfigService, consoleSender: ConsoleOtpSend
     ActorGuard,
     PagePermissionGuard,
   ],
-  exports: [TokenService, SessionService, JwtAuthGuard, ActorGuard, PagePermissionGuard],
+  exports: [
+    TokenService,
+    SessionService,
+    PinService,
+    JwtAuthGuard,
+    ActorGuard,
+    PagePermissionGuard,
+  ],
 })
 export class AuthModule {}

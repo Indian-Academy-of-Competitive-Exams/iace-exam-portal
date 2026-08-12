@@ -85,8 +85,11 @@ export class AuthService {
     const pinHash = await this.pin.hash(pin);
     const student = await this.prisma.student.upsert({
       where: { mobile },
-      create: { mobile, pinHash },
-      update: { pinHash },
+      // pinIsDefault false in both branches: this PIN is the student's own,
+      // whether they are new or replacing the one an import gave them. Leaving
+      // it set would keep prompting them to change a PIN they just chose.
+      create: { mobile, pinHash, pinIsDefault: false },
+      update: { pinHash, pinIsDefault: false },
     });
     if (!student.isActive)
       throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');

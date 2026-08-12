@@ -35,9 +35,25 @@ describe('studentWhere — three-state filters', () => {
     }
   });
 
-  it('reads neverSignedIn as "has no PIN", both ways round', () => {
-    assert.deepEqual(studentWhere(query({ neverSignedIn: 'true' })).pinHash, null);
-    assert.deepEqual(studentWhere(query({ neverSignedIn: 'false' })).pinHash, { not: null });
+  /**
+   * A PIN the institute handed out is not a sign-in. Counting it as one turns
+   * "never signed in" — the list of people to chase — into "was never
+   * imported", the moment the first roster is uploaded.
+   */
+  it('reads neverSignedIn as "has no PIN OF THEIR OWN", both ways round', () => {
+    assert.deepEqual(studentWhere(query({ neverSignedIn: 'true' })).OR, [
+      { pinHash: null },
+      { pinIsDefault: true },
+    ]);
+
+    const signedIn = studentWhere(query({ neverSignedIn: 'false' }));
+    assert.deepEqual(signedIn.pinHash, { not: null });
+    assert.equal(signedIn.pinIsDefault, false);
+  });
+
+  it('can ask for exactly the students still on a starting PIN', () => {
+    assert.equal(studentWhere(query({ hasDefaultPin: 'true' })).pinIsDefault, true);
+    assert.equal('pinIsDefault' in studentWhere(query()), false);
   });
 
   it('asks membership, not a column, for ungrouped', () => {

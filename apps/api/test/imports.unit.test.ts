@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseCsv, readCsvTable, normaliseHeader } from '../src/imports/csv';
-import { planStudentImport, type ImportContext } from '../src/imports/student-import';
+import {
+  groupEntriesIn,
+  mobilesIn,
+  planStudentImport,
+  type ImportContext,
+} from '../src/imports/student-import';
 
 /**
  * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts
@@ -108,7 +113,12 @@ describe('readCsvTable', () => {
 // ---------------------------------------------------------------------------
 
 const context = (): ImportContext => ({
-  existingByMobile: new Map([['9000000001', { id: 'stu_existing', fullName: 'Already Here' }]]),
+  existingByMobile: new Map([
+    // Chose their own PIN already — an import must never reset it.
+    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
+    // Added by an admin and never signed in: this one still needs a starting PIN.
+    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false }],
+  ]),
   // Names are canonical in the database, and a name can belong to several
   // branches — "SSC CGL MORNING" runs at two centres here on purpose.
   groupsByName: new Map([
@@ -249,7 +259,7 @@ describe('planStudentImport', () => {
 
     assert.deepEqual(plan.rows, []);
     assert.equal(plan.fileErrors.length, 1);
-    assert.match(plan.fileErrors[0] ?? '', /needs a "mobile" column/);
+    assert.match(plan.fileErrors[0] ?? '', /"Mobile Number"/);
   });
 
   it('handles an empty upload without throwing', () => {
@@ -273,5 +283,111 @@ describe('planStudentImport', () => {
       planStudentImport(readCsvTable(csv), context()),
       planStudentImport(readCsvTable(csv), context()),
     );
+  });
+});
+
+describe('planStudentImport — the starting PIN', () => {
+  it('gives a new student one', () => {
+    const plan = planStudentImport(readCsvTable('mobile\n9876543210'), context());
+
+    assert.equal(plan.rows[0]?.action, 'create');
+    assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
+  });
+
+  /**
+   * The failure this exists to prevent: re-importing last term's roster resets
+   * the PIN of every student who had chosen one, handing all of those accounts
+   * back to whoever holds the sheet — and nothing about the import looks wrong.
+   */
+  it('never resets a PIN the student chose', () => {
+    const plan = planStudentImport(readCsvTable('mobile\n9000000001'), context());
+
+    assert.equal(plan.rows[0]?.action, 'update');
+    assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
+  });
+
+  it('gives one to a student who was added by hand and never set a PIN', () => {
+    const plan = planStudentImport(readCsvTable('mobile\n9000000002'), context());
+
+    assert.equal(plan.rows[0]?.action, 'update');
+    assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
+  });
+
+  it('gives none to a row that will not be written at all', () => {
+    const plan = planStudentImport(readCsvTable('mobile\nnot-a-number'), context());
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
+  });
+});
+
+describe('the columns an admin actually writes', () => {
+  it('reads the readable headers the sample file uses', () => {
+    const plan = planStudentImport(
+      readCsvTable('Mobile Number,Full Name,Groups\n9876543210,Asha Kumari,SSC CGL EVENING'),
+      context(),
+    );
+
+    assert.equal(plan.fileErrors.length, 0);
+    assert.equal(plan.rows[0]?.mobile, '9876543210');
+    assert.equal(plan.rows[0]?.fullName, 'Asha Kumari');
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
+  });
+
+  /**
+   * Every one of these is a real file somebody will try: last month's template,
+   * a roster exported from another system, a sheet typed by hand.
+   */
+  it('accepts the other names the same column goes by', () => {
+    for (const header of ['mobile', 'Phone', 'Contact Number', 'MOBILE_NO']) {
+      const plan = planStudentImport(readCsvTable(`${header}\n9876543210`), context());
+      assert.equal(plan.fileErrors.length, 0, `"${header}" should be understood`);
+      assert.equal(plan.rows[0]?.mobile, '9876543210');
+    }
+  });
+
+  it('names the column the way the sample file does when it is missing', () => {
+    const plan = planStudentImport(readCsvTable('name,groups\nAsha,X'), context());
+
+    assert.match(plan.fileErrors[0] ?? '', /"Mobile Number"/);
+    assert.match(plan.fileErrors[0] ?? '', /sample file/);
+  });
+});
+
+/**
+ * These build the lookups the import runs before planning anything. They read
+ * the file through the SAME column resolution the planner uses — and once did
+ * not, which is the bug below.
+ */
+describe('what the import looks up before it plans', () => {
+  it('collects the mobile numbers under the readable header', () => {
+    const table = readCsvTable('Mobile Number,Full Name\n9876543210,Asha\n9000000001,Existing');
+
+    assert.deepEqual(mobilesIn(table), ['9876543210', '9000000001']);
+  });
+
+  /**
+   * The failure this exists to prevent, found by re-importing a file rather
+   * than by any unit test: reading the raw `mobile` key while the sheet said
+   * "Mobile Number" matched nothing, so every row of a RE-import looked new.
+   * The preview said "create" in confident green, and the commit would then
+   * collide on the unique mobile instead of updating the student who had it.
+   */
+  it('finds them under every spelling of the column', () => {
+    for (const header of ['Mobile Number', 'mobile', 'Phone', 'CONTACT_NUMBER']) {
+      assert.deepEqual(mobilesIn(readCsvTable(`${header}\n9876543210`)), ['9876543210'], header);
+    }
+  });
+
+  it('ignores rows whose number could never match a student', () => {
+    assert.deepEqual(mobilesIn(readCsvTable('Mobile Number\nnot-a-number\n\n9876543210')), [
+      '9876543210',
+    ]);
+  });
+
+  it('collects group entries under the readable header, several to a cell', () => {
+    const table = readCsvTable('Mobile Number,Groups\n9876543210,A / B;C');
+
+    assert.deepEqual(groupEntriesIn(table), ['A / B', 'C']);
   });
 });

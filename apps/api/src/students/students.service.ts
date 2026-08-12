@@ -215,6 +215,7 @@ export class StudentsService {
     fullName: string | null;
     isActive: boolean;
     pinHash: string | null;
+    pinIsDefault: boolean;
     preTestReady: boolean;
     profileCompleted: boolean;
     createdAt: Date;
@@ -226,7 +227,11 @@ export class StudentsService {
       fullName: row.fullName,
       isActive: row.isActive,
       // The hash itself never leaves this method — only whether one exists.
-      hasSignedIn: row.pinHash !== null,
+      // A PIN the INSTITUTE set is not a sign-in. Counting it as one would
+      // turn "never signed in" — the list of people to chase — into "was never
+      // imported", the moment the first roster is uploaded.
+      hasSignedIn: row.pinHash !== null && !row.pinIsDefault,
+      hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,
       profileCompleted: row.profileCompleted,
       groups: row.groups.map((group) => ({

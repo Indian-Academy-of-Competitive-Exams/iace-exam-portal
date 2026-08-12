@@ -21,6 +21,13 @@ export const studentImportRowSchema = z.object({
   groupIds: z.array(z.string()),
   /** Set when the number already belongs to a student — this row updates them. */
   existingStudentId: z.string().nullable(),
+  /**
+   * Whether this row hands the student a starting PIN — the first four digits
+   * of their own number. True for everyone new, and for an existing student who
+   * has never had one. NEVER for a student who has chosen their own: an import
+   * must not reset a PIN somebody picked.
+   */
+  willReceiveDefaultPin: z.boolean(),
   action: studentImportActionSchema,
   errors: z.array(z.string()),
 });
@@ -73,9 +80,50 @@ export const IMPORT_ACCEPTED_EXTENSIONS = ['.xlsx', '.csv'] as const;
  * the file an admin downloads cannot document a format the importer will not
  * accept. A hand-written sample drifts the first time a column is renamed, and
  * takes everyone who already downloaded it with it.
+ *
+ * `header` is what a person reads — "Mobile Number", not `mobile`. The file is
+ * opened, filled in and passed around by office staff, and a header row written
+ * in camelCase asks them to read our variable names.
+ *
+ * `aliases` is what the parser accepts, already normalised (lowercased, spaces
+ * and separators stripped — see normaliseHeader). Every plausible spelling is
+ * listed so a roster exported from somewhere else, or last month's template,
+ * still imports: being forgiving about the header is the whole point of naming
+ * it in more than one way.
  */
 export const STUDENT_IMPORT_COLUMNS = [
-  { header: 'mobile', width: 16, required: true },
-  { header: 'fullName', width: 28, required: false },
-  { header: 'groups', width: 52, required: false },
+  {
+    key: 'mobile',
+    header: 'Mobile Number',
+    width: 18,
+    required: true,
+    aliases: [
+      'mobilenumber',
+      'mobile',
+      'mobileno',
+      'phonenumber',
+      'phone',
+      'phoneno',
+      'contactnumber',
+      'contact',
+      'number',
+    ],
+  },
+  {
+    key: 'fullName',
+    header: 'Full Name',
+    width: 28,
+    required: false,
+    aliases: ['fullname', 'name', 'studentname', 'student'],
+  },
+  {
+    key: 'groups',
+    header: 'Groups',
+    width: 52,
+    required: false,
+    aliases: ['groups', 'group', 'batch', 'batches', 'groupnames'],
+  },
 ] as const;
+
+export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
+export type StudentImportColumnKey = StudentImportColumn['key'];

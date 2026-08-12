@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import ExcelJS from 'exceljs';
-import { AppException } from '@iace/contracts';
+import { AppException, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
 import {
   buildStudentTemplate,
   looksLikeWorkbook,
   readUploadedTable,
 } from '../src/imports/workbook';
+import { columnValue } from '../src/imports/student-import';
 
 /** Builds a real .xlsx in memory — no fixture files, no disk. */
 async function workbook(rows: unknown[][], sheetName = 'Students'): Promise<Buffer> {
@@ -170,9 +171,31 @@ describe('buildStudentTemplate', () => {
   it('produces a file this importer can actually read back', async () => {
     const table = await readUploadedTable(await buildStudentTemplate());
 
-    assert.deepEqual(table.headers, ['mobile', 'fullname', 'groups']);
+    // Asserted against the column definitions rather than a literal list, so
+    // renaming a header cannot pass this test while breaking the importer.
+    for (const column of STUDENT_IMPORT_COLUMNS) {
+      assert.ok(
+        column.aliases.some((alias) => table.headers.includes(alias)),
+        `the sample's "${column.header}" header must be one the parser accepts`,
+      );
+    }
+
     assert.ok(table.rows.length > 0, 'the sample must show at least one example row');
-    assert.equal(table.rows[0]?.values.mobile, '9876543210');
+    assert.equal(columnValue(table.rows[0]!, 'mobile'), '9876543210');
+  });
+
+  /**
+   * The headers are read by office staff filling the sheet in, not by us. A
+   * camelCase header row asks them to read our variable names.
+   */
+  it('names its columns the way a person would', async () => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load((await buildStudentTemplate()) as unknown as ArrayBuffer);
+    const header = workbook.worksheets[0]?.getRow(1);
+
+    assert.equal(header?.getCell(1).value, 'Mobile Number');
+    assert.equal(header?.getCell(2).value, 'Full Name');
+    assert.equal(header?.getCell(3).value, 'Groups');
   });
 
   it('is a workbook, not a CSV with a misleading name', async () => {

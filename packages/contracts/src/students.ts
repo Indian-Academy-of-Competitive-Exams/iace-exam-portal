@@ -87,6 +87,12 @@ export const studentSummarySchema = z.object({
    * first thing anyone asks about.
    */
   hasSignedIn: z.boolean(),
+  /**
+   * Still on the PIN an import gave them (the first four digits of their own
+   * number). Guessable by anyone holding the roster, so it is shown rather than
+   * left implicit — and it is why `hasSignedIn` is not simply "has a PIN".
+   */
+  hasDefaultPin: z.boolean(),
   preTestReady: z.boolean(),
   profileCompleted: z.boolean(),
   groups: z.array(groupRefSchema),
@@ -151,8 +157,10 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
    */
   branchId: z.string().optional(),
   isActive: optionalBoolean(),
-  /** Admin-created students who have never set a PIN. */
+  /** Admin-created students who have never set a PIN of their own. */
   neverSignedIn: optionalBoolean(),
+  /** Still on the starting PIN an import gave them — a list worth chasing. */
+  hasDefaultPin: optionalBoolean(),
   /** Mother's name, father's name and DOB — what a student needs before a test. */
   preTestReady: optionalBoolean(),
   profileCompleted: optionalBoolean(),

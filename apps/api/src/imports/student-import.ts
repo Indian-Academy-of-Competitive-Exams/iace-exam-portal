@@ -1,7 +1,10 @@
 import {
+  STUDENT_IMPORT_COLUMNS,
   canonicalName,
   mobileSchema,
   personNameSchema,
+  type StudentImportColumn,
+  type StudentImportColumnKey,
   type StudentImportRow,
   type StudentImportPlan,
 } from '@iace/contracts';
@@ -19,9 +22,28 @@ import { type CsvRow, type CsvTable } from './csv';
  * number and the rest of the file still goes in.
  */
 
-/** What the sheet must contain, and what it may. */
-export const REQUIRED_HEADERS = ['mobile'] as const;
-export const OPTIONAL_HEADERS = ['fullname', 'groups'] as const;
+/**
+ * Finds a column's value however its header was spelled.
+ *
+ * The sheet says "Mobile Number"; a roster exported from somewhere else says
+ * "Phone"; last month's template said "mobile". All three mean the same column,
+ * and every one of them is a file an admin will actually try to import.
+ */
+export function columnValue(row: CsvRow, key: StudentImportColumnKey): string {
+  const column = STUDENT_IMPORT_COLUMNS.find((candidate) => candidate.key === key);
+  for (const alias of column?.aliases ?? []) {
+    const value = row.values[alias];
+    if (value !== undefined) return value;
+  }
+  return '';
+}
+
+/** Which of the required columns the file does not have, under any of its names. */
+function missingColumns(headers: string[]): StudentImportColumn[] {
+  return STUDENT_IMPORT_COLUMNS.filter(
+    (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
+  );
+}
 
 /** Several groups in one cell, because a comma is already the column separator. */
 const GROUP_SEPARATOR = /[;|]/;
@@ -37,7 +59,7 @@ export interface ImportGroup {
 
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
-  existingByMobile: Map<string, { id: string; fullName: string | null }>;
+  existingByMobile: Map<string, { id: string; fullName: string | null; hasPin: boolean }>;
   /**
    * Canonical group name → every group with that name, one per branch.
    *
@@ -82,6 +104,36 @@ export function resolveGroup(
   };
 }
 
+/**
+ * Which mobile numbers a file mentions — what the import loads existing
+ * students by, rather than scanning the table once per row.
+ *
+ * Pure and exported so it is TESTED. It once read `row.values.mobile` while the
+ * sheet's header said "Mobile Number", so it matched nothing: every row in a
+ * re-import looked new, and the commit collided on the unique mobile instead of
+ * updating the student who already had it. Nothing about the preview looked
+ * wrong — it said "create" in confident green.
+ */
+export function mobilesIn(table: CsvTable): string[] {
+  const mobiles = new Set<string>();
+  for (const row of table.rows) {
+    const parsed = mobileSchema.safeParse(columnValue(row, 'mobile'));
+    if (parsed.success) mobiles.add(parsed.data);
+  }
+  return [...mobiles];
+}
+
+/** Every group entry the file names, still unresolved. Same reasoning. */
+export function groupEntriesIn(table: CsvTable): string[] {
+  const entries = new Set<string>();
+  for (const row of table.rows) {
+    for (const entry of columnValue(row, 'groups').split(GROUP_SEPARATOR)) {
+      if (entry.trim()) entries.add(entry);
+    }
+  }
+  return [...entries];
+}
+
 export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
   if (table.rows.length === 0) {
     return {
@@ -120,12 +172,16 @@ export function planStudentImport(table: CsvTable, context: ImportContext): Stud
 }
 
 function missingHeaders(headers: string[]): string[] {
-  const missing = REQUIRED_HEADERS.filter((header) => !headers.includes(header));
-  return missing.length === 0
-    ? []
-    : [
-        `The file needs a "${missing.join('", "')}" column. Found: ${headers.join(', ') || 'nothing'}`,
-      ];
+  const missing = missingColumns(headers);
+  if (missing.length === 0) return [];
+
+  // Named the way the sample file names them, because that is the file the
+  // admin is looking at while reading this.
+  const wanted = missing.map((column) => `"${column.header}"`).join(', ');
+  return [
+    `The first row must name the columns. This file needs ${wanted}. ` +
+      `Download the sample file to see the format.`,
+  ];
 }
 
 function planRow(
@@ -134,8 +190,8 @@ function planRow(
   seenInFile: Map<string, number>,
 ): StudentImportRow {
   const errors: string[] = [];
-  const rawMobile = row.values.mobile ?? '';
-  const rawName = row.values.fullname?.trim() ?? '';
+  const rawMobile = columnValue(row, 'mobile');
+  const rawName = columnValue(row, 'fullName').trim();
   let fullName: string | null = null;
   if (rawName !== '') {
     const parsedName = personNameSchema.safeParse(rawName);
@@ -163,7 +219,7 @@ function planRow(
     }
   }
 
-  const groupNames = (row.values.groups ?? '')
+  const groupNames = columnValue(row, 'groups')
     .split(GROUP_SEPARATOR)
     .map((name) => name.trim())
     .filter(Boolean);
@@ -176,6 +232,7 @@ function planRow(
   }
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
+  const action = errors.length > 0 ? 'skip' : existing ? 'update' : 'create';
 
   return {
     line: row.line,
@@ -184,7 +241,10 @@ function planRow(
     groupNames,
     groupIds,
     existingStudentId: existing?.id ?? null,
-    action: errors.length > 0 ? 'skip' : existing ? 'update' : 'create',
+    // A student who already chose a PIN keeps it. Re-importing last term's
+    // roster must not hand every one of those accounts back to the sheet.
+    willReceiveDefaultPin: action !== 'skip' && !existing?.hasPin,
+    action,
     errors,
   };
 }

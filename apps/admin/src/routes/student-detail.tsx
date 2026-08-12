@@ -172,8 +172,12 @@ export function StudentDetailPage() {
 
       <div className="mb-5 flex flex-wrap gap-2">
         {!detail.isActive ? <Badge variant="danger">Deactivated</Badge> : null}
-        <Badge variant={detail.hasSignedIn ? 'success' : 'info'}>
-          {detail.hasSignedIn ? 'Has signed in' : 'Never signed in'}
+        <Badge variant={detail.hasSignedIn ? 'success' : detail.hasDefaultPin ? 'warning' : 'info'}>
+          {detail.hasSignedIn
+            ? 'Has signed in'
+            : detail.hasDefaultPin
+              ? 'Default PIN — not yet changed'
+              : 'Never signed in'}
         </Badge>
         <Badge variant={detail.preTestReady ? 'success' : 'neutral'}>
           Pre-test details {detail.preTestReady ? 'on file' : 'needed'}

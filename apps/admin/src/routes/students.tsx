@@ -56,7 +56,7 @@ import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
-type StatusFilter = 'all' | 'active' | 'inactive' | 'invited';
+type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
 const ALL_FILTERS = [
@@ -87,13 +87,16 @@ function asBooleanParam(value: string): 'true' | 'false' | undefined {
 }
 
 /** Each filter is one query shape; keeping them together stops them contradicting. */
-const STATUS_QUERY: Record<StatusFilter, { isActive?: 'true' | 'false'; neverSignedIn?: 'true' }> =
-  {
-    all: {},
-    active: { isActive: 'true' },
-    inactive: { isActive: 'false' },
-    invited: { neverSignedIn: 'true' },
-  };
+const STATUS_QUERY: Record<
+  StatusFilter,
+  { isActive?: 'true' | 'false'; neverSignedIn?: 'true'; hasDefaultPin?: 'true' }
+> = {
+  all: {},
+  active: { isActive: 'true' },
+  inactive: { isActive: 'false' },
+  invited: { neverSignedIn: 'true' },
+  defaultpin: { hasDefaultPin: 'true' },
+};
 
 export function StudentsPage() {
   const [page, setPage] = useState(1);
@@ -230,6 +233,7 @@ export function StudentsPage() {
               <option value="active">Active</option>
               <option value="inactive">Deactivated</option>
               <option value="invited">Never signed in</option>
+              <option value="defaultpin">Still on the default PIN</option>
             </Select>
           </div>
 
@@ -468,6 +472,10 @@ function StudentRow({ student }: { student: StudentSummary }) {
           <Badge variant="danger">Deactivated</Badge>
         ) : student.hasSignedIn ? (
           <Badge variant="success">Active</Badge>
+        ) : student.hasDefaultPin ? (
+          // Worth its own state: they CAN sign in, but on a PIN anyone holding
+          // the roster can work out. "Never signed in" would hide that.
+          <Badge variant="warning">Default PIN</Badge>
         ) : (
           <Badge variant="info">Never signed in</Badge>
         )}

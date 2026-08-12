@@ -82,7 +82,7 @@ export function ImportStudentsPage() {
 
       <PageHeader
         title="Import students"
-        description="A mobile column is required; fullName and groups are optional. Groups must already exist — a name that does not match is reported rather than created."
+        description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -231,6 +231,10 @@ export function ImportStudentsPage() {
                 <Summary label="New students" value={plan.summary.willCreate} />
                 <Summary label="Existing students updated" value={plan.summary.willUpdate} />
                 <Summary label="Skipped (have errors)" value={plan.summary.invalid} />
+                <Summary
+                  label="Given a starting PIN"
+                  value={plan.rows.filter((row) => row.willReceiveDefaultPin).length}
+                />
               </CardContent>
             </Card>
           ) : null}
@@ -262,9 +266,15 @@ function ImportRow({ row }: { row: StudentImportRow }) {
       </TableCell>
       <TableCell>
         {row.action === 'create' ? (
-          <Badge variant="success">Create</Badge>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="success">Create</Badge>
+            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
+          </span>
         ) : row.action === 'update' ? (
-          <Badge variant="info">Update</Badge>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="info">Update</Badge>
+            {row.willReceiveDefaultPin ? <Badge variant="neutral">+ starting PIN</Badge> : null}
+          </span>
         ) : (
           <span className="flex flex-wrap items-center gap-1.5">
             <Badge variant="danger">Skip</Badge>

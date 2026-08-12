@@ -28,9 +28,15 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
       ? {}
       : { groups: query.ungrouped ? { none: {} } : { some: {} } }),
 
+    // Matches `hasSignedIn` exactly — a PIN the institute set does not count,
+    // or the filter and the badge beside it would disagree.
     ...(query.neverSignedIn === undefined
       ? {}
-      : { pinHash: query.neverSignedIn ? null : { not: null } }),
+      : query.neverSignedIn
+        ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
+        : { pinHash: { not: null }, pinIsDefault: false }),
+
+    ...(query.hasDefaultPin === undefined ? {} : { pinIsDefault: query.hasDefaultPin }),
 
     ...dateRange(query.joinedFrom, query.joinedTo),
 
