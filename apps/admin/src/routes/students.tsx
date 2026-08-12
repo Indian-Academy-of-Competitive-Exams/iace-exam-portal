@@ -44,7 +44,7 @@ import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { ROUTES } from '../lib/constants';
 import { usePageSize } from '@iace/app-kit';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 
@@ -63,7 +63,7 @@ export function StudentsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = usePageSize(STORAGE_KEYS.PAGE_SIZE);
+  const [pageSize, setPageSize] = usePageSize();
 
   // Set when arriving from a group. Group members are this list filtered, not a
   // second screen that would drift from it.

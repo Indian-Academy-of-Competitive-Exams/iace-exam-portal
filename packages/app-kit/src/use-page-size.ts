@@ -2,49 +2,29 @@ import { useCallback, useState } from 'react';
 import { PAGE_SIZE_DEFAULT, isPageSizeOption, type PageSizeOption } from '@iace/contracts';
 
 /**
- * How many rows a list shows, remembered across sessions.
+ * How many rows ONE list shows.
  *
- * It is a preference about the person, not the screen: someone on a large
- * monitor who wants 100 rows wants them on every table, and being asked again
- * on each one is the annoyance the control was added to remove. So it is stored
- * once and shared by every list.
+ * Deliberately local to the list that calls it, and deliberately not persisted.
+ * Widening the students table to 50 rows is a statement about that table — the
+ * reader is looking for someone — not a standing preference, and applying it to
+ * every other screen surprises them somewhere they were not looking. Each list
+ * starts at `PAGE_SIZE_DEFAULT` and answers only for itself.
  *
- * The stored value is VALIDATED, never trusted. A preference written by an
- * older build, or edited by hand, would otherwise be sent verbatim and make
- * every list fail until the reader thought to clear their browser storage.
- *
- * The storage key is a parameter for the same reason the token store's is: the
- * SPAs share one origin, and each keeps its own preferences.
+ * (An earlier version stored one shared preference. It meant setting 50 on any
+ * screen silently set 50 on all of them, which is what this comment exists to
+ * stop being re-invented.)
  */
-export function usePageSize(storageKey: string): [PageSizeOption, (size: number) => void] {
-  const [pageSize, setStored] = useState<PageSizeOption>(() => readStoredPageSize(storageKey));
+export function usePageSize(): [PageSizeOption, (size: number) => void] {
+  const [pageSize, setStored] = useState<PageSizeOption>(PAGE_SIZE_DEFAULT);
 
   // Takes a plain number because the control that calls it is a design-system
   // component that knows nothing about which sizes this platform allows. The
   // check below is the one place that knows, so an unsupported size is refused
   // here rather than travelling on to the API as a request it would reject.
-  const setPageSize = useCallback(
-    (size: number) => {
-      if (!isPageSizeOption(size)) return;
-      setStored(size);
-      try {
-        localStorage.setItem(storageKey, String(size));
-      } catch {
-        // Private browsing, a full quota — the choice still applies to this
-        // session, it just will not outlive it. Not worth an error.
-      }
-    },
-    [storageKey],
-  );
+  const setPageSize = useCallback((size: number) => {
+    if (!isPageSizeOption(size)) return;
+    setStored(size);
+  }, []);
 
   return [pageSize, setPageSize];
-}
-
-function readStoredPageSize(storageKey: string): PageSizeOption {
-  try {
-    const stored = Number(localStorage.getItem(storageKey));
-    return isPageSizeOption(stored) ? stored : PAGE_SIZE_DEFAULT;
-  } catch {
-    return PAGE_SIZE_DEFAULT;
-  }
 }

@@ -37,5 +37,4 @@ export const NAV_ITEMS = [
  */
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
-  PAGE_SIZE: 'iace.admin.pageSize',
 } as const;

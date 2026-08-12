@@ -33,7 +33,7 @@ import {
 import { PageHeader } from '../components/app-shell';
 import { Pagination } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, STORAGE_KEYS } from '../lib/constants';
+import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { usePageSize } from '@iace/app-kit';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
@@ -45,7 +45,7 @@ export function GroupsPage() {
   const [search, setSearch] = useState('');
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = usePageSize(STORAGE_KEYS.PAGE_SIZE);
+  const [pageSize, setPageSize] = usePageSize();
   const queryClient = useQueryClient();
 
   const groups = useQuery({
