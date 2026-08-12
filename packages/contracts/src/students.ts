@@ -105,11 +105,28 @@ export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;
  */
 export const createStudentSchema = z.object({
   mobile: mobileSchema,
-  fullName: z.string().trim().min(1).max(120).optional(),
+  // An empty box means "not known yet", not an invalid name. `.min(1).optional()`
+  // rejected '' — optional permits undefined, never the empty string — so a form
+  // whose name field was simply left alone could not be submitted at all.
+  fullName: optionalText(120),
   groupIds: z.array(z.string()).optional(),
 });
 export type CreateStudentInput = z.input<typeof createStudentSchema>;
 export type CreateStudentBody = z.infer<typeof createStudentSchema>;
+
+/**
+ * An optional free-text field: absent, or text. An empty string is neither, so
+ * it is folded into "absent" rather than failing a length rule the admin never
+ * meant to trip.
+ */
+function optionalText(max: number) {
+  return z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => (value === '' ? undefined : value));
+}
 
 /** Every field optional: this is a patch, and an omitted key means "leave it". */
 export const updateStudentProfileSchema = z.object({
@@ -122,7 +139,13 @@ export const updateStudentProfileSchema = z.object({
 });
 
 export const updateStudentSchema = z.object({
-  fullName: z.string().trim().min(1).max(120).nullish(),
+  // null clears the name; '' is the same intent typed differently.
+  fullName: z
+    .string()
+    .trim()
+    .max(120)
+    .nullish()
+    .transform((value) => (value === '' ? null : value)),
   preferredLanguage: z.string().trim().min(2).max(8).optional(),
   /** Replaces membership wholesale. A student must stay in at least one group. */
   groupIds: z.array(z.string()).optional(),

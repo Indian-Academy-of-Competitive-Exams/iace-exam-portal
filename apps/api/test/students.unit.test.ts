@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, studentDetailSchema, studentSummarySchema } from '@iace/contracts';
+import {
+  AppException,
+  createStudentSchema,
+  studentDetailSchema,
+  studentSummarySchema,
+  updateStudentSchema,
+} from '@iace/contracts';
 import { isPreTestReady, isProfileCompleted } from '../src/students/student-flags';
 
 /**
@@ -137,6 +143,50 @@ describe('admin student contracts — the privacy boundary', () => {
     // groups cannot answer the question an admin opened it to ask.
     const { groups: _groups, ...withoutGroups } = detail;
     assert.equal(studentSummarySchema.safeParse(withoutGroups).success, false);
+  });
+});
+
+describe('createStudentSchema — an absent name is not an invalid one', () => {
+  it('accepts a student with no name at all', () => {
+    // Only the mobile is required. A roster often has numbers before names.
+    const parsed = createStudentSchema.parse({ mobile: '9876543210' });
+    assert.equal(parsed.fullName, undefined);
+  });
+
+  it('accepts an EMPTY name field — the regression', () => {
+    // `.min(1).optional()` rejected '': optional permits undefined, never the
+    // empty string. An admin form whose name box was simply left alone could
+    // therefore not be submitted at all, and the message blamed the name.
+    const parsed = createStudentSchema.parse({ mobile: '9876543210', fullName: '' });
+    assert.equal(parsed.fullName, undefined);
+  });
+
+  it('treats a whitespace-only name as absent too', () => {
+    assert.equal(
+      createStudentSchema.parse({ mobile: '9876543210', fullName: '   ' }).fullName,
+      undefined,
+    );
+  });
+
+  it('keeps a real name, trimmed', () => {
+    assert.equal(
+      createStudentSchema.parse({ mobile: '9876543210', fullName: '  Meera Rao ' }).fullName,
+      'Meera Rao',
+    );
+  });
+
+  it('still refuses an absurdly long name', () => {
+    assert.equal(
+      createStudentSchema.safeParse({ mobile: '9876543210', fullName: 'x'.repeat(200) }).success,
+      false,
+    );
+  });
+
+  it('reads an empty name on UPDATE as clearing it, not as absent', () => {
+    // On a patch the two differ: absent means "leave it", null means "remove it",
+    // and an emptied box is the admin asking for the latter.
+    assert.equal(updateStudentSchema.parse({ fullName: '' }).fullName, null);
+    assert.equal(updateStudentSchema.parse({}).fullName, undefined);
   });
 });
 

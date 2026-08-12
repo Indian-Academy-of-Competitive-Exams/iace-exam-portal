@@ -1,15 +1,32 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Search, Upload, UserPlus, X } from 'lucide-react';
-import { type StudentSummary } from '@iace/contracts';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2, Search, Upload, UserPlus, X } from 'lucide-react';
+import {
+  MOBILE_DIGITS,
+  PAGE_SIZE_MAX,
+  createStudentSchema,
+  normaliseMobile,
+  type CreateStudentInput,
+  type StudentSummary,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
   Button,
   Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Field,
   Input,
+  NumericInput,
   Select,
+  digitsOnly,
   Table,
   TableBody,
   TableCell,
@@ -22,7 +39,7 @@ import { PageHeader } from '../components/app-shell';
 import { Pagination } from '../components/pagination';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { bannerMessage } from '../lib/form-errors';
+import { applyFieldErrors, bannerMessage } from '../lib/form-errors';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited';
 
@@ -44,6 +61,8 @@ export function StudentsPage() {
   // second screen that would drift from it.
   const [searchParams, setSearchParams] = useSearchParams();
   const groupId = searchParams.get('groupId') ?? undefined;
+  // The "Add student" button links here; reading it is what makes it work.
+  const creating = searchParams.get('new') === '1';
 
   const batch = useQuery({
     queryKey: ['admin', 'group', groupId],
@@ -86,6 +105,15 @@ export function StudentsPage() {
           </div>
         }
       />
+
+      {creating ? (
+        <NewStudentCard
+          onClose={() => {
+            searchParams.delete('new');
+            setSearchParams(searchParams);
+          }}
+        />
+      ) : null}
 
       <Card className="p-4">
         {groupId ? (
@@ -222,5 +250,142 @@ function StudentRow({ student }: { student: StudentSummary }) {
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'groupIds'] as const;
+
+/**
+ * Adds a student before they have signed up.
+ *
+ * The mobile number is the join key: when they later sign up with it, the OTP
+ * flow upserts onto THIS row, so the batches picked here are already in place
+ * rather than lost to a duplicate.
+ */
+function NewStudentCard({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const batches = useQuery({
+    queryKey: ['admin', 'groups', 'all'],
+    queryFn: () => api.admin.groups.list({ pageSize: PAGE_SIZE_MAX }),
+  });
+
+  const form = useForm<CreateStudentInput>({
+    resolver: zodResolver(createStudentSchema),
+    defaultValues: { mobile: '', fullName: '', groupIds: [] },
+  });
+
+  const create = useMutation({
+    mutationFn: (values: CreateStudentInput) =>
+      api.admin.students.create({
+        mobile: values.mobile,
+        // An untouched name field is "not known yet", not an empty name.
+        fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
+        groupIds: values.groupIds?.length ? values.groupIds : undefined,
+      }),
+    onSuccess: (student) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+      void navigate(ROUTES.STUDENT(student.id));
+    },
+    onError: (error) => applyFieldErrors(error, form.setError, NEW_STUDENT_FIELDS),
+  });
+
+  return (
+    <Card className="mb-5">
+      <CardHeader>
+        <CardTitle>Add a student</CardTitle>
+        <CardDescription>
+          Only the mobile number is required. They will set their own PIN the first time they sign
+          in, and land on this same record.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={form.handleSubmit((values) => create.mutate(values))}
+          noValidate
+        >
+          <div className="flex flex-wrap gap-4">
+            <div className="min-w-56 flex-1">
+              <Field
+                htmlFor="mobile"
+                label="Mobile number"
+                error={form.formState.errors.mobile?.message}
+              >
+                {(control) => (
+                  <NumericInput
+                    {...control}
+                    {...form.register('mobile')}
+                    autoFocus
+                    prefix="+91"
+                    // Room to paste a +91-prefixed number; normaliseMobile trims
+                    // it back rather than truncating to the wrong ten digits.
+                    maxLength={15}
+                    sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+                    placeholder="98765 43210"
+                    className="tabular-nums"
+                  />
+                )}
+              </Field>
+            </div>
+            <div className="min-w-56 flex-1">
+              <Field
+                htmlFor="fullName"
+                label="Full name"
+                hint="Optional — they can fill it in themselves"
+                error={form.formState.errors.fullName?.message}
+              >
+                {(control) => <Input {...control} {...form.register('fullName')} />}
+              </Field>
+            </div>
+          </div>
+
+          {batches.data?.items.length ? (
+            <fieldset>
+              <legend className="mb-1.5 text-sm font-medium text-foreground">Batches</legend>
+              <div className="max-h-44 overflow-y-auto rounded-md border border-border p-1">
+                {batches.data.items.map((batch) => (
+                  <Checkbox
+                    key={batch.id}
+                    id={`new-batch-${batch.id}`}
+                    label={batch.name}
+                    hint={batch.branch ?? undefined}
+                    value={batch.id}
+                    {...form.register('groupIds')}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <Alert variant="warning">
+              <span>
+                No batches yet — a student reaches tests only through one.{' '}
+                <Link to={ROUTES.BATCHES} className="underline underline-offset-4">
+                  Create a batch
+                </Link>{' '}
+                first, or add them now and assign later.
+              </span>
+            </Alert>
+          )}
+
+          {create.error ? (
+            <Alert variant="danger">{bannerMessage(create.error, NEW_STUDENT_FIELDS)}</Alert>
+          ) : null}
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={create.isPending}>
+              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+              Add student
+            </Button>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
