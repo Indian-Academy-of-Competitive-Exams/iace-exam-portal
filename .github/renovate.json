@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":semanticCommitTypeAll(chore)"],
+  "timezone": "Asia/Kolkata",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "rangeStrategy": "pin",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["dependencies", "security"]
+  },
+  "packageRules": [
+    {
+      "description": "Internal packages are workspace links, not registry deps.",
+      "matchPackageNames": ["@iace/**"],
+      "enabled": false
+    },
+    {
+      "description": "One PR for the whole toolchain. These move together and a repo where eslint and typescript-eslint disagree on a major does not lint at all.",
+      "groupName": "lint and format toolchain",
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/**",
+        "typescript-eslint",
+        "eslint-config-**",
+        "eslint-plugin-**",
+        "prettier",
+        "syncpack"
+      ]
+    },
+    {
+      "description": "Nest ships @nestjs/* in lockstep; a partial bump is a broken DI container.",
+      "groupName": "nestjs",
+      "matchPackageNames": ["@nestjs/**"]
+    },
+    {
+      "description": "React and its types and its DOM renderer are one decision.",
+      "groupName": "react",
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"]
+    },
+    {
+      "description": "Prisma's CLI and client must be the same version or `generate` produces a client the CLI cannot migrate against.",
+      "groupName": "prisma",
+      "matchPackageNames": ["prisma", "@prisma/**"]
+    },
+    {
+      "description": "Patches and minors for everything else, batched weekly. Majors stay one PR each — they are the ones worth reading.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-major dependencies"
+    },
+    {
+      "description": "Node stays on whatever .nvmrc says; bumping the runtime is a deliberate act, not a dependency update.",
+      "matchPackageNames": ["node", "@types/node"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

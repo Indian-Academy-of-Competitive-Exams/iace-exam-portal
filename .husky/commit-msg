@@ -1,0 +1,3 @@
+# Conventional commits. The history is a changelog and a bisect target, and
+# both stop working the moment the subject line stops saying what changed.
+pnpm exec commitlint --edit "$1"

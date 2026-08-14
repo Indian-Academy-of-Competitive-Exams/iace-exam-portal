@@ -60,6 +60,12 @@ jobs:
         if: '!cancelled()'
         run: pnpm format:check
 
+      # Cheap, and it catches the class of breakage that is hardest to see in a
+      # diff: two workspaces asking for different versions of the same library.
+      - name: Dependency alignment
+        if: '!cancelled()'
+        run: pnpm deps:check
+
       - name: Lint
         if: '!cancelled()'
         run: pnpm lint

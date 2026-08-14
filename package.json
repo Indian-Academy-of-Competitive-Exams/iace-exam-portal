@@ -15,6 +15,8 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}\"",
+    "deps:check": "syncpack lint",
+    "deps:fix": "syncpack fix",
     "clean": "turbo run clean && rm -rf node_modules",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
@@ -25,16 +27,22 @@
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url \"$SHADOW_DATABASE_URL\" --exit-code",
     "db:studio": "prisma studio --schema prisma/schema.prisma",
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
-    "test:coverage": "node scripts/coverage.mjs"
+    "test:coverage": "node scripts/coverage.mjs",
+    "prepare": "husky"
   },
   "prisma": {
     "seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.1",
+    "@commitlint/config-conventional": "21.2.0",
     "@iace/config": "workspace:*",
     "@types/node": "22.20.1",
+    "husky": "9.1.7",
+    "lint-staged": "17.3.0",
     "prettier": "3.9.6",
     "prisma": "6.19.3",
+    "syncpack": "15.3.3",
     "tsx": "4.23.12",
     "turbo": "2.10.9",
     "typescript": "5.9.3"

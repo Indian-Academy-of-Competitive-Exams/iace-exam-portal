@@ -1,0 +1,3 @@
+# Format, lint and typecheck what is about to be committed (docs/03 §11).
+# See lint-staged.config.mjs for why lint and typecheck are workspace-wide.
+pnpm exec lint-staged

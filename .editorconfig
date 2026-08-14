@@ -1,0 +1,23 @@
+# One editor baseline (docs/03 §11). These mirror .prettierrc.json exactly —
+# the point is that a file is already correct when it reaches prettier, not that
+# there are two sources of truth for indentation.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+# Two trailing spaces are a hard line break in markdown. Stripping them silently
+# rewrites the document.
+[*.md]
+trim_trailing_whitespace = false
+
+# Generated, and rewritten wholesale by pnpm.
+[pnpm-lock.yaml]
+insert_final_newline = unset
+trim_trailing_whitespace = unset

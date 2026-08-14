@@ -74,7 +74,7 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 | Job            | What it proves                                                                                                                   | Needs                              |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Verify**     | `format:check` · `lint` · `typecheck` · `test` · `build`                                                                         | nothing — no Postgres, Redis or S3 |
+| **Verify**     | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                                          | nothing — no Postgres, Redis or S3 |
 | **Migrations** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and the seed is idempotent | a Postgres service container       |
 
 The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only to check the migrations — the one thing that genuinely cannot be verified without one.
@@ -82,6 +82,23 @@ The split is the point: the test suite is deliberately infrastructure-free, so t
 Steps in Verify use `if: '!cancelled()'`, so a run reports _every_ failure rather than stopping at the first.
 
 `pnpm db:check` is the drift gate and works locally too — set `SHADOW_DATABASE_URL` to a throwaway database and it exits non-zero when `schema.prisma` has been edited without a migration.
+
+### Before the commit exists
+
+CI is the backstop, not the first line. `husky` installs two hooks on `pnpm install`:
+
+| Hook         | Runs                                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `pre-commit` | `lint-staged` — prettier + `prisma format` per file, then `pnpm lint` and `pnpm typecheck` across the workspace |
+| `commit-msg` | `commitlint` — conventional commits (`type(scope): subject`)                                                    |
+
+Formatting is per file because prettier is a per-file tool. Lint and typecheck are not, and cannot be: ESLint's flat config resolves from the working directory rather than per file, and this repo has one config per package and none at the root; `tsc -p` checks a project, not a file list, so a rename that breaks a caller elsewhere is exactly what a per-file check would miss. Both go through turbo, which caches, so the packages you did not touch are a cache hit.
+
+`pnpm deps:check` (syncpack) keeps one version of every shared library across the workspaces and runs in CI. Peer ranges are exempt — `react: ^19.0.0` in a package and `react: 19.2.8` in an app are the same statement made to two different audiences. `pnpm deps:fix` rewrites the mismatches.
+
+Renovate batches updates (`.github/renovate.json`): the lint toolchain, `@nestjs/*`, React and Prisma each move as one PR, because a partial bump of any of those is a broken build rather than a smaller change.
+
+> **TODO — turbo remote cache.** `turbo.json` is ready for it; enabling it needs a Vercel account token and `TURBO_TOKEN`/`TURBO_TEAM` as repository secrets, which only the repo owner can create. Until then every CI run recomputes from cold. Run `pnpm exec turbo login && pnpm exec turbo link`, then add the two secrets to the workflow env.
 
 ### Request size limits
 
@@ -98,7 +115,7 @@ Both are env vars: change them without touching code.
 
 ### Other scripts
 
-`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
+`pnpm build` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm format` · `pnpm deps:check` · `pnpm deps:fix` · `pnpm db:generate` · `pnpm db:check` · `pnpm db:studio` · `pnpm docker:down` · `pnpm docker:reset` (wipes volumes)
 
 `pnpm test` runs the Node test runner (no Jest). **Nothing in the suite needs Postgres, Redis or S3** — `apps/api/test/support/fakes.ts` provides an in-memory Redis with a clock the test advances, so TTLs, OTP expiry and lockout escalation are asserted without sleeping. That is what makes the suite safe as a CI gate.
 

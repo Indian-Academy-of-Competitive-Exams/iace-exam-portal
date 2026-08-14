@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/syncpack@15.3.3/dist/schema.json",
+  "semverGroups": [
+    {
+      "label": "Peer ranges stay ranges — a peer dep says what a consumer MAY bring, and pinning one would make @iace/app-kit demand the exact React this monorepo happens to be on.",
+      "dependencyTypes": ["peer"],
+      "packages": ["**"],
+      "dependencies": ["**"],
+      "isIgnored": true
+    },
+    {
+      "label": "Everything else is pinned exactly. A caret across seven workspaces is seven chances for two of them to resolve differently, and a lockfile that hides it until one of them breaks.",
+      "dependencyTypes": ["dev", "prod"],
+      "packages": ["**"],
+      "dependencies": ["**"],
+      "range": ""
+    }
+  ],
+  "versionGroups": [
+    {
+      "label": "A peer range is not a version to agree on — react ^19.0.0 in a package and react 19.2.8 in an app are the same statement, said twice for two different audiences.",
+      "dependencyTypes": ["peer"],
+      "packages": ["**"],
+      "dependencies": ["**"],
+      "isIgnored": true
+    },
+    {
+      "label": "Internal packages are always workspace:*, never a published version.",
+      "dependencyTypes": ["dev", "prod"],
+      "packages": ["**"],
+      "dependencies": ["@iace/**"],
+      "pinVersion": "workspace:*"
+    }
+  ]
+}
