@@ -134,3 +134,27 @@ After generating or modifying code, the task is not done until:
 6. Report findings and fixes by rule ID.
 
 Never mark an issue false-positive or won't-fix in SonarQube without asking me.
+
+**This is enforced, not just written down.** A `PreToolUse` hook
+(`.claude/hooks/sonar-gate.sh`, wired in `.claude/settings.json`) refuses an
+agent's `git commit` while staged `.ts`/`.tsx` under `apps`/`packages`/`prisma`
+has no recorded analysis. After analysing and fixing, record it:
+
+```bash
+bash .claude/hooks/sonar-record.sh
+```
+
+The record is a hash of the **staged content**, so re-staging a file after
+analysing it invalidates it — a stale pass is worse than no gate, because it
+reports as verified. A docs-only or config-only commit is not gated.
+
+What the hook cannot do is prove the analysis happened: the check is an MCP tool
+only the agent can call, so no shell hook can invoke or observe it. It makes
+skipping the step a deliberate act instead of the default, which is the failure
+it exists to prevent. It gates **agent** commits only — a commit typed in a
+terminal never passes through it.
+
+There is also **no `sonar-scanner` in this repo** — no dependency, no token, no
+CI job, so nothing produces a full project scan today. `sonar-project.properties`
+is configured and unused. A real scan belongs in CI, which needs a reachable
+server (the MCP one is on `host.docker.internal`, local only) and a token.
