@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { Loader2, Plus, ShieldCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
-  FEATURE_KEY_VALUES,
   PAGE_SIZE_OPTIONS,
   type Admin,
   type CreateAdminInput,
@@ -156,7 +155,9 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
     return <span className="text-sm text-muted-foreground">Everything (bypass)</span>;
   }
 
-  const held = FEATURE_KEY_VALUES.filter((key) => admin.permissions[key] !== undefined);
+  // The admin's OWN keys, not the code's list: a super admin may have
+  // registered a sector no controller checks yet, and a grant on it is real.
+  const held = Object.keys(admin.permissions).sort();
   if (held.length === 0) {
     return <span className="text-sm text-muted-foreground">Nothing yet</span>;
   }

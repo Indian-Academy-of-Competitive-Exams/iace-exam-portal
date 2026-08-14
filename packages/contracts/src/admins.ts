@@ -34,17 +34,19 @@ export type PermissionLevel = (typeof PERMISSION_LEVELS)[keyof typeof PERMISSION
 export const permissionLevelSchema = z.enum(PERMISSION_LEVELS);
 
 /**
- * The sectors of the product an admin is granted, or not.
+ * The keys the CODE knows about — the ones a controller can name in
+ * `@RequiresFeature`. A new module adds a constant here.
  *
- * Nothing seeds these. A `Feature` row has to be registered by a super admin
- * with a key from this list, and a key with no row grants nobody anything —
- * which is the safe direction to fail.
+ * This is NOT the closed set of what may exist. A super admin registers
+ * features by typing a key, and may add ones no controller checks yet; those
+ * are perfectly valid rows that simply gate nothing until code references them.
+ * So the constants below are a convenience for the code, and `featureKeySchema`
+ * below is deliberately open.
  *
- * Adding a sector is adding a constant here and registering the row; the guard
- * and the UI pick it up without further changes. Groups and branches
- * deliberately sit under STUDENT_MANAGEMENT rather than getting a key of their
- * own: a group exists to give students access to tests, so the people who
- * manage one manage the other.
+ * Nothing is seeded. A key with no Feature row grants nobody anything, which is
+ * the safe direction to fail. Groups and branches sit under STUDENT_MANAGEMENT
+ * rather than taking a key of their own: a group exists to give students access
+ * to tests, so the people who manage one manage the other.
  */
 export const FEATURE_KEYS = {
   STUDENT_MANAGEMENT: 'STUDENT_MANAGEMENT',
@@ -52,10 +54,49 @@ export const FEATURE_KEYS = {
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
 } as const;
-export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];
-export const featureKeySchema = z.enum(FEATURE_KEYS);
 
-/** Every key, for the screens that list them. Ordered as an admin reads them. */
+/**
+ * Any canonical key, not just the four above.
+ *
+ * A string rather than a union because the set is OPEN at runtime: an admin
+ * registers new sectors as the product grows, and a closed enum would make the
+ * API reject rows it had itself just created — which is exactly the
+ * "unexpected response shape" a closed schema produces on the client.
+ *
+ * `FeatureKey` stays a distinct alias so intent is readable at call sites, but
+ * it is a string: the type cannot police a value the database learns at
+ * runtime, and pretending otherwise only moves the failure to parse time.
+ */
+export type FeatureKey = string;
+
+const FEATURE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+
+/**
+ * SCREAMING_SNAKE_CASE, normalised rather than rejected — "student management"
+ * becomes STUDENT_MANAGEMENT — so a key that differs only in case or spacing is
+ * impossible rather than merely reported. Same bargain as branch and group
+ * names (see naming.ts).
+ */
+export function canonicalFeatureKey(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+export const featureKeySchema = z
+  .string()
+  .transform(canonicalFeatureKey)
+  .pipe(
+    z
+      .string()
+      .min(2, 'Give the feature a key')
+      .max(60, 'A feature key cannot be longer than 60 characters')
+      .regex(FEATURE_KEY_PATTERN, 'Use capital letters, numbers and underscores'),
+  );
+
+/** The keys the code references, for screens that want to suggest them. */
 export const FEATURE_KEY_VALUES = Object.values(FEATURE_KEYS) as readonly FeatureKey[];
 
 /**
@@ -65,13 +106,15 @@ export const FEATURE_KEY_VALUES = Object.values(FEATURE_KEYS) as readonly Featur
  * the same question — "what is my level for X" — and a list makes each of them
  * write the same find().
  *
- * partialRecord, NOT record: in Zod 4 a record over an enum is EXHAUSTIVE, so
- * `z.record(featureKeySchema, …)` would demand all four keys on every admin and
- * reject the identity of anyone granted fewer — which is everyone, including a
- * super admin, whose map is empty. Partial is also the honest shape: an absent
- * key means no access, and that is a different fact from a key set to READ.
+ * Keyed by a plain string, because the key set is open — an admin may register
+ * a sector the code has never heard of, and its grants must still round-trip.
+ * An enum key would also make this EXHAUSTIVE in Zod 4, demanding every key on
+ * every admin and rejecting the identity of anyone holding fewer.
+ *
+ * An absent key means no access, which is a different fact from a key set to
+ * READ, so the map is partial by construction rather than filled with blanks.
  */
-export const adminPermissionsSchema = z.partialRecord(featureKeySchema, permissionLevelSchema);
+export const adminPermissionsSchema = z.record(z.string(), permissionLevelSchema);
 export type AdminPermissions = z.infer<typeof adminPermissionsSchema>;
 
 /**
@@ -153,20 +196,30 @@ export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;
 
 export const featureSchema = z.object({
   id: z.string(),
-  key: featureKeySchema,
-  name: z.string(),
+  /**
+   * A plain string on the way OUT, not the transforming input schema. The value
+   * is already canonical — the server stored it that way — and re-running the
+   * transform on a response is work that can only ever disagree with the row.
+   */
+  key: z.string(),
   description: z.string().nullable(),
   createdAt: z.string(),
-  /** Who holds each level. Both entries always exist once the feature does. */
+  /**
+   * Who holds each level. An exhaustive record on purpose: both rows are
+   * created with the feature, so a response missing one is a broken invariant
+   * and should fail loudly here rather than render as an empty column.
+   */
   grants: z.record(permissionLevelSchema, z.array(z.string())),
 });
 export type Feature = z.infer<typeof featureSchema>;
 
+/**
+ * The key is the name. There is no separate label to keep in step with it, and
+ * no way for the two to disagree about what a feature is called — every screen
+ * that shows a feature shows the key.
+ */
 export const createFeatureSchema = z.object({
-  /** Constrained to the canonical list — a free-text key is a key nothing
-   *  checks, and a feature nothing gates is worse than no feature. */
   key: featureKeySchema,
-  name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional(),
 });
 export type CreateFeatureInput = z.input<typeof createFeatureSchema>;

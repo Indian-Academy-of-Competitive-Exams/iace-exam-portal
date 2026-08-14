@@ -93,7 +93,7 @@ export function PermissionsPage() {
             >
               {registered.map((feature) => (
                 <option key={feature.id} value={feature.key}>
-                  {feature.name} ({feature.key})
+                  {feature.key}
                 </option>
               ))}
             </Select>

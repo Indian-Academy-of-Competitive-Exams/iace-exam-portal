@@ -9,6 +9,7 @@ import {
   createFeatureSchema,
   featureKeySchema,
   permissionLevelSchema,
+  canonicalFeatureKey,
   satisfiesLevel,
   ADMIN_FEATURE_ROUTES,
 } from '../src/admins';
@@ -63,13 +64,24 @@ describe('shared vocabularies', () => {
     );
   });
 
-  it('refuses a key outside the canonical list', () => {
-    // A feature nothing gates is worse than no feature, so the key is a closed
-    // enum rather than free text.
-    assert.equal(featureKeySchema.safeParse('STUDENT_MANAGEMENT').success, true);
-    assert.equal(featureKeySchema.safeParse('students.manage').success, false);
-    assert.equal(featureKeySchema.safeParse('WHATEVER').success, false);
+  it('accepts any canonical key, because the set is open at runtime', () => {
+    // A closed enum would make the API reject rows it had itself just created,
+    // which surfaces on the client as "unexpected response shape".
+    assert.equal(featureKeySchema.parse('STUDENT_MANAGEMENT'), 'STUDENT_MANAGEMENT');
+    assert.equal(featureKeySchema.parse('REPORTING_DASHBOARD'), 'REPORTING_DASHBOARD');
     assert.equal(permissionLevelSchema.safeParse('DELETE').success, false);
+  });
+
+  it('normalises a key rather than rejecting it, so one sector has one spelling', () => {
+    assert.equal(featureKeySchema.parse('student management'), 'STUDENT_MANAGEMENT');
+    assert.equal(featureKeySchema.parse('  Question-Management '), 'QUESTION_MANAGEMENT');
+    assert.equal(canonicalFeatureKey('a b  c'), 'A_B_C');
+  });
+
+  it('still refuses a key that normalises to nothing usable', () => {
+    assert.equal(featureKeySchema.safeParse('').success, false);
+    assert.equal(featureKeySchema.safeParse('!!').success, false);
+    assert.equal(featureKeySchema.safeParse('9'.repeat(80)).success, false);
   });
 });
 
@@ -88,20 +100,25 @@ describe('admin input schemas', () => {
     );
   });
 
-  it('rejects a feature whose key is not canonical', () => {
-    assert.equal(createFeatureSchema.safeParse({ key: 'NOPE', name: 'Nope' }).success, false);
-    assert.equal(
-      createFeatureSchema.safeParse({ key: FEATURE_KEYS.TEST_MANAGEMENT, name: 'Tests' }).success,
-      true,
-    );
+  it('takes the key as the whole identity of a feature — there is no separate name', () => {
+    const parsed = createFeatureSchema.parse({ key: 'reporting dashboard' });
+    assert.equal(parsed.key, 'REPORTING_DASHBOARD');
+    assert.equal('name' in parsed, false);
   });
 
-  it('accepts a permissions map keyed only by canonical keys', () => {
-    const ok = adminPermissionsSchema.safeParse({
-      [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
-    });
-    assert.equal(ok.success, true);
-    assert.equal(adminPermissionsSchema.safeParse({ NOT_A_KEY: 'READ' }).success, false);
+  it('carries a grant on a key the code has never heard of', () => {
+    // Dropping it would silently discard a grant a super admin deliberately
+    // made — and discard it again on every refresh, so it would never stick.
+    assert.equal(
+      adminPermissionsSchema.safeParse({
+        [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+        REPORTING_DASHBOARD: PERMISSION_LEVELS.READ,
+      }).success,
+      true,
+    );
+    assert.equal(adminPermissionsSchema.safeParse({}).success, true);
+    // The LEVEL is still closed — that one really is a fixed vocabulary.
+    assert.equal(adminPermissionsSchema.safeParse({ ANY_KEY: 'DELETE' }).success, false);
   });
 });
 

@@ -15,7 +15,7 @@ async function withFeature(
   ctx: ReturnType<typeof build>,
   key: FeatureKey = FEATURE_KEYS.STUDENT_MANAGEMENT,
 ): Promise<void> {
-  await ctx.service.createFeature({ key, name: 'Students' });
+  await ctx.service.createFeature({ key });
 }
 
 describe('AdminsService — features', () => {
@@ -25,10 +25,7 @@ describe('AdminsService — features', () => {
     // would have nothing to update and would fail at the moment somebody tried.
     const ctx = build();
 
-    const feature = await ctx.service.createFeature({
-      key: FEATURE_KEYS.TEST_MANAGEMENT,
-      name: 'Tests',
-    });
+    const feature = await ctx.service.createFeature({ key: FEATURE_KEYS.TEST_MANAGEMENT });
 
     assert.deepEqual(Object.keys(feature.grants).sort(), ['READ', 'WRITE']);
     assert.deepEqual(feature.grants.READ, []);
@@ -113,27 +110,39 @@ describe('AdminsService — grants', () => {
     );
   });
 
-  it('ignores a granted key that is no longer in the canonical list', async () => {
+  it('carries a key the code does not know about', async () => {
+    // The key set is OPEN: a super admin registers sectors as the product
+    // grows, and one no controller checks YET must still round-trip. Dropping
+    // it would silently discard a grant somebody deliberately made — and
+    // discard it again on every refresh, so it would never stick.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    // A feature registered against a key the code has since dropped. The guard
-    // can never require it, so the grant must mean nothing rather than leak in
-    // as an unrecognised entry.
-    ctx.prisma.features.push({
-      id: 'ftr_stale',
-      key: 'RETIRED_SECTOR',
-      name: 'Retired',
-      description: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    ctx.prisma.permissions.push({
-      id: 'perm_stale',
-      featureId: 'ftr_stale',
+    await ctx.service.createFeature({ key: 'REPORTING_DASHBOARD' });
+    await ctx.service.grant({
+      featureKey: 'REPORTING_DASHBOARD',
       level: PERMISSION_LEVELS.WRITE,
-      adminIds: ['adm_1'],
+      adminId: 'adm_1',
     });
 
-    assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {});
+    assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {
+      REPORTING_DASHBOARD: PERMISSION_LEVELS.WRITE,
+    });
+  });
+
+  it('returns the full paginated shape the interceptor unpacks', async () => {
+    // Miss page or pageSize and isPaginated() says false, the whole object is
+    // wrapped as `data`, and the client fails with "unexpected response shape".
+    const ctx = build([makeAdminRow({ id: 'adm_1' })]);
+
+    const listed = await ctx.service.list({
+      page: 1,
+      pageSize: 20,
+      q: undefined,
+      activeOnly: undefined,
+    });
+
+    assert.deepEqual(Object.keys(listed).sort(), ['items', 'page', 'pageSize', 'total']);
+    assert.equal(listed.page, 1);
+    assert.equal(listed.pageSize, 20);
   });
 });
 

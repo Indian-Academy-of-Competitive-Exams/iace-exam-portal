@@ -25,7 +25,6 @@ import {
   FormRow,
   Input,
   PageHeader,
-  Select,
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -33,16 +32,21 @@ import { api } from '../lib/api';
 import { FEATURES_QUERY_KEY } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
-const NEW_FEATURE_FIELDS = ['key', 'name', 'description'] as const;
+const NEW_FEATURE_FIELDS = ['key', 'description'] as const;
 
 /**
  * Register the sectors of the product that can be granted.
  *
- * Nothing is seeded, on purpose: a key with no row here grants nobody anything,
- * which is the safe direction to fail. The key is chosen from the canonical
- * list rather than typed, because a free-text key is a key no controller
- * checks — and a feature nothing gates is worse than no feature, since it looks
- * like protection.
+ * The key IS the name — one value, so the two can never disagree about what a
+ * feature is called — and it is typed, not chosen: the set is open, and a super
+ * admin adds sectors as the product grows. It is normalised rather than
+ * rejected, so "student management" becomes STUDENT_MANAGEMENT and a key that
+ * differs only in case or spacing is impossible instead of merely reported.
+ *
+ * Nothing is seeded. A key with no row here grants nobody anything, which is
+ * the safe direction to fail. The keys the code already checks are offered as
+ * suggestions, because those are the ones that gate something today — a key
+ * outside that list is valid and simply gates nothing until a module uses it.
  */
 export function FeaturesPage() {
   const queryClient = useQueryClient();
@@ -59,14 +63,19 @@ export function FeaturesPage() {
   );
 
   const registered = features.data ?? [];
-  const unregistered = FEATURE_KEY_VALUES.filter(
+  /** Code-known keys with no row yet — the ones that gate something today. */
+  const suggested = FEATURE_KEY_VALUES.filter(
     (key) => !registered.some((feature) => feature.key === key),
   );
 
   const columns = useMemo<DataTableColumn<Feature>[]>(
     () => [
-      { key: 'key', header: 'Key', className: 'font-medium', cell: (f) => <code>{f.key}</code> },
-      { key: 'name', header: 'Name', cell: (f) => f.name },
+      {
+        key: 'key',
+        header: 'Feature',
+        className: 'font-medium',
+        cell: (f) => <code>{f.key}</code>,
+      },
       {
         key: 'description',
         header: 'Description',
@@ -96,27 +105,26 @@ export function FeaturesPage() {
         title="Features"
         description="The sectors an admin can be granted. Registering one creates its READ and WRITE rows together."
         action={
-          unregistered.length > 0 ? (
-            <Button size="sm" onClick={() => setCreating((open) => !open)}>
-              <Plus aria-hidden />
-              Register feature
-            </Button>
-          ) : undefined
+          <Button size="sm" onClick={() => setCreating((open) => !open)}>
+            <Plus aria-hidden />
+            Register feature
+          </Button>
         }
       />
 
-      {unregistered.length === 0 && !features.isPending ? (
+      {suggested.length > 0 && !features.isPending ? (
         <Alert variant="info" className="mb-5">
           <span>
-            Every key the code knows about is registered. A new one appears here once it is added to
-            FEATURE_KEYS in the shared contracts.
+            Not registered yet, and the code already checks {suggested.length === 1 ? 'it' : 'them'}
+            : <b>{suggested.join(', ')}</b>. Until registered, nobody can be granted{' '}
+            {suggested.length === 1 ? 'it' : 'them'}.
           </span>
         </Alert>
       ) : null}
 
       {creating ? (
         <NewFeatureCard
-          available={unregistered}
+          suggested={suggested}
           onDone={() => {
             setCreating(false);
             refresh();
@@ -141,13 +149,13 @@ export function FeaturesPage() {
 // ---------------------------------------------------------------------------
 
 function NewFeatureCard({
-  available,
+  suggested,
   onDone,
   onCancel,
-}: Readonly<{ available: readonly string[]; onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ suggested: readonly string[]; onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateFeatureInput>({
     resolver: zodResolver(createFeatureSchema),
-    defaultValues: { key: available[0] as CreateFeatureInput['key'], name: '', description: '' },
+    defaultValues: { key: '', description: '' },
   });
 
   const create = useMutation({
@@ -162,27 +170,39 @@ function NewFeatureCard({
       <CardHeader>
         <CardTitle>Register a feature</CardTitle>
         <CardDescription>
-          Only keys the code actually checks are offered. Both permission levels are created with
-          it, so a grant is never blocked by a missing row.
+          The key is the name. Typed in any case and normalised to SCREAMING_SNAKE_CASE, so one
+          sector can only ever be spelled one way. Both permission levels are created with it, so a
+          grant is never blocked by a missing row.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="key" label="Key" className="min-w-56 flex-1">
+          <FormField
+            form={form}
+            name="key"
+            label="Feature key"
+            hint={
+              suggested.length > 0 ? `The code checks: ${suggested.join(', ')}` : 'e.g. REPORTING'
+            }
+            className="min-w-64 flex-1"
+          >
             {(control) => (
-              <Select {...control}>
-                {available.map((key) => (
-                  <option key={key} value={key}>
-                    {key}
-                  </option>
-                ))}
-              </Select>
+              <Input
+                {...control}
+                list="feature-key-suggestions"
+                className="uppercase placeholder:normal-case"
+                placeholder="STUDENT_MANAGEMENT"
+                autoFocus
+              />
             )}
           </FormField>
-
-          <FormField form={form} name="name" label="Name" className="min-w-48 flex-1">
-            {(control) => <Input {...control} placeholder="Student management" />}
-          </FormField>
+          {/* Suggestions, not a closed list: typing a key the code has never
+              heard of is allowed and is how a new sector starts. */}
+          <datalist id="feature-key-suggestions">
+            {suggested.map((key) => (
+              <option key={key} value={key} />
+            ))}
+          </datalist>
 
           <FormField form={form} name="description" label="Description" className="min-w-64 flex-1">
             {(control) => <Input {...control} placeholder="What this covers" />}

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
-  FEATURE_KEYS,
   PERMISSION_LEVELS,
   type Admin as AdminDto,
   type AdminListQuery,
@@ -11,6 +10,7 @@ import {
   type Feature as FeatureDto,
   type FeatureKey,
   type PermissionGrantBody,
+  type Paginated,
   type PermissionLevel,
   type StudentSyncResult,
   type UpdateAdminBody,
@@ -32,7 +32,6 @@ interface AdminRow {
 interface FeatureRow {
   id: string;
   key: string;
-  name: string;
   description: string | null;
   createdAt: Date;
   permissions: { level: PermissionLevel; adminIds: string[] }[];
@@ -64,13 +63,13 @@ export class AdminsService {
       select: { level: true, feature: { select: { key: true } } },
     });
 
+    // Every key is carried, including ones no controller checks yet. The set is
+    // open — a super admin registers sectors as the product grows — so
+    // filtering to the code's known keys would silently drop a grant that was
+    // deliberately made, and drop it again on every refresh.
     const permissions: AdminPermissions = {};
     for (const row of rows) {
-      const key = row.feature.key as FeatureKey;
-      // A row whose key is not in the canonical list is a feature someone
-      // registered and then removed from the code. Ignoring it is right: the
-      // guard could never require it, so granting it means nothing.
-      if (!(key in FEATURE_KEYS)) continue;
+      const key = row.feature.key;
       if (permissions[key] === PERMISSION_LEVELS.WRITE) continue;
       permissions[key] = row.level;
     }
@@ -81,7 +80,16 @@ export class AdminsService {
   // Admins
   // ==========================================================================
 
-  async list(query: AdminListQuery): Promise<{ items: AdminDto[]; total: number }> {
+  /**
+   * Returns the full Paginated shape, not just items+total.
+   *
+   * `isPaginated` in the response interceptor requires all four keys before it
+   * will split the payload into data + meta. Miss one and the whole object is
+   * wrapped as `data`, the client validates an object against an array schema,
+   * and the only symptom is "Unexpected response shape from API" — which points
+   * at the client rather than at the handler that actually got it wrong.
+   */
+  async list(query: AdminListQuery): Promise<Paginated<AdminDto>> {
     const where = {
       deletedAt: null,
       ...(query.activeOnly === undefined ? {} : { isActive: query.activeOnly }),
@@ -108,7 +116,12 @@ export class AdminsService {
     // One grants query for the whole page rather than one per row: a list of 50
     // admins would otherwise be 51 queries.
     const grants = await this.grantsByAdmin(rows.map((row) => row.id));
-    return { items: rows.map((row) => this.toAdminDto(row, grants.get(row.id) ?? {})), total };
+    return {
+      items: rows.map((row) => this.toAdminDto(row, grants.get(row.id) ?? {})),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
   }
 
   async create(input: CreateAdminBody, createdById: string): Promise<AdminDto> {
@@ -205,11 +218,7 @@ export class AdminsService {
    * row and would have nothing to update. Creating them together means a grant
    * is always an array update and never has to consider whether the row exists.
    */
-  async createFeature(input: {
-    key: FeatureKey;
-    name: string;
-    description?: string;
-  }): Promise<FeatureDto> {
+  async createFeature(input: { key: FeatureKey; description?: string }): Promise<FeatureDto> {
     const clash = await this.prisma.feature.findUnique({ where: { key: input.key } });
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'That feature is already registered', {
@@ -220,7 +229,9 @@ export class AdminsService {
     const row = await this.prisma.feature.create({
       data: {
         key: input.key,
-        name: input.name,
+        // The column stays, always equal to the key: one value, so the two can
+        // never disagree about what a feature is called.
+        name: input.key,
         description: input.description ?? null,
         permissions: { create: BOTH_LEVELS.map((level) => ({ level })) },
       },
@@ -330,8 +341,7 @@ export class AdminsService {
     });
 
     for (const row of rows) {
-      const key = row.feature.key as FeatureKey;
-      if (!(key in FEATURE_KEYS)) continue;
+      const key = row.feature.key;
       for (const adminId of row.adminIds) {
         if (!adminIds.includes(adminId)) continue;
         const current = byAdmin.get(adminId) ?? {};
@@ -357,8 +367,7 @@ export class AdminsService {
   private toFeatureDto(row: FeatureRow): FeatureDto {
     return {
       id: row.id,
-      key: row.key as FeatureKey,
-      name: row.name,
+      key: row.key,
       description: row.description,
       createdAt: row.createdAt.toISOString(),
       grants: Object.fromEntries(

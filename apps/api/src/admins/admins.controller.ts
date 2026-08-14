@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ActorTypes,
   adminListQuerySchema,
@@ -10,6 +21,7 @@ import {
   updateAdminSchema,
   type Admin,
   type AdminListQuery,
+  type Paginated,
   type CreateAdminBody,
   type Feature,
   type FeatureKey,
@@ -43,7 +55,7 @@ export class AdminsController {
   @Get('admins')
   list(
     @Query(new ZodQuery(adminListQuerySchema)) query: AdminListQuery,
-  ): Promise<{ items: Admin[]; total: number }> {
+  ): Promise<Paginated<Admin>> {
     return this.admins.list(query);
   }
 
@@ -65,8 +77,14 @@ export class AdminsController {
     return this.admins.update(id, body);
   }
 
+  /**
+   * 200, not 204. Every response in this API is an envelope, and a 204 carries
+   * no body — so the client would read empty text where it expects
+   * `{ success, data: null, meta }` and fail with "unexpected response shape".
+   * Same reason `branches.remove` is an explicit OK.
+   */
   @Delete('admins/:id')
-  @HttpCode(204)
+  @HttpCode(HttpStatus.OK)
   async deactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
     await this.admins.deactivate(id, user.id);
   }
@@ -78,12 +96,7 @@ export class AdminsController {
 
   @Post('features')
   createFeature(
-    @Body(new ZodBody(createFeatureSchema))
-    body: {
-      key: FeatureKey;
-      name: string;
-      description?: string;
-    },
+    @Body(new ZodBody(createFeatureSchema)) body: { key: FeatureKey; description?: string },
   ): Promise<Feature> {
     return this.admins.createFeature(body);
   }
