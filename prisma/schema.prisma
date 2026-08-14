@@ -21,6 +21,36 @@
 // - TestShareLink removed — the share link is a slug on Test, generated in UI.
 // - Marks use Decimal(6,2) for exact 0.25 / 0.33 / 0.50.
 // - "createdById" audit fields are plain Admin ids (no FK) to avoid clutter.
+//
+// ---------------------------------------------------------------------------
+// Conventions every model follows (docs/03 §9)
+//
+// TIMESTAMPS — every table has `createdAt @default(now())` and
+// `updatedAt @default(now()) @updatedAt`. The DB-level default on `updatedAt`
+// is not decoration: without it, adding the column to a table that already has
+// rows is an ALTER Postgres refuses, and Prisma writes the value on every
+// update anyway, so the default only ever covers a row inserted by something
+// that is not Prisma.
+//
+// SOFT DELETE — `deletedAt DateTime?` on records that must be recoverable or
+// auditable: Student, Admin, Question, Test, Group, Branch, Subject, Topic,
+// SubTopic, Notification. Deliberately NOT on the rest:
+//   - StudentProfile, QuestionOption, TestSection, BaseConfigSection,
+//     PaperQuestion — parts of a parent, and they die with it (cascade). A
+//     soft-deleted option would still be in the answer key.
+//   - Attempt, AttemptAnswer — never deleted at all. An attempt is the record
+//     of a test somebody sat; the highest-volume table in the system does not
+//     need a column that is always null.
+//   - ExamType, BaseConfig, TestSeries — retired by a flag or by cloning
+//     (`isActive`, `locked`), which is the existing, more informative answer.
+//
+// NOTHING READS `deletedAt` YET. The column is here so the decision is made
+// once, per model, before there is data to migrate — every query still sees
+// every row. When soft delete IS implemented, note that a deleted row still
+// occupies its unique slot: Student.mobile, Branch.name, SubTopic.name and
+// Group[branchId, name] would all refuse a replacement with the same name
+// until the deleted one is purged.
+// ---------------------------------------------------------------------------
 // ============================================================================
 
 datasource db {
@@ -59,13 +89,13 @@ enum QuestionStatus {
 }
 
 enum TestUi {
-  CBT     // standard government CBT interface (primary V1 build)
+  CBT // standard government CBT interface (primary V1 build)
   GENERIC // lighter test screen (only if time permits)
 }
 
 enum LanguageMode {
   SINGLE // student picks one language (optional per-question toggle)
-  DUAL   // show two languages together (e.g. English + Hindi), stem + options
+  DUAL // show two languages together (e.g. English + Hindi), stem + options
 }
 
 enum TestStatus {
@@ -77,7 +107,7 @@ enum TestStatus {
 enum PaperQuestionStatus {
   ACTIVE
   DROPPED // excluded from scoring
-  BONUS   // awarded to everyone
+  BONUS // awarded to everyone
 }
 
 enum AttemptStatus {
@@ -109,8 +139,8 @@ enum NotificationType {
 // (pinHash). OTP also resets a forgotten PIN. OTP + sessions + device binding all
 // live in Redis. Rate-limit / lock PIN attempts in Redis.
 model Student {
-  id                String          @id @default(cuid())
-  mobile            String          @unique // only mandatory field
+  id                String    @id @default(cuid())
+  mobile            String    @unique // only mandatory field
   // 4-digit login PIN, argon2id-hashed with a server-side pepper. NOT unique:
   // it is only ever checked against the one student a mobile number resolves to,
   // so two students sharing a PIN is unremarkable and invisible to both.
@@ -120,50 +150,54 @@ model Student {
   // can sign in on day one. It is guessable by anyone who knows the number, so
   // it is tracked rather than forgotten: "has signed in" means a PIN of their
   // own, and the student is prompted to replace this one.
-  pinIsDefault      Boolean         @default(false)
+  pinIsDefault      Boolean   @default(false)
   fullName          String?
-  preferredLanguage String          @default("en")
+  preferredLanguage String    @default("en")
   // preTestReady: minimal details present (mother's name + father's name + DOB) —
   // the light gate asked before starting a test. profileCompleted: the FULL
   // profile (photo, gender, Aadhaar, PAN, address, education…) — optional, only
   // drives a gentle "complete your profile" prompt, never blocks.
-  preTestReady      Boolean         @default(false)
-  profileCompleted  Boolean         @default(false)
-  isActive          Boolean         @default(true)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  preTestReady      Boolean   @default(false)
+  profileCompleted  Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  deletedAt         DateTime? // soft delete — see the conventions note above
 
-  profile           StudentProfile?
-  groups            Group[]         // implicit M:N (batch membership) — access flows via groups
-  attempts          Attempt[]
-  notifications     Notification[]
+  profile       StudentProfile?
+  groups        Group[] // implicit M:N (batch membership) — access flows via groups
+  attempts      Attempt[]
+  notifications Notification[]
 }
 
 // Admins log in with EMAIL + OTP (OTP handled in Redis). A super admin is
 // seeded at bootstrap; super admins can create admins/super admins and grant
 // page access. Super admins bypass page checks in app logic.
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   fullName     String?
-  isSuperAdmin Boolean  @default(false)
-  isActive     Boolean  @default(true)
-  createdById  String?  // audit: Admin who created this admin
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isSuperAdmin Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  createdById  String? // audit: Admin who created this admin
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  deletedAt    DateTime? // soft delete — see the conventions note above
 
-  pages        Page[]   // implicit M:N — which pages this admin may access
+  pages Page[] // implicit M:N — which pages this admin may access
 }
 
 // One row per page/feature, identified by a stable code the super admin uses
 // to grant access (e.g. "questions.manage", "tests.create", "reports.view").
 model Page {
-  id          String  @id @default(cuid())
-  code        String  @unique
+  id          String   @id @default(cuid())
+  code        String   @unique
   name        String
   description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  admins      Admin[] // implicit M:N
+  admins Admin[] // implicit M:N
 }
 
 // Extended personal data (1:1 with Student). The only PRE-TEST required fields
@@ -185,9 +219,10 @@ model StudentProfile {
   panUrl           String? // verification record
   educationDetails Json? // [{ level, board, institution, year, percentage }]
   pastExamHistory  Json? // self-reported external govt-exam attempts (not platform Attempts)
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
 
-  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================================
@@ -195,9 +230,12 @@ model StudentProfile {
 // ============================================================================
 
 model Subject {
-  id                 String              @id @default(cuid())
-  name               String              @unique
-  code               String?             @unique
+  id        String    @id @default(cuid())
+  name      String    @unique
+  code      String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  deletedAt DateTime? // soft delete — see the conventions note above
 
   topics             Topic[]
   questions          Question[]
@@ -206,9 +244,12 @@ model Subject {
 }
 
 model Topic {
-  id        String     @id @default(cuid())
+  id        String    @id @default(cuid())
   subjectId String
   name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  deletedAt DateTime? // soft delete — see the conventions note above
 
   subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subTopics SubTopic[] // implicit M:N — a sub-topic is shared, not owned
@@ -234,8 +275,11 @@ model Topic {
 // existing sub-topic before creating one — the way the group importer resolves
 // a name rather than minting a duplicate.
 model SubTopic {
-  id        String     @id @default(cuid())
-  name      String     @unique
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  deletedAt DateTime? // soft delete — see the conventions note above
 
   topics    Topic[]
   questions Question[]
@@ -246,9 +290,9 @@ model SubTopic {
 // Each field is rich content and may hold text, inline $LaTeX$ equations,
 // and inline S3 image URLs (a question can be image-only).
 model Question {
-  id                   String           @id @default(cuid())
-  questionCode         String?          @unique
-  type                 QuestionType     @default(SINGLE_MCQ)
+  id                   String          @id @default(cuid())
+  questionCode         String?         @unique
+  type                 QuestionType    @default(SINGLE_MCQ)
   subjectId            String
   topicId              String?
   // Only meaningful together with topicId, and only when that sub-topic is
@@ -256,20 +300,21 @@ model Question {
   // many-to-many — so the service checks it on write. See SubTopic above.
   subTopicId           String?
   difficulty           DifficultyLevel
-  defaultMarks         Decimal?         @db.Decimal(6, 2)
-  defaultNegativeMarks Decimal?         @db.Decimal(6, 2)
-  status               QuestionStatus   @default(ACTIVE)
+  defaultMarks         Decimal?        @db.Decimal(6, 2)
+  defaultNegativeMarks Decimal?        @db.Decimal(6, 2)
+  status               QuestionStatus  @default(ACTIVE)
   content              Json // { "<lang>": { "stem": <rich>, "solution": <rich> } }
   stemHash             String? // dedup detection
   createdById          String? // audit (Admin id)
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @default(now()) @updatedAt
+  deletedAt            DateTime? // soft delete — see the conventions note above
 
-  subject              Subject          @relation(fields: [subjectId], references: [id])
-  topic                Topic?           @relation(fields: [topicId], references: [id])
-  subTopic             SubTopic?        @relation(fields: [subTopicId], references: [id])
-  options              QuestionOption[]
-  paperQuestions       PaperQuestion[]
+  subject        Subject          @relation(fields: [subjectId], references: [id])
+  topic          Topic?           @relation(fields: [topicId], references: [id])
+  subTopic       SubTopic?        @relation(fields: [subTopicId], references: [id])
+  options        QuestionOption[]
+  paperQuestions PaperQuestion[]
 
   @@index([subjectId, difficulty, status]) // auto-draw filter
   @@index([topicId])
@@ -281,14 +326,16 @@ model Question {
 // text = { "en": <rich>, "hi": <rich> } — an option may be plain text, an
 // $LaTeX$ equation, an inline S3 image URL, or a mix (image-only options OK).
 model QuestionOption {
-  id         String          @id @default(cuid())
+  id         String   @id @default(cuid())
   questionId String
   position   Int // authored slot 1..n: import index + canonical order for deterministic shuffle
-  isCorrect  Boolean         @default(false)
+  isCorrect  Boolean  @default(false)
   text       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
-  question   Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  answers    AttemptAnswer[]
+  question Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  AttemptAnswer[]
 
   @@unique([questionId, position])
 }
@@ -298,65 +345,69 @@ model QuestionOption {
 // ============================================================================
 
 model ExamType {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  code        String?      @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String?  @unique
   description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
   baseConfigs BaseConfig[]
   tests       Test[]
 }
 
 model BaseConfig {
-  id                     String              @id @default(cuid())
-  examTypeId             String
-  name                   String
-  isActive               Boolean             @default(true)
+  id         String  @id @default(cuid())
+  examTypeId String
+  name       String
+  isActive   Boolean @default(true)
   // Set true once ANY test created from this config has its first attempt.
   // While locked, the config and its sections are read-only — to change it, the
   // admin CLONES it into a new config. (Existing tests are snapshots, unaffected.)
-  locked                 Boolean             @default(false)
+  locked     Boolean @default(false)
 
   totalQuestions         Int
-  totalMarks             Decimal             @db.Decimal(8, 2)
+  totalMarks             Decimal      @db.Decimal(8, 2)
   durationSec            Int
-  sectionalTiming        Boolean             @default(false)
-  lockedSectionSwitching Boolean             @default(false)
+  sectionalTiming        Boolean      @default(false)
+  lockedSectionSwitching Boolean      @default(false)
   optionalSectionCount   Int?
-  calculatorEnabled      Boolean             @default(false)
-  defaultTestUi          TestUi              @default(CBT)
-  languageMode           LanguageMode        @default(SINGLE)
-  languages              String[]            @default(["en"]) // ordered; DUAL shows all of them
-  shuffleQuestions       Boolean             @default(true)
-  shuffleOptions         Boolean             @default(true)
-  marksPerQuestion       Decimal?            @db.Decimal(6, 2)
-  negativeMarks          Decimal?            @db.Decimal(6, 2)
+  calculatorEnabled      Boolean      @default(false)
+  defaultTestUi          TestUi       @default(CBT)
+  languageMode           LanguageMode @default(SINGLE)
+  languages              String[]     @default(["en"]) // ordered; DUAL shows all of them
+  shuffleQuestions       Boolean      @default(true)
+  shuffleOptions         Boolean      @default(true)
+  marksPerQuestion       Decimal?     @db.Decimal(6, 2)
+  negativeMarks          Decimal?     @db.Decimal(6, 2)
   defaultDifficultyMix   Json? // { "LOW": 30, "MEDIUM": 50, "HIGH": 20 }
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @default(now()) @updatedAt
 
-  examType               ExamType            @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
-  sections               BaseConfigSection[]
-  tests                  Test[]
+  examType ExamType            @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+  sections BaseConfigSection[]
+  tests    Test[]
 
   @@index([examTypeId])
 }
 
 model BaseConfigSection {
-  id               String     @id @default(cuid())
+  id               String   @id @default(cuid())
   baseConfigId     String
   name             String
   order            Int
   subjectId        String?
   questionCount    Int
-  marksPerQuestion Decimal    @db.Decimal(6, 2)
-  negativeMarks    Decimal    @db.Decimal(6, 2)
+  marksPerQuestion Decimal  @db.Decimal(6, 2)
+  negativeMarks    Decimal  @db.Decimal(6, 2)
   durationSec      Int?
-  mandatory        Boolean    @default(true)
+  mandatory        Boolean  @default(true)
   difficultyMix    Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 
-  baseConfig       BaseConfig @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
-  subject          Subject?   @relation(fields: [subjectId], references: [id])
+  baseConfig BaseConfig @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
+  subject    Subject?   @relation(fields: [subjectId], references: [id])
 
   @@unique([baseConfigId, order])
   @@index([subjectId])
@@ -367,46 +418,47 @@ model BaseConfigSection {
 // ============================================================================
 
 model Test {
-  id                     String          @id @default(cuid())
-  title                  String
-  examTypeId             String?
-  baseConfigId           String?
+  id           String  @id @default(cuid())
+  title        String
+  examTypeId   String?
+  baseConfigId String?
 
-  status                 TestStatus      @default(DRAFT)
-  testUi                 TestUi          @default(CBT)
+  status TestStatus @default(DRAFT)
+  testUi TestUi     @default(CBT)
 
   totalQuestions         Int
-  totalMarks             Decimal         @db.Decimal(8, 2)
+  totalMarks             Decimal      @db.Decimal(8, 2)
   durationSec            Int
-  sectionalTiming        Boolean         @default(false)
-  lockedSectionSwitching Boolean         @default(false)
+  sectionalTiming        Boolean      @default(false)
+  lockedSectionSwitching Boolean      @default(false)
   optionalSectionCount   Int?
-  calculatorEnabled      Boolean         @default(false)
-  shuffleQuestions       Boolean         @default(true)
-  shuffleOptions         Boolean         @default(true)
-  languageMode           LanguageMode    @default(SINGLE)
-  languages              String[]        @default(["en"]) // ordered; DUAL shows all of them
+  calculatorEnabled      Boolean      @default(false)
+  shuffleQuestions       Boolean      @default(true)
+  shuffleOptions         Boolean      @default(true)
+  languageMode           LanguageMode @default(SINGLE)
+  languages              String[]     @default(["en"]) // ordered; DUAL shows all of them
 
-  publishStartAt         DateTime?
-  publishEndAt           DateTime?
-  entryCutoffSec         Int?
-  extraTimeSec           Int?
+  publishStartAt DateTime?
+  publishEndAt   DateTime?
+  entryCutoffSec Int?
+  extraTimeSec   Int?
 
-  isLocked               Boolean         @default(false) // true once first student starts
-  finalizedAt            DateTime?
-  shareSlug              String?         @unique // shareable link token (optional)
-  createdById            String? // audit (Admin id)
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
+  isLocked    Boolean   @default(false) // true once first student starts
+  finalizedAt DateTime?
+  shareSlug   String?   @unique // shareable link token (optional)
+  createdById String? // audit (Admin id)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  deletedAt   DateTime? // soft delete — see the conventions note above
 
-  examType               ExamType?       @relation(fields: [examTypeId], references: [id])
-  baseConfig             BaseConfig?     @relation(fields: [baseConfigId], references: [id])
-  sections               TestSection[]
-  paperQuestions         PaperQuestion[]
-  attempts               Attempt[]
-  notifications          Notification[]
+  examType       ExamType?       @relation(fields: [examTypeId], references: [id])
+  baseConfig     BaseConfig?     @relation(fields: [baseConfigId], references: [id])
+  sections       TestSection[]
+  paperQuestions PaperQuestion[]
+  attempts       Attempt[]
+  notifications  Notification[]
 
-  series                 TestSeries[]    // implicit M:N — access reaches students via series↔group
+  series TestSeries[] // implicit M:N — access reaches students via series↔group
 
   @@index([status])
   @@index([publishStartAt, publishEndAt])
@@ -414,21 +466,23 @@ model Test {
 }
 
 model TestSection {
-  id               String          @id @default(cuid())
+  id               String   @id @default(cuid())
   testId           String
   name             String
   order            Int
   subjectId        String?
   questionCount    Int
-  marksPerQuestion Decimal         @db.Decimal(6, 2)
-  negativeMarks    Decimal         @db.Decimal(6, 2)
+  marksPerQuestion Decimal  @db.Decimal(6, 2)
+  negativeMarks    Decimal  @db.Decimal(6, 2)
   durationSec      Int?
-  mandatory        Boolean         @default(true)
+  mandatory        Boolean  @default(true)
   difficultyMix    Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 
-  test             Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
-  subject          Subject?        @relation(fields: [subjectId], references: [id])
-  paperQuestions   PaperQuestion[]
+  test           Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  subject        Subject?        @relation(fields: [subjectId], references: [id])
+  paperQuestions PaperQuestion[]
 
   @@unique([testId, order])
   @@index([subjectId])
@@ -445,11 +499,13 @@ model PaperQuestion {
   marks         Decimal             @db.Decimal(6, 2)
   negativeMarks Decimal             @db.Decimal(6, 2)
   status        PaperQuestionStatus @default(ACTIVE) // drop/bonus corrections
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @default(now()) @updatedAt
 
-  test          Test                @relation(fields: [testId], references: [id], onDelete: Cascade)
-  section       TestSection?        @relation(fields: [testSectionId], references: [id])
-  question      Question            @relation(fields: [questionId], references: [id])
-  answers       AttemptAnswer[]
+  test     Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  section  TestSection?    @relation(fields: [testSectionId], references: [id])
+  question Question        @relation(fields: [questionId], references: [id])
+  answers  AttemptAnswer[]
 
   @@unique([testId, questionId])
   @@unique([testId, order])
@@ -462,36 +518,36 @@ model PaperQuestion {
 // ============================================================================
 
 model Attempt {
-  id               String          @id @default(cuid())
-  testId           String
-  studentId        String
-  status           AttemptStatus   @default(IN_PROGRESS)
+  id        String        @id @default(cuid())
+  testId    String
+  studentId String
+  status    AttemptStatus @default(IN_PROGRESS)
 
   // lifecycle
-  startedAt        DateTime        @default(now())
-  endsAt           DateTime // server-authoritative deadline
-  submittedAt      DateTime?
-  evaluatedAt      DateTime?
-  shuffleSeed      Int
-  resumeCount      Int             @default(0)
-  locale           String          @default("en")
-  sectionState     Json? // per-section start/end/time-spent
+  startedAt    DateTime  @default(now())
+  endsAt       DateTime // server-authoritative deadline
+  submittedAt  DateTime?
+  evaluatedAt  DateTime?
+  shuffleSeed  Int
+  resumeCount  Int       @default(0)
+  locale       String    @default("en")
+  sectionState Json? // per-section start/end/time-spent
 
   // scored (filled on evaluation)
-  score            Decimal?        @db.Decimal(8, 2)
+  score            Decimal? @db.Decimal(8, 2)
   correctCount     Int?
   wrongCount       Int?
   unattemptedCount Int?
   sectionScores    Json?
   rank             Int? // last-computed snapshot; live value from Redis
-  percentile       Decimal?        @db.Decimal(5, 2)
+  percentile       Decimal? @db.Decimal(5, 2)
 
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  test             Test            @relation(fields: [testId], references: [id])
-  student          Student         @relation(fields: [studentId], references: [id])
-  answers          AttemptAnswer[]
+  test    Test            @relation(fields: [testId], references: [id])
+  student Student         @relation(fields: [studentId], references: [id])
+  answers AttemptAnswer[]
 
   @@unique([testId, studentId]) // one attempt per student (no retake)
   @@index([studentId]) // student's report dashboard: "my attempts"
@@ -507,20 +563,23 @@ model AttemptAnswer {
   attemptId        String
   paperQuestionId  String
   selectedOptionId String?
-  state            AnswerState     @default(NOT_VISITED)
+  state            AnswerState @default(NOT_VISITED)
 
   // analytics data points — captured from day one
-  timeSpentSec     Int             @default(0)
-  languageViewed   String?
+  timeSpentSec   Int     @default(0)
+  languageViewed String?
 
   // filled at scoring
-  isCorrect        Boolean?
-  marksAwarded     Decimal?        @db.Decimal(6, 2)
-  answeredAt       DateTime?
+  isCorrect    Boolean?
+  marksAwarded Decimal?  @db.Decimal(6, 2)
+  answeredAt   DateTime?
 
-  attempt          Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  paperQuestion    PaperQuestion   @relation(fields: [paperQuestionId], references: [id])
-  selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  attempt        Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  paperQuestion  PaperQuestion   @relation(fields: [paperQuestionId], references: [id])
+  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id])
 
   @@id([attemptId, paperQuestionId])
   @@index([paperQuestionId]) // question-level analytics
@@ -539,14 +598,16 @@ model AttemptAnswer {
 // ============================================================================
 
 model Branch {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
-  name      String   @unique
-  isGlobal  Boolean  @default(false)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  name      String    @unique
+  isGlobal  Boolean   @default(false)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  deletedAt DateTime? // soft delete — see the conventions note above
 
-  groups    Group[]
+  groups Group[]
 }
 
 // ============================================================================
@@ -561,16 +622,18 @@ model Branch {
 // ============================================================================
 
 model Group {
-  id             String    @id @default(cuid())
+  id          String    @id @default(cuid())
   /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
-  name           String
-  branchId       String
-  description    String?
-  createdAt      DateTime  @default(now())
+  name        String
+  branchId    String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  deletedAt   DateTime? // soft delete — see the conventions note above
 
-  branch         Branch       @relation(fields: [branchId], references: [id])
-  students       Student[]    // implicit M:N (membership)
-  testSeries     TestSeries[] // implicit M:N — grants access to these series' tests
+  branch     Branch       @relation(fields: [branchId], references: [id])
+  students   Student[] // implicit M:N (membership)
+  testSeries TestSeries[] // implicit M:N — grants access to these series' tests
 
   @@unique([branchId, name])
   @@index([branchId])
@@ -585,9 +648,10 @@ model TestSeries {
   name        String
   description String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  tests       Test[]  // implicit M:N (a test can be in several series)
-  groups      Group[] // implicit M:N — groups linked to this series get access
+  tests  Test[] // implicit M:N (a test can be in several series)
+  groups Group[] // implicit M:N — groups linked to this series get access
 }
 
 // ============================================================================
@@ -603,9 +667,11 @@ model Notification {
   testId    String?
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
+  updatedAt DateTime         @default(now()) @updatedAt
+  deletedAt DateTime? // soft delete — see the conventions note above
 
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  test      Test?            @relation(fields: [testId], references: [id], onDelete: SetNull)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  test    Test?   @relation(fields: [testId], references: [id], onDelete: SetNull)
 
   @@index([studentId, isRead])
 }
