@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Badge } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
-import { NAV_ITEMS } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /**
@@ -10,38 +10,36 @@ import { useAuth } from '../providers/auth';
  * is signed in.
  *
  * Wider than the student portal, because the screens behind it are tables.
+ *
+ * Two filters, on purpose, and they are not duplicates. `can` goes to the shell
+ * because `featureKey` is part of the shared NavItem shape and the shell knows
+ * how to read it. `superAdminOnly` is stripped here because it is NOT a feature
+ * key and must never become one — Admins, Features and Permissions are the
+ * screens that decide who decides, so gating them on a grantable permission
+ * would let the permission system hand out control of itself. @iace/app-kit has
+ * no concept of a super admin and should not learn one.
  */
 export function AppShell() {
   const { identity: admin, signOut, can } = useAuth();
 
-  /**
-   * A section nobody can open is not shown. Hiding is not the security — every
-   * route behind these is enforced server-side by FeaturePermissionGuard — it
-   * is about not offering a door that will not open.
-   *
-   * Filtered here rather than in the shared shell: `@iace/app-kit` must not
-   * learn that a section called "Branches" exists, still less what gates it.
-   */
   const nav = useMemo(
-    () =>
-      NAV_ITEMS.filter((item) => {
-        if (item.superAdminOnly) return admin?.isSuperAdmin ?? false;
-        return item.feature === undefined || can(item.feature);
-      }).map(({ to, label }) => ({ to, label })),
-    [admin?.isSuperAdmin, can],
+    () => filterAdminNav(NAV_ITEMS, admin?.isSuperAdmin ?? false),
+    [admin?.isSuperAdmin],
   );
 
   return (
     <Shell
       nav={nav}
+      can={can}
       width="wide"
       onSignOut={() => void signOut()}
-      brandSuffix={<span className="text-sm font-medium text-muted-foreground">Admin</span>}
-      identity={
-        <>
+      userLabel={admin?.email ?? ''}
+      profileHref={ROUTES.HOME}
+      brandSuffix={
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Admin</span>
           {admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}
-          <span className="hidden text-sm text-muted-foreground sm:inline">{admin?.email}</span>
-        </>
+        </span>
       }
     >
       <Outlet />

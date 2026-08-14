@@ -1,20 +1,19 @@
-import { type ReactNode } from 'react';
-import { LogOut } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
-
-export interface NavItem {
-  to: string;
-  label: string;
-}
+import { filterNavByPermission, type NavItem } from '../src';
+import { SidebarNav } from './app-shell/sidebar-nav';
+import { DrawerNav } from './app-shell/drawer-nav';
+import { UserMenu } from './app-shell/user-menu';
+import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
 
 /**
- * How wide the content runs.
+ * How wide the CONTENT runs beside the sidebar.
  *
- * A named choice rather than a class, because it is the one real difference
- * between the shells and it is a decision: the student portal is deliberately
- * narrower — a student arrives to do one thing, and a page that runs the full
- * width of a desktop monitor makes finding it harder, not easier.
+ * A named choice rather than a class, because it is a real difference between
+ * the two apps: a student arrives to do one thing, and a page running the full
+ * width of a monitor makes finding it harder, not easier.
  */
 const WIDTHS = {
   narrow: 'max-w-5xl',
@@ -24,97 +23,183 @@ const WIDTHS = {
 export type ShellWidth = keyof typeof WIDTHS;
 
 export interface AppShellProps {
-  /** The tabs, in the order this app's user works through them. */
+  /** The sections, in the order this app's user works through them. */
   nav: readonly NavItem[];
-  /** Rendered in `<main>`. Usually `<Outlet />`, sometimes a gate in front of it. */
   children: ReactNode;
   onSignOut: () => void;
+  /** Names the signed-in account — an email for an admin, a mobile for a student. */
+  userLabel: string;
+  /** Rendered in the user menu button; falls back to a generic person icon. */
+  userAvatar?: ReactNode;
+  /** Where "Profile" goes. Omitted hides the entry. */
+  profileHref?: string;
   /** Beside the brandmark — the admin app labels itself. */
   brandSuffix?: ReactNode;
-  /** Who is signed in, however this app wants to say it. */
-  identity?: ReactNode;
+  /**
+   * Permission check for `NavItem.featureKey`.
+   *
+   * Optional, and its absence is the degradation path: an app that has no
+   * permissions (the student portal) passes nothing and every section shows.
+   * See `filterNavByPermission` — hiding nav is not the security boundary.
+   */
+  can?: (featureKey: string) => boolean;
   width?: ShellWidth;
 }
 
 /**
- * The signed-in chrome: one header, one nav, and the page below it.
+ * The signed-in chrome: a top bar, a persistent left sidebar, and the page.
  *
  * Shared because it is chrome, and chrome that differs between two apps of one
- * platform reads as two products. What is genuinely per-app is injected: the
- * nav items, how the identity is shown (a student sees their photo and name, an
- * admin their email and whether they are a super admin), and the width.
- *
- * `nav` is a prop rather than an import, which is the point of the split —
+ * platform reads as two products. What is genuinely per-app is injected — the
+ * nav, who is signed in, the content width — which is the point of the split:
  * @iace/app-kit must not know that a route called "Groups" exists.
+ *
+ * The desktop and mobile structures are genuinely different components rather
+ * than one markup styled two ways. Rendering both and hiding one with CSS would
+ * put two focus traps and two tab orders in the document at once, one of them
+ * invisible — which is how a keyboard user ends up tabbing into a drawer that
+ * is not on screen.
+ *
+ * The CBT exam screen is deliberately NOT wrapped in this. A timed exam is
+ * full-bleed and has its own chrome; a sidebar there is somewhere to click by
+ * accident.
  */
 export function AppShell({
   nav,
   children,
   onSignOut,
+  userLabel,
+  userAvatar,
+  profileHref,
   brandSuffix,
-  identity,
+  can,
   width = 'wide',
 }: Readonly<AppShellProps>) {
-  const container = cn('mx-auto', WIDTHS[width]);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  const items = useMemo(() => filterNavByPermission(nav, can), [nav, can]);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  const userMenu = (
+    <UserMenu
+      label={userLabel}
+      avatar={userAvatar}
+      collapsed={isDesktop && collapsed}
+      profileHref={profileHref}
+      onSignOut={onSignOut}
+    />
+  );
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
-        <div className={cn(container, 'flex items-center justify-between gap-4 px-5 py-3')}>
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-[--z-sticky] border-b border-border bg-surface/95 backdrop-blur">
+        <div className="flex items-center gap-3 px-4 py-3">
+          {/* Mobile only: the sidebar's stand-in. On desktop the nav is always
+              present, never behind a button. */}
+          {!isDesktop ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Open navigation"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen(true)}
+            >
+              <Menu aria-hidden />
+            </Button>
+          ) : null}
+
+          <div className="flex min-w-0 items-center gap-3">
             <Brandmark withWordmark />
             {brandSuffix}
           </div>
 
-          <div className="flex items-center gap-2">
-            {identity}
+          <div className="flex flex-1 items-center justify-end">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={onSignOut}>
-              <LogOut aria-hidden />
-              <span className="hidden sm:inline">Sign out</span>
-            </Button>
           </div>
         </div>
-
-        {/*
-          px-2, not px-4: a tab carries its own px-3, so the container inset has
-          to be the content inset MINUS that, or the labels sit further in than
-          the brandmark above them and the page title below. Aligning the tab
-          BOX instead would push its text in twice.
-
-          overflow-x-auto because the nav is the one row that grows with the
-          product — a fifth and sixth section are already planned, and four
-          labels almost fill a 390px screen. Without it the overflow silently
-          becomes unreachable rather than scrollable.
-        */}
-        <nav
-          className={cn(container, 'flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]')}
-          aria-label="Sections"
-        >
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              // Without `end`, the home route matches every path and both tabs
-              // light up at once.
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                  'focus-visible:shadow-focus focus-visible:outline-none',
-                  isActive
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
       </header>
 
-      <main className={cn(container, 'px-5 py-8')}>{children}</main>
+      <div className="flex">
+        {isDesktop ? (
+          <aside
+            aria-label="Sections"
+            className={cn(
+              'sticky top-[calc(var(--control-h-lg)+var(--space-4))] flex h-[calc(100vh-4rem)] shrink-0',
+              'flex-col border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
+              collapsed ? 'w-[--sidebar-w-rail]' : 'w-[--sidebar-w]',
+            )}
+          >
+            <nav className="min-h-0 flex-1 overflow-y-auto">
+              <SidebarNav items={items} pathname={pathname} collapsed={collapsed} />
+            </nav>
+
+            <div className="mt-2 border-t border-border pt-2">
+              {userMenu}
+              <button
+                type="button"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                onClick={() => setCollapsed((was) => !was)}
+                className={cn(
+                  'mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+                  'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  'focus-visible:shadow-focus focus-visible:outline-none',
+                  collapsed && 'justify-center px-0',
+                )}
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="size-4" aria-hidden />
+                ) : (
+                  <>
+                    <PanelLeftClose className="size-4" aria-hidden />
+                    <span>Collapse</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </aside>
+        ) : null}
+
+        <main className="min-w-0 flex-1">
+          <div className={cn('mx-auto px-5 py-8', WIDTHS[width])}>{children}</div>
+        </main>
+      </div>
+
+      {/* Mobile drawer. Rendered only when open, so there is never an offscreen
+          tab stop, and only on mobile, so the two navs never coexist. */}
+      {!isDesktop && drawerOpen ? (
+        <div className="fixed inset-0 z-[--z-drawer]">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-[--overlay-bg]"
+            onClick={closeDrawer}
+          />
+          <div
+            className={cn(
+              'absolute inset-y-0 left-0 flex w-[--drawer-w] flex-col',
+              'border-r border-border bg-surface p-[--sidebar-pad]',
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <Brandmark withWordmark />
+              <Button variant="ghost" size="sm" aria-label="Close navigation" onClick={closeDrawer}>
+                <X aria-hidden />
+              </Button>
+            </div>
+
+            <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
+              <DrawerNav items={items} onNavigate={closeDrawer} />
+            </nav>
+
+            <div className="mt-2 border-t border-border pt-2">{userMenu}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+export { type NavItem };

@@ -311,7 +311,32 @@
   --empty-pad: var(--space-12) var(--space-6);
 
   /* ==========================================================================
-     12. ELEVATION — two-layer (tight key + soft ambient).
+     12. APP SHELL  [NEW]
+     The signed-in chrome: a persistent left sidebar that collapses to an icon
+     rail, and the panel a long section opens beside it.
+
+     Dimensions only — every colour here comes from the semantic roles above,
+     so the shell themes itself and there is nothing extra to keep in step
+     between light and dark.
+     ========================================================================== */
+  --sidebar-w: 16rem; /* 256 — fits a two-word label plus icon without wrapping */
+  --sidebar-w-rail: 3.5rem; /* 56 — icon + the 44px touch target it sits in     */
+  --sidebar-pad: var(--space-3);
+  --nav-item-h: var(--control-h-md);
+  --nav-item-h-touch: var(--control-h-lg); /* the drawer: thumbs, not pointers  */
+
+  /* The panel a PANEL-layout section opens, flush against the sidebar. */
+  --nav-panel-w: 17rem;
+  /* 80vh, not 100: the panel must read as anchored to the sidebar rather than
+     as a full-height second column, and the gap is what says so. */
+  --nav-panel-max-h: 80vh;
+
+  /* The mobile drawer. min() so it never eats the whole screen on a phone —
+     the sliver of page behind it is what makes it read as dismissible. */
+  --drawer-w: min(20rem, 85vw);
+
+  /* ==========================================================================
+     13. ELEVATION — two-layer (tight key + soft ambient).
      Use border OR shadow per surface, not both.
      ========================================================================== */
   --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.04);
@@ -322,7 +347,7 @@
     0 24px 48px -12px rgba(15, 23, 42, 0.22), 0 8px 16px -8px rgba(15, 23, 42, 0.12);
 
   /* ==========================================================================
-     13. RADII
+     14. RADII
      ========================================================================== */
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -332,7 +357,7 @@
   --radius-full: 999px;
 
   /* ==========================================================================
-     14. MOTION — always name properties; `transition:.12s` animates layout too
+     15. MOTION — always name properties; `transition:.12s` animates layout too
      ========================================================================== */
   --dur-instant: 80ms;
   --dur-fast: 140ms;
@@ -346,7 +371,7 @@
     color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 
   /* ==========================================================================
-     15. FOCUS
+     16. FOCUS
      ========================================================================== */
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
@@ -364,7 +389,7 @@
     0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--destructive);
 
   /* ==========================================================================
-     16. Z-INDEX — the CBT screen stacks header, footer, palette drawer,
+     17. Z-INDEX — the CBT screen stacks header, footer, palette drawer,
      submit dialog and toasts. Without a scale these become magic numbers.
      ========================================================================== */
   --z-base: 1;

@@ -1,3 +1,14 @@
+import {
+  Building2,
+  KeyRound,
+  Layers,
+  LayoutDashboard,
+  ShieldCheck,
+  ToggleRight,
+  Upload,
+  Users,
+} from 'lucide-react';
+import { type NavItem } from '@iace/app-kit';
 import { FEATURE_KEYS } from '@iace/contracts';
 
 /**
@@ -28,37 +39,72 @@ export const ROUTES = {
   NOT_FOUND: '*',
 } as const;
 
-export interface AdminNavItem {
-  to: string;
-  label: string;
-  /** Needs at least READ on this feature. */
-  /** A key from FEATURE_KEYS, or any a super admin has registered. */
-  feature?: string;
-  /** Needs isSuperAdmin, whatever is granted. */
+/**
+ * A NavItem plus the one thing the shared shape deliberately does not carry.
+ *
+ * `superAdminOnly` is NOT a feature key and must never become one: Admins,
+ * Features and Permissions are the screens that decide who decides, so gating
+ * them on a grantable permission would let the permission system hand out
+ * control of itself. It stays app-local — @iace/app-kit has no concept of a
+ * super admin, and giving it one would be teaching the shared chrome about
+ * this product's authorisation model.
+ */
+export interface AdminNavItem extends NavItem {
   superAdminOnly?: boolean;
+  children?: AdminNavItem[];
 }
 
 /**
- * The nav, in the order an admin works through it, each item carrying what it
- * takes to see it.
+ * The nav, in the order an admin works through it.
  *
- * The requirement lives HERE rather than in the shell, because the shell is
- * shared with the student app and must not learn that a section called
- * "Branches" exists, let alone what gates it. A section with no requirement is
- * visible to every signed-in admin.
- *
- * Hiding is not security — every route behind these is enforced server-side.
- * It is about not showing somebody a door that will not open.
+ * Sections rather than a flat list now: the shell resolves each one to an
+ * accordion or a side panel by child count (NAV_INLINE_MAX_ITEMS), so this file
+ * says what belongs together and the chrome decides how it opens.
  */
 export const NAV_ITEMS: readonly AdminNavItem[] = [
-  { to: ROUTES.HOME, label: 'Overview' },
-  { to: ROUTES.STUDENTS, label: 'Students', feature: FEATURE_KEYS.STUDENT_MANAGEMENT },
-  { to: ROUTES.GROUPS, label: 'Groups', feature: FEATURE_KEYS.STUDENT_MANAGEMENT },
-  { to: ROUTES.BRANCHES, label: 'Branches', feature: FEATURE_KEYS.STUDENT_MANAGEMENT },
-  { to: ROUTES.ADMINS, label: 'Admins', superAdminOnly: true },
-  { to: ROUTES.FEATURES, label: 'Features', superAdminOnly: true },
-  { to: ROUTES.PERMISSIONS, label: 'Permissions', superAdminOnly: true },
+  { to: ROUTES.HOME, label: 'Overview', icon: LayoutDashboard },
+  {
+    label: 'Students',
+    icon: Users,
+    featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
+    children: [
+      { to: ROUTES.STUDENTS, label: 'All students', icon: Users },
+      { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
+      { to: ROUTES.GROUPS, label: 'Groups', icon: Layers },
+      { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
+    ],
+  },
+  {
+    label: 'Administration',
+    icon: ShieldCheck,
+    superAdminOnly: true,
+    children: [
+      { to: ROUTES.ADMINS, label: 'Admins', icon: ShieldCheck },
+      { to: ROUTES.FEATURES, label: 'Features', icon: ToggleRight },
+      { to: ROUTES.PERMISSIONS, label: 'Permissions', icon: KeyRound },
+    ],
+  },
 ];
+
+/**
+ * Strip what this admin may not see, at every depth.
+ *
+ * Only `superAdminOnly` — `featureKey` is the shell's job, and doing it twice
+ * would be two rules to keep in step. Recursive because a super-admin-only
+ * child can sit inside an otherwise visible section.
+ */
+export function filterAdminNav(
+  items: readonly AdminNavItem[],
+  isSuperAdmin: boolean,
+): AdminNavItem[] {
+  return items.reduce<AdminNavItem[]>((kept, item) => {
+    if (item.superAdminOnly && !isSuperAdmin) return kept;
+    const children = item.children ? filterAdminNav(item.children, isSuperAdmin) : undefined;
+    if (children?.length === 0 && !item.to) return kept;
+    kept.push(children ? { ...item, children } : item);
+    return kept;
+  }, []);
+}
 
 /**
  * The signed-in admin's identity, cached under one key so `createAuth` and

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Avatar, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
+import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -26,19 +26,18 @@ export function AppShell() {
       nav={NAV_ITEMS}
       width="narrow"
       onSignOut={() => void signOut()}
-      identity={
-        <span className="hidden items-center gap-2 sm:inline-flex">
-          <Avatar
-            src={me.data?.profile?.photoUrl}
-            name={student?.fullName}
-            fallback={student?.mobile}
-            size="sm"
-          />
-          <span className="text-sm text-muted-foreground">
-            {student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
-          </span>
-        </span>
+      profileHref={ROUTES.PROFILE}
+      userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
+      userAvatar={
+        <Avatar
+          src={me.data?.profile?.photoUrl}
+          name={student?.fullName}
+          fallback={student?.mobile}
+          size="sm"
+        />
       }
+      // No `can`: the student portal has no permissions, so every section
+      // shows. filterNavByPermission is deliberately lenient about that.
     >
       {/*
         A student still on the PIN the institute set cannot get past this.

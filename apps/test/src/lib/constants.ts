@@ -1,3 +1,5 @@
+import { Home, KeyRound, User } from 'lucide-react';
+import { type NavItem } from '@iace/app-kit';
 /**
  * App-level string vocabularies. Anything that appears in more than one place —
  * or that a typo would break silently — is named here rather than written
@@ -20,11 +22,11 @@ export const ROUTES = {
  * The nav, in the order a student needs them. Deliberately short — they came
  * here to take a test, not to administer an account.
  */
-export const NAV_ITEMS = [
-  { to: ROUTES.HOME, label: 'Home' },
-  { to: ROUTES.PROFILE, label: 'Profile' },
-  { to: ROUTES.ACCOUNT, label: 'Sign-in' },
-] as const;
+export const NAV_ITEMS: readonly NavItem[] = [
+  { to: ROUTES.HOME, label: 'Home', icon: Home },
+  { to: ROUTES.PROFILE, label: 'Profile', icon: User },
+  { to: ROUTES.ACCOUNT, label: 'Sign-in', icon: KeyRound },
+];
 
 /**
  * The signed-in student's identity, cached under one key so `createAuth` and
