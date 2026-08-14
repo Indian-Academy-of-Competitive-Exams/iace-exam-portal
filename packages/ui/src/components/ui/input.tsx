@@ -31,7 +31,13 @@ const CONTROL = [
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, invalid, prefix, suffix, ...props }, ref) => (
-    <div className={cn(CONTROL, className)} aria-invalid={invalid || undefined}>
+    // data-focus-ring: this div paints the ring, so the inner <input> must not
+    // paint its own on top of it (see the rule in tokens.css).
+    <div
+      className={cn(CONTROL, className)}
+      data-focus-ring="wrapper"
+      aria-invalid={invalid || undefined}
+    >
       {prefix === undefined ? null : (
         <span className="shrink-0 select-none text-sm text-muted-foreground">{prefix}</span>
       )}

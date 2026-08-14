@@ -20,6 +20,8 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-within:shadow-focus-invalid',
         className,
       )}
+      // See input.tsx — the wrapper owns the ring, the inner control stands down.
+      data-focus-ring="wrapper"
       aria-invalid={invalid || undefined}
     >
       <select

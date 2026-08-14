@@ -488,11 +488,29 @@
    ========================================================================== */
 
 /* Keyboard focus, everywhere, defined once. :focus-visible means mouse users
-   never see it and keyboard users always do. */
+   never see it and keyboard users always do.
+
+   No border-radius here. It used to set --radius-md, which silently squared
+   off anything rounder the moment it was tabbed into — a pill button, a circle
+   avatar. It was never needed: a box-shadow ring already follows the element's
+   own border-radius. */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
-  border-radius: var(--radius-md);
+}
+
+/* Some controls are a WRAPPER around the real element — Input and Select paint
+   the border and the ring on a div so a prefix, a suffix or a chevron can sit
+   inside the same box. The rule above would then fire a SECOND ring on the
+   inner <input>, and the field showed two concentric blue outlines.
+
+   The wrapper declares that it owns the ring and the inner control stands down.
+   An attribute rather than a utility class on each input, so it is stated once
+   per component, on the element that actually makes the claim — and so the next
+   wrapper control gets it right by copying the pattern rather than by
+   remembering this paragraph. */
+[data-focus-ring='wrapper'] :where(input, select, textarea):focus-visible {
+  box-shadow: none;
 }
 
 /* Not optional — a candidate with vestibular sensitivity should not be
