@@ -14,6 +14,8 @@ erDiagram
   Subject ||--o{ Topic : "has"
   Subject ||--o{ Question : "categorizes"
   Topic ||--o{ Question : "tags"
+  Topic }o--o{ SubTopic : "drills (shared)"
+  SubTopic ||--o{ Question : "tags"
   Subject ||--o{ BaseConfigSection : "maps"
   Subject ||--o{ TestSection : "maps"
   Question ||--o{ QuestionOption : "has"
@@ -96,12 +98,18 @@ erDiagram
     string name
   }
 
+  SubTopic {
+    string id PK
+    string name UK "shared across topics; no Subject link"
+  }
+
   Question {
     string id PK
     string questionCode UK
     enum type "SINGLE_MCQ"
     string subjectId FK
     string topicId FK
+    string subTopicId FK "must be linked to topicId"
     enum difficulty "LOW/MEDIUM/HIGH"
     decimal defaultMarks
     decimal defaultNegativeMarks

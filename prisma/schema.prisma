@@ -211,9 +211,34 @@ model Topic {
   name      String
 
   subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subTopics SubTopic[] // implicit M:N — a sub-topic is shared, not owned
   questions Question[]
 
   @@unique([subjectId, name])
+}
+
+// The third level of the taxonomy, and the only one that is SHARED.
+//
+// A sub-topic hangs off topics, never off a Subject: "PERCENTAGES" means
+// something under Arithmetic and nothing at all under Quantitative Aptitude as
+// a whole. But the same sub-topic recurs under several topics — percentages are
+// drilled under Arithmetic and again under Data Interpretation, in Quant and in
+// Banking alike — so it is its own row joined many-to-many, not a child owned
+// by one parent. It reaches a second SUBJECT only through a topic in that
+// subject; there is deliberately no Subject relation here to reach it any
+// other way.
+//
+// name is unique across the whole table, which is the point: a second
+// "PERCENTAGES" row would split the very per-sub-topic analytics the sharing
+// exists to join up. So the admin screen and the importer must MATCH an
+// existing sub-topic before creating one — the way the group importer resolves
+// a name rather than minting a duplicate.
+model SubTopic {
+  id        String     @id @default(cuid())
+  name      String     @unique
+
+  topics    Topic[]
+  questions Question[]
 }
 
 // Localized content lives in JSON: content = { "en": { "stem": "...",
@@ -226,6 +251,10 @@ model Question {
   type                 QuestionType     @default(SINGLE_MCQ)
   subjectId            String
   topicId              String?
+  // Only meaningful together with topicId, and only when that sub-topic is
+  // linked to that topic. No FK can state that — the link lives in the
+  // many-to-many — so the service checks it on write. See SubTopic above.
+  subTopicId           String?
   difficulty           DifficultyLevel
   defaultMarks         Decimal?         @db.Decimal(6, 2)
   defaultNegativeMarks Decimal?         @db.Decimal(6, 2)
@@ -238,11 +267,13 @@ model Question {
 
   subject              Subject          @relation(fields: [subjectId], references: [id])
   topic                Topic?           @relation(fields: [topicId], references: [id])
+  subTopic             SubTopic?        @relation(fields: [subTopicId], references: [id])
   options              QuestionOption[]
   paperQuestions       PaperQuestion[]
 
   @@index([subjectId, difficulty, status]) // auto-draw filter
   @@index([topicId])
+  @@index([subTopicId])
   @@index([stemHash])
 }
 

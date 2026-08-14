@@ -126,7 +126,8 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 - **Student / Admin** — separate tables. Student: `mobile` is the only mandatory field. Admin: `email`, `isSuperAdmin`, page-level permissions (`Page` + implicit M:N). OTP, sessions, and device binding live in **Redis**, not the DB.
 - **StudentProfile (1:1)** — email, address, gender, dob, photo, Aadhaar/PAN links, education + past-exam history (JSON). `Student.profileCompleted` gates the first test and is true once **photo + DOB + gender + Aadhaar + PAN** are present.
 - **ExamType / BaseConfig (+ BaseConfigSection)** — reusable blueprint: sections, per-section time, marks, negative marking, total questions, default difficulty mix, shuffle rules. A Test copies + overrides it.
-- **Question / QuestionOption** — options carry a **stable id + isCorrect** (the answer key survives shuffling/editing). Localized content is **JSON** (`Question.content`, `QuestionOption.text`) keyed by language; each field is rich (text / `$LaTeX$` / inline **S3 image URL**). Tags: subject, topic, difficulty (L/M/H). One question, reused everywhere; dedup on import. **No separate media table.**
+- **Question / QuestionOption** — options carry a **stable id + isCorrect** (the answer key survives shuffling/editing). Localized content is **JSON** (`Question.content`, `QuestionOption.text`) keyed by language; each field is rich (text / `$LaTeX$` / inline **S3 image URL**). Tags: subject, topic, sub-topic, difficulty (L/M/H). One question, reused everywhere; dedup on import. **No separate media table.**
+- **Subject / Topic / SubTopic** — the three-level taxonomy. A **Topic** belongs to exactly one Subject. A **SubTopic** is **shared**: it joins **many-to-many to Topic**, so one "PERCENTAGES" row serves Arithmetic and Data Interpretation, in Quant and in Banking alike. It never hangs off a Subject directly — a sub-topic means nothing outside a topic, and it reaches a second subject only *through* one. `name` is unique table-wide, so admin and importer **match before they create**; a duplicate row would split the per-sub-topic accuracy analytics this level exists to produce. A question's `subTopicId` must be one linked to its `topicId` — enforced in the service, since the M:N puts it out of reach of a foreign key.
 - **Test** — links a BaseConfig; overrides, schedule window, **status (active/inactive)**, lock state, `shareSlug`. Independent of any series.
 - **TestSection** — per-section time, mandatory, marks/negative, difficulty override, order.
 - **PaperQuestion (frozen paper)** — the fixed questions drawn at finalize; per-question marks/negative; status (**active / dropped / bonus**).
@@ -184,14 +185,14 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 
 **Our format — narrow, forgiving, multilingual by rows not columns.** One row per **(question × language)**, linked by `question_code`; English row required, other languages are extra rows — never extra columns:
 
-`question_code | language | subject | topic | difficulty | question | option_1 | option_2 | option_3 | option_4 | correct_option | marks | negative_marks | solution | tags`
+`question_code | language | subject | topic | sub_topic | difficulty | question | option_1 | option_2 | option_3 | option_4 | correct_option | marks | negative_marks | solution | tags`
 
 Choices that fix the pain:
 
 - **Correct answer by option index (1–4)**, converted to a **stable option ID** on ingest — so later shuffling or editing never breaks the key.
 - **Multilingual by rows** (not 32 option columns) → English default; Hindi/Telugu/any language just add rows, no schema change. Serves the multi-language goal directly.
 - **Equations** inline as `$…$` (KaTeX); **images** as `[[img:filename]]` placeholders resolved from an uploaded image **ZIP** → clean image-only and equation questions.
-- **Validated taxonomy** (subject/topic/difficulty from controlled lists, create-on-confirm) → no typo-driven rejections.
+- **Validated taxonomy** (subject/topic/sub-topic/difficulty from controlled lists, create-on-confirm) → no typo-driven rejections. A `sub_topic` is matched against existing rows first and, if new, attached to the row's topic — an unrecognised one is offered for confirmation, never quietly duplicated.
 - **Preview + row-level validation:** parse → preview grid with per-row errors → fix in place or download an error report → commit only valid rows. No silent mass rejection.
 - **Duplicate detection** via normalized-stem hash.
 - Two intake paths: this Excel/CSV importer for bulk text MCQs; the **rich manual editor** (image upload + equation) for image/equation-heavy questions. A Word parser is post-V1.
