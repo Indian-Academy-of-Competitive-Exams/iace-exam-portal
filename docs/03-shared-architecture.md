@@ -77,6 +77,7 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `imports` → `../auth/pin/pin.service` — reaching past auth's public surface; route through an auth facade method.
 - `me` → `students.service` + `auth.service` — inherent aggregator; keep in the core service, but consume via public facades.
 - `groups` → `../branches/branch-rules` — real domain dependency; route through a branches facade or a shared domain lib.
+- `auth` → `Admin` rows directly (`prisma.admin.findUnique`) for the login and `me` reads. The grant lookup already routes through `AdminsService.permissionsFor`, which is the pattern; the two identity reads predate the split and are the remaining seam.
 - `../auth/decorators` (`@Public`) is imported widely — acceptable as shared kernel; consider relocating the decorator to `common` so no module depends on the _auth module_ for a guard.
 
 ---
@@ -85,17 +86,17 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 
 Only the owning module writes these tables. `existing` = module built; `planned` = module to be created (tables currently live under a broader module until then).
 
-| Module          | Owns (Prisma models)                                         | State           |
-| --------------- | ------------------------------------------------------------ | --------------- |
-| auth / admin    | `Admin`, `Page`                                              | existing (auth) |
-| students        | `Student`, `StudentProfile`                                  | existing        |
-| groups          | `Group`                                                      | existing        |
-| branches        | `Branch`                                                     | existing        |
-| question-bank   | `Subject`, `Topic`, `SubTopic`, `Question`, `QuestionOption` | planned         |
-| configs         | `ExamType`, `BaseConfig`, `BaseConfigSection`                | planned         |
-| tests / builder | `Test`, `TestSection`, `PaperQuestion`, `TestSeries`         | planned         |
-| exam (engine)   | `Attempt`, `AttemptAnswer`                                   | planned         |
-| notifications   | `Notification`                                               | planned         |
+| Module          | Owns (Prisma models)                                         | State    |
+| --------------- | ------------------------------------------------------------ | -------- |
+| admins          | `Admin`, `Feature`, `FeaturePermission`                      | existing |
+| students        | `Student`, `StudentProfile`                                  | existing |
+| groups          | `Group`                                                      | existing |
+| branches        | `Branch`                                                     | existing |
+| question-bank   | `Subject`, `Topic`, `SubTopic`, `Question`, `QuestionOption` | planned  |
+| configs         | `ExamType`, `BaseConfig`, `BaseConfigSection`                | planned  |
+| tests / builder | `Test`, `TestSection`, `PaperQuestion`, `TestSeries`         | planned  |
+| exam (engine)   | `Attempt`, `AttemptAnswer`                                   | planned  |
+| notifications   | `Notification`                                               | planned  |
 
 Access link (`Group` ↔ `TestSeries`) is owned by the tests/access side. Auth
 sessions, OTP, and device binding live in **Redis**, never Postgres.
