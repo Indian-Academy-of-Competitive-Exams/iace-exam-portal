@@ -25,13 +25,17 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { useAuth } from '../providers/auth';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
+import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { useFilters } from '../lib/use-filters';
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
 export function GroupsPage() {
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [creating, setCreating] = useState(false);
 
   // In the URL, not in state: this is where the Branches page lands.
@@ -90,10 +94,14 @@ export function GroupsPage() {
         title="Groups"
         description="The unit that grants access: a student reaches a test through the group they are in."
         action={
-          <Button size="sm" onClick={() => setCreating((open) => !open)}>
-            <Plus aria-hidden />
-            New group
-          </Button>
+          // WRITE only. The endpoint enforces it either way; this is about not
+          // offering a control that would be refused.
+          canWrite ? (
+            <Button size="sm" onClick={() => setCreating((open) => !open)}>
+              <Plus aria-hidden />
+              New group
+            </Button>
+          ) : undefined
         }
       />
 

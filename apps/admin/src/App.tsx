@@ -10,6 +10,9 @@ import { GroupsPage } from './routes/groups';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ImportGroupMembersPage } from './routes/import-group-members';
+import { AdminsPage } from './routes/admins';
+import { FeaturesPage } from './routes/features';
+import { PermissionsPage } from './routes/permissions';
 import { ROUTES } from './lib/constants';
 
 /**
@@ -40,6 +43,12 @@ export function App() {
           <Route path={ROUTES.GROUPS} element={<GroupsPage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
           <Route path={ROUTES.IMPORT_GROUP_MEMBERS_PATTERN} element={<ImportGroupMembersPage />} />
+          {/* Super-admin screens. The route exists for everyone — the page
+              itself refuses, so a pasted URL gets a sentence rather than a
+              redirect that looks like a broken link. */}
+          <Route path={ROUTES.ADMINS} element={<AdminsPage />} />
+          <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
+          <Route path={ROUTES.PERMISSIONS} element={<PermissionsPage />} />
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />

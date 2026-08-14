@@ -3,9 +3,20 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, Loader2, Search, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
+  ChevronDown,
+  Loader2,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Upload,
+  UserPlus,
+  X,
+} from 'lucide-react';
+import {
+  FEATURE_KEYS,
   MOBILE_DIGITS,
+  PERMISSION_LEVELS,
   PAGE_SIZE_MAX,
   STUDENT_SORTS,
   todayISO,
@@ -42,6 +53,7 @@ import {
   TruncatedText,
   useTruncation,
   type DataTableColumn,
+  toast,
 } from '@iace/ui';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
@@ -49,6 +61,7 @@ import { ROUTES } from '../lib/constants';
 import { applyFieldErrors, useInfinitePages, useListQuery } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
+import { useAuth } from '../providers/auth';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
@@ -92,6 +105,8 @@ const STATUS_QUERY: Record<
 };
 
 export function StudentsPage() {
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [showAll, setShowAll] = useState(false);
 
   // Every filter lives in the URL, so a link into this screen — from a group,
@@ -205,19 +220,27 @@ export function StudentsPage() {
         title="Students"
         description="Everyone enrolled, however they got here — self-signup, added by hand, or imported."
         action={
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to={ROUTES.IMPORT_STUDENTS}>
-                <Upload aria-hidden />
-                Import
-              </Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to={`${ROUTES.STUDENTS}?new=1`}>
-                <UserPlus aria-hidden />
-                Add student
-              </Link>
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            <SyncStudentsButton />
+            {/* Write actions appear only with WRITE. Hiding is not the security
+                — the endpoints enforce it — it is not offering a control that
+                would be refused. */}
+            {canWrite ? (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={ROUTES.IMPORT_STUDENTS}>
+                    <Upload aria-hidden />
+                    Import
+                  </Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to={`${ROUTES.STUDENTS}?new=1`}>
+                    <UserPlus aria-hidden />
+                    Add student
+                  </Link>
+                </Button>
+              </>
+            ) : null}
           </div>
         }
       />
@@ -651,5 +674,43 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull students from the institute's main portal.
+ *
+ * Super admin only, and a no-op today: the endpoint, the types and this button
+ * are finished, and the service body is a stub. It reports what actually
+ * happened rather than claiming success, because a button that says "Synced"
+ * while doing nothing is worse than one that says it is not built yet.
+ */
+function SyncStudentsButton() {
+  const { identity: admin } = useAuth();
+
+  const sync = useMutation({
+    mutationFn: () => api.admin.sync.students(),
+    onSuccess: (result) => toast.info(result.message),
+  });
+
+  if (!admin?.isSuperAdmin) return null;
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={sync.isPending}
+      onClick={() => sync.mutate()}
+      title="Pull students from the main portal"
+    >
+      {sync.isPending ? (
+        <Loader2 className="animate-spin" aria-hidden />
+      ) : (
+        <RefreshCw aria-hidden />
+      )}
+      Sync from portal
+    </Button>
   );
 }
