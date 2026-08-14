@@ -26,12 +26,8 @@
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url \"$SHADOW_DATABASE_URL\" --exit-code",
     "db:studio": "prisma studio --schema prisma/schema.prisma",
-    "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
     "test:coverage": "node scripts/coverage.mjs",
     "prepare": "husky"
-  },
-  "prisma": {
-    "seed": "tsx --env-file-if-exists=.env prisma/seed.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.1",

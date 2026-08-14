@@ -33,9 +33,10 @@ corepack enable            # activates the pinned pnpm from package.json
 docker compose up -d       # postgres + redis + minio (+ one-shot bucket create)
 pnpm install
 pnpm db:migrate            # applies prisma/migrations
-pnpm db:seed               # creates the bootstrap super admin from .env
 pnpm dev                   # api + test + admin, together
 ```
+
+Then create the first super admin — see [Bootstrapping the first admin](#bootstrapping-the-first-admin).
 
 | What          | Where                        |
 | ------------- | ---------------------------- |
@@ -50,7 +51,30 @@ pnpm dev                   # api + test + admin, together
 OTP delivery is stubbed in development (`OTP_SENDER=console`): **the code is printed in the API log** and echoed into the login screen, so no SMS or email is sent.
 
 - **Student** (:5173) — _Create an account_ with any valid 10-digit Indian mobile → enter the code from the API log → choose a 4-digit PIN. That signs you in and creates the account. Every login after that is **mobile + PIN**; _Forgot PIN?_ runs the same OTP flow again. Five wrong PINs lock the number, and each repeat lockout lasts longer — 15 minutes, then an hour, then a day (`PIN_LOCKOUT_STEPS_SEC`). Signing in or resetting the PIN clears the ladder.
-- **Admin** (:5174) — the seeded `SEED_SUPER_ADMIN_EMAIL`, email + OTP every time. Admins cannot self-register.
+- **Admin** (:5174) — email + OTP every time. Admins cannot self-register, and **there is no code path anywhere in this repo that creates one** — the first row goes in by hand (below), and every admin after that is created by a super admin in the admin app.
+
+### Bootstrapping the first admin
+
+Admins cannot sign up, so an empty `Admin` table means nobody can reach the admin app. There is deliberately no seed script: a command that mints a super admin is a command that can be run against production by accident, and it tends to be run by CI, by a container entrypoint, and eventually by someone debugging. One SQL statement, run once, by a person who meant it:
+
+```sql
+INSERT INTO "Admin" (id, email, "fullName", "isSuperAdmin", "isActive", "createdAt", "updatedAt")
+VALUES (
+  gen_random_uuid()::text,   -- any unique string; the app generates cuids, this only has to be distinct
+  'you@iace.co.in',          -- lowercase: login looks the row up by exact match
+  'Super Admin',
+  true,
+  true,
+  now(),
+  now()
+);
+```
+
+Locally: `docker compose exec -T postgres psql -U postgres -d iace -c "<the statement above>"`.
+
+That account bypasses every feature check, so it can immediately register `Feature` rows and grant them. Everything after the first row is done in the UI.
+
+**Feature rows are not seeded either.** A super admin registers each one from the Features screen using a key from `FEATURE_KEYS` in `@iace/contracts`. A key with no row grants nobody anything, which is the safe direction to fail.
 
 ### The API response envelope
 
@@ -74,10 +98,10 @@ Controllers return plain data (or `{ items, page, pageSize, total }` for a list,
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
 
-| Job            | What it proves                                                                                                                   | Needs                              |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Verify**     | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                                          | nothing — no Postgres, Redis or S3 |
-| **Migrations** | every migration applies to an **empty** database, `prisma/migrations` still produces `schema.prisma`, and the seed is idempotent | a Postgres service container       |
+| Job            | What it proves                                                                                          | Needs                              |
+| -------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **Verify**     | `format:check` · `deps:check` · `lint` · `typecheck` · `test` · `build`                                 | nothing — no Postgres, Redis or S3 |
+| **Migrations** | every migration applies to an **empty** database and `prisma/migrations` still produces `schema.prisma` | a Postgres service container       |
 
 The split is the point: the test suite is deliberately infrastructure-free, so the job that gates every PR stays fast, and the one database that CI does start exists only to check the migrations — the one thing that genuinely cannot be verified without one.
 

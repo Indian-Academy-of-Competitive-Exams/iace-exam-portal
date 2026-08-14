@@ -5,8 +5,9 @@ import { REQUIRED_PAGE_KEY, type AuthenticatedUser } from '../../common/security
 
 /**
  * Page-level admin permissions. Each admin screen declares the `Page.code` it
- * needs; the super admin bypasses the check entirely, which is how the seeded
- * bootstrap account can reach everything before any grants exist.
+ * needs; the super admin bypasses the check entirely, which is how the
+ * hand-inserted bootstrap account (see the README) reaches everything before
+ * any grants exist.
  *
  * Codes are carried in the access token, so this costs nothing at request time;
  * a permission change takes effect on the next refresh (≤ the access TTL).

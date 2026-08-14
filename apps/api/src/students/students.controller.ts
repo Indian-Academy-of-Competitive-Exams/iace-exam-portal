@@ -23,8 +23,9 @@ import { StudentsService } from './students.service';
  *
  * `@Actors(ADMIN)` is the hard boundary — a student's token is a perfectly
  * valid JWT and must not reach here. `@RequiresPage` is the finer one; until
- * admin management exists there are no grants to hand out, and the seeded super
- * admin bypasses the check, so this is in place ready rather than idle.
+ * admin management exists there are no grants to hand out, and the bootstrap
+ * super admin inserted by hand (see the README) bypasses the check, so this is
+ * in place ready rather than idle.
  */
 @Controller('admin/students')
 @Actors(ActorTypes.ADMIN)

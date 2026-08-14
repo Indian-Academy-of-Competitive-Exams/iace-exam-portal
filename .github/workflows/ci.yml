@@ -134,12 +134,3 @@ jobs:
       # database" true rather than aspirational.
       - name: Check migrations still match the schema
         run: pnpm db:check
-
-      # The seed is the only way into the admin app, so a broken one is a broken
-      # environment. It is idempotent, so running it twice proves that too.
-      - name: Seed, twice (it must be idempotent)
-        env:
-          SEED_SUPER_ADMIN_EMAIL: ci@iace.co.in
-        run: |
-          pnpm db:seed
-          pnpm db:seed
