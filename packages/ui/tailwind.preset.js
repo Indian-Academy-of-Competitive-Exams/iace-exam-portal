@@ -6,7 +6,30 @@
    and classes like bg-primary / text-muted-foreground / border-border just work.
    ============================================================================ */
 
+const path = require('node:path');
 const plugin = require('tailwindcss/plugin');
+
+/**
+ * Which files Tailwind must READ to know a class is used.
+ *
+ * This lives in the preset, not in each app's config, because getting it wrong
+ * does not fail — it silently omits CSS. `AppShell` lives in
+ * `packages/app-kit/browser`, and while that directory went unscanned the
+ * entire signed-in chrome was styled by classes Tailwind never emitted:
+ * `max-w-6xl` (so the shell had no max width and content ran edge to edge),
+ * `py-8` (so there was no gap between the nav and the page), `sm:inline` (so
+ * the responsive rules never applied) and `z-10`. Nothing errored. The build
+ * was green and the pages were simply wrong, in a way that reads as a design
+ * problem rather than a config one.
+ *
+ * Resolved from __dirname so it is correct whatever directory the build runs
+ * in, and globbed by package rather than listed one by one so a new package
+ * with a component in it is covered the day it is created. Both `src` and
+ * `browser` are matched: app-kit splits its DOM-free tier from its web tier
+ * across exactly those two (docs/03 §3).
+ */
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const WORKSPACE_CONTENT = [path.join(REPO_ROOT, 'packages/*/{src,browser}/**/*.{ts,tsx}')];
 
 /**
  * Wraps a CSS-variable colour so BOTH call shapes work.
@@ -38,6 +61,8 @@ const token =
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Merged with each app's own `content`, so an app declares only itself.
+  content: WORKSPACE_CONTENT,
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {

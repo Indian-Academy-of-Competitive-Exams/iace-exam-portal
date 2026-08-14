@@ -9,11 +9,13 @@ import preset from '@iace/ui/tailwind.preset';
 /** @type {import('tailwindcss').Config} */
 export default {
   presets: [preset],
-  content: [
-    './index.html',
-    './src/**/*.{ts,tsx}',
-    // The design-system components ship as source, so Tailwind must scan them.
-    '../../packages/ui/src/**/*.{ts,tsx}',
-  ],
+  // Tailwind does NOT merge `content` across presets — whichever config
+  // defines it first wins outright, so a preset that declares content is
+  // silently ignored. Hence the spread: `preset.content` carries every shared
+  // package that ships components (@iace/ui, @iace/app-kit), and this file adds
+  // only what belongs to this app. Dropping the spread compiles, builds green,
+  // and quietly stops emitting the shell's classes — see the coverage test in
+  // packages/config.
+  content: [...preset.content, './index.html', './src/**/*.{ts,tsx}'],
   plugins: [animate],
 };
