@@ -10,10 +10,18 @@ import { paginationQuerySchema } from './envelope';
 // and every role system ends up with a "Manager (but not branches)" role that
 // exists for one person.
 //
-// The keys and levels live HERE because three places have to agree on them
-// exactly: the Prisma enum, the controllers that require them, and the admin
-// app that hides a section without them. A typo in any one of those is a screen
-// that silently never appears, which is the kind of bug nobody reports because
+// A FEATURE is just a key. There is no hierarchy — no categories, no
+// sub-features — so every feature is a peer of every other, and one an admin
+// registers at runtime is indistinguishable from STUDENT_MANAGEMENT to the
+// schema, the guard and the token. Several screens can share one key (Students,
+// Groups and Branches all sit on STUDENT_MANAGEMENT); a screen never splits
+// across two.
+//
+// The LEVEL vocabulary lives here because it is genuinely fixed and three
+// places must agree on it exactly: the Prisma enum, the guard, and the admin
+// app. The KEY vocabulary does not, because the set grows at runtime — what
+// lives here is only the subset code already references, and a typo in one of
+// THOSE is a screen that silently never appears, which nobody reports because
 // it looks like the feature was never built.
 // ============================================================================
 
@@ -34,14 +42,15 @@ export type PermissionLevel = (typeof PERMISSION_LEVELS)[keyof typeof PERMISSION
 export const permissionLevelSchema = z.enum(PERMISSION_LEVELS);
 
 /**
- * The keys the CODE knows about — the ones a controller can name in
- * `@RequiresFeature`. A new module adds a constant here.
+ * Features that already have a screen wired to them, named here so a controller
+ * can reference one without retyping the string.
  *
- * This is NOT the closed set of what may exist. A super admin registers
- * features by typing a key, and may add ones no controller checks yet; those
- * are perfectly valid rows that simply gate nothing until code references them.
- * So the constants below are a convenience for the code, and `featureKeySchema`
- * below is deliberately open.
+ * These are NOT a tier. Every feature is a peer: the key IS the feature, there
+ * are no categories and no sub-features, and one an admin registers today sits
+ * at exactly the same level as STUDENT_MANAGEMENT — same row, same two
+ * permission levels, same treatment by the guard. The only difference is
+ * whether code happens to reference it yet, which is a fact about what has been
+ * built, not about rank. Hence `featureKeySchema` below is open.
  *
  * Nothing is seeded. A key with no Feature row grants nobody anything, which is
  * the safe direction to fail. Groups and branches sit under STUDENT_MANAGEMENT
@@ -96,7 +105,8 @@ export const featureKeySchema = z
       .regex(FEATURE_KEY_PATTERN, 'Use capital letters, numbers and underscores'),
   );
 
-/** The keys the code references, for screens that want to suggest them. */
+/** The ones already wired to a screen — offered as autocomplete, not a list
+ *  of what is allowed. Anything canonical is allowed. */
 export const FEATURE_KEY_VALUES = Object.values(FEATURE_KEYS) as readonly FeatureKey[];
 
 /**

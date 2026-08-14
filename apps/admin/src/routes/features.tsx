@@ -43,10 +43,15 @@ const NEW_FEATURE_FIELDS = ['key', 'description'] as const;
  * rejected, so "student management" becomes STUDENT_MANAGEMENT and a key that
  * differs only in case or spacing is impossible instead of merely reported.
  *
+ * Every feature is a peer. There are no categories and no sub-features: the key
+ * IS the feature, and one registered today sits at exactly the same level as
+ * STUDENT_MANAGEMENT — same row shape, same two permission levels, same
+ * treatment by the guard.
+ *
  * Nothing is seeded. A key with no row here grants nobody anything, which is
- * the safe direction to fail. The keys the code already checks are offered as
- * suggestions, because those are the ones that gate something today — a key
- * outside that list is valid and simply gates nothing until a module uses it.
+ * the safe direction to fail. Some keys are already wired to a screen, which is
+ * a fact about what exists in the product today, not a tier — a key nothing is
+ * wired to yet is equally valid and simply gates nothing until a module uses it.
  */
 export function FeaturesPage() {
   const queryClient = useQueryClient();
@@ -63,8 +68,8 @@ export function FeaturesPage() {
   );
 
   const registered = features.data ?? [];
-  /** Code-known keys with no row yet — the ones that gate something today. */
-  const suggested = FEATURE_KEY_VALUES.filter(
+  /** Wired to a screen already, but with no row yet — so granting is impossible. */
+  const unregisteredWired = FEATURE_KEY_VALUES.filter(
     (key) => !registered.some((feature) => feature.key === key),
   );
 
@@ -112,19 +117,20 @@ export function FeaturesPage() {
         }
       />
 
-      {suggested.length > 0 && !features.isPending ? (
+      {unregisteredWired.length > 0 && !features.isPending ? (
         <Alert variant="info" className="mb-5">
           <span>
-            Not registered yet, and the code already checks {suggested.length === 1 ? 'it' : 'them'}
-            : <b>{suggested.join(', ')}</b>. Until registered, nobody can be granted{' '}
-            {suggested.length === 1 ? 'it' : 'them'}.
+            {unregisteredWired.length === 1 ? 'A screen is' : 'Screens are'} already wired to{' '}
+            <b>{unregisteredWired.join(', ')}</b>, but{' '}
+            {unregisteredWired.length === 1 ? 'it has' : 'they have'} no row yet — so nobody can be
+            granted {unregisteredWired.length === 1 ? 'it' : 'them'} until registered here.
           </span>
         </Alert>
       ) : null}
 
       {creating ? (
         <NewFeatureCard
-          suggested={suggested}
+          alreadyWired={unregisteredWired}
           onDone={() => {
             setCreating(false);
             refresh();
@@ -149,10 +155,10 @@ export function FeaturesPage() {
 // ---------------------------------------------------------------------------
 
 function NewFeatureCard({
-  suggested,
+  alreadyWired,
   onDone,
   onCancel,
-}: Readonly<{ suggested: readonly string[]; onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ alreadyWired: readonly string[]; onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateFeatureInput>({
     resolver: zodResolver(createFeatureSchema),
     defaultValues: { key: '', description: '' },
@@ -170,9 +176,9 @@ function NewFeatureCard({
       <CardHeader>
         <CardTitle>Register a feature</CardTitle>
         <CardDescription>
-          The key is the name. Typed in any case and normalised to SCREAMING_SNAKE_CASE, so one
-          sector can only ever be spelled one way. Both permission levels are created with it, so a
-          grant is never blocked by a missing row.
+          The key is the feature, and the key is its name. Typed in any case and normalised to
+          SCREAMING_SNAKE_CASE, so one feature can only ever be spelled one way. Both permission
+          levels are created with it, so a grant is never blocked by a missing row.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -182,7 +188,9 @@ function NewFeatureCard({
             name="key"
             label="Feature key"
             hint={
-              suggested.length > 0 ? `The code checks: ${suggested.join(', ')}` : 'e.g. REPORTING'
+              alreadyWired.length > 0
+                ? `Already wired to a screen: ${alreadyWired.join(', ')}`
+                : 'Anything you name — e.g. REPORTING'
             }
             className="min-w-64 flex-1"
           >
@@ -196,10 +204,10 @@ function NewFeatureCard({
               />
             )}
           </FormField>
-          {/* Suggestions, not a closed list: typing a key the code has never
-              heard of is allowed and is how a new sector starts. */}
+          {/* Autocomplete, not a closed list. A key nothing is wired to yet is
+              just as valid — that is how a new feature starts. */}
           <datalist id="feature-key-suggestions">
-            {suggested.map((key) => (
+            {alreadyWired.map((key) => (
               <option key={key} value={key} />
             ))}
           </datalist>
