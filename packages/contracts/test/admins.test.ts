@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   FEATURE_KEYS,
-  FEATURE_KEY_VALUES,
   PERMISSION_LEVELS,
   adminPermissionsSchema,
   createAdminSchema,
@@ -52,9 +51,9 @@ describe('shared vocabularies', () => {
     }
   });
 
-  it('exposes exactly the four initial sectors', () => {
+  it('names the sectors code already references', () => {
     assert.deepEqual(
-      [...FEATURE_KEY_VALUES].sort(),
+      Object.values(FEATURE_KEYS).sort(),
       [
         'BRANCH_TEST_MANAGEMENT',
         'QUESTION_MANAGEMENT',

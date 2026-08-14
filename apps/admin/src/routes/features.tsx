@@ -5,13 +5,11 @@ import { useForm } from 'react-hook-form';
 import { Loader2, Plus } from 'lucide-react';
 import {
   createFeatureSchema,
-  FEATURE_KEY_VALUES,
   PERMISSION_LEVELS,
   type CreateFeatureInput,
   type Feature,
 } from '@iace/contracts';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -49,9 +47,7 @@ const NEW_FEATURE_FIELDS = ['key', 'description'] as const;
  * treatment by the guard.
  *
  * Nothing is seeded. A key with no row here grants nobody anything, which is
- * the safe direction to fail. Some keys are already wired to a screen, which is
- * a fact about what exists in the product today, not a tier — a key nothing is
- * wired to yet is equally valid and simply gates nothing until a module uses it.
+ * the safe direction to fail.
  */
 export function FeaturesPage() {
   const queryClient = useQueryClient();
@@ -68,10 +64,6 @@ export function FeaturesPage() {
   );
 
   const registered = features.data ?? [];
-  /** Wired to a screen already, but with no row yet — so granting is impossible. */
-  const unregisteredWired = FEATURE_KEY_VALUES.filter(
-    (key) => !registered.some((feature) => feature.key === key),
-  );
 
   const columns = useMemo<DataTableColumn<Feature>[]>(
     () => [
@@ -117,20 +109,8 @@ export function FeaturesPage() {
         }
       />
 
-      {unregisteredWired.length > 0 && !features.isPending ? (
-        <Alert variant="info" className="mb-5">
-          <span>
-            {unregisteredWired.length === 1 ? 'A screen is' : 'Screens are'} already wired to{' '}
-            <b>{unregisteredWired.join(', ')}</b>, but{' '}
-            {unregisteredWired.length === 1 ? 'it has' : 'they have'} no row yet — so nobody can be
-            granted {unregisteredWired.length === 1 ? 'it' : 'them'} until registered here.
-          </span>
-        </Alert>
-      ) : null}
-
       {creating ? (
         <NewFeatureCard
-          alreadyWired={unregisteredWired}
           onDone={() => {
             setCreating(false);
             refresh();
@@ -155,10 +135,9 @@ export function FeaturesPage() {
 // ---------------------------------------------------------------------------
 
 function NewFeatureCard({
-  alreadyWired,
   onDone,
   onCancel,
-}: Readonly<{ alreadyWired: readonly string[]; onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateFeatureInput>({
     resolver: zodResolver(createFeatureSchema),
     defaultValues: { key: '', description: '' },
@@ -187,30 +166,18 @@ function NewFeatureCard({
             form={form}
             name="key"
             label="Feature key"
-            hint={
-              alreadyWired.length > 0
-                ? `Already wired to a screen: ${alreadyWired.join(', ')}`
-                : 'Anything you name — e.g. REPORTING'
-            }
+            hint="Anything you name — e.g. REPORTING"
             className="min-w-64 flex-1"
           >
             {(control) => (
               <Input
                 {...control}
-                list="feature-key-suggestions"
                 className="uppercase placeholder:normal-case"
                 placeholder="STUDENT_MANAGEMENT"
                 autoFocus
               />
             )}
           </FormField>
-          {/* Autocomplete, not a closed list. A key nothing is wired to yet is
-              just as valid — that is how a new feature starts. */}
-          <datalist id="feature-key-suggestions">
-            {alreadyWired.map((key) => (
-              <option key={key} value={key} />
-            ))}
-          </datalist>
 
           <FormField form={form} name="description" label="Description" className="min-w-64 flex-1">
             {(control) => <Input {...control} placeholder="What this covers" />}

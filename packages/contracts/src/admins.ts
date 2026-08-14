@@ -105,10 +105,6 @@ export const featureKeySchema = z
       .regex(FEATURE_KEY_PATTERN, 'Use capital letters, numbers and underscores'),
   );
 
-/** The ones already wired to a screen — offered as autocomplete, not a list
- *  of what is allowed. Anything canonical is allowed. */
-export const FEATURE_KEY_VALUES = Object.values(FEATURE_KEYS) as readonly FeatureKey[];
-
 /**
  * What an admin may do, by feature. Absent key = no access at all.
  *
