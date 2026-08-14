@@ -10,6 +10,14 @@ Shared build/lint config for the monorepo. Nothing here is app-specific.
 | `eslint.config.js`       | Node/library packages (flat config)                         |
 | `eslint.react.config.js` | the two SPAs (adds react-hooks + react-refresh)             |
 
+The last two are **governance** rather than style — they are the CI half of
+`docs/03`, which is only a document until something enforces it:
+
+| File                       | Enforces                                                                   |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `eslint.no-dom.js`         | §3 — `app-kit`/`contracts` `src` may not touch `window`/`document`/storage |
+| `eslint.api-boundaries.js` | §4 — `apps/api/src` modules reach a sibling only through its public entry  |
+
 Consume by extending, never by copying:
 
 ```jsonc

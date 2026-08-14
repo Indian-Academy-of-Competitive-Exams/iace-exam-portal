@@ -8,15 +8,24 @@
     "./tsconfig.node.json": "./tsconfig.node.json",
     "./tsconfig.react.json": "./tsconfig.react.json",
     "./eslint": "./eslint.config.js",
-    "./eslint-react": "./eslint.react.config.js"
+    "./eslint-react": "./eslint.react.config.js",
+    "./eslint-no-dom": "./eslint.no-dom.js",
+    "./eslint-api-boundaries": "./eslint.api-boundaries.js"
   },
   "files": [
     "tsconfig.base.json",
     "tsconfig.node.json",
     "tsconfig.react.json",
     "eslint.config.js",
-    "eslint.react.config.js"
+    "eslint.react.config.js",
+    "eslint.no-dom.js",
+    "eslint.api-boundaries.js",
+    "eslint-rules"
   ],
+  "scripts": {
+    "test": "node --test test/**/*.test.js",
+    "clean": "rm -rf .turbo"
+  },
   "dependencies": {
     "@eslint/js": "10.0.1",
     "eslint": "10.8.1",

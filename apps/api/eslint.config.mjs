@@ -1,7 +1,9 @@
 import config from '@iace/config/eslint';
+import boundaries from '@iace/config/eslint-api-boundaries';
 
 export default [
   ...config,
+  ...boundaries,
   {
     files: ['src/**/*.ts'],
     rules: {
