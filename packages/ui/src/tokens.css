@@ -1,17 +1,23 @@
 /* ============================================================================
-   IACE Design System — tokens
-   packages/ui/src/tokens.css
-   Import this ONCE at each app's entry (main.tsx). Everything else references
-   these variables (directly or through the Tailwind preset). Do not hardcode
-   colors/spacing/radii in components — extend this file instead.
-   Dark mode: set data-theme="dark" (or "light") on <html>.
-   ============================================================================ */
+   IACE DESIGN TOKENS — v0.3
+   packages/ui/tokens.css
+
+   v0.2 added the layers that were documented but never tokenised:
+     spacing · typography · motion · state · focus
+   v0.3 adds tokens for the components that were absent entirely:
+     timer · skeleton · toast · modal · tooltip · empty state
+   and completes the CBT palette (5th state + current-question ring).
+
+   Your v0.1 colour work is preserved except two corrections, marked FIX.
+   ========================================================================== */
 
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* ---- Brand red ramp (muted brick — primary) ---- */
+  /* ==========================================================================
+     1. PRIMITIVES — COLOUR RAMPS
+     ========================================================================== */
   --red-50: #fcf3f3;
   --red-100: #f7e4e4;
   --red-200: #efc8c8;
@@ -23,7 +29,6 @@
   --red-800: #842a2a;
   --red-900: #6e2727;
 
-  /* ---- Danger ramp (crimson — cooler/more urgent than brand) ---- */
   --crimson-50: #fff1f3;
   --crimson-100: #ffe4e9;
   --crimson-200: #fecdd6;
@@ -34,7 +39,6 @@
   --crimson-700: #be123c;
   --crimson-800: #9f1239;
 
-  /* ---- Neutral (slate) ramp ---- */
   --slate-50: #f8fafc;
   --slate-100: #f1f5f9;
   --slate-200: #e2e8f0;
@@ -47,33 +51,149 @@
   --slate-900: #0f172a;
   --slate-950: #020617;
 
-  /* ---- Semantic roles (code against these) ---- */
+  /* Amber ramp — NEW. The timer needs three distinct escalation steps and
+     v0.1 had only a single --warning value to work with. */
+  --amber-50: #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-800: #92400e;
+  --amber-900: #78350f;
+
+  /* Ember ramp — NEW. Deliberately orange, never red. Reserved exclusively
+     for time pressure so it can never be confused with brand or destructive. */
+  --ember-100: #ffedd5;
+  --ember-200: #fed7aa;
+  --ember-300: #fdba74;
+  --ember-400: #fb923c;
+  --ember-500: #f97316;
+  --ember-600: #ea580c;
+  --ember-700: #c2410c;
+  --ember-800: #9a3412;
+
+  /* ==========================================================================
+     2. TYPOGRAPHY
+     ========================================================================== */
+  /* FIX-1: bilingual stack. system-ui does not reliably cover Telugu; the
+     Indic faces sit AFTER the Latin ones so the browser resolves per-glyph. */
+  --font-sans:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Telugu',
+    'Noto Sans Devanagari', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem; /* 11 — dense meta, chart legends       */
+  --text-xs: 0.75rem; /* 12 — overlines, captions, badges     */
+  --text-sm: 0.8125rem; /* 13 — table cells, secondary          */
+  --text-base: 0.875rem; /* 14 — body default                    */
+  --text-md: 1rem; /* 16 — card titles, question stem      */
+  --text-lg: 1.125rem; /* 18 — subsection headings             */
+  --text-xl: 1.375rem; /* 22 — section headings, timer         */
+  --text-2xl: 1.75rem; /* 28 — page titles                     */
+  --text-3xl: 2.25rem; /* 36 — hero figures, KPI values        */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* FIX-2: line height was a flat 1.5. Headings tighter, table rows tighter
+     still, and long-form question passages LOOSER. */
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --leading-indic: 1.8; /* Telugu matras clip at 1.5 */
+
+  /* FIX-3: negative tracking was on all headings incl. 16px. Banded so it
+     can only be applied where it actually helps. */
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+
+  /* ==========================================================================
+     3. SPACING — 4px base, no off-grid values
+     ========================================================================== */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2: 0.5rem;
+  --space-2-5: 0.625rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Semantic spacing — use THESE in components, not the raw scale. */
+  --gap-inline: var(--space-2);
+  --gap-stack: var(--space-3);
+  --gap-group: var(--space-4);
+  --pad-card: var(--space-5);
+  --pad-card-compact: var(--space-4);
+  --pad-cell-x: var(--space-3);
+  --pad-cell-y: var(--space-2-5);
+  --gap-section: var(--space-10);
+
+  /* ==========================================================================
+     4. CONTROL SIZING
+     ========================================================================== */
+  --control-h-sm: 2rem; /* 32 */
+  --control-h-md: 2.25rem; /* 36 */
+  --control-h-lg: 2.75rem; /* 44 — iOS/Android touch-target floor */
+  --control-px-sm: var(--space-3);
+  --control-px-md: var(--space-4);
+  --control-px-lg: var(--space-5);
+  --row-h-comfortable: 3rem;
+  --row-h-compact: 2.5rem;
+
+  /* ==========================================================================
+     5. SEMANTIC COLOUR ROLES
+     ========================================================================== */
   --background: #f6f7f9;
   --surface: #ffffff;
   --surface-2: #f8fafc;
-  --foreground: #0b0b0c;
+  --surface-hover: #f1f5f9;
+  --surface-active: #e2e8f0;
+
+  /* FIX-4: --foreground was #0B0B0C (neutral black) while every other neutral
+     is blue-tinted slate. Two blacks in one palette reads subtly off. */
+  --foreground: var(--slate-950);
+  --foreground-secondary: var(--slate-700);
+
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --border: #e2e8f0;
+  --border-strong: #cbd5e1;
   --input: #e2e8f0;
-  /* Focus is BLUE, not brand red — a deliberate departure from the first draft
-     of this system. With the brand red and the crimson `--destructive` sitting
-     a few degrees apart, a red focus ring made a field that was merely selected
-     look exactly like a field that was wrong, and the primary button made three
-     reds on one small card. Blue leaves red to mean two things only: "this is
-     IACE" and "this is broken". (The chart palette is blue-led for the same
-     reason.) Revert by setting this to #b83939. */
   --ring: #2563eb;
 
   --primary: #b83939;
   --primary-hover: #9e3030;
+  --primary-active: #842a2a;
   --primary-foreground: #ffffff;
+  --primary-subtle: #f7e4e4;
+  --primary-ink: #9e3030;
+
   --secondary: #f1f5f9;
   --secondary-hover: #e2e8f0;
-  --secondary-foreground: #0f172a; /* Cancel */
+  --secondary-active: #cbd5e1;
+  --secondary-foreground: #0f172a;
+
   --destructive: #be123c;
   --destructive-hover: #9f1239;
+  --destructive-active: #881337;
   --destructive-foreground: #ffffff;
+
   --success: #15803d;
   --success-foreground: #ffffff;
   --success-subtle: #dcfce7;
@@ -87,7 +207,14 @@
   --info-subtle: #dbeafe;
   --info-ink: #1e40af;
 
-  /* ---- Chart surface + validated categorical series (colorblind-safe) ---- */
+  /* Disabled — v0.1's opacity:.5 dragged label text to ~2.3:1 (fails WCAG). */
+  --disabled-bg: var(--slate-100);
+  --disabled-fg: var(--slate-400);
+  --disabled-border: var(--slate-200);
+
+  /* ==========================================================================
+     6. CHARTS
+     ========================================================================== */
   --chart-surface: #fcfcfb;
   --chart-grid: #e1e0d9;
   --chart-axis: #c3c2b7;
@@ -101,56 +228,196 @@
   --series-7: #4a3aa7;
   --series-8: #e34948;
 
-  /* ---- Exam CBT palette (faithful to the real exam — fixed convention) ---- */
+  /* ==========================================================================
+     7. EXAM CBT — completed to the real 5-state convention
+     ========================================================================== */
   --exam-answered: #16a34a;
+  --exam-answered-ink: #ffffff;
   --exam-notanswered: #c1272d;
+  --exam-notanswered-ink: #ffffff;
   --exam-notvisited: #e2e8f0;
+  --exam-notvisited-ink: #0f172a;
   --exam-marked: #7c3aed;
   --exam-marked-ink: #ffffff;
+  /* 5th state: marked for review AND answered — purple body, green tick.
+     Candidates rely on this to triage their final minutes. */
+  --exam-answered-marked: #7c3aed;
+  --exam-answered-marked-tick: #22c55e;
+  /* Ring on the question currently open. Blue: positional only, never a
+     status — it must not read as answered, marked, or wrong. */
+  --exam-current: #1d4ed8;
+  --exam-cell-size: 2.125rem; /* 34 */
+  --exam-cell-gap: var(--space-2);
 
-  /* ---- Focus + invalid glows ----
-     The style guide's focus treatment is a SOFT 3px glow plus a border tint,
-     not a hard offset ring. That distinction carries real weight here: the
-     brand is red and `--destructive` is a near neighbour of it, so a hard red
-     outline on a focused field is indistinguishable from an error. The glow
-     reads as "you are here"; the crimson one reads as "this is wrong". */
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);
-  --focus-ring-invalid: 0 0 0 3px color-mix(in srgb, var(--destructive) 22%, transparent);
+  /* ==========================================================================
+     8. TIMER  [NEW]
+     Escalates by FORM (outlined → tinted → filled), not by hue. Red is
+     deliberately unused: it already means brand and destructive, and a third
+     meaning on the highest-attention element would collapse all three.
+     A filled block replacing an outlined one is also a stronger peripheral
+     signal than a hue shift, and it survives colourblindness.
+     ========================================================================== */
+  --timer-font-size: var(--text-xl);
+  --timer-min-w: 7.5rem; /* holds 00:00:00 without reflow */
+  --timer-pad-x: var(--space-4);
+  --timer-h: var(--control-h-lg);
 
-  /* ---- Elevation ---- */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --timer-normal-bg: var(--surface-2);
+  --timer-normal-ink: var(--slate-800);
+  --timer-normal-border: var(--border-strong);
 
-  /* ---- Radii ---- */
+  --timer-warn-bg: var(--amber-100); /* ≤ 5 min — tinted */
+  --timer-warn-ink: var(--amber-800);
+  --timer-warn-border: var(--amber-300);
+
+  --timer-critical-bg: var(--ember-700); /* ≤ 1 min — filled */
+  --timer-critical-ink: #ffffff;
+  --timer-critical-border: var(--ember-700);
+
+  /* ==========================================================================
+     9. SKELETON  [NEW]
+     ========================================================================== */
+  --skeleton-base: var(--slate-200);
+  --skeleton-shine: rgba(255, 255, 255, 0.65);
+  --skeleton-radius: var(--radius-md);
+  --skeleton-dur: 1.4s;
+
+  /* ==========================================================================
+     10. OVERLAY · MODAL · TOAST · TOOLTIP  [NEW]
+     ========================================================================== */
+  --overlay-bg: rgba(2, 6, 23, 0.55);
+
+  --modal-w-sm: 25rem; /* 400 */
+  --modal-w-md: 32.5rem; /* 520 */
+  --modal-w-lg: 45rem; /* 720 */
+  --modal-radius: var(--radius-2xl);
+  --modal-pad: var(--space-6);
+
+  --toast-w: 23.75rem; /* 380 */
+  --toast-gap: var(--space-3);
+  --toast-inset: var(--space-6);
+  --toast-pad: var(--space-4);
+  --toast-radius: var(--radius-lg);
+
+  --tooltip-bg: var(--slate-900);
+  --tooltip-ink: #ffffff;
+  --tooltip-radius: var(--radius-md);
+
+  /* ==========================================================================
+     11. EMPTY STATE  [NEW]
+     ========================================================================== */
+  --empty-icon: var(--slate-300);
+  --empty-icon-bg: var(--slate-100);
+  --empty-max-w: 24rem; /* measure cap so copy never runs wide */
+  --empty-pad: var(--space-12) var(--space-6);
+
+  /* ==========================================================================
+     12. ELEVATION — two-layer (tight key + soft ambient).
+     Use border OR shadow per surface, not both.
+     ========================================================================== */
+  --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 8px -2px rgba(15, 23, 42, 0.08), 0 2px 3px -1px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 24px -6px rgba(15, 23, 42, 0.12), 0 4px 8px -3px rgba(15, 23, 42, 0.07);
+  --shadow-overlay:
+    0 24px 48px -12px rgba(15, 23, 42, 0.22), 0 8px 16px -8px rgba(15, 23, 42, 0.12);
+
+  /* ==========================================================================
+     13. RADII
+     ========================================================================== */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-2xl: 16px;
+  --radius-full: 999px;
+
+  /* ==========================================================================
+     14. MOTION — always name properties; `transition:.12s` animates layout too
+     ========================================================================== */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-normal: 220ms;
+  --dur-slow: 340ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --transition-colors:
+    background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+
+  /* ==========================================================================
+     15. FOCUS
+     ========================================================================== */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--ring);
+  --focus-ring:
+    0 0 0 var(--focus-ring-offset) var(--surface),
+    0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color);
+
+  /* Compat: aria-invalid ring. Kept from v0.1 — the Tailwind preset
+     (boxShadow.focus-invalid) and the input component reference it. Same
+     geometry as --focus-ring with the destructive colour; theme-aware through
+     the tokens it references, so one definition serves light and dark. */
+  --focus-ring-invalid:
+    0 0 0 var(--focus-ring-offset) var(--surface),
+    0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--destructive);
+
+  /* ==========================================================================
+     16. Z-INDEX — the CBT screen stacks header, footer, palette drawer,
+     submit dialog and toasts. Without a scale these become magic numbers.
+     ========================================================================== */
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-drawer: 30;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
 }
 
+/* ============================================================================
+   DARK THEME
+   ========================================================================== */
 :root[data-theme='dark'] {
   color-scheme: dark;
+
   --background: #0a0c10;
   --surface: #13161c;
   --surface-2: #181c23;
+  --surface-hover: #1b212a;
+  --surface-active: #232935;
+
   --foreground: #f8fafc;
+  --foreground-secondary: #cbd5e1;
   --muted: #1b212a;
   --muted-foreground: #94a3b8;
   --border: #262c35;
+  --border-strong: #343b47;
   --input: #262c35;
   --ring: #60a5fa;
 
-  --primary: #b83939;
-  --primary-hover: #c25454;
+  /* Brand lifted one ramp step: #B83939 on #13161C is dark-on-dark and reads
+     muddy as a filled shape, even though its label contrast is fine. */
+  --primary: #c25454;
+  --primary-hover: #d07777;
+  --primary-active: #e2a3a3;
   --primary-foreground: #ffffff;
+  --primary-subtle: #2a1616;
+  --primary-ink: #e2a3a3;
+
   --secondary: #1e242c;
   --secondary-hover: #262c35;
+  --secondary-active: #343b47;
   --secondary-foreground: #e2e8f0;
-  --destructive: #be123c;
-  --destructive-hover: #e11d48;
+
+  --destructive: #e11d48;
+  --destructive-hover: #f43f5e;
+  --destructive-active: #fb7189;
   --destructive-foreground: #ffffff;
+
   --success: #16a34a;
   --success-foreground: #04140a;
   --success-subtle: #0c2a17;
@@ -163,6 +430,10 @@
   --info-foreground: #04122b;
   --info-subtle: #0e2247;
   --info-ink: #93c5fd;
+
+  --disabled-bg: #1b212a;
+  --disabled-fg: #5a6474;
+  --disabled-border: #262c35;
 
   --chart-surface: #1a1a19;
   --chart-grid: #2c2c2a;
@@ -178,15 +449,69 @@
   --series-8: #e66767;
 
   --exam-answered: #22c55e;
+  --exam-answered-ink: #04140a;
   --exam-notanswered: #ef4444;
+  --exam-notanswered-ink: #ffffff;
   --exam-notvisited: #334155;
+  --exam-notvisited-ink: #e2e8f0;
   --exam-marked: #8b5cf6;
   --exam-marked-ink: #ffffff;
+  --exam-answered-marked: #8b5cf6;
+  --exam-answered-marked-tick: #4ade80;
+  --exam-current: #60a5fa;
 
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 30%, transparent);
-  --focus-ring-invalid: 0 0 0 3px color-mix(in srgb, var(--destructive) 32%, transparent);
+  --timer-normal-bg: #181c23;
+  --timer-normal-ink: #f8fafc;
+  --timer-normal-border: #343b47;
+  --timer-warn-bg: #3a2a08;
+  --timer-warn-ink: #fbbf24;
+  --timer-warn-border: #78350f;
+  --timer-critical-bg: #ea580c;
+  --timer-critical-ink: #ffffff;
+  --timer-critical-border: #ea580c;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --skeleton-base: #1e242c;
+  --skeleton-shine: rgba(255, 255, 255, 0.07);
+
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --tooltip-bg: #e2e8f0;
+  --tooltip-ink: #0f172a;
+  --empty-icon: #343b47;
+  --empty-icon-bg: #1b212a;
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.5), 0 2px 3px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 24px -6px rgba(0, 0, 0, 0.6), 0 4px 8px -3px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 8px 16px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   GLOBAL FLOOR — must be true on every screen
+   ========================================================================== */
+
+/* Keyboard focus, everywhere, defined once. :focus-visible means mouse users
+   never see it and keyboard users always do. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-md);
+}
+
+/* Not optional — a candidate with vestibular sensitivity should not be
+   fighting your transitions during a timed exam. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Tag the element (lang="te") rather than branching in JS. */
+:lang(te) {
+  line-height: var(--leading-indic);
 }

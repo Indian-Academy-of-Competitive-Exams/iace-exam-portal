@@ -1,0 +1,606 @@
+/* ============================================================================
+   IACE COMPONENTS — the pieces missing from v0.1
+   packages/ui/components.css   ·   requires tokens.css v0.3
+
+   timer · skeleton · empty state · toast · modal · pagination · tooltip
+   · completed CBT question palette
+
+   Every value here is a token reference. If you find yourself writing a raw
+   px or hex below this line, the token layer is missing something — add it
+   to tokens.css rather than hardcoding here.
+   ========================================================================== */
+
+/* ============================================================================
+   1. TIMER
+   The highest-stakes single component in the product.
+
+   Escalation is by FORM, not hue:
+     normal   outlined, neutral
+     warning  tinted amber          (≤ 5:00)
+     critical filled ember + pulse  (≤ 1:00)
+
+   Three non-negotiables baked in:
+     · tabular-nums + fixed min-width — the clock must never reflow the header
+     · aria-live="off" on the ticking value, or every second is announced
+     · the pulse is decorative only; state is also carried by colour AND text
+   ========================================================================== */
+.timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  height: var(--timer-h);
+  min-width: var(--timer-min-w);
+  padding-inline: var(--timer-pad-x);
+  justify-content: center;
+
+  font-family: var(--font-sans);
+  font-size: var(--timer-font-size);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-normal);
+  line-height: 1;
+
+  background: var(--timer-normal-bg);
+  color: var(--timer-normal-ink);
+  border: 1px solid var(--timer-normal-border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition-colors);
+}
+.timer__icon {
+  width: 1.125em;
+  height: 1.125em;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+.timer__label {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  opacity: 0.7;
+}
+
+.timer--warning {
+  background: var(--timer-warn-bg);
+  color: var(--timer-warn-ink);
+  border-color: var(--timer-warn-border);
+}
+.timer--critical {
+  background: var(--timer-critical-bg);
+  color: var(--timer-critical-ink);
+  border-color: var(--timer-critical-border);
+  font-weight: var(--weight-bold);
+  animation: timer-pulse 2s var(--ease-in-out) infinite;
+}
+/* Opacity only — never scale/translate. A clock that moves is a clock that
+   is harder to read, and this is the one element that must stay readable. */
+@keyframes timer-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ember-500) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--ember-500) 0%, transparent);
+  }
+}
+
+/* Compact variant for the React Native / mobile web exam header */
+.timer--sm {
+  height: var(--control-h-md);
+  min-width: 5.5rem;
+  font-size: var(--text-md);
+  padding-inline: var(--space-3);
+}
+
+/* ============================================================================
+   2. SKELETON
+   Use for anything that takes >300ms. Below that a skeleton flashes and
+   reads as jank; show nothing instead.
+   Match the skeleton's shape to the real content — a skeleton that is the
+   wrong size causes a layout jump on resolve, which is worse than a spinner.
+   ========================================================================== */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton-base);
+  border-radius: var(--skeleton-radius);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  animation: skeleton-sweep var(--skeleton-dur) var(--ease-in-out) infinite;
+}
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Reduced motion: keep the placeholder, drop the sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+.skeleton--text {
+  height: 1em;
+  border-radius: var(--radius-sm);
+}
+.skeleton--title {
+  height: 1.5em;
+  width: 40%;
+  border-radius: var(--radius-sm);
+}
+.skeleton--circle {
+  border-radius: var(--radius-full);
+}
+.skeleton--kpi {
+  height: 7.5rem;
+  border-radius: var(--radius-xl);
+}
+.skeleton--row {
+  height: var(--row-h-comfortable);
+  border-radius: var(--radius-sm);
+}
+
+/* Last line of a paragraph is always short — a full-width final line is the
+   tell that gives away a fake skeleton. */
+.skeleton-paragraph {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.skeleton-paragraph .skeleton--text:last-child {
+  width: 62%;
+}
+
+/* ============================================================================
+   3. EMPTY STATE
+   An empty screen is an invitation to act. Every empty state needs exactly
+   three things: what is missing, why, and the one action that fixes it.
+   Never ship an empty state without a primary action.
+   ========================================================================== */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--empty-pad);
+  max-width: var(--empty-max-w);
+  margin-inline: auto;
+}
+.empty__icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: var(--space-4);
+  color: var(--empty-icon);
+  background: var(--empty-icon-bg);
+  border-radius: var(--radius-full);
+}
+.empty__icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.empty__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-normal);
+  margin-bottom: var(--space-2);
+}
+.empty__body {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-5);
+}
+.empty__actions {
+  display: flex;
+  gap: var(--gap-inline);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Error state reuses the frame. Errors explain what happened and how to fix
+   it — they do not apologise and they are never vague. */
+.empty--error .empty__icon {
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+/* ============================================================================
+   4. TOAST
+   Bottom-right on desktop, top on mobile (thumb reach + it must not sit under
+   the CBT sticky footer). Success auto-dismisses; errors never do.
+   ========================================================================== */
+.toast-viewport {
+  position: fixed;
+  bottom: var(--toast-inset);
+  right: var(--toast-inset);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--toast-gap);
+  width: var(--toast-w);
+  max-width: calc(100vw - (var(--space-4) * 2));
+  pointer-events: none;
+}
+.toast-viewport > * {
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  .toast-viewport {
+    top: var(--space-4);
+    bottom: auto;
+    left: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+  }
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--toast-pad);
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--toast-radius);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  animation: toast-in var(--dur-normal) var(--ease-out);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast__icon {
+  width: 1.0625rem;
+  height: 1.0625rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+}
+.toast__body {
+  flex: 1;
+  min-width: 0;
+}
+.toast__title {
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-0-5);
+}
+.toast__desc {
+  color: var(--muted-foreground);
+}
+.toast__close {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-colors);
+}
+.toast__close:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.toast--success {
+  border-left-color: var(--success);
+}
+.toast--success .toast__icon {
+  color: var(--success);
+}
+.toast--warning {
+  border-left-color: var(--warning);
+}
+.toast--warning .toast__icon {
+  color: var(--warning-ink);
+}
+.toast--error {
+  border-left-color: var(--destructive);
+}
+.toast--error .toast__icon {
+  color: var(--destructive);
+}
+.toast--info {
+  border-left-color: var(--info);
+}
+.toast--info .toast__icon {
+  color: var(--info);
+}
+
+/* ============================================================================
+   5. MODAL / DIALOG
+   Pair with a real <dialog> or a focus-trapping library — the CSS below does
+   not trap focus, and an untrapped modal is worse than no modal.
+   ========================================================================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--overlay-bg);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  animation: overlay-in var(--dur-fast) var(--ease-out);
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  position: relative;
+  z-index: var(--z-modal);
+  width: 100%;
+  max-width: var(--modal-w-md);
+  max-height: calc(100vh - var(--space-16));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--modal-radius);
+  box-shadow: var(--shadow-overlay);
+  animation: modal-in var(--dur-normal) var(--ease-spring);
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.modal--sm {
+  max-width: var(--modal-w-sm);
+}
+.modal--lg {
+  max-width: var(--modal-w-lg);
+}
+
+.modal__header {
+  padding: var(--modal-pad) var(--modal-pad) var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.modal__title {
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-normal);
+}
+.modal__body {
+  padding: 0 var(--modal-pad);
+  overflow-y: auto;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--foreground-secondary);
+}
+.modal__footer {
+  padding: var(--space-5) var(--modal-pad) var(--modal-pad);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap-inline);
+}
+/* Destructive confirmation: icon + crimson, per the v0.1 red decision.
+   Never make the destructive action the default-focused button. */
+.modal__icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+}
+.modal--destructive .modal__icon {
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+/* ============================================================================
+   6. PAGINATION
+   Tabular-nums so page numbers don't jitter between 9 and 10.
+   ========================================================================== */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+.pagination__info {
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+  margin-right: var(--space-3);
+}
+.page-btn {
+  min-width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding-inline: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+.page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.page-btn:active:not(:disabled) {
+  background: var(--surface-active);
+}
+.page-btn[aria-current='page'] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+.page-btn:disabled {
+  color: var(--disabled-fg);
+  cursor: not-allowed;
+}
+.page-ellipsis {
+  min-width: var(--control-h-sm);
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   7. TOOLTIP
+   Never put essential information in a tooltip — it does not exist on touch.
+   ========================================================================== */
+.tooltip {
+  position: absolute;
+  z-index: var(--z-tooltip);
+  padding: var(--space-2) var(--space-3);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  border-radius: var(--tooltip-radius);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  box-shadow: var(--shadow-md);
+  max-width: 16rem;
+  pointer-events: none;
+  animation: tooltip-in var(--dur-instant) var(--ease-out);
+}
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================================================================
+   8. CBT QUESTION PALETTE — all five states + current-question ring
+   Shape carries meaning alongside colour, so the palette stays readable for
+   colourblind candidates: square = answered, pentagon = not answered,
+   rounded = not visited, circle = marked.
+   ========================================================================== */
+.qpalette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--exam-cell-size));
+  gap: var(--exam-cell-gap);
+}
+.qcell {
+  position: relative;
+  width: var(--exam-cell-size);
+  height: var(--exam-cell-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+.qcell--answered {
+  background: var(--exam-answered);
+  color: var(--exam-answered-ink);
+}
+.qcell--notanswered {
+  background: var(--exam-notanswered);
+  color: var(--exam-notanswered-ink);
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
+}
+.qcell--notvisited {
+  background: var(--exam-notvisited);
+  color: var(--exam-notvisited-ink);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.qcell--marked {
+  background: var(--exam-marked);
+  color: var(--exam-marked-ink);
+  border-radius: var(--radius-full);
+}
+/* 5th state — marked for review AND answered */
+.qcell--answered-marked {
+  background: var(--exam-answered-marked);
+  color: var(--exam-marked-ink);
+  border-radius: var(--radius-full);
+}
+.qcell--answered-marked::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 0.625rem;
+  height: 0.625rem;
+  background: var(--exam-answered-marked-tick);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+/* Positional only — stacks on top of any status above */
+.qcell--current {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--exam-current);
+}
+.qcell:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--focus-ring-color);
+}
+
+.qlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--foreground-secondary);
+}
+.qlegend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.qlegend__swatch {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}

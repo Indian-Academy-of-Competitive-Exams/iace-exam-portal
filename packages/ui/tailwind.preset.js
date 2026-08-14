@@ -150,7 +150,9 @@ module.exports = {
         'toast-in': 'toast-in 160ms ease-out',
       },
       fontFamily: {
-        sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Single source of truth: the bilingual Inter + Noto stack lives in
+        // tokens.css (--font-sans). Keeping it here too would drift.
+        sans: ['var(--font-sans)'],
       },
       fontVariantNumeric: {
         tabular: 'tabular-nums',

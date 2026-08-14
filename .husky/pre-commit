@@ -1,3 +1,8 @@
 # Format, lint and typecheck what is about to be committed (docs/03 §11).
 # See lint-staged.config.mjs for why lint and typecheck are workspace-wide.
+#!/bin/sh
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
 pnpm exec lint-staged

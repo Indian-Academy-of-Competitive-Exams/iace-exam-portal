@@ -1,3 +1,8 @@
 # Conventional commits. The history is a changelog and a bisect target, and
 # both stop working the moment the subject line stops saying what changed.
+
+#!/bin/sh
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 pnpm exec commitlint --edit "$1"

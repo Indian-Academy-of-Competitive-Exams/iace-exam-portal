@@ -1,6 +1,7 @@
 // Design tokens first: every colour, radius and shadow in the app resolves
 // against these CSS variables. Static imports, so the bundler can see them.
 import '@iace/ui/tokens.css';
+import '@iace/ui/components.css';
 import './index.css';
 
 import { toast } from '@iace/ui';
