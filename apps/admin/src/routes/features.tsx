@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Loader2, Plus } from 'lucide-react';
 import {
   createFeatureSchema,
+  featureKeyDraft,
   PERMISSION_LEVELS,
   type CreateFeatureInput,
   type Feature,
@@ -166,15 +167,26 @@ function NewFeatureCard({
             form={form}
             name="key"
             label="Feature key"
-            hint="Anything you name — e.g. REPORTING"
+            hint="Capitals and underscores — spaces become underscores as you type"
             className="min-w-64 flex-1"
           >
             {(control) => (
               <Input
                 {...control}
-                className="uppercase placeholder:normal-case"
+                className="font-mono"
                 placeholder="STUDENT_MANAGEMENT"
                 autoFocus
+                onChange={(event) => {
+                  // Normalise in the field itself, not just on submit, so the
+                  // super admin reads the key they are actually creating rather
+                  // than discovering after the fact that their spaces became
+                  // underscores. Same rewrite-before-the-handler pattern as
+                  // NumericInput, so react-hook-form and zod only ever see the
+                  // normalised value.
+                  const drafted = featureKeyDraft(event.currentTarget.value);
+                  if (event.currentTarget.value !== drafted) event.currentTarget.value = drafted;
+                  return control.onChange(event);
+                }}
               />
             )}
           </FormField>

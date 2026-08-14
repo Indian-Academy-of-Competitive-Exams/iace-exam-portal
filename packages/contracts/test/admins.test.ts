@@ -9,6 +9,7 @@ import {
   featureKeySchema,
   permissionLevelSchema,
   canonicalFeatureKey,
+  featureKeyDraft,
   satisfiesLevel,
   ADMIN_FEATURE_ROUTES,
 } from '../src/admins';
@@ -75,6 +76,29 @@ describe('shared vocabularies', () => {
     assert.equal(featureKeySchema.parse('student management'), 'STUDENT_MANAGEMENT');
     assert.equal(featureKeySchema.parse('  Question-Management '), 'QUESTION_MANAGEMENT');
     assert.equal(canonicalFeatureKey('a b  c'), 'A_B_C');
+  });
+
+  it('normalises live, so a multi-word key can actually be typed', () => {
+    // The reason featureKeyDraft exists. canonicalFeatureKey strips the
+    // trailing underscore, so applying IT on each keystroke would eat the
+    // separator the moment it appeared and "student management" would arrive as
+    // STUDENTMANAGEMENT — with no way to get an underscore in at all.
+    let field = '';
+    for (const character of 'student management') field = featureKeyDraft(field + character);
+
+    assert.equal(field, 'STUDENT_MANAGEMENT');
+    assert.equal(featureKeySchema.parse(field), 'STUDENT_MANAGEMENT');
+  });
+
+  it('keeps a trailing separator while typing but not once submitted', () => {
+    assert.equal(featureKeyDraft('student '), 'STUDENT_');
+    assert.equal(canonicalFeatureKey('student '), 'STUDENT');
+    assert.equal(featureKeySchema.parse('student '), 'STUDENT');
+  });
+
+  it('drops leading separators even mid-type, so a key never starts with _', () => {
+    assert.equal(featureKeyDraft('  lead'), 'LEAD');
+    assert.equal(featureKeyDraft('__x'), 'X');
   });
 
   it('still refuses a key that normalises to nothing usable', () => {

@@ -94,6 +94,27 @@ export function canonicalFeatureKey(value: string): string {
     .replace(/^_+|_+$/g, '');
 }
 
+/**
+ * The same normalisation, applied WHILE the key is being typed.
+ *
+ * Differs from `canonicalFeatureKey` in exactly one way: a trailing underscore
+ * survives. That single difference is what makes a multi-word key typeable —
+ * the space between "student" and "management" becomes the separator, and
+ * stripping it on every keystroke means the next letter lands as STUDENTM and
+ * the reader can never get an underscore in at all.
+ *
+ * It also does not trim, for the same reason: a trailing space IS the
+ * separator being typed. The submitted value still goes through
+ * `canonicalFeatureKey` in the schema, which tidies the trailing underscore
+ * away — so the draft can be permissive without the stored key ever being.
+ */
+export function featureKeyDraft(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+/, '');
+}
+
 export const featureKeySchema = z
   .string()
   .transform(canonicalFeatureKey)
