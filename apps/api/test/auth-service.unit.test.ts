@@ -10,7 +10,7 @@ import { TokenService } from '../src/auth/token.service';
 import {
   FakeConfig,
   FakeEventBus,
-  FakeOtpSender,
+  FakeMessageSender,
   FakePrisma,
   FakeRedis,
   NO_DEVICE,
@@ -30,7 +30,7 @@ const MOBILE = '9876543210';
 function build(students: FakeStudent[] = [], admins: FakeAdmin[] = []) {
   const redis = new FakeRedis();
   const config = new FakeConfig();
-  const sender = new FakeOtpSender();
+  const sender = new FakeMessageSender();
   const prisma = new FakePrisma(students, admins);
 
   const otp = new OtpService(redis.asService(), config.asService(), sender);

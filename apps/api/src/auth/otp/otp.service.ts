@@ -1,12 +1,24 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
-import { AppException, ErrorCodes, type ActorType, type OtpRequestResponse } from '@iace/contracts';
+import {
+  ActorTypes,
+  AppException,
+  ErrorCodes,
+  type ActorType,
+  type OtpRequestResponse,
+} from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
 import { OTP_SENDERS } from '../../config/env.schema';
 import { RedisService } from '../../redis/redis.service';
 import { redisKeys } from '../../redis/redis.keys';
+import {
+  MESSAGE_CHANNELS,
+  MESSAGE_KINDS,
+  MESSAGE_SENDER,
+  type MessageChannel,
+  type MessageSender,
+} from '../../common/messaging';
 import { type StoredOtp } from '../auth.types';
-import { OTP_SENDER, type OtpSender } from './otp-sender';
 
 /**
  * OTP lifecycle. Every piece of state — the code hash, the attempt counter and
@@ -21,7 +33,7 @@ export class OtpService {
   constructor(
     private readonly redis: RedisService,
     private readonly config: AppConfigService,
-    @Inject(OTP_SENDER) private readonly sender: OtpSender,
+    @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
   ) {}
 
   /** Policy values, exposed so callers can echo them without re-reading config. */
@@ -58,7 +70,17 @@ export class OtpService {
       await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
     }
 
-    await this.sender.send({ actor, destination: identifier, code, ttlSec });
+    await this.sender.send({
+      channel: channelFor(actor),
+      kind: MESSAGE_KINDS.OTP,
+      to: identifier,
+      actor,
+      subject: 'Your IACE verification code',
+      body: `${code} is your IACE verification code. It expires in ${ttlSec} seconds.`,
+      // The provider fills its DLT-registered template from these; `body` is
+      // what a console or SMTP sender shows when there is no template.
+      data: { code, ttlSec },
+    });
 
     return {
       sent: true,
@@ -122,4 +144,14 @@ export class OtpService {
     const expected = Buffer.from(expectedHash, 'hex');
     return actual.length === expected.length && timingSafeEqual(actual, expected);
   }
+}
+
+/**
+ * Students are reached on the mobile number they signed up with, admins on
+ * their email address — the same split the two identity tables have. It lives
+ * beside the only caller rather than in the messaging module, because it is a
+ * fact about how THIS platform's actors are contacted, not about delivery.
+ */
+function channelFor(actor: ActorType): MessageChannel {
+  return actor === ActorTypes.STUDENT ? MESSAGE_CHANNELS.SMS : MESSAGE_CHANNELS.EMAIL;
 }

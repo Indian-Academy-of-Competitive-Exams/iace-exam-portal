@@ -2,7 +2,7 @@ import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
 import { type PrismaService } from '../../src/prisma/prisma.service';
-import { type OtpDelivery, type OtpSender } from '../../src/auth/otp/otp-sender';
+import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import {
   type DomainEventBus,
@@ -198,18 +198,29 @@ export class FakeConfig {
 // ---------------------------------------------------------------------------
 
 /** Captures what would have been sent, so a test can read the code back. */
-export class FakeOtpSender implements OtpSender {
-  readonly sent: OtpDelivery[] = [];
+export class FakeMessageSender implements MessageSender {
+  readonly sent: OutboundMessage[] = [];
 
-  send(delivery: OtpDelivery): Promise<void> {
-    this.sent.push(delivery);
+  send(message: OutboundMessage): Promise<void> {
+    this.sent.push(message);
     return Promise.resolve();
   }
 
-  get lastCode(): string {
+  get lastMessage(): OutboundMessage {
     const last = this.sent.at(-1);
-    if (!last) throw new Error('no OTP was sent');
-    return last.code;
+    if (!last) throw new Error('nothing was sent');
+    return last;
+  }
+
+  /**
+   * The code out of the last OTP. Read from `data`, which is what a provider
+   * template is filled from — the rendered `body` is for channels that have no
+   * template, and asserting against it would tie every auth test to copy.
+   */
+  get lastCode(): string {
+    const code = this.lastMessage.data?.code;
+    if (typeof code !== 'string') throw new Error('no OTP was sent');
+    return code;
   }
 }
 

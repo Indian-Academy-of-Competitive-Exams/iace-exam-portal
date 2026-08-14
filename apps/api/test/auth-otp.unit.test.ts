@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ActorTypes, AppException } from '@iace/contracts';
 import { OtpService } from '../src/auth/otp/otp.service';
-import { FakeConfig, FakeOtpSender, FakeRedis } from './support/fakes';
+import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
 
 const MOBILE = '9876543210';
 
 function build(overrides = {}) {
   const redis = new FakeRedis();
   const config = new FakeConfig(overrides);
-  const sender = new FakeOtpSender();
+  const sender = new FakeMessageSender();
   return {
     redis,
     config,

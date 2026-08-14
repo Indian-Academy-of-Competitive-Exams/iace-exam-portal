@@ -12,7 +12,7 @@ import { DOMAIN_EVENTS, PIN_RESET_REASONS } from '../src/common/events';
 import {
   FakeConfig,
   FakeEventBus,
-  FakeOtpSender,
+  FakeMessageSender,
   FakePrisma,
   FakeRedis,
   NO_DEVICE,
@@ -37,7 +37,7 @@ function build(
 ) {
   const redis = new FakeRedis();
   const config = new FakeConfig();
-  const sender = new FakeOtpSender();
+  const sender = new FakeMessageSender();
   const prisma = new FakePrisma(students);
 
   const auth = new AuthService(

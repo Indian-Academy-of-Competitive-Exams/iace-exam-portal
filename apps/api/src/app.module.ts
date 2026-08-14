@@ -6,6 +6,7 @@ import { RedisModule } from './redis/redis.module';
 import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './common/events';
+import { MessagingModule } from './common/messaging';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { StudentsModule } from './students/students.module';
@@ -40,6 +41,7 @@ import { RequestIdMiddleware } from './common/request-id';
     QueueModule,
     StorageModule,
     EventsModule,
+    MessagingModule,
     AuthModule,
     StudentsModule,
     MeModule,
