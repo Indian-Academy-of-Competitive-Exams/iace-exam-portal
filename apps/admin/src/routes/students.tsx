@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, Loader2, Search, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PAGE_SIZE_MAX,
-  PAGE_SIZE_OPTIONS,
   STUDENT_SORTS,
   todayISO,
   createStudentSchema,
@@ -25,33 +24,29 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  cn,
   Combobox,
+  DataTable,
+  digitsOnly,
   Field,
+  FormField,
   Input,
+  linkVariants,
   NumericInput,
+  PageHeader,
   Pagination,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableState,
-  TableHead,
-  TableHeader,
-  TableRow,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   TruncatedText,
-  cn,
-  digitsOnly,
-  linkVariants,
   useTruncation,
+  type DataTableColumn,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { applyFieldErrors, useInfinitePages, usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, useInfinitePages, useListQuery } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
 import { useFilters } from '../lib/use-filters';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
@@ -97,8 +92,6 @@ const STATUS_QUERY: Record<
 };
 
 export function StudentsPage() {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = usePageSize();
   const [showAll, setShowAll] = useState(false);
 
   // Every filter lives in the URL, so a link into this screen — from a group,
@@ -163,18 +156,50 @@ export function StudentsPage() {
     ...STATUS_QUERY[status],
   };
 
-  const students = useQuery({
-    queryKey: ['admin', 'students', { ...query, page, pageSize }],
-    queryFn: () => api.admin.students.list({ ...query, page, pageSize }),
-    // Without this the table empties on every keystroke and the page jumps;
-    // holding the previous page keeps the rows still while the next arrives.
-    placeholderData: keepPreviousData,
+  // The page resets itself whenever `query` changes, and the rows hold still
+  // while the next one arrives — see useListQuery.
+  const students = useListQuery({
+    queryKey: ['admin', 'students'],
+    filters: query,
+    fetchPage: (params) => api.admin.students.list(params),
   });
 
-  const set = (changes: Partial<Record<FilterKey, string | undefined>>) => {
-    filters.set(changes);
-    setPage(1);
-  };
+  const set = (changes: Partial<Record<FilterKey, string | undefined>>) => filters.set(changes);
+
+  const columns = useMemo<DataTableColumn<StudentSummary>[]>(
+    () => [
+      { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
+      {
+        key: 'mobile',
+        header: 'Mobile',
+        className: 'tabular-nums text-muted-foreground',
+        cell: (s) => s.mobile,
+      },
+      {
+        key: 'groups',
+        header: 'Groups',
+        cell: (s) =>
+          s.groups.length === 0 ? (
+            // A student in no group can reach no test, so this is a problem to
+            // show rather than an empty cell.
+            <Badge variant="warning">No group</Badge>
+          ) : (
+            <GroupsCell groups={s.groups} />
+          ),
+      },
+      { key: 'status', header: 'Status', cell: (s) => <SignInStatus student={s} /> },
+      {
+        key: 'pretest',
+        header: 'Pre-test details',
+        cell: (s) => (
+          <Badge variant={s.preTestReady ? 'success' : 'neutral'}>
+            {s.preTestReady ? 'On file' : 'Needed'}
+          </Badge>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <>
@@ -409,10 +434,7 @@ export function StudentsPage() {
                 variant="secondary"
                 className="w-full"
                 disabled={filters.activeCount(ALL_FILTERS) === 0}
-                onClick={() => {
-                  filters.clear();
-                  setPage(1);
-                }}
+                onClick={() => filters.clear()}
               >
                 <X aria-hidden />
                 Clear all filters
@@ -421,86 +443,23 @@ export function StudentsPage() {
           </div>
         ) : null}
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead>Mobile</TableHead>
-              <TableHead>Groups</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Pre-test details</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {/* "None match" and "there are none" are different facts, and
-                telling an admin the wrong one sends them looking in the wrong
-                place. Any filter at all means the former. */}
-            <TableState
-              isLoading={students.isPending}
-              isEmpty={!students.data?.items.length}
-              colSpan={5}
-              empty={
-                filters.activeCount(ALL_FILTERS) > 0
-                  ? 'No students match those filters.'
-                  : 'No students yet. Add one, or import a roster.'
-              }
-            >
-              {students.data?.items.map((student) => (
-                <StudentRow key={student.id} student={student} />
-              ))}
-            </TableState>
-          </TableBody>
-        </Table>
-
-        {students.data ? (
-          <Pagination
-            page={students.data.page}
-            pageSize={students.data.pageSize}
-            total={students.data.total}
-            onPageChange={setPage}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              // Page 9 of 20-per-page may not exist at 100 per page, and
-              // landing on an empty table reads as "the rows are gone".
-              setPage(1);
-            }}
-          />
-        ) : null}
+        {/* "None match" and "there are none" are different facts, and telling
+            an admin the wrong one sends them looking in the wrong place. Any
+            filter at all means the former. */}
+        <DataTable
+          columns={columns}
+          rows={students.items}
+          rowKey={(student) => student.id}
+          isLoading={students.isPending}
+          empty={
+            filters.activeCount(ALL_FILTERS) > 0
+              ? 'No students match those filters.'
+              : 'No students yet. Add one, or import a roster.'
+          }
+          footer={students.hasLoaded ? <Pagination {...students.pagination} /> : null}
+        />
       </Card>
     </>
-  );
-}
-
-function StudentRow({ student }: Readonly<{ student: StudentSummary }>) {
-  return (
-    <TableRow>
-      <TableCell>
-        <StudentNameCell student={student} />
-      </TableCell>
-
-      <TableCell className="tabular-nums text-muted-foreground">{student.mobile}</TableCell>
-
-      <TableCell>
-        {student.groups.length === 0 ? (
-          // A student in no group can reach no test, so this is a problem to
-          // show rather than an empty cell.
-          <Badge variant="warning">No group</Badge>
-        ) : (
-          <GroupsCell groups={student.groups} />
-        )}
-      </TableCell>
-
-      <TableCell>
-        <SignInStatus student={student} />
-      </TableCell>
-
-      <TableCell>
-        <Badge variant={student.preTestReady ? 'success' : 'neutral'}>
-          {student.preTestReady ? 'On file' : 'Needed'}
-        </Badge>
-      </TableCell>
-    </TableRow>
   );
 }
 
@@ -640,38 +599,31 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
           noValidate
         >
           <div className="flex flex-wrap gap-4">
-            <div className="min-w-56 flex-1">
-              <Field
-                htmlFor="mobile"
-                label="Mobile number"
-                error={form.formState.errors.mobile?.message}
-              >
-                {(control) => (
-                  <NumericInput
-                    {...control}
-                    {...form.register('mobile')}
-                    autoFocus
-                    prefix="+91"
-                    // Room to paste a +91-prefixed number; normaliseMobile trims
-                    // it back rather than truncating to the wrong ten digits.
-                    maxLength={15}
-                    sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
-                    placeholder="98765 43210"
-                    className="tabular-nums"
-                  />
-                )}
-              </Field>
-            </div>
-            <div className="min-w-56 flex-1">
-              <Field
-                htmlFor="fullName"
-                label="Full name"
-                hint="Optional — they can fill it in themselves"
-                error={form.formState.errors.fullName?.message}
-              >
-                {(control) => <Input {...control} {...form.register('fullName')} />}
-              </Field>
-            </div>
+            <FormField form={form} name="mobile" label="Mobile number" className="min-w-56 flex-1">
+              {(control) => (
+                <NumericInput
+                  {...control}
+                  autoFocus
+                  prefix="+91"
+                  // Room to paste a +91-prefixed number; normaliseMobile trims
+                  // it back rather than truncating to the wrong ten digits.
+                  maxLength={15}
+                  sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+                  placeholder="98765 43210"
+                  className="tabular-nums"
+                />
+              )}
+            </FormField>
+
+            <FormField
+              form={form}
+              name="fullName"
+              label="Full name"
+              hint="Optional — they can fill it in themselves"
+              className="min-w-56 flex-1"
+            >
+              {(control) => <Input {...control} />}
+            </FormField>
           </div>
 
           <fieldset>

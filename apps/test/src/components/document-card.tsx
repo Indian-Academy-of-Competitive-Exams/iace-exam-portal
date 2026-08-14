@@ -4,7 +4,7 @@ import { Check, FileText, ImageOff, Loader2, Upload } from 'lucide-react';
 import { DOCUMENT_MAX_BYTES, acceptedTypesFor, type DocumentKind, type Me } from '@iace/contracts';
 import { Button, cn } from '@iace/ui';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY } from '../lib/constants';
+import { PROFILE_QUERY_KEY } from '../lib/constants';
 
 /**
  * One uploadable thing: a photo, an Aadhaar, a PAN.
@@ -33,7 +33,7 @@ export function DocumentCard({
       // The response IS the refreshed profile, so the card shows the new file
       // without a second request — and the identity carries profileCompleted,
       // which this upload may have just changed.
-      queryClient.setQueryData(ME_QUERY_KEY, me);
+      queryClient.setQueryData(PROFILE_QUERY_KEY, me);
       void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
     },
   });

@@ -16,9 +16,9 @@ import {
   CardTitle,
   Field,
   Input,
+  PageHeader,
   Select,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';

@@ -45,3 +45,14 @@ export const browserSignOutSignal: SignOutSignal = {
 export function createBrowserTokenStore(storageKey: string): TokenStore {
   return createTokenStore(storageKey, browserStorage);
 }
+
+// --- the web app scaffolding ------------------------------------------------
+//
+// These compose @iace/ui and react-router-dom, which is exactly why they live
+// under `browser/` and not in `src/`: a React Native app reuses the tier above
+// (createAuth, useListQuery, the API client) and brings its own navigator and
+// its own chrome. Nothing here is importable without opting into the DOM.
+export { AppProviders } from './app-providers';
+export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
+export { mountApp } from './mount-app';
+export { ProtectedRoute } from './protected-route';

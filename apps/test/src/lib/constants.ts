@@ -27,11 +27,18 @@ export const NAV_ITEMS = [
 ] as const;
 
 /**
- * The student's own record. Shared so the profile screens and every upload
- * write to the same cache entry — two keys would mean a photo that uploaded
- * successfully and a page that still says it is missing.
+ * The signed-in student's identity, cached under one key so `createAuth` and
+ * anything that reads the session agree on where it lives.
  */
-export const ME_QUERY_KEY = ['me'] as const;
+export const ME_QUERY_KEY = ['auth', 'me'] as const;
+
+/**
+ * The student's own RECORD — profile, documents, groups. A different thing from
+ * the identity above, and deliberately a different key: the profile screens and
+ * every upload write here, and the header's avatar reads it, so a photo shows
+ * the moment it uploads rather than on the next reload.
+ */
+export const PROFILE_QUERY_KEY = ['me'] as const;
 
 /**
  * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing

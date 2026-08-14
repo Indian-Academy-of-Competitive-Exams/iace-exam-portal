@@ -16,14 +16,14 @@ import {
   CardTitle,
   Field,
   Input,
+  PageHeader,
   Select,
   Textarea,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
+import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
 /**
  * Named once so the banner and the field mapping cannot drift apart.
@@ -53,7 +53,7 @@ const FORM_FIELDS = [
 export function ProfilePage() {
   const queryClient = useQueryClient();
 
-  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
+  const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
   const form = useForm<UpdateMeInput>({
     resolver: zodResolver(updateMeSchema),
@@ -87,7 +87,7 @@ export function ProfilePage() {
     meta: { success: 'Your details have been saved.', fields: FORM_FIELDS },
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {
-      queryClient.setQueryData(ME_QUERY_KEY, updated);
+      queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // The identity carries preTestReady, and saving these fields is exactly
       // what changes it — without this the prompt would still be there.
       void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });

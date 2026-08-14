@@ -11,12 +11,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  PageHeader,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { DocumentCard } from '../components/document-card';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
+import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
 /**
  * The student's profile, as it stands.
@@ -27,7 +27,7 @@ import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
  * input box.
  */
 export function ProfileViewPage() {
-  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
+  const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
   if (me.isPending) {
     return (

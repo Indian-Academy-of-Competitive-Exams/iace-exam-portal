@@ -11,8 +11,8 @@ import {
 } from '@iace/ui';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, ROUTES } from '../lib/constants';
-import { useAuth } from '../providers/auth-context';
+import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { useAuth } from '../providers/auth';
 
 /**
  * Where a student lands.
@@ -26,8 +26,8 @@ import { useAuth } from '../providers/auth-context';
  * there are no direct grants to check.
  */
 export function DashboardPage() {
-  const { student } = useAuth();
-  const me = useQuery({ queryKey: ME_QUERY_KEY, queryFn: () => api.me.profile() });
+  const { identity: student } = useAuth();
+  const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
   return (
     <>

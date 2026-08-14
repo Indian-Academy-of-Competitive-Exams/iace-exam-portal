@@ -4,6 +4,13 @@ export { Input, type InputProps } from './components/ui/input';
 export { NumericInput, digitsOnly, type NumericInputProps } from './components/ui/numeric-input';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
+export {
+  FormActions,
+  FormField,
+  FormRow,
+  type FieldControl,
+  type FormFieldProps,
+} from './components/ui/form-field';
 export { Alert, alertVariants, type AlertProps } from './components/ui/alert';
 export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
 export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
@@ -23,6 +30,8 @@ export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './comp
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination } from './components/ui/pagination';
+export { PageHeader } from './components/ui/page-header';
+export { DataTable, type DataTableColumn, type DataTableProps } from './components/ui/data-table';
 export {
   TruncatedText,
   useTruncation,

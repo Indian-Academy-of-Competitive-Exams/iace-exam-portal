@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,19 +14,16 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Field,
+  DataTable,
+  FormActions,
+  FormField,
+  FormRow,
   Input,
-  Table,
-  TableBody,
-  TableCell,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
   linkVariants,
+  PageHeader,
+  type DataTableColumn,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
-import { useAuth } from '../providers/auth-context';
+import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
@@ -43,7 +40,7 @@ const NEW_BRANCH_FIELDS = ['name'] as const;
  * should choose from the centres that exist, not name one and hope it matches.
  */
 export function BranchesPage() {
-  const { admin } = useAuth();
+  const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
 
   const [creating, setCreating] = useState(false);
@@ -51,6 +48,62 @@ export function BranchesPage() {
   const queryClient = useQueryClient();
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'branches'] });
+
+  const columns = useMemo<DataTableColumn<Branch>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Branch',
+        className: 'font-medium',
+        cell: (branch) =>
+          branch.groupCount > 0 ? (
+            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+              {branch.name}
+            </Link>
+          ) : (
+            branch.name
+          ),
+      },
+      {
+        key: 'groups',
+        header: 'Groups',
+        numeric: true,
+        cell: (branch) =>
+          branch.groupCount > 0 ? (
+            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+              {branch.groupCount}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">0</span>
+          ),
+      },
+      {
+        key: 'students',
+        // A branch answers two questions — which groups, and which students
+        // those groups reach. Both are the existing screen filtered.
+        cell: (branch) => (
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+              <Users aria-hidden />
+              Students
+            </Link>
+          </Button>
+        ),
+      },
+      { key: 'status', header: 'Status', cell: (branch) => <BranchStatus branch={branch} /> },
+      {
+        key: 'actions',
+        className: 'text-right',
+        cell: (branch) => (
+          <BranchRowActions branch={branch} canEdit={isSuperAdmin} onChanged={refresh} />
+        ),
+      },
+    ],
+    // `refresh` is a fresh closure each render and is only ever called from a
+    // click; rebuilding the columns for it would defeat the memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isSuperAdmin],
+  );
 
   return (
     <>
@@ -86,31 +139,15 @@ export function BranchesPage() {
       ) : null}
 
       <Card className="p-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Branch</TableHead>
-              <TableHead numeric>Groups</TableHead>
-              <TableHead />
-              <TableHead>Status</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {branches.length === 0 ? (
-              <TableEmpty colSpan={5}>No branches yet.</TableEmpty>
-            ) : (
-              branches.map((branch) => (
-                <BranchRow
-                  key={branch.id}
-                  branch={branch}
-                  canEdit={isSuperAdmin}
-                  onChanged={refresh}
-                />
-              ))
-            )}
-          </TableBody>
-        </Table>
+        {/* No pagination: the branch list is a short, slow-moving one that
+            `useBranches` already loads in full, a page at a time. */}
+        <DataTable
+          columns={columns}
+          rows={branches}
+          rowKey={(branch) => branch.id}
+          isLoading={false}
+          empty="No branches yet."
+        />
       </Card>
     </>
   );
@@ -143,26 +180,19 @@ function NewBranchCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          className="flex flex-wrap items-start gap-4"
-          onSubmit={form.handleSubmit((values) => create.mutate(values))}
-          noValidate
-        >
-          <div className="min-w-56 flex-1">
-            <Field htmlFor="name" label="Branch name" error={form.formState.errors.name?.message}>
-              {(control) => (
-                <Input
-                  {...control}
-                  {...form.register('name')}
-                  className="uppercase placeholder:normal-case"
-                  placeholder="AMEERPET"
-                  autoFocus
-                />
-              )}
-            </Field>
-          </div>
+        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
+          <FormField form={form} name="name" label="Branch name" className="min-w-56 flex-1">
+            {(control) => (
+              <Input
+                {...control}
+                className="uppercase placeholder:normal-case"
+                placeholder="AMEERPET"
+                autoFocus
+              />
+            )}
+          </FormField>
 
-          <div className="flex gap-2 pt-[26px]">
+          <FormActions>
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
               Create
@@ -171,8 +201,8 @@ function NewBranchCard({
             <Button type="button" variant="secondary" onClick={onCancel}>
               Cancel
             </Button>
-          </div>
-        </form>
+          </FormActions>
+        </FormRow>
       </CardContent>
     </Card>
   );
@@ -245,7 +275,8 @@ function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
   return <Badge variant="neutral">Retired</Badge>;
 }
 
-function BranchRow({
+/** The mutations a row can run, and the confirm state they share. */
+function BranchRowActions({
   branch,
   canEdit,
   onChanged,
@@ -274,56 +305,15 @@ function BranchRow({
   const busy = remove.isPending || setActive.isPending;
 
   return (
-    <>
-      <TableRow>
-        <TableCell className="font-medium">
-          {branch.groupCount > 0 ? (
-            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
-              {branch.name}
-            </Link>
-          ) : (
-            branch.name
-          )}
-        </TableCell>
-
-        <TableCell numeric>
-          {branch.groupCount > 0 ? (
-            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
-              {branch.groupCount}
-            </Link>
-          ) : (
-            <span className="text-muted-foreground">0</span>
-          )}
-        </TableCell>
-
-        <TableCell>
-          {/* A branch answers two questions — which groups, and which students
-              those groups reach. Both are the existing screen filtered. */}
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
-              <Users aria-hidden />
-              Students
-            </Link>
-          </Button>
-        </TableCell>
-
-        <TableCell>
-          <BranchStatus branch={branch} />
-        </TableCell>
-
-        <TableCell className="text-right">
-          <BranchActions
-            branch={branch}
-            canEdit={canEdit}
-            busy={busy}
-            confirming={confirming}
-            onConfirm={() => setConfirming(true)}
-            onCancel={() => setConfirming(false)}
-            onDelete={() => remove.mutate()}
-            onToggleActive={() => setActive.mutate(!branch.isActive)}
-          />
-        </TableCell>
-      </TableRow>
-    </>
+    <BranchActions
+      branch={branch}
+      canEdit={canEdit}
+      busy={busy}
+      confirming={confirming}
+      onConfirm={() => setConfirming(true)}
+      onCancel={() => setConfirming(false)}
+      onDelete={() => remove.mutate()}
+      onToggleActive={() => setActive.mutate(!branch.isActive)}
+    />
   );
 }

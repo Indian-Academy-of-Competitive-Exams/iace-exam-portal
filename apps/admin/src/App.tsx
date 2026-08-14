@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from '@iace/app-kit/browser';
+import { useAuth } from './providers/auth';
 import { AppShell } from './components/app-shell';
 import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
@@ -8,7 +10,6 @@ import { GroupsPage } from './routes/groups';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ImportGroupMembersPage } from './routes/import-group-members';
-import { ProtectedRoute } from './routes/protected-route';
 import { ROUTES } from './lib/constants';
 
 /**
@@ -16,10 +17,20 @@ import { ROUTES } from './lib/constants';
  * once. ProtectedRoute is the outer gate; the shell is the layout inside it.
  */
 export function App() {
+  const { identity, isLoading } = useAuth();
+
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-      <Route element={<ProtectedRoute />}>
+      <Route
+        element={
+          <ProtectedRoute
+            isAuthenticated={identity !== null}
+            isLoading={isLoading}
+            loginPath={ROUTES.LOGIN}
+          />
+        }
+      >
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.STUDENTS} element={<StudentsPage />} />

@@ -1,15 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
-import {
-  PAGE_SIZE_OPTIONS,
-  createGroupSchema,
-  type CreateGroupInput,
-  type GroupSummary,
-} from '@iace/contracts';
+import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
 import {
   Badge,
   Button,
@@ -18,49 +13,76 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Field,
+  DataTable,
+  FormActions,
+  FormField,
+  FormRow,
   Input,
+  linkVariants,
+  PageHeader,
   Pagination,
   Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableState,
-  TableHead,
-  TableHeader,
-  TableRow,
-  linkVariants,
+  type DataTableColumn,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { applyFieldErrors, usePageSize } from '@iace/app-kit';
+import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 import { useFilters } from '../lib/use-filters';
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
 export function GroupsPage() {
   const [creating, setCreating] = useState(false);
-  const [page, setPage] = useState(1);
 
   // In the URL, not in state: this is where the Branches page lands.
   const filters = useFilters<'q' | 'branchId'>();
   const search = filters.get('q');
   const branchId = filters.get('branchId');
-  const [pageSize, setPageSize] = usePageSize();
   const queryClient = useQueryClient();
 
-  const groups = useQuery({
-    queryKey: ['admin', 'groups', { search, branchId, page, pageSize }],
-    queryFn: () =>
-      api.admin.groups.list({ q: search, page, pageSize, branchId: branchId || undefined }),
-    // Holds the rows still while the next page arrives, instead of blanking
-    // the table on every keystroke.
-    placeholderData: keepPreviousData,
+  // The page resets itself whenever these change — see useListQuery.
+  const groups = useListQuery({
+    queryKey: ['admin', 'groups'],
+    filters: { q: search, branchId: branchId || undefined },
+    fetchPage: (params) => api.admin.groups.list(params),
   });
 
   const allBranches = useBranches();
   const branch = allBranches.find((candidate) => candidate.id === branchId);
+
+  const columns = useMemo<DataTableColumn<GroupSummary>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Group',
+        className: 'font-medium',
+        // Members are the student list filtered — the same screen, not a copy.
+        cell: (group) => (
+          <Link to={`${ROUTES.STUDENTS}?groupId=${group.id}`} className={linkVariants()}>
+            {group.name}
+          </Link>
+        ),
+      },
+      {
+        key: 'branch',
+        header: 'Branch',
+        cell: (group) =>
+          group.branch.isGlobal ? (
+            <Badge variant="info">{group.branch.name}</Badge>
+          ) : (
+            <span className="text-muted-foreground">{group.branch.name}</span>
+          ),
+      },
+      { key: 'students', header: 'Students', numeric: true, cell: (g) => g.studentCount },
+      { key: 'series', header: 'Test series', numeric: true, cell: (g) => g.testSeriesCount },
+      {
+        key: 'actions',
+        className: 'text-right',
+        cell: (group) => <GroupActions group={group} />,
+      },
+    ],
+    [],
+  );
 
   return (
     <>
@@ -91,14 +113,7 @@ export function GroupsPage() {
           <div className="mb-4 flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Showing the branch</span>
             <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                filters.set({ branchId: undefined });
-                setPage(1);
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: undefined })}>
               <X aria-hidden />
               Clear
             </Button>
@@ -112,20 +127,14 @@ export function GroupsPage() {
               placeholder="Search by name or branch"
               value={search}
               prefix={<Search className="size-4" aria-hidden />}
-              onChange={(event) => {
-                filters.set({ q: event.target.value });
-                setPage(1);
-              }}
+              onChange={(event) => filters.set({ q: event.target.value })}
             />
           </div>
           <div className="w-52">
             <Select
               aria-label="Filter by branch"
               value={branchId}
-              onChange={(event) => {
-                filters.set({ branchId: event.target.value });
-                setPage(1);
-              }}
+              onChange={(event) => filters.set({ branchId: event.target.value })}
             >
               <option value="">All branches</option>
               {allBranches.map((branch) => (
@@ -137,47 +146,18 @@ export function GroupsPage() {
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Group</TableHead>
-              <TableHead>Branch</TableHead>
-              <TableHead numeric>Students</TableHead>
-              <TableHead numeric>Test series</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableState
-              isLoading={groups.isPending}
-              isEmpty={!groups.data?.items.length}
-              colSpan={5}
-              empty={
-                search
-                  ? `No group matches “${search}”.`
-                  : 'No groups yet. Create one before adding students.'
-              }
-            >
-              {groups.data?.items.map((group) => (
-                <GroupRow key={group.id} group={group} />
-              ))}
-            </TableState>
-          </TableBody>
-        </Table>
-
-        {groups.data ? (
-          <Pagination
-            page={groups.data.page}
-            pageSize={groups.data.pageSize}
-            total={groups.data.total}
-            onPageChange={setPage}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(1);
-            }}
-          />
-        ) : null}
+        <DataTable
+          columns={columns}
+          rows={groups.items}
+          rowKey={(group) => group.id}
+          isLoading={groups.isPending}
+          empty={
+            search
+              ? `No group matches “${search}”.`
+              : 'No groups yet. Create one before adding students.'
+          }
+          footer={groups.hasLoaded ? <Pagination {...groups.pagination} /> : null}
+        />
       </Card>
     </>
   );
@@ -216,46 +196,39 @@ function NewGroupCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          className="flex flex-wrap items-start gap-4"
-          onSubmit={form.handleSubmit((values) => create.mutate(values))}
-          noValidate
-        >
-          <div className="min-w-48 flex-1">
-            <Field
-              htmlFor="branchId"
-              label="Branch"
-              error={form.formState.errors.branchId?.message}
-              hint="Only a super admin can add a branch."
-            >
-              {(control) => (
-                <Select {...control} {...form.register('branchId')} autoFocus>
-                  <option value="">Pick a branch…</option>
-                  {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
-          <div className="min-w-56 flex-1">
-            <Field htmlFor="name" label="Group name" error={form.formState.errors.name?.message}>
-              {(control) => (
-                // Shown in capitals as it is typed, because that is what will be
-                // stored — the preview would otherwise disagree with the result.
-                <Input
-                  {...control}
-                  {...form.register('name')}
-                  className="uppercase placeholder:normal-case"
-                  placeholder="SSC CGL MORNING"
-                />
-              )}
-            </Field>
-          </div>
+        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
+          <FormField
+            form={form}
+            name="branchId"
+            label="Branch"
+            hint="Only a super admin can add a branch."
+            className="min-w-48 flex-1"
+          >
+            {(control) => (
+              <Select {...control} autoFocus>
+                <option value="">Pick a branch…</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
 
-          <div className="flex gap-2 pt-[26px]">
+          <FormField form={form} name="name" label="Group name" className="min-w-56 flex-1">
+            {(control) => (
+              // Shown in capitals as it is typed, because that is what will be
+              // stored — the preview would otherwise disagree with the result.
+              <Input
+                {...control}
+                className="uppercase placeholder:normal-case"
+                placeholder="SSC CGL MORNING"
+              />
+            )}
+          </FormField>
+
+          <FormActions>
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
               Create
@@ -264,8 +237,8 @@ function NewGroupCard({
             <Button type="button" variant="secondary" onClick={onCancel}>
               Cancel
             </Button>
-          </div>
-        </form>
+          </FormActions>
+        </FormRow>
       </CardContent>
     </Card>
   );
@@ -273,7 +246,7 @@ function NewGroupCard({
 
 // ---------------------------------------------------------------------------
 
-function GroupRow({ group }: Readonly<{ group: GroupSummary }>) {
+function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
 
@@ -286,67 +259,48 @@ function GroupRow({ group }: Readonly<{ group: GroupSummary }>) {
     onError: () => setConfirming(false),
   });
 
+  if (confirming) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Delete?</span>
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={remove.isPending}
+          onClick={() => remove.mutate()}
+        >
+          Yes, delete
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
+      </span>
+    );
+  }
+
   return (
-    <>
-      <TableRow>
-        <TableCell className="font-medium">
-          {/* Members are the student list filtered — the same screen, not a copy. */}
-          <Link to={`${ROUTES.STUDENTS}?groupId=${group.id}`} className={linkVariants()}>
-            {group.name}
-          </Link>
-        </TableCell>
-        <TableCell>
-          {group.branch.isGlobal ? (
-            <Badge variant="info">{group.branch.name}</Badge>
-          ) : (
-            <span className="text-muted-foreground">{group.branch.name}</span>
-          )}
-        </TableCell>
-        <TableCell numeric>{group.studentCount}</TableCell>
-        <TableCell numeric>{group.testSeriesCount}</TableCell>
-        <TableCell className="text-right">
-          {confirming ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Delete?</span>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate()}
-              >
-                Yes, delete
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => setConfirming(false)}>
-                Cancel
-              </Button>
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1">
-              {/* Bulk membership lives on the group, not on a sheet: the group
-                  is the screen you are already on, so it cannot be mistyped. */}
-              <Button size="sm" variant="outline" asChild>
-                <Link to={ROUTES.IMPORT_GROUP_MEMBERS(group.id)}>
-                  <UserPlus aria-hidden />
-                  Add students
-                </Link>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-label={`Delete ${group.name}`}
-                onClick={() => {
-                  // Clear the last refusal: it described the group as it was
-                  // before the admin went and moved the students.
-                  remove.reset();
-                  setConfirming(true);
-                }}
-              >
-                <Trash2 aria-hidden />
-              </Button>
-            </span>
-          )}
-        </TableCell>
-      </TableRow>
-    </>
+    <span className="inline-flex items-center gap-1">
+      {/* Bulk membership lives on the group, not on a sheet: the group is the
+          screen you are already on, so it cannot be mistyped. */}
+      <Button size="sm" variant="outline" asChild>
+        <Link to={ROUTES.IMPORT_GROUP_MEMBERS(group.id)}>
+          <UserPlus aria-hidden />
+          Add students
+        </Link>
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={`Delete ${group.name}`}
+        onClick={() => {
+          // Clear the last refusal: it described the group as it was before the
+          // admin went and moved the students.
+          remove.reset();
+          setConfirming(true);
+        }}
+      >
+        <Trash2 aria-hidden />
+      </Button>
+    </span>
   );
 }

@@ -13,10 +13,10 @@ import {
   CardTitle,
   Field,
   NumericInput,
+  PageHeader,
 } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
 import { api } from '../lib/api';
-import { useAuth } from '../providers/auth-context';
+import { useAuth } from '../providers/auth';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
 
@@ -27,7 +27,7 @@ const FORM_FIELDS = ['currentPin', 'newPin'] as const;
  * student is still on the PIN an import gave them.
  */
 export function AccountPage() {
-  const { student } = useAuth();
+  const { identity: student } = useAuth();
   const onDefaultPin = student?.hasDefaultPin ?? false;
 
   return (

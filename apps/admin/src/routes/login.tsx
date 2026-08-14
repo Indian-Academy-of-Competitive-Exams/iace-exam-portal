@@ -23,7 +23,7 @@ import {
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
-import { useAuth } from '../providers/auth-context';
+import { useAuth } from '../providers/auth';
 const codeFormSchema = z.object({ code: otpCodeSchema });
 
 // Same names the server keys `fieldErrors` by — it validates with the same schemas.
@@ -35,7 +35,7 @@ const CODE_FIELDS = ['code'] as const;
  * and be active, so an unknown address simply never receives a code.
  */
 export function LoginPage() {
-  const { admin, signIn } = useAuth();
+  const { identity: admin, signIn } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<OtpRequestResponse | null>(null);

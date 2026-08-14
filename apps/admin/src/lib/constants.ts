@@ -31,6 +31,12 @@ export const NAV_ITEMS = [
 ] as const;
 
 /**
+ * The signed-in admin's identity, cached under one key so `createAuth` and
+ * anything that reads the session agree on where it lives.
+ */
+export const ME_QUERY_KEY = ['auth', 'me'] as const;
+
+/**
  * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing
  * one origin never read each other's session.
  *

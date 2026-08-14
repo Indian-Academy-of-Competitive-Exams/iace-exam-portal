@@ -16,6 +16,8 @@ TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** fo
 
 `apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
+Both SPAs are thin by construction: the bootstrap, the session, the route guard and the chrome all come from `@iace/app-kit`, and the form and table kits from `@iace/ui`. What an app owns is its routes, its nav, its storage keys, its login screen and its dashboard — the things that genuinely differ. See `docs/03-shared-architecture.md` §2–§3.
+
 ## Local prerequisites
 
 **Node 22 LTS** (pinned in `.nvmrc`; `nvm use` picks it up), pnpm 11 via corepack, Docker Desktop, Git. Local services (Postgres + Redis + MinIO) run via `docker compose up`.

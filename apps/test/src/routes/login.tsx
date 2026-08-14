@@ -35,7 +35,7 @@ import {
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
-import { useAuth } from '../providers/auth-context';
+import { useAuth } from '../providers/auth';
 /** Why the student is going through the OTP flow — it only changes the words. */
 const OTP_INTENTS = {
   SIGNUP: 'SIGNUP',
@@ -67,7 +67,7 @@ type Step =
   | { kind: 'pin'; intent: OtpIntent; mobile: string; ticket: PinSetupTicket };
 
 export function LoginPage() {
-  const { student, signIn } = useAuth();
+  const { identity: student, signIn } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>({ kind: 'signIn' });
 

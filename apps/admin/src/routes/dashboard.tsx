@@ -1,10 +1,9 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@iace/ui';
-import { PageHeader } from '../components/app-shell';
-import { useAuth } from '../providers/auth-context';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from '@iace/ui';
+import { useAuth } from '../providers/auth';
 
 /** Landing screen. The header, nav and sign-out live in AppShell. */
 export function DashboardPage() {
-  const { admin } = useAuth();
+  const { identity: admin } = useAuth();
 
   return (
     <>
