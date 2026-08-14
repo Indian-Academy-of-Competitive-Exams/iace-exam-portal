@@ -151,6 +151,10 @@ It skips itself, without blocking, when there is nothing to scan (no staged
 must still be able to commit. `SKIP_SONAR=1 git commit …` is the deliberate
 escape. What it will not skip is a reachable server saying the gate failed.
 
+**Local only, deliberately.** There is no Sonar job in CI and none is wanted:
+the server runs on localhost, a runner cannot reach it, and the pre-commit gate
+already blocks the code before it exists as a commit. Do not add one.
+
 Roughly 20s when it does run. The MCP `analyze_code_snippet` tool is still worth
 using while writing code — it is instant and per-file — but it is **not**
 equivalent: it applies a narrower rule set, and has reported clean on files a
