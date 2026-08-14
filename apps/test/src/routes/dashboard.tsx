@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  PageHeader,
 } from '@iace/ui';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
@@ -31,20 +32,18 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="mb-6 flex items-center gap-4">
-        <Avatar
-          src={me.data?.profile?.photoUrl}
-          name={student?.fullName}
-          fallback={student?.mobile}
-          size="lg"
-        />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
-          </h1>
-          <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">+91 {student?.mobile}</p>
-        </div>
-      </div>
+      <PageHeader
+        leading={
+          <Avatar
+            src={me.data?.profile?.photoUrl}
+            name={student?.fullName}
+            fallback={student?.mobile}
+            size="lg"
+          />
+        }
+        title={student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
+        description={<span className="tabular-nums">+91 {student?.mobile}</span>}
+      />
 
       <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 

@@ -15,18 +15,32 @@ export function PageHeader({
   title,
   description,
   action,
+  leading,
 }: Readonly<{
   title: React.ReactNode;
   description?: React.ReactNode;
   action?: React.ReactNode;
+  /**
+   * Sits before the title — an avatar, an icon, a back button.
+   *
+   * It exists because the student dashboard needed one and, lacking a slot for
+   * it, hand-rolled the whole header instead: a different heading size, a
+   * different gap. One screen opening differently from the other ten is not a
+   * decision anybody made, it is what happens when the shared component cannot
+   * express what a page needs. So the slot is the fix, not a copy.
+   */
+  leading?: React.ReactNode;
 }>) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-        {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
-        ) : null}
+      <div className="flex items-center gap-4">
+        {leading}
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+          {description ? (
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
       </div>
       {action}
     </div>

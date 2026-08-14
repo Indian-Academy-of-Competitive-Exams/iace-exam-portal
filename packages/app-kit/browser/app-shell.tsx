@@ -76,7 +76,21 @@ export function AppShell({
           </div>
         </div>
 
-        <nav className={cn(container, 'flex gap-1 px-4')} aria-label="Sections">
+        {/*
+          px-2, not px-4: a tab carries its own px-3, so the container inset has
+          to be the content inset MINUS that, or the labels sit further in than
+          the brandmark above them and the page title below. Aligning the tab
+          BOX instead would push its text in twice.
+
+          overflow-x-auto because the nav is the one row that grows with the
+          product — a fifth and sixth section are already planned, and four
+          labels almost fill a 390px screen. Without it the overflow silently
+          becomes unreachable rather than scrollable.
+        */}
+        <nav
+          className={cn(container, 'flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]')}
+          aria-label="Sections"
+        >
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -86,7 +100,7 @@ export function AppShell({
               end={item.to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors',
                   'focus-visible:shadow-focus focus-visible:outline-none',
                   isActive
                     ? 'border-primary text-foreground'
