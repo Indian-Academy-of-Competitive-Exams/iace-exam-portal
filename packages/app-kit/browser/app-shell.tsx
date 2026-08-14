@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import { Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
 import { filterNavByPermission, type NavItem } from '../src';
 import { SidebarNav } from './app-shell/sidebar-nav';
@@ -127,8 +127,12 @@ export function AppShell({
           <aside
             aria-label="Sections"
             className={cn(
-              'sticky top-[calc(var(--control-h-lg)+var(--space-4))] flex h-[calc(100vh-4rem)] shrink-0',
-              'flex-col border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
+              // `sticky`, not `relative` — it is already a positioned ancestor,
+              // so the edge button anchors to it. Adding `relative` too looks
+              // harmless and is not: tailwind-merge drops one of two position
+              // utilities, so the source would claim a class that never lands.
+              'sticky top-[calc(var(--control-h-lg)+var(--space-4))] flex h-[calc(100vh-4rem)]',
+              'shrink-0 flex-col border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
               collapsed ? 'w-[--sidebar-w-rail]' : 'w-[--sidebar-w]',
             )}
           >
@@ -136,29 +140,33 @@ export function AppShell({
               <SidebarNav items={items} pathname={pathname} collapsed={collapsed} />
             </nav>
 
-            <div className="mt-2 border-t border-border pt-2">
-              {userMenu}
-              <button
-                type="button"
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                onClick={() => setCollapsed((was) => !was)}
-                className={cn(
-                  'mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                  'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  'focus-visible:shadow-focus focus-visible:outline-none',
-                  collapsed && 'justify-center px-0',
-                )}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="size-4" aria-hidden />
-                ) : (
-                  <>
-                    <PanelLeftClose className="size-4" aria-hidden />
-                    <span>Collapse</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <div className="mt-2 border-t border-border pt-2">{userMenu}</div>
+
+            {/*
+              On the divider, not in the sidebar. It acts on the boundary
+              between nav and content, so that is where it belongs — and a
+              full-width row inside the sidebar spent a whole line of the nav
+              on a control that is used about twice a day.
+            */}
+            <button
+              type="button"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={!collapsed}
+              onClick={() => setCollapsed((was) => !was)}
+              className={cn(
+                'absolute -right-3 top-3 grid size-6 place-items-center rounded-full',
+                'border border-border bg-surface text-muted-foreground shadow-sm',
+                'hover:bg-muted hover:text-foreground',
+                'focus-visible:shadow-focus focus-visible:outline-none',
+                'z-[--z-sticky]',
+              )}
+            >
+              {collapsed ? (
+                <ChevronRight className="size-3.5" aria-hidden />
+              ) : (
+                <ChevronLeft className="size-3.5" aria-hidden />
+              )}
+            </button>
           </aside>
         ) : null}
 

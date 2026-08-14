@@ -1,7 +1,7 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import * as Popover from '@radix-ui/react-popover';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@iace/ui';
 import {
   NAV_LAYOUT,
@@ -61,70 +61,45 @@ function Leaf({
   );
 }
 
-/** INLINE: an accordion under the section. */
-function InlineSection({
-  item,
-  pathname,
-  onNavigate,
-}: Readonly<{ item: NavItem; pathname: string; onNavigate?: () => void }>) {
-  const panelId = useId();
-  // Open if you are already inside it — a collapsed section while its page is
-  // showing is a sidebar that has lost your place.
-  const [open, setOpen] = useState(() => isNavItemActive(item, pathname));
-
-  return (
-    <li>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((was) => !was)}
-        className={cn(ROW, isNavItemActive(item, pathname) ? ROW_ACTIVE : ROW_IDLE)}
-      >
-        <Glyph item={item} collapsed={false} />
-        <span className="flex-1 text-left">{item.label}</span>
-        <ChevronDown
-          className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')}
-          aria-hidden
-        />
-      </button>
-
-      {open ? (
-        <ul id={panelId} className="mt-1 space-y-0.5 border-l border-border pl-3 ml-4">
-          {(item.children ?? []).map((child) => (
-            <li key={child.label}>
-              <Leaf item={child} collapsed={false} onNavigate={onNavigate} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  );
-}
-
 /**
- * PANEL: a click-opened panel beside the sidebar, one level, up to 80vh.
+ * A section, opened as a popover anchored to its own row.
  *
- * On Radix Popover rather than an absolutely-positioned div, for one decisive
- * reason: the sidebar's nav scrolls, and `overflow-y-auto` creates a clipping
- * context that an absolute child cannot escape — the panel simply never
- * appeared. A portal escapes it. Radix also brings the behaviour this panel is
- * required to have and that is tedious to get right by hand: click not hover,
- * Esc and click-away, focus moved in and returned on close, and collision
- * handling so a section near the bottom flips instead of running off screen.
+ * Both layouts open beside the sidebar rather than expanding into it. An
+ * accordion is the obvious way to show children and the wrong one here: it
+ * pushes every section below it down the sidebar, so the item you were aiming
+ * at moves out from under the pointer at the moment you commit to it, and on a
+ * short viewport the thing you opened scrolls out of view. A popover leaves the
+ * sidebar exactly where it was.
+ *
+ * What `resolveNavLayout` still decides is the SHAPE, which is a real
+ * difference: INLINE is sized to its contents, PANEL is a fixed width that
+ * scrolls at 80vh and can carry labelled groups. A three-item popup has no
+ * business being 17rem wide and 80vh tall, and a twenty-item one cannot be
+ * anything else.
+ *
+ * Both therefore point RIGHT. The down-chevron is gone with the accordion it
+ * described: nothing expands below any more, and an affordance that promises a
+ * behaviour the component no longer has is worse than none.
  */
-function PanelSection({
+function SectionPopover({
   item,
   pathname,
   collapsed,
+  wide,
   onNavigate,
-}: Readonly<{ item: NavItem; pathname: string; collapsed: boolean; onNavigate?: () => void }>) {
+}: Readonly<{
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+  wide: boolean;
+  onNavigate?: () => void;
+}>) {
   const [open, setOpen] = useState(false);
 
   const children = item.children ?? [];
   // One level only. A child with children of its own becomes a labelled GROUP
-  // inside this same panel — a second cascade is a menu you have to chase with
-  // the pointer, and it is unusable on a trackpad.
+  // inside this same popover — a second cascade is a menu you have to chase
+  // with the pointer, and it is unusable on a trackpad.
   const groups = children.filter(isNavSection);
   const loose = children.filter((child) => !isNavSection(child));
 
@@ -162,13 +137,16 @@ function PanelSection({
           <Popover.Content
             side="right"
             align="start"
-            // Flush and continuous with the section rather than floating near
-            // it: aligned to the row it came from, one step off the sidebar.
+            // Aligned to the row it came from and one step off the sidebar, so
+            // it reads as continuous with the section rather than as a menu
+            // that happens to be nearby.
             sideOffset={4}
             collisionPadding={8}
             className={cn(
-              'z-[--z-popover] w-[--nav-panel-w] max-h-[--nav-panel-max-h] overflow-y-auto',
-              'rounded-lg border border-border bg-surface p-2 shadow-lg',
+              'z-[--z-popover] overflow-y-auto rounded-lg border border-border bg-surface p-2 shadow-lg',
+              wide
+                ? 'w-[--nav-panel-w] max-h-[--nav-panel-max-h]'
+                : 'min-w-52 max-h-[--nav-panel-max-h]',
             )}
           >
             <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -209,9 +187,9 @@ function PanelSection({
 /**
  * The desktop nav list. `collapsed` is the icon rail.
  *
- * In the rail every section becomes a PANEL regardless of its resolved layout:
- * an accordion has nowhere to expand into when the sidebar is 56px wide, and
- * expanding it would either overflow or silently truncate the labels.
+ * Every section opens as a popover; the resolved layout chooses whether it is
+ * sized to its contents or a fixed scrolling panel. In the rail everything is
+ * the wide shape, because a popover sized to a 56px trigger is not a size.
  */
 export function SidebarNav({
   items,
@@ -234,17 +212,16 @@ export function SidebarNav({
             </li>
           );
         }
-        const layout = collapsed ? NAV_LAYOUT.PANEL : resolveNavLayout(item);
-        return layout === NAV_LAYOUT.PANEL ? (
-          <PanelSection
+        const wide = collapsed || resolveNavLayout(item) === NAV_LAYOUT.PANEL;
+        return (
+          <SectionPopover
             key={item.label}
             item={item}
             pathname={pathname}
             collapsed={collapsed}
+            wide={wide}
             onNavigate={onNavigate}
           />
-        ) : (
-          <InlineSection key={item.label} item={item} pathname={pathname} onNavigate={onNavigate} />
         );
       })}
     </ul>
