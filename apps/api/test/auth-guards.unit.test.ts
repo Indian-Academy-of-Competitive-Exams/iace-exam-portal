@@ -4,11 +4,17 @@ import 'reflect-metadata';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { type ExecutionContext } from '@nestjs/common';
-import { ActorTypes, AppException } from '@iace/contracts';
+import {
+  ActorTypes,
+  AppException,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  type AdminPermissions,
+} from '@iace/contracts';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
-import { PagePermissionGuard } from '../src/auth/guards/page-permission.guard';
-import { Actors, Public, RequiresPage, type AuthenticatedUser } from '../src/common/security';
+import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
+import { Actors, Public, RequiresFeature, type AuthenticatedUser } from '../src/common/security';
 import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import { FakeConfig, FakeRedis, NO_DEVICE } from './support/fakes';
@@ -31,8 +37,11 @@ class ProbeController {
   @Actors(ActorTypes.STUDENT)
   studentOnly() {}
 
-  @RequiresPage('questions.manage')
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   managesQuestions() {}
+
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  readsQuestions() {}
 
   plainRoute() {}
 }
@@ -82,7 +91,7 @@ describe('JwtAuthGuard', () => {
       sub?: string;
       actor?: 'STUDENT' | 'ADMIN';
       isSuperAdmin?: boolean;
-      pages?: string[];
+      permissions?: AdminPermissions;
     } = {},
   ) {
     const sub = claims.sub ?? SUBJECT;
@@ -94,7 +103,7 @@ describe('JwtAuthGuard', () => {
       actor,
       sid,
       ...(claims.isSuperAdmin === undefined ? {} : { isSuperAdmin: claims.isSuperAdmin }),
-      ...(claims.pages === undefined ? {} : { pages: claims.pages }),
+      ...(claims.permissions === undefined ? {} : { permissions: claims.permissions }),
     });
     return { token, sid, sub, actor };
   }
@@ -151,7 +160,7 @@ describe('JwtAuthGuard', () => {
       actor: ActorTypes.STUDENT,
       sessionId: sid,
       isSuperAdmin: false,
-      pages: [],
+      permissions: {},
     } satisfies AuthenticatedUser);
   });
 
@@ -209,7 +218,7 @@ describe('JwtAuthGuard', () => {
       sub: 'adm_1',
       actor: ActorTypes.ADMIN,
       isSuperAdmin: true,
-      pages: ['questions.manage'],
+      permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
     });
     const { context, request } = probe(ProbeController.prototype.plainRoute, authed(token));
 
@@ -218,7 +227,9 @@ describe('JwtAuthGuard', () => {
     const user = request.user as AuthenticatedUser;
     assert.equal(user.actor, ActorTypes.ADMIN);
     assert.equal(user.isSuperAdmin, true);
-    assert.deepEqual(user.pages, ['questions.manage']);
+    assert.deepEqual(user.permissions, {
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    });
   });
 
   it('does not look up a session for a @Public route', async () => {
@@ -238,7 +249,7 @@ describe('JwtAuthGuard', () => {
 describe('ActorGuard', () => {
   const guard = new ActorGuard(new Reflector());
   const user = (actor: 'STUDENT' | 'ADMIN'): { user: AuthenticatedUser } => ({
-    user: { id: 'x', actor, sessionId: 's', isSuperAdmin: false, pages: [] },
+    user: { id: 'x', actor, sessionId: 's', isSuperAdmin: false, permissions: {} },
   });
 
   it('allows a route that names no actor', async () => {
@@ -301,57 +312,87 @@ describe('ActorGuard', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('PagePermissionGuard', () => {
-  const guard = new PagePermissionGuard(new Reflector());
-  const admin = (pages: string[], isSuperAdmin = false): { user: AuthenticatedUser } => ({
-    user: { id: 'adm', actor: ActorTypes.ADMIN, sessionId: 's', isSuperAdmin, pages },
+describe('FeaturePermissionGuard', () => {
+  const guard = new FeaturePermissionGuard(new Reflector());
+  const admin = (
+    permissions: AdminPermissions,
+    isSuperAdmin = false,
+  ): { user: AuthenticatedUser } => ({
+    user: { id: 'adm', actor: ActorTypes.ADMIN, sessionId: 's', isSuperAdmin, permissions },
   });
 
-  it('allows a route that requires no page', async () => {
-    const { context } = probe(ProbeController.prototype.plainRoute, admin([]));
+  it('allows a route that requires no feature', async () => {
+    const { context } = probe(ProbeController.prototype.plainRoute, admin({}));
 
     assert.equal(await guard.canActivate(context), true);
   });
 
-  it('allows an admin holding the page', async () => {
+  it('allows an admin holding the exact level', async () => {
     const { context } = probe(
       ProbeController.prototype.managesQuestions,
-      admin(['questions.manage']),
+      admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE }),
     );
 
     assert.equal(await guard.canActivate(context), true);
   });
 
-  it('refuses an admin without it, and names the page', async () => {
-    const { context } = probe(ProbeController.prototype.managesQuestions, admin(['reports.view']));
+  it('refuses READ where the route wants WRITE', async () => {
+    // The failure the levels exist to prevent: a viewer must not be able to
+    // change anything just because they can see it.
+    const { context } = probe(
+      ProbeController.prototype.managesQuestions,
+      admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.READ }),
+    );
+
+    assert.throws(
+      () => guard.canActivate(context),
+      (error: unknown) => AppException.is(error) && error.code === 'FORBIDDEN',
+    );
+  });
+
+  it('lets WRITE satisfy a route that only wants READ', async () => {
+    const { context } = probe(
+      ProbeController.prototype.readsQuestions,
+      admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE }),
+    );
+
+    assert.equal(await guard.canActivate(context), true);
+  });
+
+  it('refuses an admin granted a different feature, and names what was needed', async () => {
+    const { context } = probe(
+      ProbeController.prototype.managesQuestions,
+      admin({ [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE }),
+    );
 
     assert.throws(
       () => guard.canActivate(context),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, 'FORBIDDEN');
-        assert.match(error.message, /questions\.manage/);
+        assert.match(error.message, /QUESTION_MANAGEMENT/);
         return true;
       },
     );
   });
 
   it('lets a super admin through without the grant', async () => {
-    // How the seeded bootstrap account reaches every screen before any grants
-    // exist. If this stopped working, a fresh deployment would be unusable.
-    const { context } = probe(ProbeController.prototype.managesQuestions, admin([], true));
+    // How the hand-inserted bootstrap account reaches every screen before any
+    // grants exist. If this stopped working, a fresh deployment would be
+    // unusable and there is no seed to fall back on.
+    const { context } = probe(ProbeController.prototype.managesQuestions, admin({}, true));
 
     assert.equal(await guard.canActivate(context), true);
   });
 
-  it('refuses a student outright, whatever pages the token claims', async () => {
+  it('refuses a student outright, whatever the token claims', async () => {
     const { context } = probe(ProbeController.prototype.managesQuestions, {
       user: {
         id: 'stu',
         actor: ActorTypes.STUDENT,
         sessionId: 's',
         isSuperAdmin: true,
-        pages: ['questions.manage'],
+        permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
       } satisfies AuthenticatedUser,
     });
 

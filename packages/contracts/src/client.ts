@@ -29,6 +29,23 @@ import {
   type VerifyAdminOtpInput,
   type VerifyStudentOtpInput,
 } from './auth';
+import {
+  ADMIN_ADMIN_ROUTES,
+  ADMIN_FEATURE_ROUTES,
+  ADMIN_SYNC_ROUTES,
+  adminSchema,
+  featureSchema,
+  studentSyncResultSchema,
+  type Admin,
+  type AdminListQueryInput,
+  type CreateAdminInput,
+  type CreateFeatureInput,
+  type Feature,
+  type PermissionGrantBody,
+  type PermissionGrantInput,
+  type StudentSyncResult,
+  type UpdateAdminInput,
+} from './admins';
 import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
@@ -450,6 +467,74 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: { isActive },
             schema: studentDetailSchema,
+          }),
+      },
+
+      /**
+       * Admin management, features and grants. Every one of these is super
+       * admin only on the server; the client does not re-state that, because a
+       * check the UI makes and the API does not is theatre.
+       */
+      admins: {
+        list: (query: AdminListQueryInput = {}): Promise<Paginated<Admin>> =>
+          requestPaginated(`${ADMIN_ADMIN_ROUTES.list}${queryString({ ...query })}`, {
+            schema: adminSchema.array(),
+          }),
+
+        create: (input: CreateAdminInput): Promise<Admin> =>
+          request(ADMIN_ADMIN_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: adminSchema,
+          }),
+
+        update: (id: string, input: UpdateAdminInput): Promise<Admin> =>
+          request(ADMIN_ADMIN_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: adminSchema,
+          }),
+
+        /** Soft-delete + prune every grant. Not a hard delete: an admin who
+         *  created records stays referenced by them. */
+        deactivate: (id: string): Promise<NoContent> =>
+          request(ADMIN_ADMIN_ROUTES.deactivate(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+      },
+
+      features: {
+        list: (): Promise<Feature[]> =>
+          request(ADMIN_FEATURE_ROUTES.list, { schema: featureSchema.array() }),
+
+        create: (input: CreateFeatureInput): Promise<Feature> =>
+          request(ADMIN_FEATURE_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: featureSchema,
+          }),
+
+        grant: (input: PermissionGrantInput): Promise<Feature> =>
+          request(ADMIN_FEATURE_ROUTES.grant, {
+            method: 'POST',
+            body: input,
+            schema: featureSchema,
+          }),
+
+        revoke: (input: PermissionGrantBody): Promise<Feature> =>
+          request(ADMIN_FEATURE_ROUTES.revoke(input.featureKey, input.level, input.adminId), {
+            method: 'DELETE',
+            schema: featureSchema,
+          }),
+      },
+
+      sync: {
+        /** Stubbed server-side — the plumbing is finished, the fetch is not. */
+        students: (): Promise<StudentSyncResult> =>
+          request(ADMIN_SYNC_ROUTES.students, {
+            method: 'POST',
+            schema: studentSyncResultSchema,
           }),
       },
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { adminPermissionsSchema } from './admins';
 import {
   ActorTypes,
   actorTypeSchema,
@@ -155,8 +156,13 @@ export const adminIdentitySchema = z.object({
   email: z.string(),
   fullName: z.string().nullable(),
   isSuperAdmin: z.boolean(),
-  /** Page codes this admin may access. Super admins bypass the check entirely. */
-  pages: z.array(z.string()),
+  /**
+   * What this admin may do, by feature key. A super admin bypasses the check
+   * entirely, so theirs is empty — an empty map on a super admin means
+   * "everything", and on anyone else means "nothing". The two are only ever
+   * read together with `isSuperAdmin`, never apart.
+   */
+  permissions: adminPermissionsSchema,
 });
 export type AdminIdentity = z.infer<typeof adminIdentitySchema>;
 
@@ -187,7 +193,9 @@ export const accessTokenClaimsSchema = z.object({
   actor: actorTypeSchema,
   sid: z.string(),
   isSuperAdmin: z.boolean().optional(),
-  pages: z.array(z.string()).optional(),
+  /** Carried in the token, so the guard costs nothing at request time. A grant
+   *  change takes effect on the next refresh (<= the access TTL). */
+  permissions: adminPermissionsSchema.optional(),
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
 

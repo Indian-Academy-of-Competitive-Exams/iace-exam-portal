@@ -44,7 +44,7 @@ export class JwtAuthGuard implements CanActivate {
       actor: claims.actor,
       sessionId: claims.sid,
       isSuperAdmin: claims.isSuperAdmin ?? false,
-      pages: claims.pages ?? [],
+      permissions: claims.permissions ?? {},
     };
     return true;
   }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
-import { ActorTypes, AppException } from '@iace/contracts';
+import { ActorTypes, AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { TokenService } from '../src/auth/token.service';
 import { FakeConfig } from './support/fakes';
 
@@ -33,15 +33,17 @@ describe('TokenService', () => {
         actor: ActorTypes.ADMIN,
         sid: 's',
         isSuperAdmin: true,
-        pages: ['questions.manage'],
+        permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
       }),
     );
     assert.equal(admin.isSuperAdmin, true);
-    assert.deepEqual(admin.pages, ['questions.manage']);
+    assert.deepEqual(admin.permissions, {
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    });
 
     const student = await tokens.verifyAccess(await tokens.signAccess(STUDENT_CLAIMS));
     assert.equal(student.isSuperAdmin, undefined);
-    assert.equal(student.pages, undefined);
+    assert.equal(student.permissions, undefined);
   });
 
   it('will not accept a refresh token as an access token', async () => {

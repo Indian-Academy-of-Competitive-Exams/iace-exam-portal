@@ -308,10 +308,3 @@ export const ADMIN_STUDENT_ROUTES = {
   update: (id: string) => `/admin/students/${id}`,
   setActive: (id: string) => `/admin/students/${id}/active`,
 } as const;
-
-/** Page codes the guards check. Granting them needs admin management (later);
- *  until then the seeded super admin bypasses the check. */
-export const ADMIN_PAGES = {
-  STUDENTS_MANAGE: 'students.manage',
-  GROUPS_MANAGE: 'groups.manage',
-} as const;

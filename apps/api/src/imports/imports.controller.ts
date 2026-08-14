@@ -13,7 +13,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { type Response } from 'express';
 import {
-  ADMIN_PAGES,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   ActorTypes,
   AppException,
   ErrorCodes,
@@ -26,7 +27,7 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
-import { Actors, RequiresPage } from '../common/security';
+import { Actors, RequiresFeature } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
 import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';
@@ -49,7 +50,6 @@ interface UploadedFileLike {
  */
 @Controller('imports')
 @Actors(ActorTypes.ADMIN)
-@RequiresPage(ADMIN_PAGES.STUDENTS_MANAGE)
 export class ImportsController {
   constructor(
     private readonly imports: ImportsService,
@@ -60,6 +60,7 @@ export class ImportsController {
    * The sample file. Generated on request from the same column list the parser
    * matches on, so it can never document a format the importer will not accept.
    */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('students/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${STUDENT_IMPORT_TEMPLATE_FILENAME}"`)
@@ -71,6 +72,7 @@ export class ImportsController {
   }
 
   /** Writes nothing — this is what the admin reads before committing. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
@@ -78,6 +80,7 @@ export class ImportsController {
     return this.imports.previewStudents(this.bufferOf(file));
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('students/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
@@ -93,6 +96,7 @@ export class ImportsController {
   // batches nobody checked.
   // ==========================================================================
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('groups/members/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME}"`)
@@ -101,6 +105,7 @@ export class ImportsController {
     response.send(await buildGroupMemberTemplate());
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Post('groups/:groupId/members/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
@@ -111,6 +116,7 @@ export class ImportsController {
     return this.imports.previewGroupMembers(groupId, this.bufferOf(file));
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('groups/:groupId/members/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))

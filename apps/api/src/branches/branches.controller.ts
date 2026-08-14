@@ -11,7 +11,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
-  ADMIN_PAGES,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   ActorTypes,
   branchListQuerySchema,
   createBranchSchema,
@@ -22,7 +23,7 @@ import {
   type Paginated,
   type UpdateBranchBody,
 } from '@iace/contracts';
-import { Actors, RequiresPage, RequiresSuperAdmin } from '../common/security';
+import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { BranchesService } from './branches.service';
 
@@ -33,10 +34,10 @@ import { BranchesService } from './branches.service';
  */
 @Controller('admin/branches')
 @Actors(ActorTypes.ADMIN)
-@RequiresPage(ADMIN_PAGES.GROUPS_MANAGE)
 export class BranchesController {
   constructor(private readonly branches: BranchesService) {}
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
   list(
     @Query(new ZodQuery(branchListQuerySchema)) query: BranchListQuery,
@@ -60,6 +61,7 @@ export class BranchesController {
   }
 
   /** Refused while any group still sits under the branch, and always for GLOBAL. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @RequiresSuperAdmin()

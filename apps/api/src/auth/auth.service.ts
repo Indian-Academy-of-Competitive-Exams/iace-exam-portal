@@ -10,9 +10,11 @@ import {
   type OtpRequestResponse,
   type PinSetupTicket,
   type StudentIdentity,
+  type AdminPermissions,
 } from '@iace/contracts';
 import { type Student } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminsService } from '../admins';
 import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
@@ -44,6 +46,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
     private readonly events: DomainEventBus,
+    private readonly admins: AdminsService,
   ) {}
 
   // ==========================================================================
@@ -234,10 +237,7 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.otp.verify(ActorTypes.ADMIN, email, code);
 
-    const admin = await this.prisma.admin.findUnique({
-      where: { email },
-      include: { pages: { select: { code: true } } },
-    });
+    const admin = await this.prisma.admin.findUnique({ where: { email } });
     if (!admin?.isActive) throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
 
     const identity: AuthIdentity = {
@@ -246,7 +246,7 @@ export class AuthService {
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      pages: admin.pages.map((page) => page.code),
+      permissions: await this.adminPermissions(admin.id, admin.isSuperAdmin),
     };
 
     return { tokens: await this.issue(identity, device), identity };
@@ -299,7 +299,7 @@ export class AuthService {
       actor: identity.actor,
       sid: claims.sid,
       ...(identity.actor === ActorTypes.ADMIN
-        ? { isSuperAdmin: identity.isSuperAdmin, pages: identity.pages }
+        ? { isSuperAdmin: identity.isSuperAdmin, permissions: identity.permissions }
         : {}),
     });
 
@@ -347,7 +347,7 @@ export class AuthService {
       actor: identity.actor,
       sid: sessionId,
       ...(identity.actor === ActorTypes.ADMIN
-        ? { isSuperAdmin: identity.isSuperAdmin, pages: identity.pages }
+        ? { isSuperAdmin: identity.isSuperAdmin, permissions: identity.permissions }
         : {}),
     });
     const refreshToken = await this.tokens.signRefresh({
@@ -394,10 +394,7 @@ export class AuthService {
       return this.studentIdentity(student);
     }
 
-    const admin = await this.prisma.admin.findUnique({
-      where: { id },
-      include: { pages: { select: { code: true } } },
-    });
+    const admin = await this.prisma.admin.findUnique({ where: { id } });
     if (!admin?.isActive) return null;
     return {
       actor: ActorTypes.ADMIN,
@@ -405,8 +402,20 @@ export class AuthService {
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      pages: admin.pages.map((page) => page.code),
+      permissions: await this.adminPermissions(admin.id, admin.isSuperAdmin),
     };
+  }
+
+  /**
+   * Grants for a token, through the admins facade rather than by reaching into
+   * its tables (docs/03 §4.2).
+   *
+   * Skipped entirely for a super admin: they bypass every check, so the query
+   * would be work whose result is never read, and an empty map on a super admin
+   * already means "everything".
+   */
+  private async adminPermissions(id: string, isSuperAdmin: boolean): Promise<AdminPermissions> {
+    return isSuperAdmin ? {} : this.admins.permissionsFor(id);
   }
 
   // Values echoed for unknown admins; they must match the real policy exactly

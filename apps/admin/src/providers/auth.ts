@@ -1,4 +1,11 @@
-import { ActorTypes, type AdminIdentity } from '@iace/contracts';
+import {
+  ActorTypes,
+  PERMISSION_LEVELS,
+  satisfiesLevel,
+  type AdminIdentity,
+  type FeatureKey,
+  type PermissionLevel,
+} from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
 import { api, signOutSignal, tokenStore } from '../lib/api';
 import { ME_QUERY_KEY } from '../lib/constants';
@@ -15,18 +22,25 @@ import { ME_QUERY_KEY } from '../lib/constants';
  */
 export const { AuthProvider, useAuth } = createAuth<
   AdminIdentity,
-  { canAccess: (pageCode: string) => boolean }
+  { can: (key: FeatureKey, level?: PermissionLevel) => boolean }
 >({
   actor: ActorTypes.ADMIN,
   queryKey: ME_QUERY_KEY,
   tokenStore,
   signOutSignal,
   endpoints: { me: () => api.auth.me(), logout: async () => void (await api.auth.logout()) },
-  // Mirrors the server-side PagePermissionGuard: super admins bypass checks.
-  // Admin-only by design — a student identity has no pages, so a shared
-  // `canAccess` would be a function that can only ever answer false.
+  /**
+   * Mirrors the server-side FeaturePermissionGuard exactly, and shares the rule
+   * with it: `satisfiesLevel` is the same function the guard calls, imported
+   * rather than reimplemented. The two answering differently is precisely the
+   * bug where the UI renders a button the API then refuses — which reads to the
+   * user as a broken product rather than as a permission they lack.
+   *
+   * Admin-only by design: a student identity has no grants, so a shared `can`
+   * would be a function that can only ever answer false.
+   */
   extend: (admin) => ({
-    canAccess: (pageCode: string) =>
-      admin !== null && (admin.isSuperAdmin || admin.pages.includes(pageCode)),
+    can: (key: FeatureKey, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
+      admin !== null && (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),
   }),
 });

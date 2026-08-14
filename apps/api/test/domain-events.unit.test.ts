@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuthService } from '../src/auth/auth.service';
+import { type AdminsService } from '../src/admins';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { PinService } from '../src/auth/pin/pin.service';
 import { SessionService } from '../src/auth/session.service';
@@ -10,6 +11,7 @@ import { TokenService } from '../src/auth/token.service';
 import { DomainEventBus } from '../src/common/events/domain-event-bus';
 import { DOMAIN_EVENTS, PIN_RESET_REASONS } from '../src/common/events';
 import {
+  FakeAdminsService,
   FakeConfig,
   FakeEventBus,
   FakeMessageSender,
@@ -47,6 +49,7 @@ function build(
     new TokenService(new JwtService({}), config.asService()),
     new SessionService(redis.asService()),
     bus.asService(),
+    new FakeAdminsService() as unknown as AdminsService,
   );
   return { auth, sender, redis, prisma };
 }

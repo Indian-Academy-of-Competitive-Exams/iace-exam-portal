@@ -1,3 +1,4 @@
+import type { AdminPermissions, PermissionLevel } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -294,7 +295,6 @@ export interface FakeAdmin {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
-  pages: { code: string }[];
 }
 
 export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
@@ -319,7 +319,6 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
     fullName: 'Super Admin',
     isSuperAdmin: true,
     isActive: true,
-    pages: [],
     ...overrides,
   };
 }
@@ -477,3 +476,237 @@ export const NO_DEVICE: DeviceContext = {
   ip: null,
   userAgent: null,
 };
+
+/**
+ * The admins facade, as far as auth is concerned: one method returning the
+ * grant map that goes into a token.
+ *
+ * A fake rather than the real service because the real one is a Prisma query
+ * against a GIN index, and auth's tests are about what auth does with the
+ * answer, not about how it is fetched. `calls` is recorded so a test can assert
+ * the obvious optimisation — that a super admin is never looked up.
+ */
+export class FakeAdminsService {
+  readonly calls: string[] = [];
+  constructor(private readonly grants: Record<string, AdminPermissions> = {}) {}
+
+  permissionsFor(adminId: string): Promise<AdminPermissions> {
+    this.calls.push(adminId);
+    return Promise.resolve(this.grants[adminId] ?? {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Admins / features / grants
+// ---------------------------------------------------------------------------
+
+interface FakeFeatureRow {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface FakePermissionRow {
+  id: string;
+  featureId: string;
+  level: PermissionLevel;
+  adminIds: string[];
+}
+
+interface FakeAdminRow {
+  id: string;
+  email: string;
+  fullName: string | null;
+  isSuperAdmin: boolean;
+  isActive: boolean;
+  createdById: string | null;
+  createdAt: Date;
+  deletedAt: Date | null;
+}
+
+/**
+ * Enough Prisma for AdminsService to run unchanged, with no database.
+ *
+ * The point is to exercise the RULES — both permission rows are created with a
+ * feature, deactivating prunes grants, granting twice grants once — which are
+ * exactly the parts a real Postgres would not catch for us anyway. `$transaction`
+ * runs the callback directly: these tests are about what the writes ARE, not
+ * about isolation, and pretending to roll back would be a lie either way.
+ */
+export class FakeAdminsPrisma {
+  private seq = 0;
+  readonly features: FakeFeatureRow[] = [];
+  readonly permissions: FakePermissionRow[] = [];
+
+  constructor(readonly admins: FakeAdminRow[] = []) {}
+
+  private id(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}_${this.seq}`;
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(fn: (tx: FakeAdminsPrisma) => Promise<T>): Promise<T> {
+    return fn(this);
+  }
+
+  readonly admin = {
+    findUnique: ({ where }: { where: { id?: string; email?: string } }) =>
+      Promise.resolve(
+        this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email)) ?? null,
+      ),
+
+    findFirst: ({ where }: { where: { id: string; deletedAt: null } }) =>
+      Promise.resolve(this.admins.find((a) => a.id === where.id && a.deletedAt === null) ?? null),
+
+    findMany: ({ skip = 0, take = 50 }: { skip?: number; take?: number } = {}) =>
+      Promise.resolve(this.admins.filter((a) => a.deletedAt === null).slice(skip, skip + take)),
+
+    count: () => Promise.resolve(this.admins.filter((a) => a.deletedAt === null).length),
+
+    create: ({ data }: { data: Partial<FakeAdminRow> & { email: string } }) => {
+      const row: FakeAdminRow = {
+        id: this.id('adm'),
+        email: data.email,
+        fullName: data.fullName ?? null,
+        isSuperAdmin: data.isSuperAdmin ?? false,
+        isActive: true,
+        createdById: data.createdById ?? null,
+        createdAt: new Date(),
+        deletedAt: null,
+      };
+      this.admins.push(row);
+      return Promise.resolve(row);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAdminRow> }) => {
+      const row = this.admins.find((a) => a.id === where.id);
+      if (!row) throw new Error(`no admin ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
+  readonly feature = {
+    findUnique: ({ where }: { where: { key?: string; id?: string } }) =>
+      Promise.resolve(
+        this.features.find((f) => (where.key ? f.key === where.key : f.id === where.id)) ?? null,
+      ),
+
+    findUniqueOrThrow: ({ where }: { where: { id: string } }) => {
+      const row = this.features.find((f) => f.id === where.id);
+      if (!row) throw new Error(`no feature ${where.id}`);
+      return Promise.resolve(this.withPermissions(row));
+    },
+
+    findMany: () =>
+      Promise.resolve(
+        [...this.features]
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map((f) => this.withPermissions(f)),
+      ),
+
+    create: ({
+      data,
+    }: {
+      data: {
+        key: string;
+        name: string;
+        description: string | null;
+        permissions: { create: { level: PermissionLevel }[] };
+      };
+    }) => {
+      const row: FakeFeatureRow = {
+        id: this.id('ftr'),
+        key: data.key,
+        name: data.name,
+        description: data.description,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.features.push(row);
+      for (const p of data.permissions.create) {
+        this.permissions.push({
+          id: this.id('perm'),
+          featureId: row.id,
+          level: p.level,
+          adminIds: [],
+        });
+      }
+      return Promise.resolve(this.withPermissions(row));
+    },
+  };
+
+  readonly featurePermission = {
+    findMany: ({
+      where,
+    }: {
+      where: { adminIds?: { has?: string; hasSome?: string[] } };
+    }): Promise<
+      { id: string; level: PermissionLevel; adminIds: string[]; feature: { key: string } }[]
+    > => {
+      const has = where.adminIds?.has;
+      const hasSome = where.adminIds?.hasSome;
+      return Promise.resolve(
+        this.permissions
+          .filter((p) =>
+            has !== undefined
+              ? p.adminIds.includes(has)
+              : (hasSome ?? []).some((id) => p.adminIds.includes(id)),
+          )
+          .map((p) => ({
+            id: p.id,
+            level: p.level,
+            adminIds: [...p.adminIds],
+            feature: { key: this.features.find((f) => f.id === p.featureId)?.key ?? '' },
+          })),
+      );
+    },
+
+    findUnique: ({
+      where,
+    }: {
+      where: { featureId_level: { featureId: string; level: PermissionLevel } };
+    }) => {
+      const { featureId, level } = where.featureId_level;
+      const row = this.permissions.find((p) => p.featureId === featureId && p.level === level);
+      return Promise.resolve(row ? { id: row.id, adminIds: [...row.adminIds] } : null);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: { adminIds: string[] } }) => {
+      const row = this.permissions.find((p) => p.id === where.id);
+      if (!row) throw new Error(`no permission ${where.id}`);
+      row.adminIds = data.adminIds;
+      return Promise.resolve(row);
+    },
+  };
+
+  private withPermissions(row: FakeFeatureRow) {
+    return {
+      ...row,
+      permissions: this.permissions
+        .filter((p) => p.featureId === row.id)
+        .map((p) => ({ level: p.level, adminIds: [...p.adminIds] })),
+    };
+  }
+}
+
+export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRow {
+  return {
+    id: 'adm_1',
+    email: 'admin@iace.co.in',
+    fullName: 'An Admin',
+    isSuperAdmin: false,
+    isActive: true,
+    createdById: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    deletedAt: null,
+    ...overrides,
+  };
+}

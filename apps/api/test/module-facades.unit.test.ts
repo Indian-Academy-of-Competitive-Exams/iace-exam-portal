@@ -34,6 +34,7 @@ function authService(): { auth: AuthService; pin: PinService } {
     null as never,
     null as never,
     null as never,
+    null as never,
   );
   return { auth, pin };
 }

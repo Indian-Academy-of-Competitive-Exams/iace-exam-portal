@@ -5,8 +5,9 @@ export {
   CurrentUser,
   IS_PUBLIC_KEY,
   Public,
-  REQUIRED_PAGE_KEY,
-  RequiresPage,
+  REQUIRED_FEATURE_KEY,
+  RequiresFeature,
   RequiresSuperAdmin,
   SUPER_ADMIN_KEY,
+  type RequiredFeature,
 } from './decorators';

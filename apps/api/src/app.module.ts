@@ -9,6 +9,7 @@ import { EventsModule } from './common/events';
 import { MessagingModule } from './common/messaging';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { AdminsModule } from './admins';
 import { StudentsModule } from './students/students.module';
 import { BranchesModule } from './branches/branches.module';
 import { MeModule } from './me/me.module';
@@ -16,7 +17,7 @@ import { GroupsModule } from './groups/groups.module';
 import { ImportsModule } from './imports/imports.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
-import { PagePermissionGuard } from './auth/guards/page-permission.guard';
+import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
 import { SuperAdminGuard } from './auth/guards/super-admin.guard';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { ResponseInterceptor } from './common/response.interceptor';
@@ -43,6 +44,7 @@ import { RequestIdMiddleware } from './common/request-id';
     EventsModule,
     MessagingModule,
     AuthModule,
+    AdminsModule,
     StudentsModule,
     MeModule,
     BranchesModule,
@@ -55,7 +57,7 @@ import { RequestIdMiddleware } from './common/request-id';
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ActorGuard },
-    { provide: APP_GUARD, useClass: PagePermissionGuard },
+    { provide: APP_GUARD, useClass: FeaturePermissionGuard },
     { provide: APP_GUARD, useClass: SuperAdminGuard },
   ],
 })

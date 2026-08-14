@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
-import { ActorTypes, AppException } from '@iace/contracts';
+import {
+  ActorTypes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  type AdminPermissions,
+  AppException,
+} from '@iace/contracts';
 import { AuthService } from '../src/auth/auth.service';
+import { type AdminsService } from '../src/admins';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { PinService } from '../src/auth/pin/pin.service';
 import { SessionService } from '../src/auth/session.service';
@@ -14,6 +21,7 @@ import {
   FakePrisma,
   FakeRedis,
   NO_DEVICE,
+  FakeAdminsService,
   makeAdmin,
   makeStudent,
   type FakeAdmin,
@@ -27,7 +35,11 @@ import {
 
 const MOBILE = '9876543210';
 
-function build(students: FakeStudent[] = [], admins: FakeAdmin[] = []) {
+function build(
+  students: FakeStudent[] = [],
+  admins: FakeAdmin[] = [],
+  grants: Record<string, AdminPermissions> = {},
+) {
   const redis = new FakeRedis();
   const config = new FakeConfig();
   const sender = new FakeMessageSender();
@@ -40,8 +52,18 @@ function build(students: FakeStudent[] = [], admins: FakeAdmin[] = []) {
 
   const events = new FakeEventBus();
 
-  const auth = new AuthService(prisma.asService(), otp, pin, tokens, sessions, events.asService());
-  return { auth, otp, pin, tokens, sessions, prisma, redis, sender, config, events };
+  const adminsFacade = new FakeAdminsService(grants);
+
+  const auth = new AuthService(
+    prisma.asService(),
+    otp,
+    pin,
+    tokens,
+    sessions,
+    events.asService(),
+    adminsFacade as unknown as AdminsService,
+  );
+  return { auth, otp, pin, tokens, sessions, prisma, redis, sender, config, events, adminsFacade };
 }
 
 /** Drives signup the way the endpoints do: OTP → ticket → PIN. */
@@ -218,11 +240,10 @@ describe('AuthService — signup and PIN reset', () => {
 });
 
 describe('AuthService — admin', () => {
-  it('signs in a known active admin and carries their page codes', async () => {
-    const ctx = build(
-      [],
-      [makeAdmin({ isSuperAdmin: false, pages: [{ code: 'questions.manage' }] })],
-    );
+  it('signs in a known active admin and carries their grants', async () => {
+    const ctx = build([], [makeAdmin({ id: 'adm_1', isSuperAdmin: false })], {
+      adm_1: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    });
     await ctx.auth.requestAdminOtp('admin@iace.co.in');
 
     const { identity } = await ctx.auth.verifyAdminOtp(
@@ -232,9 +253,23 @@ describe('AuthService — admin', () => {
     );
 
     assert.equal(identity.actor, ActorTypes.ADMIN);
-    assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.pages : null, [
-      'questions.manage',
-    ]);
+    assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.permissions : null, {
+      [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE,
+    });
+  });
+
+  it('does not look up grants for a super admin — they bypass every check', async () => {
+    const ctx = build([], [makeAdmin({ id: 'adm_root', isSuperAdmin: true })]);
+    await ctx.auth.requestAdminOtp('admin@iace.co.in');
+
+    const { identity } = await ctx.auth.verifyAdminOtp(
+      'admin@iace.co.in',
+      ctx.sender.lastCode,
+      NO_DEVICE,
+    );
+
+    assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.permissions : null, {});
+    assert.deepEqual(ctx.adminsFacade.calls, [], 'a super admin needs no grant query');
   });
 
   it('answers identically for an unknown admin, but sends nothing', async () => {
@@ -285,7 +320,7 @@ describe('AuthService — refresh and me', () => {
       actor: ActorTypes.STUDENT,
       sessionId: claims.sid,
       isSuperAdmin: false,
-      pages: [],
+      permissions: {},
     });
 
     assert.equal(identity.actor === ActorTypes.STUDENT ? identity.preTestReady : null, true);

@@ -11,7 +11,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
-  ADMIN_PAGES,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   ActorTypes,
   addGroupMembersSchema,
   createGroupSchema,
@@ -25,7 +26,7 @@ import {
   type Paginated,
   type UpdateGroupBody,
 } from '@iace/contracts';
-import { Actors, RequiresPage } from '../common/security';
+import { Actors, RequiresFeature } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { GroupsService } from './groups.service';
 
@@ -36,10 +37,10 @@ import { GroupsService } from './groups.service';
  */
 @Controller('admin/groups')
 @Actors(ActorTypes.ADMIN)
-@RequiresPage(ADMIN_PAGES.GROUPS_MANAGE)
 export class GroupsController {
   constructor(private readonly groups: GroupsService) {}
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
   list(
     @Query(new ZodQuery(groupListQuerySchema)) query: GroupListQuery,
@@ -47,16 +48,19 @@ export class GroupsController {
     return this.groups.list(query);
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id')
   detail(@Param('id') id: string): Promise<GroupSummary> {
     return this.groups.detail(id);
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(@Body(new ZodBody(createGroupSchema)) body: CreateGroupBody): Promise<GroupSummary> {
     return this.groups.create(body);
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -66,12 +70,14 @@ export class GroupsController {
   }
 
   /** Refused while anything still depends on the group. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id') id: string): Promise<void> {
     return this.groups.remove(id);
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/students')
   @HttpCode(HttpStatus.OK)
   addMembers(
@@ -81,6 +87,7 @@ export class GroupsController {
     return this.groups.addMembers(id, body.studentIds);
   }
 
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id/students/:studentId')
   @HttpCode(HttpStatus.OK)
   removeMember(@Param('id') id: string, @Param('studentId') studentId: string): Promise<void> {

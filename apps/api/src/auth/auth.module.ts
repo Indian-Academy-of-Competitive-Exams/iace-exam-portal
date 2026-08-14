@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AppConfigModule } from '../config/config.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AdminsModule } from '../admins';
 import { RedisModule } from '../redis/redis.module';
 import { EventsModule } from '../common/events';
 import { MessagingModule } from '../common/messaging';
@@ -13,7 +14,7 @@ import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ActorGuard } from './guards/actor.guard';
-import { PagePermissionGuard } from './guards/page-permission.guard';
+import { FeaturePermissionGuard } from './guards/feature-permission.guard';
 
 @Module({
   // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not
@@ -24,6 +25,11 @@ import { PagePermissionGuard } from './guards/page-permission.guard';
     PrismaModule,
     RedisModule,
     EventsModule,
+    // Auth reads an admin's grants to put them in a token. It goes through the
+    // admins facade rather than the tables (docs/03 §4.2) — the direction is
+    // one-way, because admins gates itself on @RequiresSuperAdmin from the
+    // shared kernel and needs nothing from auth.
+    AdminsModule,
     // The OTP is one outbound message among several to come; auth no longer
     // owns the delivery channel, only the decision to send.
     MessagingModule,
@@ -38,7 +44,7 @@ import { PagePermissionGuard } from './guards/page-permission.guard';
     PinService,
     JwtAuthGuard,
     ActorGuard,
-    PagePermissionGuard,
+    FeaturePermissionGuard,
   ],
   exports: [
     // AuthService for the student's own PIN change: it owns verification, the
@@ -50,7 +56,7 @@ import { PagePermissionGuard } from './guards/page-permission.guard';
     PinService,
     JwtAuthGuard,
     ActorGuard,
-    PagePermissionGuard,
+    FeaturePermissionGuard,
   ],
 })
 export class AuthModule {}

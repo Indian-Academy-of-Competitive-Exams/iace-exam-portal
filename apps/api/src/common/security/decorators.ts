@@ -1,5 +1,11 @@
 import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
-import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  type ActorType,
+  type FeatureKey,
+  type PermissionLevel,
+} from '@iace/contracts';
 import { type AuthenticatedUser } from './authenticated-user';
 
 /**
@@ -19,7 +25,7 @@ import { type AuthenticatedUser } from './authenticated-user';
 
 export const IS_PUBLIC_KEY = 'auth:public';
 export const ACTORS_KEY = 'auth:actors';
-export const REQUIRED_PAGE_KEY = 'auth:page';
+export const REQUIRED_FEATURE_KEY = 'auth:feature';
 export const SUPER_ADMIN_KEY = 'auth:superAdmin';
 
 /** Opt a route out of the globally-applied JWT guard. */
@@ -28,11 +34,22 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 /** Restrict a route to one identity table — students and admins are separate. */
 export const Actors = (...actors: ActorType[]) => SetMetadata(ACTORS_KEY, actors);
 
+/** What a route demands: a feature, at a level. */
+export interface RequiredFeature {
+  key: FeatureKey;
+  level: PermissionLevel;
+}
+
 /**
- * Require a page permission (a `Page.code`, e.g. "questions.manage").
- * Super admins bypass the check.
+ * Require a feature permission at a level. Super admins bypass the check.
+ *
+ * The LEVEL is per route, not per controller, which is the point of having
+ * levels at all: a class-level decorator would force reads and writes to need
+ * the same grant and make READ meaningless. Put it on the handler — GET wants
+ * READ, everything that changes something wants WRITE.
  */
-export const RequiresPage = (pageCode: string) => SetMetadata(REQUIRED_PAGE_KEY, pageCode);
+export const RequiresFeature = (key: FeatureKey, level: PermissionLevel) =>
+  SetMetadata(REQUIRED_FEATURE_KEY, { key, level } satisfies RequiredFeature);
 
 /**
  * Restrict a route to super admins, above and beyond any page permission.

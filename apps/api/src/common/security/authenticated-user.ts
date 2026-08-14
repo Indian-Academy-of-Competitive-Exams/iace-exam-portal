@@ -1,4 +1,4 @@
-import { type ActorType } from '@iace/contracts';
+import { type ActorType, type AdminPermissions } from '@iace/contracts';
 
 /**
  * What the JWT guard attaches to the request after a token checks out.
@@ -15,5 +15,7 @@ export interface AuthenticatedUser {
   /** Redis session id — the handle a logout revokes. */
   sessionId: string;
   isSuperAdmin: boolean;
-  pages: string[];
+  /** Feature -> level. Empty for a student, and for a super admin, who
+   *  bypasses the check entirely — the two are only read together. */
+  permissions: AdminPermissions;
 }
