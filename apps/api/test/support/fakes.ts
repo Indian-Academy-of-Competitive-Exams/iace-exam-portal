@@ -210,6 +210,17 @@ export class FakeOtpSender implements OtpSender {
 
 // ---------------------------------------------------------------------------
 
+/** The `StudentProfile` columns the flags and the document writes look at. */
+export interface FakeProfile {
+  motherName: string | null;
+  fatherName: string | null;
+  dob: Date | null;
+  gender: string | null;
+  photoUrl: string | null;
+  aadhaarUrl: string | null;
+  panUrl: string | null;
+}
+
 export interface FakeStudent {
   id: string;
   mobile: string;
@@ -219,6 +230,20 @@ export interface FakeStudent {
   preTestReady: boolean;
   profileCompleted: boolean;
   isActive: boolean;
+  profile: FakeProfile | null;
+}
+
+export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
+  return {
+    motherName: null,
+    fatherName: null,
+    dob: null,
+    gender: null,
+    photoUrl: null,
+    aadhaarUrl: null,
+    panUrl: null,
+    ...overrides,
+  };
 }
 
 export interface FakeAdmin {
@@ -240,6 +265,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     preTestReady: false,
     profileCompleted: false,
     isActive: true,
+    profile: null,
     ...overrides,
   };
 }
@@ -290,6 +316,36 @@ export class FakePrisma {
       const created = makeStudent({ ...create, id: `stu_new_${this.nextId++}` });
       this.students.push(created);
       return Promise.resolve(created);
+    },
+
+    /**
+     * Enough of a nested write for the profile paths: scalar columns are
+     * assigned, and `profile.upsert` creates the row or merges into it exactly
+     * as Prisma would. Modelled rather than stubbed because the thing worth
+     * asserting — "storing a document recomputes `profileCompleted` from the
+     * MERGED profile" — is invisible if the fake just records the call.
+     */
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown> & {
+        profile?: { upsert: { create: Partial<FakeProfile>; update: Partial<FakeProfile> } };
+      };
+    }) => {
+      const student = this.students.find((s) => s.id === where.id);
+      if (!student) throw new Error(`no student ${where.id}`);
+
+      const { profile, ...scalars } = data;
+      Object.assign(student, scalars);
+
+      if (profile) {
+        student.profile = student.profile
+          ? Object.assign(student.profile, profile.upsert.update)
+          : makeProfile(profile.upsert.create);
+      }
+      return Promise.resolve(student);
     },
   };
 

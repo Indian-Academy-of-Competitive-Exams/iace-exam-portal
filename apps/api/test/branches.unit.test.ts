@@ -5,7 +5,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
 import { branchDeletionBlocker, branchEditBlocker } from '../src/branches/branch-rules';
 import { SuperAdminGuard } from '../src/auth/guards/super-admin.guard';
-import { SUPER_ADMIN_KEY } from '../src/auth/decorators';
+import { SUPER_ADMIN_KEY } from '../src/common/security';
 
 describe('branchDeletionBlocker', () => {
   it('allows deleting an empty branch', () => {

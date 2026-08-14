@@ -10,7 +10,7 @@ import {
   type UpdateBranchBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { branchDeletionBlocker, branchEditBlocker } from './branch-rules';
+import { branchDeletionBlocker, branchEditBlocker, INACTIVE_BRANCH_MESSAGE } from './branch-rules';
 
 const BRANCH_INCLUDE = {
   _count: { select: { groups: true } },
@@ -25,9 +25,36 @@ interface BranchRow {
   _count: { groups: number };
 }
 
+/** Owns `Branch` (docs/03 §5) — the only module that writes it. */
 @Injectable()
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Whether a branch may take something new — used by whoever is about to
+   * attach to one. Throws with the message the form should show; returns
+   * quietly when the branch is fine.
+   *
+   * This is the branches module's rule, so it is answered by the branches
+   * module (docs/03 §4.2). It was previously answered by `groups`, which read
+   * `Branch` directly and imported the message constant out of `branch-rules`
+   * — which meant the next module to attach to a branch would either have
+   * copied that check or forgotten it, and "forgotten it" is a group quietly
+   * created under a retired centre.
+   */
+  async assertUsable(branchId: string): Promise<void> {
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+    if (!branch) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such branch', {
+        fieldErrors: { branchId: ['Pick a branch'] },
+      });
+    }
+    if (!branch.isActive) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
+        fieldErrors: { branchId: [INACTIVE_BRANCH_MESSAGE] },
+      });
+    }
+  }
 
   async list(query: BranchListQuery): Promise<Paginated<Branch>> {
     const where: Prisma.BranchWhereInput = {

@@ -22,8 +22,7 @@ import {
   type VerifyStudentOtpBody,
 } from '@iace/contracts';
 import { AuthService } from './auth.service';
-import { CurrentUser, Public } from './decorators';
-import { type AuthenticatedUser } from './auth.types';
+import { CurrentUser, Public, type AuthenticatedUser } from '../common/security';
 import { deviceFrom } from './device';
 import { ZodBody } from '../common/zod-validation.pipe';
 

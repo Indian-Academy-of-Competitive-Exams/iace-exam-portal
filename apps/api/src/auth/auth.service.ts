@@ -17,8 +17,18 @@ import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
-import { type AuthenticatedUser, type DeviceContext } from './auth.types';
+import { type AuthenticatedUser } from '../common/security';
+import { type DeviceContext } from './auth.types';
 
+/**
+ * Owns `Admin` and `Page` (docs/03 §5) — and READS `Student` for credentials,
+ * which the students module owns. That split is deliberate: a PIN hash is a
+ * credential, not profile data, and putting login behind the students facade
+ * would make the students module a dependency of every sign-in.
+ *
+ * Sessions, OTP codes and device binding are Redis-only and are never written
+ * to Postgres at all.
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -231,6 +241,21 @@ export class AuthService {
     };
 
     return { tokens: await this.issue(identity, device), identity };
+  }
+
+  /**
+   * Hashes a PIN the way a chosen one is hashed — same argon2 profile, same
+   * pepper — for the bulk importer, which seeds a starting PIN so an uploaded
+   * roster can sign in the same day.
+   *
+   * A facade method rather than the importer reaching for `PinService`
+   * directly (docs/03 §4.1). The pepper and the cost parameters are auth's, and
+   * the day either changes, every hash in the system has to change with it: a
+   * second module holding its own reference to the hasher is how one of them
+   * quietly keeps the old settings.
+   */
+  hashPin(pin: string): Promise<string> {
+    return this.pin.hash(pin);
   }
 
   // ==========================================================================

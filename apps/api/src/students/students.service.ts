@@ -19,7 +19,7 @@ import { StorageService } from '../storage/storage.service';
 /** How long a signed link to somebody's identity document stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
-import { isPreTestReady, isProfileCompleted } from './student-flags';
+import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 
 /** Exactly what the summary and detail views need — nothing else is read. */
 const STUDENT_INCLUDE = {
@@ -31,6 +31,11 @@ const STUDENT_INCLUDE = {
   },
 } as const satisfies Prisma.StudentInclude;
 
+/**
+ * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that
+ * writes them, `imports` excepted (see its own note; a bulk roster is one
+ * statement per file rather than per row).
+ */
 @Injectable()
 export class StudentsService {
   constructor(
@@ -231,6 +236,51 @@ export class StudentsService {
     });
 
     return this.detail(id);
+  }
+
+  /**
+   * Confirms there is a student to act on, without reading anything about them.
+   *
+   * Exists so a caller can check BEFORE doing expensive work it would then have
+   * to undo — `me` calls it ahead of pushing a file to S3, rather than
+   * discovering the student is gone once the object is already stored.
+   */
+  async assertExists(id: string): Promise<void> {
+    const student = await this.prisma.student.findUnique({ where: { id }, select: { id: true } });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+  }
+
+  /**
+   * Points a profile at a stored document and recomputes `profileCompleted`.
+   *
+   * The write lives here rather than in whoever handled the upload because
+   * `StudentProfile` is this module's table (docs/03 §5), and `profileCompleted`
+   * is a STORED column: a second writer that set the column but not the flag
+   * would leave a student who has just uploaded their last document still being
+   * nudged to upload it.
+   *
+   * The flag is recomputed from the merged profile, not from the one column
+   * this call touched — see `update` above, which does the same for the same
+   * reason.
+   */
+  async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      include: { profile: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    const nextProfile = { ...student.profile, [column]: key };
+
+    await this.prisma.student.update({
+      where: { id },
+      data: {
+        profile: {
+          upsert: { create: { [column]: key }, update: { [column]: key } },
+        },
+        profileCompleted: isProfileCompleted(nextProfile as never),
+      },
+    });
   }
 
   /** Deactivation is reversible and keeps history; there is no hard delete. */

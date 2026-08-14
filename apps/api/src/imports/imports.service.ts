@@ -8,7 +8,7 @@ import {
   type StudentImportResult,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { PinService } from '../auth/pin/pin.service';
+import { AuthService } from '../auth';
 import { defaultPinFor } from './default-pin';
 import {
   mobilesInMemberFile,
@@ -31,11 +31,18 @@ import { readUploadedTable } from './workbook';
  */
 const HASH_CONCURRENCY = 4;
 
+/**
+ * Owns no tables (docs/03 §5). It writes `Student` and the `Student`⇄`Group`
+ * link on behalf of the students and groups modules — the one place in the API
+ * where that is true, because a roster upload is a bulk operation over both and
+ * splitting it in two would cost a round trip per row. Revisit if `imports`
+ * ever moves off the core deployable.
+ */
 @Injectable()
 export class ImportsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly pin: PinService,
+    private readonly auth: AuthService,
   ) {}
 
   /** What the file would do. Writes nothing. */
@@ -116,7 +123,7 @@ export class ImportsService {
 
     for (let start = 0; start < mobiles.length; start += HASH_CONCURRENCY) {
       const batch = mobiles.slice(start, start + HASH_CONCURRENCY);
-      const hashed = await Promise.all(batch.map((m) => this.pin.hash(defaultPinFor(m))));
+      const hashed = await Promise.all(batch.map((m) => this.auth.hashPin(defaultPinFor(m))));
       batch.forEach((mobile, index) => hashes.set(mobile, hashed[index]!));
     }
 

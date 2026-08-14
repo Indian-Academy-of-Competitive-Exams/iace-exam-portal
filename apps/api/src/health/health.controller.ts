@@ -3,7 +3,7 @@ import { type DependencyHealth, type HealthResponse } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { StorageService } from '../storage/storage.service';
-import { Public } from '../auth/decorators';
+import { Public } from '../common/security';
 
 /**
  * Liveness + readiness in one. Always answers 200 so a load balancer can read

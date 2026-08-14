@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
-import { SUPER_ADMIN_KEY } from '../decorators';
-import { type AuthenticatedUser } from '../auth.types';
+import { SUPER_ADMIN_KEY } from '../../common/security';
+import { type AuthenticatedUser } from '../../common/security';
 
 /**
  * Super-admin-only routes.

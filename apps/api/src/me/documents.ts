@@ -6,6 +6,7 @@ import {
   acceptedTypesFor,
   type DocumentKind,
 } from '@iace/contracts';
+import { type ProfileDocumentColumn } from '../students';
 
 /**
  * The rules for a student's uploaded photo and identity documents.
@@ -16,14 +17,21 @@ import {
  * another's record.
  */
 
-/** Which profile column each kind writes to. The client never chooses this. */
-const COLUMN_FOR: Record<DocumentKind, 'photoUrl' | 'aadhaarUrl' | 'panUrl'> = {
+/**
+ * Which profile column each kind writes to. The client never chooses this.
+ *
+ * The column type comes from the students module, which owns `StudentProfile`:
+ * adding a document kind that writes somewhere `profileCompleted` does not look
+ * at then fails to compile here, rather than shipping as a profile that can
+ * never be completed.
+ */
+const COLUMN_FOR: Record<DocumentKind, ProfileDocumentColumn> = {
   [DOCUMENT_KINDS.PHOTO]: 'photoUrl',
   [DOCUMENT_KINDS.AADHAAR]: 'aadhaarUrl',
   [DOCUMENT_KINDS.PAN]: 'panUrl',
 };
 
-export function columnFor(kind: DocumentKind): 'photoUrl' | 'aadhaarUrl' | 'panUrl' {
+export function columnFor(kind: DocumentKind): ProfileDocumentColumn {
   return COLUMN_FOR[kind];
 }
 

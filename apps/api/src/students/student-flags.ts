@@ -23,6 +23,16 @@ export interface ProfileCompletionFields extends PreTestFields {
   panUrl?: string | null;
 }
 
+/**
+ * The `StudentProfile` columns an uploaded file lands in.
+ *
+ * Named here, beside the flag that reads them, so "which columns hold a
+ * document" and "which columns decide `profileCompleted`" cannot drift apart —
+ * a new document kind that forgot to join the second list would be a profile
+ * that can never be completed.
+ */
+export type ProfileDocumentColumn = 'photoUrl' | 'aadhaarUrl' | 'panUrl';
+
 const present = (value: unknown): boolean =>
   value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '');
 

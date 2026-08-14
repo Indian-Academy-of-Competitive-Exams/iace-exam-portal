@@ -5,14 +5,26 @@ export interface StoredTokens {
   refreshToken: string;
 }
 
+/**
+ * The seam between "where tokens are kept" and everything that reads them.
+ *
+ * Deliberately the shape of `localStorage` and deliberately SYNCHRONOUS: the
+ * API client has to be able to read the current token from any call site,
+ * including a background refresh, without awaiting. The web adapter is
+ * `localStorage`; a future Expo app supplies SecureStore's sync accessors or
+ * MMKV. This package never learns which (docs/03 §3).
+ */
+export interface KeyValueStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
 export interface TokenStore {
   get(): StoredTokens | null;
   set(tokens: AuthTokens): void;
   clear(): void;
 }
-
-/** Broadcast when a refresh fails, so the auth context can drop the session. */
-export const SIGNED_OUT_EVENT = 'iace:signed-out';
 
 /**
  * Token persistence, kept outside React so the API client can read the current
@@ -22,12 +34,15 @@ export const SIGNED_OUT_EVENT = 'iace:signed-out';
  * and the student portal to come all share one browser origin: a shared key
  * would mean whichever app loaded last silently clobbered the other's session,
  * and an admin token would be handed to a student's requests.
+ *
+ * The STORAGE is a parameter for a different reason — see `KeyValueStorage`.
+ * `@iace/app-kit/browser` has the localStorage one ready to pass.
  */
-export function createTokenStore(storageKey: string): TokenStore {
+export function createTokenStore(storageKey: string, storage: KeyValueStorage): TokenStore {
   return {
     get(): StoredTokens | null {
       try {
-        const raw = localStorage.getItem(storageKey);
+        const raw = storage.getItem(storageKey);
         return raw ? (JSON.parse(raw) as StoredTokens) : null;
       } catch {
         // Unreadable or unparseable is the same as signed out — a corrupt entry
@@ -37,14 +52,14 @@ export function createTokenStore(storageKey: string): TokenStore {
     },
 
     set(tokens: AuthTokens): void {
-      localStorage.setItem(
+      storage.setItem(
         storageKey,
         JSON.stringify({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       );
     },
 
     clear(): void {
-      localStorage.removeItem(storageKey);
+      storage.removeItem(storageKey);
     },
   };
 }

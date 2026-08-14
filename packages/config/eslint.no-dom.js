@@ -8,7 +8,12 @@
 // token store and a window-event emitter, Expo passes in SecureStore and its
 // own emitter, and the package itself knows about neither.
 //
-// `packages/ui` is deliberately NOT covered — it is web-only by design.
+// The scope is `src/**` on purpose, and it is load-bearing: `app-kit/browser`
+// holds the web adapters and is deliberately outside it, so the boundary
+// between the portable tier and the web tier is a directory you can see rather
+// than a convention you have to know.
+//
+// `packages/ui` is not covered at all — it is web-only by design.
 import { defineConfig } from 'eslint/config';
 
 /** The four that actually appear in SPA plumbing. */

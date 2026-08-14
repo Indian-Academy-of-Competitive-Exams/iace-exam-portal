@@ -8,10 +8,9 @@ import { ActorTypes, AppException } from '@iace/contracts';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { ActorGuard } from '../src/auth/guards/actor.guard';
 import { PagePermissionGuard } from '../src/auth/guards/page-permission.guard';
-import { Actors, Public, RequiresPage } from '../src/auth/decorators';
+import { Actors, Public, RequiresPage, type AuthenticatedUser } from '../src/common/security';
 import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
-import { type AuthenticatedUser } from '../src/auth/auth.types';
 import { FakeConfig, FakeRedis, NO_DEVICE } from './support/fakes';
 
 /**

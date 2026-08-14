@@ -14,7 +14,7 @@ import {
   type StudentSummary,
   type UpdateStudentBody,
 } from '@iace/contracts';
-import { Actors, RequiresPage } from '../auth/decorators';
+import { Actors, RequiresPage } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { StudentsService } from './students.service';
 

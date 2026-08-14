@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActorTypes, type AdminIdentity, type AuthSessionResponse } from '@iace/contracts';
-import { api, tokenStore } from '../lib/api';
-import { SIGNED_OUT_EVENT } from '@iace/app-kit';
+import { api, signOutSignal, tokenStore } from '../lib/api';
 import { AuthContext, ME_QUERY_KEY, type AuthContextValue } from './auth-context';
 
 export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -22,8 +21,7 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
   }, [queryClient]);
 
   useEffect(() => {
-    window.addEventListener(SIGNED_OUT_EVENT, clearSession);
-    return () => window.removeEventListener(SIGNED_OUT_EVENT, clearSession);
+    return signOutSignal.subscribe(clearSession);
   }, [clearSession]);
 
   const signIn = useCallback(

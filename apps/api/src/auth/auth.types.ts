@@ -1,14 +1,10 @@
-import { type ActorType } from '@iace/contracts';
-
-/** What the JWT guard attaches to the request after a token checks out. */
-export interface AuthenticatedUser {
-  id: string;
-  actor: ActorType;
-  /** Redis session id — the handle a logout revokes. */
-  sessionId: string;
-  isSuperAdmin: boolean;
-  pages: string[];
-}
+/**
+ * Auth's own internal shapes.
+ *
+ * `AuthenticatedUser` deliberately is NOT here — it is the one type every other
+ * controller has to name, so it lives in `common/security` (docs/03 §4).
+ * Everything below is auth's business alone.
+ */
 
 /** The Redis-resident half of a session. Never written to Postgres. */
 export interface StoredSession {

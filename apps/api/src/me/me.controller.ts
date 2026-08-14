@@ -25,11 +25,9 @@ import {
   type Me,
   type UpdateMeBody,
 } from '@iace/contracts';
-import { Actors, CurrentUser } from '../auth/decorators';
-import { type AuthenticatedUser } from '../auth/auth.types';
+import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam } from '../common/zod-validation.pipe';
-import { AuthService } from '../auth/auth.service';
-import { deviceFrom } from '../auth/device';
+import { AuthService, deviceFrom } from '../auth';
 import { MeService } from './me.service';
 
 /**

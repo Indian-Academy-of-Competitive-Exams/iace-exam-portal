@@ -26,7 +26,7 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
-import { Actors, RequiresPage } from '../auth/decorators';
+import { Actors, RequiresPage } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
 import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';

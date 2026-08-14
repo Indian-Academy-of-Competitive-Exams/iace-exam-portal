@@ -6,10 +6,8 @@ import {
   type Me,
   type UpdateMeBody,
 } from '@iace/contracts';
-import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { StudentsService } from '../students/students.service';
-import { isProfileCompleted } from '../students/student-flags';
+import { StudentsService } from '../students';
 import { checkDocument, columnFor, documentKey } from './documents';
 
 /**
@@ -26,11 +24,14 @@ import { checkDocument, columnFor, documentKey } from './documents';
  * old PIN, climbs the lockout ladder, revokes sessions and issues fresh tokens
  * — and all four of those live in AuthService. Reimplementing any of them here
  * is how one of them ends up subtly different from the login that shares it.
+ *
+ * Owns NO tables (docs/03 §5). It is an aggregator by design — the student's
+ * own view over `students` and `auth` — so every read and every write goes
+ * through those modules' facades and none of them touch Prisma from here.
  */
 @Injectable()
 export class MeService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly students: StudentsService,
     private readonly storage: StorageService,
   ) {}
@@ -61,30 +62,16 @@ export class MeService {
     checkDocument(kind, file);
     if (!file) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload');
 
-    const student = await this.prisma.student.findUnique({
-      where: { id: studentId },
-      include: { profile: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+    // Before the upload, not after: an object pushed to S3 for a student who
+    // no longer exists is one nothing will ever read or clean up.
+    await this.students.assertExists(studentId);
 
     const key = documentKey(studentId, kind, file.mimetype, Date.now());
     await this.storage.upload(key, file.buffer, file.mimetype);
 
-    const column = columnFor(kind);
-    const nextProfile = { ...student.profile, [column]: key };
-
-    await this.prisma.student.update({
-      where: { id: studentId },
-      data: {
-        profile: {
-          upsert: { create: { [column]: key }, update: { [column]: key } },
-        },
-        // Recomputed from the merged profile: uploading a photo can be the
-        // thing that completes it, and a stale flag means the student is still
-        // being nudged for something they have just done.
-        profileCompleted: isProfileCompleted(nextProfile as never),
-      },
-    });
+    // The write — and the `profileCompleted` recompute that has to go with it —
+    // belongs to the module that owns the table.
+    await this.students.saveDocumentKey(studentId, columnFor(kind), key);
 
     return this.profile(studentId);
   }

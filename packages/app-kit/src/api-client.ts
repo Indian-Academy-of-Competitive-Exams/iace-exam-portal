@@ -1,5 +1,6 @@
 import { createApiClient } from '@iace/contracts';
-import { SIGNED_OUT_EVENT, type TokenStore } from './token-store';
+import { type TokenStore } from './token-store';
+import { type SignOutSignal } from './sign-out-signal';
 
 /**
  * One client per app, typed end to end by @iace/contracts. It refreshes expired
@@ -10,9 +11,17 @@ import { SIGNED_OUT_EVENT, type TokenStore } from './token-store';
  * out" is identical in every SPA, and getting it subtly different in one of
  * them is how an app ends up retrying forever with a dead token instead of
  * returning to the login screen.
+ *
+ * Both halves arrive as adapters, so this file has no platform in it: the web
+ * apps pass the localStorage store and the window-event signal from
+ * `@iace/app-kit/browser` (docs/03 §3).
  */
-export function createBrowserApiClient(options: { baseUrl: string; tokenStore: TokenStore }) {
-  const { baseUrl, tokenStore } = options;
+export function createAppApiClient(options: {
+  baseUrl: string;
+  tokenStore: TokenStore;
+  signOutSignal: SignOutSignal;
+}) {
+  const { baseUrl, tokenStore, signOutSignal } = options;
 
   return createApiClient({
     baseUrl,
@@ -21,7 +30,7 @@ export function createBrowserApiClient(options: { baseUrl: string; tokenStore: T
     onTokensRefreshed: (tokens) => tokenStore.set(tokens),
     onUnauthorized: () => {
       tokenStore.clear();
-      window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+      signOutSignal.emit();
     },
   });
 }

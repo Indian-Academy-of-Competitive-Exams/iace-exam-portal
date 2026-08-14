@@ -25,7 +25,7 @@ import {
   type Paginated,
   type UpdateGroupBody,
 } from '@iace/contracts';
-import { Actors, RequiresPage } from '../auth/decorators';
+import { Actors, RequiresPage } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { GroupsService } from './groups.service';
 

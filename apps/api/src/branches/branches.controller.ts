@@ -22,7 +22,7 @@ import {
   type Paginated,
   type UpdateBranchBody,
 } from '@iace/contracts';
-import { Actors, RequiresPage, RequiresSuperAdmin } from '../auth/decorators';
+import { Actors, RequiresPage, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { BranchesService } from './branches.service';
 

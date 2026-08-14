@@ -9,5 +9,5 @@
     "rootDir": "..",
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../src/**/*.ts"]
+  "include": ["**/*.ts", "../src/**/*.ts", "../browser/**/*.ts"]
 }

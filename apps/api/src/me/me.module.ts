@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { DOCUMENT_MAX_BYTES } from '@iace/contracts';
-import { AuthModule } from '../auth/auth.module';
+import { AuthModule } from '../auth';
 import { StorageModule } from '../storage/storage.module';
-import { StudentsModule } from '../students/students.module';
+import { StudentsModule } from '../students';
 import { MeController } from './me.controller';
 import { MeService } from './me.service';
 

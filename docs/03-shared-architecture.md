@@ -54,7 +54,7 @@ are web-only. Enforced by lint (§13), not by memory.
 
 ## 3. Frontend rules
 
-- **`app-kit` is DOM-free.** No `window`, `document`, or `localStorage` anywhere in `app-kit`/`contracts` `src`. Storage and the sign-out signal are **injected adapters**: the browser supplies a `localStorage` token store + a window-event emitter; Expo will supply SecureStore + its own emitter. The `TokenStore` interface is the seam.
+- **`app-kit` is DOM-free.** No `window`, `document`, or `localStorage` anywhere in `app-kit`/`contracts` `src`. Storage and the sign-out signal are **injected adapters**: the browser supplies a `localStorage` token store + a window-event emitter; Expo will supply SecureStore + its own emitter. The `TokenStore` and `SignOutSignal` interfaces are the seam. The browser adapters ship as `@iace/app-kit/browser` — one copy for both SPAs, outside `src/` so the lint rule's scope _is_ the boundary; mobile imports `@iace/app-kit` and never sees them.
 - **Shared app scaffolding.** The bootstrap (`main`, providers, query/theme wiring), a generic `createAuth<TIdentity>({ endpoints, tokenStore })`, `<ProtectedRoute>`, and `<AppShell nav={…}/>` (chrome shared, nav injected) live in `app-kit`/`ui`. Apps do not copy these.
 - **Shared form + list kits.** A `<Field>`/form-row set in `ui` wires react-hook-form + zod + envelope `fieldErrors`. A `<DataTable>` + `useListQuery` covers the paginated-list-with-filters pattern.
 - **Kept app-specific (do not commonize):** login flows (student PIN/OTP vs admin email-OTP genuinely diverge), dashboards, per-app nav config and constants.

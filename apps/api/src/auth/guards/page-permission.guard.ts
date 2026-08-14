@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
-import { REQUIRED_PAGE_KEY } from '../decorators';
-import { type AuthenticatedUser } from '../auth.types';
+import { REQUIRED_PAGE_KEY } from '../../common/security';
+import { type AuthenticatedUser } from '../../common/security';
 
 /**
  * Page-level admin permissions. Each admin screen declares the `Page.code` it

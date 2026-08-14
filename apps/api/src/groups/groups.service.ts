@@ -10,7 +10,7 @@ import {
   type Paginated,
   type UpdateGroupBody,
 } from '@iace/contracts';
-import { INACTIVE_BRANCH_MESSAGE } from '../branches/branch-rules';
+import { BranchesService } from '../branches';
 import { PrismaService } from '../prisma/prisma.service';
 import { canRemoveFromGroup, groupDeletionBlocker, LAST_GROUP_MESSAGE } from './group-rules';
 
@@ -29,9 +29,18 @@ interface GroupRow {
   _count: { students: number; testSeries: number };
 }
 
+/**
+ * Owns `Group` and the `Group`⇄`Student` membership link (docs/03 §5). It
+ * READS `Branch` and `Student` to validate what it is asked to attach, and asks
+ * `BranchesService` rather than deciding for itself whether a branch will have
+ * it.
+ */
 @Injectable()
 export class GroupsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly branches: BranchesService,
+  ) {}
 
   async list(query: GroupListQuery): Promise<Paginated<GroupSummary>> {
     const search = query.q?.trim();
@@ -74,7 +83,7 @@ export class GroupsService {
   }
 
   async create(input: CreateGroupBody): Promise<GroupSummary> {
-    await this.assertBranchUsable(input.branchId);
+    await this.branches.assertUsable(input.branchId);
     await this.assertNameFree(input.branchId, input.name);
 
     const group = await this.prisma.group.create({
@@ -207,20 +216,6 @@ export class GroupsService {
           fieldErrors: { name: ['That branch already has a group with this name'] },
         },
       );
-    }
-  }
-
-  private async assertBranchUsable(branchId: string): Promise<void> {
-    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
-    if (!branch) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such branch', {
-        fieldErrors: { branchId: ['Pick a branch'] },
-      });
-    }
-    if (!branch.isActive) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
-        fieldErrors: { branchId: [INACTIVE_BRANCH_MESSAGE] },
-      });
     }
   }
 }

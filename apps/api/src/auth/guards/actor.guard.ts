@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
-import { ACTORS_KEY } from '../decorators';
-import { type AuthenticatedUser } from '../auth.types';
+import { ACTORS_KEY } from '../../common/security';
+import { type AuthenticatedUser } from '../../common/security';
 
 /**
  * Enforces @Actors(...). Students and Admins are separate tables with separate
