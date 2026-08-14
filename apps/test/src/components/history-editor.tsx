@@ -50,7 +50,8 @@ export function HistoryEditor<T extends FieldValues>({
 
   // The delete button gets a fixed column of its own, so it lands under itself
   // on every row instead of wherever the last input left it.
-  const template = `${columns.map((c) => `minmax(0, ${c.span ?? 1}fr)`).join(' ')} auto`;
+  const track = (span: number) => `minmax(0, ${span}fr)`;
+  const template = `${columns.map((c) => track(c.span ?? 1)).join(' ')} auto`;
 
   return (
     <Card>

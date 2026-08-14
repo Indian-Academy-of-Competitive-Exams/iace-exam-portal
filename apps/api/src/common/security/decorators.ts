@@ -1,11 +1,5 @@
 import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
-import {
-  AppException,
-  ErrorCodes,
-  type ActorType,
-  type FeatureKey,
-  type PermissionLevel,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, type ActorType, type PermissionLevel } from '@iace/contracts';
 import { type AuthenticatedUser } from './authenticated-user';
 
 /**
@@ -36,7 +30,7 @@ export const Actors = (...actors: ActorType[]) => SetMetadata(ACTORS_KEY, actors
 
 /** What a route demands: a feature, at a level. */
 export interface RequiredFeature {
-  key: FeatureKey;
+  key: string;
   level: PermissionLevel;
 }
 
@@ -48,7 +42,7 @@ export interface RequiredFeature {
  * the same grant and make READ meaningless. Put it on the handler — GET wants
  * READ, everything that changes something wants WRITE.
  */
-export const RequiresFeature = (key: FeatureKey, level: PermissionLevel) =>
+export const RequiresFeature = (key: string, level: PermissionLevel) =>
   SetMetadata(REQUIRED_FEATURE_KEY, { key, level } satisfies RequiredFeature);
 
 /**

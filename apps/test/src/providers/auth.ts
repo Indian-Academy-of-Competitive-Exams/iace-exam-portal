@@ -17,5 +17,10 @@ export const { AuthProvider, useAuth } = createAuth<StudentIdentity>({
   queryKey: ME_QUERY_KEY,
   tokenStore,
   signOutSignal,
-  endpoints: { me: () => api.auth.me(), logout: async () => void (await api.auth.logout()) },
+  endpoints: {
+    me: () => api.auth.me(),
+    logout: async () => {
+      await api.auth.logout();
+    },
+  },
 });

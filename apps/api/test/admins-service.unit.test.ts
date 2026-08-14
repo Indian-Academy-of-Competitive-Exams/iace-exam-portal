@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, FEATURE_KEYS, PERMISSION_LEVELS, type FeatureKey } from '@iace/contracts';
+import { AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { FakeAdminsPrisma, makeAdminRow } from './support/fakes';
 
@@ -13,7 +13,7 @@ const ACTOR = 'adm_actor';
 
 async function withFeature(
   ctx: ReturnType<typeof build>,
-  key: FeatureKey = FEATURE_KEYS.STUDENT_MANAGEMENT,
+  key: string = FEATURE_KEYS.STUDENT_MANAGEMENT,
 ): Promise<void> {
   await ctx.service.createFeature({ key });
 }

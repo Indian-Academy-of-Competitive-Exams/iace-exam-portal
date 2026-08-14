@@ -50,6 +50,45 @@ const NEW_FEATURE_FIELDS = ['key', 'description'] as const;
  * Nothing is seeded. A key with no row here grants nobody anything, which is
  * the safe direction to fail.
  */
+/**
+ * The column set, built OUTSIDE the component.
+ *
+ * `cell` is a render prop — an arrow returning JSX — and a static analyser
+ * cannot tell that apart from a component declared inside another component,
+ * which is a real bug (a new component type every render, so React remounts
+ * the subtree and loses its state). Defining them out here makes the
+ * distinction explicit rather than something a reader has to infer.
+ */
+function featureColumns(): DataTableColumn<Feature>[] {
+  return [
+    {
+      key: 'key',
+      header: 'Feature',
+      className: 'font-medium',
+      cell: (f) => <code>{f.key}</code>,
+    },
+    {
+      key: 'description',
+      header: 'Description',
+      cell: (f) => f.description ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
+      key: 'holders',
+      header: 'Holders',
+      cell: (f) => (
+        <div className="flex gap-2">
+          {[PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE].map((level) => (
+            <Badge key={level} variant="neutral">
+              {level}
+              <span className="tabular-nums opacity-70">{f.grants[level]?.length ?? 0}</span>
+            </Badge>
+          ))}
+        </div>
+      ),
+    },
+  ];
+}
+
 export function FeaturesPage() {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
@@ -66,36 +105,7 @@ export function FeaturesPage() {
 
   const registered = features.data ?? [];
 
-  const columns = useMemo<DataTableColumn<Feature>[]>(
-    () => [
-      {
-        key: 'key',
-        header: 'Feature',
-        className: 'font-medium',
-        cell: (f) => <code>{f.key}</code>,
-      },
-      {
-        key: 'description',
-        header: 'Description',
-        cell: (f) => f.description ?? <span className="text-muted-foreground">—</span>,
-      },
-      {
-        key: 'holders',
-        header: 'Holders',
-        cell: (f) => (
-          <div className="flex gap-2">
-            {[PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE].map((level) => (
-              <Badge key={level} variant="neutral">
-                {level}
-                <span className="tabular-nums opacity-70">{f.grants[level]?.length ?? 0}</span>
-              </Badge>
-            ))}
-          </div>
-        ),
-      },
-    ],
-    [],
-  );
+  const columns = useMemo(() => featureColumns(), []);
 
   return (
     <SuperAdminOnly title="Features">

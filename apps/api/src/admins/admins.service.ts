@@ -8,7 +8,6 @@ import {
   type AdminPermissions,
   type CreateAdminBody,
   type Feature as FeatureDto,
-  type FeatureKey,
   type PermissionGrantBody,
   type Paginated,
   type PermissionLevel,
@@ -218,7 +217,7 @@ export class AdminsService {
    * row and would have nothing to update. Creating them together means a grant
    * is always an array update and never has to consider whether the row exists.
    */
-  async createFeature(input: { key: FeatureKey; description?: string }): Promise<FeatureDto> {
+  async createFeature(input: { key: string; description?: string }): Promise<FeatureDto> {
     const clash = await this.prisma.feature.findUnique({ where: { key: input.key } });
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'That feature is already registered', {

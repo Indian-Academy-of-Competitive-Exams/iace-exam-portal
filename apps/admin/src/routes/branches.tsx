@@ -32,6 +32,67 @@ import { applyFieldErrors } from '@iace/app-kit';
 const NEW_BRANCH_FIELDS = ['name'] as const;
 
 /**
+ * The column set, built OUTSIDE the component.
+ *
+ * `cell` is a render prop — an arrow returning JSX — and a static analyser
+ * cannot tell that apart from a component declared inside another component,
+ * which is a real bug (a new type every render, so React remounts the subtree
+ * and loses its state). Defining them out here makes the distinction explicit
+ * rather than something a reader has to infer.
+ */
+function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableColumn<Branch>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Branch',
+      className: 'font-medium',
+      cell: (branch) =>
+        branch.groupCount > 0 ? (
+          <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+            {branch.name}
+          </Link>
+        ) : (
+          branch.name
+        ),
+    },
+    {
+      key: 'groups',
+      header: 'Groups',
+      numeric: true,
+      cell: (branch) =>
+        branch.groupCount > 0 ? (
+          <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+            {branch.groupCount}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">0</span>
+        ),
+    },
+    {
+      key: 'students',
+      // A branch answers two questions — which groups, and which students
+      // those groups reach. Both are the existing screen filtered.
+      cell: (branch) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+            <Users aria-hidden />
+            Students
+          </Link>
+        </Button>
+      ),
+    },
+    { key: 'status', header: 'Status', cell: (branch) => <BranchStatus branch={branch} /> },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (branch) => (
+        <BranchRowActions branch={branch} canEdit={isSuperAdmin} onChanged={refresh} />
+      ),
+    },
+  ];
+}
+
+/**
  * The branch list — deliberately the smallest screen in the app.
  *
  * Everyone who can manage groups can READ it, because they have to pick from it
@@ -52,58 +113,7 @@ export function BranchesPage() {
     [queryClient],
   );
 
-  const columns = useMemo<DataTableColumn<Branch>[]>(
-    () => [
-      {
-        key: 'name',
-        header: 'Branch',
-        className: 'font-medium',
-        cell: (branch) =>
-          branch.groupCount > 0 ? (
-            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
-              {branch.name}
-            </Link>
-          ) : (
-            branch.name
-          ),
-      },
-      {
-        key: 'groups',
-        header: 'Groups',
-        numeric: true,
-        cell: (branch) =>
-          branch.groupCount > 0 ? (
-            <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
-              {branch.groupCount}
-            </Link>
-          ) : (
-            <span className="text-muted-foreground">0</span>
-          ),
-      },
-      {
-        key: 'students',
-        // A branch answers two questions — which groups, and which students
-        // those groups reach. Both are the existing screen filtered.
-        cell: (branch) => (
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
-              <Users aria-hidden />
-              Students
-            </Link>
-          </Button>
-        ),
-      },
-      { key: 'status', header: 'Status', cell: (branch) => <BranchStatus branch={branch} /> },
-      {
-        key: 'actions',
-        className: 'text-right',
-        cell: (branch) => (
-          <BranchRowActions branch={branch} canEdit={isSuperAdmin} onChanged={refresh} />
-        ),
-      },
-    ],
-    [isSuperAdmin, refresh],
-  );
+  const columns = useMemo(() => branchColumns(isSuperAdmin, refresh), [isSuperAdmin, refresh]);
 
   return (
     <>

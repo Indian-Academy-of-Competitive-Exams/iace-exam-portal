@@ -33,6 +33,48 @@ import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { useFilters } from '../lib/use-filters';
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
+/**
+ * The column set, built OUTSIDE the component.
+ *
+ * `cell` is a render prop — an arrow returning JSX — and a static analyser
+ * cannot tell that apart from a component declared inside another component,
+ * which is a real bug (a new component type every render, so React remounts
+ * the subtree and loses its state). Defining them out here makes the
+ * distinction explicit rather than something a reader has to infer.
+ */
+function groupColumns(): DataTableColumn<GroupSummary>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Group',
+      className: 'font-medium',
+      // Members are the student list filtered — the same screen, not a copy.
+      cell: (group) => (
+        <Link to={`${ROUTES.STUDENTS}?groupId=${group.id}`} className={linkVariants()}>
+          {group.name}
+        </Link>
+      ),
+    },
+    {
+      key: 'branch',
+      header: 'Branch',
+      cell: (group) =>
+        group.branch.isGlobal ? (
+          <Badge variant="info">{group.branch.name}</Badge>
+        ) : (
+          <span className="text-muted-foreground">{group.branch.name}</span>
+        ),
+    },
+    { key: 'students', header: 'Students', numeric: true, cell: (g) => g.studentCount },
+    { key: 'series', header: 'Test series', numeric: true, cell: (g) => g.testSeriesCount },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (group) => <GroupActions group={group} />,
+    },
+  ];
+}
+
 export function GroupsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -54,39 +96,7 @@ export function GroupsPage() {
   const allBranches = useBranches();
   const branch = allBranches.find((candidate) => candidate.id === branchId);
 
-  const columns = useMemo<DataTableColumn<GroupSummary>[]>(
-    () => [
-      {
-        key: 'name',
-        header: 'Group',
-        className: 'font-medium',
-        // Members are the student list filtered — the same screen, not a copy.
-        cell: (group) => (
-          <Link to={`${ROUTES.STUDENTS}?groupId=${group.id}`} className={linkVariants()}>
-            {group.name}
-          </Link>
-        ),
-      },
-      {
-        key: 'branch',
-        header: 'Branch',
-        cell: (group) =>
-          group.branch.isGlobal ? (
-            <Badge variant="info">{group.branch.name}</Badge>
-          ) : (
-            <span className="text-muted-foreground">{group.branch.name}</span>
-          ),
-      },
-      { key: 'students', header: 'Students', numeric: true, cell: (g) => g.studentCount },
-      { key: 'series', header: 'Test series', numeric: true, cell: (g) => g.testSeriesCount },
-      {
-        key: 'actions',
-        className: 'text-right',
-        cell: (group) => <GroupActions group={group} />,
-      },
-    ],
-    [],
-  );
+  const columns = useMemo(() => groupColumns(), []);
 
   return (
     <>

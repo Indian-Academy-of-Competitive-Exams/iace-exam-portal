@@ -3,7 +3,6 @@ import {
   PERMISSION_LEVELS,
   satisfiesLevel,
   type AdminIdentity,
-  type FeatureKey,
   type PermissionLevel,
 } from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
@@ -22,13 +21,18 @@ import { ME_QUERY_KEY } from '../lib/constants';
  */
 export const { AuthProvider, useAuth } = createAuth<
   AdminIdentity,
-  { can: (key: FeatureKey, level?: PermissionLevel) => boolean }
+  { can: (key: string, level?: PermissionLevel) => boolean }
 >({
   actor: ActorTypes.ADMIN,
   queryKey: ME_QUERY_KEY,
   tokenStore,
   signOutSignal,
-  endpoints: { me: () => api.auth.me(), logout: async () => void (await api.auth.logout()) },
+  endpoints: {
+    me: () => api.auth.me(),
+    logout: async () => {
+      await api.auth.logout();
+    },
+  },
   /**
    * Mirrors the server-side FeaturePermissionGuard exactly, and shares the rule
    * with it: `satisfiesLevel` is the same function the guard calls, imported
@@ -40,7 +44,7 @@ export const { AuthProvider, useAuth } = createAuth<
    * would be a function that can only ever answer false.
    */
   extend: (admin) => ({
-    can: (key: FeatureKey, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
+    can: (key: string, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
       admin !== null && (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),
   }),
 });

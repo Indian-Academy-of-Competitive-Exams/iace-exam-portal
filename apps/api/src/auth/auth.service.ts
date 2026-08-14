@@ -10,7 +10,6 @@ import {
   type OtpRequestResponse,
   type PinSetupTicket,
   type StudentIdentity,
-  type AdminPermissions,
 } from '@iace/contracts';
 import { type Student } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -246,7 +245,11 @@ export class AuthService {
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      permissions: await this.adminPermissions(admin.id, admin.isSuperAdmin),
+      // Skipped for a super admin: they bypass every check, so the query would
+      // be work whose result is never read, and an empty map on a super admin
+      // already means "everything". Read through the admins facade rather than
+      // its tables (docs/03 §4.2).
+      permissions: admin.isSuperAdmin ? {} : await this.admins.permissionsFor(admin.id),
     };
 
     return { tokens: await this.issue(identity, device), identity };
@@ -402,20 +405,12 @@ export class AuthService {
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      permissions: await this.adminPermissions(admin.id, admin.isSuperAdmin),
+      // Skipped for a super admin: they bypass every check, so the query would
+      // be work whose result is never read, and an empty map on a super admin
+      // already means "everything". Read through the admins facade rather than
+      // its tables (docs/03 §4.2).
+      permissions: admin.isSuperAdmin ? {} : await this.admins.permissionsFor(admin.id),
     };
-  }
-
-  /**
-   * Grants for a token, through the admins facade rather than by reaching into
-   * its tables (docs/03 §4.2).
-   *
-   * Skipped entirely for a super admin: they bypass every check, so the query
-   * would be work whose result is never read, and an empty map on a super admin
-   * already means "everything".
-   */
-  private async adminPermissions(id: string, isSuperAdmin: boolean): Promise<AdminPermissions> {
-    return isSuperAdmin ? {} : this.admins.permissionsFor(id);
   }
 
   // Values echoed for unknown admins; they must match the real policy exactly

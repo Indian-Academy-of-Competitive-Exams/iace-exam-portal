@@ -105,6 +105,49 @@ const STATUS_QUERY: Record<
   defaultpin: { hasDefaultPin: 'true' },
 };
 
+/**
+ * The column set, built OUTSIDE the component.
+ *
+ * `cell` is a render prop — an arrow returning JSX — and a static analyser
+ * cannot tell that apart from a component declared inside another component,
+ * which is a real bug (a new component type every render, so React remounts
+ * the subtree and loses its state). Defining them out here makes the
+ * distinction explicit rather than something a reader has to infer.
+ */
+function studentColumns(): DataTableColumn<StudentSummary>[] {
+  return [
+    { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
+    {
+      key: 'mobile',
+      header: 'Mobile',
+      className: 'tabular-nums text-muted-foreground',
+      cell: (s) => s.mobile,
+    },
+    {
+      key: 'groups',
+      header: 'Groups',
+      cell: (s) =>
+        s.groups.length === 0 ? (
+          // A student in no group can reach no test, so this is a problem to
+          // show rather than an empty cell.
+          <Badge variant="warning">No group</Badge>
+        ) : (
+          <GroupsCell groups={s.groups} />
+        ),
+    },
+    { key: 'status', header: 'Status', cell: (s) => <SignInStatus student={s} /> },
+    {
+      key: 'pretest',
+      header: 'Pre-test details',
+      cell: (s) => (
+        <Badge variant={s.preTestReady ? 'success' : 'neutral'}>
+          {s.preTestReady ? 'On file' : 'Needed'}
+        </Badge>
+      ),
+    },
+  ];
+}
+
 export function StudentsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -180,40 +223,7 @@ export function StudentsPage() {
     fetchPage: (params) => api.admin.students.list(params),
   });
 
-  const columns = useMemo<DataTableColumn<StudentSummary>[]>(
-    () => [
-      { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
-      {
-        key: 'mobile',
-        header: 'Mobile',
-        className: 'tabular-nums text-muted-foreground',
-        cell: (s) => s.mobile,
-      },
-      {
-        key: 'groups',
-        header: 'Groups',
-        cell: (s) =>
-          s.groups.length === 0 ? (
-            // A student in no group can reach no test, so this is a problem to
-            // show rather than an empty cell.
-            <Badge variant="warning">No group</Badge>
-          ) : (
-            <GroupsCell groups={s.groups} />
-          ),
-      },
-      { key: 'status', header: 'Status', cell: (s) => <SignInStatus student={s} /> },
-      {
-        key: 'pretest',
-        header: 'Pre-test details',
-        cell: (s) => (
-          <Badge variant={s.preTestReady ? 'success' : 'neutral'}>
-            {s.preTestReady ? 'On file' : 'Needed'}
-          </Badge>
-        ),
-      },
-    ],
-    [],
-  );
+  const columns = useMemo(() => studentColumns(), []);
 
   return (
     <>

@@ -1,4 +1,4 @@
-import { FEATURE_KEYS, type FeatureKey } from '@iace/contracts';
+import { FEATURE_KEYS } from '@iace/contracts';
 
 /**
  * App-level string vocabularies. Anything that appears in more than one place —
@@ -32,7 +32,8 @@ export interface AdminNavItem {
   to: string;
   label: string;
   /** Needs at least READ on this feature. */
-  feature?: FeatureKey;
+  /** A key from FEATURE_KEYS, or any a super admin has registered. */
+  feature?: string;
   /** Needs isSuperAdmin, whatever is granted. */
   superAdminOnly?: boolean;
 }

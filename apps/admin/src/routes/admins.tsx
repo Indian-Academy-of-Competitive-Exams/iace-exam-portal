@@ -47,6 +47,55 @@ const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
  * they made, so the row has to survive; deactivating is what actually stops
  * them signing in, and it prunes their grants on the way out.
  */
+/**
+ * The column set, built OUTSIDE the component.
+ *
+ * `cell` is a render prop — an arrow returning JSX — and a static analyser
+ * cannot tell that apart from a component declared inside another component,
+ * which is a real bug (a new component type every render, so React remounts
+ * the subtree and loses its state). Defining them out here makes the
+ * distinction explicit rather than something a reader has to infer.
+ */
+function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
+  return [
+    { key: 'email', header: 'Email', className: 'font-medium', cell: (a) => a.email },
+    { key: 'name', header: 'Name', cell: (a) => a.fullName ?? '—' },
+    {
+      key: 'role',
+      header: 'Role',
+      cell: (a) =>
+        a.isSuperAdmin ? (
+          <Badge variant="primary">
+            <ShieldCheck aria-hidden />
+            Super admin
+          </Badge>
+        ) : (
+          <Badge variant="neutral">Admin</Badge>
+        ),
+    },
+    {
+      key: 'grants',
+      header: 'Granted',
+      cell: (a) => <GrantSummary admin={a} />,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (a) =>
+        a.isActive ? (
+          <Badge variant="success">Active</Badge>
+        ) : (
+          <Badge variant="neutral">Deactivated</Badge>
+        ),
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (a) => <DeactivateButton admin={a} onChanged={refresh} />,
+    },
+  ];
+}
+
 export function AdminsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize();
@@ -63,46 +112,7 @@ export function AdminsPage() {
     [queryClient],
   );
 
-  const columns = useMemo<DataTableColumn<Admin>[]>(
-    () => [
-      { key: 'email', header: 'Email', className: 'font-medium', cell: (a) => a.email },
-      { key: 'name', header: 'Name', cell: (a) => a.fullName ?? '—' },
-      {
-        key: 'role',
-        header: 'Role',
-        cell: (a) =>
-          a.isSuperAdmin ? (
-            <Badge variant="primary">
-              <ShieldCheck aria-hidden />
-              Super admin
-            </Badge>
-          ) : (
-            <Badge variant="neutral">Admin</Badge>
-          ),
-      },
-      {
-        key: 'grants',
-        header: 'Granted',
-        cell: (a) => <GrantSummary admin={a} />,
-      },
-      {
-        key: 'status',
-        header: 'Status',
-        cell: (a) =>
-          a.isActive ? (
-            <Badge variant="success">Active</Badge>
-          ) : (
-            <Badge variant="neutral">Deactivated</Badge>
-          ),
-      },
-      {
-        key: 'actions',
-        className: 'text-right',
-        cell: (a) => <DeactivateButton admin={a} onChanged={refresh} />,
-      },
-    ],
-    [refresh],
-  );
+  const columns = useMemo(() => adminColumns(refresh), [refresh]);
 
   return (
     <SuperAdminOnly title="Admins">

@@ -24,7 +24,6 @@ import {
   type Paginated,
   type CreateAdminBody,
   type Feature,
-  type FeatureKey,
   type PermissionGrantBody,
   type StudentSyncResult,
   type UpdateAdminBody,
@@ -96,7 +95,7 @@ export class AdminsController {
 
   @Post('features')
   createFeature(
-    @Body(new ZodBody(createFeatureSchema)) body: { key: FeatureKey; description?: string },
+    @Body(new ZodBody(createFeatureSchema)) body: { key: string; description?: string },
   ): Promise<Feature> {
     return this.admins.createFeature(body);
   }

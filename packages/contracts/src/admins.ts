@@ -72,11 +72,11 @@ export const FEATURE_KEYS = {
  * API reject rows it had itself just created — which is exactly the
  * "unexpected response shape" a closed schema produces on the client.
  *
- * `FeatureKey` stays a distinct alias so intent is readable at call sites, but
- * it is a string: the type cannot police a value the database learns at
- * runtime, and pretending otherwise only moves the failure to parse time.
+ * There is deliberately no `FeatureKey` alias. `type FeatureKey = string` would
+ * carry no information a reader does not already have from the parameter name,
+ * and a type cannot police a value the database learns at runtime — the only
+ * real check is `featureKeySchema` below, at the edge.
  */
-export type FeatureKey = string;
 
 const FEATURE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
@@ -92,12 +92,13 @@ export function canonicalFeatureKey(value: string): string {
       .trim()
       .toUpperCase()
       .replace(/[^A-Z0-9]+/g, '_')
-      // Two anchored replaces rather than /^_+|_+$/g: the `_+$` branch of that
-      // alternation is scanned from every position and backtracks through each
-      // underscore run, so its worst case is super-linear. Both are
-      // sub-millisecond on a real key; this one is linear by construction.
-      .replace(/^_+/, '')
-      .replace(/_+$/, '')
+      // No quantifier on these two, deliberately: the replace above collapses
+      // every run of non-alphanumerics to a SINGLE underscore, so at most one
+      // can be leading and one trailing. `_+$` would be scanned from every
+      // position and backtrack through each run — super-linear worst case for
+      // a pattern that never needed to repeat.
+      .replace(/^_/, '')
+      .replace(/_$/, '')
   );
 }
 
@@ -116,10 +117,13 @@ export function canonicalFeatureKey(value: string): string {
  * away — so the draft can be permissive without the stored key ever being.
  */
 export function featureKeyDraft(value: string): string {
-  return value
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+/, '');
+  return (
+    value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      // Single `_`, for the same reason as canonicalFeatureKey above.
+      .replace(/^_/, '')
+  );
 }
 
 export const featureKeySchema = z
@@ -304,7 +308,7 @@ export const ADMIN_FEATURE_ROUTES = {
    * proxies and some fetch stacks quietly drop it, and a revoke that silently
    * becomes a no-op is the worst possible failure for this particular verb.
    */
-  revoke: (featureKey: FeatureKey, level: PermissionLevel, adminId: string) =>
+  revoke: (featureKey: string, level: PermissionLevel, adminId: string) =>
     `/admin/features/${featureKey}/permissions/${level}/${adminId}`,
 } as const;
 

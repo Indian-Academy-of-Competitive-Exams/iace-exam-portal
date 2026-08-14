@@ -154,7 +154,19 @@ export function Combobox({
             </div>
           ) : null}
 
-          <div className="max-h-64 overflow-y-auto p-1" onScroll={onScroll}>
+          {/*
+            role="listbox" is not decoration: the rows below carry
+            role="option", and an option outside a listbox is invalid ARIA — a
+            screen reader announces a pile of buttons rather than a list with a
+            position and a count. This was missing, which is a real defect and
+            not the false positive it first looked like.
+          */}
+          <div
+            role="listbox"
+            aria-label={ariaLabel ?? placeholder}
+            className="max-h-64 overflow-y-auto p-1"
+            onScroll={onScroll}
+          >
             {clearable ? (
               <Option
                 label={placeholder}
