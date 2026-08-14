@@ -29,6 +29,7 @@ import {
 } from '@iace/contracts';
 import {
   Badge,
+  BadgeList,
   Button,
   Card,
   CardContent,
@@ -542,28 +543,20 @@ function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
  * group filter above the table is the way to actually see who is in what.
  */
 function GroupsCell({ groups }: Readonly<{ groups: GroupRef[] }>) {
-  const [first, ...rest] = groups;
-  if (!first) return null;
-
   return (
-    <div className="flex max-w-[12rem] items-center gap-1">
-      <Badge className="min-w-0 shrink">
-        <TruncatedText>{first.name}</TruncatedText>
-      </Badge>
-
-      {rest.length > 0 ? (
-        // Not a truncation: these names are hidden however wide the column
-        // gets, so this one always has something to say.
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="neutral" tabIndex={0} className="focus-visible:shadow-focus">
-              +{rest.length}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>{rest.map((group) => group.name).join('\n')}</TooltipContent>
-        </Tooltip>
-      ) : null}
-    </div>
+    <BadgeList
+      items={groups}
+      label={(group) => group.name}
+      className="max-w-[12rem]"
+      // The visible one is still truncated to the column: a long group name
+      // would otherwise widen the cell on its own.
+    >
+      {(group) => (
+        <Badge className="min-w-0 shrink">
+          <TruncatedText>{group.name}</TruncatedText>
+        </Badge>
+      )}
+    </BadgeList>
   );
 }
 

@@ -16,6 +16,7 @@ export { Alert, alertVariants, type AlertProps } from './components/ui/alert';
 export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
 export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
+export { BadgeList, type BadgeListProps } from './components/ui/badge-list';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export { Select, type SelectProps } from './components/ui/select';
 export { Textarea, type TextareaProps } from './components/ui/textarea';

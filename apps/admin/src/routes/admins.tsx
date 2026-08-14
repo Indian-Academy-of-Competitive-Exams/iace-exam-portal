@@ -11,6 +11,7 @@ import {
 } from '@iace/contracts';
 import {
   Badge,
+  BadgeList,
   Button,
   Card,
   CardContent,
@@ -25,6 +26,7 @@ import {
   Input,
   PageHeader,
   Pagination,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors, usePageSize } from '@iace/app-kit';
@@ -163,14 +165,14 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   }
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {held.map((key) => (
-        <Badge key={key} variant="neutral">
-          {key}
-          <span className="opacity-70">{admin.permissions[key]}</span>
+    <BadgeList items={held} label={(key) => `${key} — ${admin.permissions[key]}`} max={1}>
+      {(key) => (
+        <Badge variant="neutral" className="min-w-0 shrink">
+          <TruncatedText>{key}</TruncatedText>
+          <span className="shrink-0 opacity-70">{admin.permissions[key]}</span>
         </Badge>
-      ))}
-    </div>
+      )}
+    </BadgeList>
   );
 }
 
