@@ -159,7 +159,10 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
 
   // The admin's OWN keys, not the code's list: a super admin may have
   // registered a sector no controller checks yet, and a grant on it is real.
-  const held = Object.keys(admin.permissions).sort();
+  // localeCompare, not bare sort(): the default sorts by UTF-16 code unit,
+  // which is only accidentally right for ASCII keys and silently wrong the
+  // first time one is not.
+  const held = Object.keys(admin.permissions).sort((a, b) => a.localeCompare(b));
   if (held.length === 0) {
     return <span className="text-sm text-muted-foreground">Nothing yet</span>;
   }

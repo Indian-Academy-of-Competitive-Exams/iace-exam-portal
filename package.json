@@ -38,6 +38,7 @@
     "lint-staged": "17.3.0",
     "prettier": "3.9.6",
     "prisma": "6.19.3",
+    "sonarqube-scanner": "5.0.0",
     "syncpack": "15.3.3",
     "tsx": "4.23.12",
     "turbo": "2.10.9",

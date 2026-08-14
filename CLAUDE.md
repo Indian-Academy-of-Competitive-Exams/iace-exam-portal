@@ -135,26 +135,23 @@ After generating or modifying code, the task is not done until:
 
 Never mark an issue false-positive or won't-fix in SonarQube without asking me.
 
-**This is enforced, not just written down.** A `PreToolUse` hook
-(`.claude/hooks/sonar-gate.sh`, wired in `.claude/settings.json`) refuses an
-agent's `git commit` while staged `.ts`/`.tsx` under `apps`/`packages`/`prisma`
-has no recorded analysis. After analysing and fixing, record it:
+**This is enforced by a real scan, not a reminder.** `pre-commit` runs
+`scripts/sonar-precommit.sh`: coverage, then `sonar-scanner`, then the quality
+gate — and the commit fails if the gate does. It runs for **every** commit,
+typed or agent-made, because a git hook cannot tell the difference.
 
-```bash
-bash .claude/hooks/sonar-record.sh
-```
+Coverage runs FIRST, via `scripts/coverage.mjs`. Skip it and the scan uploads
+whatever `coverage/lcov.info` was last written, so the coverage condition judges
+today's code on an older run — which is how the gate first came back at 59%
+instead of 84%.
 
-The record is a hash of the **staged content**, so re-staging a file after
-analysing it invalidates it — a stale pass is worse than no gate, because it
-reports as verified. A docs-only or config-only commit is not gated.
+It skips itself, without blocking, when there is nothing to scan (no staged
+`.ts`/`.tsx` under `apps`/`packages`/`prisma`), when `SONAR_HOST_URL`/
+`SONAR_TOKEN` are unset, or when the server is unreachable — an offline laptop
+must still be able to commit. `SKIP_SONAR=1 git commit …` is the deliberate
+escape. What it will not skip is a reachable server saying the gate failed.
 
-What the hook cannot do is prove the analysis happened: the check is an MCP tool
-only the agent can call, so no shell hook can invoke or observe it. It makes
-skipping the step a deliberate act instead of the default, which is the failure
-it exists to prevent. It gates **agent** commits only — a commit typed in a
-terminal never passes through it.
-
-There is also **no `sonar-scanner` in this repo** — no dependency, no token, no
-CI job, so nothing produces a full project scan today. `sonar-project.properties`
-is configured and unused. A real scan belongs in CI, which needs a reachable
-server (the MCP one is on `host.docker.internal`, local only) and a token.
+Roughly 20s when it does run. The MCP `analyze_code_snippet` tool is still worth
+using while writing code — it is instant and per-file — but it is **not**
+equivalent: it applies a narrower rule set, and has reported clean on files a
+full scan then flagged.

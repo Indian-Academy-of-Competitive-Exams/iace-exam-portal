@@ -77,7 +77,10 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
     new BranchesService(new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService());
 
   it('accepts an active branch', async () => {
-    await usable().assertUsable('br_1');
+    // doesNotReject rather than a bare call: "it did not throw" is the whole
+    // assertion, and writing it down is what stops the test passing later for
+    // the wrong reason — a method that silently stopped checking anything.
+    await assert.doesNotReject(() => usable().assertUsable('br_1'));
   });
 
   it('refuses a retired branch, keyed to the field the form shows', async () => {

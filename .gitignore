@@ -93,5 +93,6 @@ docker-data/
 tmp/
 
 sonar-project.properties
-# Written by .claude/hooks/sonar-record.sh — a local claim, not shared state.
-.claude/.sonar-verified
+
+# sonar-scanner working directory
+.scannerwork/

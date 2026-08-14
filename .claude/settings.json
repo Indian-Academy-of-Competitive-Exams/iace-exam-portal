@@ -1,21 +1,5 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(git commit *)",
-            "command": "bash .claude/hooks/sonar-gate.sh",
-            "timeout": 15,
-            "statusMessage": "Checking SonarQube verification…"
-          }
-        ]
-      }
-    ]
   }
 }

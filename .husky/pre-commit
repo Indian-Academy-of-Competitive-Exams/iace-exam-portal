@@ -6,3 +6,7 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 pnpm exec lint-staged
+
+# A real SonarQube scan + quality gate. Skips itself when nothing it scans is
+# staged, when the server is down, or with SKIP_SONAR=1. See the script.
+bash scripts/sonar-precommit.sh

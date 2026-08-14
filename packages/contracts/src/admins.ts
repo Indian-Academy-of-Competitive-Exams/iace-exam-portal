@@ -87,11 +87,18 @@ const FEATURE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
  * names (see naming.ts).
  */
 export function canonicalFeatureKey(value: string): string {
-  return value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+  return (
+    value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      // Two anchored replaces rather than /^_+|_+$/g: the `_+$` branch of that
+      // alternation is scanned from every position and backtracks through each
+      // underscore run, so its worst case is super-linear. Both are
+      // sub-millisecond on a real key; this one is linear by construction.
+      .replace(/^_+/, '')
+      .replace(/_+$/, '')
+  );
 }
 
 /**
@@ -198,8 +205,10 @@ export const adminEmailSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .email('Enter a valid email address')
-  .max(254);
+  // Piped into the top-level z.email(): the .email() METHOD is deprecated in
+  // Zod 4, and the pipe keeps the order that matters — normalise first, then
+  // validate what will actually be stored.
+  .pipe(z.email('Enter a valid email address').max(254));
 
 export const createAdminSchema = z.object({
   email: adminEmailSchema,
