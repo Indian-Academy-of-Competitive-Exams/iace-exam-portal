@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  type AdminPermissions,
   ActorTypes,
   AppException,
   ErrorCodes,
@@ -213,13 +214,17 @@ export class AuthService {
   // ==========================================================================
 
   /**
-   * No self-signup: the admin must already exist and be active. The response is
-   * identical either way so the endpoint can't be used to enumerate admins —
-   * an unknown address simply never receives a code.
+   * No self-signup: the admin must already exist. A DEACTIVATED one still gets
+   * a code — they are allowed in specifically so the app can tell them their
+   * access was removed, and silently swallowing the code here would strand
+   * them at a login screen that appears to be broken.
+   *
+   * The response is identical either way, so the endpoint cannot be used to
+   * enumerate admins — an unknown address simply never receives a code.
    */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin?.isActive) {
+    if (!admin || admin.deletedAt) {
       return {
         sent: true,
         expiresInSec: this.otpTtlPlaceholder,
@@ -236,8 +241,15 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.otp.verify(ActorTypes.ADMIN, email, code);
 
+    // Deliberately NOT gated on isActive. A deactivated admin signs in and is
+    // told what happened; refusing them here would answer a real account with
+    // "invalid credentials", which reads as a typo and sends them to reset a
+    // password they do not have. `deletedAt` still refuses — that row is gone,
+    // not switched off.
     const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin?.isActive) throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
+    if (!admin || admin.deletedAt) {
+      throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
+    }
 
     const identity: AuthIdentity = {
       actor: ActorTypes.ADMIN,
@@ -245,11 +257,8 @@ export class AuthService {
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      // Skipped for a super admin: they bypass every check, so the query would
-      // be work whose result is never read, and an empty map on a super admin
-      // already means "everything". Read through the admins facade rather than
-      // its tables (docs/03 §4.2).
-      permissions: admin.isSuperAdmin ? {} : await this.admins.permissionsFor(admin.id),
+      isActive: admin.isActive,
+      permissions: await this.adminGrants(admin),
     };
 
     return { tokens: await this.issue(identity, device), identity };
@@ -302,7 +311,11 @@ export class AuthService {
       actor: identity.actor,
       sid: claims.sid,
       ...(identity.actor === ActorTypes.ADMIN
-        ? { isSuperAdmin: identity.isSuperAdmin, permissions: identity.permissions }
+        ? {
+            isSuperAdmin: identity.isSuperAdmin,
+            isActive: identity.isActive,
+            permissions: identity.permissions,
+          }
         : {}),
     });
 
@@ -350,7 +363,11 @@ export class AuthService {
       actor: identity.actor,
       sid: sessionId,
       ...(identity.actor === ActorTypes.ADMIN
-        ? { isSuperAdmin: identity.isSuperAdmin, permissions: identity.permissions }
+        ? {
+            isSuperAdmin: identity.isSuperAdmin,
+            isActive: identity.isActive,
+            permissions: identity.permissions,
+          }
         : {}),
     });
     const refreshToken = await this.tokens.signRefresh({
@@ -398,19 +415,35 @@ export class AuthService {
     }
 
     const admin = await this.prisma.admin.findUnique({ where: { id } });
-    if (!admin?.isActive) return null;
+    if (!admin || admin.deletedAt) return null;
     return {
       actor: ActorTypes.ADMIN,
       id: admin.id,
       email: admin.email,
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
-      // Skipped for a super admin: they bypass every check, so the query would
-      // be work whose result is never read, and an empty map on a super admin
-      // already means "everything". Read through the admins facade rather than
-      // its tables (docs/03 §4.2).
-      permissions: admin.isSuperAdmin ? {} : await this.admins.permissionsFor(admin.id),
+      isActive: admin.isActive,
+      permissions: await this.adminGrants(admin),
     };
+  }
+
+  /**
+   * The grant map a token carries.
+   *
+   * Empty for a super admin, who bypasses every check, so the query would be
+   * work whose result is never read. Empty for a deactivated admin too — their
+   * rows are pruned on deactivation, but reading it off `isActive` means the
+   * answer does not depend on that cleanup having succeeded.
+   *
+   * Read through the admins facade rather than its tables (docs/03 §4.2).
+   */
+  private async adminGrants(admin: {
+    id: string;
+    isSuperAdmin: boolean;
+    isActive: boolean;
+  }): Promise<AdminPermissions> {
+    if (admin.isSuperAdmin || !admin.isActive) return {};
+    return this.admins.permissionsFor(admin.id);
   }
 
   // Values echoed for unknown admins; they must match the real policy exactly

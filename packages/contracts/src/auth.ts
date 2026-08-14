@@ -157,6 +157,12 @@ export const adminIdentitySchema = z.object({
   fullName: z.string().nullable(),
   isSuperAdmin: z.boolean(),
   /**
+   * False once deactivated. A deactivated admin can still SIGN IN — that is
+   * how they are told what happened, instead of an "invalid credentials" that
+   * reads as a typo — but every check refuses them, super admin included.
+   */
+  isActive: z.boolean(),
+  /**
    * What this admin may do, by feature key. A super admin bypasses the check
    * entirely, so theirs is empty — an empty map on a super admin means
    * "everything", and on anyone else means "nothing". The two are only ever
@@ -193,6 +199,9 @@ export const accessTokenClaimsSchema = z.object({
   actor: actorTypeSchema,
   sid: z.string(),
   isSuperAdmin: z.boolean().optional(),
+  /** Absent on a student token, and on an admin token issued before
+   *  deactivation existed — both are read as active. */
+  isActive: z.boolean().optional(),
   /** Carried in the token, so the guard costs nothing at request time. A grant
    *  change takes effect on the next refresh (<= the access TTL). */
   permissions: adminPermissionsSchema.optional(),

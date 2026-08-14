@@ -161,7 +161,7 @@ export class AdminsService {
   }
 
   /**
-   * Soft-delete, and prune every grant in the same transaction.
+   * Switch the account off, and prune every grant in the same transaction.
    *
    * The pruning is the point. `adminIds` is a denormalized array with no
    * foreign key, so nothing else would ever remove the id: a deactivated
@@ -179,10 +179,12 @@ export class AdminsService {
     await this.requireActive(id);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.admin.update({
-        where: { id },
-        data: { isActive: false, deletedAt: new Date() },
-      });
+      // isActive only — NOT deletedAt. Deactivation is not deletion: the
+      // account still exists, still signs in, and still appears in this list
+      // marked Deactivated. Setting deletedAt here also hid the row from
+      // `list`, which filters on it, so the "Deactivated" badge could never
+      // actually be seen.
+      await tx.admin.update({ where: { id }, data: { isActive: false } });
 
       const holding = await tx.featurePermission.findMany({
         where: { adminIds: { has: id } },

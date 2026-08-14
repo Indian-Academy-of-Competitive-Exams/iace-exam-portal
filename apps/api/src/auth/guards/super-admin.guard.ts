@@ -29,6 +29,14 @@ export class SuperAdminGuard implements CanActivate {
     if (user?.actor !== ActorTypes.ADMIN || !user.isSuperAdmin) {
       throw new AppException(ErrorCodes.FORBIDDEN, 'Only a super admin can change this');
     }
+    // Being a super admin is not enough if the account is switched off — see
+    // the same check in FeaturePermissionGuard.
+    if (!user.isActive) {
+      throw new AppException(
+        ErrorCodes.FORBIDDEN,
+        'Your account has been deactivated — ask a super admin to restore it',
+      );
+    }
     return true;
   }
 }

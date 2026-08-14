@@ -258,6 +258,35 @@ describe('AuthService — admin', () => {
     });
   });
 
+  it('signs in a DEACTIVATED admin, and hands them nothing', async () => {
+    // The point of the change: refusing here would answer a real account with
+    // "invalid credentials", which reads as a typo. They get in, and the app
+    // tells them what actually happened.
+    const ctx = build([], [makeAdmin({ id: 'adm_1', isSuperAdmin: false, isActive: false })], {
+      adm_1: { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+    });
+    await ctx.auth.requestAdminOtp('admin@iace.co.in');
+
+    const { identity } = await ctx.auth.verifyAdminOtp(
+      'admin@iace.co.in',
+      ctx.sender.lastCode,
+      NO_DEVICE,
+    );
+
+    assert.equal(identity.actor === ActorTypes.ADMIN ? identity.isActive : null, false);
+    // Empty even though the fake still holds a grant — the answer must not
+    // depend on the pruning having succeeded.
+    assert.deepEqual(identity.actor === ActorTypes.ADMIN ? identity.permissions : null, {});
+  });
+
+  it('still sends a code to a deactivated admin, or they are stranded at login', async () => {
+    const ctx = build([], [makeAdmin({ id: 'adm_1', isActive: false })]);
+
+    await ctx.auth.requestAdminOtp('admin@iace.co.in');
+
+    assert.ok(ctx.sender.lastCode, 'a deactivated admin must still receive a code');
+  });
+
   it('does not look up grants for a super admin — they bypass every check', async () => {
     const ctx = build([], [makeAdmin({ id: 'adm_root', isSuperAdmin: true })]);
     await ctx.auth.requestAdminOtp('admin@iace.co.in');
@@ -320,6 +349,7 @@ describe('AuthService — refresh and me', () => {
       actor: ActorTypes.STUDENT,
       sessionId: claims.sid,
       isSuperAdmin: false,
+      isActive: true,
       permissions: {},
     });
 

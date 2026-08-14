@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Badge } from '@iace/ui';
+import { Alert, Badge, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -22,9 +22,15 @@ import { useAuth } from '../providers/auth';
 export function AppShell() {
   const { identity: admin, signOut, can } = useAuth();
 
+  const isDeactivated = admin !== null && !admin.isActive;
+
+  // A deactivated admin keeps their session — that is how they are told what
+  // happened — but the nav goes with the access. `can` already answers false
+  // for every feature; this covers the super-admin-only sections, which are
+  // gated on the flag rather than on a feature key.
   const nav = useMemo(
-    () => filterAdminNav(NAV_ITEMS, admin?.isSuperAdmin ?? false),
-    [admin?.isSuperAdmin],
+    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, admin?.isSuperAdmin ?? false)),
+    [isDeactivated, admin?.isSuperAdmin],
   );
 
   return (
@@ -42,7 +48,37 @@ export function AppShell() {
         </span>
       }
     >
-      <Outlet />
+      {isDeactivated ? <DeactivatedNotice /> : <Outlet />}
     </Shell>
+  );
+}
+
+/**
+ * What a deactivated admin sees instead of the app.
+ *
+ * They are let in on purpose. Refusing the login would answer a real account
+ * with "invalid credentials", which reads as a typo and sends someone to reset
+ * a password they do not have — so they sign in and are told plainly, once,
+ * what actually happened and who can undo it.
+ *
+ * It replaces the outlet rather than sitting above it: every screen behind it
+ * would be empty of data anyway, because the server refuses each request, and
+ * a page of failed requests under a banner is a worse way to learn this.
+ */
+function DeactivatedNotice() {
+  return (
+    <>
+      <PageHeader
+        title="Your access has been removed"
+        description="Your account is still here, but it has been deactivated."
+      />
+      <Alert variant="warning">
+        <span>
+          Every section and action across the platform is closed to you, including anything you were
+          granted before. Nothing you created has been deleted. A super admin can restore your
+          access — until then there is nothing here to do.
+        </span>
+      </Alert>
+    </>
   );
 }

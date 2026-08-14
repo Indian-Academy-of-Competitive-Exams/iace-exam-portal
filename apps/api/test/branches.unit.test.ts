@@ -81,12 +81,22 @@ describe('SuperAdminGuard', () => {
     return () => new SuperAdminGuard(reflector).canActivate(context);
   };
 
-  const superAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: true };
-  const plainAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: false };
-  const student = { actor: ActorTypes.STUDENT, isSuperAdmin: false };
+  const superAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: true, isActive: true };
+  const plainAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: false, isActive: true };
+  const student = { actor: ActorTypes.STUDENT, isSuperAdmin: false, isActive: true };
+  const deactivatedSuperAdmin = { actor: ActorTypes.ADMIN, isSuperAdmin: true, isActive: false };
 
   it('lets a super admin through', () => {
     assert.equal(guardFor(true, superAdmin)(), true);
+  });
+
+  it('refuses a DEACTIVATED super admin — being one is not enough if switched off', () => {
+    assert.throws(guardFor(true, deactivatedSuperAdmin), (error: unknown) => {
+      assert.ok(AppException.is(error));
+      assert.equal(error.code, ErrorCodes.FORBIDDEN);
+      assert.match(error.message, /deactivated/i);
+      return true;
+    });
   });
 
   it('refuses an admin who is not a super admin, however many pages they hold', () => {

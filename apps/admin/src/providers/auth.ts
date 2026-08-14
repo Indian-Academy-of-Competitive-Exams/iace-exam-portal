@@ -45,6 +45,11 @@ export const { AuthProvider, useAuth } = createAuth<
    */
   extend: (admin) => ({
     can: (key: string, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
-      admin !== null && (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),
+      // isActive first, and it gates the super-admin bypass too — the same
+      // order the server's FeaturePermissionGuard uses, because the two
+      // answering differently is the bug where a visible control is refused.
+      admin !== null &&
+      admin.isActive &&
+      (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),
   }),
 });

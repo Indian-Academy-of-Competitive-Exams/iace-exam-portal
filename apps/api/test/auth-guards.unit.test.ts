@@ -160,6 +160,7 @@ describe('JwtAuthGuard', () => {
       actor: ActorTypes.STUDENT,
       sessionId: sid,
       isSuperAdmin: false,
+      isActive: true,
       permissions: {},
     } satisfies AuthenticatedUser);
   });
@@ -249,7 +250,7 @@ describe('JwtAuthGuard', () => {
 describe('ActorGuard', () => {
   const guard = new ActorGuard(new Reflector());
   const user = (actor: 'STUDENT' | 'ADMIN'): { user: AuthenticatedUser } => ({
-    user: { id: 'x', actor, sessionId: 's', isSuperAdmin: false, permissions: {} },
+    user: { id: 'x', actor, sessionId: 's', isSuperAdmin: false, isActive: true, permissions: {} },
   });
 
   it('allows a route that names no actor', async () => {
@@ -317,8 +318,16 @@ describe('FeaturePermissionGuard', () => {
   const admin = (
     permissions: AdminPermissions,
     isSuperAdmin = false,
+    isActive = true,
   ): { user: AuthenticatedUser } => ({
-    user: { id: 'adm', actor: ActorTypes.ADMIN, sessionId: 's', isSuperAdmin, permissions },
+    user: {
+      id: 'adm',
+      actor: ActorTypes.ADMIN,
+      sessionId: 's',
+      isSuperAdmin,
+      isActive,
+      permissions,
+    },
   });
 
   it('allows a route that requires no feature', async () => {
@@ -385,6 +394,37 @@ describe('FeaturePermissionGuard', () => {
     assert.equal(await guard.canActivate(context), true);
   });
 
+  it('refuses a deactivated admin, even one who is a super admin', async () => {
+    // THE guarantee this change exists for. A deactivated super admin who
+    // still bypassed every check would be the single account deactivation
+    // cannot switch off, so the check sits BEFORE the bypass.
+    const { context } = probe(ProbeController.prototype.managesQuestions, admin({}, true, false));
+
+    assert.throws(
+      () => guard.canActivate(context),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, 'FORBIDDEN');
+        assert.match(error.message, /deactivated/i);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a deactivated admin who still holds a matching grant', async () => {
+    // Grants are pruned on deactivation, but the refusal must not depend on
+    // that cleanup having succeeded.
+    const { context } = probe(
+      ProbeController.prototype.managesQuestions,
+      admin({ [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE }, false, false),
+    );
+
+    assert.throws(
+      () => guard.canActivate(context),
+      (error: unknown) => AppException.is(error) && error.code === 'FORBIDDEN',
+    );
+  });
+
   it('refuses a student outright, whatever the token claims', async () => {
     const { context } = probe(ProbeController.prototype.managesQuestions, {
       user: {
@@ -392,6 +432,7 @@ describe('FeaturePermissionGuard', () => {
         actor: ActorTypes.STUDENT,
         sessionId: 's',
         isSuperAdmin: true,
+        isActive: true,
         permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
       } satisfies AuthenticatedUser,
     });
