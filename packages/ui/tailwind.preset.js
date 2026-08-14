@@ -153,6 +153,11 @@ module.exports = {
         // Single source of truth: the bilingual Inter + Noto stack lives in
         // tokens.css (--font-sans). Keeping it here too would drift.
         sans: ['var(--font-sans)'],
+        // Mapped for the same reason, and because leaving it out is not
+        // neutral: `font-mono` still WORKS without this line, it just silently
+        // resolves to Tailwind's default stack instead of ours, so the token
+        // reads as unused while the system quietly has two mono faces.
+        mono: ['var(--font-mono)'],
       },
       fontVariantNumeric: {
         tabular: 'tabular-nums',

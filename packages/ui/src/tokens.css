@@ -293,21 +293,14 @@
   --modal-radius: var(--radius-2xl);
   --modal-pad: var(--space-6);
 
-  /* Toast and tooltip ship as React components (toast.tsx, tooltip.tsx) which
-     take their values from the Tailwind preset, so nothing reads the group
-     below yet — it is the vocabulary for a future restyle, not the current
-     look. Read the component before reaching for one of these: the shipped
-     toast is top-anchored and tinted, and the shipped tooltip is a LIGHT
-     popover, not the inverted chip --tooltip-bg describes. */
-  --toast-w: 23.75rem; /* 380 */
-  --toast-gap: var(--space-3);
-  --toast-inset: var(--space-6);
-  --toast-pad: var(--space-4);
-  --toast-radius: var(--radius-lg);
-
-  --tooltip-bg: var(--slate-900);
-  --tooltip-ink: #ffffff;
-  --tooltip-radius: var(--radius-md);
+  /* No --toast-* or --tooltip-* here. Both ship as React components
+     (toast.tsx, tooltip.tsx) and take their values from the Tailwind preset;
+     this group existed only for the raw CSS blocks that used to sit in
+     components.css, and it left with them. A token nothing reads is not a
+     spare — it is a second opinion. --tooltip-bg in particular described an
+     inverted dark chip while the shipped tooltip is a light popover, so the
+     next reader to reach for it would have got a component matching nothing
+     on screen. */
 
   /* ==========================================================================
      11. EMPTY STATE  [NEW]
@@ -480,8 +473,6 @@
   --skeleton-shine: rgba(255, 255, 255, 0.07);
 
   --overlay-bg: rgba(0, 0, 0, 0.7);
-  --tooltip-bg: #e2e8f0;
-  --tooltip-ink: #0f172a;
   --empty-icon: #343b47;
   --empty-icon-bg: #1b212a;
 
