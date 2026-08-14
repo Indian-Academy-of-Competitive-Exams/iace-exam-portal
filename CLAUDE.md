@@ -121,10 +121,15 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 After generating or modifying code, the task is not done until:
 
 1. Reload the files you touched.
-2. Analyze them via the SonarQube MCP tools. Project key: `my-app`.
-3. For every BLOCKER/CRITICAL/MAJOR finding, look up the rule, understand why it
+2. Analyze them via the SonarQube MCP tools. Project key: `iace-platform` — the
+   value in `sonar-project.properties`, which is the one that has to match the
+   SonarQube UI. A wrong key does not warn: it 404s, and the step gets skipped.
+3. Only `apps`, `packages` and `prisma` are analysed (`sonar.sources`). `docs/`
+   is outside it on purpose, so a docs-only change has nothing to submit — say
+   so rather than reporting a clean scan that never ran.
+4. For every BLOCKER/CRITICAL/MAJOR finding, look up the rule, understand why it
    fired, fix the cause. No `// NOSONAR` without asking me.
-4. Re-analyze until clean.
-5. Report findings and fixes by rule ID.
+5. Re-analyze until clean.
+6. Report findings and fixes by rule ID.
 
 Never mark an issue false-positive or won't-fix in SonarQube without asking me.
