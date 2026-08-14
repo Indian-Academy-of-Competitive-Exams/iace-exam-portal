@@ -293,6 +293,12 @@
   --modal-radius: var(--radius-2xl);
   --modal-pad: var(--space-6);
 
+  /* Toast and tooltip ship as React components (toast.tsx, tooltip.tsx) which
+     take their values from the Tailwind preset, so nothing reads the group
+     below yet — it is the vocabulary for a future restyle, not the current
+     look. Read the component before reaching for one of these: the shipped
+     toast is top-anchored and tinted, and the shipped tooltip is a LIGHT
+     popover, not the inverted chip --tooltip-bg describes. */
   --toast-w: 23.75rem; /* 380 */
   --toast-gap: var(--space-3);
   --toast-inset: var(--space-6);

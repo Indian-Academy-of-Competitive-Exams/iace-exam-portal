@@ -2,12 +2,18 @@
    IACE COMPONENTS — the pieces missing from v0.1
    packages/ui/components.css   ·   requires tokens.css v0.3
 
-   timer · skeleton · empty state · toast · modal · pagination · tooltip
-   · completed CBT question palette
+   timer · skeleton · empty state · modal · completed CBT question palette
 
    Every value here is a token reference. If you find yourself writing a raw
    px or hex below this line, the token layer is missing something — add it
    to tokens.css rather than hardcoding here.
+
+   ONE DEFINITION PER COMPONENT. Toast, tooltip and pagination are NOT here:
+   they ship as React components (toast.tsx, tooltip.tsx, pagination.tsx),
+   which are already token-driven through the Tailwind preset. A raw class
+   here as well would be a second, differently-shaped design of the same
+   thing — and the one nobody renders is the one that silently rots. If a
+   component exists in src/components/ui, style it there.
    ========================================================================== */
 
 /* ============================================================================
@@ -216,123 +222,7 @@
 }
 
 /* ============================================================================
-   4. TOAST
-   Bottom-right on desktop, top on mobile (thumb reach + it must not sit under
-   the CBT sticky footer). Success auto-dismisses; errors never do.
-   ========================================================================== */
-.toast-viewport {
-  position: fixed;
-  bottom: var(--toast-inset);
-  right: var(--toast-inset);
-  z-index: var(--z-toast);
-  display: flex;
-  flex-direction: column;
-  gap: var(--toast-gap);
-  width: var(--toast-w);
-  max-width: calc(100vw - (var(--space-4) * 2));
-  pointer-events: none;
-}
-.toast-viewport > * {
-  pointer-events: auto;
-}
-
-@media (max-width: 640px) {
-  .toast-viewport {
-    top: var(--space-4);
-    bottom: auto;
-    left: var(--space-4);
-    right: var(--space-4);
-    width: auto;
-  }
-}
-
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--toast-pad);
-  background: var(--surface);
-  color: var(--foreground);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border-strong);
-  border-radius: var(--toast-radius);
-  box-shadow: var(--shadow-lg);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  animation: toast-in var(--dur-normal) var(--ease-out);
-}
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-2));
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.toast__icon {
-  width: 1.0625rem;
-  height: 1.0625rem;
-  flex-shrink: 0;
-  margin-top: 0.0625rem;
-}
-.toast__body {
-  flex: 1;
-  min-width: 0;
-}
-.toast__title {
-  font-weight: var(--weight-semibold);
-  margin-bottom: var(--space-0-5);
-}
-.toast__desc {
-  color: var(--muted-foreground);
-}
-.toast__close {
-  flex-shrink: 0;
-  width: 1.25rem;
-  height: 1.25rem;
-  display: grid;
-  place-items: center;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  color: var(--muted-foreground);
-  border-radius: var(--radius-sm);
-  transition: var(--transition-colors);
-}
-.toast__close:hover {
-  background: var(--surface-hover);
-  color: var(--foreground);
-}
-
-.toast--success {
-  border-left-color: var(--success);
-}
-.toast--success .toast__icon {
-  color: var(--success);
-}
-.toast--warning {
-  border-left-color: var(--warning);
-}
-.toast--warning .toast__icon {
-  color: var(--warning-ink);
-}
-.toast--error {
-  border-left-color: var(--destructive);
-}
-.toast--error .toast__icon {
-  color: var(--destructive);
-}
-.toast--info {
-  border-left-color: var(--info);
-}
-.toast--info .toast__icon {
-  color: var(--info);
-}
-
-/* ============================================================================
-   5. MODAL / DIALOG
+   4. MODAL / DIALOG
    Pair with a real <dialog> or a focus-trapping library — the CSS below does
    not trap focus, and an untrapped modal is worse than no modal.
    ========================================================================== */
@@ -427,91 +317,7 @@
 }
 
 /* ============================================================================
-   6. PAGINATION
-   Tabular-nums so page numbers don't jitter between 9 and 10.
-   ========================================================================== */
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-variant-numeric: tabular-nums;
-}
-.pagination__info {
-  font-size: var(--text-sm);
-  color: var(--muted-foreground);
-  margin-right: var(--space-3);
-}
-.page-btn {
-  min-width: var(--control-h-sm);
-  height: var(--control-h-sm);
-  padding-inline: var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--foreground);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition-colors);
-}
-.page-btn:hover:not(:disabled) {
-  background: var(--surface-hover);
-}
-.page-btn:active:not(:disabled) {
-  background: var(--surface-active);
-}
-.page-btn[aria-current='page'] {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: var(--primary);
-}
-.page-btn:disabled {
-  color: var(--disabled-fg);
-  cursor: not-allowed;
-}
-.page-ellipsis {
-  min-width: var(--control-h-sm);
-  display: inline-grid;
-  place-items: center;
-  color: var(--muted-foreground);
-  font-size: var(--text-sm);
-}
-
-/* ============================================================================
-   7. TOOLTIP
-   Never put essential information in a tooltip — it does not exist on touch.
-   ========================================================================== */
-.tooltip {
-  position: absolute;
-  z-index: var(--z-tooltip);
-  padding: var(--space-2) var(--space-3);
-  background: var(--tooltip-bg);
-  color: var(--tooltip-ink);
-  border-radius: var(--tooltip-radius);
-  font-size: var(--text-xs);
-  line-height: var(--leading-snug);
-  box-shadow: var(--shadow-md);
-  max-width: 16rem;
-  pointer-events: none;
-  animation: tooltip-in var(--dur-instant) var(--ease-out);
-}
-@keyframes tooltip-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* ============================================================================
-   8. CBT QUESTION PALETTE — all five states + current-question ring
+   5. CBT QUESTION PALETTE — all five states + current-question ring
    Shape carries meaning alongside colour, so the palette stays readable for
    colourblind candidates: square = answered, pentagon = not answered,
    rounded = not visited, circle = marked.
