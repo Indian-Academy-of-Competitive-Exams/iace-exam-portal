@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AppConfigModule } from '../config/config.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
+import { EventsModule } from '../common/events';
 import { AppConfigService } from '../config/app-config.service';
 import { OTP_SENDERS } from '../config/env.schema';
 import { AuthController } from './auth.controller';
@@ -42,7 +43,7 @@ function createOtpSender(config: AppConfigService, consoleSender: ConsoleOtpSend
   // Its own infra, declared rather than assumed (docs/03 §4.5). Redis is not
   // optional here: OTP, sessions, device binding and the PIN lockout ladder all
   // live there and nowhere else.
-  imports: [AppConfigModule, PrismaModule, RedisModule, JwtModule.register({})],
+  imports: [AppConfigModule, PrismaModule, RedisModule, EventsModule, JwtModule.register({})],
   controllers: [AuthController],
   providers: [
     AuthService,

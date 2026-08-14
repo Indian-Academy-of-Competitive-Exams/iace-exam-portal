@@ -18,6 +18,8 @@ import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { type AuthenticatedUser } from '../common/security';
+import { DOMAIN_EVENTS, DomainEventBus, PIN_RESET_REASONS } from '../common/events';
+import { type PinResetReason } from '../common/events';
 import { type DeviceContext } from './auth.types';
 
 /**
@@ -37,6 +39,7 @@ export class AuthService {
     private readonly pin: PinService,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
+    private readonly events: DomainEventBus,
   ) {}
 
   // ==========================================================================
@@ -108,6 +111,7 @@ export class AuthService {
     // the point of a reset — and clears any lockout the student hit first.
     await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
     await this.pin.clearFailures(mobile);
+    this.announcePinReset(student.id, mobile, PIN_RESET_REASONS.OTP_RESET);
 
     const identity = this.studentIdentity(student);
     return { tokens: await this.issue(identity, device), identity };
@@ -162,6 +166,7 @@ export class AuthService {
 
     await this.sessions.revokeAll(ActorTypes.STUDENT, studentId);
     await this.pin.clearFailures(student.mobile);
+    this.announcePinReset(studentId, student.mobile, PIN_RESET_REASONS.SELF_CHANGE);
 
     const identity = this.studentIdentity(updated);
     return { tokens: await this.issue(identity, device), identity };
@@ -312,6 +317,23 @@ export class AuthService {
   // ==========================================================================
   // Internals
   // ==========================================================================
+
+  /**
+   * Announces a PIN change, AFTER the sessions are already revoked.
+   *
+   * The revocation is not moved onto this event and must not be: ending every
+   * other session is the security guarantee of a reset, and a guarantee cannot
+   * depend on a listener being registered. The event exists for the reactions
+   * that come later — telling the student their PIN changed, noting the device
+   * it happened from — which are things it is acceptable to miss one of.
+   *
+   * Both paths emit. They differ in how the student proved themselves (an OTP
+   * versus the old PIN), not in what happened to their sessions, and a listener
+   * that cares about the difference has `reason` to look at.
+   */
+  private announcePinReset(studentId: string, mobile: string, reason: PinResetReason): void {
+    this.events.emit(DOMAIN_EVENTS.STUDENT_PIN_RESET, { studentId, mobile, reason });
+  }
 
   private async issue(identity: AuthIdentity, device: DeviceContext): Promise<AuthTokens> {
     const sessionId = this.sessions.newSessionId();

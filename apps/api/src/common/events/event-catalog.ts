@@ -1,0 +1,91 @@
+/**
+ * Every cross-module event in the platform, declared in one place (docs/03 §6).
+ *
+ * The rule this file serves: a cross-module *reaction* goes through here as an
+ * event, while a cross-module *query* stays a typed facade call. The difference
+ * is what happens at extraction — an event handler relocates to another service
+ * by moving a file, and a direct method call does not.
+ *
+ * Most of the catalog is DECLARED AND UNWIRED, on purpose. The producers do not
+ * exist yet (exam, scoring, notifications are all `planned` in §5), and naming
+ * the events now is what stops each of those modules inventing its own shape
+ * for the same fact when it arrives. A stub here is a decision made early, not
+ * dead code.
+ */
+
+export const DOMAIN_EVENTS = {
+  /** A student pressed submit. TODO(docs/03 §6): emit from the exam module. */
+  ATTEMPT_SUBMITTED: 'attempt.submitted',
+  /** A scoring job finished. TODO(docs/03 §6): emit from the scoring worker. */
+  SCORING_COMPLETED: 'scoring.completed',
+  /** A test reached a group. TODO(docs/03 §6): emit from access/admin. */
+  TEST_ASSIGNED: 'test.assigned',
+  /** A paper question was excluded from scoring. TODO(docs/03 §6): from admin. */
+  PAPER_QUESTION_DROPPED: 'paperQuestion.dropped',
+  /** A paper question was awarded to everyone. TODO(docs/03 §6): from admin. */
+  PAPER_QUESTION_BONUS: 'paperQuestion.bonus',
+  /** A student's PIN changed and every session was revoked. WIRED — see auth. */
+  STUDENT_PIN_RESET: 'student.pin_reset',
+} as const;
+
+export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
+
+/** Which of the two PIN paths this was. Both revoke every other session. */
+export const PIN_RESET_REASONS = {
+  /** Forgotten: proved the number by OTP, then chose a new PIN. */
+  OTP_RESET: 'otp_reset',
+  /** Remembered: signed in, gave the current PIN, chose a new one. */
+  SELF_CHANGE: 'self_change',
+} as const;
+
+export type PinResetReason = (typeof PIN_RESET_REASONS)[keyof typeof PIN_RESET_REASONS];
+
+export interface AttemptSubmittedEvent {
+  attemptId: string;
+  testId: string;
+  studentId: string;
+  /** ISO — events carry strings, so the payload survives a queue unchanged. */
+  submittedAt: string;
+}
+
+export interface ScoringCompletedEvent {
+  attemptId: string;
+  testId: string;
+  studentId: string;
+  /** Serialised Decimal. Never a JS number — marks are exact 0.25 steps. */
+  score: string;
+}
+
+export interface TestAssignedEvent {
+  testId: string;
+  /** The groups that just gained access, via the series linked to them. */
+  groupIds: string[];
+}
+
+export interface PaperQuestionCorrectedEvent {
+  testId: string;
+  paperQuestionId: string;
+  questionId: string;
+  /** Audit only — `Admin.id`, matching the createdById columns in the schema. */
+  changedByAdminId: string | null;
+}
+
+export interface StudentPinResetEvent {
+  studentId: string;
+  mobile: string;
+  reason: PinResetReason;
+}
+
+/**
+ * Name → payload. `emit` is typed off this, so an event cannot be published
+ * with the wrong shape and a handler cannot claim a shape the producer never
+ * sends.
+ */
+export interface DomainEventPayloads {
+  [DOMAIN_EVENTS.ATTEMPT_SUBMITTED]: AttemptSubmittedEvent;
+  [DOMAIN_EVENTS.SCORING_COMPLETED]: ScoringCompletedEvent;
+  [DOMAIN_EVENTS.TEST_ASSIGNED]: TestAssignedEvent;
+  [DOMAIN_EVENTS.PAPER_QUESTION_DROPPED]: PaperQuestionCorrectedEvent;
+  [DOMAIN_EVENTS.PAPER_QUESTION_BONUS]: PaperQuestionCorrectedEvent;
+  [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
+}

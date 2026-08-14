@@ -4,6 +4,11 @@ import { type RedisService } from '../../src/redis/redis.service';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type OtpDelivery, type OtpSender } from '../../src/auth/otp/otp-sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
+import {
+  type DomainEventBus,
+  type DomainEventName,
+  type DomainEventPayloads,
+} from '../../src/common/events';
 
 /**
  * Test doubles for the three things the auth services touch: Redis, config and
@@ -219,6 +224,32 @@ export interface FakeProfile {
   photoUrl: string | null;
   aadhaarUrl: string | null;
   panUrl: string | null;
+}
+
+/**
+ * Records what was published instead of publishing it.
+ *
+ * Deliberately a recorder and not a real emitter: the guarantee worth asserting
+ * is that a producer ANNOUNCES the fact, not that some listener reacted. A test
+ * that needed a listener to observe the emit would be testing EventEmitter2.
+ */
+export class FakeEventBus {
+  readonly published: { event: DomainEventName; payload: unknown }[] = [];
+
+  emit<K extends DomainEventName>(event: K, payload: DomainEventPayloads[K]): void {
+    this.published.push({ event, payload });
+  }
+
+  /** Every payload published under one name, in order. */
+  of<K extends DomainEventName>(event: K): DomainEventPayloads[K][] {
+    return this.published
+      .filter((entry) => entry.event === event)
+      .map((entry) => entry.payload as DomainEventPayloads[K]);
+  }
+
+  asService(): DomainEventBus {
+    return this as unknown as DomainEventBus;
+  }
 }
 
 export interface FakeStudent {

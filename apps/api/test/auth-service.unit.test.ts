@@ -9,12 +9,13 @@ import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import {
   FakeConfig,
+  FakeEventBus,
   FakeOtpSender,
   FakePrisma,
   FakeRedis,
+  NO_DEVICE,
   makeAdmin,
   makeStudent,
-  NO_DEVICE,
   type FakeAdmin,
   type FakeStudent,
 } from './support/fakes';
@@ -37,8 +38,10 @@ function build(students: FakeStudent[] = [], admins: FakeAdmin[] = []) {
   const tokens = new TokenService(new JwtService({}), config.asService());
   const sessions = new SessionService(redis.asService());
 
-  const auth = new AuthService(prisma.asService(), otp, pin, tokens, sessions);
-  return { auth, otp, pin, tokens, sessions, prisma, redis, sender, config };
+  const events = new FakeEventBus();
+
+  const auth = new AuthService(prisma.asService(), otp, pin, tokens, sessions, events.asService());
+  return { auth, otp, pin, tokens, sessions, prisma, redis, sender, config, events };
 }
 
 /** Drives signup the way the endpoints do: OTP → ticket → PIN. */

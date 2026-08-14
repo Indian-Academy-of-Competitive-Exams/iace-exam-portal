@@ -33,6 +33,7 @@ function authService(): { auth: AuthService; pin: PinService } {
     pin,
     null as never,
     null as never,
+    null as never,
   );
   return { auth, pin };
 }
