@@ -11,6 +11,7 @@ export {
   type FieldControl,
   type FormFieldProps,
 } from './components/ui/form-field';
+export { Accordion, type AccordionProps } from './components/ui/accordion';
 export { Alert, alertVariants, type AlertProps } from './components/ui/alert';
 export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
 export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';

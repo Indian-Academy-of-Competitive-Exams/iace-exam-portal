@@ -308,7 +308,8 @@ export class AdminsService {
    * change to this body and nothing else. It deliberately does NOT touch the
    * bulk importer, which is a separate, working path.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
+  // No await yet — the body is a stub. `async` stays so the signature does not
+  // change when the real fetch lands.
   async triggerStudentSync(): Promise<StudentSyncResult> {
     return {
       startedAt: new Date().toISOString(),

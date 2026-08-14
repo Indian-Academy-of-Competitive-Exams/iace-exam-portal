@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Loader2, Plus, ShieldCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
@@ -29,9 +29,9 @@ import {
 } from '@iace/ui';
 import { applyFieldErrors, usePageSize } from '@iace/app-kit';
 import { api } from '../lib/api';
+import { ADMINS_QUERY_KEY } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
-const ADMINS_QUERY_KEY = ['admin', 'admins'] as const;
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
 
 /**
@@ -214,6 +214,11 @@ function NewAdminCard({
     defaultValues: { email: '', fullName: '', isSuperAdmin: false },
   });
 
+  // useWatch, not form.watch: the latter returns a fresh function each render,
+  // which makes React Compiler skip memoising the whole component (see the
+  // same call in students.tsx).
+  const isSuperAdmin = useWatch({ control: form.control, name: 'isSuperAdmin' }) ?? false;
+
   const create = useMutation({
     meta: { success: 'Admin created.', fields: NEW_ADMIN_FIELDS },
     mutationFn: (values: CreateAdminInput) => api.admin.admins.create(values),
@@ -246,7 +251,7 @@ function NewAdminCard({
             {(control) => (
               <Checkbox
                 {...control}
-                checked={form.watch('isSuperAdmin') ?? false}
+                checked={isSuperAdmin}
                 onChange={(event) => form.setValue('isSuperAdmin', event.target.checked)}
                 label="Super admin"
                 hint="Bypasses every feature check, and can manage admins."

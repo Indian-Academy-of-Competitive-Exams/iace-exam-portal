@@ -70,6 +70,14 @@ export const ME_QUERY_KEY = ['auth', 'me'] as const;
 export const FEATURES_QUERY_KEY = ['admin', 'features'] as const;
 
 /**
+ * Admins. Shared for the same reason: a grant changes the feature's holder list
+ * AND the admin's permission map, and the Permissions screen renders off the
+ * second — so both caches have to be invalidated by whichever screen made the
+ * change, or the checkboxes show the state from before the click.
+ */
+export const ADMINS_QUERY_KEY = ['admin', 'admins'] as const;
+
+/**
  * The admin list the Permissions screen assigns from.
  *
  * PAGE_SIZE_MAX, deliberately: this is an assignment surface, not a browse one,
