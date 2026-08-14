@@ -31,7 +31,15 @@ export interface ListQueryResult<TItem> {
   total: number;
   page: number;
   pageSize: PageSizeOption;
-  isPending: boolean;
+  /**
+   * Whether to show a loading state — a FIRST load with nothing to show yet.
+   *
+   * Not `isPending`, which stays true for a query that is switched off and
+   * would leave such a list saying "Loading…" for ever. And not `isFetching`,
+   * which is true while the next page is on its way and would blank a table
+   * that is still perfectly readable.
+   */
+  isLoading: boolean;
   /** Whether a page has ever arrived — the footer stays hidden until one has. */
   hasLoaded: boolean;
   setPage: (page: number) => void;
@@ -120,7 +128,7 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     total,
     page,
     pageSize,
-    isPending: query.isPending,
+    isLoading: query.isLoading,
     hasLoaded: query.data !== undefined,
     setPage,
     setPageSize,

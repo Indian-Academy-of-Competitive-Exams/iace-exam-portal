@@ -23,7 +23,7 @@ import {
 import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { ME_QUERY_KEY, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
 /**
  * Named once so the banner and the field mapping cannot drift apart.
@@ -90,7 +90,7 @@ export function ProfilePage() {
       queryClient.setQueryData(PROFILE_QUERY_KEY, updated);
       // The identity carries preTestReady, and saving these fields is exactly
       // what changes it — without this the prompt would still be there.
-      void queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
       form.reset(form.getValues());
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),

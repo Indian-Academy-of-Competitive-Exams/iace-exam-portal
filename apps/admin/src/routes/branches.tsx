@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,7 +47,10 @@ export function BranchesPage() {
   const branches = useBranches();
   const queryClient = useQueryClient();
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'branches'] });
+  const refresh = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: ['admin', 'branches'] }),
+    [queryClient],
+  );
 
   const columns = useMemo<DataTableColumn<Branch>[]>(
     () => [
@@ -99,10 +102,7 @@ export function BranchesPage() {
         ),
       },
     ],
-    // `refresh` is a fresh closure each render and is only ever called from a
-    // click; rebuilding the columns for it would defeat the memo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isSuperAdmin],
+    [isSuperAdmin, refresh],
   );
 
   return (
@@ -132,7 +132,7 @@ export function BranchesPage() {
         <NewBranchCard
           onDone={() => {
             setCreating(false);
-            void refresh();
+            refresh();
           }}
           onCancel={() => setCreating(false)}
         />

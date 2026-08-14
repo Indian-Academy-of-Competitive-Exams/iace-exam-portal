@@ -164,8 +164,6 @@ export function StudentsPage() {
     fetchPage: (params) => api.admin.students.list(params),
   });
 
-  const set = (changes: Partial<Record<FilterKey, string | undefined>>) => filters.set(changes);
-
   const columns = useMemo<DataTableColumn<StudentSummary>[]>(
     () => [
       { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
@@ -246,7 +244,11 @@ export function StudentsPage() {
                 {group.data.branch.name} / {group.data.name}
               </Badge>
             ) : null}
-            <Button variant="ghost" size="sm" onClick={() => set({ groupId: '', branchId: '' })}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => filters.set({ groupId: '', branchId: '' })}
+            >
               <X aria-hidden />
               Clear
             </Button>
@@ -260,7 +262,7 @@ export function StudentsPage() {
               placeholder="Search by name or mobile"
               value={filters.get('q')}
               prefix={<Search className="size-4" aria-hidden />}
-              onChange={(event) => set({ q: event.target.value })}
+              onChange={(event) => filters.set({ q: event.target.value })}
             />
           </div>
 
@@ -268,7 +270,7 @@ export function StudentsPage() {
             <Select
               aria-label="Filter by status"
               value={status}
-              onChange={(event) => set({ status: event.target.value })}
+              onChange={(event) => filters.set({ status: event.target.value })}
             >
               <option value="all">All students</option>
               <option value="active">Active</option>
@@ -282,7 +284,7 @@ export function StudentsPage() {
             <Select
               aria-label="Sort by"
               value={filters.get('sort') || STUDENT_SORTS.RECENT}
-              onChange={(event) => set({ sort: event.target.value })}
+              onChange={(event) => filters.set({ sort: event.target.value })}
             >
               <option value={STUDENT_SORTS.RECENT}>Newest first</option>
               <option value={STUDENT_SORTS.OLDEST}>Oldest first</option>
@@ -317,7 +319,7 @@ export function StudentsPage() {
                   value={branchId}
                   // Clearing the group too: a group belongs to one branch, so
                   // keeping both would usually mean asking for an empty set.
-                  onChange={(event) => set({ branchId: event.target.value, groupId: '' })}
+                  onChange={(event) => filters.set({ branchId: event.target.value, groupId: '' })}
                 >
                   <option value="">Any branch</option>
                   {branches.map((option) => (
@@ -334,7 +336,7 @@ export function StudentsPage() {
                 <Combobox
                   {...control}
                   value={groupId}
-                  onChange={(next) => set({ groupId: next })}
+                  onChange={(next) => filters.set({ groupId: next })}
                   // The chosen group is very often outside the page that
                   // happens to be loaded; without this the control would look
                   // like it had lost the selection.
@@ -364,7 +366,7 @@ export function StudentsPage() {
                 <Select
                   {...control}
                   value={filters.get('preTestReady')}
-                  onChange={(event) => set({ preTestReady: event.target.value })}
+                  onChange={(event) => filters.set({ preTestReady: event.target.value })}
                 >
                   <option value="">Any</option>
                   <option value="true">On file</option>
@@ -378,7 +380,7 @@ export function StudentsPage() {
                 <Select
                   {...control}
                   value={filters.get('profileCompleted')}
-                  onChange={(event) => set({ profileCompleted: event.target.value })}
+                  onChange={(event) => filters.set({ profileCompleted: event.target.value })}
                 >
                   <option value="">Any</option>
                   <option value="true">Complete</option>
@@ -396,7 +398,7 @@ export function StudentsPage() {
                 <Select
                   {...control}
                   value={filters.get('ungrouped')}
-                  onChange={(event) => set({ ungrouped: event.target.value })}
+                  onChange={(event) => filters.set({ ungrouped: event.target.value })}
                 >
                   <option value="">Any</option>
                   <option value="true">In no group</option>
@@ -412,7 +414,7 @@ export function StudentsPage() {
                   type="date"
                   max={todayISO()}
                   value={filters.get('joinedFrom')}
-                  onChange={(event) => set({ joinedFrom: event.target.value })}
+                  onChange={(event) => filters.set({ joinedFrom: event.target.value })}
                 />
               )}
             </Field>
@@ -424,7 +426,7 @@ export function StudentsPage() {
                   type="date"
                   max={todayISO()}
                   value={filters.get('joinedTo')}
-                  onChange={(event) => set({ joinedTo: event.target.value })}
+                  onChange={(event) => filters.set({ joinedTo: event.target.value })}
                 />
               )}
             </Field>
@@ -450,7 +452,7 @@ export function StudentsPage() {
           columns={columns}
           rows={students.items}
           rowKey={(student) => student.id}
-          isLoading={students.isPending}
+          isLoading={students.isLoading}
           empty={
             filters.activeCount(ALL_FILTERS) > 0
               ? 'No students match those filters.'

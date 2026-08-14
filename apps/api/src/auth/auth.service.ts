@@ -18,8 +18,12 @@ import { PinService } from './pin/pin.service';
 import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { type AuthenticatedUser } from '../common/security';
-import { DOMAIN_EVENTS, DomainEventBus, PIN_RESET_REASONS } from '../common/events';
-import { type PinResetReason } from '../common/events';
+import {
+  DOMAIN_EVENTS,
+  DomainEventBus,
+  PIN_RESET_REASONS,
+  type PinResetReason,
+} from '../common/events';
 import { type DeviceContext } from './auth.types';
 
 /**

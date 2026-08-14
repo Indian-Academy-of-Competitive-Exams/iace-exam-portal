@@ -4,8 +4,7 @@ import { type Request } from 'express';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { TokenService } from '../token.service';
 import { SessionService } from '../session.service';
-import { IS_PUBLIC_KEY } from '../../common/security';
-import { type AuthenticatedUser } from '../../common/security';
+import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../../common/security';
 
 /**
  * Applied globally (see AppModule's APP_GUARD); routes opt out with @Public().

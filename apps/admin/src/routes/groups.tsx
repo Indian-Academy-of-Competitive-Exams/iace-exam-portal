@@ -150,7 +150,7 @@ export function GroupsPage() {
           columns={columns}
           rows={groups.items}
           rowKey={(group) => group.id}
-          isLoading={groups.isPending}
+          isLoading={groups.isLoading}
           empty={
             search
               ? `No group matches “${search}”.`
