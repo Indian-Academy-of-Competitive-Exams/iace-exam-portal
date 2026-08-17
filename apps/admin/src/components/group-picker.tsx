@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
 import { PAGE_SIZE_MAX, type GroupRef } from '@iace/contracts';
-import { Alert, Checkbox, Input, linkVariants } from '@iace/ui';
+import { Alert, Checkbox, linkVariants, SearchInput } from '@iace/ui';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -80,12 +79,11 @@ export function GroupPicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <Input
+      <SearchInput
         aria-label="Search groups"
         placeholder="Search groups"
         value={search}
-        prefix={<Search className="size-4" aria-hidden />}
-        onChange={(event) => setSearch(event.target.value)}
+        onChange={setSearch}
       />
 
       <GroupPickerBody hasAnyGroups={hasAnyGroups} isPending={groups.isPending}>

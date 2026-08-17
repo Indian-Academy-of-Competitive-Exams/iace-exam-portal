@@ -3,15 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  ChevronDown,
-  RefreshCw,
-  Search,
-  SlidersHorizontal,
-  Upload,
-  UserPlus,
-  X,
-} from 'lucide-react';
+import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
   FEATURE_KEYS,
   MOBILE_DIGITS,
@@ -46,6 +38,7 @@ import {
   NumericInput,
   PageHeader,
   Pagination,
+  SearchInput,
   Select,
   Tooltip,
   TooltipContent,
@@ -290,12 +283,11 @@ export function StudentsPage() {
 
         <div className="mb-3 flex flex-wrap gap-3">
           <div className="min-w-56 flex-1">
-            <Input
+            <SearchInput
               aria-label="Search students"
               placeholder="Search by name or mobile"
               value={filters.get('q')}
-              prefix={<Search className="size-4" aria-hidden />}
-              onChange={(event) => filters.set({ q: event.target.value })}
+              onChange={(q) => filters.set({ q })}
             />
           </div>
 

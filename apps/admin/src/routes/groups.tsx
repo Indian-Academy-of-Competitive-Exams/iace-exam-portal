@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
+import { Plus, Trash2, UserPlus, X } from 'lucide-react';
 import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
 import {
   Badge,
@@ -21,6 +21,7 @@ import {
   linkVariants,
   PageHeader,
   Pagination,
+  SearchInput,
   Select,
   type DataTableColumn,
 } from '@iace/ui';
@@ -140,12 +141,11 @@ export function GroupsPage() {
 
         <div className="mb-4 flex flex-wrap gap-3">
           <div className="min-w-56 flex-1">
-            <Input
+            <SearchInput
               aria-label="Search groups"
               placeholder="Search by name or branch"
               value={search}
-              prefix={<Search className="size-4" aria-hidden />}
-              onChange={(event) => filters.set({ q: event.target.value })}
+              onChange={(q) => filters.set({ q })}
             />
           </div>
           <div className="w-52">

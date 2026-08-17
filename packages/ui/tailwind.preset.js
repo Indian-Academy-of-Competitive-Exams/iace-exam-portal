@@ -234,6 +234,10 @@ module.exports = {
     plugin(({ addBase }) => {
       addBase({
         '*': { borderColor: 'var(--border)' },
+        // WebKit draws its own ✕ inside a search field. SearchInput ships one
+        // that is themed, keyboard-reachable and labelled, and two clear
+        // buttons side by side is one of them being wrong.
+        'input[type="search"]::-webkit-search-cancel-button': { display: 'none' },
         body: {
           backgroundColor: 'var(--background)',
           color: 'var(--foreground)',

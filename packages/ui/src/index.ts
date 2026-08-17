@@ -25,6 +25,15 @@ export {
   type FileDropzoneProps,
 } from './components/ui/file-dropzone';
 export { Select, type SelectProps } from './components/ui/select';
+export {
+  SearchInput,
+  useDebouncedSearch,
+  createDebouncer,
+  SEARCH_DEBOUNCE_MS,
+  type Debouncer,
+  type DebouncedSearch,
+  type SearchInputProps,
+} from './components/ui/search-input';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
 export {
   Toaster,

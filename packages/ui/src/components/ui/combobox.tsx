@@ -2,9 +2,14 @@ import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useDebouncedSearch } from './search-input';
 
 /** How close to the end counts as "nearly there", in pixels. */
 const LOAD_MORE_THRESHOLD_PX = 160;
+
+/** Stable no-op for the unsearchable case — a new arrow each render would make
+ *  the hook look like it had a different consumer every time. */
+const NO_SEARCH = () => {};
 
 export interface ComboboxItem {
   value: string;
@@ -85,6 +90,13 @@ export function Combobox({
 }: Readonly<ComboboxProps>) {
   const [open, setOpen] = React.useState(false);
 
+  // Declared whether or not this instance searches: hooks cannot be conditional,
+  // and an unused debouncer costs a timer that never starts.
+  const { draft: searchDraft, type: typeSearch } = useDebouncedSearch(
+    search ?? '',
+    onSearchChange ?? NO_SEARCH,
+  );
+
   const selected = items.find((item) => item.value === value);
   const triggerLabel = selected?.label ?? selectedLabel ?? value ?? placeholder;
 
@@ -144,10 +156,14 @@ export function Combobox({
           {onSearchChange ? (
             <div className="flex items-center gap-2 border-b border-border px-3">
               <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              {/* Debounced for the same reason as SearchInput: this searches
+                  the SERVER, so an unwaited keystroke is a request, and the
+                  answers to the first seven letters of a group name are ones
+                  nobody reads. The field itself stays instant. */}
               <input
                 autoFocus
-                value={search ?? ''}
-                onChange={(event) => onSearchChange(event.target.value)}
+                value={searchDraft}
+                onChange={(event) => typeSearch(event.target.value)}
                 placeholder={searchPlaceholder}
                 className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
