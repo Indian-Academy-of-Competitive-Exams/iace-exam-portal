@@ -176,6 +176,23 @@
   .demo-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
     gap:12px; border-top:1px solid var(--border); padding:12px 4px 0; }
 
+  /* Demo-only: skeleton stand-in for skeleton.tsx, drawn here because the
+     skeleton ships as React — the TSX is the truth. */
+  .demo-skeleton { position:relative; overflow:hidden; background:var(--skeleton-base);
+    border-radius:var(--skeleton-radius); }
+  .demo-skeleton::after { content:''; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+    animation:demo-skeleton-sweep var(--skeleton-dur) var(--ease-in-out) infinite; }
+  @keyframes demo-skeleton-sweep { to { transform:translateX(100%); } }
+  @media (prefers-reduced-motion: reduce) { .demo-skeleton::after { animation:none; opacity:0; } }
+  .demo-skeleton--text { height:1em; border-radius:var(--radius-sm); }
+  .demo-skeleton--title { height:1.5em; width:40%; border-radius:var(--radius-sm); }
+  .demo-skeleton--circle { border-radius:var(--radius-full); }
+  .demo-skeleton--kpi { height:7.5rem; border-radius:var(--radius-xl); }
+  .demo-skeleton--row { height:var(--row-h-comfortable); border-radius:var(--radius-sm); }
+  .demo-skeleton-paragraph { display:flex; flex-direction:column; gap:var(--space-2); }
+  .demo-skeleton-paragraph .demo-skeleton--text:last-child { width:62%; }
+
   /* Demo-only: modal stand-in for dialog.tsx. Shown INLINE rather than over a
      real overlay so the page stays scrollable, and drawn here rather than
      linked because the modal ships as React — the TSX is the truth. */
@@ -596,25 +613,27 @@
       <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px">
         <div class="card card-pad">
           <div class="label" style="margin-bottom:10px">Text block</div>
-          <div class="skeleton-paragraph">
-            <div class="skeleton skeleton--title"></div>
-            <div class="skeleton skeleton--text"></div>
-            <div class="skeleton skeleton--text"></div>
-            <div class="skeleton skeleton--text"></div>
+          <div class="demo-skeleton-paragraph">
+            <div class="demo-skeleton demo-skeleton--title"></div>
+            <div class="demo-skeleton demo-skeleton--text"></div>
+            <div class="demo-skeleton demo-skeleton--text"></div>
+            <div class="demo-skeleton demo-skeleton--text"></div>
           </div>
           <div class="note">The last line is short on purpose — a full-width final line is the tell that gives away a fake skeleton.</div>
         </div>
         <div class="card card-pad">
           <div class="label" style="margin-bottom:10px">Shapes</div>
           <div class="row" style="gap:12px;align-items:center">
-            <div class="skeleton skeleton--circle" style="width:40px;height:40px"></div>
-            <div class="skeleton skeleton--kpi" style="width:120px"></div>
+            <div class="demo-skeleton demo-skeleton--circle" style="width:40px;height:40px"></div>
+            <div class="demo-skeleton demo-skeleton--kpi" style="width:120px"></div>
             <div class="stack" style="gap:8px;flex:1">
-              <div class="skeleton skeleton--row"></div>
-              <div class="skeleton skeleton--row"></div>
+              <div class="demo-skeleton demo-skeleton--row"></div>
+              <div class="demo-skeleton demo-skeleton--row"></div>
             </div>
           </div>
           <div class="note">
+            <b>Ships as React</b> — <code>skeleton.tsx</code>, with <code>SkeletonParagraph</code> for the
+            block on the left; what you see is a stand-in drawn to match.
             Use above <b>300 ms</b> only — below that a skeleton flashes and reads as jank, so show nothing.
             Match the skeleton to the real content's size: one that is the wrong shape causes a layout jump on
             resolve, which is worse than the spinner it replaced. Reduced motion keeps the placeholder and drops the sweep.

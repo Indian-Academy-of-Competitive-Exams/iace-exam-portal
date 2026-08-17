@@ -37,6 +37,13 @@ export {
 export { Textarea, type TextareaProps } from './components/ui/textarea';
 export { Separator, type SeparatorProps } from './components/ui/separator';
 export {
+  Skeleton,
+  SkeletonParagraph,
+  type SkeletonProps,
+  type SkeletonVariant,
+  type SkeletonParagraphProps,
+} from './components/ui/skeleton';
+export {
   Spinner,
   LoadingState,
   type SpinnerProps,

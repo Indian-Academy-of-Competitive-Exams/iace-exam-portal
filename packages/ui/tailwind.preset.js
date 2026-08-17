@@ -196,6 +196,12 @@ module.exports = {
           from: { opacity: '0', transform: 'translateY(0.75rem) scale(0.98)' },
           to: { opacity: '1', transform: 'none' },
         },
+        // The sheen crossing a skeleton. Travels from off one edge to off the
+        // other, so it never parks in the middle of the placeholder.
+        'skeleton-sweep': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(100%)' },
+        },
       },
       animation: {
         'tooltip-in': 'tooltip-in 120ms ease-out',
@@ -205,6 +211,9 @@ module.exports = {
         // --dur-normal / --ease-spring. The one place a little overshoot earns
         // its keep: a dialog interrupts, and should feel like it landed.
         'dialog-in': 'dialog-in 220ms cubic-bezier(0.34, 1.4, 0.64, 1)',
+        // --skeleton-dur / --ease-in-out. Slow on purpose: a fast sweep reads
+        // as something happening rather than as something being waited for.
+        'skeleton-sweep': 'skeleton-sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
       },
       fontFamily: {
         // Single source of truth: the bilingual Inter + Noto stack lives in
