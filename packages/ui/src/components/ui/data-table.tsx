@@ -19,7 +19,10 @@ export interface DataTableProps<TRow> {
   isLoading: boolean;
   /** Shown when there are no rows. The caller writes it — see below. */
   empty: React.ReactNode;
+  /** Overrides the loading skeleton with a message. Rarely what you want. */
   loading?: React.ReactNode;
+  /** Roughly how many rows this list usually shows. */
+  skeletonRows?: number;
   /** Usually a `<Pagination />`. Rendered only when given. */
   footer?: React.ReactNode;
 }
@@ -47,6 +50,7 @@ export function DataTable<TRow>({
   isLoading,
   empty,
   loading,
+  skeletonRows,
   footer,
 }: Readonly<DataTableProps<TRow>>) {
   return (
@@ -68,6 +72,7 @@ export function DataTable<TRow>({
             colSpan={columns.length}
             empty={empty}
             loading={loading}
+            skeletonRows={skeletonRows}
           >
             {rows.map((row) => (
               <TableRow key={rowKey(row)}>

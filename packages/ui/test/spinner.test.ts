@@ -36,6 +36,44 @@ describe('Spinner', () => {
  * Every remaining one belongs to Button (which owns its own pending state) or
  * to Spinner itself.
  */
+/**
+ * A spinner is for an action somebody just took. Content arriving into a page
+ * has a shape — a table, a list, a card, a form — and `Skeleton` holds it while
+ * it arrives; a spinner in its place collapses the region to a dot and then
+ * throws the page around when the data lands.
+ *
+ * The four that remain are all actions or shapeless waits: reading a chosen
+ * file, saving a permission toggle, fetching the next page of an open list, and
+ * the app deciding whether anyone is signed in before there is a page at all.
+ */
+describe('spinners left in the product', () => {
+  const ALLOWED = new Set([
+    'apps/admin/src/routes/import-students.tsx',
+    'apps/admin/src/routes/import-group-members.tsx',
+    'apps/admin/src/routes/permissions.tsx',
+    'packages/ui/src/components/ui/combobox.tsx',
+    'packages/app-kit/browser/protected-route.tsx',
+  ]);
+
+  it('are only where an action is running, never where content is arriving', () => {
+    const offenders = [
+      ...globSync('apps/*/src/**/*.tsx', { cwd: REPO_ROOT }),
+      ...globSync('packages/*/{src,browser}/**/*.tsx', { cwd: REPO_ROOT }),
+    ].filter((relative) => {
+      if (ALLOWED.has(relative) || relative.endsWith('ui/spinner.tsx')) return false;
+      return /<(?:Spinner|LoadingState)\b/.test(
+        readFileSync(path.join(REPO_ROOT, relative), 'utf8'),
+      );
+    });
+
+    assert.deepEqual(
+      offenders,
+      [],
+      'content on its way into a page uses Skeleton — it holds the shape it is about to fill',
+    );
+  });
+});
+
 describe('hand-rolled spinners', () => {
   it('are gone from the apps and the shared packages', () => {
     const allowed = new Set([

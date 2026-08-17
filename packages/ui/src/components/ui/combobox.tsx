@@ -4,6 +4,7 @@ import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
+import { Skeleton } from './skeleton';
 
 /** How close to the end counts as "nearly there", in pixels. */
 const LOAD_MORE_THRESHOLD_PX = 160;
@@ -209,7 +210,9 @@ export function Combobox({
               />
             ))}
 
-            {isLoading ? <Status>Loading…</Status> : null}
+            {/* Rows in the shape of the rows that are coming, so the list does
+                not collapse to one line and then jump when they land. */}
+            {isLoading ? <OptionSkeleton /> : null}
             {!isLoading && items.length === 0 ? <Status>{emptyLabel}</Status> : null}
 
             {/* Only while there is another page, so a finished list says so by
@@ -265,4 +268,19 @@ function Option({
 
 function Status({ children }: Readonly<{ children: React.ReactNode }>) {
   return <p className="px-2 py-3 text-sm text-muted-foreground">{children}</p>;
+}
+
+/** Placeholder rows have no identity of their own, so their keys are fixed. */
+const PLACEHOLDER_KEYS = ['a', 'b', 'c', 'd'];
+
+function OptionSkeleton() {
+  return (
+    <>
+      {PLACEHOLDER_KEYS.map((key) => (
+        <div key={key} className="px-2 py-2">
+          <Skeleton variant="text" />
+        </div>
+      ))}
+    </>
+  );
 }

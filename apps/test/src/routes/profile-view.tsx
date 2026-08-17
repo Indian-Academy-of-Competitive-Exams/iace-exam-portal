@@ -11,8 +11,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  LoadingState,
   PageHeader,
+  SkeletonParagraph,
 } from '@iace/ui';
 import { DocumentCard } from '../components/document-card';
 import { PreTestPrompt } from '../components/pre-test-prompt';
@@ -30,7 +30,13 @@ import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 export function ProfileViewPage() {
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
-  if (me.isPending) return <LoadingState />;
+  if (me.isPending) {
+    return (
+      <Card className="p-6">
+        <SkeletonParagraph lines={5} />
+      </Card>
+    );
+  }
 
   if (me.error || !me.data) {
     // The reason is on the toast; this only has to stop the page being blank.

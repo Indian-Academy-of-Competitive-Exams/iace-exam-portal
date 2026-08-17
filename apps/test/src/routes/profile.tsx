@@ -16,9 +16,9 @@ import {
   CardTitle,
   Field,
   Input,
-  LoadingState,
   PageHeader,
   Select,
+  SkeletonParagraph,
   Textarea,
 } from '@iace/ui';
 import { HistoryEditor } from '../components/history-editor';
@@ -113,7 +113,18 @@ export function ProfilePage() {
 
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
 
-      {me.isPending && <LoadingState />}
+      {me.isPending && (
+        // Two cards, because that is what the form is: the three pre-test
+        // fields, then everything optional.
+        <div className="flex flex-col gap-5">
+          <Card className="p-6">
+            <SkeletonParagraph lines={3} />
+          </Card>
+          <Card className="p-6">
+            <SkeletonParagraph lines={4} />
+          </Card>
+        </div>
+      )}
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {!me.isPending && !me.error && (
         <form

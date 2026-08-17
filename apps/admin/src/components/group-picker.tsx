@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type GroupRef } from '@iace/contracts';
-import { Alert, Checkbox, linkVariants, LoadingState, SearchInput, Separator } from '@iace/ui';
+import { Alert, Checkbox, linkVariants, SearchInput, Separator, Skeleton } from '@iace/ui';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -17,6 +17,9 @@ import { ROUTES } from '../lib/constants';
  * already selected is pinned above the results and stays visible whatever the
  * search says.
  */
+/** Placeholder rows have no identity of their own, so their keys are fixed. */
+const PLACEHOLDER_KEYS = ['a', 'b', 'c', 'd'];
+
 /** What the counter under the list says. */
 function selectionSummary(count: number, search: string): string {
   if (count === 0) return 'None selected';
@@ -149,7 +152,19 @@ function GroupPickerBody({
   children,
 }: Readonly<{ hasAnyGroups: boolean; isPending: boolean; children: React.ReactNode }>) {
   if (hasAnyGroups) return <>{children}</>;
-  if (isPending) return <LoadingState />;
+  if (isPending) {
+    // The picker is a list of checkbox rows in a bordered box, and it knows
+    // that before the groups arrive — so it holds the box open at roughly the
+    // right height instead of showing a line of text that the list then shoves
+    // down the form.
+    return (
+      <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+        {PLACEHOLDER_KEYS.map((key) => (
+          <Skeleton key={key} variant="text" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <Alert variant="warning">

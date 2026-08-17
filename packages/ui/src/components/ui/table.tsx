@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
+import { Skeleton } from './skeleton';
 
 /**
  * Data-forward table, per the style guide: quiet uppercase headers, a rule
@@ -89,6 +90,34 @@ function TableEmpty({
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty };
 
+/** Placeholder rows have no identity of their own, so their keys are fixed. */
+const PLACEHOLDER_KEYS = Array.from({ length: 12 }, (_, index) => `placeholder-${index}`);
+
+/**
+ * The rows a table shows while its rows are on their way.
+ *
+ * A table is the case skeletons exist for: the shape is already known — this
+ * many columns, roughly this many rows — so the header stays put, the columns
+ * keep their widths, and nothing jumps when the data lands. The centred
+ * "Loading…" it replaced collapsed the table to one line and then threw the
+ * page around as the real rows arrived.
+ */
+function TableSkeleton({ rows, columns }: Readonly<{ rows: number; columns: number }>) {
+  return (
+    <>
+      {PLACEHOLDER_KEYS.slice(0, rows).map((rowKey) => (
+        <TableRow key={rowKey}>
+          {PLACEHOLDER_KEYS.slice(0, columns).map((cellKey) => (
+            <TableCell key={cellKey}>
+              <Skeleton variant="text" />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 /**
  * A table body's three states: loading, empty, or rows.
  *
@@ -100,13 +129,20 @@ export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmp
  * `empty` is the message for "nothing matches", which is a different fact from
  * "there is nothing yet" — the caller decides which it is, because only the
  * caller knows whether a filter is set.
+ *
+ * Loading is skeleton rows, not a word. A table knows its own shape before the
+ * data arrives, so it can hold it: the word "Loading…" collapsed the whole
+ * table to a single centred line and then threw the page around when the rows
+ * landed. `loading` is still there for the rare wait that has something to say
+ * ("Reading the file…"), and passing it opts back out of the skeleton.
  */
 export function TableState({
   isLoading,
   isEmpty,
   colSpan,
   empty,
-  loading = 'Loading…',
+  loading,
+  skeletonRows = 5,
   children,
 }: Readonly<{
   isLoading: boolean;
@@ -114,9 +150,17 @@ export function TableState({
   colSpan: number;
   empty: React.ReactNode;
   loading?: React.ReactNode;
+  /** Roughly what the list usually holds — enough to fill the fold, not more. */
+  skeletonRows?: number;
   children: React.ReactNode;
 }>) {
-  if (isLoading) return <TableEmpty colSpan={colSpan}>{loading}</TableEmpty>;
+  if (isLoading) {
+    return loading === undefined ? (
+      <TableSkeleton rows={skeletonRows} columns={colSpan} />
+    ) : (
+      <TableEmpty colSpan={colSpan}>{loading}</TableEmpty>
+    );
+  }
   if (isEmpty) return <TableEmpty colSpan={colSpan}>{empty}</TableEmpty>;
   return <>{children}</>;
 }

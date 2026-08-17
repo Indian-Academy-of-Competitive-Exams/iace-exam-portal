@@ -16,9 +16,10 @@ import {
   CardTitle,
   Field,
   Input,
-  LoadingState,
   PageHeader,
   Select,
+  Skeleton,
+  SkeletonParagraph,
 } from '@iace/ui';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
@@ -174,7 +175,22 @@ export function StudentDetailPage() {
     },
   });
 
-  if (student.isPending) return <LoadingState />;
+  // Shaped like the page it stands in for — a heading, then the two cards —
+  // so the header does not appear on top of a line of text and then shove it
+  // down when the record lands.
+  if (student.isPending) {
+    return (
+      <div className="flex flex-col gap-5">
+        <Skeleton variant="title" />
+        <Card className="p-6">
+          <SkeletonParagraph lines={3} />
+        </Card>
+        <Card className="p-6">
+          <SkeletonParagraph lines={5} />
+        </Card>
+      </div>
+    );
+  }
   if (student.error || !student.data) {
     // The reason is on the toast; this only has to stop the page being blank.
     return <Alert variant="danger">Could not load this student.</Alert>;
