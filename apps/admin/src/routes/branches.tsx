@@ -23,6 +23,7 @@ import {
   linkVariants,
   PageHeader,
   plural,
+  TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
@@ -102,7 +103,7 @@ export function BranchesPage() {
 
   const columns = useMemo(() => branchColumns(isSuperAdmin, refresh), [isSuperAdmin, refresh]);
 
-  return (
+  const header = (
     <>
       <PageHeader
         title="Branches"
@@ -134,19 +135,21 @@ export function BranchesPage() {
           onCancel={() => setCreating(false)}
         />
       ) : null}
-
-      <Card className="p-4">
-        {/* No pagination: the branch list is a short, slow-moving one that
-            `useBranches` already loads in full, a page at a time. */}
-        <DataTable
-          columns={columns}
-          rows={branches}
-          rowKey={(branch) => branch.id}
-          isLoading={false}
-          empty="No branches yet."
-        />
-      </Card>
     </>
+  );
+
+  return (
+    <TableFrame framed={!creating} header={header}>
+      {/* No pagination: the branch list is a short, slow-moving one that
+          `useBranches` already loads in full, a page at a time. */}
+      <DataTable
+        columns={columns}
+        rows={branches}
+        rowKey={(branch) => branch.id}
+        isLoading={false}
+        empty="No branches yet."
+      />
+    </TableFrame>
   );
 }
 

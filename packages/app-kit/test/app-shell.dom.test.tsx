@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, render, screen } from '@testing-library/react';
-import { ThemeProvider } from '@iace/ui';
+import { PAGE_CONTENT_CLASS, ThemeProvider } from '@iace/ui';
 import { AppShell } from '../browser/app-shell';
 import { type NavItem } from '../src';
 
@@ -85,5 +85,20 @@ describe('AppShell', () => {
     renderShell({ nav: [] });
 
     assert.ok(screen.getByRole('button', { name: /admin@iace\.co\.in/ }));
+  });
+
+  /**
+   * The shell is a fixed-height frame and its content region is what scrolls, so
+   * a framed page can take the height instead. @iace/ui owns that class because it
+   * also owns the `data-page-frame` the selector matches.
+   */
+  it('scrolls its content region, not the document', () => {
+    setDesktop(true);
+    const { container } = renderShell();
+
+    const page = screen.getByText('Page').parentElement;
+    assert.equal(page?.className.includes(PAGE_CONTENT_CLASS), true);
+    assert.match(container.firstElementChild?.className ?? '', /h-dvh/);
+    assert.match(container.firstElementChild?.className ?? '', /overflow-hidden/);
   });
 });

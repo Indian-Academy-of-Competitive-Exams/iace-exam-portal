@@ -83,21 +83,30 @@ table and is left alone.
 preference: a collapsed table drops the borders on a sticky heading row and refuses a radius on a row,
 and both asks need it.
 
-Row rules move off `<tr>`'s `border-b` and onto the cells as an inset `box-shadow`. A shadow rather
-than a border because the hover inset needs the cell's own vertical border edges.
+Row rules move off `<tr>`'s `border-b` and onto the cells, still as a border: `border-separate` does
+not render a `<tr>` border, and unlike a collapsed table it keeps a cell's border under a sticky
+heading.
 
 `TableRow` loses `hover:bg-muted/50`. The hover moves to `TableBody` as one
-`[&>tr:hover>td]:bg-muted`, a selector that cannot reach a `thead` — which is the actual fix for the
+`[&>tr:hover>td]:before:bg-muted`, a selector that cannot reach a `thead` — the actual fix for the
 highlighting heading row, rather than a second class that happens to override it.
 
-The inset: every body cell carries a permanent `border-y-[3px] border-y-transparent` with `py`
-reduced to match, plus `bg-clip-padding`, so the fill stops short of the row boundary and the row's
-height is identical hovered or not. The first and last cell round their outer corners. `TableHead`
-becomes `sticky top-0` on `bg-card`, matching the `Card` it sits in, with its own inset rule.
+The band is a **pseudo-element**, `before:inset-y-[3px]` inside each body cell, rounded at the row's
+two ends only (`first:before:rounded-l-md`, `last:before:rounded-r-md`) and square between columns,
+or every cell would notch away from its neighbour. `isolate` on the cell keeps `before:-z-10` behind
+the text and no further. The radius belongs to the band and not the cell: on the cell it would round
+the `border-b` along with the fill and bend the rule away from the table edge. Row height is
+untouched, hovered or not.
 
-This relies on an inset shadow painting beneath a transparent border, so the rule stays visible below
-the inset fill. To be confirmed in a browser, not assumed. If it does not hold, the fallback is a
-background-gradient band on the cell: same result, no border involvement.
+Two techniques were tried and discarded first. A `bg-*` on the cell fills it to its edges, leaving no
+air. An inset `box-shadow` for the rule plus a transparent border for the inset fails because an
+inset shadow is clipped to the padding box, so the rule would land inside the fill rather than below
+it.
+
+`TableHead` becomes `sticky top-0` on `bg-card`, matching the `Card` it sits in.
+
+Verified against the compiled stylesheet rather than assumed: the emitted CSS puts the radius on
+`td:before` and the rule on `td`.
 
 ## Testing
 

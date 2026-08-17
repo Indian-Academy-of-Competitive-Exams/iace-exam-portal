@@ -1,14 +1,28 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
+import { useInTableFrame } from './table-frame';
 
-/** Uppercase headers, a rule between rows, tabular figures. Scrolls itself. */
+/**
+ * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar:
+ * inside a `TableFrame` it takes the remaining height and scrolls both ways.
+ *
+ * `border-separate` rather than collapsed — a collapsed table drops the borders on
+ * a sticky heading row and refuses a radius on a row, and this table needs both.
+ */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="w-full overflow-x-auto">
-      <table ref={ref} className={cn('w-full border-collapse text-sm', className)} {...props} />
-    </div>
-  ),
+  ({ className, ...props }, ref) => {
+    const fills = useInTableFrame();
+    return (
+      <div className={cn('w-full', fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto')}>
+        <table
+          ref={ref}
+          className={cn('w-full border-separate border-spacing-0 text-sm', className)}
+          {...props}
+        />
+      </div>
+    );
+  },
 );
 Table.displayName = 'Table';
 
@@ -19,40 +33,65 @@ const TableHeader = React.forwardRef<
 TableHeader.displayName = 'TableHeader';
 
 /**
+ * Owns the hover, because a heading row is not a target and nothing up there is
+ * clickable. Scoping it to `&>tr` keeps it off a `thead` however rows are composed.
  * The last body row draws no rule — `Pagination` under it has its own `border-t`.
- * Scoped to the body: the header row is the last child of its own `thead`.
  */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn('[&>tr:last-child]:border-b-0', className)} {...props} />
+  <tbody
+    ref={ref}
+    className={cn('[&>tr:hover>td]:before:bg-muted', '[&>tr:last-child>td]:border-b-0', className)}
+    {...props}
+  />
 ));
 TableBody.displayName = 'TableBody';
 
-/** The rule is on the `<tr>`, which `border-collapse` renders — only it knows if it is last. */
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn('border-b border-border transition-colors hover:bg-muted/50', className)}
-      {...props}
-    />
+    <tr ref={ref} className={cn('transition-colors', className)} {...props} />
   ),
 );
 TableRow.displayName = 'TableRow';
+
+/**
+ * The rule between rows. On the cells rather than the row: `border-separate` does
+ * not render a `<tr>` border, and a sticky heading keeps a cell border.
+ */
+const RULE = 'border-b border-border';
+
+/**
+ * The band a row's hover fills: inset 3px top and bottom so it stops short of the
+ * rules, rounded at the two ends of the row only — square between columns, or every
+ * cell would notch away from its neighbour.
+ *
+ * A pseudo-element, not the cell's own background: a radius on the cell would round
+ * its `border-b` along with the fill, bending the rule away from the table edge.
+ * `isolate` keeps `-z-10` behind the text and no further, and the radius is
+ * permanent because nothing paints it until the body says so.
+ */
+const HOVER_BAND = [
+  'relative isolate',
+  "before:absolute before:inset-x-0 before:inset-y-[3px] before:-z-10 before:content-['']",
+  'first:before:rounded-l-md last:before:rounded-r-md',
+].join(' ');
 
 export interface TableCellProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   /** Right-aligned tabular figures, for counts and amounts. */
   numeric?: boolean;
 }
 
+/** `bg-card` is not decoration: without it the rows scroll through the heading. */
 const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
   ({ className, numeric, ...props }, ref) => (
     <th
       ref={ref}
       className={cn(
+        'sticky top-0 z-[1] bg-card',
         'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
+        RULE,
         numeric && 'text-right tabular-nums',
         className,
       )}
@@ -62,12 +101,15 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
 );
 TableHead.displayName = 'TableHead';
 
+/** Carries the band the body fills on hover; nothing paints it until then. */
 const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
   ({ className, numeric, ...props }, ref) => (
     <td
       ref={ref}
       className={cn(
         'px-3 py-2.5 align-middle text-foreground',
+        RULE,
+        HOVER_BAND,
         numeric && 'text-right tabular-nums',
         className,
       )}

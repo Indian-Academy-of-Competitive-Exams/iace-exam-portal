@@ -112,6 +112,12 @@ export { Progress, type ProgressProps, type ProgressSize } from './components/ui
 export { PageHeader } from './components/ui/page-header';
 export { DataTable, type DataTableColumn, type DataTableProps } from './components/ui/data-table';
 export {
+  TableFrame,
+  useInTableFrame,
+  PAGE_CONTENT_CLASS,
+  type TableFrameProps,
+} from './components/ui/table-frame';
+export {
   TruncatedText,
   useTruncation,
   type TruncatedTextProps,

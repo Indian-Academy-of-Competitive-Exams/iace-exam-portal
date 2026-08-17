@@ -41,6 +41,7 @@ import {
   Pagination,
   SearchInput,
   Select,
+  TableFrame,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -198,7 +199,9 @@ export function StudentsPage() {
 
   const columns = useMemo(() => studentColumns(), []);
 
-  return (
+  // The create form sits in the header slot, and unframes the page while it is
+  // open: pinned, a form that tall would leave the table no height to scroll in.
+  const header = (
     <>
       <PageHeader
         title="Students"
@@ -237,235 +240,241 @@ export function StudentsPage() {
           }}
         />
       ) : null}
+    </>
+  );
 
-      <Card className="p-4">
-        {/* Arrived from somewhere: say where, and offer the way back out. */}
-        {group.data || branch ? (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Showing</span>
-            {branch ? (
-              <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
-            ) : null}
-            {group.data ? (
-              <Badge variant="primary">
-                {group.data.branch.name} / {group.data.name}
-              </Badge>
-            ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => filters.set({ groupId: '', branchId: '' })}
-            >
-              <X aria-hidden />
-              Clear
-            </Button>
-          </div>
-        ) : null}
+  const toolbar = (
+    <>
+      {/* Arrived from somewhere: say where, and offer the way back out. */}
+      {group.data || branch ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Showing</span>
+          {branch ? (
+            <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
+          ) : null}
+          {group.data ? (
+            <Badge variant="primary">
+              {group.data.branch.name} / {group.data.name}
+            </Badge>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => filters.set({ groupId: '', branchId: '' })}
+          >
+            <X aria-hidden />
+            Clear
+          </Button>
+        </div>
+      ) : null}
 
-        <div className="mb-3 flex flex-wrap gap-3">
-          <div className="min-w-56 flex-1">
-            <SearchInput
-              aria-label="Search students"
-              placeholder="Search by name or mobile"
-              value={filters.get('q')}
-              onChange={(q) => filters.set({ q })}
-            />
-          </div>
+      <div className="mb-3 flex flex-wrap gap-3">
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search students"
+            placeholder="Search by name or mobile"
+            value={filters.get('q')}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
 
-          <div className="w-44">
-            <Select
-              aria-label="Filter by status"
-              value={status}
-              onChange={(event) => filters.set({ status: event.target.value })}
-            >
-              <option value="all">All students</option>
-              <option value="active">Active</option>
-              <option value="inactive">Deactivated</option>
-              <option value="invited">Never signed in</option>
-              <option value="defaultpin">Still on the default PIN</option>
-            </Select>
-          </div>
+        <div className="w-44">
+          <Select
+            aria-label="Filter by status"
+            value={status}
+            onChange={(event) => filters.set({ status: event.target.value })}
+          >
+            <option value="all">All students</option>
+            <option value="active">Active</option>
+            <option value="inactive">Deactivated</option>
+            <option value="invited">Never signed in</option>
+            <option value="defaultpin">Still on the default PIN</option>
+          </Select>
+        </div>
 
-          <div className="w-44">
-            <Select
-              aria-label="Sort by"
-              value={filters.get('sort') || STUDENT_SORTS.RECENT}
-              onChange={(event) => filters.set({ sort: event.target.value })}
-            >
-              <option value={STUDENT_SORTS.RECENT}>Newest first</option>
-              <option value={STUDENT_SORTS.OLDEST}>Oldest first</option>
-              <option value={STUDENT_SORTS.NAME}>Name (A–Z)</option>
-              <option value={STUDENT_SORTS.MOBILE}>Mobile number</option>
-            </Select>
-          </div>
+        <div className="w-44">
+          <Select
+            aria-label="Sort by"
+            value={filters.get('sort') || STUDENT_SORTS.RECENT}
+            onChange={(event) => filters.set({ sort: event.target.value })}
+          >
+            <option value={STUDENT_SORTS.RECENT}>Newest first</option>
+            <option value={STUDENT_SORTS.OLDEST}>Oldest first</option>
+            <option value={STUDENT_SORTS.NAME}>Name (A–Z)</option>
+            <option value={STUDENT_SORTS.MOBILE}>Mobile number</option>
+          </Select>
+        </div>
 
-          {/*
+        {/*
             The rest are folded away by default. Seven controls across the top
             of the roster is a wall to read past every time you only wanted to
             search a name — but the count keeps a hidden filter from being a
             silent one.
           */}
-          <Button variant="outline" onClick={() => setShowAll((open) => !open)}>
-            <SlidersHorizontal aria-hidden />
-            Filters
-            {extraCount > 0 ? <Badge variant="primary">{extraCount}</Badge> : null}
-            <ChevronDown
-              aria-hidden
-              className={cn('transition-transform', showAll && 'rotate-180')}
-            />
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => setShowAll((open) => !open)}>
+          <SlidersHorizontal aria-hidden />
+          Filters
+          {extraCount > 0 ? <Badge variant="primary">{extraCount}</Badge> : null}
+          <ChevronDown
+            aria-hidden
+            className={cn('transition-transform', showAll && 'rotate-180')}
+          />
+        </Button>
+      </div>
 
-        {filtersOpen ? (
-          <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field htmlFor="filter-branch" label="Branch">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={branchId}
-                  // Clearing the group too: a group belongs to one branch, so
-                  // keeping both would usually mean asking for an empty set.
-                  onChange={(event) => filters.set({ branchId: event.target.value, groupId: '' })}
-                >
-                  <option value="">Any branch</option>
-                  {branches.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-
-            <Field htmlFor="filter-group" label="Group">
-              {(control) => (
-                <Combobox
-                  {...control}
-                  value={groupId}
-                  onChange={(next) => filters.set({ groupId: next })}
-                  // The chosen group is often outside the loaded page.
-                  selectedLabel={
-                    group.data ? `${group.data.branch.name} / ${group.data.name}` : undefined
-                  }
-                  items={groupPages.items.map((option) => ({
-                    value: option.id,
-                    label: option.name,
-                    hint: option.branch.name,
-                  }))}
-                  placeholder="Any group"
-                  search={groupSearch}
-                  onSearchChange={setGroupSearch}
-                  searchPlaceholder="Search groups"
-                  hasMore={groupPages.hasMore}
-                  onLoadMore={groupPages.loadMore}
-                  isLoading={groupPages.isLoading}
-                  isLoadingMore={groupPages.isLoadingMore}
-                  emptyLabel="No group matches that"
-                />
-              )}
-            </Field>
-
-            <Field htmlFor="filter-pretest" label="Pre-test details">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={filters.get('preTestReady')}
-                  onChange={(event) => filters.set({ preTestReady: event.target.value })}
-                >
-                  <option value="">Any</option>
-                  <option value="true">On file</option>
-                  <option value="false">Needed</option>
-                </Select>
-              )}
-            </Field>
-
-            <Field htmlFor="filter-profile" label="Full profile">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={filters.get('profileCompleted')}
-                  onChange={(event) => filters.set({ profileCompleted: event.target.value })}
-                >
-                  <option value="">Any</option>
-                  <option value="true">Complete</option>
-                  <option value="false">Incomplete</option>
-                </Select>
-              )}
-            </Field>
-
-            <Field
-              htmlFor="filter-ungrouped"
-              label="Group membership"
-              hint="A student in no group can reach no test."
-            >
-              {(control) => (
-                <Select
-                  {...control}
-                  value={filters.get('ungrouped')}
-                  onChange={(event) => filters.set({ ungrouped: event.target.value })}
-                >
-                  <option value="">Any</option>
-                  <option value="true">In no group</option>
-                  <option value="false">In at least one</option>
-                </Select>
-              )}
-            </Field>
-
-            <Field htmlFor="filter-from" label="Enrolled from">
-              {(control) => (
-                <Input
-                  {...control}
-                  type="date"
-                  max={todayISO()}
-                  value={filters.get('joinedFrom')}
-                  onChange={(event) => filters.set({ joinedFrom: event.target.value })}
-                />
-              )}
-            </Field>
-
-            <Field htmlFor="filter-to" label="Enrolled until">
-              {(control) => (
-                <Input
-                  {...control}
-                  type="date"
-                  max={todayISO()}
-                  value={filters.get('joinedTo')}
-                  onChange={(event) => filters.set({ joinedTo: event.target.value })}
-                />
-              )}
-            </Field>
-
-            <div className="flex items-end">
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={filters.activeCount(ALL_FILTERS) === 0}
-                onClick={() => filters.clear()}
+      {filtersOpen ? (
+        <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field htmlFor="filter-branch" label="Branch">
+            {(control) => (
+              <Select
+                {...control}
+                value={branchId}
+                // Clearing the group too: a group belongs to one branch, so
+                // keeping both would usually mean asking for an empty set.
+                onChange={(event) => filters.set({ branchId: event.target.value, groupId: '' })}
               >
-                <X aria-hidden />
-                Clear all filters
-              </Button>
-            </div>
-          </div>
-        ) : null}
+                <option value="">Any branch</option>
+                {branches.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
 
-        {/* "None match" and "there are none" are different facts, and telling
-            an admin the wrong one sends them looking in the wrong place. Any
-            filter at all means the former. */}
-        <DataTable
-          columns={columns}
-          rows={students.items}
-          rowKey={(student) => student.id}
-          isLoading={students.isLoading}
-          empty={
-            filters.activeCount(ALL_FILTERS) > 0
-              ? 'No students match those filters.'
-              : 'No students yet. Add one, or import a roster.'
-          }
-          footer={students.hasLoaded ? <Pagination {...students.pagination} /> : null}
-        />
-      </Card>
+          <Field htmlFor="filter-group" label="Group">
+            {(control) => (
+              <Combobox
+                {...control}
+                value={groupId}
+                onChange={(next) => filters.set({ groupId: next })}
+                // The chosen group is often outside the loaded page.
+                selectedLabel={
+                  group.data ? `${group.data.branch.name} / ${group.data.name}` : undefined
+                }
+                items={groupPages.items.map((option) => ({
+                  value: option.id,
+                  label: option.name,
+                  hint: option.branch.name,
+                }))}
+                placeholder="Any group"
+                search={groupSearch}
+                onSearchChange={setGroupSearch}
+                searchPlaceholder="Search groups"
+                hasMore={groupPages.hasMore}
+                onLoadMore={groupPages.loadMore}
+                isLoading={groupPages.isLoading}
+                isLoadingMore={groupPages.isLoadingMore}
+                emptyLabel="No group matches that"
+              />
+            )}
+          </Field>
+
+          <Field htmlFor="filter-pretest" label="Pre-test details">
+            {(control) => (
+              <Select
+                {...control}
+                value={filters.get('preTestReady')}
+                onChange={(event) => filters.set({ preTestReady: event.target.value })}
+              >
+                <option value="">Any</option>
+                <option value="true">On file</option>
+                <option value="false">Needed</option>
+              </Select>
+            )}
+          </Field>
+
+          <Field htmlFor="filter-profile" label="Full profile">
+            {(control) => (
+              <Select
+                {...control}
+                value={filters.get('profileCompleted')}
+                onChange={(event) => filters.set({ profileCompleted: event.target.value })}
+              >
+                <option value="">Any</option>
+                <option value="true">Complete</option>
+                <option value="false">Incomplete</option>
+              </Select>
+            )}
+          </Field>
+
+          <Field
+            htmlFor="filter-ungrouped"
+            label="Group membership"
+            hint="A student in no group can reach no test."
+          >
+            {(control) => (
+              <Select
+                {...control}
+                value={filters.get('ungrouped')}
+                onChange={(event) => filters.set({ ungrouped: event.target.value })}
+              >
+                <option value="">Any</option>
+                <option value="true">In no group</option>
+                <option value="false">In at least one</option>
+              </Select>
+            )}
+          </Field>
+
+          <Field htmlFor="filter-from" label="Enrolled from">
+            {(control) => (
+              <Input
+                {...control}
+                type="date"
+                max={todayISO()}
+                value={filters.get('joinedFrom')}
+                onChange={(event) => filters.set({ joinedFrom: event.target.value })}
+              />
+            )}
+          </Field>
+
+          <Field htmlFor="filter-to" label="Enrolled until">
+            {(control) => (
+              <Input
+                {...control}
+                type="date"
+                max={todayISO()}
+                value={filters.get('joinedTo')}
+                onChange={(event) => filters.set({ joinedTo: event.target.value })}
+              />
+            )}
+          </Field>
+
+          <div className="flex items-end">
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={filters.activeCount(ALL_FILTERS) === 0}
+              onClick={() => filters.clear()}
+            >
+              <X aria-hidden />
+              Clear all filters
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </>
+  );
+
+  return (
+    <TableFrame framed={!creating} header={header} toolbar={toolbar}>
+      {/* "None match" and "there are none" are different facts, and telling
+          an admin the wrong one sends them looking in the wrong place. Any
+          filter at all means the former. */}
+      <DataTable
+        columns={columns}
+        rows={students.items}
+        rowKey={(student) => student.id}
+        isLoading={students.isLoading}
+        empty={
+          filters.activeCount(ALL_FILTERS) > 0
+            ? 'No students match those filters.'
+            : 'No students yet. Add one, or import a roster.'
+        }
+        footer={students.hasLoaded ? <Pagination {...students.pagination} /> : null}
+      />
+    </TableFrame>
   );
 }
 

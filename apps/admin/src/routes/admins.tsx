@@ -27,6 +27,7 @@ import {
   Input,
   PageHeader,
   Pagination,
+  TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
@@ -100,8 +101,8 @@ export function AdminsPage() {
 
   const columns = useMemo(() => adminColumns(refresh), [refresh]);
 
-  return (
-    <SuperAdminOnly title="Admins">
+  const header = (
+    <>
       <PageHeader
         title="Admins"
         description="Who can sign in to this app. Every admin here was created by a super admin — nobody can self-register."
@@ -122,24 +123,31 @@ export function AdminsPage() {
           onCancel={() => setCreating(false)}
         />
       ) : null}
+    </>
+  );
 
-      <Card className="p-4">
+  return (
+    <SuperAdminOnly title="Admins">
+      <TableFrame framed={!creating} header={header}>
         <DataTable
           columns={columns}
           rows={admins.data?.items ?? []}
           rowKey={(a) => a.id}
           isLoading={admins.isPending}
           empty="No admins yet."
+          // As the footer, not a sibling: it stays put under the scrolling body.
+          footer={
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={admins.data?.total ?? 0}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+            />
+          }
         />
-        <Pagination
-          page={page}
-          pageSize={pageSize}
-          total={admins.data?.total ?? 0}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-          pageSizeOptions={PAGE_SIZE_OPTIONS}
-        />
-      </Card>
+      </TableFrame>
     </SuperAdminOnly>
   );
 }

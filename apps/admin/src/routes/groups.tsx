@@ -25,6 +25,7 @@ import {
   Pagination,
   SearchInput,
   Select,
+  TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -93,7 +94,7 @@ export function GroupsPage() {
 
   const columns = useMemo(() => groupColumns(), []);
 
-  return (
+  const header = (
     <>
       <PageHeader
         title="Groups"
@@ -119,59 +120,65 @@ export function GroupsPage() {
           onCancel={() => setCreating(false)}
         />
       ) : null}
-
-      <Card className="p-4">
-        {/* Arrived from a branch: say so, and offer the way back out. */}
-        {branch ? (
-          <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Showing the branch</span>
-            <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
-            <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: undefined })}>
-              <X aria-hidden />
-              Clear
-            </Button>
-          </div>
-        ) : null}
-
-        <div className="mb-4 flex flex-wrap gap-3">
-          <div className="min-w-56 flex-1">
-            <SearchInput
-              aria-label="Search groups"
-              placeholder="Search by name or branch"
-              value={search}
-              onChange={(q) => filters.set({ q })}
-            />
-          </div>
-          <div className="w-52">
-            <Select
-              aria-label="Filter by branch"
-              value={branchId}
-              onChange={(event) => filters.set({ branchId: event.target.value })}
-            >
-              <option value="">All branches</option>
-              {allBranches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-
-        <DataTable
-          columns={columns}
-          rows={groups.items}
-          rowKey={(group) => group.id}
-          isLoading={groups.isLoading}
-          empty={
-            search
-              ? `No group matches “${search}”.`
-              : 'No groups yet. Create one before adding students.'
-          }
-          footer={groups.hasLoaded ? <Pagination {...groups.pagination} /> : null}
-        />
-      </Card>
     </>
+  );
+
+  const toolbar = (
+    <>
+      {/* Arrived from a branch: say so, and offer the way back out. */}
+      {branch ? (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Showing the branch</span>
+          <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
+          <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: undefined })}>
+            <X aria-hidden />
+            Clear
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search groups"
+            placeholder="Search by name or branch"
+            value={search}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
+        <div className="w-52">
+          <Select
+            aria-label="Filter by branch"
+            value={branchId}
+            onChange={(event) => filters.set({ branchId: event.target.value })}
+          >
+            <option value="">All branches</option>
+            {allBranches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <TableFrame framed={!creating} header={header} toolbar={toolbar}>
+      <DataTable
+        columns={columns}
+        rows={groups.items}
+        rowKey={(group) => group.id}
+        isLoading={groups.isLoading}
+        empty={
+          search
+            ? `No group matches “${search}”.`
+            : 'No groups yet. Create one before adding students.'
+        }
+        footer={groups.hasLoaded ? <Pagination {...groups.pagination} /> : null}
+      />
+    </TableFrame>
   );
 }
 

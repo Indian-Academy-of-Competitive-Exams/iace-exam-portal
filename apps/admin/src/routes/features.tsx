@@ -24,6 +24,7 @@ import {
   FormRow,
   Input,
   PageHeader,
+  TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -86,8 +87,8 @@ export function FeaturesPage() {
 
   const columns = useMemo(() => featureColumns(), []);
 
-  return (
-    <SuperAdminOnly title="Features">
+  const header = (
+    <>
       <PageHeader
         title="Features"
         description="The sectors an admin can be granted. Registering one creates its READ and WRITE rows together."
@@ -108,8 +109,12 @@ export function FeaturesPage() {
           onCancel={() => setCreating(false)}
         />
       ) : null}
+    </>
+  );
 
-      <Card className="p-4">
+  return (
+    <SuperAdminOnly title="Features">
+      <TableFrame framed={!creating} header={header}>
         <DataTable
           columns={columns}
           rows={registered}
@@ -117,7 +122,7 @@ export function FeaturesPage() {
           isLoading={features.isPending}
           empty="No features registered yet — nobody can be granted anything until one is."
         />
-      </Card>
+      </TableFrame>
     </SuperAdminOnly>
   );
 }

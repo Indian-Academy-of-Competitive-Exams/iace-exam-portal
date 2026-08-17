@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import {
   Brandmark,
   Button,
+  PAGE_CONTENT_CLASS,
   Sheet,
   SheetClose,
   SheetContent,
@@ -50,6 +51,9 @@ export interface AppShellProps {
 /**
  * The signed-in chrome: top bar, sidebar, page. Desktop and mobile are different
  * components, not one markup styled twice — rendering both would give two tab orders.
+ *
+ * A fixed-height frame: the document never scrolls, the content region does. A page
+ * can take that height for itself — see `TableFrame`.
  */
 export function AppShell({
   nav,
@@ -86,8 +90,9 @@ export function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-[--z-sticky] border-b border-border bg-surface/95 backdrop-blur">
+    // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <header className="flex-none border-b border-border bg-surface">
         <div className="flex items-center gap-3 px-4 py-3">
           {/* Mobile only: the sidebar's stand-in. On desktop the nav is always
               present, never behind a button. */}
@@ -120,16 +125,15 @@ export function AppShell({
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex min-h-0 flex-1">
         {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
             a complementary one announces the same region twice. */}
         {isDesktop && hasNav ? (
           <div
             className={cn(
-              // `sticky` is already the positioned ancestor; adding `relative` makes
-              // tailwind-merge drop one of the two.
-              'sticky top-[calc(var(--control-h-lg)+var(--space-4))] flex h-[calc(100vh-4rem)]',
-              'shrink-0 flex-col border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
+              // `relative` positions the collapse toggle that hangs off the edge.
+              'relative flex h-full shrink-0 flex-col',
+              'border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
               collapsed ? 'w-[--sidebar-w-rail]' : 'w-[--sidebar-w]',
             )}
           >
@@ -168,8 +172,8 @@ export function AppShell({
           </div>
         ) : null}
 
-        <main className="min-w-0 flex-1">
-          <div className={cn('mx-auto px-5 py-8', WIDTHS[width])}>{children}</div>
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className={cn(PAGE_CONTENT_CLASS, WIDTHS[width])}>{children}</div>
         </main>
       </div>
 
