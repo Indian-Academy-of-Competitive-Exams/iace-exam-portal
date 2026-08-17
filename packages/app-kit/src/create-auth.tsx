@@ -1,4 +1,12 @@
-import { createContext, use, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { type AuthIdentity, type AuthSessionResponse } from '@iace/contracts';
 import { type TokenStore } from './token-store';
@@ -71,19 +79,34 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
   function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const queryClient = useQueryClient();
 
+    /**
+     * Whether a token exists, held in React state and NOT read from the store
+     * during render.
+     *
+     * The store is deliberately outside React (the API client reads it
+     * synchronously), so writing to it changes nothing any component is
+     * watching. Sign-out used to clear the store and call `removeQueries`, and
+     * neither of those notifies an active observer — the identity stayed on
+     * screen and the user stayed "signed in" until they reloaded. This flag is
+     * the render-visible half of the same fact, so ending a session re-renders
+     * the tree that guards on it.
+     */
+    const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
+
     // The stored token is the source of truth for "am I signed in"; /auth/me
     // re-reads the identity from Postgres so a profile or permission change
     // lands on reload rather than at the next full sign-in.
     const { data, isLoading } = useQuery({
       queryKey,
       queryFn: () => endpoints.me(),
-      enabled: tokenStore.get() !== null,
+      enabled: hasToken,
       retry: false,
       staleTime: 5 * 60 * 1000,
     });
 
     const clearSession = useCallback(() => {
       tokenStore.clear();
+      setHasToken(false);
       queryClient.removeQueries({ queryKey });
     }, [queryClient]);
 
@@ -94,6 +117,7 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     const signIn = useCallback(
       (session: AuthSessionResponse) => {
         tokenStore.set(session.tokens);
+        setHasToken(true);
         queryClient.setQueryData(queryKey, session.identity);
       },
       [queryClient],
@@ -111,8 +135,11 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     }, [clearSession]);
 
     const value = useMemo(() => {
+      // `hasToken` first: the cached identity outlives the token by a render or
+      // two after sign-out, and a stale identity is exactly what makes a logged
+      // out user look logged in.
       const identity = (
-        data !== undefined && data.actor === actor ? data : null
+        hasToken && data !== undefined && data.actor === actor ? data : null
       ) as TIdentity | null;
 
       return {
@@ -120,12 +147,12 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
         // Only "loading" if there is a token to load an identity FOR. Without
         // this, a signed-out visitor sits on a spinner instead of the login
         // screen while a query that will never run reports as pending.
-        isLoading: isLoading && tokenStore.get() !== null,
+        isLoading: isLoading && hasToken,
         signIn,
         signOut,
         ...(extend?.(identity) ?? ({} as TExtra)),
       } as AuthState<TIdentity> & TExtra;
-    }, [data, isLoading, signIn, signOut]);
+    }, [data, hasToken, isLoading, signIn, signOut]);
 
     return <AuthContext value={value}>{children}</AuthContext>;
   }
