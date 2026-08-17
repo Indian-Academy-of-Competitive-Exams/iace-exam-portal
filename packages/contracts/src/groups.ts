@@ -5,9 +5,29 @@ import { groupNameSchema } from './naming';
 
 // ============================================================================
 // Groups — the access unit: Student -> Group -> TestSeries -> Test. Enforced
-// server-side: a student stays in at least one group, and a group with students
-// or a series cannot be deleted. One branch each, name unique within it.
+// server-side: a student stays in at least one group, a deactivated student
+// gains no new one, and a group with students or a series cannot be deleted.
+// One branch each, name unique within it.
 // ============================================================================
+
+export const DEACTIVATED_MEMBER_MESSAGE =
+  'That student is deactivated. Reactivate them before adding them to a group.';
+
+/**
+ * Whether an add may go ahead, given how many of the students joining are deactivated.
+ *
+ * A deactivated student keeps the groups they were already in — deactivation is reversible
+ * and rewrites no history — but gains no new ones. A group is a route to a test, so granting
+ * one to a revoked account hands back exactly what the deactivation took away.
+ *
+ * Here rather than in the API's `groups` module because both `students` and `imports` enforce
+ * it too, and reaching into a sibling module's rules is a boundary break (docs/03 §4).
+ */
+export function deactivatedMemberBlocker(deactivatedCount: number): string | null {
+  if (deactivatedCount < 1) return null;
+  if (deactivatedCount === 1) return DEACTIVATED_MEMBER_MESSAGE;
+  return `${deactivatedCount} of those students are deactivated. Reactivate them before adding them to a group.`;
+}
 
 export const groupSummarySchema = z.object({
   id: z.string(),

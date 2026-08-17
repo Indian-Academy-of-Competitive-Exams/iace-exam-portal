@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   addGroupMembersSchema,
   createGroupSchema,
+  deactivatedMemberBlocker,
   groupListQuerySchema,
   groupSummarySchema,
   updateGroupSchema,
@@ -45,6 +46,32 @@ describe('groupDeletionBlocker', () => {
 
   it('reports the students first — it is the one the admin must act on', () => {
     assert.match(groupDeletionBlocker({ studentCount: 3, testSeriesCount: 3 })!, /students/);
+  });
+});
+
+describe('deactivatedMemberBlocker', () => {
+  it('allows an add where every student is active', () => {
+    assert.equal(deactivatedMemberBlocker(0), null);
+  });
+
+  /**
+   * A group is a route to a test, so granting one to a deactivated account hands back
+   * exactly what the deactivation took away — quietly, and without reactivating them.
+   */
+  it('refuses an add that includes a deactivated student', () => {
+    const blocker = deactivatedMemberBlocker(1);
+
+    assert.ok(blocker);
+    assert.match(blocker, /deactivated/i);
+    assert.match(blocker, /reactivate/i, 'and says what to do about it');
+  });
+
+  it('says how many, because an admin reads this message', () => {
+    assert.match(deactivatedMemberBlocker(4)!, /4 of those students/);
+  });
+
+  it('gets the singular right', () => {
+    assert.match(deactivatedMemberBlocker(1)!, /That student is/);
   });
 });
 

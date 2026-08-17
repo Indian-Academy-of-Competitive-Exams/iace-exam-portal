@@ -255,7 +255,27 @@ export interface FakeStudent {
   preTestReady: boolean;
   profileCompleted: boolean;
   isActive: boolean;
+  /** True while the student is still on the PIN the institute set for them. */
+  pinIsDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
   profile: FakeProfile | null;
+  /**
+   * The groups this student is in. Membership lives on both sides, as in Prisma, and carries
+   * the branch because `StudentsService.detail` reads it back out.
+   */
+  groups: FakeGroupRef[];
+}
+
+export interface FakeGroupRef {
+  id: string;
+  name: string;
+  branch: { name: string };
+}
+
+/** A group as a student's row carries it. */
+export function makeGroupRef(id: string, name = 'SSC CGL MORNING'): FakeGroupRef {
+  return { id, name, branch: { name: 'AMEERPET' } };
 }
 
 export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
@@ -289,7 +309,30 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     preTestReady: false,
     profileCompleted: false,
     isActive: true,
+    pinIsDefault: false,
+    // Fixed, not `new Date()`: a summary serialises this and a moving value would
+    // make an assertion on the payload untestable.
+    createdAt: new Date('2026-01-05T09:30:00.000Z'),
+    updatedAt: new Date('2026-01-05T09:30:00.000Z'),
     profile: null,
+    groups: [],
+    ...overrides,
+  };
+}
+
+export interface FakeGroup {
+  id: string;
+  name: string;
+  branch: { name: string };
+  students: { id: string }[];
+}
+
+export function makeGroup(overrides: Partial<FakeGroup> = {}): FakeGroup {
+  return {
+    id: 'grp_1',
+    name: 'SSC CGL MORNING',
+    branch: { name: 'AMEERPET' },
+    students: [],
     ...overrides,
   };
 }
@@ -313,6 +356,7 @@ export class FakePrisma {
     readonly students: FakeStudent[] = [],
     readonly admins: FakeAdmin[] = [],
     readonly branches: FakeBranch[] = [],
+    readonly groups: FakeGroup[] = [],
   ) {}
 
   readonly student = {
@@ -320,6 +364,16 @@ export class FakePrisma {
       Promise.resolve(
         this.students.find((s) => (where.id ? s.id === where.id : s.mobile === where.mobile)) ??
           null,
+      ),
+
+    /** `where.id.in` and `where.mobile.in`, which is all the membership paths ask for. */
+    findMany: ({ where = {} }: { where?: { id?: { in: string[] }; mobile?: { in: string[] } } }) =>
+      Promise.resolve(
+        this.students.filter(
+          (s) =>
+            (where.id?.in ? where.id.in.includes(s.id) : true) &&
+            (where.mobile?.in ? where.mobile.in.includes(s.mobile) : true),
+        ),
       ),
 
     upsert: ({
@@ -342,8 +396,9 @@ export class FakePrisma {
     },
 
     /**
-     * Enough of a nested write for the profile paths: scalar columns are assigned, and
-     * `profile.upsert` creates the row or merges into it exactly as Prisma would.
+     * Enough of a nested write for the profile and membership paths: scalar columns are
+     * assigned, `profile.upsert` creates the row or merges into it, and `groups.set` /
+     * `groups.connect` replace or extend membership, exactly as Prisma would.
      */
     update: ({
       where,
@@ -352,13 +407,20 @@ export class FakePrisma {
       where: { id: string };
       data: Record<string, unknown> & {
         profile?: { upsert: { create: Partial<FakeProfile>; update: Partial<FakeProfile> } };
+        groups?: { set?: { id: string }[]; connect?: { id: string }[] };
       };
     }) => {
       const student = this.students.find((s) => s.id === where.id);
       if (!student) throw new Error(`no student ${where.id}`);
 
-      const { profile, ...scalars } = data;
+      const { profile, groups, ...scalars } = data;
       Object.assign(student, scalars);
+
+      const named = (id: string) => makeGroupRef(id, this.groups.find((g) => g.id === id)?.name);
+      if (groups?.set) student.groups = groups.set.map((ref) => named(ref.id));
+      for (const ref of groups?.connect ?? []) {
+        if (!student.groups.some((g) => g.id === ref.id)) student.groups.push(named(ref.id));
+      }
 
       if (profile) {
         student.profile = student.profile
@@ -374,6 +436,54 @@ export class FakePrisma {
       Promise.resolve(
         this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email)) ?? null,
       ),
+  };
+
+  /** Groups and their membership, enough for the add/remove paths. */
+  readonly group = {
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.groups.find((g) => g.id === where.id) ?? null),
+
+    count: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        where?.id?.in
+          ? this.groups.filter((g) => where.id!.in.includes(g.id)).length
+          : this.groups.length,
+      ),
+
+    /** `connect`, `disconnect` and `set`, kept in step on both sides of the relation. */
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: {
+        students?: {
+          connect?: { id: string }[];
+          disconnect?: { id: string };
+          set?: { id: string }[];
+        };
+      };
+    }) => {
+      const group = this.groups.find((g) => g.id === where.id);
+      if (!group) throw new Error(`no group ${where.id}`);
+
+      for (const { id } of data.students?.connect ?? []) {
+        if (!group.students.some((s) => s.id === id)) group.students.push({ id });
+        const student = this.students.find((s) => s.id === id);
+        if (student && !student.groups.some((g) => g.id === group.id)) {
+          student.groups.push(makeGroupRef(group.id, group.name));
+        }
+      }
+
+      const removed = data.students?.disconnect?.id;
+      if (removed !== undefined) {
+        group.students = group.students.filter((s) => s.id !== removed);
+        const student = this.students.find((s) => s.id === removed);
+        if (student) student.groups = student.groups.filter((g) => g.id !== group.id);
+      }
+
+      return Promise.resolve(group);
+    },
   };
 
   /** Branches, with the group counts the service reads through `_count`. */

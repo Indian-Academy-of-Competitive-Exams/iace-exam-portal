@@ -159,7 +159,7 @@ export class ImportsService {
       mobiles.length
         ? this.prisma.student.findMany({
             where: { mobile: { in: mobiles } },
-            select: { id: true, mobile: true, fullName: true },
+            select: { id: true, mobile: true, fullName: true, isActive: true },
           })
         : Promise.resolve([]),
       // Only the members this file could possibly mention, not the whole group:
@@ -175,7 +175,10 @@ export class ImportsService {
     return {
       group: { id: group.id, name: group.name, branchName: group.branch.name },
       studentsByMobile: new Map(
-        students.map((student) => [student.mobile, { id: student.id, fullName: student.fullName }]),
+        students.map((student) => [
+          student.mobile,
+          { id: student.id, fullName: student.fullName, isActive: student.isActive },
+        ]),
       ),
       memberIds: new Set(members.map((member) => member.id)),
     };
@@ -193,7 +196,7 @@ export class ImportsService {
       mobiles.length
         ? this.prisma.student.findMany({
             where: { mobile: { in: mobiles } },
-            select: { id: true, mobile: true, fullName: true, pinHash: true },
+            select: { id: true, mobile: true, fullName: true, pinHash: true, isActive: true },
           })
         : Promise.resolve([]),
       groupNames.length
@@ -207,7 +210,7 @@ export class ImportsService {
       existingByMobile: new Map(
         students.map((s) => [
           s.mobile,
-          { id: s.id, fullName: s.fullName, hasPin: s.pinHash !== null },
+          { id: s.id, fullName: s.fullName, hasPin: s.pinHash !== null, isActive: s.isActive },
         ]),
       ),
       groupsByName: groupsByCanonicalName(groups),

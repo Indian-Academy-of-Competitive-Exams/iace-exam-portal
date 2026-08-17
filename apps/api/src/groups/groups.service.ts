@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  deactivatedMemberBlocker,
   type AddGroupMembersResult,
   type CreateGroupBody,
   type GroupListQuery,
@@ -133,6 +134,7 @@ export class GroupsService {
   /**
    * Adding is a set operation: a student already in the group is left alone rather than treated as
    * an error, because selecting a whole page and adding it is the normal way this gets used.
+   * A deactivated student joining refuses the whole add — see `deactivatedMemberBlocker`.
    */
   async addMembers(id: string, studentIds: string[]): Promise<AddGroupMembersResult> {
     const group = await this.prisma.group.findUnique({
@@ -144,7 +146,7 @@ export class GroupsService {
     const wanted = [...new Set(studentIds)];
     const found = await this.prisma.student.findMany({
       where: { id: { in: wanted } },
-      select: { id: true },
+      select: { id: true, isActive: true },
     });
     if (found.length !== wanted.length) {
       throw new AppException(
@@ -158,6 +160,19 @@ export class GroupsService {
 
     const existing = new Set(group.students.map((s) => s.id));
     const toAdd = wanted.filter((studentId) => !existing.has(studentId));
+    const joining = new Set(toAdd);
+
+    // Counted over the ones JOINING, not everyone named: a deactivated student already in
+    // this group is not being granted anything, and complaining about them would block an
+    // admin re-submitting a page they had already added.
+    const blocker = deactivatedMemberBlocker(
+      found.filter((student) => !student.isActive && joining.has(student.id)).length,
+    );
+    if (blocker) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
+        fieldErrors: { studentIds: [blocker] },
+      });
+    }
 
     if (toAdd.length > 0) {
       await this.prisma.group.update({

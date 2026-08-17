@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  deactivatedMemberBlocker,
   educationEntrySchema,
   pastExamEntrySchema,
   type Gender,
@@ -178,6 +179,7 @@ export class StudentsService {
         );
       }
       await this.assertGroupsExist(input.groupIds);
+      this.assertMayJoinGroups(student, input.groupIds);
     }
 
     const profilePatch = input.profile;
@@ -254,6 +256,27 @@ export class StudentsService {
   // ==========================================================================
   // Internals
   // ==========================================================================
+
+  /**
+   * A deactivated student keeps the groups they are in but gains no new ones — see
+   * group-rules.ts. Only the groups this save would ADD are checked, so an admin can still
+   * take a deactivated student out of one, or save the rest of their record unchanged.
+   */
+  private assertMayJoinGroups(
+    student: { isActive: boolean; groups: { id: string }[] },
+    groupIds: string[],
+  ): void {
+    if (student.isActive) return;
+
+    const already = new Set(student.groups.map((group) => group.id));
+    const joining = new Set(groupIds.filter((id) => !already.has(id)));
+    const blocker = deactivatedMemberBlocker(joining.size > 0 ? 1 : 0);
+    if (blocker) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
+        fieldErrors: { groupIds: [blocker] },
+      });
+    }
+  }
 
   private async assertGroupsExist(groupIds: string[] | undefined): Promise<void> {
     if (!groupIds?.length) return;

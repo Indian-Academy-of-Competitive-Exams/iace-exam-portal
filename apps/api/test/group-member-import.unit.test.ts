@@ -10,9 +10,10 @@ import {
 const context = (): GroupMemberContext => ({
   group: { id: 'g1', name: 'SSC CGL MORNING', branchName: 'AMEERPET' },
   studentsByMobile: new Map([
-    ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari' }],
-    ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja' }],
-    ['9876543212', { id: 'stu_other', fullName: null }],
+    ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari', isActive: true }],
+    ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja', isActive: true }],
+    ['9876543212', { id: 'stu_other', fullName: null, isActive: true }],
+    ['9000000000', { id: 'stu_off', fullName: 'Deactivated Devi', isActive: false }],
   ]),
   memberIds: new Set(['stu_member']),
 });
@@ -27,6 +28,28 @@ describe('planGroupMemberImport', () => {
     assert.equal(result.rows[0]?.studentId, 'stu_new');
     assert.equal(result.rows[0]?.studentName, 'Asha Kumari');
     assert.deepEqual(result.summary, { total: 1, willAdd: 1, alreadyMembers: 0, invalid: 0 });
+  });
+
+  /**
+   * A group is a route to a test, so a roster must not quietly hand one back to an account
+   * somebody deactivated. A row-level error, not a file-level refusal: the other 199 names in
+   * the file are fine and should still go in.
+   */
+  it('skips a deactivated student, and says why', () => {
+    const result = plan('Mobile Number\n9000000000');
+
+    assert.equal(result.rows[0]?.action, 'skip');
+    assert.match(result.rows[0]?.errors[0] ?? '', /deactivated/i);
+    assert.equal(result.summary.willAdd, 0);
+    assert.equal(result.summary.invalid, 1);
+  });
+
+  it('adds the rest of the file around a deactivated row', () => {
+    const result = plan('Mobile Number\n9000000000\n9876543210');
+
+    assert.equal(result.rows[1]?.action, 'add');
+    assert.equal(result.summary.willAdd, 1);
+    assert.equal(result.summary.invalid, 1);
   });
 
   /**

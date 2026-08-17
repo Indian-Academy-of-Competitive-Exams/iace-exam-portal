@@ -1,4 +1,5 @@
 import {
+  DEACTIVATED_MEMBER_MESSAGE,
   IMPORT_MAX_ROWS,
   STUDENT_IMPORT_COLUMNS,
   canonicalName,
@@ -44,7 +45,10 @@ export interface ImportGroup {
 
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
-  existingByMobile: Map<string, { id: string; fullName: string | null; hasPin: boolean }>;
+  existingByMobile: Map<
+    string,
+    { id: string; fullName: string | null; hasPin: boolean; isActive: boolean }
+  >;
   /** Canonical group name → every group with that name, one per branch. */
   groupsByName: Map<string, ImportGroup[]>;
 }
@@ -234,15 +238,21 @@ function planRow(
   const number = readMobile(row, seenInFile);
   const groups = readGroups(row, context.groupsByName);
 
-  const errors = [name.error, number.error, ...groups.errors].filter(
-    (error): error is string => error !== undefined,
-  );
-
   const { fullName } = name;
   const { mobile } = number;
   const { groupNames, groupIds } = groups;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
+
+  const errors = [
+    name.error,
+    number.error,
+    ...groups.errors,
+    // Only when the row would grant a group. Editing a deactivated student's name is
+    // fine; handing their account a route to a test is not — see group-rules.ts.
+    existing && !existing.isActive && groupIds.length > 0 ? DEACTIVATED_MEMBER_MESSAGE : undefined,
+  ].filter((error): error is string => error !== undefined);
+
   const action = actionFor(errors.length, Boolean(existing));
 
   return {

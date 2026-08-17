@@ -1,4 +1,5 @@
 import {
+  DEACTIVATED_MEMBER_MESSAGE,
   GROUP_MEMBER_IMPORT_COLUMNS,
   IMPORT_MAX_ROWS,
   mobileSchema,
@@ -13,7 +14,7 @@ import { type CsvRow, type CsvTable } from './csv';
 export interface GroupMemberContext {
   group: { id: string; name: string; branchName: string };
   /** Mobile → the student it resolves to, for the numbers this file lists. */
-  studentsByMobile: Map<string, { id: string; fullName: string | null }>;
+  studentsByMobile: Map<string, { id: string; fullName: string | null; isActive: boolean }>;
   /** Who is in the group already. */
   memberIds: Set<string>;
 }
@@ -111,6 +112,12 @@ function planRow(
     // Named as a missing STUDENT rather than a bad number, because that is the
     // thing to go and fix — and the fix is the student importer, not this one.
     errors.push('No student has this number yet — import them as a student first');
+  }
+
+  // Only when they would be JOINING: a deactivated student already in the group is not
+  // being granted anything by this file.
+  if (student && !student.isActive && !context.memberIds.has(student.id)) {
+    errors.push(DEACTIVATED_MEMBER_MESSAGE);
   }
 
   if (errors.length > 0 || !student) {

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
 import { ArrowLeft, FileText, Save } from 'lucide-react';
-import { todayISO, type Gender, type StudentDetail } from '@iace/contracts';
+import { todayISO, type Gender, type GroupRef, type StudentDetail } from '@iace/contracts';
 import {
   Alert,
   Avatar,
@@ -86,6 +86,55 @@ function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
   if (detail.hasSignedIn) return <Badge variant="success">Has signed in</Badge>;
   if (detail.hasDefaultPin) return <Badge variant="warning">Default PIN — not yet changed</Badge>;
   return <Badge variant="info">Never signed in</Badge>;
+}
+
+/**
+ * Which groups the student is in. A deactivated student may lose one but not gain one, so the
+ * unticked boxes lock: the server refuses either way, and offering a control it would refuse is
+ * worse than not offering it.
+ */
+function GroupsCard({
+  isActive,
+  known,
+  selectedIds,
+  register,
+  error,
+}: Readonly<{
+  isActive: boolean;
+  known: GroupRef[];
+  selectedIds: string[];
+  register: UseFormRegisterReturn;
+  error?: string;
+}>) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Groups</CardTitle>
+        <CardDescription>
+          A student reaches tests only through a group, so they must stay in at least one.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {isActive ? null : (
+          <Alert variant="info">
+            <span>
+              Deactivated, so no new group can be added — a group is how a student reaches a test.
+              Their current groups can still be removed, or reactivate them first.
+            </span>
+          </Alert>
+        )}
+
+        <GroupPicker
+          idPrefix="group"
+          register={register}
+          selectedIds={selectedIds}
+          known={known}
+          error={error}
+          lockedToSelection={!isActive}
+        />
+      </CardContent>
+    </Card>
+  );
 }
 
 export function StudentDetailPage() {
@@ -337,23 +386,13 @@ export function StudentDetailPage() {
         </Card>
 
         <div className="flex flex-col gap-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>Groups</CardTitle>
-              <CardDescription>
-                A student reaches tests only through a group, so they must stay in at least one.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <GroupPicker
-                idPrefix="group"
-                register={form.register('groupIds')}
-                selectedIds={selectedGroupIds}
-                known={detail.groups}
-                error={form.formState.errors.groupIds?.message}
-              />
-            </CardContent>
-          </Card>
+          <GroupsCard
+            isActive={detail.isActive}
+            known={detail.groups}
+            selectedIds={selectedGroupIds}
+            register={form.register('groupIds')}
+            error={form.formState.errors.groupIds?.message}
+          />
 
           <Card>
             <CardContent className="flex flex-col gap-3 pt-6">

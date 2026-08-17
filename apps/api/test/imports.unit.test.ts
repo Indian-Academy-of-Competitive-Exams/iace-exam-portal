@@ -113,9 +113,11 @@ describe('readCsvTable', () => {
 const context = (): ImportContext => ({
   existingByMobile: new Map([
     // Chose their own PIN already — an import must never reset it.
-    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
+    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true, isActive: true }],
     // Added by an admin and never signed in: this one still needs a starting PIN.
-    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false }],
+    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false, isActive: true }],
+    // Deactivated: a roster must not hand this account a group back.
+    ['9000000003', { id: 'stu_off', fullName: 'Gone Away', hasPin: true, isActive: false }],
   ]),
   // Names are canonical in the database, and a name can belong to several
   // branches — "SSC CGL MORNING" runs at two centres here on purpose.
@@ -143,6 +145,28 @@ describe('planStudentImport', () => {
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[1]?.action, 'update');
     assert.equal(plan.rows[1]?.existingStudentId, 'stu_existing');
+  });
+
+  /**
+   * The student importer also grants groups, so it is a way back in for a deactivated
+   * account. Row-level, so the rest of the roster still imports.
+   */
+  it('refuses to put a deactivated student into a group', () => {
+    const plan = planStudentImport(
+      readCsvTable('mobile,groups\n9000000003,SSC CGL EVENING'),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(plan.rows[0]?.errors[0] ?? '', /deactivated/i);
+  });
+
+  /** Their record is still editable — the rule is about gaining a group, not about the row. */
+  it('leaves a deactivated student alone when the row names no group', () => {
+    const plan = planStudentImport(readCsvTable('mobile,fullName\n9000000003,New Name'), context());
+
+    assert.equal(plan.rows[0]?.action, 'update');
+    assert.deepEqual(plan.rows[0]?.errors, []);
   });
 
   it('resolves group names, several to a cell', () => {
