@@ -2,19 +2,7 @@ import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { cn } from '../../lib/utils';
 
-/**
- * A menu of actions hanging off a control.
- *
- * The difference from a popover holding some links is what it says about
- * itself. A popover is an anonymous box: a screen reader lands in it and finds
- * a pile of links with no sense of how many there are or where in the list it
- * is. A menu announces "menu, 3 items", moves between them with the arrow keys,
- * jumps by first letter, and closes on Escape returning focus to the trigger —
- * none of which a popover does, and none of which a call site should have to
- * build.
- *
- * Row actions in a table want this too: it is the same shape every time.
- */
+/** Menu semantics a popover has not: item count, arrow keys, typeahead, Escape to trigger. */
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
@@ -45,12 +33,7 @@ export interface DropdownMenuItemProps extends React.ComponentPropsWithoutRef<
   destructive?: boolean;
 }
 
-/**
- * `asChild` is how a router `<Link>` becomes a menu item: an `<a href>` would
- * reload the SPA and throw away the query cache to move between two screens of
- * the same app, and Radix still needs to own the element to keep the roving
- * focus and the keyboard behaviour.
- */
+/** `asChild` makes a router `<Link>` the item without losing the keyboard behaviour. */
 const DropdownMenuItem = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Item>,
   DropdownMenuItemProps
@@ -59,9 +42,7 @@ const DropdownMenuItem = React.forwardRef<
     ref={ref}
     className={cn(
       'flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors',
-      // data-highlighted is the keyboard AND the pointer: Radix moves it with
-      // the arrow keys, so hover styling alone would leave a menu that looks
-      // inert to anyone not using a mouse.
+      // data-highlighted follows the arrow keys as well as the pointer.
       destructive
         ? 'text-destructive data-[highlighted]:bg-destructive/10'
         : 'text-foreground data-[highlighted]:bg-muted',

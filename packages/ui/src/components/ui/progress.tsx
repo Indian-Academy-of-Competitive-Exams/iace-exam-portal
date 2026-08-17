@@ -13,12 +13,7 @@ export interface ProgressProps extends Omit<
   React.ProgressHTMLAttributes<HTMLProgressElement>,
   'value'
 > {
-  /**
-   * How far along, out of `max`. Leave it out for work whose length is not
-   * known — the bar then shows the browser's own indeterminate animation,
-   * which is an honest "something is happening" rather than a made-up
-   * percentage.
-   */
+  /** Omit for work of unknown length — the bar then runs the indeterminate animation. */
   value?: number;
   max?: number;
   size?: ProgressSize;
@@ -27,19 +22,8 @@ export interface ProgressProps extends Omit<
 }
 
 /**
- * How far along something is: an import reading rows, a section of a paper.
- *
- * The native `<progress>` element, for the same reason Checkbox uses a native
- * box — it already announces itself as a progress bar with its value, and it
- * already has an indeterminate state, both of which a div would have to earn
- * back with ARIA that is easy to get subtly wrong.
- *
- * Styling one means addressing three pseudo-elements: WebKit splits the track
- * and the fill into `::-webkit-progress-bar` and `::-webkit-progress-value`,
- * while Firefox styles the element itself as the track and `::-moz-progress-bar`
- * as the fill. Miss any of them and the bar is invisible in one browser and
- * fine in another — which is exactly the kind of difference nobody notices
- * until a student reports it.
+ * Native `<progress>`, which announces itself and has an indeterminate state.
+ * Needs all three pseudo-elements: WebKit's bar and value, Firefox's bar.
  */
 export const Progress = React.forwardRef<HTMLProgressElement, ProgressProps>(
   ({ className, value, max = 100, size = 'md', ...props }, ref) => (

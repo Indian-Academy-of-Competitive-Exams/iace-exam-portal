@@ -2,13 +2,7 @@ import * as React from 'react';
 import { FileUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-/**
- * A file size a person can read at a glance.
- *
- * KB up to a megabyte, MB above it — "15000 KB" is a number the reader has to
- * do arithmetic on before it means anything. One decimal on MB, none on KB,
- * because the point is the order of magnitude and not the exact byte count.
- */
+/** KB below a megabyte, MB above it. */
 export function formatFileSize(bytes: number): string {
   const kilobytes = bytes / 1024;
   if (kilobytes < 1024) return `${Math.round(kilobytes)} KB`;
@@ -22,11 +16,7 @@ export interface FileDropzoneProps {
   file: File | null;
   /** `undefined` when the picker was dismissed without a choice. */
   onFileChange: (file: File | undefined) => void;
-  /**
-   * What is acceptable, said BEFORE they choose — ".xlsx or .csv", "JPG or PNG
-   * up to 5MB". A rule the reader only meets as a rejection is a rule we chose
-   * not to tell them.
-   */
+  /** What is acceptable, said before they choose — ".xlsx or .csv". */
   hint: string;
   /** The call to action while nothing is chosen. */
   label?: string;
@@ -36,19 +26,7 @@ export interface FileDropzoneProps {
   'aria-label'?: string;
 }
 
-/**
- * Choose a file, or drop one on it.
- *
- * The same twenty lines sat in both import screens — the dashed frame, the
- * swap from prompt to filename, the size line, and the one non-obvious bit
- * below (clearing `value` so the same file can be chosen twice). Two copies of
- * a control is two places for it to drift, and the drift here is invisible:
- * both looked fine, and only one of them would have been fixed.
- *
- * Dropping works as well as clicking. An import screen is somewhere people
- * arrive with a file already in hand, and dragging it in is the shortest path
- * between the two — it was simply never wired up.
- */
+/** Choose a file, or drop one on it. */
 export function FileDropzone({
   accept,
   file,
@@ -67,14 +45,11 @@ export function FileDropzone({
   };
 
   return (
-    // The input is INSIDE the label, so the association is implicit and needs
-    // no htmlFor — it is only visually hidden, not removed.
+    // The input is inside the label, so the association needs no htmlFor.
     <label
       className={cn(
         'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-3 py-6 text-center text-sm transition-colors',
-        // The ring is on the label because the input it belongs to is
-        // sr-only — without this the control could be tabbed to and focused
-        // with nothing on screen saying so.
+        // The ring goes on the label: the input carrying it is sr-only.
         'focus-within:border-ring focus-within:shadow-focus',
         dragging
           ? 'border-ring bg-muted text-foreground'
@@ -110,9 +85,7 @@ export function FileDropzone({
         aria-label={ariaLabel ?? label}
         onChange={(event) => {
           onFileChange(event.target.files?.[0]);
-          // Cleared so choosing the SAME file again still fires. Whoever is
-          // re-picking has usually just fixed the file and saved over the top,
-          // and a picker that ignores that looks broken.
+          // Cleared so choosing the same file twice still fires `change`.
           event.target.value = '';
         }}
       />

@@ -5,21 +5,8 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
- * A panel that slides in from an edge: the mobile nav drawer, and — when the
- * exam engine arrives — the question palette on a phone.
- *
- * It is the dialog primitive wearing a different shape, and it is here for the
- * same reason: a hand-built drawer is an overlay and a panel, and everything
- * that makes it safe is invisible. Focus has to move into it and stay there
- * while it is open, Escape has to close it, the page behind has to stop
- * scrolling and go inert to a screen reader, and focus has to return to the
- * button that opened it. A drawer missing those is one the reader can tab
- * straight out of, into a page they cannot see.
- *
- * Always render a `SheetTitle` inside it. Where the panel has no visible
- * heading — a nav drawer under a logo — give it one and hide it with
- * `className="sr-only"`: it is what a screen reader announces on arrival, and
- * without it the panel is an unnamed region.
+ * A panel sliding in from an edge, on the dialog primitive: focus trap, Escape, scroll lock.
+ * Always render a `SheetTitle`; hide it with `sr-only` where there is no visible heading.
  */
 const Sheet = DialogPrimitive.Root;
 const SheetTrigger = DialogPrimitive.Trigger;

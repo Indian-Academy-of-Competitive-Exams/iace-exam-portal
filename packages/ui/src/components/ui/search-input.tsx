@@ -14,12 +14,7 @@ export interface Debouncer {
   cancel: () => void;
 }
 
-/**
- * The waiting, separated from the input so it can be tested without a DOM.
- *
- * Kept deliberately small: it holds ONE pending call, because a search box only
- * ever has one outstanding question — "what did they finally type".
- */
+/** The waiting, split out so it can be tested without a DOM. Holds one pending call. */
 export function createDebouncer(delay: number): Debouncer {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: (() => void) | undefined;
@@ -60,14 +55,7 @@ export interface DebouncedSearch {
   clear: () => void;
 }
 
-/**
- * A search box that stays instant while the search itself waits.
- *
- * `value` is still the truth. When it changes from somewhere else — a "clear
- * all filters" button, a link that arrives with a term in the URL — the box
- * follows it; our own commits are ignored, or the caret would jump back on
- * every keystroke.
- */
+/** Instant box, waiting search. The box follows `value` when it changes from elsewhere. */
 export function useDebouncedSearch(
   value: string,
   onChange: (next: string) => void,
@@ -84,8 +72,7 @@ export function useDebouncedSearch(
     setDraft(value);
   }, [value]);
 
-  // A pending search after the box has gone would run a query for a screen the
-  // reader has already left.
+  // A pending search after unmount would query for a screen nobody is on.
   React.useEffect(() => {
     const pending = debouncer.current;
     return () => pending?.cancel();
@@ -126,19 +113,7 @@ export interface SearchInputProps {
   className?: string;
 }
 
-/**
- * The search box, with the wait built in.
- *
- * Three screens had `<Input prefix={<Search/>}>` with `onChange` wired straight
- * to the query state, so every keystroke was a request: "AMEERPET" is eight of
- * them, seven of which are answers nobody reads. Two of the three also write
- * that state into the URL, so the same eight keystrokes were eight entries in
- * the browser's history — Back walked out of the search one letter at a time.
- *
- * The box stays instant while the search waits: what the reader types lands in
- * local state immediately and is only handed upward once the typing settles.
- * Enter and losing focus skip the wait, because both mean "I have finished".
- */
+/** Hands the term up once the typing settles. Enter and blur skip the wait. */
 export function SearchInput({
   value,
   onChange,
@@ -173,8 +148,7 @@ export function SearchInput({
       onBlur={flush}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          // Submitting nothing — the search is live. Without this, Enter in a
-          // search box that sits inside a form posts the form.
+          // Without this, Enter inside a form submits it.
           event.preventDefault();
           flush();
         }

@@ -12,19 +12,7 @@ export interface AccordionProps extends Omit<React.HTMLAttributes<HTMLDetailsEle
   children: React.ReactNode;
 }
 
-/**
- * A disclosure panel, on native `<details>`/`<summary>`.
- *
- * Native because the browser already gives this one keyboard operation, the
- * right role, correct announcement of expanded/collapsed, and — the part that
- * is easy to forget — in-page find that can reveal a match inside a closed
- * panel. A div-and-onClick version has to re-earn all four, and usually earns
- * the first three and forgets the fourth.
- *
- * Uncontrolled on purpose. `defaultOpen` sets the initial state and then the
- * reader owns it; a controlled panel that re-closes itself on every refetch is
- * the standard way this component goes wrong.
- */
+/** Disclosure panel on native `<details>`. `defaultOpen` is the initial state only. */
 const Accordion = React.forwardRef<HTMLDetailsElement, AccordionProps>(
   ({ className, title, meta, defaultOpen = false, children, ...props }, ref) => (
     <details

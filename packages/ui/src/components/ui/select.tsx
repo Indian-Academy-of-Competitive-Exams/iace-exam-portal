@@ -6,11 +6,7 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
   invalid?: boolean;
 }
 
-/**
- * A native select. Deliberately not a custom listbox: the browser's own is
- * keyboard-accessible, screen-reader correct and renders as the platform picker
- * on a phone — all of which a hand-rolled dropdown has to re-earn.
- */
+/** Native select: keyboard-accessible, and the platform picker on a phone. */
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, invalid, children, ...props }, ref) => (
     <div

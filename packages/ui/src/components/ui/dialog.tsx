@@ -5,23 +5,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
-/**
- * The modal layer.
- *
- * Built on Radix because the hard parts of a dialog are the invisible ones:
- * focus moves into it and cannot leave while it is open, Escape closes it,
- * everything behind it is inert to a screen reader, and focus returns to
- * whatever opened it. An untrapped modal is worse than no modal — the reader
- * tabs into a page they cannot see and lands on controls that do nothing.
- *
- * It replaces the raw `.overlay` / `.modal` classes that used to live in
- * components.css. Two definitions of one component is one definition too many,
- * and the one nobody renders is the one that rots.
- *
- * Every value here comes from the same tokens that CSS used: --overlay-bg,
- * --modal-w-*, --modal-radius, --modal-pad, --shadow-overlay and the z-index
- * scale, so light and dark still swap in one place.
- */
+/** The modal layer, on Radix: focus trap, Escape, inert background, focus restored. */
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogClose = DialogPrimitive.Close;
@@ -40,8 +24,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const dialogVariants = cva(
   [
-    // pointer-events restored here because the centring wrapper waives them, so
-    // a click beside the dialog reaches the overlay and dismisses.
+    // The centring wrapper waives pointer-events so a click beside this reaches the overlay.
     'pointer-events-auto relative flex w-full flex-col',
     'max-h-[calc(100dvh-4rem)]',
     'bg-surface text-foreground rounded-[--modal-radius] shadow-[--shadow-overlay]',
@@ -69,10 +52,7 @@ export interface DialogContentProps
   closeLabel?: string;
 }
 
-/**
- * Always render a `DialogTitle` inside this — Radix labels the dialog with it,
- * and without one a screen reader announces an unnamed region.
- */
+/** Always render a `DialogTitle` inside — Radix labels the dialog with it. */
 const DialogContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   DialogContentProps
@@ -173,11 +153,7 @@ export interface ConfirmDialogProps {
   title: string;
   /** What the action does and what it does not undo. */
   description: React.ReactNode;
-  /**
-   * Names the action — "Deactivate", "Delete test". Never "Confirm" or "OK":
-   * a reader who skipped the sentence learns nothing from a button that only
-   * agrees with a question they did not read.
-   */
+  /** Names the action — "Deactivate", "Delete test". Never "Confirm" or "OK". */
   confirmLabel: string;
   cancelLabel?: string;
   /** Crimson button, warning glyph — for anything that destroys or revokes. */
@@ -190,23 +166,8 @@ export interface ConfirmDialogProps {
 }
 
 /**
- * "Are you sure?" done once, properly.
- *
- * It replaces `globalThis.confirm`, which cannot be themed, cannot be tested,
- * cannot say which thing it is about in anything but plain text, and blocks the
- * whole browser tab while it is up.
- *
- * Two rules are built in rather than left to each call site:
- *
- *   · Cancel takes the focus, never the destructive button. Enter on a dialog
- *     that appeared under the reader's fingers must not delete anything.
- *   · Cancel is neutral grey. Only the action itself is crimson, so the colour
- *     means "this is the one that destroys" rather than "this is a dialog".
- *
- * It does NOT close itself. The caller closes it when the work it started has
- * finished, because closing on click hides the failure: the row would still be
- * there, unchanged, with nothing on screen tying the toast to the thing it
- * refused to do.
+ * Cancel takes the focus and is neutral grey; only the action is crimson.
+ * Does not close itself — the caller closes when the work finishes, so a failure stays visible.
  */
 function ConfirmDialog({
   open,
@@ -222,9 +183,7 @@ function ConfirmDialog({
 }: Readonly<ConfirmDialogProps>) {
   const cancelRef = React.useRef<HTMLButtonElement>(null);
 
-  // While the action runs, the only way out is for it to finish. Escape and a
-  // click outside would otherwise dismiss a dialog whose work is still in
-  // flight, leaving the reader to guess whether it went through.
+  // No Escape or outside click while the action is in flight.
   const blockWhileLoading = (event: Event) => {
     if (loading) event.preventDefault();
   };

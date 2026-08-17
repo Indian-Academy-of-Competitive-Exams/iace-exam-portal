@@ -2,15 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
 
-/**
- * Data-forward table, per the style guide: quiet uppercase headers, a rule
- * BETWEEN rows, and numbers in tabular figures so columns of digits line up
- * rather than wobble.
- *
- * Wrapped in an overflow container because a table is the one thing that
- * reliably breaks a responsive layout — it scrolls itself instead of pushing
- * the page sideways.
- */
+/** Uppercase headers, a rule between rows, tabular figures. Scrolls itself. */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div className="w-full overflow-x-auto">
@@ -27,18 +19,8 @@ const TableHeader = React.forwardRef<
 TableHeader.displayName = 'TableHeader';
 
 /**
- * The last row draws no rule.
- *
- * A rule BETWEEN rows separates them; a rule after the last one is the table
- * drawing its own bottom edge, and the table is not the last thing in the box —
- * `Pagination` sits under it with a `border-t` of its own. Two rules landed a
- * dozen pixels apart at different widths, one spanning the table and one inset
- * by the pagination's padding, which reads as a rendering fault rather than as
- * a design. Worse, `TableEmpty` never had a bottom border, so the same table
- * ended one way with rows in it and another way without.
- *
- * Scoped to the body on purpose: the header's rule is the header/body divider
- * and has to stay, and the header row is the last child of its own `thead`.
+ * The last body row draws no rule — `Pagination` under it has its own `border-t`.
+ * Scoped to the body: the header row is the last child of its own `thead`.
  */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
@@ -48,14 +30,7 @@ const TableBody = React.forwardRef<
 ));
 TableBody.displayName = 'TableBody';
 
-/**
- * The rule belongs to the row, not to each of its cells.
- *
- * Painted on the `<tr>`, which `border-collapse` renders, so "does this row
- * have a line under it" is one decision in one place. On the cells it was the
- * same decision repeated per column, and nothing there could see whether its
- * row was the last one.
- */
+/** The rule is on the `<tr>`, which `border-collapse` renders — only it knows if it is last. */
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
     <tr
@@ -121,15 +96,7 @@ export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmp
 /** Placeholder rows have no identity of their own, so their keys are fixed. */
 const PLACEHOLDER_KEYS = Array.from({ length: 12 }, (_, index) => `placeholder-${index}`);
 
-/**
- * The rows a table shows while its rows are on their way.
- *
- * A table is the case skeletons exist for: the shape is already known — this
- * many columns, roughly this many rows — so the header stays put, the columns
- * keep their widths, and nothing jumps when the data lands. The centred
- * "Loading…" it replaced collapsed the table to one line and then threw the
- * page around as the real rows arrived.
- */
+/** Rows shaped like the rows coming, so the header and column widths hold still. */
 function TableSkeleton({ rows, columns }: Readonly<{ rows: number; columns: number }>) {
   return (
     <>
@@ -147,22 +114,8 @@ function TableSkeleton({ rows, columns }: Readonly<{ rows: number; columns: numb
 }
 
 /**
- * A table body's three states: loading, empty, or rows.
- *
- * Every list screen wrote this as a nested ternary — `isPending ? … : rows.length
- * ? … : …` — which is both hard to read and easy to get subtly different from
- * the screen next door. One of them said "No rows" while another said nothing at
- * all, and neither was a decision anybody made.
- *
- * `empty` is the message for "nothing matches", which is a different fact from
- * "there is nothing yet" — the caller decides which it is, because only the
- * caller knows whether a filter is set.
- *
- * Loading is skeleton rows, not a word. A table knows its own shape before the
- * data arrives, so it can hold it: the word "Loading…" collapsed the whole
- * table to a single centred line and then threw the page around when the rows
- * landed. `loading` is still there for the rare wait that has something to say
- * ("Reading the file…"), and passing it opts back out of the skeleton.
+ * Loading, empty, or rows. `empty` is the caller's — only they know if a filter is set.
+ * Loading draws skeleton rows; pass `loading` to show a message instead.
  */
 export function TableState({
   isLoading,

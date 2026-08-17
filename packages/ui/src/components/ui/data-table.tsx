@@ -28,20 +28,8 @@ export interface DataTableProps<TRow> {
 }
 
 /**
- * The paginated list, assembled once.
- *
- * Every list screen was writing the same header row, the same three-state body,
- * and the same pagination block underneath — and getting them subtly different.
- * `colSpan` on the empty state is the clearest example: it is the column count,
- * it was written by hand on each screen, and when a column was added nothing
- * failed. The empty row just stopped spanning the table and sat squashed under
- * the first heading, which reads as a broken table rather than an empty one.
- * Here it cannot be wrong, because it is `columns.length`.
- *
- * The `empty` MESSAGE stays the caller's, because only the caller knows whether
- * a filter is set: "No group matches that search" and "No groups yet — create
- * one before adding students" are different facts, and showing the second when
- * the first is true sends an admin off to create something they already have.
+ * Header, three-state body and pagination in one; `colSpan` follows `columns.length`.
+ * The `empty` message stays the caller's — only they know whether a filter is set.
  */
 export function DataTable<TRow>({
   columns,

@@ -1,13 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-/**
- * `htmlFor` is REQUIRED, not optional.
- *
- * A label with no control attached looks identical on screen and is useless to
- * anyone using a screen reader or clicking the text to focus the input. Making
- * it part of the type means that mistake cannot compile.
- */
+/** `htmlFor` is required: a detached label is useless to a screen reader. */
 export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
   htmlFor: string;
 }

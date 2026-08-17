@@ -19,13 +19,7 @@ export interface PinInputProps extends Omit<
   invalid?: boolean;
 }
 
-/**
- * Boxes share the width, but stop growing at `max-w-14`.
- *
- * `w-full` alone makes four boxes in a narrow form stretch into squat letterbox
- * shapes that stop reading as digit cells; a fixed width alone overflows a
- * phone once the code is eight digits. Sharing up to a cap does both.
- */
+/** Boxes share the width up to a cap, so four in a narrow form stay square. */
 const BOX = [
   'flex h-12 w-full min-w-0 max-w-14 items-center justify-center rounded-md border bg-surface',
   'text-lg font-medium tabular-nums text-foreground',
@@ -33,27 +27,8 @@ const BOX = [
 ].join(' ');
 
 /**
- * A code entered one digit per box — the shape every bank app and OTP screen
- * has already taught people to expect.
- *
- * **One real input, N drawn boxes**, rather than N inputs of `maxLength={1}`.
- * The boxes are `aria-hidden` decoration over a single focusable field that
- * holds the entire value, and that is what makes the rest work:
- *
- *   - **Autofill.** `autocomplete="one-time-code"` only fills a field that can
- *     hold the whole code. Split across four inputs, iOS and Android drop the
- *     code into the first box and leave the student to type the rest — which is
- *     the exact convenience the segmented look is promising.
- *   - **Paste.** A pasted code lands in one field and spreads across the boxes.
- *     Four inputs would take the first digit and silently discard the others.
- *   - **Screen readers.** One labelled field announces "One-time code, 4 8 1 3".
- *     Four unlabelled boxes announce "edit text, blank" four times, and a
- *     correction means hunting for which box holds the wrong digit.
- *
- * The caret is pinned to the end on every focus and click, so clicking box two
- * of four does not strand the next keystroke in the middle of the value. That
- * is a deliberate simplification: mid-value editing is not worth the ambiguity
- * when the whole value is four digits and retyping it costs nothing.
+ * One real input under N aria-hidden boxes, which is what makes autofill,
+ * paste and screen readers work. The caret is pinned to the end — no mid-value editing.
  */
 const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
   (
@@ -76,9 +51,7 @@ const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
   ) => {
     const [focused, setFocused] = React.useState(false);
 
-    // The box the next keystroke lands in. Clamped, so a full value highlights
-    // the last box instead of nothing — otherwise the field looks unfocused at
-    // exactly the moment the student is deciding whether to submit.
+    // The box the next keystroke lands in. Clamped, so a full value highlights the last.
     const activeIndex = Math.min(value.length, length - 1);
 
     return (
@@ -116,10 +89,7 @@ const PinInput = React.forwardRef<HTMLInputElement, PinInputProps>(
           ref={ref}
           value={value}
           disabled={disabled}
-          // Concealment is drawn, not native — the input is invisible either
-          // way. `password` is still right for a PIN: it is what stops a
-          // password manager offering to save a one-time code, and what makes
-          // one offer to fill a PIN.
+          // Concealment is drawn, not native. `password` still drives password-manager behaviour.
           type={masked ? 'password' : 'text'}
           inputMode="numeric"
           autoComplete={autoComplete}
@@ -156,10 +126,7 @@ function renderCell(digit: string | undefined, masked: boolean): React.ReactNode
   return masked ? <span className="text-2xl leading-none">&bull;</span> : digit;
 }
 
-/**
- * Deferred to the next frame as well as run now: a click sets the caret AFTER
- * this handler, so setting it here alone is immediately undone.
- */
+/** Deferred a frame as well as run now: a click sets the caret after this handler. */
 function caretToEnd(input: HTMLInputElement): void {
   const end = input.value.length;
   input.setSelectionRange(end, end);

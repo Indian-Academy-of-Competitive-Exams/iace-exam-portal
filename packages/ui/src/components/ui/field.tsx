@@ -19,16 +19,8 @@ export interface FieldProps {
 }
 
 /**
- * Label + control + hint/error as one unit.
- *
- * Every screen was assembling this by hand, which is why spacing and error
- * wording drifted between them — and why the accessible wiring was missing
- * everywhere: an error rendered next to an input is invisible to a screen
- * reader unless `aria-describedby` points at it. Doing it once here means a
- * screen cannot forget.
- *
- * The hint gives way to the error rather than stacking, so the space below a
- * control never changes height and the form does not jump as it is filled in.
+ * Label + control + hint/error, with `aria-describedby` wired.
+ * The hint gives way to the error rather than stacking, so the height never changes.
  */
 export function Field({ htmlFor, label, hint, error, children, className }: Readonly<FieldProps>) {
   const messageId = `${htmlFor}-message`;

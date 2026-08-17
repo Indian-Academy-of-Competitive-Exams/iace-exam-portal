@@ -5,12 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 export interface BadgeListProps<T> {
   items: readonly T[];
-  /**
-   * Plain text for one item — used for the overflow tooltip, one line each.
-   * Text rather than a node on purpose: the tooltip has to be readable as a
-   * list, and a node would invite putting controls in a thing that does not
-   * exist on touch.
-   */
+  /** Plain text per item for the overflow tooltip, one line each. */
   label: (item: T) => string;
   /** The visible chip. Defaults to a neutral badge showing `label`. */
   children?: (item: T) => React.ReactNode;
@@ -22,23 +17,8 @@ export interface BadgeListProps<T> {
 }
 
 /**
- * Chips in a table row, with the overflow behind a tooltip.
- *
- * A row cannot grow to fit its contents. Rendering every chip either wraps the
- * row to three lines — at which point the columns no longer line up and the
- * table stops being scannable, which is the only reason it is a table — or
- * clips them at the column edge, which hides values with nothing to say they
- * are hidden. Both lose the same information; only one of them admits it.
- *
- * So: the first `max`, then a `+N` chip whose tooltip lists the rest. The count
- * is the honest part — it says how much is missing — and the tooltip is the
- * recovery. `+N` is focusable, so the overflow is reachable by keyboard and not
- * only by hover.
- *
- * The tooltip is RECOVERY, never the only home for something. If a value
- * matters enough that a decision depends on it, it belongs on a detail screen
- * or behind a filter, because a tooltip does not survive touch, print, or a
- * reader that never hovers.
+ * The first `max` chips, then a focusable `+N` whose tooltip lists the rest.
+ * Never a value's only home — a tooltip does not survive touch or print.
  */
 export function BadgeList<T>({
   items,

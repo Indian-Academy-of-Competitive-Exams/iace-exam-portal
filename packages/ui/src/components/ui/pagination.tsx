@@ -3,14 +3,8 @@ import { Button } from './button';
 import { Select } from './select';
 
 /**
- * Shows the range rather than only the page number: "1–20 of 337" answers "how
- * much is there" and "am I nearly done", which a bare "page 1" does not.
- *
- * The rows-per-page control is optional so a short, never-paged list can leave
- * it off. The sizes are PASSED IN rather than known here: the API caps what it
- * will accept, the cap and the offered sizes are declared together in
- * @iace/contracts, and a design-system component has no business knowing either
- * — it would only be a second place for them to drift apart.
+ * Shows the range ("1–20 of 337"), not just the page number.
+ * Page sizes are passed in: the cap is declared in @iace/contracts, not here.
  */
 export function Pagination({
   page,

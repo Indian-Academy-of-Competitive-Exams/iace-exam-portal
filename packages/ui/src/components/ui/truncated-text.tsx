@@ -2,17 +2,7 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
-/**
- * Reports whether an element is actually showing less than it holds.
- *
- * The point is that a tooltip should only exist where something is hidden. One
- * that fires on text the reader can already see is noise, and it trains them to
- * ignore the one that mattered. So this measures rather than assumes: `truncate`
- * on a short name changes nothing, and no tooltip appears.
- *
- * Re-measures on resize, because whether a name fits depends on the column
- * width, which depends on the window.
- */
+/** Whether an element shows less than it holds, measured — so a short name gets no tooltip. */
 export function useTruncation<T extends HTMLElement>(content: unknown) {
   const ref = React.useRef<T>(null);
   const [truncated, setTruncated] = React.useState(false);
@@ -21,8 +11,7 @@ export function useTruncation<T extends HTMLElement>(content: unknown) {
     const element = ref.current;
     if (!element) return;
 
-    // The 1px slack absorbs sub-pixel layout, which otherwise reports a
-    // perfectly fitting string as overflowing on some zoom levels.
+    // 1px slack absorbs sub-pixel layout at some zoom levels.
     const measure = () => setTruncated(element.scrollWidth > element.clientWidth + 1);
     measure();
 

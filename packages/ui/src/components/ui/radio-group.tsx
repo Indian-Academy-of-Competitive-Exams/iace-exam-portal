@@ -14,37 +14,20 @@ export interface RadioGroupProps extends Omit<
   React.HTMLAttributes<HTMLFieldSetElement>,
   'onChange'
 > {
-  /**
-   * Shared by every radio in the group. It is what makes them one control
-   * rather than four unrelated ones — the browser keys the arrow-key roving,
-   * the single-selection rule and "radio button, 2 of 4" off this name.
-   */
+  /** Shared by every radio in the group — the browser keys arrow-key roving off it. */
   name: string;
   value?: string;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
-  /**
-   * What the group is asking. Required, because a set of options with no
-   * question announces four unexplained choices — for a CBT paper it is the
-   * question stem.
-   */
+  /** What the group is asking. For a CBT paper it is the question stem. */
   legend: React.ReactNode;
   /** The stem is already on screen above the options, so it is not repeated. */
   hideLegend?: boolean;
 }
 
 /**
- * One choice out of several.
- *
- * Native radios, for the same reason Checkbox uses a native box: the browser's
- * own control already moves between options with the arrow keys, enforces the
- * one-of-many rule, and announces its position in the set. A div wearing a
- * radio role has to re-earn all three, and the exam screen is the last place to
- * be relying on a re-implementation of something the platform does.
- *
- * A `fieldset` with a `legend` rather than a div, because that is the element
- * that ties a question to its answers: without it a screen reader reads four
- * options with nothing saying what they answer.
+ * Native radios: arrow keys, the one-of-many rule and "radio button, 2 of 4" come free.
+ * A `fieldset` + `legend` is what ties the question to its answers.
  */
 export function RadioGroup({
   name,
@@ -81,11 +64,7 @@ export interface RadioGroupItemProps extends Omit<
   hint?: React.ReactNode;
 }
 
-/**
- * Shaped like Checkbox on purpose — the two sit in the same forms, and a radio
- * row that is a different height from a checkbox row above it reads as a
- * mistake rather than as a different kind of question.
- */
+/** Same row shape as Checkbox — the two sit in the same forms. */
 export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemProps>(
   ({ className, value, label, hint, id, onChange, ...props }, ref) => {
     const group = React.useContext(RadioGroupContext);
@@ -107,8 +86,7 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
           type="radio"
           name={group.name}
           value={value}
-          // Uncontrolled when the group has no `value` — a form using
-          // react-hook-form registers the inputs itself and owns the state.
+          // Uncontrolled when the group has no `value`: react-hook-form owns it.
           checked={group.value === undefined ? undefined : group.value === value}
           className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:shadow-focus focus-visible:outline-none"
           onChange={(event) => {

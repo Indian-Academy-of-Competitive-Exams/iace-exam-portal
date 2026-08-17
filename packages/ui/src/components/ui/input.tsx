@@ -5,22 +5,13 @@ import { cn } from '../../lib/utils';
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   /** Marks the field invalid for both styling and assistive tech. */
   invalid?: boolean;
-  /**
-   * Rendered inside the control, before the text — a country code, a currency,
-   * a search icon. Inside rather than beside it, so it reads as part of the
-   * value the student is completing instead of a stray label next to a box.
-   */
+  /** Inside the control, before the text — a country code, a currency, a search icon. */
   prefix?: React.ReactNode;
   /** Rendered inside the control, after the text — a unit, a reveal toggle. */
   suffix?: React.ReactNode;
 }
 
-/**
- * Focus is a SOFT glow, per the style guide, and invalid is the same glow in
- * crimson. The distinction is the whole point: the brand is red, so a hard red
- * outline on a focused field is indistinguishable from an error, and every
- * field looks broken the moment it is tabbed into.
- */
+/** Focus is a soft glow; invalid is the same glow in crimson. */
 const CONTROL = [
   'flex h-10 w-full items-center gap-2 rounded-md border bg-surface px-3 text-sm',
   'border-input text-foreground shadow-sm transition-[box-shadow,border-color]',
@@ -31,8 +22,7 @@ const CONTROL = [
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, invalid, prefix, suffix, ...props }, ref) => (
-    // data-focus-ring: this div paints the ring, so the inner <input> must not
-    // paint its own on top of it (see the rule in tokens.css).
+    // This div paints the ring, so the inner input must not (see tokens.css).
     <div
       className={cn(CONTROL, className)}
       data-focus-ring="wrapper"

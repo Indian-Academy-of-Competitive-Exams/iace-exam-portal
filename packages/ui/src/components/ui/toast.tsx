@@ -3,17 +3,8 @@ import { AlertTriangle, Check, Info, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
- * Transient messages: "Saved", "Added 2 students", "Could not reach the server".
- *
- * The store is a plain module-level subscription rather than React context, so
- * `toast.success(…)` works from anywhere — including a QueryClient callback,
- * which is not inside a component and is precisely where we want to catch every
- * failure once instead of in each form.
- *
- * WHAT DOES NOT BELONG HERE: a message about one field. "Use letters only" in a
- * corner of the screen, while the offending input sits unmarked, makes the
- * reader find it themselves and remember it while they do. Field errors stay on
- * fields — see applyFieldErrors — and this takes what is left.
+ * Transient messages. A module-level store, so it works from a QueryClient callback.
+ * Never a field error — those stay on the field (see applyFieldErrors).
  */
 export const TOAST_VARIANTS = {
   SUCCESS: 'success',
@@ -47,8 +38,7 @@ function show(message: string, variant: ToastVariant): number {
   const trimmed = message.trim();
   if (trimmed === '') return -1;
 
-  // The same message twice in a row is one event the reader saw once — a
-  // retried mutation should not stack three identical failures.
+  // The same message twice is one event; a retry should not stack three.
   const duplicate = toasts.find((t) => t.message === trimmed && t.variant === variant);
   if (duplicate) return duplicate.id;
 
@@ -85,13 +75,7 @@ function useToasts(): Toast[] {
   );
 }
 
-/**
- * Renders them. Goes once, high in the app, beside the other providers.
- *
- * `aria-live="polite"` rather than assertive even for failures: a toast never
- * carries something the reader must act on this second, and interrupting them
- * mid-sentence to say "Saved" is worse than waiting for a pause.
- */
+/** Renders them. Goes once, high in the app. Polite even for failures. */
 export function Toaster() {
   const items = useToasts();
 
@@ -128,15 +112,12 @@ function ToastRow({ toast: item }: Readonly<{ toast: Toast }>) {
     if (paused) return;
     const timer = setTimeout(() => dismissToast(item.id), LIFETIME_MS[item.variant]);
     return () => clearTimeout(timer);
-    // Re-armed when un-paused, so a message the reader hovered to finish
-    // reading gets its full life back rather than vanishing on mouse-out.
+    // Re-armed on un-pause, so a hovered message gets its full life back.
   }, [item.id, item.variant, paused]);
 
   return (
     <div
-      // pointer-events-auto on the row, not the container: the container spans
-      // the width of the screen and would otherwise swallow clicks meant for
-      // whatever is behind it.
+      // On the row, not the full-width container, which would swallow clicks behind it.
       className={cn(
         'pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm shadow-lg',
         'animate-toast-in',

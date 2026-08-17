@@ -1,15 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-/**
- * A person, at a glance.
- *
- * Falls back to initials rather than a generic silhouette: every student
- * without a photo would otherwise look like every other one, which is worse
- * than useless in a list. Initials come from the name when there is one, and
- * from the mobile number when there is not — a student added by an admin has a
- * number long before anybody types their name.
- */
+/** A photo, or initials from the name, or from the mobile number. */
 export interface AvatarProps {
   /** A signed URL. Null while there is no photo on file. */
   src?: string | null;
@@ -27,8 +19,7 @@ const SIZES = {
 } as const;
 
 export function Avatar({ src, name, fallback, size = 'md', className }: Readonly<AvatarProps>) {
-  // A signed URL expires. When it does the image 404s, and a broken-image icon
-  // is worse than the initials it replaced — so a failed load falls back.
+  // Signed URLs expire; a failed load falls back to initials.
   const [failed, setFailed] = React.useState(false);
   const showPhoto = Boolean(src) && !failed;
 
@@ -40,8 +31,7 @@ export function Avatar({ src, name, fallback, size = 'md', className }: Readonly
         SIZES[size],
         className,
       )}
-      // The name is already beside it in every current use, so announcing it
-      // twice would just be noise.
+      // The name is already beside it in every current use.
       aria-hidden={!showPhoto}
     >
       {showPhoto ? (
@@ -58,19 +48,12 @@ export function Avatar({ src, name, fallback, size = 'md', className }: Readonly
   );
 }
 
-/**
- * Up to two initials.
- *
- * Takes the first letter of the first and last words, so "Kandukuri Venkata
- * Ramana Murthy" reads as KM rather than KV — the last name is the one people
- * are called by.
- */
+/** First letter of the first and last word: "Kandukuri Venkata Ramana Murthy" is KM. */
 export function initialsOf(name?: string | null, fallback?: string | null): string {
   const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {
-    // A mobile number: its last two digits tell two students apart better than
-    // its first two, which are usually the same operator prefix.
+    // A mobile number: the first two digits are the operator prefix, so take the last two.
     const digits = (fallback ?? '').replace(/\D/g, '');
     return digits.slice(-2) || '—';
   }

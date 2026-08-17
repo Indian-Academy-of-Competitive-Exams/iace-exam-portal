@@ -2,18 +2,8 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 /**
- * Placeholders in the shape of what is coming.
- *
- * Two rules from the style guide are built in rather than restated per screen:
- *
- *   · Only for a wait over ~300ms. Below that a skeleton flashes and reads as
- *     jank — show nothing at all instead.
- *   · Match the real content's shape. A skeleton the wrong size causes a
- *     layout jump when the data lands, which is worse than a spinner.
- *
- * Prefer this to `LoadingState` wherever the shape is already known — a table
- * of rows, a row of stat tiles — because it holds the layout still. Where it is
- * not known, a line of text is the honest answer.
+ * Placeholders shaped like the content coming. Use above ~300ms only; below that it flashes.
+ * Match the real shape, or the layout jumps when the data lands.
  */
 const VARIANTS = {
   /** A line of body copy. */
@@ -45,9 +35,7 @@ export function Skeleton({ className, variant = 'text', ...props }: Readonly<Ske
         'after:absolute after:inset-0 after:-translate-x-full',
         'after:bg-gradient-to-r after:from-transparent after:via-[--skeleton-shine] after:to-transparent',
         'after:animate-skeleton-sweep',
-        // Keep the placeholder, drop the motion. The global reduced-motion rule
-        // only shortens animations, which would leave the sheen parked at one
-        // end — a bright band that looks like part of the design.
+        // The global reduced-motion rule only shortens, which would park the sheen mid-element.
         'motion-reduce:after:hidden',
         className,
       )}
@@ -63,12 +51,7 @@ export interface SkeletonParagraphProps extends React.HTMLAttributes<HTMLDivElem
   lines?: number;
 }
 
-/**
- * A block of text on its way.
- *
- * The last line is short, because the last line of a real paragraph always is —
- * a stack of full-width bars is the tell that gives away a fake skeleton.
- */
+/** A paragraph on its way. The last line is short, as a real one is. */
 export function SkeletonParagraph({
   lines = 3,
   className,

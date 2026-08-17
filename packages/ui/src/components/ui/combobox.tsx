@@ -25,14 +25,7 @@ export interface ComboboxProps {
   onChange: (value: string) => void;
   items: readonly ComboboxItem[];
 
-  /**
-   * What to show for the current value when it is not in `items`.
-   *
-   * It usually will not be: with pages loaded on demand, a value chosen
-   * earlier — or arriving in a link — is very often outside the page that
-   * happens to be loaded. Without this the trigger renders blank and the
-   * control looks like it lost the selection.
-   */
+  /** Label for the current value when it sits outside the loaded pages. */
   selectedLabel?: string;
 
   /** Shown when nothing is selected. Also the "clear" option's label. */
@@ -59,16 +52,8 @@ export interface ComboboxProps {
 }
 
 /**
- * A select for a list too long to render at once.
- *
- * The list is loaded a page at a time and the next page is fetched when the
- * reader scrolls to the bottom — which is the point: a plain `<select>` over a
- * capped query silently ends at the first hundred and looks complete. Anything
- * missing from it is invisible, and the reader has no way to know.
- *
- * It knows nothing about where items come from. The paging lives in
- * `useInfinitePages` (@iace/app-kit); this only says "I have reached the end of
- * what you gave me" and renders what comes back.
+ * Select for a list too long to render at once; the next page loads near the bottom.
+ * Paging itself lives in `useInfinitePages` (@iace/app-kit).
  */
 export function Combobox({
   value,
@@ -92,8 +77,7 @@ export function Combobox({
 }: Readonly<ComboboxProps>) {
   const [open, setOpen] = React.useState(false);
 
-  // Declared whether or not this instance searches: hooks cannot be conditional,
-  // and an unused debouncer costs a timer that never starts.
+  // Hooks cannot be conditional; unused, it never starts a timer.
   const { draft: searchDraft, type: typeSearch } = useDebouncedSearch(
     search ?? '',
     onSearchChange ?? NO_SEARCH,
@@ -103,18 +87,8 @@ export function Combobox({
   const triggerLabel = selected?.label ?? selectedLabel ?? value ?? placeholder;
 
   /**
-   * Ask for the next page as the reader nears the bottom.
-   *
-   * A scroll handler rather than an IntersectionObserver. The observer is the
-   * fashionable answer and it was the first thing here, but it has to be
-   * attached to an element inside a portal that mounts a tick after the popover
-   * opens, re-armed every time a page is appended, and rooted on the scroller
-   * rather than the viewport — three chances to attach to nothing and silently
-   * never fire, which is exactly what it did. Scroll position is a fact this
-   * element already has.
-   *
-   * The threshold starts the fetch before the end is reached, so the next page
-   * is usually there by the time the reader gets to it.
+   * Fetch the next page near the bottom. A scroll handler, not an
+   * IntersectionObserver: the list mounts in a portal and re-renders per page.
    */
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
     if (!onLoadMore || !hasMore) return;
@@ -130,8 +104,7 @@ export function Combobox({
           id={id}
           aria-label={ariaLabel}
           disabled={disabled}
-          // Deliberately the same shape as Select: the two sit side by side in
-          // a filter row, and a 36px control beside a 40px one reads as broken.
+          // Same height as Select: the two sit side by side in a filter row.
           className={cn(
             'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface px-3 text-sm shadow-sm',
             'transition-[box-shadow,border-color] hover:border-ring',
@@ -151,8 +124,7 @@ export function Combobox({
         <PopoverPrimitive.Content
           align="start"
           sideOffset={4}
-          // Matches the trigger, so the list never appears narrower than the
-          // thing it belongs to.
+          // Matches the trigger width.
           className="z-50 w-[var(--radix-popover-trigger-width)] min-w-56 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
         >
           {onSearchChange ? (
