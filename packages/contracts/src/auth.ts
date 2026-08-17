@@ -40,6 +40,13 @@ export const otpRequestResponseSchema = z.object({
   sent: z.literal(true),
   expiresInSec: z.number().int(),
   resendAfterSec: z.number().int(),
+  /**
+   * How many digits the code has. The server decides it (`OTP_LENGTH`), so the
+   * login screen must be told rather than assume: it draws one box per digit,
+   * and a screen guessing six against a server sending four asks for two digits
+   * that will never arrive.
+   */
+  codeLength: z.number().int().min(4).max(8),
   /** Dev-only echo of the code — present only when the console sender is active. */
   devCode: z.string().optional(),
 });

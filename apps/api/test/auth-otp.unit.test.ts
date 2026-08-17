@@ -27,6 +27,17 @@ describe('OtpService — request', () => {
     assert.match(sender.lastCode, /^\d{6}$/);
   });
 
+  it('tells the caller how many digits it sent, so the screen draws that many boxes', async () => {
+    const { otp, sender } = build({ OTP_LENGTH: 4 });
+
+    const challenge = await otp.request(ActorTypes.STUDENT, MOBILE);
+
+    assert.equal(challenge.codeLength, 4);
+    // The length of the code actually sent, not of the setting read twice — a
+    // padded code is what the student sees, and the boxes must match it.
+    assert.equal(challenge.codeLength, sender.lastCode.length);
+  });
+
   it('stores a hash, never the code itself', async () => {
     const { otp, redis, sender } = build();
 

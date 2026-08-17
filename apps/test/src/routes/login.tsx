@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
+import {
+  Controller,
+  useForm,
+  type Control,
+  type FieldPath,
+  type FieldValues,
+  type UseFormRegisterReturn,
+} from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -29,6 +36,7 @@ import {
   CardTitle,
   Field,
   NumericInput,
+  PinInput,
   ThemeToggle,
   digitsOnly,
 } from '@iace/ui';
@@ -172,12 +180,15 @@ function SignInStep({
             error={form.formState.errors.mobile?.message}
             register={form.register('mobile')}
           />
-          <PinField
+          <DigitsField
+            name="pin"
+            control={form.control}
             id="pin"
             label="PIN"
+            length={PIN_LENGTH}
+            masked
             autoComplete="current-password"
             error={form.formState.errors.pin?.message}
-            register={form.register('pin')}
           />
 
           <Button type="submit" disabled={login.isPending}>
@@ -315,7 +326,18 @@ function CodeStep({
           onSubmit={form.handleSubmit((values) => verify.mutate(values))}
           noValidate
         >
-          <CodeField error={form.formState.errors.code?.message} register={form.register('code')} />
+          <DigitsField
+            name="code"
+            control={form.control}
+            id="code"
+            label="One-time code"
+            // The server decides how long a code is; the boxes follow it rather
+            // than assuming six.
+            length={challenge.codeLength}
+            autoFocus
+            autoComplete="one-time-code"
+            error={form.formState.errors.code?.message}
+          />
 
           {challenge.devCode ? (
             <Alert variant="info">
@@ -386,19 +408,27 @@ function SetPinStep({
           onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
           noValidate
         >
-          <PinField
+          <DigitsField
+            name="pin"
+            control={form.control}
             id="pin"
             label="New PIN"
+            length={PIN_LENGTH}
+            masked
             autoFocus
+            autoComplete="new-password"
             hint={`${PIN_LENGTH} digits — avoid 1234 or all one digit`}
             error={form.formState.errors.pin?.message}
-            register={form.register('pin')}
           />
-          <PinField
+          <DigitsField
+            name="confirmPin"
+            control={form.control}
             id="confirmPin"
             label="Confirm PIN"
+            length={PIN_LENGTH}
+            masked
+            autoComplete="new-password"
             error={form.formState.errors.confirmPin?.message}
-            register={form.register('confirmPin')}
           />
 
           <Button type="submit" disabled={setPin.isPending}>
@@ -469,58 +499,55 @@ function MobileField({
   );
 }
 
-function PinField({
+/**
+ * A code entered one box per digit \u2014 the PIN and the OTP are the same control.
+ *
+ * `Controller` rather than `register`, because the boxes are a RENDERING of the
+ * value rather than the value itself. An uncontrolled input keeps its digits in
+ * the DOM where nothing re-renders, so the boxes would never fill \u2014 and
+ * `form.reset()` would clear the field while leaving them filled on screen.
+ */
+function DigitsField<TFieldValues extends FieldValues>({
+  name,
+  control,
   id,
   label,
+  length,
+  autoComplete,
+  masked,
   autoFocus,
-  autoComplete = 'new-password',
   hint,
   error,
-  register,
 }: Readonly<{
+  name: FieldPath<TFieldValues>;
+  control: Control<TFieldValues>;
   id: string;
   label: string;
+  length: number;
+  autoComplete: 'one-time-code' | 'new-password' | 'current-password';
+  masked?: boolean;
   autoFocus?: boolean;
-  autoComplete?: 'new-password' | 'current-password';
   hint?: string;
   error?: string;
-  register: UseFormRegisterReturn;
 }>) {
   return (
     <Field htmlFor={id} label={label} hint={hint} error={error}>
-      {(control) => (
-        <NumericInput
-          {...control}
-          {...register}
-          masked
-          autoFocus={autoFocus}
-          autoComplete={autoComplete}
-          maxLength={PIN_LENGTH}
-          placeholder={'\u2022'.repeat(PIN_LENGTH)}
-          invalid={Boolean(error)}
-          className="tracking-[0.6em] tabular-nums"
-        />
-      )}
-    </Field>
-  );
-}
-
-function CodeField({
-  error,
-  register,
-}: Readonly<{ error?: string; register: UseFormRegisterReturn }>) {
-  return (
-    <Field htmlFor="code" label="One-time code" error={error}>
-      {(control) => (
-        <NumericInput
-          {...control}
-          {...register}
-          autoFocus
-          autoComplete="one-time-code"
-          maxLength={8}
-          placeholder="••••••"
-          invalid={Boolean(error)}
-          className="text-center text-base tracking-[0.5em] tabular-nums"
+      {(wiring) => (
+        <Controller
+          name={name}
+          control={control}
+          render={({ field: { value, ...field } }) => (
+            <PinInput
+              {...wiring}
+              {...field}
+              value={String(value ?? '')}
+              length={length}
+              masked={masked}
+              autoFocus={autoFocus}
+              autoComplete={autoComplete}
+              invalid={Boolean(error)}
+            />
+          )}
         />
       )}
     </Field>

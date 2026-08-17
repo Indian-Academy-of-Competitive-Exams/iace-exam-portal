@@ -229,6 +229,7 @@ export class AuthService {
         sent: true,
         expiresInSec: this.otpTtlPlaceholder,
         resendAfterSec: this.otpCooldownPlaceholder,
+        codeLength: this.otpCodeLengthPlaceholder,
       };
     }
     return this.otp.request(ActorTypes.ADMIN, email);
@@ -454,5 +455,9 @@ export class AuthService {
 
   private get otpCooldownPlaceholder(): number {
     return this.otp.cooldownSec;
+  }
+
+  private get otpCodeLengthPlaceholder(): number {
+    return this.otp.codeLength;
   }
 }

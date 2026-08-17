@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm, type Control, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { KeyRound, Loader2 } from 'lucide-react';
@@ -12,8 +12,8 @@ import {
   CardHeader,
   CardTitle,
   Field,
-  NumericInput,
   PageHeader,
+  PinInput,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
@@ -33,7 +33,7 @@ export function AccountPage() {
   return (
     <>
       <PageHeader
-        title="Your sign-in"
+        title="Change PIN"
         description="You sign in with your mobile number and a four-digit PIN."
       />
       <ChangePinCard onDefaultPin={onDefaultPin} />
@@ -87,39 +87,23 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
           onSubmit={form.handleSubmit((values) => change.mutate(values))}
           noValidate
         >
-          <Field
-            htmlFor="currentPin"
+          <PinField
+            name="currentPin"
+            control={form.control}
             label={onDefaultPin ? 'PIN you were given' : 'Current PIN'}
+            autoComplete="current-password"
             error={form.formState.errors.currentPin?.message}
             hint={onDefaultPin ? 'The first four digits of your mobile number.' : undefined}
-          >
-            {(control) => (
-              <NumericInput
-                {...control}
-                {...form.register('currentPin')}
-                masked
-                maxLength={PIN_LENGTH}
-                autoComplete="current-password"
-              />
-            )}
-          </Field>
+          />
 
-          <Field
-            htmlFor="newPin"
+          <PinField
+            name="newPin"
+            control={form.control}
             label="New PIN"
+            autoComplete="new-password"
             error={form.formState.errors.newPin?.message}
             hint={`${PIN_LENGTH} digits.`}
-          >
-            {(control) => (
-              <NumericInput
-                {...control}
-                {...form.register('newPin')}
-                masked
-                maxLength={PIN_LENGTH}
-                autoComplete="new-password"
-              />
-            )}
-          </Field>
+          />
 
           <Button type="submit" disabled={change.isPending}>
             {change.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
@@ -128,5 +112,51 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * A PIN as four boxes, wired to react-hook-form.
+ *
+ * `Controller` rather than `register`: the boxes RENDER the value, so an
+ * uncontrolled input would keep the digits somewhere nothing re-reads — and the
+ * `form.reset()` after a successful change would leave four filled boxes
+ * standing over an empty field.
+ */
+function PinField({
+  name,
+  control,
+  label,
+  autoComplete,
+  hint,
+  error,
+}: Readonly<{
+  name: FieldPath<ChangePinInput>;
+  control: Control<ChangePinInput>;
+  label: string;
+  autoComplete: 'current-password' | 'new-password';
+  hint?: string;
+  error?: string;
+}>) {
+  return (
+    <Field htmlFor={name} label={label} hint={hint} error={error}>
+      {(wiring) => (
+        <Controller
+          name={name}
+          control={control}
+          render={({ field: { value, ...field } }) => (
+            <PinInput
+              {...wiring}
+              {...field}
+              value={value}
+              length={PIN_LENGTH}
+              masked
+              autoComplete={autoComplete}
+              invalid={Boolean(error)}
+            />
+          )}
+        />
+      )}
+    </Field>
   );
 }

@@ -303,14 +303,21 @@ describe('AuthService — admin', () => {
 
   it('answers identically for an unknown admin, but sends nothing', async () => {
     const ctx = build();
+    const real = build([], [makeAdmin({ email: 'admin@iace.co.in' })]);
 
     const response = await ctx.auth.requestAdminOtp('nobody@example.com');
+    const { devCode: _devCode, ...realResponse } =
+      await real.auth.requestAdminOtp('admin@iace.co.in');
 
     // Same shape and same numbers as a real send, so the response cannot be
-    // used to enumerate admins — but no code actually goes out.
+    // used to enumerate admins — but no code actually goes out. Compared as a
+    // whole object on purpose: a field added to one branch and forgotten in the
+    // other is exactly the difference an attacker would measure.
+    assert.deepEqual(response, realResponse);
     assert.equal(response.sent, true);
     assert.equal(response.expiresInSec, 300);
     assert.equal(response.resendAfterSec, 45);
+    assert.equal(response.codeLength, 6);
     assert.equal(ctx.sender.sent.length, 0);
   });
 

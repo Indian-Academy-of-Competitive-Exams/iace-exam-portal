@@ -2,6 +2,7 @@ export { cn } from './lib/utils';
 export { Button, buttonVariants, type ButtonProps } from './components/ui/button';
 export { Input, type InputProps } from './components/ui/input';
 export { NumericInput, digitsOnly, type NumericInputProps } from './components/ui/numeric-input';
+export { PinInput, type PinInputProps } from './components/ui/pin-input';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
 export {

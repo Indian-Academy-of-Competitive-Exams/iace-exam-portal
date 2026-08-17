@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -17,7 +17,7 @@ import {
   CardTitle,
   Field,
   Input,
-  NumericInput,
+  PinInput,
   ThemeToggle,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -183,16 +183,25 @@ function CodeStep({
           noValidate
         >
           <Field htmlFor="code" label="One-time code" error={form.formState.errors.code?.message}>
-            {(control) => (
-              <NumericInput
-                {...control}
-                {...form.register('code')}
-                autoFocus
-                autoComplete="one-time-code"
-                maxLength={8}
-                placeholder="••••••"
-                invalid={Boolean(form.formState.errors.code)}
-                className="text-center text-base tracking-[0.5em] tabular-nums"
+            {(wiring) => (
+              <Controller
+                name="code"
+                control={form.control}
+                // Controlled, because the boxes render the value: `register`
+                // would leave the digits in the DOM where nothing draws them.
+                render={({ field: { value, ...field } }) => (
+                  <PinInput
+                    {...wiring}
+                    {...field}
+                    value={value}
+                    // The server decides how long a code is; the boxes follow
+                    // it rather than assuming six.
+                    length={challenge.codeLength}
+                    autoFocus
+                    autoComplete="one-time-code"
+                    invalid={Boolean(form.formState.errors.code)}
+                  />
+                )}
               />
             )}
           </Field>
