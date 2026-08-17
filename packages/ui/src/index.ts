@@ -20,6 +20,12 @@ export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { BadgeList, type BadgeListProps } from './components/ui/badge-list';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export {
+  RadioGroup,
+  RadioGroupItem,
+  type RadioGroupProps,
+  type RadioGroupItemProps,
+} from './components/ui/radio-group';
+export {
   FileDropzone,
   formatFileSize,
   type FileDropzoneProps,
