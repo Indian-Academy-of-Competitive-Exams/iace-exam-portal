@@ -6,13 +6,7 @@ import { createDebouncer } from '../src/components/ui/search-input';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
-/**
- * The waiting that makes a search box cost one request instead of eight.
- *
- * Timers are mocked rather than slept through: the guarantee is about ordering
- * and cancellation, and a test that sleeps for it is a test that is slow AND
- * flaky.
- */
+/** Timers are mocked: the guarantee is ordering and cancellation, not elapsed time. */
 describe('createDebouncer', () => {
   it('runs once, after the typing stops', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
@@ -50,11 +44,7 @@ describe('createDebouncer', () => {
     assert.doesNotThrow(() => debouncer.flush());
   });
 
-  /**
-   * The unmount case. A search that lands after the screen has gone is a
-   * request for a page nobody is looking at, and a setState on a component that
-   * no longer exists.
-   */
+  /** The unmount case: a search landing after the screen has gone. */
   it('cancel drops the pending search entirely', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const run = mock.fn();
@@ -69,11 +59,7 @@ describe('createDebouncer', () => {
 });
 
 describe('search boxes', () => {
-  /**
-   * Two of the three screens write the term into the URL, so an unwaited
-   * keystroke was also a history entry: Back walked out of a search one letter
-   * at a time instead of leaving the screen.
-   */
+  /** Two of the three write the term into the URL, so a keystroke was a history entry too. */
   it('are not hand-built out of a plain Input and a magnifier', () => {
     const offenders = globSync('apps/*/src/**/*.tsx', { cwd: REPO_ROOT }).filter((relative) =>
       /prefix=\{<Search\b/.test(readFileSync(path.join(REPO_ROOT, relative), 'utf8')),

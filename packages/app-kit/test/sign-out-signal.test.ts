@@ -2,15 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createLocalSignOutSignal } from '../src/sign-out-signal';
 
-/**
- * The channel that gets a user back to the login screen when their refresh
- * token is gone.
- *
- * Worth its own tests because both ways of getting it wrong are silent: a
- * signal nobody hears leaves the app retrying forever against a dead token,
- * and a subscription that never comes off keeps a stale React callback alive
- * and clears a session the user has since re-established.
- */
+/** Both failures here are silent: a signal nobody hears, or a subscription that never comes off. */
 describe('createLocalSignOutSignal', () => {
   it('reaches every subscriber', () => {
     const signal = createLocalSignOutSignal();

@@ -5,15 +5,7 @@ export interface StoredTokens {
   refreshToken: string;
 }
 
-/**
- * The seam between "where tokens are kept" and everything that reads them.
- *
- * Deliberately the shape of `localStorage` and deliberately SYNCHRONOUS: the
- * API client has to be able to read the current token from any call site,
- * including a background refresh, without awaiting. The web adapter is
- * `localStorage`; a future Expo app supplies SecureStore's sync accessors or
- * MMKV. This package never learns which (docs/03 §3).
- */
+/** The storage seam. Synchronous, so the API client can read a token from any call site. */
 export interface KeyValueStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -27,16 +19,8 @@ export interface TokenStore {
 }
 
 /**
- * Token persistence, kept outside React so the API client can read the current
- * token synchronously from any call site (including a background refresh).
- *
- * The storage key is a PARAMETER, and every app must pass its own. Admin, test
- * and the student portal to come all share one browser origin: a shared key
- * would mean whichever app loaded last silently clobbered the other's session,
- * and an admin token would be handed to a student's requests.
- *
- * The STORAGE is a parameter for a different reason — see `KeyValueStorage`.
- * `@iace/app-kit/browser` has the localStorage one ready to pass.
+ * Token persistence, outside React. Every app passes its OWN key: the SPAs share one
+ * origin, and a shared key would hand an admin's token to a student's requests.
  */
 export function createTokenStore(storageKey: string, storage: KeyValueStorage): TokenStore {
   return {

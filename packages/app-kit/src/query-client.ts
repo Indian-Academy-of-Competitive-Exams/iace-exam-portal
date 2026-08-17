@@ -1,13 +1,7 @@
 import { MutationCache, QueryCache, QueryClient, type Mutation } from '@tanstack/react-query';
 import { bannerMessage } from './form-errors';
 
-/**
- * What a mutation may declare about itself, for the central handler below.
- *
- * `success` is a string rather than a boolean because the message is the point:
- * "Saved" and "Added 12 students to SSC CGL MORNING" are both confirmations and
- * only one of them is worth reading.
- */
+/** What a mutation declares about itself, for the central handler below. */
 /** What a query may declare. `silent` opts out of the central reporting. */
 export interface AppQueryMeta {
   silent?: boolean;
@@ -16,42 +10,21 @@ export interface AppQueryMeta {
 export interface AppMutationMeta {
   /** Announced when it succeeds. Omit for mutations nobody needs told about. */
   success?: string | ((data: unknown) => string);
-  /**
-   * Fields this mutation's form owns. A failure whose messages ALL land on
-   * those fields is not announced — the inputs already say it, and a toast
-   * repeating it makes the reader look in two places.
-   */
+  /** Fields this form owns. A failure landing entirely on them is not also toasted. */
   fields?: readonly string[];
   /** Opt out entirely: the screen handles its own reporting. */
   silent?: boolean;
 }
 
 /**
- * The fetching policy every IACE SPA runs on.
- *
- * These are not per-app preferences, they are one judgement about the network
- * the platform lives on: students sit live timed tests over flaky mobile
- * connections, where a request worth retrying is worth retrying ONCE and a
- * client that hammers is worse than one that fails visibly. Refetch-on-focus is
- * off for the same reason — a student tabbing back mid-test should not trigger
- * a burst of requests.
- *
- * It also catches EVERY mutation failure in one place. Without this, each form
- * grows its own error banner, they drift, and the one that was forgotten fails
- * in silence — which is the failure nobody reports because it looks like
- * nothing happened.
+ * The fetching policy every SPA runs on: retry once, no refetch on focus — students
+ * sit timed tests on flaky mobile. Also catches every mutation failure in one place.
  */
 export function createAppQueryClient(options: { notify?: Notifier } = {}): QueryClient {
   const { notify } = options;
 
   return new QueryClient({
-    /**
-     * Reads that fail are announced here too, so NOTHING is left to a component
-     * to report. It fires once, after the retry below is exhausted — not on
-     * every attempt — and a screen whose data did not arrive still shows a
-     * neutral "could not load" in place of its content, because a toast that
-     * fades leaves a blank page behind it.
-     */
+    /** Failed reads are announced here too, once, after the retries are exhausted. */
     queryCache: new QueryCache({
       onError: (error, query) => {
         const meta = (query.meta ?? {}) as AppQueryMeta;

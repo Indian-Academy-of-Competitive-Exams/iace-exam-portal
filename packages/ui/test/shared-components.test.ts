@@ -14,16 +14,8 @@ function appsDeclaring(name: string): string[] {
 }
 
 /**
- * A component that two screens both need belongs in @iace/ui, and the cost of
- * getting that wrong is invisible: both copies look right, one of them gets
- * fixed, and nobody compares two screens side by side to notice.
- *
- * These three were each written out more than once before they moved:
- *
- *   · the import summary row, byte-identical in both import screens
- *   · the tinted sign-in step glyph, byte-identical in BOTH APPS
- *   · the Field + Controller + PinInput sandwich, in three places, because
- *     FormField cannot serve a control that renders its own value
+ * A component two screens both need belongs in @iace/ui. Both copies look right,
+ * one of them gets fixed, and nobody compares two screens side by side.
  */
 describe('components that live in the design system', () => {
   for (const name of ['StatRow', 'StepIcon', 'PinField']) {
@@ -32,11 +24,7 @@ describe('components that live in the design system', () => {
     });
   }
 
-  /**
-   * The names they had before they moved. An app declaring one of these again
-   * is the same component coming back under a different label, which is how a
-   * design system quietly stops being the source of anything.
-   */
+  /** The names they had before they moved — the same component under a new label. */
   for (const name of ['Summary', 'DigitsField']) {
     it(`no app brings back ${name}`, () => {
       assert.deepEqual(appsDeclaring(name), []);

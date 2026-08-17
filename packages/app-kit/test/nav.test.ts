@@ -16,10 +16,7 @@ const kids = (n: number): NavItem[] =>
 
 describe('resolveNavLayout', () => {
   it('keeps a small section inline and pushes a big one into a panel', () => {
-    // The threshold is the whole point of AUTO: an accordion of twenty items
-    // shoves everything below it off the screen, and a panel for three is
-    // ceremony. Both boundaries are asserted so a change to the constant has
-    // to be deliberate.
+    // Both boundaries, so a change to the threshold has to be deliberate.
     assert.equal(
       resolveNavLayout(leaf('s', { children: kids(NAV_INLINE_MAX_ITEMS) })),
       NAV_LAYOUT.INLINE,
@@ -105,9 +102,7 @@ describe('filterNavByPermission', () => {
   });
 
   it('filters nothing when no `can` is supplied', () => {
-    // THE degradation that matters: the student app has no permissions, and an
-    // app that never opted in must not silently lose its nav the day a
-    // featureKey appears somewhere.
+    // An app that never opted in must not lose its nav when a featureKey appears.
     assert.deepEqual(
       filterNavByPermission(nav).map((i) => i.label),
       ['Open', 'Gated', 'Section'],

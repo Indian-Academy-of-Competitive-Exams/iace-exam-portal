@@ -13,14 +13,8 @@ import { type TokenStore } from './token-store';
 import { type SignOutSignal } from './sign-out-signal';
 
 /**
- * The session, from the point of view of a screen.
- *
- * `identity` is null whenever there is no usable session — no token, a token
- * that no longer works, or a token for the WRONG ACTOR. That last one is the
- * reason the actor is a parameter rather than something each app checks for
- * itself: a student's JWT is a perfectly valid JWT, and the admin app must not
- * treat it as a session even though nothing about it is malformed. The server
- * enforces the same split; this makes the client agree with it in one place.
+ * The session as a screen sees it. `identity` is null with no token, a dead token,
+ * or a token for the wrong actor — a student's JWT is valid and is not an admin session.
  */
 export interface AuthState<TIdentity> {
   identity: TIdentity | null;
@@ -42,30 +36,11 @@ export interface CreateAuthOptions<TIdentity extends AuthIdentity, TExtra extend
     me: () => Promise<AuthIdentity>;
     logout: () => Promise<void>;
   };
-  /**
-   * App-specific reads over the identity, merged into the context value.
-   *
-   * The admin app's `canAccess` lives here. It is genuinely admin-only — page
-   * permissions are an admin concept and a student identity has no pages — so
-   * putting it in the shared shape would have meant every student screen
-   * carrying a function that can only ever answer false.
-   */
+  /** App-specific reads over the identity, merged into the context value. */
   extend?: (identity: TIdentity | null) => TExtra;
 }
 
-/**
- * One session implementation for every SPA.
- *
- * The four apps' providers were the same forty lines with one word changed, and
- * that word was the identity type. Which would be harmless if the forty lines
- * were boring — but they hold the rule that a stored token is the source of
- * truth for "am I signed in", the re-read of `/auth/me` that makes a permission
- * change land without a re-login, the sign-out signal subscription, and the
- * decision to clear locally when the server has already forgotten the session.
- * Four copies of that is four chances for one of them to get a detail wrong,
- * and the symptom of a wrong detail here is somebody stuck on a login screen
- * that will not admit they are signed in.
- */
+/** One session implementation for every SPA, parameterised by the identity type. */
 export function createAuth<TIdentity extends AuthIdentity, TExtra extends object = object>(
   options: CreateAuthOptions<TIdentity, TExtra>,
 ): {
@@ -80,22 +55,12 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
     const queryClient = useQueryClient();
 
     /**
-     * Whether a token exists, held in React state and NOT read from the store
-     * during render.
-     *
-     * The store is deliberately outside React (the API client reads it
-     * synchronously), so writing to it changes nothing any component is
-     * watching. Sign-out used to clear the store and call `removeQueries`, and
-     * neither of those notifies an active observer — the identity stayed on
-     * screen and the user stayed "signed in" until they reloaded. This flag is
-     * the render-visible half of the same fact, so ending a session re-renders
-     * the tree that guards on it.
+     * Whether a token exists, in React state — the store is outside React, so
+     * writing to it notifies nothing that renders.
      */
     const [hasToken, setHasToken] = useState(() => tokenStore.get() !== null);
 
-    // The stored token is the source of truth for "am I signed in"; /auth/me
-    // re-reads the identity from Postgres so a profile or permission change
-    // lands on reload rather than at the next full sign-in.
+    // /auth/me re-reads the identity, so a permission change lands on reload.
     const { data, isLoading } = useQuery({
       queryKey,
       queryFn: () => endpoints.me(),
@@ -127,26 +92,20 @@ export function createAuth<TIdentity extends AuthIdentity, TExtra extends object
       try {
         await endpoints.logout();
       } catch {
-        // Already invalid server-side; clearing locally is still correct, and
-        // refusing to sign out because the sign-out call failed would strand
-        // the user in a session they have asked to end.
+        // Already invalid server-side; clear locally anyway.
       }
       clearSession();
     }, [clearSession]);
 
     const value = useMemo(() => {
-      // `hasToken` first: the cached identity outlives the token by a render or
-      // two after sign-out, and a stale identity is exactly what makes a logged
-      // out user look logged in.
+      // `hasToken` first: the cached identity outlives the token by a render or two.
       const identity = (
         hasToken && data !== undefined && data.actor === actor ? data : null
       ) as TIdentity | null;
 
       return {
         identity,
-        // Only "loading" if there is a token to load an identity FOR. Without
-        // this, a signed-out visitor sits on a spinner instead of the login
-        // screen while a query that will never run reports as pending.
+        // Only "loading" if there is a token to load an identity for.
         isLoading: isLoading && hasToken,
         signIn,
         signOut,

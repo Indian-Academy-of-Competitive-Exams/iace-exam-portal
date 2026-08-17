@@ -16,13 +16,7 @@ const dialog = read('src/components/ui/dialog.tsx');
 const components = read('src/components.css');
 
 describe('dialog', () => {
-  /**
-   * The rule the style guide states and a call site cannot be trusted to
-   * remember: Enter on a confirm that appeared under someone's fingers must not
-   * be the thing that deletes. Radix focuses the first focusable child, which
-   * is whichever button the markup happens to put first — so ConfirmDialog
-   * takes the choice away from the DOM order and aims it at Cancel.
-   */
+  /** Radix focuses the first focusable child, so the choice is taken away from DOM order. */
   it('gives the opening focus to Cancel, never the destructive button', () => {
     assert.match(
       dialog,
@@ -31,11 +25,7 @@ describe('dialog', () => {
     );
   });
 
-  /**
-   * A dialog whose work is still in flight must not vanish under an Escape or a
-   * stray click — the reader is left guessing whether the thing they asked for
-   * happened.
-   */
+  /** Dismissing mid-request leaves the reader guessing whether it happened. */
   it('cannot be dismissed while the action it started is running', () => {
     for (const handler of ['onEscapeKeyDown', 'onPointerDownOutside', 'onInteractOutside']) {
       assert.ok(
@@ -46,11 +36,7 @@ describe('dialog', () => {
     assert.match(dialog, /if \(loading\) event\.preventDefault\(\)/);
   });
 
-  /**
-   * ONE DEFINITION PER COMPONENT. The raw CSS could not trap focus, and leaving
-   * it beside the React component would leave two designs of one thing, only
-   * one of which anybody renders.
-   */
+  /** One definition per component: the raw CSS copy could not trap focus. */
   it('is the only modal definition — components.css declares no .modal', () => {
     assert.ok(!/^\.modal/m.test(components), 'components.css must not declare .modal classes');
     assert.ok(!/^\.overlay/m.test(components), 'components.css must not declare .overlay');
@@ -65,12 +51,7 @@ describe('dialog', () => {
   });
 });
 
-/**
- * `globalThis.confirm` blocks the whole tab, cannot be themed, cannot be
- * tested, and renders its message as one unstyled line — so the sentence that
- * explains what will NOT be undone reads like a warning from the browser rather
- * than from the product. ConfirmDialog exists so nobody reaches for it again.
- */
+/** `globalThis.confirm` blocks the tab, cannot be themed and cannot be tested. */
 describe('native confirm', () => {
   it('is gone from every app and package', () => {
     const sources = [

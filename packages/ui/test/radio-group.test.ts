@@ -10,32 +10,20 @@ const radio = read('src/components/ui/radio-group.tsx');
 const checkbox = read('src/components/ui/checkbox.tsx');
 
 describe('RadioGroup', () => {
-  /**
-   * The exam screen is the last place to be re-implementing something the
-   * platform already does. Native radios sharing a name give arrow-key movement
-   * between options, the one-of-many rule, and "radio button, 2 of 4" — all of
-   * which a div with role="radio" has to earn back by hand.
-   */
+  /** Native radios give arrow keys, the one-of-many rule and "radio button, 2 of 4". */
   it('uses native radios, like Checkbox uses a native box', () => {
     assert.match(radio, /type="radio"/);
     assert.match(radio, /name=\{group\.name\}/);
     assert.ok(!/role="radio"/.test(radio), 'no hand-built radio semantics');
   });
 
-  /**
-   * A fieldset+legend is what ties a question to its answers. Without it a
-   * screen reader reads four options and nothing that says what they answer.
-   */
+  /** Without a fieldset+legend a screen reader reads four options and no question. */
   it('is a fieldset with a legend, so the options have a question', () => {
     assert.match(radio, /<fieldset/);
     assert.match(radio, /<legend/);
   });
 
-  /**
-   * Passing no `value` has to leave `checked` undefined rather than false —
-   * `checked={false}` makes it a controlled input pinned to unchecked, so a
-   * form that registers the inputs itself could never tick one.
-   */
+  /** `checked={false}` would pin it unchecked, so a registering form could never tick it. */
   it('stays uncontrolled when the group holds no value', () => {
     assert.match(
       radio,

@@ -9,18 +9,8 @@ const read = (relative: string) => readFileSync(path.join(UI_ROOT, relative), 'u
 const tokens = read('src/tokens.css');
 
 /**
- * A focused field showed TWO concentric rings.
- *
- * tokens.css paints a ring on every focusable element, which is the right floor
- * — a control nobody has styled yet still shows focus. But Input and Select are
- * a wrapper around the real element, because a prefix, a suffix or a chevron
- * has to sit inside the same box, and the wrapper paints the border and the
- * ring itself. So the floor fired again on the inner <input> and drew a second
- * ring inside the first.
- *
- * The fix is a claim the wrapper makes (`data-focus-ring="wrapper"`) and a rule
- * that honours it. Both halves are asserted, because either one alone is
- * useless and neither is obviously load-bearing to someone tidying up.
+ * tokens.css rings every focusable element; a wrapper control would draw a second ring
+ * inside its own. Both halves of the opt-out are asserted — either alone is useless.
  */
 describe('focus ring', () => {
   it('stands the inner control down when a wrapper owns the ring', () => {

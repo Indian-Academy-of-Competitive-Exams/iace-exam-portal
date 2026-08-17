@@ -15,13 +15,7 @@ const skeleton = read('src/components/ui/skeleton.tsx');
 const components = read('src/components.css');
 
 describe('Skeleton', () => {
-  /**
-   * The global reduced-motion rule in tokens.css shortens every animation to
-   * 0.01ms. For a looping sweep that is not "no motion" — it is the sheen
-   * jumping to its end position and parking there, a bright band across the
-   * placeholder that looks like part of the design. So the sweep is removed
-   * outright rather than sped up.
-   */
+  /** The global rule only shortens animations, which would park the sheen mid-element. */
   it('drops the sweep for reduced motion instead of just shortening it', () => {
     assert.match(skeleton, /motion-reduce:after:hidden/);
   });
@@ -31,10 +25,7 @@ describe('Skeleton', () => {
     assert.ok(preset.theme.extend.animation['skeleton-sweep']);
   });
 
-  /**
-   * The last line of a real paragraph is short. A stack of equal full-width
-   * bars is the tell that gives away a fake skeleton.
-   */
+  /** A stack of equal full-width bars is the tell that gives away a fake skeleton. */
   it('ends a paragraph on a short line', () => {
     assert.match(skeleton, /index === lines - 1 \? 'w-\[62%\]'/);
   });

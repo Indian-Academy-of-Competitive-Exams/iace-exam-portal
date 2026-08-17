@@ -25,21 +25,12 @@ describe('formatFileSize', () => {
 });
 
 describe('FileDropzone', () => {
-  /**
-   * The non-obvious line, and the reason two hand-written copies were a risk:
-   * a file input holds the last chosen path, so choosing the SAME file twice
-   * fires `change` once. Whoever is re-picking has usually just fixed the file
-   * and saved over the top — to them the second pick simply does nothing.
-   */
+  /** A file input holds the last path, so choosing the same file twice fires `change` once. */
   it('clears the input so the same file can be chosen twice', () => {
     assert.match(source, /event\.target\.value = '';/);
   });
 
-  /**
-   * The input is `sr-only`, so the focus ring it would paint is invisible. The
-   * label has to carry it or the control can be tabbed to with nothing on
-   * screen saying where the focus went.
-   */
+  /** The input is sr-only, so the ring it would paint is invisible. */
   it('paints the focus ring on the label, since the input is hidden', () => {
     assert.match(source, /focus-within:border-ring focus-within:shadow-focus/);
   });

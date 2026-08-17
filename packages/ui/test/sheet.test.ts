@@ -19,12 +19,7 @@ const shell = readFileSync(
 );
 
 describe('Sheet', () => {
-  /**
-   * It is the dialog primitive in a different shape, and that IS the point. A
-   * hand-built drawer is an overlay plus a panel, and everything that makes it
-   * safe is invisible: the focus trap, Escape, the scroll lock, the inert
-   * background, and focus returning to the button that opened it.
-   */
+  /** What makes a drawer safe is invisible: focus trap, Escape, scroll lock, inert background. */
   it('is built on the dialog primitive, not on a positioned div', () => {
     assert.match(sheet, /@radix-ui\/react-dialog/);
     assert.match(sheet, /DialogPrimitive\.Portal/);
@@ -48,11 +43,7 @@ describe('the mobile nav drawer', () => {
     );
   });
 
-  /**
-   * The panel's visible heading is a logo, which announces nothing. Without a
-   * title a screen reader arrives in an unnamed region and has to guess what it
-   * has been dropped into.
-   */
+  /** The visible heading is a logo, which announces nothing. */
   it('has a name, even though its heading is a logo', () => {
     assert.match(shell, /<SheetTitle className="sr-only">Navigation<\/SheetTitle>/);
   });

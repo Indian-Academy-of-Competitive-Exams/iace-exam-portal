@@ -2,15 +2,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Spinner } from '@iace/ui';
 
 /**
- * The gate in front of every authed route.
- *
- * Three states, and the middle one is the whole point: while the identity is
- * still being read, this shows a spinner rather than deciding. Without that,
- * a reload of any authed page bounces to the login screen for a frame before
- * bouncing back — which looks like being signed out at random.
- *
- * `state.from` is what lets the login screen return the user to where they were
- * going instead of to the dashboard.
+ * The gate in front of every authed route. Waits rather than deciding while the
+ * identity loads, or a reload bounces to login for a frame. `state.from` is the way back.
  */
 export function ProtectedRoute({
   isAuthenticated,

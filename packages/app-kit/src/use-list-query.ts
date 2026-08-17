@@ -4,19 +4,8 @@ import { PAGE_SIZE_OPTIONS, type Paginated, type PageSizeOption } from '@iace/co
 import { usePageSize } from './use-page-size';
 
 /**
- * A stable identity for one set of filters.
- *
- * Both halves are load-bearing, and both failures look like the table jumping
- * back to page 1 for no reason a reader could name:
- *
- *  - **Keys are sorted.** Callers build these objects with spreads whose shape
- *    depends on the filter (`{ ...STATUS_QUERY[status], q }`), so the same
- *    logical filter set can arrive with its keys in a different order.
- *  - **`undefined` is dropped.** `{ q: undefined }` and `{}` are the same
- *    question — a filter that is not set — and must not read as a change.
- *
- * Exported because it is the whole correctness of the page reset, and it is
- * pure, so it can be asserted without rendering anything.
+ * A stable identity for one set of filters: keys sorted (callers build them with
+ * spreads) and `undefined` dropped (`{ q: undefined }` and `{}` are the same question).
  */
 export function filterKey(filters: object): string {
   return JSON.stringify(
@@ -31,14 +20,7 @@ export interface ListQueryResult<TItem> {
   total: number;
   page: number;
   pageSize: PageSizeOption;
-  /**
-   * Whether to show a loading state — a FIRST load with nothing to show yet.
-   *
-   * Not `isPending`, which stays true for a query that is switched off and
-   * would leave such a list saying "Loading…" for ever. And not `isFetching`,
-   * which is true while the next page is on its way and would blank a table
-   * that is still perfectly readable.
-   */
+  /** A first load with nothing to show. Not `isPending` (true when disabled) or `isFetching`. */
   isLoading: boolean;
   /** Whether a page has ever arrived — the footer stays hidden until one has. */
   hasLoaded: boolean;
@@ -56,25 +38,8 @@ export interface ListQueryResult<TItem> {
 }
 
 /**
- * A filtered, paginated list — the pattern behind every table in the admin app.
- *
- * It exists for three behaviours that are individually small and were
- * individually forgotten at least once:
- *
- * 1. **The page resets when the filters change.** Page 4 of the old result set
- *    is usually past the end of the new one, and an empty table reads as
- *    "there are none" rather than "you are too far in". Every screen was doing
- *    this by calling `setPage(1)` inside each filter handler — which works
- *    until someone adds a seventh filter and only wires six.
- * 2. **The rows hold still while the next page loads** (`keepPreviousData`).
- *    Without it the table empties on every keystroke of a search box and the
- *    page height jumps under the reader's cursor.
- * 3. **The page size comes from `usePageSize`**, so it is per-list and capped
- *    to what the API will actually accept.
- *
- * The FILTERS stay the caller's, because where they live is the caller's
- * decision — the admin screens keep them in the URL so a link into a screen and
- * the controls on it are the same state, and a future screen might not.
+ * A filtered, paginated list: the page resets when the filters change, the rows hold
+ * still while the next page loads, and the size comes from `usePageSize`.
  */
 export function useListQuery<TItem, TFilters extends object>(options: {
   /** Include everything the fetch depends on EXCEPT page and pageSize. */
@@ -88,15 +53,7 @@ export function useListQuery<TItem, TFilters extends object>(options: {
   const [pageSize, choosePageSize] = usePageSize();
   const [page, setPage] = useState(1);
 
-  /**
-   * Reset during render rather than in an effect.
-   *
-   * An effect would let one render escape with the new filters and the old page
-   * number — which is a request for page 4 of a result set that has three, and
-   * a visible flash of "nothing found" before the corrected request lands. This
-   * is React's documented adjust-state-on-change pattern: the extra render
-   * happens before anything is committed to the screen.
-   */
+  /** Reset during render, not in an effect: an effect lets one render escape with the old page. */
   const key = filterKey(filters);
   const [lastKey, setLastKey] = useState(key);
   if (key !== lastKey) {
@@ -133,9 +90,7 @@ export function useListQuery<TItem, TFilters extends object>(options: {
     setPage,
     setPageSize,
     pagination: {
-      // The SERVED page and size, not the requested ones: while the next page
-      // is in flight the rows on screen are still the old ones, and a footer
-      // that has already moved on describes a table nobody is looking at.
+      // The served page and size, not the requested: the rows on screen are still the old ones.
       page: query.data?.page ?? page,
       pageSize: query.data?.pageSize ?? pageSize,
       total,

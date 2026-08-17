@@ -2,21 +2,11 @@ import { AppException, type ErrorCode } from '@iace/contracts';
 import { type FieldValues, type Path, type UseFormSetError } from 'react-hook-form';
 
 /**
- * Bridges the API's `fieldErrors` into react-hook-form.
- *
- * The server validates with the same zod schema the form does, so when it
- * rejects something the client let through — a burnt OTP, a PIN the lockout
- * refuses — the message belongs on the field, not in a banner far from it.
- * Keys the form does not know (and the `_` catch-all for whole-body issues)
- * fall through to `bannerMessage` instead of being dropped.
+ * Bridges the API's `fieldErrors` into react-hook-form. Keys the form does not know,
+ * and the `_` catch-all, fall through to `bannerMessage` rather than being dropped.
  */
 
-/**
- * The server keys nested problems by their full path (`profile.dob`), while a
- * form registers flat names (`dob`). Matching on the leaf as well as the whole
- * key lets one message reach the input that caused it without the form having
- * to know how the request body was nested.
- */
+/** The server keys by full path (`profile.dob`); a form registers the leaf (`dob`). */
 function messagesFor(fieldErrors: Record<string, string[]>, field: string): string[] | undefined {
   if (fieldErrors[field]) return fieldErrors[field];
   const match = Object.keys(fieldErrors).find((key) => key.split('.').at(-1) === field);

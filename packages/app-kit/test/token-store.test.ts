@@ -2,14 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createTokenStore, type KeyValueStorage } from '../src/token-store';
 
-/**
- * A storage adapter with a Map behind it.
- *
- * It used to be a `globalThis.localStorage` stand-in installed before each
- * test. It is a plain object now because storage is an INJECTED adapter — the
- * package no longer reaches for a global, which is what lets a future Expo app
- * import it (docs/03 §3). That the tests got simpler is the tell.
- */
+/** A storage adapter with a Map behind it. */
 function fakeStorage(): KeyValueStorage & { entries: Map<string, string> } {
   const entries = new Map<string, string>();
   return {
@@ -37,11 +30,7 @@ describe('createTokenStore', () => {
     assert.deepEqual([...storage.entries.keys()], ['iace.admin.auth']);
   });
 
-  /**
-   * The failure this exists to prevent. Admin and test are two SPAs on ONE
-   * origin: a shared key means whichever loaded last silently clobbers the
-   * other's session, and an admin's token gets handed to a student's requests.
-   */
+  /** Two SPAs on one origin: a shared key hands an admin's token to a student's requests. */
   it('keeps two apps on one origin from seeing each other', () => {
     const storage = fakeStorage();
     const admin = createTokenStore('iace.admin.auth', storage);
@@ -75,9 +64,7 @@ describe('createTokenStore', () => {
   });
 
   it('survives a storage that refuses to answer', () => {
-    // Safari in private mode, a quota error, a SecureStore that is locked. The
-    // session is unreadable, which is the same as signed out — it must not
-    // throw out of every single request.
+    // Safari private mode, a quota error, a locked SecureStore: unreadable is signed out.
     const hostile: KeyValueStorage = {
       getItem: () => {
         throw new Error('storage unavailable');

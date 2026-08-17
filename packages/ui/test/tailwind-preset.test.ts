@@ -15,11 +15,7 @@ function resolve(path: string): ColorFn {
   return node as ColorFn;
 }
 
-/**
- * Tailwind asks for a colour in two different shapes, and conflating them broke
- * every colour utility in the app at once — silently, because an invalid
- * declaration is dropped and light mode's fallbacks look like the theme.
- */
+/** Tailwind asks for a colour in two shapes; conflating them drops every declaration. */
 describe('preset colour tokens', () => {
   const cases = [
     'background',

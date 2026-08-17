@@ -5,17 +5,8 @@ import { isNavSection, type NavItem } from '../../src';
 import { NavLeaf } from './sidebar-nav';
 
 /**
- * The mobile nav: drill-down, never a side panel.
- *
- * A panel beside a drawer has nowhere to go on a 390px screen, and an
- * accordion buries the thing you were reaching for under the section above it.
- * Drilling gives every level the full width and one obvious way back, which is
- * the pattern every phone OS already taught the reader.
- *
- * Depth is one level, matching the desktop panel: a child with children of its
- * own renders as a labelled group in the same list rather than a second drill.
- * Two identical-looking back arrows that mean different things is how people
- * get lost.
+ * The mobile nav: drill-down, one level deep. A child with children of its own
+ * renders as a labelled group rather than a second drill.
  */
 export function DrawerNav({
   items,

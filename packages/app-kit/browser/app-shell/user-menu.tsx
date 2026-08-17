@@ -13,21 +13,8 @@ import {
 import { type NavItem } from '../../src';
 
 /**
- * Who is signed in, at the bottom of the sidebar, with the things you do from
- * there: the account screens this app has, and leaving.
- *
- * Bottom rather than top-right because that is where the identity belongs in a
- * sidebar shell — the top bar is for the brand and the theme, and putting the
- * account in both places invites the reader to wonder whether they differ.
- *
- * The entries are a list rather than a fixed Profile link because what belongs
- * to an account differs per app: a student has a profile AND a PIN to change,
- * an admin signs in with an emailed code and has neither.
- *
- * A menu, not a popover holding links. The popover it used to be closed on
- * Escape and on a click outside — but it was an anonymous box: it announced no
- * count and no position, and the arrow keys did nothing in it. This is a list
- * of choices, so it says so.
+ * Who is signed in, at the bottom of the sidebar, with the account screens and Log out.
+ * A menu rather than a popover, so it announces a count and answers the arrow keys.
  */
 export function UserMenu({
   label,

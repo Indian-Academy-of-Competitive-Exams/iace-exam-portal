@@ -18,13 +18,7 @@ import { DrawerNav } from './app-shell/drawer-nav';
 import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
 
-/**
- * How wide the CONTENT runs beside the sidebar.
- *
- * A named choice rather than a class, because it is a real difference between
- * the two apps: a student arrives to do one thing, and a page running the full
- * width of a monitor makes finding it harder, not easier.
- */
+/** How wide the content runs beside the sidebar. */
 const WIDTHS = {
   narrow: 'max-w-5xl',
   wide: 'max-w-6xl',
@@ -41,41 +35,18 @@ export interface AppShellProps {
   userLabel: string;
   /** Rendered in the user menu button; falls back to a generic person icon. */
   userAvatar?: ReactNode;
-  /**
-   * Account screens listed in the user menu above Log out — profile, change
-   * PIN, whatever this app has. Leaves only. Empty leaves just Log out.
-   */
+  /** Account screens above Log out. Leaves only; empty leaves just Log out. */
   userMenuItems?: readonly NavItem[];
   /** Beside the brandmark — the admin app labels itself. */
   brandSuffix?: ReactNode;
-  /**
-   * Permission check for `NavItem.featureKey`.
-   *
-   * Optional, and its absence is the degradation path: an app that has no
-   * permissions (the student portal) passes nothing and every section shows.
-   * See `filterNavByPermission` — hiding nav is not the security boundary.
-   */
+  /** Optional: an app with no permissions passes nothing and every section shows. */
   can?: (featureKey: string) => boolean;
   width?: ShellWidth;
 }
 
 /**
- * The signed-in chrome: a top bar, a persistent left sidebar, and the page.
- *
- * Shared because it is chrome, and chrome that differs between two apps of one
- * platform reads as two products. What is genuinely per-app is injected — the
- * nav, who is signed in, the content width — which is the point of the split:
- * @iace/app-kit must not know that a route called "Groups" exists.
- *
- * The desktop and mobile structures are genuinely different components rather
- * than one markup styled two ways. Rendering both and hiding one with CSS would
- * put two focus traps and two tab orders in the document at once, one of them
- * invisible — which is how a keyboard user ends up tabbing into a drawer that
- * is not on screen.
- *
- * The CBT exam screen is deliberately NOT wrapped in this. A timed exam is
- * full-bleed and has its own chrome; a sidebar there is somewhere to click by
- * accident.
+ * The signed-in chrome: top bar, sidebar, page. Desktop and mobile are different
+ * components, not one markup styled twice — rendering both would give two tab orders.
  */
 export function AppShell({
   nav,
@@ -140,10 +111,8 @@ export function AppShell({
           <aside
             aria-label="Sections"
             className={cn(
-              // `sticky`, not `relative` — it is already a positioned ancestor,
-              // so the edge button anchors to it. Adding `relative` too looks
-              // harmless and is not: tailwind-merge drops one of two position
-              // utilities, so the source would claim a class that never lands.
+              // `sticky` is already the positioned ancestor; adding `relative` makes
+              // tailwind-merge drop one of the two.
               'sticky top-[calc(var(--control-h-lg)+var(--space-4))] flex h-[calc(100vh-4rem)]',
               'shrink-0 flex-col border-r border-border bg-surface p-[--sidebar-pad] transition-[width]',
               collapsed ? 'w-[--sidebar-w-rail]' : 'w-[--sidebar-w]',

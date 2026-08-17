@@ -6,11 +6,7 @@ import { plural } from '../src/lib/utils';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
-/**
- * Calls that destroy a record, revoke somebody's access, or create a way into
- * the product. Matched on the API surface rather than on wording, because the
- * button label is the part most likely to be reworded.
- */
+/** Matched on the API surface, not on wording — the label is what gets reworded. */
 const NEEDS_CONFIRMING = [
   /api\.admin\.\w+\.remove\(/,
   /api\.admin\.\w+\.setActive\(/,
@@ -21,30 +17,8 @@ const NEEDS_CONFIRMING = [
 ] as const;
 
 /**
- * Anything that deletes, revokes, grants or changes what somebody can do asks
- * first — in a dialog that says what it does, not a chip that says "Delete?".
- *
- * The wording is the point as much as the extra click. "Delete?" beside a row
- * is a speed bump; it cannot say that the group is how 240 students reach their
- * tests, that a retired branch would keep everything while a deleted one is
- * refused outright, or that a super admin can create more super admins. A
- * reader who knew all that would sometimes stop, and the whole reason to
- * interrupt them is the times they would.
- *
- * Reversibility is not the test — visibility is. Retiring a branch is undone by
- * the button beside it and still asks, because nothing on that row changes
- * except a badge while the consequence lands weeks later on somebody else, as a
- * branch that will not accept the group they are creating.
- *
- * One thing deliberately does NOT ask, and it is worth naming so the omission
- * reads as a decision: committing an import, whose screen is built around a
- * preview listing every row and what would happen to it. Asking after showing
- * the answer adds a step and no information.
- *
- * The permission grid used to be a second exemption, on the grounds that a
- * dialog per checkbox would make setting up an admin unusable. That was true,
- * and the answer was to stop asking per checkbox rather than to stop asking:
- * the ticks are a draft now, and the SAVE is the one deliberate step.
+ * Anything that deletes, revokes, grants or changes what somebody can do asks first.
+ * The one exemption is the import commit, whose screen already previews every row.
  */
 describe('destructive actions', () => {
   const appFiles = globSync('apps/*/src/**/*.tsx', { cwd: REPO_ROOT });
@@ -63,17 +37,8 @@ describe('destructive actions', () => {
     );
   });
 
-  /**
-   * The chip-sized confirm these replaced. It came back once already as a
-   * second copy in another screen, so it is worth naming: the failure is not
-   * one bad row, it is that copying it looked like the way to confirm here.
-   */
-  /**
-   * A toggle asks in BOTH directions. One that sometimes asks and sometimes
-   * fires on a single click is one people stop reading — and the reverse
-   * direction is usually where the fact nothing else says lives: reactivating
-   * an admin restores their sign-in and not the grants that were dropped.
-   */
+  /** The chip-sized confirm these replaced, which had already been copied once. */
+  /** A toggle asks both ways: the reverse direction carries the fact nothing else says. */
   it('ask in both directions of a toggle', () => {
     const toggles = {
       'apps/admin/src/routes/admins.tsx': 'Reactivate',
@@ -117,11 +82,7 @@ describe('destructive actions', () => {
   });
 });
 
-/**
- * "1 students" reads as a bug in the number rather than in the sentence, and a
- * confirmation is the last place to look careless about a count somebody is
- * about to act on.
- */
+/** "1 students" reads as a bug in the number rather than in the sentence. */
 describe('plural', () => {
   it('agrees with its count', () => {
     assert.equal(plural(0, 'student'), '0 students');

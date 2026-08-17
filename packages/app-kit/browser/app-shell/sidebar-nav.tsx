@@ -11,14 +11,7 @@ import {
   type NavItem,
 } from '../../src';
 
-/**
- * One row in the sidebar, whatever it turns out to be.
- *
- * The chevron is the contract with the reader: **down means it expands below,
- * right means a panel opens beside**. Getting that wrong is worse than having
- * no affordance, because the reader braces for the wrong thing — a sidebar
- * that jumps when they expected a panel has moved the item they were aiming at.
- */
+/** One row in the sidebar. The chevron points right: a panel opens beside, never below. */
 const ROW = [
   'flex w-full items-center gap-3 rounded-md px-3 text-sm font-medium',
   'h-[--nav-item-h] transition-colors',
@@ -62,24 +55,8 @@ function Leaf({
 }
 
 /**
- * A section, opened as a popover anchored to its own row.
- *
- * Both layouts open beside the sidebar rather than expanding into it. An
- * accordion is the obvious way to show children and the wrong one here: it
- * pushes every section below it down the sidebar, so the item you were aiming
- * at moves out from under the pointer at the moment you commit to it, and on a
- * short viewport the thing you opened scrolls out of view. A popover leaves the
- * sidebar exactly where it was.
- *
- * What `resolveNavLayout` still decides is the SHAPE, which is a real
- * difference: INLINE is sized to its contents, PANEL is a fixed width that
- * scrolls at 80vh and can carry labelled groups. A three-item popup has no
- * business being 17rem wide and 80vh tall, and a twenty-item one cannot be
- * anything else.
- *
- * Both therefore point RIGHT. The down-chevron is gone with the accordion it
- * described: nothing expands below any more, and an affordance that promises a
- * behaviour the component no longer has is worse than none.
+ * A section, opened as a popover beside its row so the sidebar never moves.
+ * `resolveNavLayout` picks the shape: INLINE sized to contents, PANEL fixed and scrolling.
  */
 function SectionPopover({
   item,
@@ -97,9 +74,7 @@ function SectionPopover({
   const [open, setOpen] = useState(false);
 
   const children = item.children ?? [];
-  // One level only. A child with children of its own becomes a labelled GROUP
-  // inside this same popover — a second cascade is a menu you have to chase
-  // with the pointer, and it is unusable on a trackpad.
+  // One level only: a child with children becomes a labelled group in this popover.
   const groups = children.filter(isNavSection);
   const loose = children.filter((child) => !isNavSection(child));
 
@@ -137,9 +112,7 @@ function SectionPopover({
           <Popover.Content
             side="right"
             align="start"
-            // Aligned to the row it came from and one step off the sidebar, so
-            // it reads as continuous with the section rather than as a menu
-            // that happens to be nearby.
+            // Aligned to its row and one step off the sidebar.
             sideOffset={4}
             collisionPadding={8}
             className={cn(
@@ -184,13 +157,7 @@ function SectionPopover({
   );
 }
 
-/**
- * The desktop nav list. `collapsed` is the icon rail.
- *
- * Every section opens as a popover; the resolved layout chooses whether it is
- * sized to its contents or a fixed scrolling panel. In the rail everything is
- * the wide shape, because a popover sized to a 56px trigger is not a size.
- */
+/** The desktop nav list. `collapsed` is the icon rail, where every popover is the wide shape. */
 export function SidebarNav({
   items,
   pathname,

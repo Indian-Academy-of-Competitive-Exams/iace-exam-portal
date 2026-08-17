@@ -4,16 +4,8 @@ import { ThemeProvider, Toaster, TooltipProvider } from '@iace/ui';
 import { type ReactNode } from 'react';
 
 /**
- * The provider stack every IACE SPA runs inside, in the order that matters.
- *
- * The order is not arbitrary and is the reason this is shared rather than
- * copied: the query client has to be outside the auth provider (which queries),
- * the theme has to be outside everything it paints, and the `<Toaster />` has to
- * be inside the theme but outside the router — a toast raised by a mutation
- * during a navigation must not unmount with the route that raised it.
- *
- * `children` goes inside the router, so an app's own auth provider and routes
- * both see it.
+ * The provider stack, in the order that matters: query client outside auth,
+ * theme outside everything it paints, Toaster inside the theme but outside the router.
  */
 export function AppProviders({
   queryClient,

@@ -10,12 +10,7 @@ const spinner = readFileSync(
 );
 
 describe('Spinner', () => {
-  /**
-   * A spinner is a picture. Given a label it becomes a live region and says
-   * what is being waited for; without one it is hidden entirely, because the
-   * text beside it — "Reading the file…" — already carries the announcement and
-   * marking both announces the wait twice.
-   */
+  /** Marking both the glyph and the text beside it announces the wait twice. */
   it('announces itself only when nothing beside it does', () => {
     // <output> carries the live region natively; the glyph inside stays hidden
     // so the label is announced once, not alongside "graphic".
@@ -30,21 +25,10 @@ describe('Spinner', () => {
   });
 });
 
+/** Every remaining `<Loader2>` belongs to Button or to Spinner itself. */
 /**
- * `<Loader2 className="animate-spin" />` written out by hand was the same wait
- * drawn at four different sizes, sometimes with a colour and sometimes without.
- * Every remaining one belongs to Button (which owns its own pending state) or
- * to Spinner itself.
- */
-/**
- * A spinner is for an action somebody just took. Content arriving into a page
- * has a shape — a table, a list, a card, a form — and `Skeleton` holds it while
- * it arrives; a spinner in its place collapses the region to a dot and then
- * throws the page around when the data lands.
- *
- * The four that remain are all actions or shapeless waits: reading a chosen
- * file (twice), fetching the next page of an already-open list, and the app
- * deciding whether anyone is signed in before there is a page at all.
+ * A spinner is for an action; content arriving into a page uses `Skeleton`.
+ * The four allowed below are actions or waits with no shape to hold.
  */
 describe('spinners left in the product', () => {
   const ALLOWED = new Set([

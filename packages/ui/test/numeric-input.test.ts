@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { digitsOnly } from '../src/components/ui/numeric-input';
 
-/**
- * The filtering rule behind NumericInput. `type="tel"` and `inputMode` only ask
- * politely — a physical keyboard ignores both — so this is what actually keeps
- * a letter out of a mobile-number field.
- */
+/** `type="tel"` and `inputMode` only ask; this is what keeps a letter out. */
 describe('digitsOnly', () => {
   it('drops everything that is not a digit', () => {
     assert.equal(digitsOnly('abcdef'), '');

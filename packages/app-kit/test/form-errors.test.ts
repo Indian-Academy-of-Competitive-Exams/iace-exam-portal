@@ -22,11 +22,7 @@ describe('applyFieldErrors', () => {
     assert.equal(set.mobile, 'That is not a valid mobile number');
   });
 
-  /**
-   * The server keys nested problems by their full path (`profile.dob`) while a
-   * form registers flat names (`dob`). Without leaf matching the message is
-   * dropped, the field is never highlighted, and the form looks inert.
-   */
+  /** Without leaf matching, a `profile.dob` message never reaches the `dob` input. */
   it('matches a nested server path against the flat name a form registered', () => {
     const set: Record<string, string> = {};
     applyFieldErrors(

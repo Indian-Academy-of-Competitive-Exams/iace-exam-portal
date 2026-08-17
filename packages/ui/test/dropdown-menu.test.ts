@@ -14,11 +14,7 @@ const userMenu = readFileSync(
 );
 
 describe('DropdownMenu', () => {
-  /**
-   * Radix moves `data-highlighted` with the arrow keys as well as the pointer.
-   * Styling `hover:` alone leaves a menu that looks inert to anyone driving it
-   * from the keyboard — the selection moves and nothing on screen follows it.
-   */
+  /** `hover:` alone leaves the keyboard selection moving with nothing following it. */
   it('styles the highlight, not just the hover', () => {
     assert.match(menu, /data-\[highlighted\]:bg-muted/);
     assert.match(menu, /data-\[highlighted\]:bg-destructive\/10/);
@@ -27,22 +23,13 @@ describe('DropdownMenu', () => {
 });
 
 describe('the user menu', () => {
-  /**
-   * It was a Popover holding a column of links. That closed on Escape and on a
-   * click outside, so it was not broken — but a popover is an anonymous box: it
-   * announces no item count and no position within the list, and the arrow keys
-   * do nothing inside it. A list of choices should say that it is one.
-   */
+  /** A popover announces no item count and no position, and ignores the arrow keys. */
   it('is a menu rather than a popover full of links', () => {
     assert.ok(!/react-popover/.test(userMenu), 'the account menu must not be a bare popover');
     assert.match(userMenu, /<DropdownMenuItem/);
   });
 
-  /**
-   * An <a href> reloads the SPA, throwing away the query cache to move between
-   * two screens of the same app. `asChild` is what lets a router Link be the
-   * menu item without Radix losing the keyboard behaviour.
-   */
+  /** An <a href> reloads the SPA and throws away the query cache. */
   it('navigates with the router, not with the browser', () => {
     assert.match(userMenu, /<DropdownMenuItem key=\{entry\.label\} asChild>\s*<Link/);
   });

@@ -10,10 +10,7 @@ const preset = createRequire(import.meta.url)('../tailwind.preset.js') as {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
-/**
- * Every colour name the preset actually declares, in the shape Tailwind builds
- * a class from: `primary`, `primary-hover`, `muted-foreground`, `series-1`.
- */
+/** Every declared colour, in the shape Tailwind builds a class from. */
 function declaredColours(): Set<string> {
   const names = new Set<string>();
   for (const [key, value] of Object.entries(preset.theme.extend.colors)) {
@@ -45,11 +42,7 @@ const COLOUR_UTILITIES = [
   'placeholder',
 ] as const;
 
-/**
- * Class-ish tokens out of a source file: what sits inside quotes and template
- * literals, split on whitespace. Deliberately loose — a false hit lands on a
- * name that is not a colour root and is dropped below.
- */
+/** Class-ish tokens, split on whitespace. Loose — a false hit is dropped below. */
 function classCandidates(source: string): string[] {
   return source.split(/[\s'"`{}()[\],;]+/).filter(Boolean);
 }
@@ -70,19 +63,8 @@ function sharedSourceFiles(): string[] {
 }
 
 /**
- * A colour class Tailwind cannot resolve is NOT a build error. The class matches
- * no rule, no CSS is emitted, and the element quietly inherits whatever it would
- * have had anyway — so it reads as a design decision rather than a typo.
- *
- * That is exactly how `text-foreground-secondary` survived in the app shell:
- * the preset declared `foreground` as a single colour with no `secondary` under
- * it, so two of the shell's labels rendered at full foreground weight while the
- * source said otherwise, and nothing anywhere complained.
- *
- * The check is narrow on purpose. It only looks at classes whose ROOT is one of
- * our own colours — `foreground-…`, `primary-…`, `exam-…` — because those are
- * the ones where a plausible-looking shade can be invented. Tailwind's own
- * palette and every non-colour utility are left alone.
+ * An unresolvable colour class is not a build error — no CSS is emitted and the element
+ * inherits. Scoped to our own roots, where a plausible shade can be invented.
  */
 describe('preset colour classes', () => {
   const colours = declaredColours();
