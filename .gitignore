@@ -96,3 +96,6 @@ sonar-project.properties
 
 # sonar-scanner working directory
 .scannerwork/
+
+# Brainstorming visual companion (local mockups)
+.superpowers/
