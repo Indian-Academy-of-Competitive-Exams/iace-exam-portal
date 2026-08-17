@@ -16,6 +16,8 @@ const NEEDS_CONFIRMING = [
   /api\.admin\.\w+\.setActive\(/,
   /api\.admin\.admins\.create\(/,
   /api\.admin\.sync\./,
+  /api\.admin\.features\.revoke\(/,
+  /api\.admin\.features\.grant\(/,
 ] as const;
 
 /**
@@ -34,16 +36,15 @@ const NEEDS_CONFIRMING = [
  * except a badge while the consequence lands weeks later on somebody else, as a
  * branch that will not accept the group they are creating.
  *
- * Two things deliberately do NOT ask, both because the effect is already in
- * front of the reader, and both worth naming so the omissions read as decisions:
+ * One thing deliberately does NOT ask, and it is worth naming so the omission
+ * reads as a decision: committing an import, whose screen is built around a
+ * preview listing every row and what would happen to it. Asking after showing
+ * the answer adds a step and no information.
  *
- *   · Committing an import — the screen is built around a preview listing every
- *     row and what would happen to it. Asking after showing the answer adds a
- *     step and no information.
- *   · The permission grid — the checkbox IS the state, the admin it applies to
- *     is named at the top of the panel, and one tick is undone by the same tick.
- *     A dialog per checkbox would make setting up an admin unusable, which is
- *     how people learn to click through the dialogs that matter.
+ * The permission grid used to be a second exemption, on the grounds that a
+ * dialog per checkbox would make setting up an admin unusable. That was true,
+ * and the answer was to stop asking per checkbox rather than to stop asking:
+ * the ticks are a draft now, and the SAVE is the one deliberate step.
  */
 describe('destructive actions', () => {
   const appFiles = globSync('apps/*/src/**/*.tsx', { cwd: REPO_ROOT });

@@ -43,14 +43,13 @@ describe('Spinner', () => {
  * throws the page around when the data lands.
  *
  * The four that remain are all actions or shapeless waits: reading a chosen
- * file, saving a permission toggle, fetching the next page of an open list, and
- * the app deciding whether anyone is signed in before there is a page at all.
+ * file (twice), fetching the next page of an already-open list, and the app
+ * deciding whether anyone is signed in before there is a page at all.
  */
 describe('spinners left in the product', () => {
   const ALLOWED = new Set([
     'apps/admin/src/routes/import-students.tsx',
     'apps/admin/src/routes/import-group-members.tsx',
-    'apps/admin/src/routes/permissions.tsx',
     'packages/ui/src/components/ui/combobox.tsx',
     'packages/app-kit/browser/protected-route.tsx',
   ]);
