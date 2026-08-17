@@ -118,7 +118,10 @@ export function AppShell({
               collapsed ? 'w-[--sidebar-w-rail]' : 'w-[--sidebar-w]',
             )}
           >
-            <nav className="min-h-0 flex-1 overflow-y-auto">
+            {/* mt-8 clears the collapse toggle below, which hangs off the right
+                edge at top-3 and is 24px tall: without it the first nav row sits
+                level with the button and reads as attached to that item. */}
+            <nav className="mt-8 min-h-0 flex-1 overflow-y-auto">
               <SidebarNav items={items} pathname={pathname} collapsed={collapsed} />
             </nav>
 

@@ -38,9 +38,15 @@ export function UserMenu({
           type="button"
           title={collapsed ? label : undefined}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm',
+            'flex items-center gap-2 rounded-md text-sm',
             'text-foreground-secondary hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
-            collapsed && 'justify-center px-0',
+            collapsed
+              ? // A circle wider than the avatar, so the hover tint reads as a ring
+                // around it. `px-0` left the background exactly the avatar's width,
+                // touching its border on both sides; and a rounded-md box behind a
+                // round image is two different shapes fighting.
+                'size-10 shrink-0 justify-center self-center rounded-full'
+              : 'w-full px-2 py-2',
           )}
         >
           {avatar ?? <User className="size-4 shrink-0" aria-hidden />}
