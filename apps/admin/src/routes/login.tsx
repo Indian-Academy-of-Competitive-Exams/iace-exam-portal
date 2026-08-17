@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Info, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Info, Mail, ShieldCheck } from 'lucide-react';
 import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import {
   Alert,
@@ -131,8 +131,7 @@ function EmailStep({
             )}
           </Field>
 
-          <Button type="submit" disabled={requestOtp.isPending}>
-            {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={requestOtp.isPending}>
             Send code
           </Button>
         </form>
@@ -216,8 +215,7 @@ function CodeStep({
             </Alert>
           ) : null}
 
-          <Button type="submit" disabled={verify.isPending}>
-            {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={verify.isPending}>
             Verify &amp; continue
           </Button>
 

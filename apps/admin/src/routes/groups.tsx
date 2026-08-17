@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
+import { Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
 import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
 import {
   Badge,
@@ -247,8 +247,7 @@ function NewGroupCard({
           </FormField>
 
           <FormActions>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={create.isPending}>
               Create
             </Button>
             {/* Cancel is neutral grey, never red — it destroys nothing. */}
@@ -284,7 +283,7 @@ function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
         <Button
           size="sm"
           variant="destructive"
-          disabled={remove.isPending}
+          loading={remove.isPending}
           onClick={() => remove.mutate()}
         >
           Yes, delete

@@ -1,7 +1,7 @@
 import { Controller, useForm, type Control, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { KeyRound, Loader2 } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
@@ -105,8 +105,7 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
             hint={`${PIN_LENGTH} digits.`}
           />
 
-          <Button type="submit" disabled={change.isPending}>
-            {change.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={change.isPending}>
             Save new PIN
           </Button>
         </form>

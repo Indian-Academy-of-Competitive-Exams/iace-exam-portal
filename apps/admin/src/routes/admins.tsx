@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Loader2, Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
+import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
   PAGE_SIZE_OPTIONS,
@@ -217,8 +217,13 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
 
   if (!admin.isActive) {
     return (
-      <Button variant="outline" size="sm" disabled={busy} onClick={() => setActive.mutate()}>
-        {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserCheck aria-hidden />}
+      <Button
+        variant="outline"
+        size="sm"
+        icon={<UserCheck aria-hidden />}
+        loading={busy}
+        onClick={() => setActive.mutate()}
+      >
         Reactivate
       </Button>
     );
@@ -226,8 +231,13 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
 
   return (
     <>
-      <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
-        {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserMinus aria-hidden />}
+      <Button
+        variant="destructive"
+        size="sm"
+        icon={<UserMinus aria-hidden />}
+        loading={busy}
+        onClick={() => setConfirming(true)}
+      >
         Deactivate
       </Button>
       {/* A confirm, because it signs somebody out and drops every grant they
@@ -304,8 +314,7 @@ function NewAdminCard({
           </FormField>
 
           <FormActions>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={create.isPending}>
               Create
             </Button>
             <Button type="button" variant="secondary" onClick={onCancel}>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Loader2, Plus, Power, Trash2, Users } from 'lucide-react';
+import { Plus, Power, Trash2, Users } from 'lucide-react';
 import { createBranchSchema, type Branch, type CreateBranchInput } from '@iace/contracts';
 import {
   Alert,
@@ -203,8 +203,7 @@ function NewBranchCard({
           </FormField>
 
           <FormActions>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={create.isPending}>
               Create
             </Button>
             {/* Cancel is neutral grey, never red — it destroys nothing. */}

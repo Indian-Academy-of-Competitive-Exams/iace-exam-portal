@@ -254,8 +254,7 @@ export function ProfilePage() {
           />
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={save.isPending || !form.formState.isDirty}>
-              {save.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={save.isPending} disabled={!form.formState.isDirty}>
               Save changes
             </Button>
             {/* Cancel is neutral grey, never red — it destroys nothing. */}

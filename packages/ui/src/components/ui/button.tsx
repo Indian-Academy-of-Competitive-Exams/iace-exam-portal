@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /**
@@ -41,13 +42,77 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   /** Render as the child element (e.g. a router <Link>) instead of a <button>. */
   asChild?: boolean;
+  /**
+   * The leading glyph. A prop rather than a child because `loading` swaps it
+   * for the spinner — the icon and the spinner are the same slot, and a button
+   * showing both says the action is running twice.
+   */
+  icon?: React.ReactNode;
+  /**
+   * The action this button started has not come back yet.
+   *
+   * Disables as well as spins: the whole point is that a second click cannot
+   * land, and `disabled` is the only thing that actually stops one. `aria-busy`
+   * says the same to a screen reader, which sees no spinner.
+   */
+  loading?: boolean;
 }
 
+/**
+ * `loading` is a prop, not a pattern each screen re-types.
+ *
+ * It was `{m.isPending ? <Loader2 className="animate-spin" /> : <Icon />}` in a
+ * dozen places, which is a design decision (which spinner, what size, does the
+ * button disable, does anything announce it) copied by hand a dozen times — and
+ * the copies had already drifted: some disabled the button, some did not, none
+ * set aria-busy, so a screen reader was told nothing was happening at all.
+ */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      icon,
+      loading = false,
+      disabled,
+      children,
+      // A bare <button> in a form submits it. Every button we have that means
+      // to submit says so; the other forty do not, and one of them landing
+      // inside a form later would post it on a click meant to open a panel —
+      // which looks like a bug in the form, not in the button. Not applied to
+      // the asChild branch: `type` on an <a> is a MIME hint, not a role.
+      type = 'button',
+      ...props
+    },
+    ref,
+  ) => {
+    const classes = cn(buttonVariants({ variant, size }), className);
+
+    // asChild hands rendering to the child element, which owns its own content
+    // — injecting a spinner into it would put a second child inside a Slot that
+    // accepts exactly one. A link does not have a pending state anyway.
+    if (asChild) {
+      return (
+        <Slot className={classes} ref={ref} {...props}>
+          {children}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />
+      <button
+        type={type}
+        className={classes}
+        ref={ref}
+        disabled={Boolean(disabled) || loading}
+        aria-busy={loading || undefined}
+        {...props}
+      >
+        {loading ? <Loader2 className="animate-spin" aria-hidden /> : icon}
+        {children}
+      </button>
     );
   },
 );

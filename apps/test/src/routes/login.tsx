@@ -11,7 +11,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Info, KeyRound, Loader2, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, Info, KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PIN_LENGTH,
@@ -191,8 +191,7 @@ function SignInStep({
             error={form.formState.errors.pin?.message}
           />
 
-          <Button type="submit" disabled={login.isPending}>
-            {login.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={login.isPending}>
             Sign in
           </Button>
 
@@ -269,8 +268,7 @@ function MobileStep({
             register={form.register('mobile')}
           />
 
-          <Button type="submit" disabled={requestOtp.isPending}>
-            {requestOtp.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={requestOtp.isPending}>
             Send code
           </Button>
 
@@ -349,8 +347,7 @@ function CodeStep({
             </Alert>
           ) : null}
 
-          <Button type="submit" disabled={verify.isPending}>
-            {verify.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={verify.isPending}>
             Verify &amp; continue
           </Button>
 
@@ -431,8 +428,7 @@ function SetPinStep({
             error={form.formState.errors.confirmPin?.message}
           />
 
-          <Button type="submit" disabled={setPin.isPending}>
-            {setPin.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+          <Button type="submit" loading={setPin.isPending}>
             Save PIN &amp; continue
           </Button>
         </form>

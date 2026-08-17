@@ -5,7 +5,6 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ChevronDown,
-  Loader2,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -666,8 +665,7 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
           </fieldset>
 
           <div className="flex gap-2">
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={create.isPending}>
               Add student
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -704,15 +702,11 @@ function SyncStudentsButton() {
     <Button
       variant="outline"
       size="sm"
-      disabled={sync.isPending}
+      icon={<RefreshCw aria-hidden />}
+      loading={sync.isPending}
       onClick={() => sync.mutate()}
       title="Pull students from the main portal"
     >
-      {sync.isPending ? (
-        <Loader2 className="animate-spin" aria-hidden />
-      ) : (
-        <RefreshCw aria-hidden />
-      )}
       Sync from portal
     </Button>
   );

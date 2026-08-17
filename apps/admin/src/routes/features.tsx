@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   createFeatureSchema,
   featureKeyDraft,
@@ -206,8 +206,7 @@ function NewFeatureCard({
           </FormField>
 
           <FormActions>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            <Button type="submit" loading={create.isPending}>
               Register
             </Button>
             <Button type="button" variant="secondary" onClick={onCancel}>

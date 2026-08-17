@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, FileText, ImageOff, Loader2, Upload } from 'lucide-react';
+import { Check, FileText, ImageOff, Upload } from 'lucide-react';
 import { DOCUMENT_MAX_BYTES, acceptedTypesFor, type DocumentKind, type Me } from '@iace/contracts';
 import { Button, cn } from '@iace/ui';
 import { api } from '../lib/api';
@@ -77,14 +77,10 @@ export function DocumentCard({
         variant="outline"
         size="sm"
         className="w-full"
-        disabled={upload.isPending}
+        icon={<Upload aria-hidden />}
+        loading={upload.isPending}
         onClick={() => inputRef.current?.click()}
       >
-        {upload.isPending ? (
-          <Loader2 className="animate-spin" aria-hidden />
-        ) : (
-          <Upload aria-hidden />
-        )}
         {/* Named for what it does to what is already there — "Upload" over an
             existing document reads as "add a second one". */}
         {url ? 'Replace this' : 'Upload'}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { ArrowLeft, FileText, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, FileText, Save } from 'lucide-react';
 import { todayISO, type Gender, type StudentDetail } from '@iace/contracts';
 import {
   Alert,
@@ -197,7 +197,7 @@ export function StudentDetailPage() {
           <Button
             variant={detail.isActive ? 'destructive' : 'secondary'}
             size="sm"
-            disabled={setActive.isPending}
+            loading={setActive.isPending}
             onClick={() => setActive.mutate(!detail.isActive)}
           >
             {detail.isActive ? 'Deactivate' : 'Reactivate'}
@@ -338,12 +338,12 @@ export function StudentDetailPage() {
               ) : null}
               {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
 
-              <Button type="submit" disabled={save.isPending || !form.formState.isDirty}>
-                {save.isPending ? (
-                  <Loader2 className="animate-spin" aria-hidden />
-                ) : (
-                  <Save aria-hidden />
-                )}
+              <Button
+                type="submit"
+                icon={<Save aria-hidden />}
+                loading={save.isPending}
+                disabled={!form.formState.isDirty}
+              >
                 Save changes
               </Button>
             </CardContent>

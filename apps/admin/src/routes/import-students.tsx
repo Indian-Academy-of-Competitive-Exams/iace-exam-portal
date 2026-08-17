@@ -157,12 +157,12 @@ export function ImportStudentsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <Button variant="outline" disabled={sample.isPending} onClick={() => sample.mutate()}>
-                {sample.isPending ? (
-                  <Loader2 className="animate-spin" aria-hidden />
-                ) : (
-                  <Download aria-hidden />
-                )}
+              <Button
+                variant="outline"
+                icon={<Download aria-hidden />}
+                loading={sample.isPending}
+                onClick={() => sample.mutate()}
+              >
                 Download sample file
               </Button>
             </CardContent>
@@ -207,14 +207,11 @@ export function ImportStudentsPage() {
               ) : null}
 
               <Button
-                disabled={!canCommit || commit.isPending}
+                icon={<Upload aria-hidden />}
+                loading={commit.isPending}
+                disabled={!canCommit}
                 onClick={() => file && commit.mutate(file)}
               >
-                {commit.isPending ? (
-                  <Loader2 className="animate-spin" aria-hidden />
-                ) : (
-                  <Upload aria-hidden />
-                )}
                 Import {plan ? `${plan.summary.willCreate + plan.summary.willUpdate} rows` : ''}
               </Button>
             </CardContent>
