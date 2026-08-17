@@ -196,6 +196,17 @@ module.exports = {
           from: { opacity: '0', transform: 'translateY(0.75rem) scale(0.98)' },
           to: { opacity: '1', transform: 'none' },
         },
+        // A panel arriving from the edge it is anchored to. Two keyframes, not
+        // one parameterised by a variable, because a transform is not something
+        // Tailwind can interpolate a direction into.
+        'sheet-in-left': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
+        'sheet-in-right': {
+          from: { transform: 'translateX(100%)' },
+          to: { transform: 'translateX(0)' },
+        },
         // The sheen crossing a skeleton. Travels from off one edge to off the
         // other, so it never parks in the middle of the placeholder.
         'skeleton-sweep': {
@@ -214,6 +225,10 @@ module.exports = {
         // --skeleton-dur / --ease-in-out. Slow on purpose: a fast sweep reads
         // as something happening rather than as something being waited for.
         'skeleton-sweep': 'skeleton-sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+        // --dur-normal / --ease-out. No overshoot here, unlike the dialog: a
+        // panel that bounces off the screen edge it is attached to looks loose.
+        'sheet-in-left': 'sheet-in-left 220ms cubic-bezier(0.2, 0, 0, 1)',
+        'sheet-in-right': 'sheet-in-right 220ms cubic-bezier(0.2, 0, 0, 1)',
       },
       fontFamily: {
         // Single source of truth: the bilingual Inter + Noto stack lives in

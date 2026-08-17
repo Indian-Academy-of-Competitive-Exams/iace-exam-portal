@@ -1,7 +1,17 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
-import { Brandmark, Button, Separator, ThemeToggle, cn } from '@iace/ui';
+import {
+  Brandmark,
+  Button,
+  Separator,
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  ThemeToggle,
+  cn,
+} from '@iace/ui';
 import { filterNavByPermission, type NavItem } from '../src';
 import { SidebarNav } from './app-shell/sidebar-nav';
 import { DrawerNav } from './app-shell/drawer-nav';
@@ -179,27 +189,26 @@ export function AppShell({
         </main>
       </div>
 
-      {/* Mobile drawer. Rendered only when open, so there is never an offscreen
-          tab stop, and only on mobile, so the two navs never coexist. */}
-      {!isDesktop && drawerOpen ? (
-        <div className="fixed inset-0 z-[--z-drawer]">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            className="absolute inset-0 bg-[--overlay-bg]"
-            onClick={closeDrawer}
-          />
-          <div
-            className={cn(
-              'absolute inset-y-0 left-0 flex w-[--drawer-w] flex-col',
-              'border-r border-border bg-surface p-[--sidebar-pad]',
-            )}
-          >
+      {/* Mobile only, so the two navs never coexist. A Sheet rather than an
+          overlay and a panel: it owns the focus trap, Escape, the scroll lock
+          and the return of focus to the hamburger — a drawer without those is
+          one the reader can tab straight out of, into a page they cannot see. */}
+      {!isDesktop ? (
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          {/* aria-describedby={undefined}: the panel is a list of links and has
+              nothing to describe. Radix otherwise warns in dev that a dialog
+              without a description is probably missing one. */}
+          <SheetContent side="left" showClose={false} aria-describedby={undefined}>
             <div className="mb-2 flex items-center justify-between">
               <Brandmark withWordmark />
-              <Button variant="ghost" size="sm" aria-label="Close navigation" onClick={closeDrawer}>
-                <X aria-hidden />
-              </Button>
+              {/* The heading a screen reader announces on arrival. Hidden
+                  because the logo beside it is the visible one. */}
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetClose asChild>
+                <Button variant="ghost" size="sm" aria-label="Close navigation">
+                  <X aria-hidden />
+                </Button>
+              </SheetClose>
             </div>
 
             <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
@@ -208,8 +217,8 @@ export function AppShell({
 
             <Separator className="my-2" />
             {userMenu}
-          </div>
-        </div>
+          </SheetContent>
+        </Sheet>
       ) : null}
     </div>
   );

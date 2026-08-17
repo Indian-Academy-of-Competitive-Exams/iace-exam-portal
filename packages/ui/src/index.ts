@@ -60,6 +60,16 @@ export {
 } from './components/ui/toast';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
 export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+  sheetVariants,
+  type SheetContentProps,
+} from './components/ui/sheet';
+export {
   Dialog,
   DialogTrigger,
   DialogClose,
