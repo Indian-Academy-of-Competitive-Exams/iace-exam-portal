@@ -2,15 +2,15 @@
    IACE COMPONENTS — the pieces missing from v0.1
    packages/ui/components.css   ·   requires tokens.css v0.3
 
-   timer · skeleton · empty state · modal · completed CBT question palette
+   timer · skeleton · empty state · completed CBT question palette
 
    Every value here is a token reference. If you find yourself writing a raw
    px or hex below this line, the token layer is missing something — add it
    to tokens.css rather than hardcoding here.
 
-   ONE DEFINITION PER COMPONENT. Toast, tooltip and pagination are NOT here:
-   they ship as React components (toast.tsx, tooltip.tsx, pagination.tsx),
-   which are already token-driven through the Tailwind preset. A raw class
+   ONE DEFINITION PER COMPONENT. Toast, tooltip, pagination and the modal are
+   NOT here: they ship as React components (toast.tsx, tooltip.tsx,
+   pagination.tsx, dialog.tsx), token-driven through the preset. A raw class
    here as well would be a second, differently-shaped design of the same
    thing — and the one nobody renders is the one that silently rots. If a
    component exists in src/components/ui, style it there.
@@ -222,99 +222,15 @@
 }
 
 /* ============================================================================
-   4. MODAL / DIALOG
-   Pair with a real <dialog> or a focus-trapping library — the CSS below does
-   not trap focus, and an untrapped modal is worse than no modal.
+   4. MODAL / DIALOG — moved to dialog.tsx
+   The CSS that was here could not trap focus, and an untrapped modal is worse
+   than no modal: the reader tabs behind it into a page they cannot see. It is
+   now a React component built on Radix, which owns the focus trap, Escape, the
+   inert background and the return of focus to whatever opened it — reading the
+   same --overlay-bg / --modal-* / --shadow-overlay / --z-* tokens it always did.
+   Keeping a raw copy here as well would be a second design of one component,
+   and the one nobody renders is the one that rots.
    ========================================================================== */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-overlay);
-  background: var(--overlay-bg);
-  display: grid;
-  place-items: center;
-  padding: var(--space-4);
-  animation: overlay-in var(--dur-fast) var(--ease-out);
-}
-@keyframes overlay-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.modal {
-  position: relative;
-  z-index: var(--z-modal);
-  width: 100%;
-  max-width: var(--modal-w-md);
-  max-height: calc(100vh - var(--space-16));
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border-radius: var(--modal-radius);
-  box-shadow: var(--shadow-overlay);
-  animation: modal-in var(--dur-normal) var(--ease-spring);
-}
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-3)) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.modal--sm {
-  max-width: var(--modal-w-sm);
-}
-.modal--lg {
-  max-width: var(--modal-w-lg);
-}
-
-.modal__header {
-  padding: var(--modal-pad) var(--modal-pad) var(--space-3);
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-}
-.modal__title {
-  flex: 1;
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-normal);
-}
-.modal__body {
-  padding: 0 var(--modal-pad);
-  overflow-y: auto;
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
-  color: var(--foreground-secondary);
-}
-.modal__footer {
-  padding: var(--space-5) var(--modal-pad) var(--modal-pad);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--gap-inline);
-}
-/* Destructive confirmation: icon + crimson, per the v0.1 red decision.
-   Never make the destructive action the default-focused button. */
-.modal__icon {
-  display: grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-}
-.modal--destructive .modal__icon {
-  color: var(--destructive);
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-}
 
 /* ============================================================================
    5. CBT QUESTION PALETTE — all five states + current-question ring

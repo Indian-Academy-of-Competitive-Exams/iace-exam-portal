@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  ConfirmDialog,
   DataTable,
   FormActions,
   FormField,
@@ -197,6 +198,8 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
  * row used to show) reads as permanently stuck rather than as switched off.
  */
 function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
+  const [confirming, setConfirming] = useState(false);
+
   const setActive = useMutation({
     meta: {
       success: admin.isActive
@@ -204,7 +207,10 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
         : 'Admin reactivated. Grant them access again on the Permissions screen.',
     },
     mutationFn: () => api.admin.admins.setActive(admin.id, !admin.isActive),
-    onSuccess: onChanged,
+    onSuccess: () => {
+      setConfirming(false);
+      onChanged();
+    },
   });
 
   const busy = setActive.isPending;
@@ -219,28 +225,27 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
   }
 
   return (
-    <Button
-      variant="destructive"
-      size="sm"
-      disabled={busy}
-      onClick={() => {
-        // A confirm, because it signs somebody out and drops every grant they
-        // hold — and reactivating does NOT bring those back, so re-granting is
-        // manual work for whoever does it. Saying so here is the difference
-        // between an undo and a surprise.
-        if (
-          !globalThis.confirm(
-            `Deactivate ${admin.email}? Their grants are removed and are NOT restored if you switch them back on.`,
-          )
-        ) {
-          return;
-        }
-        setActive.mutate();
-      }}
-    >
-      {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserMinus aria-hidden />}
-      Deactivate
-    </Button>
+    <>
+      <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
+        {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserMinus aria-hidden />}
+        Deactivate
+      </Button>
+      {/* A confirm, because it signs somebody out and drops every grant they
+          hold — and reactivating does NOT bring those back, so re-granting is
+          manual work for whoever does it. Saying so here is the difference
+          between an undo and a surprise. It stays open until the request comes
+          back, so a failure lands on the dialog that caused it. */}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        destructive
+        loading={busy}
+        title={`Deactivate ${admin.email}?`}
+        description="They are signed out and every permission they hold is removed. Switching them back on does NOT restore those grants — someone has to grant them again, by hand."
+        confirmLabel="Deactivate"
+        onConfirm={() => setActive.mutate()}
+      />
+    </>
   );
 }
 

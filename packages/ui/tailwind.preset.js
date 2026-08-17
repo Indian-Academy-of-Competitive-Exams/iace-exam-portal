@@ -183,10 +183,28 @@ module.exports = {
           from: { opacity: '0', transform: 'translateY(-6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        // The dim behind a dialog. Opacity only — anything that moves here
+        // reads as the page itself shifting under the reader.
+        'overlay-in': {
+          from: { opacity: '0' },
+          to: { opacity: '1' },
+        },
+        // Rises the last few pixels into place. Ends at `none` rather than a
+        // written-out transform, so the dialog owns no transform once it has
+        // landed and centring stays the layout's job.
+        'dialog-in': {
+          from: { opacity: '0', transform: 'translateY(0.75rem) scale(0.98)' },
+          to: { opacity: '1', transform: 'none' },
+        },
       },
       animation: {
         'tooltip-in': 'tooltip-in 120ms ease-out',
         'toast-in': 'toast-in 160ms ease-out',
+        // --dur-fast / --ease-out.
+        'overlay-in': 'overlay-in 140ms cubic-bezier(0.2, 0, 0, 1)',
+        // --dur-normal / --ease-spring. The one place a little overshoot earns
+        // its keep: a dialog interrupts, and should feel like it landed.
+        'dialog-in': 'dialog-in 220ms cubic-bezier(0.34, 1.4, 0.64, 1)',
       },
       fontFamily: {
         // Single source of truth: the bilingual Inter + Noto stack lives in

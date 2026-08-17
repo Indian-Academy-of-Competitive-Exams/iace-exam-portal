@@ -176,10 +176,22 @@
   .demo-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
     gap:12px; border-top:1px solid var(--border); padding:12px 4px 0; }
 
-  /* Demo-only: the modal is shown INLINE rather than over a real overlay, so
-     the page stays scrollable. .modal itself is the linked one. */
+  /* Demo-only: modal stand-in for dialog.tsx. Shown INLINE rather than over a
+     real overlay so the page stays scrollable, and drawn here rather than
+     linked because the modal ships as React — the TSX is the truth. */
   .demo-overlay { background:var(--overlay-bg); border-radius:var(--radius-xl); padding:28px;
     display:grid; place-items:center; }
+  .demo-modal { position:relative; width:100%; max-width:var(--modal-w-sm); display:flex; flex-direction:column;
+    background:var(--surface); border-radius:var(--modal-radius); box-shadow:var(--shadow-overlay); }
+  .demo-modal__header { padding:var(--modal-pad) var(--modal-pad) 12px; display:flex; align-items:flex-start; gap:12px; }
+  .demo-modal__title { flex:1; font-size:var(--text-lg); font-weight:var(--weight-semibold);
+    line-height:var(--leading-tight); letter-spacing:var(--tracking-normal); }
+  .demo-modal__body { padding:0 var(--modal-pad); font-size:var(--text-sm);
+    line-height:var(--leading-normal); color:var(--foreground-secondary); }
+  .demo-modal__footer { padding:20px var(--modal-pad) var(--modal-pad); display:flex; justify-content:flex-end; gap:8px; }
+  .demo-modal__icon { display:grid; place-items:center; width:40px; height:40px; flex-shrink:0;
+    border-radius:var(--radius-full); color:var(--destructive);
+    background:color-mix(in srgb, var(--destructive) 12%, transparent); }
 
   /* type scale */
   .type-row { display:flex; align-items:baseline; gap:16px; padding:8px 0; border-bottom:1px dashed var(--border); }
@@ -647,23 +659,23 @@
       <div class="sec-title">Modal / dialog</div>
       <div class="grid" style="grid-template-columns:1fr 1fr; gap:14px">
         <div class="demo-overlay">
-          <div class="modal modal--sm">
-            <div class="modal__header"><div class="modal__title">Submit your test?</div></div>
-            <div class="modal__body">You have <b>4 unanswered</b> and <b>2 marked for review</b>. Once submitted the paper closes and cannot be reopened.</div>
-            <div class="modal__footer">
+          <div class="demo-modal">
+            <div class="demo-modal__header"><div class="demo-modal__title">Submit your test?</div></div>
+            <div class="demo-modal__body">You have <b>4 unanswered</b> and <b>2 marked for review</b>. Once submitted the paper closes and cannot be reopened.</div>
+            <div class="demo-modal__footer">
               <button class="btn btn-secondary">Keep working</button>
               <button class="btn btn-primary">Submit</button>
             </div>
           </div>
         </div>
         <div class="demo-overlay">
-          <div class="modal modal--sm modal--destructive">
-            <div class="modal__header">
-              <div class="modal__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg></div>
-              <div class="modal__title">Delete “SSC CGL Tier 1 — MT 44”?</div>
+          <div class="demo-modal">
+            <div class="demo-modal__header">
+              <div class="demo-modal__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg></div>
+              <div class="demo-modal__title">Delete “SSC CGL Tier 1 — MT 44”?</div>
             </div>
-            <div class="modal__body">This removes the test for all <b>1,858</b> assigned students, along with their attempts and results. This cannot be undone.</div>
-            <div class="modal__footer">
+            <div class="demo-modal__body">This removes the test for all <b>1,858</b> assigned students, along with their attempts and results. This cannot be undone.</div>
+            <div class="demo-modal__footer">
               <button class="btn btn-secondary">Cancel</button>
               <button class="btn btn-destructive">Delete test</button>
             </div>
@@ -671,11 +683,13 @@
         </div>
       </div>
       <div class="note">
-        Shown inline here so the page still scrolls; in the app <code>.modal</code> sits inside
-        <code>.overlay</code>. Pair it with a real <code>&lt;dialog&gt;</code> or a focus-trapping library — the
-        CSS does not trap focus, and an untrapped modal is worse than no modal. <b>Never make the destructive
-        action the default-focused button</b>: Cancel is neutral grey and takes the focus, delete is crimson and
-        has to be aimed at.
+        <b>Ships as React</b> — <code>dialog.tsx</code>, on Radix, with <code>ConfirmDialog</code> for the
+        destructive case on the right. There is no <code>.modal</code> class any more: the CSS that used to be
+        here could not trap focus, and an untrapped modal is worse than no modal — the reader tabs behind it
+        into a page they cannot see. What you see below is a stand-in drawn to match; the TSX is the truth,
+        and it reads the same <code>--modal-*</code> tokens. Shown inline so the page still scrolls.
+        <b>Never make the destructive action the default-focused button</b>: Cancel is neutral grey and takes
+        the focus, delete is crimson and has to be aimed at. <code>ConfirmDialog</code> does that itself.
       </div>
     </section>
 

@@ -30,6 +30,22 @@ export {
   type ToastVariant,
 } from './components/ui/toast';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip';
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+  DialogFooter,
+  ConfirmDialog,
+  dialogVariants,
+  type DialogContentProps,
+  type ConfirmDialogProps,
+} from './components/ui/dialog';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination } from './components/ui/pagination';
