@@ -103,7 +103,7 @@ describe('admin student contracts', () => {
     hasDefaultPin: false,
     preTestReady: true,
     profileCompleted: false,
-    groups: [{ id: 'g1', name: 'SSC MORNING', branchName: 'AMEERPET' }],
+    groups: [{ id: 'g1', name: 'SSC MORNING', examType: 'SSC CGL' }],
     createdAt: new Date().toISOString(),
     preferredLanguage: 'en',
     updatedAt: new Date().toISOString(),

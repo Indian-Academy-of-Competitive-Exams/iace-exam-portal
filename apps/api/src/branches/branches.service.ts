@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   type Branch,
   type BranchListQuery,
+  type BranchType,
   type CreateBranchBody,
   type Paginated,
   type UpdateBranchBody,
@@ -19,7 +20,7 @@ const BRANCH_INCLUDE = {
 interface BranchRow {
   id: string;
   name: string;
-  isGlobal: boolean;
+  type: BranchType;
   isActive: boolean;
   createdAt: Date;
   _count: { groups: number };
@@ -58,9 +59,9 @@ export class BranchesService {
       this.prisma.branch.findMany({
         where,
         include: BRANCH_INCLUDE,
-        // GLOBAL first: it is the one every admin is looking for by default,
-        // and alphabetical order would bury it somewhere in the middle.
-        orderBy: [{ isGlobal: 'desc' }, { name: 'asc' }],
+        // The online branch first: it is the one every admin is looking for by
+        // default. `desc` because VIRTUAL is declared after PHYSICAL.
+        orderBy: [{ type: 'desc' }, { name: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
@@ -118,7 +119,7 @@ export class BranchesService {
 
     const blocker = branchDeletionBlocker({
       groupCount: branch._count.groups,
-      isGlobal: branch.isGlobal,
+      type: branch.type,
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
@@ -136,7 +137,7 @@ function toBranch(row: BranchRow): Branch {
   return {
     id: row.id,
     name: row.name,
-    isGlobal: row.isGlobal,
+    type: row.type,
     isActive: row.isActive,
     groupCount: row._count.groups,
     createdAt: row.createdAt.toISOString(),

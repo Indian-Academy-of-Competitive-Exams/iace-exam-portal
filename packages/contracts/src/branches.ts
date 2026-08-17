@@ -7,11 +7,21 @@ import { branchNameSchema } from './naming';
 // so an admin creating a group picks a centre rather than typing one.
 // ============================================================================
 
+/**
+ * PHYSICAL is a coaching centre students attend; VIRTUAL is a branch with no
+ * address, which is where every online student sits.
+ */
+export const BRANCH_TYPE = {
+  PHYSICAL: 'PHYSICAL',
+  VIRTUAL: 'VIRTUAL',
+} as const;
+export const branchTypeSchema = z.enum(BRANCH_TYPE);
+export type BranchType = z.infer<typeof branchTypeSchema>;
+
 export const branchSchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** The one cross-branch branch. Seeded, and refused for deletion. */
-  isGlobal: z.boolean(),
+  type: branchTypeSchema,
   isActive: z.boolean(),
   /** Groups under it — a branch with groups cannot be deleted. */
   groupCount: z.number().int(),
@@ -19,11 +29,11 @@ export const branchSchema = z.object({
 });
 export type Branch = z.infer<typeof branchSchema>;
 
-/** Just enough to name the branch a group sits in. */
+/** Just enough to name a branch a group is offered at. */
 export const branchRefSchema = z.object({
   id: z.string(),
   name: z.string(),
-  isGlobal: z.boolean(),
+  type: branchTypeSchema,
 });
 export type BranchRef = z.infer<typeof branchRefSchema>;
 

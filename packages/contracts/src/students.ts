@@ -49,11 +49,23 @@ export const personNameSchema = z
 // Reading
 // ============================================================================
 
+/**
+ * Where a student sits relative to the institute. Mandatory on every route in —
+ * it decides which branch and which groups they may be given.
+ */
+export const STUDENT_TYPE = {
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE',
+  NON_IACE: 'NON_IACE',
+} as const;
+export const studentTypeSchema = z.enum(STUDENT_TYPE);
+export type StudentType = z.infer<typeof studentTypeSchema>;
+
 export const groupRefSchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** Two branches may both run a "SSC CGL MORNING" — the name alone is ambiguous. */
-  branchName: z.string(),
+  /** The name is unique within this code, so it is what disambiguates one. */
+  examType: z.string().nullable(),
 });
 export type GroupRef = z.infer<typeof groupRefSchema>;
 

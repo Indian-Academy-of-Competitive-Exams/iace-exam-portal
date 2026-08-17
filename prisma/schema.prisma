@@ -10,9 +10,10 @@
 //   + FeaturePermission (one row per feature+level, holding a denormalized
 //   adminIds array). Replaced the old Page table and the Admin ⇄ Page M:N.
 //   Super admins bypass feature checks in app logic.
-// - Many-to-many junctions (Student⇄Group, Test⇄TestSeries,
-//   Test⇄Group access, Test⇄Student access) are IMPLICIT — Prisma manages the
-//   hidden join tables, so they are not models here.
+// - Many-to-many junctions (Branch⇄Group, Test⇄TestSeries, Group⇄TestSeries) are
+//   IMPLICIT — Prisma manages the hidden join tables, so they are not models
+//   here. Student⇄Group is NOT one of them: a student reaches a group through
+//   `enrolledExams` or `directGroupIds`, and there is no membership row.
 // - Question text/options are stored as localized JSON (row-per-language tables
 //   removed); option identity stays relational (stable id + isCorrect) so the
 //   answer key survives shuffling and AttemptAnswer can FK the chosen option.
@@ -51,7 +52,7 @@
 // once, per model, before there is data to migrate — every query still sees
 // every row. When soft delete IS implemented, note that a deleted row still
 // occupies its unique slot: Student.mobile, Branch.name, SubTopic.name and
-// Group[branchId, name] would all refuse a replacement with the same name
+// Group[examType, name] would all refuse a replacement with the same name
 // until the deleted one is purged.
 // ---------------------------------------------------------------------------
 // ============================================================================
@@ -134,6 +135,64 @@ enum NotificationType {
   GENERIC
 }
 
+// The enums below mirror the const objects in @iace/contracts EXACTLY — the
+// guard, the importer and the UI compare the same strings, so a divergence here
+// is a silent refusal. prisma-enums.unit.test.ts holds the two sides together.
+
+enum StudentType {
+  ONLINE
+  OFFLINE
+  NON_IACE
+}
+
+enum GroupType {
+  GLOBAL
+  EXAM
+  PROGRAM
+  SCHOLARSHIP
+  NON_IACE
+}
+
+enum BranchType {
+  PHYSICAL
+  VIRTUAL
+}
+
+enum ImportSource {
+  INDIVIDUAL
+  SHEET
+  SCRIPT
+  SELF_SIGNUP
+}
+
+enum AuditFeature {
+  STUDENT
+  STUDENT_PROFILE
+  GROUP
+  BRANCH
+  ADMIN
+  QUESTION
+  TEST
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  ACTIVATE
+  DEACTIVATE
+  IMPORT
+}
+
+// Wider than ActorTypes in @iace/contracts, which decides which table a token's
+// identity lives in: nothing signs in as SCRIPT or SYSTEM.
+enum AuditActorType {
+  ADMIN
+  STUDENT
+  SCRIPT
+  SYSTEM
+}
+
 // ============================================================================
 // People — Student and Admin are separate
 // ============================================================================
@@ -142,8 +201,16 @@ enum NotificationType {
 // (pinHash). OTP also resets a forgotten PIN. OTP + sessions + device binding all
 // live in Redis. Rate-limit / lock PIN attempts in Redis.
 model Student {
-  id                String    @id @default(cuid())
-  mobile            String    @unique // only mandatory field
+  id                String       @id @default(cuid())
+  mobile            String       @unique // only mandatory field
+  // The id this student carries in the main portal. Unique, so a re-sync of the
+  // same roster reconciles onto the row it made last time instead of doubling it.
+  externalRef       String?      @unique
+  studentType       StudentType
+  // ExamType codes, not ids: the WHAT a student is here for. An EXAM/PROGRAM
+  // group is reached by matching this, so no membership row exists for it.
+  enrolledExams     String[]     @default([])
+  program           String?
   // 4-digit login PIN, argon2id-hashed with a server-side pepper. NOT unique:
   // it is only ever checked against the one student a mobile number resolves to,
   // so two students sharing a PIN is unremarkable and invisible to both.
@@ -153,24 +220,43 @@ model Student {
   // can sign in on day one. It is guessable by anyone who knows the number, so
   // it is tracked rather than forgotten: "has signed in" means a PIN of their
   // own, and the student is prompted to replace this one.
-  pinIsDefault      Boolean   @default(false)
+  pinIsDefault      Boolean      @default(false)
   fullName          String?
-  preferredLanguage String    @default("en")
+  preferredLanguage String       @default("en")
   // preTestReady: minimal details present (mother's name + father's name + DOB) —
   // the light gate asked before starting a test. profileCompleted: the FULL
   // profile (photo, gender, Aadhaar, PAN, address, education…) — optional, only
   // drives a gentle "complete your profile" prompt, never blocks.
-  preTestReady      Boolean   @default(false)
-  profileCompleted  Boolean   @default(false)
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @default(now()) @updatedAt
+  preTestReady      Boolean      @default(false)
+  profileCompleted  Boolean      @default(false)
+  // The groups granted to this student ALONE — scholarship and non-IACE. Not
+  // FK-enforced, so deleting a group prunes the id from every student holding it.
+  directGroupIds    String[]     @default([])
+  // The branch they started at, and the one they attend now: access and
+  // scheduling read `currentBranchId`, `baseBranchId` is history.
+  baseBranchId      String?
+  currentBranchId   String?
+  // Three separate states, deliberately. `isActive` false cannot sign in;
+  // `isTestBlocked` signs in and sees history but cannot start a test; `deletedAt` is gone.
+  isActive          Boolean      @default(true)
+  isTestBlocked     Boolean      @default(false)
+  createdVia        ImportSource @default(INDIVIDUAL)
+  createdById       String? // audit (Admin id); null for a self-signup or a script
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now()) @updatedAt
   deletedAt         DateTime? // soft delete — see the conventions note above
 
   profile       StudentProfile?
-  groups        Group[] // implicit M:N (batch membership) — access flows via groups
+  baseBranch    Branch?         @relation("StudentBaseBranch", fields: [baseBranchId], references: [id])
+  currentBranch Branch?         @relation("StudentCurrentBranch", fields: [currentBranchId], references: [id])
   attempts      Attempt[]
   notifications Notification[]
+
+  // GIN on both arrays: every access question is a contains ("students enrolled
+  // in this exam", "students granted this group"), which a btree cannot answer.
+  @@index([enrolledExams], type: Gin)
+  @@index([directGroupIds], type: Gin)
+  @@index([currentBranchId])
 }
 
 // Admins log in with EMAIL + OTP (OTP handled in Redis). The FIRST super admin
@@ -190,6 +276,9 @@ model Admin {
   fullName     String?
   isSuperAdmin Boolean  @default(false)
   isActive     Boolean  @default(true)
+  // The branches a branch-scoped admin may manage. EMPTY MEANS ALL, which is
+  // every admin today — nothing filters on it until the branch panel ships.
+  branchIds    String[] @default([])
   createdById  String? // audit: Admin who created this admin
   createdAt    DateTime @default(now())
   updatedAt    DateTime @default(now()) @updatedAt
@@ -639,51 +728,80 @@ model AttemptAnswer {
 // up with "Ameerpet", "ameerpet" and "Ameerpet " as three branches. An admin
 // creating a group now PICKS a branch instead of assuming one.
 //
-// Exactly one row is GLOBAL: the branch for groups that are not tied to any
-// physical centre (ALL STUDENTS, SCHOLARSHIP 2026). It is seeded and protected
-// from deletion; `isGlobal` marks it so nothing has to match on its name.
+// A branch is where a student attends and the catalog of exams offered there.
+// Every online student sits in the one VIRTUAL branch, which has no address and
+// is protected from rename, retirement and deletion.
 // ============================================================================
 
 model Branch {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
-  name      String    @unique
-  isGlobal  Boolean   @default(false)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
+  name      String     @unique
+  type      BranchType @default(PHYSICAL)
+  // Inactive is a write freeze: no new groups, students or series. Everything it
+  // already holds keeps working.
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @default(now()) @updatedAt
   deletedAt DateTime? // soft delete — see the conventions note above
 
-  groups Group[]
+  groups          Group[] // implicit M:N — the exams this branch offers
+  baseStudents    Student[]          @relation("StudentBaseBranch")
+  currentStudents Student[]          @relation("StudentCurrentBranch")
+  testConfigs     BranchTestConfig[]
+}
+
+// What a branch offers its students, and when. Access is granted at SERIES
+// level; the window here is the whole series' default. A per-test override is a
+// future table, so adding one changes scheduling without touching access.
+model BranchTestConfig {
+  id           String    @id @default(cuid())
+  branchId     String
+  testSeriesId String
+  enabled      Boolean   @default(false)
+  startAt      DateTime?
+  endAt        DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, testSeriesId])
+  @@index([testSeriesId])
 }
 
 // ============================================================================
-// Groups (batches) — the access unit. A student is always in >=1 group; a group
-// is linked to test series; a student's access = the tests in the series linked
-// to their groups. Student -> Group -> TestSeries -> Test. No direct grants.
+// Groups (batches) — the access unit. A group is linked to test series, and a
+// student reaches those series' tests through it. Student -> Group ->
+// TestSeries -> Test.
 //
-// A group belongs to exactly one branch, and its name is unique WITHIN that
-// branch — two centres both running "SSC CGL MORNING" is normal, and forcing
-// one of them to invent a different name is what produced the drifting,
-// near-duplicate names in the first place.
+// HOW a group reaches a student depends on its `type`: GLOBAL is everybody with
+// no rows stored at all, EXAM and PROGRAM match an entry in
+// `Student.enrolledExams`, and SCHOLARSHIP and NON_IACE are handed out one
+// student at a time through `Student.directGroupIds`.
+//
+// The name is unique per `examType`, not per branch: the same batch is taught at
+// several centres, so branches are a catalog tag (M:N) rather than ownership.
 // ============================================================================
 
 model Group {
   id          String    @id @default(cuid())
   /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
   name        String
-  branchId    String
+  type        GroupType
+  /// ExamType code — set for EXAM and PROGRAM, null for the rest.
+  examType    String?
   description String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now()) @updatedAt
   deletedAt   DateTime? // soft delete — see the conventions note above
 
-  branch     Branch       @relation(fields: [branchId], references: [id])
-  students   Student[] // implicit M:N (membership)
+  branches   Branch[] // implicit M:N — the centres offering this group
   testSeries TestSeries[] // implicit M:N — grants access to these series' tests
 
-  @@unique([branchId, name])
-  @@index([branchId])
+  @@unique([examType, name])
+  @@index([type])
 }
 
 // ============================================================================
@@ -697,8 +815,60 @@ model TestSeries {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
-  tests  Test[] // implicit M:N (a test can be in several series)
-  groups Group[] // implicit M:N — groups linked to this series get access
+  tests         Test[] // implicit M:N (a test can be in several series)
+  groups        Group[] // implicit M:N — groups linked to this series get access
+  branchConfigs BranchTestConfig[]
+}
+
+// ============================================================================
+// Audit — data CRUD and imports only. An exam interaction is not an audit event;
+// it is the attempt. Always-on and self-scoped: a super admin reads every row, a
+// normal admin only their own.
+// ============================================================================
+
+// One row per import RUN — a sheet, a script sync, or a single-record add.
+model ImportLog {
+  id         String       @id @default(cuid())
+  feature    AuditFeature
+  source     ImportSource
+  actorId    String?
+  /// The uploaded sheet, or a snapshot of the payload a script sent.
+  fileS3Key  String?
+  total      Int          @default(0)
+  created    Int          @default(0)
+  updated    Int          @default(0)
+  skipped    Int          @default(0)
+  failed     Int          @default(0)
+  status     String
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  errors     Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @updatedAt
+
+  rowActions RowActionLog[]
+
+  @@index([feature, createdAt])
+}
+
+// One row per record changed. `changed` is { field: { from, to } } — the answer
+// to "what actually changed", which a diff of two snapshots is not.
+model RowActionLog {
+  id          String         @id @default(cuid())
+  feature     AuditFeature
+  entityId    String
+  action      AuditAction
+  actorType   AuditActorType
+  actorId     String?
+  changed     Json?
+  importLogId String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @default(now()) @updatedAt
+
+  importLog ImportLog? @relation(fields: [importLogId], references: [id], onDelete: SetNull)
+
+  @@index([feature, entityId, actorId, createdAt])
+  @@index([importLogId])
 }
 
 // ============================================================================

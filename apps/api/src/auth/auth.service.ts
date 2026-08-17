@@ -4,6 +4,8 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  IMPORT_SOURCE,
+  STUDENT_TYPE,
   type ActorType,
   type AuthIdentity,
   type AuthSessionResponse,
@@ -90,7 +92,15 @@ export class AuthService {
       where: { mobile },
       // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or
       // replacing the one an import gave them.
-      create: { mobile, pinHash, pinIsDefault: false },
+      create: {
+        mobile,
+        pinHash,
+        pinIsDefault: false,
+        // A student who arrives at the PIN screen without a row signed themselves
+        // up, which only an online student can do.
+        studentType: STUDENT_TYPE.ONLINE,
+        createdVia: IMPORT_SOURCE.SELF_SIGNUP,
+      },
       update: { pinHash, pinIsDefault: false },
     });
     if (!student.isActive)

@@ -4,7 +4,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Plus, Power, Trash2, Users } from 'lucide-react';
-import { createBranchSchema, type Branch, type CreateBranchInput } from '@iace/contracts';
+import {
+  BRANCH_TYPE,
+  createBranchSchema,
+  type Branch,
+  type CreateBranchInput,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -231,8 +236,8 @@ function BranchActions({
   busy: boolean;
   onAsk: (confirm: BranchConfirm) => void;
 }>) {
-  // GLOBAL is never editable, whoever is looking.
-  if (!canEdit || branch.isGlobal) return null;
+  // The online branch is never editable, whoever is looking.
+  if (!canEdit || branch.type === BRANCH_TYPE.VIRTUAL) return null;
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -260,7 +265,7 @@ function BranchActions({
 
 /** Three states, listed. See SignInStatus in students.tsx for the reasoning. */
 function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
-  if (branch.isGlobal) return <Badge variant="info">System</Badge>;
+  if (branch.type === BRANCH_TYPE.VIRTUAL) return <Badge variant="info">System</Badge>;
   if (branch.isActive) return <Badge variant="success">Active</Badge>;
   return <Badge variant="neutral">Retired</Badge>;
 }

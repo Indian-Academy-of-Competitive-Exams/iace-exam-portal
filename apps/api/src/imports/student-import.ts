@@ -34,13 +34,13 @@ function missingColumns(headers: string[]): StudentImportColumn[] {
 /** Several groups in one cell, because a comma is already the column separator. */
 const GROUP_SEPARATOR = /[;|]/;
 
-/** How a cell names the branch a group is in: "AMEERPET / SSC CGL MORNING". */
-const BRANCH_QUALIFIER = '/';
+/** How a cell names the exam a group is for: "SSC CGL / SSC CGL MORNING". */
+const EXAM_QUALIFIER = '/';
 
 export interface ImportGroup {
   id: string;
   name: string;
-  branchName: string;
+  examType: string | null;
 }
 
 export interface ImportContext {
@@ -49,7 +49,7 @@ export interface ImportContext {
     string,
     { id: string; fullName: string | null; hasPin: boolean; isActive: boolean }
   >;
-  /** Canonical group name → every group with that name, one per branch. */
+  /** Canonical group name → every group with that name, one per exam type. */
   groupsByName: Map<string, ImportGroup[]>;
 }
 
@@ -58,25 +58,23 @@ export function resolveGroup(
   entry: string,
   groupsByName: Map<string, ImportGroup[]>,
 ): { group: ImportGroup } | { error: string } {
-  const separator = entry.indexOf(BRANCH_QUALIFIER);
-  const branchName = separator === -1 ? null : canonicalName(entry.slice(0, separator));
+  const separator = entry.indexOf(EXAM_QUALIFIER);
+  const examType = separator === -1 ? null : canonicalName(entry.slice(0, separator));
   const name = canonicalName(separator === -1 ? entry : entry.slice(separator + 1));
 
   const matches = groupsByName.get(name) ?? [];
 
-  if (branchName !== null) {
-    const match = matches.find((group) => group.branchName === branchName);
-    return match
-      ? { group: match }
-      : { error: `No group called "${name}" in branch "${branchName}"` };
+  if (examType !== null) {
+    const match = matches.find((group) => group.examType === examType);
+    return match ? { group: match } : { error: `No group called "${name}" for "${examType}"` };
   }
 
   if (matches.length === 0) return { error: `No group called "${name}"` };
   if (matches.length === 1) return { group: matches[0]! };
 
-  const branches = matches.map((group) => group.branchName).join(', ');
+  const exams = matches.map((group) => group.examType ?? '—').join(', ');
   return {
-    error: `"${name}" exists in more than one branch (${branches}) — write it as "${matches[0]!.branchName} ${BRANCH_QUALIFIER} ${name}"`,
+    error: `"${name}" exists under more than one exam (${exams}) — write it as "${matches[0]!.examType} ${EXAM_QUALIFIER} ${name}"`,
   };
 }
 

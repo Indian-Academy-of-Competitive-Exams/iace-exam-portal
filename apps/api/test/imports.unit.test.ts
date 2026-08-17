@@ -119,18 +119,18 @@ const context = (): ImportContext => ({
     // Deactivated: a roster must not hand this account a group back.
     ['9000000003', { id: 'stu_off', fullName: 'Gone Away', hasPin: true, isActive: false }],
   ]),
-  // Names are canonical in the database, and a name can belong to several
-  // branches — "SSC CGL MORNING" runs at two centres here on purpose.
+  // Names are canonical in the database, and a name is unique only within an
+  // exam type — "SSC CGL MORNING" is taught for two exams here on purpose.
   groupsByName: new Map([
     [
       'SSC CGL MORNING',
       [
-        { id: 'g_morning_am', name: 'SSC CGL MORNING', branchName: 'AMEERPET' },
-        { id: 'g_morning_kp', name: 'SSC CGL MORNING', branchName: 'KUKATPALLY' },
+        { id: 'g_morning_cgl', name: 'SSC CGL MORNING', examType: 'SSC CGL' },
+        { id: 'g_morning_chsl', name: 'SSC CGL MORNING', examType: 'SSC CHSL' },
       ],
     ],
-    ['SSC CGL EVENING', [{ id: 'g_evening', name: 'SSC CGL EVENING', branchName: 'AMEERPET' }]],
-    ['ALL STUDENTS', [{ id: 'g_all', name: 'ALL STUDENTS', branchName: 'GLOBAL' }]],
+    ['SSC CGL EVENING', [{ id: 'g_evening', name: 'SSC CGL EVENING', examType: 'SSC CGL' }]],
+    ['ALL STUDENTS', [{ id: 'g_all', name: 'ALL STUDENTS', examType: null }]],
   ]),
 });
 
@@ -171,11 +171,11 @@ describe('planStudentImport', () => {
 
   it('resolves group names, several to a cell', () => {
     const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,AMEERPET / SSC CGL MORNING;SSC CGL EVENING'),
+      readCsvTable('mobile,groups\n9876543210,SSC CGL / SSC CGL MORNING;SSC CGL EVENING'),
       context(),
     );
 
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning_am', 'g_evening']);
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning_cgl', 'g_evening']);
     assert.equal(plan.rows[0]?.action, 'create');
   });
 
@@ -197,10 +197,10 @@ describe('planStudentImport', () => {
   });
 
   /**
-   * The failure this prevents: a name that two centres share is resolved by picking the first, and a
-   * Kukatpally roster quietly enrols into Ameerpet. Nothing about that looks wrong afterwards.
+   * The failure this prevents: a name two exams share is resolved by picking the first, and a CHSL
+   * roster quietly enrols into the CGL batch. Nothing about that looks wrong afterwards.
    */
-  it('refuses a name that exists in more than one branch, and names them', () => {
+  it('refuses a name that exists under more than one exam, and names them', () => {
     const plan = planStudentImport(
       readCsvTable('mobile,groups\n9876543210,SSC CGL MORNING'),
       context(),
@@ -209,32 +209,29 @@ describe('planStudentImport', () => {
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.deepEqual(plan.rows[0]?.groupIds, []);
     const error = plan.rows[0]?.errors[0] ?? '';
-    assert.match(error, /more than one branch/);
-    assert.match(error, /AMEERPET/);
-    assert.match(error, /KUKATPALLY/);
+    assert.match(error, /more than one exam/);
+    assert.match(error, /SSC CGL/);
+    assert.match(error, /SSC CHSL/);
     // and it shows the form that would have worked
-    assert.match(error, /AMEERPET \/ SSC CGL MORNING/);
+    assert.match(error, /SSC CGL \/ SSC CGL MORNING/);
   });
 
   it('accepts the qualified form for a name that is not ambiguous at all', () => {
     const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,GLOBAL / ALL STUDENTS'),
+      readCsvTable('mobile,groups\n9876543210,SSC CGL / SSC CGL EVENING'),
       context(),
     );
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_all']);
+    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
   });
 
-  it('reports a qualified name whose branch does not have that group', () => {
+  it('reports a qualified name whose exam does not have that group', () => {
     const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,KUKATPALLY / SSC CGL EVENING'),
+      readCsvTable('mobile,groups\n9876543210,SSC CHSL / SSC CGL EVENING'),
       context(),
     );
 
     assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(
-      plan.rows[0]?.errors[0] ?? '',
-      /No group called "SSC CGL EVENING" in branch "KUKATPALLY"/,
-    );
+    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC CGL EVENING" for "SSC CHSL"/);
   });
 
   it('skips a bad row and keeps the rest of the file', () => {

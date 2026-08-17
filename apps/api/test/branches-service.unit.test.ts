@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   AppException,
+  BRANCH_TYPE,
   ErrorCodes,
   branchListQuerySchema,
   type BranchListQuery,
@@ -19,7 +20,7 @@ function serviceWith(branches = [makeBranch()]) {
 const listQuery = (over: Partial<BranchListQuery> = {}): BranchListQuery =>
   branchListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
 
-const GLOBAL = makeBranch({ id: 'br_global', name: 'GLOBAL', isGlobal: true });
+const ONLINE = makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL });
 
 describe('BranchesService — listing', () => {
   it('reports the group count each branch carries', async () => {
@@ -72,35 +73,35 @@ describe('BranchesService — creating', () => {
   });
 });
 
-describe('BranchesService — GLOBAL is protected', () => {
+describe('BranchesService — the online branch is protected', () => {
   /**
-   * The failure these prevent: GLOBAL holds every group tied to no centre, and nothing re-creates
+   * The failure these prevent: the online branch is where every online student sits, and nothing re-creates
    * it. Losing it is not recoverable from the UI.
    */
-  it('refuses to delete GLOBAL, even with no groups under it', async () => {
-    const { service } = serviceWith([GLOBAL]);
+  it('refuses to delete the online branch, even with no groups under it', async () => {
+    const { service } = serviceWith([ONLINE]);
 
     await assert.rejects(
-      () => service.remove('br_global'),
+      () => service.remove('br_online'),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.CONFLICT);
-        assert.match(error.message, /GLOBAL/);
+        assert.match(error.message, /online branch/);
         return true;
       },
     );
   });
 
-  it('refuses to rename GLOBAL', async () => {
-    const { service } = serviceWith([GLOBAL]);
+  it('refuses to rename the online branch', async () => {
+    const { service } = serviceWith([ONLINE]);
 
-    await assert.rejects(() => service.update('br_global', { name: 'EVERYONE' }), AppException.is);
+    await assert.rejects(() => service.update('br_online', { name: 'EVERYONE' }), AppException.is);
   });
 
-  it('refuses to deactivate GLOBAL', async () => {
-    const { service } = serviceWith([GLOBAL]);
+  it('refuses to deactivate the online branch', async () => {
+    const { service } = serviceWith([ONLINE]);
 
-    await assert.rejects(() => service.update('br_global', { isActive: false }), AppException.is);
+    await assert.rejects(() => service.update('br_online', { isActive: false }), AppException.is);
   });
 });
 

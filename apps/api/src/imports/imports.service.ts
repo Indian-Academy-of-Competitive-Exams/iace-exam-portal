@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
+  IMPORT_SOURCE,
+  STUDENT_TYPE,
   type GroupMemberImportPlan,
   type GroupMemberImportResult,
   type StudentImportPlan,
@@ -59,6 +61,12 @@ export class ImportsService {
       plan.rows.filter((row) => row.willReceiveDefaultPin && row.mobile).map((row) => row.mobile!),
     );
 
+    // The grants each existing student already holds, so adding a group to them
+    // is a union rather than a duplicate — one bounded read, not one per row.
+    const grantsById = await this.grantsFor(
+      plan.rows.map((row) => row.existingStudentId).filter((id): id is string => id !== null),
+    );
+
     let created = 0;
     let updated = 0;
 
@@ -71,13 +79,11 @@ export class ImportsService {
         ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
         : {};
 
-      // Groups are added, never replaced: a roster for one group must not
-      // remove a student from the others they are already in.
-      const groups = row.groupIds.length
-        ? { groups: { connect: row.groupIds.map((id) => ({ id })) } }
-        : {};
-
       if (row.existingStudentId) {
+        // Groups are added, never replaced: a roster for one group must not
+        // remove a student from the others they are already in.
+        const grants = new Set([...(grantsById.get(row.existingStudentId) ?? []), ...row.groupIds]);
+
         await this.prisma.student.update({
           where: { id: row.existingStudentId },
           data: {
@@ -85,13 +91,20 @@ export class ImportsService {
             // whatever PIN they have — see the planner: `willReceiveDefaultPin` is false once they chose one.
             ...(row.fullName === null ? {} : { fullName: row.fullName }),
             ...startingPin,
-            ...groups,
+            directGroupIds: [...grants],
           },
         });
         updated += 1;
       } else {
         await this.prisma.student.create({
-          data: { mobile: row.mobile, fullName: row.fullName, ...startingPin, ...groups },
+          data: {
+            mobile: row.mobile,
+            fullName: row.fullName,
+            studentType: STUDENT_TYPE.ONLINE,
+            createdVia: IMPORT_SOURCE.SHEET,
+            directGroupIds: row.groupIds,
+            ...startingPin,
+          },
         });
         created += 1;
       }
@@ -132,16 +145,18 @@ export class ImportsService {
 
     const toAdd = plan.rows
       .filter((row) => row.action === 'add' && row.studentId)
-      .map((row) => ({ id: row.studentId as string }));
+      .map((row) => row.studentId as string);
 
-    if (toAdd.length > 0) {
-      // One connect for the whole file: membership is a set, so this is a
-      // single statement rather than a round trip per student.
-      await this.prisma.group.update({
-        where: { id: groupId },
-        data: { students: { connect: toAdd } },
-      });
-    }
+    // The planner already left out anyone holding this grant, so a push cannot
+    // duplicate one.
+    await this.prisma.$transaction(
+      toAdd.map((studentId) =>
+        this.prisma.student.update({
+          where: { id: studentId },
+          data: { directGroupIds: { push: groupId } },
+        }),
+      ),
+    );
 
     return { ...plan.summary, added: toAdd.length };
   }
@@ -149,7 +164,7 @@ export class ImportsService {
   private async groupContextFor(groupId: string, table: CsvTable): Promise<GroupMemberContext> {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
-      include: { branch: { select: { name: true } } },
+      select: { id: true, name: true, examType: true },
     });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
@@ -166,14 +181,14 @@ export class ImportsService {
       // a batch of 2,000 must not be loaded to add ten people to it.
       mobiles.length
         ? this.prisma.student.findMany({
-            where: { mobile: { in: mobiles }, groups: { some: { id: groupId } } },
+            where: { mobile: { in: mobiles }, directGroupIds: { has: groupId } },
             select: { id: true },
           })
         : Promise.resolve([]),
     ]);
 
     return {
-      group: { id: group.id, name: group.name, branchName: group.branch.name },
+      group,
       studentsByMobile: new Map(
         students.map((student) => [
           student.mobile,
@@ -200,9 +215,7 @@ export class ImportsService {
           })
         : Promise.resolve([]),
       groupNames.length
-        ? this.prisma.group.findMany({
-            select: { id: true, name: true, branch: { select: { name: true } } },
-          })
+        ? this.prisma.group.findMany({ select: { id: true, name: true, examType: true } })
         : Promise.resolve([]),
     ]);
 
@@ -216,18 +229,26 @@ export class ImportsService {
       groupsByName: groupsByCanonicalName(groups),
     };
   }
+
+  /** Student id → the groups already granted to them. */
+  private async grantsFor(studentIds: string[]): Promise<Map<string, string[]>> {
+    if (studentIds.length === 0) return new Map();
+
+    const students = await this.prisma.student.findMany({
+      where: { id: { in: studentIds } },
+      select: { id: true, directGroupIds: true },
+    });
+    return new Map(students.map((student) => [student.id, student.directGroupIds]));
+  }
 }
 
-/** Group name → every group carrying it, one per branch. */
-function groupsByCanonicalName(
-  groups: { id: string; name: string; branch: { name: string } }[],
-): Map<string, ImportGroup[]> {
+/** Group name → every group carrying it, one per exam type. */
+function groupsByCanonicalName(groups: ImportGroup[]): Map<string, ImportGroup[]> {
   const byName = new Map<string, ImportGroup[]>();
   for (const group of groups) {
-    const entry = { id: group.id, name: group.name, branchName: group.branch.name };
     const existing = byName.get(group.name);
-    if (existing) existing.push(entry);
-    else byName.set(group.name, [entry]);
+    if (existing) existing.push(group);
+    else byName.set(group.name, [group]);
   }
   return byName;
 }

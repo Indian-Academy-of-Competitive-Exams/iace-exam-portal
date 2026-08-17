@@ -1,4 +1,9 @@
-import type { AdminPermissions, PermissionLevel } from '@iace/contracts';
+import {
+  BRANCH_TYPE,
+  type AdminPermissions,
+  type BranchType,
+  type PermissionLevel,
+} from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -260,22 +265,8 @@ export interface FakeStudent {
   createdAt: Date;
   updatedAt: Date;
   profile: FakeProfile | null;
-  /**
-   * The groups this student is in. Membership lives on both sides, as in Prisma, and carries
-   * the branch because `StudentsService.detail` reads it back out.
-   */
-  groups: FakeGroupRef[];
-}
-
-export interface FakeGroupRef {
-  id: string;
-  name: string;
-  branch: { name: string };
-}
-
-/** A group as a student's row carries it. */
-export function makeGroupRef(id: string, name = 'SSC CGL MORNING'): FakeGroupRef {
-  return { id, name, branch: { name: 'AMEERPET' } };
+  /** The groups granted to this student — the column, as Prisma stores it. */
+  directGroupIds: string[];
 }
 
 export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
@@ -315,7 +306,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     createdAt: new Date('2026-01-05T09:30:00.000Z'),
     updatedAt: new Date('2026-01-05T09:30:00.000Z'),
     profile: null,
-    groups: [],
+    directGroupIds: [],
     ...overrides,
   };
 }
@@ -323,16 +314,14 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
 export interface FakeGroup {
   id: string;
   name: string;
-  branch: { name: string };
-  students: { id: string }[];
+  examType: string | null;
 }
 
 export function makeGroup(overrides: Partial<FakeGroup> = {}): FakeGroup {
   return {
     id: 'grp_1',
     name: 'SSC CGL MORNING',
-    branch: { name: 'AMEERPET' },
-    students: [],
+    examType: null,
     ...overrides,
   };
 }
@@ -346,6 +335,21 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
     isActive: true,
     ...overrides,
   };
+}
+
+/** The student filters the fakes answer: two `in` lookups and a grant lookup. */
+interface StudentWhere {
+  id?: { in: string[] };
+  mobile?: { in: string[] };
+  directGroupIds?: { has: string };
+}
+
+function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
+  return (
+    (where.id?.in ? where.id.in.includes(student.id) : true) &&
+    (where.mobile?.in ? where.mobile.in.includes(student.mobile) : true) &&
+    (where.directGroupIds ? student.directGroupIds.includes(where.directGroupIds.has) : true)
+  );
 }
 
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
@@ -366,15 +370,12 @@ export class FakePrisma {
           null,
       ),
 
-    /** `where.id.in` and `where.mobile.in`, which is all the membership paths ask for. */
-    findMany: ({ where = {} }: { where?: { id?: { in: string[] }; mobile?: { in: string[] } } }) =>
-      Promise.resolve(
-        this.students.filter(
-          (s) =>
-            (where.id?.in ? where.id.in.includes(s.id) : true) &&
-            (where.mobile?.in ? where.mobile.in.includes(s.mobile) : true),
-        ),
-      ),
+    /** `where.id.in`, `where.mobile.in` and a grant lookup — all the membership paths ask for. */
+    findMany: ({ where = {} }: { where?: StudentWhere }) =>
+      Promise.resolve(this.students.filter((s) => matchesStudent(s, where))),
+
+    count: ({ where = {} }: { where?: StudentWhere } = {}) =>
+      Promise.resolve(this.students.filter((s) => matchesStudent(s, where)).length),
 
     upsert: ({
       where,
@@ -396,9 +397,9 @@ export class FakePrisma {
     },
 
     /**
-     * Enough of a nested write for the profile and membership paths: scalar columns are
-     * assigned, `profile.upsert` creates the row or merges into it, and `groups.set` /
-     * `groups.connect` replace or extend membership, exactly as Prisma would.
+     * Enough of a nested write for the profile and grant paths: scalar columns are assigned,
+     * `profile.upsert` creates the row or merges into it, and `directGroupIds` takes either a
+     * whole array or a `push`, exactly as Prisma would.
      */
     update: ({
       where,
@@ -407,20 +408,17 @@ export class FakePrisma {
       where: { id: string };
       data: Record<string, unknown> & {
         profile?: { upsert: { create: Partial<FakeProfile>; update: Partial<FakeProfile> } };
-        groups?: { set?: { id: string }[]; connect?: { id: string }[] };
+        directGroupIds?: string[] | { push: string };
       };
     }) => {
       const student = this.students.find((s) => s.id === where.id);
       if (!student) throw new Error(`no student ${where.id}`);
 
-      const { profile, groups, ...scalars } = data;
+      const { profile, directGroupIds, ...scalars } = data;
       Object.assign(student, scalars);
 
-      const named = (id: string) => makeGroupRef(id, this.groups.find((g) => g.id === id)?.name);
-      if (groups?.set) student.groups = groups.set.map((ref) => named(ref.id));
-      for (const ref of groups?.connect ?? []) {
-        if (!student.groups.some((g) => g.id === ref.id)) student.groups.push(named(ref.id));
-      }
+      if (Array.isArray(directGroupIds)) student.directGroupIds = [...directGroupIds];
+      else if (directGroupIds) student.directGroupIds.push(directGroupIds.push);
 
       if (profile) {
         student.profile = student.profile
@@ -438,10 +436,24 @@ export class FakePrisma {
       ),
   };
 
-  /** Groups and their membership, enough for the add/remove paths. */
+  /** Groups as the grant paths read them — the membership itself lives on the student. */
   readonly group = {
     findUnique: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.groups.find((g) => g.id === where.id) ?? null),
+
+    findFirst: ({ where }: { where: { name?: string; examType?: string | null } }) =>
+      Promise.resolve(
+        this.groups.find(
+          (g) =>
+            (where.name === undefined || g.name === where.name) &&
+            (where.examType === undefined || g.examType === where.examType),
+        ) ?? null,
+      ),
+
+    findMany: ({ where = {} }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.groups.filter((g) => (where.id?.in ? where.id.in.includes(g.id) : true)),
+      ),
 
     count: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
       Promise.resolve(
@@ -449,41 +461,6 @@ export class FakePrisma {
           ? this.groups.filter((g) => where.id!.in.includes(g.id)).length
           : this.groups.length,
       ),
-
-    /** `connect`, `disconnect` and `set`, kept in step on both sides of the relation. */
-    update: ({
-      where,
-      data,
-    }: {
-      where: { id: string };
-      data: {
-        students?: {
-          connect?: { id: string }[];
-          disconnect?: { id: string };
-          set?: { id: string }[];
-        };
-      };
-    }) => {
-      const group = this.groups.find((g) => g.id === where.id);
-      if (!group) throw new Error(`no group ${where.id}`);
-
-      for (const { id } of data.students?.connect ?? []) {
-        if (!group.students.some((s) => s.id === id)) group.students.push({ id });
-        const student = this.students.find((s) => s.id === id);
-        if (student && !student.groups.some((g) => g.id === group.id)) {
-          student.groups.push(makeGroupRef(group.id, group.name));
-        }
-      }
-
-      const removed = data.students?.disconnect?.id;
-      if (removed !== undefined) {
-        group.students = group.students.filter((s) => s.id !== removed);
-        const student = this.students.find((s) => s.id === removed);
-        if (student) student.groups = student.groups.filter((g) => g.id !== group.id);
-      }
-
-      return Promise.resolve(group);
-    },
   };
 
   /** Branches, with the group counts the service reads through `_count`. */
@@ -528,7 +505,7 @@ export class FakePrisma {
 export interface FakeBranch {
   id: string;
   name: string;
-  isGlobal: boolean;
+  type: BranchType;
   isActive: boolean;
   createdAt: Date;
   _count: { groups: number };
@@ -538,7 +515,7 @@ export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
   return {
     id: 'br_1',
     name: 'AMEERPET',
-    isGlobal: false,
+    type: BRANCH_TYPE.PHYSICAL,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,

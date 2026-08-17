@@ -10,6 +10,26 @@ import { groupNameSchema } from './naming';
 // One branch each, name unique within it.
 // ============================================================================
 
+/**
+ * How a group reaches its students. GLOBAL is the singleton everybody is in;
+ * EXAM and PROGRAM are reached by an enrolment matching `examType`; SCHOLARSHIP
+ * and NON_IACE are granted student by student.
+ */
+export const GROUP_TYPE = {
+  GLOBAL: 'GLOBAL',
+  EXAM: 'EXAM',
+  PROGRAM: 'PROGRAM',
+  SCHOLARSHIP: 'SCHOLARSHIP',
+  NON_IACE: 'NON_IACE',
+} as const;
+export const groupTypeSchema = z.enum(GROUP_TYPE);
+export type GroupType = z.infer<typeof groupTypeSchema>;
+
+/** `SSC CGL / SSC CGL MORNING` — qualified where a code exists, bare where none does. */
+export function qualifiedGroupName(group: { name: string; examType: string | null }): string {
+  return group.examType ? `${group.examType} / ${group.name}` : group.name;
+}
+
 export const DEACTIVATED_MEMBER_MESSAGE =
   'That student is deactivated. Reactivate them before adding them to a group.';
 
@@ -26,7 +46,11 @@ export function deactivatedMemberBlocker(deactivatedCount: number): string | nul
 export const groupSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
-  branch: branchRefSchema,
+  type: groupTypeSchema,
+  /** The ExamType code this group's name is unique within, where it has one. */
+  examType: z.string().nullable(),
+  /** The centres offering it — empty for a group that belongs to no centre. */
+  branches: z.array(branchRefSchema),
   description: z.string().nullable(),
   studentCount: z.number().int(),
   /** How many test series this group grants — 0 means it grants nothing yet. */

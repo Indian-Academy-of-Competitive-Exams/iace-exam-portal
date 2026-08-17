@@ -4,9 +4,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, UserPlus, X } from 'lucide-react';
-import { createGroupSchema, type CreateGroupInput, type GroupSummary } from '@iace/contracts';
+import {
+  BRANCH_TYPE,
+  createGroupSchema,
+  qualifiedGroupName,
+  type BranchRef,
+  type CreateGroupInput,
+  type GroupSummary,
+} from '@iace/contracts';
 import {
   Badge,
+  BadgeList,
   Button,
   Card,
   CardContent,
@@ -52,14 +60,9 @@ function groupColumns(): DataTableColumn<GroupSummary>[] {
       ),
     },
     {
-      key: 'branch',
-      header: 'Branch',
-      cell: (group) =>
-        group.branch.isGlobal ? (
-          <Badge variant="info">{group.branch.name}</Badge>
-        ) : (
-          <span className="text-muted-foreground">{group.branch.name}</span>
-        ),
+      key: 'branches',
+      header: 'Branches',
+      cell: (group) => <BranchesCell branches={group.branches} />,
     },
     { key: 'students', header: 'Students', numeric: true, cell: (g) => g.studentCount },
     { key: 'series', header: 'Test series', numeric: true, cell: (g) => g.testSeriesCount },
@@ -69,6 +72,23 @@ function groupColumns(): DataTableColumn<GroupSummary>[] {
       cell: (group) => <GroupActions group={group} />,
     },
   ];
+}
+
+/** Every centre a group is offered at: the first, then a focusable count for the rest. */
+function BranchesCell({ branches }: Readonly<{ branches: BranchRef[] }>) {
+  return (
+    <BadgeList
+      items={branches}
+      label={(branch) => branch.name}
+      empty={<span className="text-muted-foreground">None</span>}
+    >
+      {(branch) => (
+        <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'neutral'}>
+          {branch.name}
+        </Badge>
+      )}
+    </BadgeList>
+  );
 }
 
 export function GroupsPage() {
@@ -129,7 +149,9 @@ export function GroupsPage() {
       {branch ? (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Showing the branch</span>
-          <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
+          <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+            {branch.name}
+          </Badge>
           <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: undefined })}>
             <X aria-hidden />
             Clear
@@ -313,7 +335,7 @@ function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
         onOpenChange={setConfirming}
         destructive
         loading={remove.isPending}
-        title={`Delete ${group.branch.name} / ${group.name}?`}
+        title={`Delete ${qualifiedGroupName(group)}?`}
         description={
           group.studentCount === 0
             ? 'The group is empty, so nobody loses access. This cannot be undone.'

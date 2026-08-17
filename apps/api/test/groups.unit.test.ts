@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  BRANCH_TYPE,
+  GROUP_TYPE,
   addGroupMembersSchema,
   createGroupSchema,
   deactivatedMemberBlocker,
@@ -183,7 +185,9 @@ describe('group contracts', () => {
     const summary = {
       id: 'g1',
       name: 'SSC MORNING',
-      branch: { id: 'b1', name: 'AMEERPET', isGlobal: false },
+      type: GROUP_TYPE.EXAM,
+      examType: null,
+      branches: [{ id: 'b1', name: 'AMEERPET', type: BRANCH_TYPE.PHYSICAL }],
       description: null,
       studentCount: 42,
       testSeriesCount: 2,

@@ -42,5 +42,5 @@ export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, labe
 /** e.g. SSC CGL MORNING, RRB JE 2026 B2. */
 export const groupNameSchema = canonicalNameSchema({ max: GROUP_NAME_MAX, label: 'group' });
 
-/** The seeded cross-branch branch. Code identifies it by `isGlobal`, never by this string. */
+/** The seeded branch with no address. Code identifies it by its `type`, never by this string. */
 export const GLOBAL_BRANCH_NAME = 'GLOBAL';

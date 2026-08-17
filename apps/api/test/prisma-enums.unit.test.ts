@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, it } from 'node:test';
+import {
+  ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_ACTOR_TYPE,
+  AUDIT_FEATURE,
+  BRANCH_TYPE,
+  GROUP_TYPE,
+  IMPORT_SOURCE,
+  STUDENT_TYPE,
+  actorTypeSchema,
+} from '@iace/contracts';
+
+/**
+ * The two sides of every shared enum: a const object in contracts, and a Prisma enum the database
+ * stores. A value present on one side and not the other is a runtime failure no type catches — the
+ * guard compares strings the column cannot hold, or a write dies at the driver.
+ */
+const SCHEMA = readFileSync(join(__dirname, '../../../prisma/schema.prisma'), 'utf8');
+
+const MIRRORED = {
+  StudentType: STUDENT_TYPE,
+  GroupType: GROUP_TYPE,
+  BranchType: BRANCH_TYPE,
+  ImportSource: IMPORT_SOURCE,
+  AuditFeature: AUDIT_FEATURE,
+  AuditAction: AUDIT_ACTION,
+  AuditActorType: AUDIT_ACTOR_TYPE,
+} as const;
+
+function prismaEnum(name: string): string[] {
+  const block = new RegExp(String.raw`enum ${name} \{([^}]*)\}`).exec(SCHEMA);
+  assert.ok(block, `schema.prisma has no enum ${name}`);
+  return block[1]!
+    .split('\n')
+    .map((line) => line.replace(/\/\/.*$/, '').trim())
+    .filter((line) => line.length > 0);
+}
+
+describe('Prisma enums mirror the const objects in contracts', () => {
+  for (const [prismaName, constant] of Object.entries(MIRRORED)) {
+    // Order too, not just membership: `orderBy: { type: 'desc' }` on Branch puts
+    // the virtual branch first only because VIRTUAL is declared last.
+    it(`${prismaName} carries exactly its const object's values, in order`, () => {
+      assert.deepEqual(prismaEnum(prismaName), Object.values(constant));
+    });
+
+    it(`${prismaName}'s const object keys each equal their value`, () => {
+      for (const [key, value] of Object.entries(constant)) assert.equal(key, value);
+    });
+  }
+});
+
+/**
+ * The reason the audit actor is its own enum: `ActorTypes` decides which table a token's identity is
+ * read from, and nothing signs in as a script or as the system.
+ */
+describe('the token actor stays narrower than the audit actor', () => {
+  it('admits only a student and an admin', () => {
+    assert.deepEqual(Object.values(ActorTypes), ['STUDENT', 'ADMIN']);
+  });
+
+  it('refuses SCRIPT and SYSTEM', () => {
+    assert.equal(actorTypeSchema.safeParse(AUDIT_ACTOR_TYPE.SCRIPT).success, false);
+    assert.equal(actorTypeSchema.safeParse(AUDIT_ACTOR_TYPE.SYSTEM).success, false);
+  });
+});

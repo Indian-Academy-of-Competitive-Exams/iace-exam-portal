@@ -5,6 +5,7 @@ import { ArrowLeft, Download, UserPlus } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
+  qualifiedGroupName,
   type GroupMemberImportPlan,
   type GroupMemberImportRow,
 } from '@iace/contracts';
@@ -110,10 +111,7 @@ export function ImportGroupMembersPage() {
       {plan ? (
         <Alert variant="info" className="mb-5">
           <span>
-            Adding to{' '}
-            <strong>
-              {plan.group.branchName} / {plan.group.name}
-            </strong>
+            Adding to <strong>{qualifiedGroupName(plan.group)}</strong>
           </span>
         </Alert>
       ) : null}

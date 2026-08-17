@@ -5,6 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
+  BRANCH_TYPE,
   FEATURE_KEYS,
   MOBILE_DIGITS,
   PERMISSION_LEVELS,
@@ -13,6 +14,7 @@ import {
   todayISO,
   createStudentSchema,
   normaliseMobile,
+  qualifiedGroupName,
   type CreateStudentInput,
   type GroupRef,
   type StudentSort,
@@ -248,13 +250,11 @@ export function StudentsPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Showing</span>
           {branch ? (
-            <Badge variant={branch.isGlobal ? 'info' : 'primary'}>{branch.name}</Badge>
-          ) : null}
-          {group.data ? (
-            <Badge variant="primary">
-              {group.data.branch.name} / {group.data.name}
+            <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+              {branch.name}
             </Badge>
           ) : null}
+          {group.data ? <Badge variant="primary">{qualifiedGroupName(group.data)}</Badge> : null}
           <Button
             variant="ghost"
             size="sm"
@@ -348,13 +348,11 @@ export function StudentsPage() {
                 value={groupId}
                 onChange={(next) => filters.set({ groupId: next })}
                 // The chosen group is often outside the loaded page.
-                selectedLabel={
-                  group.data ? `${group.data.branch.name} / ${group.data.name}` : undefined
-                }
+                selectedLabel={group.data ? qualifiedGroupName(group.data) : undefined}
                 items={groupPages.items.map((option) => ({
                   value: option.id,
                   label: option.name,
-                  hint: option.branch.name,
+                  hint: option.examType ?? undefined,
                 }))}
                 placeholder="Any group"
                 search={groupSearch}

@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  IMPORT_SOURCE,
+  STUDENT_TYPE,
   deactivatedMemberBlocker,
   educationEntrySchema,
   pastExamEntrySchema,
   type Gender,
   type CreateStudentBody,
+  type GroupRef,
   type Paginated,
   type StudentDetail,
   type StudentListQuery,
@@ -22,15 +24,8 @@ const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 
-/** Exactly what the summary and detail views need — nothing else is read. */
-const STUDENT_INCLUDE = {
-  groups: {
-    // The branch comes with the group: a group name is unique only within its
-    // branch, so on its own it does not say which group this is.
-    select: { id: true, name: true, branch: { select: { name: true } } },
-    orderBy: [{ branch: { name: 'asc' } }, { name: 'asc' }],
-  },
-} as const satisfies Prisma.StudentInclude;
+/** What names a group on a student's row — the group ids themselves are a column. */
+const GROUP_REF_SELECT = { id: true, name: true, examType: true } as const;
 
 /**
  * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
@@ -55,7 +50,6 @@ export class StudentsService {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.student.findMany({
         where,
-        include: STUDENT_INCLUDE,
         orderBy: studentOrderBy(query.sort),
         skip,
         take: query.pageSize,
@@ -63,8 +57,11 @@ export class StudentsService {
       this.prisma.student.count({ where }),
     ]);
 
+    // One lookup for the whole page, not one per student.
+    const named = await this.groupRefs(rows.flatMap((row) => row.directGroupIds));
+
     return {
-      items: rows.map((row) => this.toSummary(row)),
+      items: rows.map((row) => this.toSummary(row, namesOf(row.directGroupIds, named))),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -74,16 +71,30 @@ export class StudentsService {
   async detail(id: string): Promise<StudentDetail> {
     const student = await this.prisma.student.findUnique({
       where: { id },
-      include: { ...STUDENT_INCLUDE, profile: true },
+      include: { profile: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
+    const named = await this.groupRefs(student.directGroupIds);
+
     return {
-      ...this.toSummary(student),
+      ...this.toSummary(student, namesOf(student.directGroupIds, named)),
       preferredLanguage: student.preferredLanguage,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
     };
+  }
+
+  /** The groups a set of ids names, by id. A group deleted out from under a grant is simply absent. */
+  private async groupRefs(groupIds: string[]): Promise<Map<string, GroupRef>> {
+    const wanted = [...new Set(groupIds)];
+    if (wanted.length === 0) return new Map();
+
+    const groups = await this.prisma.group.findMany({
+      where: { id: { in: wanted } },
+      select: GROUP_REF_SELECT,
+    });
+    return new Map(groups.map((group) => [group.id, group]));
   }
 
   /** A stored profile as the API returns it. */
@@ -153,9 +164,11 @@ export class StudentsService {
       data: {
         mobile: input.mobile,
         fullName: input.fullName ?? null,
-        ...(input.groupIds?.length
-          ? { groups: { connect: input.groupIds.map((id) => ({ id })) } }
-          : {}),
+        // An admin adding one student by hand is adding an online one; the
+        // roster import is where the type is chosen per row.
+        studentType: STUDENT_TYPE.ONLINE,
+        createdVia: IMPORT_SOURCE.INDIVIDUAL,
+        directGroupIds: input.groupIds ?? [],
       },
     });
     return this.detail(student.id);
@@ -165,13 +178,13 @@ export class StudentsService {
   async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
     const student = await this.prisma.student.findUnique({
       where: { id },
-      include: { profile: true, groups: { select: { id: true } } },
+      include: { profile: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     if (input.groupIds) {
       // The rule is "do not strip a student's LAST group", not "every student must have one".
-      if (input.groupIds.length === 0 && student.groups.length > 0) {
+      if (input.groupIds.length === 0 && student.directGroupIds.length > 0) {
         throw new AppException(
           ErrorCodes.VALIDATION_ERROR,
           'A student must stay in at least one group',
@@ -196,7 +209,7 @@ export class StudentsService {
         ...(input.preferredLanguage === undefined
           ? {}
           : { preferredLanguage: input.preferredLanguage }),
-        ...(input.groupIds ? { groups: { set: input.groupIds.map((gid) => ({ id: gid })) } } : {}),
+        ...(input.groupIds ? { directGroupIds: input.groupIds } : {}),
         ...(profilePatch
           ? {
               profile: {
@@ -259,12 +272,12 @@ export class StudentsService {
 
   /** Only the groups this save would ADD, so a deactivated student can still lose one. */
   private assertMayJoinGroups(
-    student: { isActive: boolean; groups: { id: string }[] },
+    student: { isActive: boolean; directGroupIds: string[] },
     groupIds: string[],
   ): void {
     if (student.isActive) return;
 
-    const already = new Set(student.groups.map((group) => group.id));
+    const already = new Set(student.directGroupIds);
     const joining = new Set(groupIds.filter((id) => !already.has(id)));
     const blocker = deactivatedMemberBlocker(joining.size > 0 ? 1 : 0);
     if (blocker) {
@@ -285,18 +298,20 @@ export class StudentsService {
     }
   }
 
-  private toSummary(row: {
-    id: string;
-    mobile: string;
-    fullName: string | null;
-    isActive: boolean;
-    pinHash: string | null;
-    pinIsDefault: boolean;
-    preTestReady: boolean;
-    profileCompleted: boolean;
-    createdAt: Date;
-    groups: { id: string; name: string; branch: { name: string } }[];
-  }): StudentSummary {
+  private toSummary(
+    row: {
+      id: string;
+      mobile: string;
+      fullName: string | null;
+      isActive: boolean;
+      pinHash: string | null;
+      pinIsDefault: boolean;
+      preTestReady: boolean;
+      profileCompleted: boolean;
+      createdAt: Date;
+    },
+    groups: GroupRef[],
+  ): StudentSummary {
     return {
       id: row.id,
       mobile: row.mobile,
@@ -308,14 +323,18 @@ export class StudentsService {
       hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,
       profileCompleted: row.profileCompleted,
-      groups: row.groups.map((group) => ({
-        id: group.id,
-        name: group.name,
-        branchName: group.branch.name,
-      })),
+      groups,
       createdAt: row.createdAt.toISOString(),
     };
   }
+}
+
+/** The named groups behind a student's grants, in name order; unknown ids drop out. */
+function namesOf(groupIds: string[], named: Map<string, GroupRef>): GroupRef[] {
+  return groupIds
+    .map((id) => named.get(id))
+    .filter((group): group is GroupRef => group !== undefined)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** A DATE column round-trips as YYYY-MM-DD; the time part is not ours to invent. */

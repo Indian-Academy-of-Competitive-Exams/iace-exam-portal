@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { PAGE_SIZE_MAX, type GroupRef } from '@iace/contracts';
+import { PAGE_SIZE_MAX, qualifiedGroupName, type GroupRef } from '@iace/contracts';
 import { Alert, Checkbox, linkVariants, SearchInput, Separator, Skeleton } from '@iace/ui';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../lib/api';
@@ -95,12 +95,12 @@ export function GroupPicker({
               key={group.id}
               id={`${idPrefix}-${group.id}`}
               label={group.name}
-              hint={group.branch.name}
+              hint={group.examType ?? undefined}
               value={group.id}
               {...register}
               disabled={lockedToSelection}
               onChange={(event) => {
-                remember({ id: group.id, label: `${group.branch.name} / ${group.name}` });
+                remember({ id: group.id, label: qualifiedGroupName(group) });
                 void register.onChange(event);
               }}
             />
@@ -158,7 +158,7 @@ function GroupPickerBody({
   );
 }
 
-/** Branch-qualified: two centres may both run a "SSC CGL MORNING". */
+/** Exam-qualified: two exams may both run a "SSC CGL MORNING". */
 function labelFor(group: GroupRef): string {
-  return `${group.branchName} / ${group.name}`;
+  return qualifiedGroupName(group);
 }

@@ -5,7 +5,7 @@ import { GroupsService } from '../src/groups/groups.service';
 import { StudentsService } from '../src/students/students.service';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type StorageService } from '../src/storage/storage.service';
-import { FakePrisma, makeGroup, makeGroupRef, makeStudent } from './support/fakes';
+import { FakePrisma, makeGroup, makeStudent } from './support/fakes';
 
 /**
  * Deactivation revokes access, and access runs Student → Group → TestSeries → Test. So every path
@@ -45,7 +45,7 @@ describe('GroupsService.addMembers — deactivated students', () => {
     const result = await groups.addMembers(MORNING, ['stu_active']);
 
     assert.equal(result.added, 1);
-    assert.deepEqual(prisma.groups[0]?.students, [{ id: 'stu_active' }]);
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
   });
 
   it('refuses a deactivated student, and writes nothing', async () => {
@@ -59,7 +59,11 @@ describe('GroupsService.addMembers — deactivated students', () => {
     assert.ok(error instanceof AppException);
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.match(error.message, /deactivated/i);
-    assert.deepEqual(prisma.groups[0]?.students, [], 'the whole add is refused, not filtered');
+    assert.deepEqual(
+      prisma.students[0]?.directGroupIds,
+      [],
+      'the whole add is refused, not filtered',
+    );
   });
 
   /** Selecting a page and adding it is the normal way this is used; one bad row stops all of it. */
@@ -73,7 +77,10 @@ describe('GroupsService.addMembers — deactivated students', () => {
 
     assert.ok(error instanceof AppException);
     assert.deepEqual(error.fieldErrors?.studentIds?.length, 1);
-    assert.deepEqual(prisma.groups[0]?.students, []);
+    assert.deepEqual(
+      prisma.students.flatMap((student) => student.directGroupIds),
+      [],
+    );
   });
 
   /**
@@ -83,8 +90,8 @@ describe('GroupsService.addMembers — deactivated students', () => {
    */
   it('says nothing about a deactivated student already in the group', async () => {
     const { groups } = servicesWith(
-      [deactivated({ groups: [makeGroupRef(MORNING)] })],
-      [makeGroup({ id: MORNING, students: [{ id: 'stu_off' }] })],
+      [deactivated({ directGroupIds: [MORNING] })],
+      [makeGroup({ id: MORNING })],
     );
 
     const result = await groups.addMembers(MORNING, ['stu_off']);
@@ -96,17 +103,15 @@ describe('GroupsService.addMembers — deactivated students', () => {
 
 describe('StudentsService.update — deactivated students', () => {
   it('lets an active student change groups', async () => {
-    const { studentsService, prisma } = servicesWith([active({ groups: [makeGroupRef(MORNING)] })]);
+    const { studentsService, prisma } = servicesWith([active({ directGroupIds: [MORNING] })]);
 
     await studentsService.update('stu_active', { groupIds: [MORNING, EVENING] });
 
-    assert.deepEqual(prisma.students[0]?.groups.length, 2);
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING, EVENING]);
   });
 
   it('refuses to put a deactivated student into a group they are not in', async () => {
-    const { studentsService, prisma } = servicesWith([
-      deactivated({ groups: [makeGroupRef(MORNING)] }),
-    ]);
+    const { studentsService, prisma } = servicesWith([deactivated({ directGroupIds: [MORNING] })]);
 
     const error = await studentsService.update('stu_off', { groupIds: [MORNING, EVENING] }).then(
       () => null,
@@ -116,11 +121,7 @@ describe('StudentsService.update — deactivated students', () => {
     assert.ok(error instanceof AppException);
     assert.match(error.message, /deactivated/i);
     assert.ok(error.fieldErrors?.groupIds);
-    assert.deepEqual(
-      prisma.students[0]?.groups.map((g) => g.id),
-      [MORNING],
-      'nothing changed',
-    );
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING], 'nothing changed');
   });
 
   /**
@@ -129,7 +130,7 @@ describe('StudentsService.update — deactivated students', () => {
    */
   it('lets a deactivated student be taken out of a group they are in', async () => {
     const { studentsService, prisma } = servicesWith([
-      deactivated({ groups: [makeGroupRef(MORNING), makeGroupRef(EVENING, 'SSC CGL EVENING')] }),
+      deactivated({ directGroupIds: [MORNING, EVENING] }),
     ]);
 
     const detail = await studentsService.update('stu_off', { groupIds: [MORNING] });
@@ -138,9 +139,6 @@ describe('StudentsService.update — deactivated students', () => {
       detail.groups.map((group) => group.id),
       [MORNING],
     );
-    assert.deepEqual(
-      prisma.students[0]?.groups.map((group) => group.id),
-      [MORNING],
-    );
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
   });
 });

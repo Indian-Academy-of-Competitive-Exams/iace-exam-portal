@@ -12,7 +12,7 @@ import { type CsvRow, type CsvTable } from './csv';
 /** Planning a bulk add into ONE group. */
 
 export interface GroupMemberContext {
-  group: { id: string; name: string; branchName: string };
+  group: { id: string; name: string; examType: string | null };
   /** Mobile → the student it resolves to, for the numbers this file lists. */
   studentsByMobile: Map<string, { id: string; fullName: string | null; isActive: boolean }>;
   /** Who is in the group already. */

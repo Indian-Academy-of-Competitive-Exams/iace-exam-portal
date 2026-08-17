@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ActorTypes, AppException, ErrorCodes, createBranchSchema } from '@iace/contracts';
+import {
+  ActorTypes,
+  AppException,
+  BRANCH_TYPE,
+  ErrorCodes,
+  createBranchSchema,
+} from '@iace/contracts';
 import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
 import { branchDeletionBlocker, branchEditBlocker } from '../src/branches/branch-rules';
@@ -9,7 +15,7 @@ import { SUPER_ADMIN_KEY } from '../src/common/security';
 
 describe('branchDeletionBlocker', () => {
   it('allows deleting an empty branch', () => {
-    assert.equal(branchDeletionBlocker({ groupCount: 0, isGlobal: false }), null);
+    assert.equal(branchDeletionBlocker({ groupCount: 0, type: BRANCH_TYPE.PHYSICAL }), null);
   });
 
   /**
@@ -17,36 +23,48 @@ describe('branchDeletionBlocker', () => {
    * student in them silently loses the route to their tests.
    */
   it('refuses a branch that still has groups, and says how many', () => {
-    const blocker = branchDeletionBlocker({ groupCount: 3, isGlobal: false });
+    const blocker = branchDeletionBlocker({ groupCount: 3, type: BRANCH_TYPE.PHYSICAL });
     assert.match(blocker ?? '', /still has 3 groups/);
   });
 
   it('reads naturally for a single group', () => {
-    assert.match(branchDeletionBlocker({ groupCount: 1, isGlobal: false }) ?? '', /1 group\b/);
+    assert.match(
+      branchDeletionBlocker({ groupCount: 1, type: BRANCH_TYPE.PHYSICAL }) ?? '',
+      /1 group\b/,
+    );
   });
 
-  it('refuses GLOBAL even when it is empty — nothing would re-create it', () => {
-    assert.match(branchDeletionBlocker({ groupCount: 0, isGlobal: true }) ?? '', /GLOBAL/);
+  it('refuses the online branch even when empty — nothing would re-create it', () => {
+    assert.match(
+      branchDeletionBlocker({ groupCount: 0, type: BRANCH_TYPE.VIRTUAL }) ?? '',
+      /online branch/,
+    );
   });
 });
 
 describe('branchEditBlocker', () => {
   it('leaves an ordinary branch alone', () => {
-    assert.equal(branchEditBlocker({ isGlobal: false }, { name: 'KUKATPALLY' }), null);
-    assert.equal(branchEditBlocker({ isGlobal: false }, { isActive: false }), null);
+    assert.equal(branchEditBlocker({ type: BRANCH_TYPE.PHYSICAL }, { name: 'KUKATPALLY' }), null);
+    assert.equal(branchEditBlocker({ type: BRANCH_TYPE.PHYSICAL }, { isActive: false }), null);
   });
 
-  it('refuses to rename GLOBAL', () => {
-    assert.match(branchEditBlocker({ isGlobal: true }, { name: 'EVERYONE' }) ?? '', /renamed/);
+  it('refuses to rename the online branch', () => {
+    assert.match(
+      branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, { name: 'EVERYONE' }) ?? '',
+      /renamed/,
+    );
   });
 
-  it('refuses to deactivate GLOBAL', () => {
-    assert.match(branchEditBlocker({ isGlobal: true }, { isActive: false }) ?? '', /deactivated/);
+  it('refuses to deactivate the online branch', () => {
+    assert.match(
+      branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, { isActive: false }) ?? '',
+      /deactivated/,
+    );
   });
 
-  it('still permits a no-op patch on GLOBAL', () => {
-    assert.equal(branchEditBlocker({ isGlobal: true }, {}), null);
-    assert.equal(branchEditBlocker({ isGlobal: true }, { isActive: true }), null);
+  it('still permits a no-op patch on the online branch', () => {
+    assert.equal(branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, {}), null);
+    assert.equal(branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, { isActive: true }), null);
   });
 });
 

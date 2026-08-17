@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Pencil } from 'lucide-react';
-import { type Me } from '@iace/contracts';
+import { qualifiedGroupName, type Me } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -122,7 +122,7 @@ export function ProfileViewPage() {
             <CardContent className="flex flex-wrap gap-2">
               {me.data.groups.map((group) => (
                 <Badge key={group.id} variant="primary">
-                  {group.branchName} / {group.name}
+                  {qualifiedGroupName(group)}
                 </Badge>
               ))}
             </CardContent>

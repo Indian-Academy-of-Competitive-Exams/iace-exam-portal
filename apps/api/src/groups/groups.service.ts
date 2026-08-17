@@ -3,11 +3,14 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  GROUP_TYPE,
   deactivatedMemberBlocker,
   type AddGroupMembersResult,
+  type BranchType,
   type CreateGroupBody,
   type GroupListQuery,
   type GroupSummary,
+  type GroupType,
   type Paginated,
   type UpdateGroupBody,
 } from '@iace/contracts';
@@ -15,19 +18,20 @@ import { BranchesService } from '../branches';
 import { PrismaService } from '../prisma/prisma.service';
 import { canRemoveFromGroup, groupDeletionBlocker, LAST_GROUP_MESSAGE } from './group-rules';
 
-/** Counts come from the relation, so a list never issues a query per row. */
 const GROUP_INCLUDE = {
-  branch: { select: { id: true, name: true, isGlobal: true } },
-  _count: { select: { students: true, testSeries: true } },
+  branches: { select: { id: true, name: true, type: true }, orderBy: { name: 'asc' } },
+  _count: { select: { testSeries: true } },
 } as const satisfies Prisma.GroupInclude;
 
 interface GroupRow {
   id: string;
   name: string;
-  branch: { id: string; name: string; isGlobal: boolean };
+  type: GroupType;
+  examType: string | null;
+  branches: { id: string; name: string; type: BranchType }[];
   description: string | null;
   createdAt: Date;
-  _count: { students: number; testSeries: number };
+  _count: { testSeries: number };
 }
 
 /** Owns `Group` and the `Group`⇄`Student` membership link (docs/03 §5). */
@@ -41,12 +45,12 @@ export class GroupsService {
   async list(query: GroupListQuery): Promise<Paginated<GroupSummary>> {
     const search = query.q?.trim();
     const where: Prisma.GroupWhereInput = {
-      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.branchId ? { branches: { some: { id: query.branchId } } } : {}),
       ...(search
         ? {
             OR: [
               { name: { contains: search, mode: 'insensitive' } },
-              { branch: { name: { contains: search, mode: 'insensitive' } } },
+              { branches: { some: { name: { contains: search, mode: 'insensitive' } } } },
             ],
           }
         : {}),
@@ -56,16 +60,17 @@ export class GroupsService {
       this.prisma.group.findMany({
         where,
         include: GROUP_INCLUDE,
-        // Grouped by branch, because that is how an admin looks for one.
-        orderBy: [{ branch: { name: 'asc' } }, { name: 'asc' }],
+        orderBy: [{ name: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
       this.prisma.group.count({ where }),
     ]);
 
+    const counts = await this.studentCounts(rows.map((row) => row.id));
+
     return {
-      items: rows.map(toSummary),
+      items: rows.map((row) => toSummary(row, counts.get(row.id) ?? 0)),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -75,32 +80,31 @@ export class GroupsService {
   async detail(id: string): Promise<GroupSummary> {
     const group = await this.prisma.group.findUnique({ where: { id }, include: GROUP_INCLUDE });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
-    return toSummary(group);
+    return toSummary(group, await this.studentCount(id));
   }
 
   async create(input: CreateGroupBody): Promise<GroupSummary> {
     await this.branches.assertUsable(input.branchId);
-    await this.assertNameFree(input.branchId, input.name);
+    await this.assertNameFree(null, input.name);
 
     const group = await this.prisma.group.create({
       data: {
         name: input.name,
-        branchId: input.branchId,
+        type: GROUP_TYPE.EXAM,
         description: input.description ?? null,
+        branches: { connect: { id: input.branchId } },
       },
       include: GROUP_INCLUDE,
     });
-    return toSummary(group);
+    return toSummary(group, 0);
   }
 
   async update(id: string, input: UpdateGroupBody): Promise<GroupSummary> {
     const group = await this.prisma.group.findUnique({ where: { id } });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
-    // A group never moves branch (see updateGroupSchema), so the name only
-    // ever has to be free where it already lives.
     if (input.name !== undefined && input.name !== group.name)
-      await this.assertNameFree(group.branchId, input.name);
+      await this.assertNameFree(group.examType, input.name);
 
     const updated = await this.prisma.group.update({
       where: { id },
@@ -110,7 +114,7 @@ export class GroupsService {
       },
       include: GROUP_INCLUDE,
     });
-    return toSummary(updated);
+    return toSummary(updated, await this.studentCount(id));
   }
 
   /** Only ever deletes a group nothing depends on — see group-rules.ts. */
@@ -119,7 +123,7 @@ export class GroupsService {
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
     const blocker = groupDeletionBlocker({
-      studentCount: group._count.students,
+      studentCount: await this.studentCount(id),
       testSeriesCount: group._count.testSeries,
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
@@ -137,16 +141,13 @@ export class GroupsService {
    * A deactivated student joining refuses the whole add — see `deactivatedMemberBlocker`.
    */
   async addMembers(id: string, studentIds: string[]): Promise<AddGroupMembersResult> {
-    const group = await this.prisma.group.findUnique({
-      where: { id },
-      include: { students: { select: { id: true } } },
-    });
+    const group = await this.prisma.group.findUnique({ where: { id }, select: { id: true } });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
     const wanted = [...new Set(studentIds)];
     const found = await this.prisma.student.findMany({
       where: { id: { in: wanted } },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, directGroupIds: true },
     });
     if (found.length !== wanted.length) {
       throw new AppException(
@@ -158,7 +159,9 @@ export class GroupsService {
       );
     }
 
-    const existing = new Set(group.students.map((s) => s.id));
+    const existing = new Set(
+      found.filter((student) => student.directGroupIds.includes(id)).map((student) => student.id),
+    );
     const toAdd = wanted.filter((studentId) => !existing.has(studentId));
     const joining = new Set(toAdd);
 
@@ -173,12 +176,14 @@ export class GroupsService {
       });
     }
 
-    if (toAdd.length > 0) {
-      await this.prisma.group.update({
-        where: { id },
-        data: { students: { connect: toAdd.map((studentId) => ({ id: studentId })) } },
-      });
-    }
+    await this.prisma.$transaction(
+      toAdd.map((studentId) =>
+        this.prisma.student.update({
+          where: { id: studentId },
+          data: { directGroupIds: { push: id } },
+        }),
+      ),
+    );
 
     return { added: toAdd.length, alreadyMembers: wanted.length - toAdd.length };
   }
@@ -187,21 +192,20 @@ export class GroupsService {
   async removeMember(id: string, studentId: string): Promise<void> {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
-      include: { groups: { select: { id: true } } },
+      select: { directGroupIds: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    const isMember = student.groups.some((group) => group.id === id);
-    if (!isMember)
+    if (!student.directGroupIds.includes(id))
       throw new AppException(ErrorCodes.NOT_FOUND, 'That student is not in this group');
 
-    if (!canRemoveFromGroup(student.groups.length)) {
+    if (!canRemoveFromGroup(student.directGroupIds.length)) {
       throw new AppException(ErrorCodes.CONFLICT, LAST_GROUP_MESSAGE);
     }
 
-    await this.prisma.group.update({
-      where: { id },
-      data: { students: { disconnect: { id: studentId } } },
+    await this.prisma.student.update({
+      where: { id: studentId },
+      data: { directGroupIds: student.directGroupIds.filter((groupId) => groupId !== id) },
     });
   }
 
@@ -212,29 +216,43 @@ export class GroupsService {
    * and "ssc cgl morning" are both SSC CGL MORNING and the second one is caught here rather than
    * created beside the first.
    */
-  private async assertNameFree(branchId: string, name: string): Promise<void> {
-    const clash = await this.prisma.group.findUnique({
-      where: { branchId_name: { branchId, name } },
-    });
+  private async assertNameFree(examType: string | null, name: string): Promise<void> {
+    // findFirst, not the compound unique: a null examType matches no row through
+    // a unique lookup, because in SQL one null never equals another.
+    const clash = await this.prisma.group.findFirst({ where: { examType, name } });
     if (clash) {
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        'That branch already has a group with this name',
-        {
-          fieldErrors: { name: ['That branch already has a group with this name'] },
-        },
-      );
+      throw new AppException(ErrorCodes.CONFLICT, 'A group with this name already exists', {
+        fieldErrors: { name: ['A group with this name already exists'] },
+      });
     }
+  }
+
+  /** Membership is an array on the student, so a count is a query per group. */
+  private async studentCounts(groupIds: string[]): Promise<Map<string, number>> {
+    if (groupIds.length === 0) return new Map();
+
+    const counts = await this.prisma.$transaction(
+      groupIds.map((groupId) =>
+        this.prisma.student.count({ where: { directGroupIds: { has: groupId } } }),
+      ),
+    );
+    return new Map(groupIds.map((groupId, index) => [groupId, counts[index] ?? 0]));
+  }
+
+  private async studentCount(groupId: string): Promise<number> {
+    return this.prisma.student.count({ where: { directGroupIds: { has: groupId } } });
   }
 }
 
-function toSummary(row: GroupRow): GroupSummary {
+function toSummary(row: GroupRow, studentCount: number): GroupSummary {
   return {
     id: row.id,
     name: row.name,
-    branch: row.branch,
+    type: row.type,
+    examType: row.examType,
+    branches: row.branches,
     description: row.description,
-    studentCount: row._count.students,
+    studentCount,
     testSeriesCount: row._count.testSeries,
     createdAt: row.createdAt.toISOString(),
   };

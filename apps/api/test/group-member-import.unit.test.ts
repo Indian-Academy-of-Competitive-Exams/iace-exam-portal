@@ -8,7 +8,7 @@ import {
 } from '../src/imports/group-member-import';
 
 const context = (): GroupMemberContext => ({
-  group: { id: 'g1', name: 'SSC CGL MORNING', branchName: 'AMEERPET' },
+  group: { id: 'g1', name: 'SSC CGL MORNING', examType: 'SSC CGL' },
   studentsByMobile: new Map([
     ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari', isActive: true }],
     ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja', isActive: true }],
@@ -107,7 +107,7 @@ describe('planGroupMemberImport', () => {
     assert.deepEqual(plan('Mobile Number\n9876543210').group, {
       id: 'g1',
       name: 'SSC CGL MORNING',
-      branchName: 'AMEERPET',
+      examType: 'SSC CGL',
     });
   });
 

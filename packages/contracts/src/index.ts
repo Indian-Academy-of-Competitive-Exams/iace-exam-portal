@@ -1,6 +1,7 @@
 export * from './common';
 export * from './envelope';
 export * from './admins';
+export * from './audit';
 export * from './auth';
 export * from './naming';
 export * from './students';

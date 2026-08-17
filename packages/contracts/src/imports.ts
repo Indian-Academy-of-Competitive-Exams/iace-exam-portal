@@ -1,9 +1,23 @@
 import { z } from 'zod';
+import { groupRefSchema } from './students';
 
 // ============================================================================
 // Bulk student import. Previewed before anything is written, errors reported by
 // line, and a commit applies only the valid rows.
 // ============================================================================
+
+/**
+ * How a record got here. INDIVIDUAL is one admin filling a form, SHEET an
+ * uploaded file, SCRIPT the main portal syncing, SELF_SIGNUP the student.
+ */
+export const IMPORT_SOURCE = {
+  INDIVIDUAL: 'INDIVIDUAL',
+  SHEET: 'SHEET',
+  SCRIPT: 'SCRIPT',
+  SELF_SIGNUP: 'SELF_SIGNUP',
+} as const;
+export const importSourceSchema = z.enum(IMPORT_SOURCE);
+export type ImportSource = z.infer<typeof importSourceSchema>;
 
 /** What a single line would do. `skip` means it has errors and will be left. */
 export const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
@@ -153,7 +167,7 @@ export const groupMemberImportSummarySchema = z.object({
 export type GroupMemberImportSummary = z.infer<typeof groupMemberImportSummarySchema>;
 
 export const groupMemberImportPlanSchema = z.object({
-  group: z.object({ id: z.string(), name: z.string(), branchName: z.string() }),
+  group: groupRefSchema,
   rows: z.array(groupMemberImportRowSchema),
   summary: groupMemberImportSummarySchema,
   fileErrors: z.array(z.string()),

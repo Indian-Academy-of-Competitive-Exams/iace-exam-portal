@@ -58,23 +58,23 @@ describe('studentWhere — three-state filters', () => {
     assert.equal(conditionsFor().length, 0);
   });
 
-  it('asks membership, not a column, for ungrouped', () => {
-    assertHas({ ungrouped: 'true' }, { groups: { none: {} } });
-    assertHas({ ungrouped: 'false' }, { groups: { some: {} } });
+  it('reads ungrouped as "holds no grant at all", both ways round', () => {
+    assertHas({ ungrouped: 'true' }, { directGroupIds: { isEmpty: true } });
+    assertHas({ ungrouped: 'false' }, { directGroupIds: { isEmpty: false } });
   });
 });
 
 describe('studentWhere — access-shaped filters', () => {
-  it('finds a group through membership', () => {
-    assertHas({ groupId: 'g1' }, { groups: { some: { id: 'g1' } } });
+  it('finds a group through the grants on the student', () => {
+    assertHas({ groupId: 'g1' }, { directGroupIds: { has: 'g1' } });
   });
 
   /**
-   * A branch has no students of its own — it has groups, and those have members. Asking the student
-   * table for a branchId directly would find none.
+   * The branch a student ATTENDS, which is the one access and scheduling read. Going through their
+   * groups would answer a different question: a group is offered at several centres.
    */
-  it('finds a branch through the groups under it', () => {
-    assertHas({ branchId: 'b1' }, { groups: { some: { branchId: 'b1' } } });
+  it('finds a branch on the student, not through their groups', () => {
+    assertHas({ branchId: 'b1' }, { currentBranchId: 'b1' });
   });
 });
 
@@ -108,14 +108,14 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   it('keeps the group filter when a branch is chosen too', () => {
     const params = { groupId: 'g1', branchId: 'b1' };
 
-    assertHas(params, { groups: { some: { id: 'g1' } } });
-    assertHas(params, { groups: { some: { branchId: 'b1' } } });
+    assertHas(params, { directGroupIds: { has: 'g1' } });
+    assertHas(params, { currentBranchId: 'b1' });
     assert.equal(conditionsFor(params).length, 2);
   });
 
   it('keeps the group filter alongside the ungrouped one', () => {
-    assertHas({ groupId: 'g1', ungrouped: 'false' }, { groups: { some: { id: 'g1' } } });
-    assertHas({ groupId: 'g1', ungrouped: 'false' }, { groups: { some: {} } });
+    assertHas({ groupId: 'g1', ungrouped: 'false' }, { directGroupIds: { has: 'g1' } });
+    assertHas({ groupId: 'g1', ungrouped: 'false' }, { directGroupIds: { isEmpty: false } });
   });
 
   /**

@@ -10,12 +10,12 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
   if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
-  // A student's route to a test runs through their groups, so all three of
-  // these ask about membership rather than a column on the student.
-  if (query.groupId) add({ groups: { some: { id: query.groupId } } });
-  if (query.branchId) add({ groups: { some: { branchId: query.branchId } } });
+  // A grant is an id in a column on the student, and the branch is another one:
+  // neither is a join any more.
+  if (query.groupId) add({ directGroupIds: { has: query.groupId } });
+  if (query.branchId) add({ currentBranchId: query.branchId });
   if (query.ungrouped !== undefined) {
-    add({ groups: query.ungrouped ? { none: {} } : { some: {} } });
+    add({ directGroupIds: { isEmpty: query.ungrouped } });
   }
 
   // Matches `hasSignedIn` exactly — a PIN the institute set does not count, or
