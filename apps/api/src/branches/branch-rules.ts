@@ -1,23 +1,11 @@
-/**
- * The rules that keep the branch list trustworthy. All pure, so they can be
- * tested without a database, and all exist to stop a list that everything else
- * picks from being edited out from under those choices.
- */
+/** The rules that keep the branch list trustworthy. */
 
 export interface BranchUsage {
   groupCount: number;
   isGlobal: boolean;
 }
 
-/**
- * A branch may only be deleted once no group sits under it, and GLOBAL never.
- *
- * Deleting a branch with groups would take those groups' students' access with
- * it. GLOBAL is refused outright: it is the home for every group that belongs
- * to no physical centre, and nothing re-creates it if it goes.
- *
- * Returns the reason it cannot be deleted, or null when it can.
- */
+/** A branch may only be deleted once no group sits under it, and GLOBAL never. */
 export function branchDeletionBlocker(usage: BranchUsage): string | null {
   if (usage.isGlobal) {
     return 'GLOBAL is part of the system and cannot be deleted.';
@@ -28,13 +16,7 @@ export function branchDeletionBlocker(usage: BranchUsage): string | null {
   return null;
 }
 
-/**
- * GLOBAL cannot be renamed or retired either.
- *
- * Retiring it would stop cross-branch groups being created with no way back,
- * and renaming it would leave the one branch every admin recognises called
- * something else — while `isGlobal`, not the name, is what code goes by.
- */
+/** GLOBAL cannot be renamed or retired either. */
 export function branchEditBlocker(
   usage: Pick<BranchUsage, 'isGlobal'>,
   changes: { name?: string; isActive?: boolean },

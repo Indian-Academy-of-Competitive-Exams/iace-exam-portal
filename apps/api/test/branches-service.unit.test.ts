@@ -9,14 +9,7 @@ import {
 import { BranchesService } from '../src/branches/branches.service';
 import { FakePrisma, makeBranch } from './support/fakes';
 
-/**
- * The branch list, exercised through the service rather than its rule helpers.
- *
- * `branch-rules.ts` was already tested, but nothing ever loaded the service
- * that CALLS it — so a rule could have been correct and simply not consulted,
- * and every test would still have passed. These run against a fake Prisma: no
- * database, no container, same code path.
- */
+/** The branch list, exercised through the service rather than its rule helpers. */
 function serviceWith(branches = [makeBranch()]) {
   const prisma = new FakePrisma([], [], branches);
   return { service: new BranchesService(prisma.asService()), prisma };
@@ -60,9 +53,9 @@ describe('BranchesService — creating', () => {
   });
 
   /**
-   * Names arrive canonical from the schema, so this catches the REAL duplicate
-   * rather than a differently-typed one — and it must be a CONFLICT the form
-   * can show against the name field, not a 500 from the unique index.
+   * Names arrive canonical from the schema, so this catches the REAL duplicate rather than a
+   * differently-typed one — and it must be a CONFLICT the form can show against the name field, not
+   * a 500 from the unique index.
    */
   it('refuses a duplicate name, against the field', async () => {
     const { service } = serviceWith([makeBranch({ name: 'AMEERPET' })]);
@@ -81,8 +74,8 @@ describe('BranchesService — creating', () => {
 
 describe('BranchesService — GLOBAL is protected', () => {
   /**
-   * The failure these prevent: GLOBAL holds every group tied to no centre, and
-   * nothing re-creates it. Losing it is not recoverable from the UI.
+   * The failure these prevent: GLOBAL holds every group tied to no centre, and nothing re-creates
+   * it. Losing it is not recoverable from the UI.
    */
   it('refuses to delete GLOBAL, even with no groups under it', async () => {
     const { service } = serviceWith([GLOBAL]);
@@ -121,8 +114,8 @@ describe('BranchesService — deleting', () => {
   });
 
   /**
-   * Deleting a branch with groups would take its students' route to every test
-   * with it — and the click would look like it worked.
+   * Deleting a branch with groups would take its students' route to every test with it — and the
+   * click would look like it worked.
    */
   it('refuses a branch that still has groups, and says how many', async () => {
     const { service, prisma } = serviceWith([makeBranch({ id: 'br_1', _count: { groups: 3 } })]);

@@ -4,9 +4,8 @@ import { AppException, ErrorCodes, type ActorType } from '@iace/contracts';
 import { ACTORS_KEY, type AuthenticatedUser } from '../../common/security';
 
 /**
- * Enforces @Actors(...). Students and Admins are separate tables with separate
- * rules, so an admin-only route must never accept a student token even though
- * both are perfectly valid JWTs.
+ * Enforces @Actors(...). Students and Admins are separate tables with separate rules, so an
+ * admin-only route must never accept a student token even though both are perfectly valid JWTs.
  */
 @Injectable()
 export class ActorGuard implements CanActivate {

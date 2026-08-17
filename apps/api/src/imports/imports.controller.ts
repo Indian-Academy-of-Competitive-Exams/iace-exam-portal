@@ -32,21 +32,15 @@ import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
 import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';
 
-/**
- * The two fields we use off a multipart upload.
- *
- * Declared rather than imported: @types/multer no longer augments the global
- * Express namespace, and depending on an ambient type from a transitive package
- * is how a dependency bump becomes a compile error in unrelated code.
- */
+/** The two fields we use off a multipart upload. */
 interface UploadedFileLike {
   buffer: Buffer;
   size: number;
 }
 
 /**
- * Mounted under /imports, which is the one path with the larger body limit —
- * see common/body-parsers.ts. Everything else on the API is capped far lower.
+ * Mounted under /imports, which is the one path with the larger body limit — see
+ * common/body-parsers.ts. Everything else on the API is capped far lower.
  */
 @Controller('imports')
 @Actors(ActorTypes.ADMIN)
@@ -57,8 +51,8 @@ export class ImportsController {
   ) {}
 
   /**
-   * The sample file. Generated on request from the same column list the parser
-   * matches on, so it can never document a format the importer will not accept.
+   * The sample file. Generated on request from the same column list the parser matches on, so it can
+   * never document a format the importer will not accept.
    */
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('students/template')
@@ -89,11 +83,9 @@ export class ImportsController {
   }
 
   // ==========================================================================
-  // Adding students to one group
-  //
-  // The group is in the PATH, not in the file: it is the screen the admin is
-  // on, so it cannot be mistyped, and one sheet cannot scatter students across
-  // batches nobody checked.
+  // Adding students to one group The group is in the PATH, not in the file: it is the screen the
+  // admin is on, so it cannot be mistyped, and one sheet cannot scatter students across batches
+  // nobody checked.
   // ==========================================================================
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -128,10 +120,9 @@ export class ImportsController {
   }
 
   /**
-   * A second line of defence, and only that: MulterModule already aborts the
-   * stream at the same limit (see imports.module.ts), so reaching this means
-   * something upstream let a large body through. Kept because the two are
-   * enforced in different places and only one of them is ours to guarantee.
+   * A second line of defence, and only that: MulterModule already aborts the stream at the same
+   * limit (see imports.module.ts), so reaching this means something upstream let a large body
+   * through.
    */
   private bufferOf(file: UploadedFileLike | undefined): Buffer {
     if (!file) {

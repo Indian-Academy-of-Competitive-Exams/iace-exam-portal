@@ -6,14 +6,7 @@ import { TokenService } from '../token.service';
 import { SessionService } from '../session.service';
 import { IS_PUBLIC_KEY, type AuthenticatedUser } from '../../common/security';
 
-/**
- * Applied globally (see AppModule's APP_GUARD); routes opt out with @Public().
- *
- * Verifying the signature is not enough — we also confirm the Redis session
- * still exists, which is what makes logout and revocation take effect
- * immediately instead of at token expiry. That is one Redis GET per request,
- * which is exactly the kind of load Redis is here to absorb.
- */
+/** Applied globally (see AppModule's APP_GUARD); routes opt out with @Public(). */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(

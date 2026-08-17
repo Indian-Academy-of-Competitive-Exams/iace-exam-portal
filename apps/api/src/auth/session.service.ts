@@ -6,13 +6,8 @@ import { redisKeys } from '../redis/redis.keys';
 import { type DeviceContext, type StoredSession } from './auth.types';
 
 /**
- * Sessions and device binding — Redis only, never Postgres. A session's TTL is
- * the refresh-token lifetime, so expiry is automatic and there is no sweeper.
- *
- * Two properties we get from keeping the session server-side:
- *   - logout is instant (the key is gone, so the access token stops working);
- *   - a stolen refresh token is detectable, because tokens rotate on every use
- *     and a replay of the old one no longer matches the stored hash.
+ * Sessions and device binding — Redis only, never Postgres. A session's TTL is the refresh-token
+ * lifetime, so expiry is automatic and there is no sweeper.
  */
 @Injectable()
 export class SessionService {
@@ -61,9 +56,9 @@ export class SessionService {
   }
 
   /**
-   * Verifies the presented refresh token against the stored hash and swaps in
-   * the new one. Any mismatch revokes the session outright: either the token
-   * was replayed after rotation, or it leaked.
+   * Verifies the presented refresh token against the stored hash and swaps in the new one. Any
+   * mismatch revokes the session outright: either the token was replayed after rotation, or it
+   * leaked.
    */
   async rotate(
     actor: ActorType,

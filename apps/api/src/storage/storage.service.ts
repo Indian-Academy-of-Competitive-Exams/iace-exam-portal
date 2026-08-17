@@ -9,15 +9,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AppConfigService } from '../config/app-config.service';
 
-/**
- * THE upload path — there is exactly one, and it is never branched by
- * environment. Local dev talks to MinIO and production talks to AWS S3 through
- * the identical AWS SDK v3 calls below; only S3_ENDPOINT, the credentials and
- * S3_FORCE_PATH_STYLE differ, and those come from env.
- *
- *   local:      S3_ENDPOINT=http://localhost:9000  S3_FORCE_PATH_STYLE=true
- *   production: S3_ENDPOINT unset                  S3_FORCE_PATH_STYLE=false
- */
+/** THE upload path — there is exactly one, and it is never branched by environment. */
 @Injectable()
 export class StorageService implements OnModuleDestroy {
   private readonly logger = new Logger(StorageService.name);
@@ -85,8 +77,8 @@ export class StorageService implements OnModuleDestroy {
   }
 
   /**
-   * Stable public URL for an object. In production this is the CloudFront /
-   * bucket origin; locally it points straight at MinIO.
+   * Stable public URL for an object. In production this is the CloudFront / bucket origin; locally
+   * it points straight at MinIO.
    */
   publicUrl(key: string): string {
     const base = this.publicBaseUrl ?? `${this.config.get('S3_ENDPOINT') ?? ''}/${this.bucket}`;

@@ -11,15 +11,7 @@ import {
   type DomainEventPayloads,
 } from '../../src/common/events';
 
-/**
- * Test doubles for the three things the auth services touch: Redis, config and
- * Postgres. They are hand-written rather than mocked so the suite needs no
- * running infrastructure — the same property the envelope tests have, and the
- * reason `pnpm test` is safe to put in CI on day one.
- *
- * The Redis fake models TTL against a clock the test controls, so expiry is
- * asserted by advancing time rather than by sleeping.
- */
+/** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
 interface Entry {
   value: string | Set<string>;
@@ -213,11 +205,7 @@ export class FakeMessageSender implements MessageSender {
     return last;
   }
 
-  /**
-   * The code out of the last OTP. Read from `data`, which is what a provider
-   * template is filled from — the rendered `body` is for channels that have no
-   * template, and asserting against it would tie every auth test to copy.
-   */
+  /** The code out of the last OTP. */
   get lastCode(): string {
     const code = this.lastMessage.data?.code;
     if (typeof code !== 'string') throw new Error('no OTP was sent');
@@ -238,13 +226,7 @@ export interface FakeProfile {
   panUrl: string | null;
 }
 
-/**
- * Records what was published instead of publishing it.
- *
- * Deliberately a recorder and not a real emitter: the guarantee worth asserting
- * is that a producer ANNOUNCES the fact, not that some listener reacted. A test
- * that needed a listener to observe the emit would be testing EventEmitter2.
- */
+/** Records what was published instead of publishing it. */
 export class FakeEventBus {
   readonly published: { event: DomainEventName; payload: unknown }[] = [];
 
@@ -360,11 +342,8 @@ export class FakePrisma {
     },
 
     /**
-     * Enough of a nested write for the profile paths: scalar columns are
-     * assigned, and `profile.upsert` creates the row or merges into it exactly
-     * as Prisma would. Modelled rather than stubbed because the thing worth
-     * asserting — "storing a document recomputes `profileCompleted` from the
-     * MERGED profile" — is invisible if the fake just records the call.
+     * Enough of a nested write for the profile paths: scalar columns are assigned, and
+     * `profile.upsert` creates the row or merges into it exactly as Prisma would.
      */
     update: ({
       where,
@@ -397,14 +376,7 @@ export class FakePrisma {
       ),
   };
 
-  /**
-   * Branches, with the group counts the service reads through `_count`.
-   *
-   * Enough of Prisma's shape for BranchesService to run unchanged — the point
-   * is to exercise the RULES (GLOBAL is protected, a branch with groups cannot
-   * be deleted, a duplicate name is refused) without a database. Anything the
-   * service does not call is deliberately absent rather than stubbed.
-   */
+  /** Branches, with the group counts the service reads through `_count`. */
   readonly branch = {
     findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
       Promise.resolve(
@@ -465,11 +437,7 @@ export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
   };
 }
 
-/**
- * The device context every session-creating call needs. Typed as DeviceContext
- * rather than inferred, so `{ ...NO_DEVICE, deviceId: 'phone-a' }` is allowed —
- * inference would fix each field to the literal `null`.
- */
+/** The device context every session-creating call needs. */
 export const NO_DEVICE: DeviceContext = {
   deviceId: null,
   deviceName: null,
@@ -478,13 +446,8 @@ export const NO_DEVICE: DeviceContext = {
 };
 
 /**
- * The admins facade, as far as auth is concerned: one method returning the
- * grant map that goes into a token.
- *
- * A fake rather than the real service because the real one is a Prisma query
- * against a GIN index, and auth's tests are about what auth does with the
- * answer, not about how it is fetched. `calls` is recorded so a test can assert
- * the obvious optimisation — that a super admin is never looked up.
+ * The admins facade, as far as auth is concerned: one method returning the grant map that goes
+ * into a token.
  */
 export class FakeAdminsService {
   readonly calls: string[] = [];
@@ -496,9 +459,8 @@ export class FakeAdminsService {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Admins / features / grants
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Admins / features /
+// grants ---------------------------------------------------------------------------
 
 interface FakeFeatureRow {
   id: string;
@@ -526,15 +488,7 @@ interface FakeAdminRow {
   createdAt: Date;
 }
 
-/**
- * Enough Prisma for AdminsService to run unchanged, with no database.
- *
- * The point is to exercise the RULES — both permission rows are created with a
- * feature, deactivating prunes grants, granting twice grants once — which are
- * exactly the parts a real Postgres would not catch for us anyway. `$transaction`
- * runs the callback directly: these tests are about what the writes ARE, not
- * about isolation, and pretending to roll back would be a lie either way.
- */
+/** Enough Prisma for AdminsService to run unchanged, with no database. */
 export class FakeAdminsPrisma {
   private seq = 0;
   readonly features: FakeFeatureRow[] = [];

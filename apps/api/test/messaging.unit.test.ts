@@ -7,15 +7,7 @@ import { MESSAGE_CHANNELS, MESSAGE_KINDS } from '../src/common/messaging';
 import { OtpService } from '../src/auth/otp/otp.service';
 import { FakeConfig, FakeMessageSender, FakeRedis } from './support/fakes';
 
-/**
- * The outbound-message seam (docs/03 §10).
- *
- * Two things are worth holding onto through the generalisation from `OtpSender`
- * to `MessageSender`: an OTP still reaches a student by SMS and an admin by
- * email, and the console sender is still refused in production. The second is
- * the one that matters — it is the only thing standing between a misconfigured
- * deploy and live login codes printed into a log anyone with access can read.
- */
+/** The outbound-message seam (docs/03 §10). */
 
 function otpService(config = new FakeConfig()) {
   const sender = new FakeMessageSender();
@@ -49,9 +41,8 @@ describe('OTP as one caller of the message sender', () => {
 
     await service.request(ActorTypes.STUDENT, '9876543210');
 
-    // MSG91 fills a DLT-registered template from `data`; it never sends our
-    // `body`. A code that only existed in the prose would arrive as an empty
-    // template — a message with no code in it.
+    // MSG91 fills a DLT-registered template from `data`; it never sends our `body`. A code that only
+    // existed in the prose would arrive as an empty template — a message with no code in it.
     const { data, body } = sender.lastMessage;
     assert.match(String(data?.code), /^\d{6}$/);
     assert.equal(data?.ttlSec, 300);
@@ -69,9 +60,9 @@ describe('OTP as one caller of the message sender', () => {
 });
 
 describe('Provider selection', () => {
-  // The factory the module's useFactory calls, exercised directly — the guard
-  // is the subject, and standing a Nest container up around it would only add
-  // a dependency and a way for the test to pass for the wrong reason.
+  // The factory the module's useFactory calls, exercised directly — the guard is the subject, and
+  // standing a Nest container up around it would only add a dependency and a way for the test to
+  // pass for the wrong reason.
   const senderFor = (env: Record<string, unknown>) =>
     createMessageSender(new FakeConfig(env).asService(), new ConsoleMessageSender());
 
@@ -81,14 +72,7 @@ describe('Provider selection', () => {
     assert.ok(sender instanceof ConsoleMessageSender);
   });
 
-  /**
-   * The failure this exists to prevent. A production deploy that still says
-   * `console` must not start: every OTP it issues would be written to the
-   * application log in plaintext, and a login code in a log is a login.
-   *
-   * It throws at BOOT rather than at send time, so the deploy fails visibly
-   * instead of a month of codes going to the log before anyone notices.
-   */
+  /** The failure this exists to prevent. */
   it('refuses the console sender in production, at boot', () => {
     assert.throws(
       () => senderFor({ NODE_ENV: 'production', OTP_SENDER: 'console' }),

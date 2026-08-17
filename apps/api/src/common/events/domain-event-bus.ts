@@ -3,19 +3,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { type DomainEventName, type DomainEventPayloads } from './event-catalog';
 
 /**
- * The in-process event bus, typed against the catalog.
- *
- * FIRE AND FORGET, deliberately. A producer publishes a fact that has already
- * happened — the PIN *is* reset, the attempt *is* submitted — so a listener
- * that fails must not turn a completed operation into a failed request. The
- * catch below is what guarantees that: without it, EventEmitter2 propagates a
- * synchronous listener error straight back into the caller's stack, and a
- * broken notification handler would start failing PIN resets.
- *
- * That also fixes the delivery guarantee at "best effort in this process". When
- * a reaction has to survive a crash or a redeploy — scoring, above all — the
- * answer is a BullMQ job, not this (docs/03 §6). This is for reactions where
- * losing one is a missed notification, not a missing result.
+ * The in-process event bus, typed against the catalog. FIRE AND FORGET: a producer
+ * publishes a fact that already happened, so a failing listener must not fail the request.
  */
 @Injectable()
 export class DomainEventBus {

@@ -3,8 +3,8 @@ import { describe, it } from 'node:test';
 import { changePinSchema, updateMeSchema, updateStudentSchema } from '@iace/contracts';
 
 /**
- * A student's own account. The guarantees here are the ones that decide whether
- * a student can quietly grant themselves something, or lock somebody else out.
+ * A student's own account. The guarantees here are the ones that decide whether a student can
+ * quietly grant themselves something, or lock somebody else out.
  */
 describe('updateMeSchema — what a student may change about themselves', () => {
   it('accepts the ordinary details', () => {
@@ -18,11 +18,9 @@ describe('updateMeSchema — what a student may change about themselves', () => 
   });
 
   /**
-   * The failure this prevents: group membership is what grants access to
-   * tests, so a student who could set their own groups could enrol themselves
-   * in any batch in the institute — including one sitting a paper they are not
-   * meant to see. Stripped rather than rejected, so a stray key from a shared
-   * form is harmless rather than an error nobody can explain.
+   * The failure this prevents: group membership is what grants access to tests, so a student who
+   * could set their own groups could enrol themselves in any batch in the institute — including one
+   * sitting a paper they are not meant to see.
    */
   it('SILENTLY DROPS groupIds — a student cannot grant themselves access', () => {
     const parsed = updateMeSchema.parse({
@@ -56,9 +54,8 @@ describe('changePinSchema', () => {
   });
 
   /**
-   * The current PIN is required even though the caller is already signed in: a
-   * session left open on a shared machine would otherwise be enough to lock
-   * the real owner out of their own account.
+   * The current PIN is required even though the caller is already signed in: a session left open on
+   * a shared machine would otherwise be enough to lock the real owner out of their own account.
    */
   it('requires the current PIN', () => {
     const result = changePinSchema.safeParse({ newPin: '4417' });

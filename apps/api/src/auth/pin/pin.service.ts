@@ -8,9 +8,8 @@ import { redisKeys } from '../../redis/redis.keys';
 import { secondsToHuman } from '../../common/duration';
 
 /**
- * Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and
- * anything past the end of the ladder stays on the last one. Pure, so the
- * escalation can be tested without Redis.
+ * Picks the rung: the 1st lockout gets the 1st step, the 2nd the 2nd, and anything past the end of
+ * the ladder stays on the last one. Pure, so the escalation can be tested without Redis.
  */
 export function lockoutDurationFor(steps: number[], lockoutCount: number): number {
   const index = Math.min(Math.max(lockoutCount, 1), steps.length) - 1;
@@ -19,9 +18,8 @@ export function lockoutDurationFor(steps: number[], lockoutCount: number): numbe
 }
 
 /**
- * OWASP's low-memory argon2id profile (19 MiB, t=2, p=1). It costs ~20ms per
- * verify here, which is the right trade for a login that runs once a day per
- * student rather than once per request.
+ * OWASP's low-memory argon2id profile (19 MiB, t=2, p=1). It costs ~20ms per verify here, which is
+ * the right trade for a login that runs once a day per student rather than once per request.
  */
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
@@ -30,26 +28,7 @@ const ARGON2_OPTIONS = {
   parallelism: 1,
 } as const;
 
-/**
- * The 4-digit student login PIN.
- *
- * Two things carry the security here, because four digits is a very small
- * secret — 10,000 possibilities, not a million:
- *
- *  1. A PEPPER — the PIN is HMAC'd with a server-side secret before it is
- *     hashed. The pepper lives in the environment, never beside the hash, so a
- *     stolen Student table cannot be brute-forced offline (10,000 candidates
- *     is otherwise a fraction of a second's work).
- *  2. An ESCALATING LOCKOUT — consecutive failures are counted in Redis and the
- *     number is locked out once the cap is hit, for LONGER each time it
- *     happens again (15 minutes → 1 hour → 1 day). This is what actually stops
- *     online guessing: a fixed cooldown can simply be waited out, and at five
- *     tries per quarter-hour the whole 10,000-PIN space falls in about three
- *     weeks.
- *
- * Every counter, lock and setup ticket is Redis-only with a TTL: nothing to
- * expire by hand, nothing mirrored into Postgres.
- */
+/** The 4-digit student login PIN. */
 @Injectable()
 export class PinService {
   /** Verified against on unknown mobiles so a login costs the same either way. */
@@ -70,8 +49,8 @@ export class PinService {
   }
 
   /**
-   * How long the wrong-attempt counter lives. The first rung doubles as this
-   * window, so an isolated typo today never joins forces with one next week.
+   * How long the wrong-attempt counter lives. The first rung doubles as this window, so an isolated
+   * typo today never joins forces with one next week.
    */
   get attemptWindowSec(): number {
     return lockoutDurationFor(this.lockoutSteps, 1);
@@ -95,9 +74,8 @@ export class PinService {
 
   async verify(hash: string, pin: string): Promise<boolean> {
     try {
-      // No options here on purpose: argon2 reads the cost parameters back out
-      // of the encoded hash, so raising ARGON2_OPTIONS later still verifies
-      // every PIN hashed under the old settings.
+      // No options here on purpose: argon2 reads the cost parameters back out of the encoded hash, so
+      // raising ARGON2_OPTIONS later still verifies every PIN hashed under the old settings.
       return await argon2.verify(hash, this.pepper(pin));
     } catch {
       // A malformed or foreign hash is a failed login, not a 500.
@@ -106,9 +84,8 @@ export class PinService {
   }
 
   /**
-   * Burns the same ~20ms as a real verify when there is no account to check
-   * against, so response time cannot be used to test whether a number is
-   * registered.
+   * Burns the same ~20ms as a real verify when there is no account to check against, so response
+   * time cannot be used to test whether a number is registered.
    */
   async burnVerifyTime(): Promise<void> {
     this.decoyHash ??= this.hash('0000');
@@ -132,14 +109,8 @@ export class PinService {
   }
 
   /**
-   * Records a wrong PIN and locks the number once the cap is reached — each
-   * time for LONGER than the last.
-   *
-   * Waiting out a fixed 15 minutes and starting again is a viable attack on a
-   * 4-digit PIN: five tries a quarter-hour is ~480 a day, and the whole space
-   * is 10,000. Climbing to an hour and then a day turns that into a handful of
-   * guesses a day, while a student who mistypes twice in a morning never
-   * notices the ladder exists.
+   * Records a wrong PIN and locks the number once the cap is reached — each time for LONGER than the
+   * last.
    */
   async registerFailure(mobile: string): Promise<void> {
     const key = redisKeys.pinAttempts(mobile);
@@ -147,9 +118,8 @@ export class PinService {
     if (attempts === 1) await this.redis.client.expire(key, this.attemptWindowSec);
     if (attempts < this.maxAttempts) return;
 
-    // Nth lockout for this number → Nth rung. The counter outlives the lockout
-    // it causes (plus the decay window), so waiting one out and starting over
-    // climbs instead of resetting.
+    // Nth lockout for this number → Nth rung. The counter outlives the lockout it causes (plus the
+    // decay window), so waiting one out and starting over climbs instead of resetting.
     const lockoutsKey = redisKeys.pinLockouts(mobile);
     const lockouts = await this.redis.client.incr(lockoutsKey);
     const lockoutSec = lockoutDurationFor(this.lockoutSteps, lockouts);
@@ -160,10 +130,8 @@ export class PinService {
   }
 
   /**
-   * A correct PIN (or a fresh one) wipes the slate, ladder included: whoever
-   * did that holds the PIN or has just proved they hold the number, and both
-   * are the owner. It is also what stops the escalation from punishing a
-   * student who simply forgot and reset.
+   * A correct PIN (or a fresh one) wipes the slate, ladder included: whoever did that holds the PIN
+   * or has just proved they hold the number, and both are the owner.
    */
   async clearFailures(mobile: string): Promise<void> {
     await this.redis.del(
@@ -177,11 +145,7 @@ export class PinService {
   // Setup ticket — the bridge between "OTP verified" and "PIN set"
   // ==========================================================================
 
-  /**
-   * Issued the moment an OTP checks out. It is what lets the PIN screen be a
-   * separate step: the student is not signed in yet, but they have proved they
-   * hold the number, and that proof is good for a few minutes.
-   */
+  /** Issued the moment an OTP checks out. */
   async issueSetupToken(mobile: string): Promise<{ setupToken: string; expiresInSec: number }> {
     const setupToken = randomBytes(32).toString('hex');
     await this.redis.client.set(

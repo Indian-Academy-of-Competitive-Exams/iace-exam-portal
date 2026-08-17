@@ -8,11 +8,7 @@ const boolFromEnv = (fallback: boolean) =>
     .optional()
     .transform((v) => (v === undefined || v === '' ? fallback : v === 'true' || v === '1'));
 
-/**
- * A comma-separated ladder of positive second counts, e.g. "900,3600,86400".
- * Must not descend — a lockout ladder that gets shorter is a config mistake,
- * and one that silently "works" would quietly weaken the account it protects.
- */
+/** A comma-separated ladder of positive second counts, e.g. "900,3600,86400". */
 const secondsLadder = (fallback: number[]) =>
   z
     .string()
@@ -54,9 +50,8 @@ export const NODE_ENVS = {
 export type NodeEnv = (typeof NODE_ENVS)[keyof typeof NODE_ENVS];
 
 /**
- * OTP delivery channels. CONSOLE prints the code to the API log and is refused
- * outright in production (see AuthModule); MSG91 is the DLT-registered SMS
- * sender that replaces it.
+ * OTP delivery channels. CONSOLE prints the code to the API log and is refused outright in
+ * production (see AuthModule); MSG91 is the DLT-registered SMS sender that replaces it.
  */
 export const OTP_SENDERS = {
   CONSOLE: 'console',
@@ -64,12 +59,7 @@ export const OTP_SENDERS = {
 } as const;
 export type OtpSenderChannel = (typeof OTP_SENDERS)[keyof typeof OTP_SENDERS];
 
-/**
- * A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb.
- * Validated here so a typo fails at boot rather than becoming a silently
- * enormous limit — `bytes` returns null for garbage, and body-parser then
- * treats "no limit" as the answer.
- */
+/** A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb. */
 const byteSize = (fallback: string) =>
   z
     .string()
@@ -102,32 +92,19 @@ export const envSchema = z.object({
   OTP_MAX_VERIFY_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_SENDER: z.enum(OTP_SENDERS).default(OTP_SENDERS.CONSOLE),
 
-  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the
-  // attempt counters and the setup ticket live in Redis.
-  //
-  // The pepper is HMAC'd into the PIN before hashing and is NEVER stored with
-  // it. A 4-digit PIN is only 10,000 candidates — a leaked Student table alone
-  // would fall in under a second, so the hash is worthless without this secret.
-  // Rotating it invalidates every PIN (students recover by OTP reset).
+  // Student PIN policy. The PIN itself is argon2id-hashed in Postgres; the attempt counters and the
+  // setup ticket live in Redis.
   PIN_PEPPER: z.string().min(24, 'PIN_PEPPER must be at least 24 characters'),
   PIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-  // Escalating lockout. Each time a number is locked out again it climbs one
-  // rung; the last rung repeats forever. Four digits is only 10,000 guesses, so
-  // a flat 15 minutes leaves ~480 tries a day — enough to exhaust the space in
-  // about three weeks. Climbing to a day cuts that to a handful of tries.
-  // The FIRST step doubles as the window the wrong-attempt counter lives in.
+  // Escalating lockout. Each time a number is locked out again it climbs one rung; the last rung
+  // repeats forever.
   PIN_LOCKOUT_STEPS_SEC: secondsLadder([900, 3600, 86400]),
-  // How long a number must go without being locked out before the ladder drops
-  // back to the first rung. Signing in correctly, or resetting the PIN, clears
-  // it immediately — this only matters to someone who keeps failing.
+  // How long a number must go without being locked out before the ladder drops back to the first
+  // rung.
   PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
   PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
 
-  // Request body limits. Deliberately two: the ordinary API exchanges small
-  // JSON (a login is a few hundred bytes, a single question a few tens of KB —
-  // images are S3 URLs, never inline), so a generous global limit would only
-  // widen the surface for cheap memory-pressure attacks. The question importer
-  // is the one endpoint that legitimately receives a large payload.
+  // Request body limits.
   BODY_LIMIT_DEFAULT: byteSize('256kb'),
   BODY_LIMIT_IMPORT: byteSize('10mb'),
 
@@ -161,8 +138,8 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 /**
- * Fails the process at boot with every problem listed at once — a missing env
- * var should never surface as a mystery 500 an hour into a live test.
+ * Fails the process at boot with every problem listed at once — a missing env var should never
+ * surface as a mystery 500 an hour into a live test.
  */
 export function validateEnv(raw: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(raw);

@@ -28,9 +28,8 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { BranchesService } from './branches.service';
 
 /**
- * Branches. Reading is open to anyone who can manage groups — they have to see
- * the list to pick from it — while every write is super-admin only, which is
- * the entire reason the table exists.
+ * Branches. Reading is open to anyone who can manage groups — they have to see the list to pick
+ * from it — while every write is super-admin only, which is the entire reason the table exists.
  */
 @Controller('admin/branches')
 @Actors(ActorTypes.ADMIN)

@@ -20,13 +20,8 @@ import { RequestIdMiddleware, REQUEST_ID_HEADER } from '../src/common/request-id
 import { ZodBody } from '../src/common/zod-validation.pipe';
 
 /**
- * End to end over real HTTP, through a real Nest app wired exactly the way
- * AppModule wires the envelope. The point is the wiring: that a handler which
- * knows nothing about the envelope still answers inside it, and that a thrown
- * error never escapes as anything else.
- *
- * The probe module stands in for AppModule so the test needs no database,
- * Redis or S3 — only the three pieces under test.
+ * End to end over real HTTP, through a real Nest app wired exactly the way AppModule wires the
+ * envelope.
  */
 
 const bodySchema = z.object({ mobile: z.string().min(10, 'Enter a valid 10-digit mobile number') });

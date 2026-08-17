@@ -10,9 +10,8 @@ import {
 import { isPreTestReady, isProfileCompleted } from '../src/students/student-flags';
 
 /**
- * The flag rules and the privacy boundary. Both are the sort of thing that
- * looks obviously right in review and is wrong in production, so they are
- * asserted rather than read.
+ * The flag rules and the privacy boundary. Both are the sort of thing that looks obviously right
+ * in review and is wrong in production, so they are asserted rather than read.
  */
 
 describe('isPreTestReady', () => {
@@ -65,9 +64,8 @@ describe('isProfileCompleted', () => {
   });
 
   it('counts documents an admin cannot see', () => {
-    // The flag describes the student's record, not what one role may read.
-    // Admins never see Aadhaar or PAN, and the profile is still incomplete
-    // without them.
+    // The flag describes the student's record, not what one role may read. Admins never see Aadhaar or
+    // PAN, and the profile is still incomplete without them.
     assert.equal(isProfileCompleted({ ...complete, aadhaarUrl: null }), false);
   });
 
@@ -116,14 +114,7 @@ describe('admin student contracts', () => {
     assert.ok(studentDetailSchema.safeParse(detail).success);
   });
 
-  /**
-   * Admins DO see the identity documents. They were once withheld, deliberately;
-   * that was reversed because the institute verifies these records and an admin
-   * who cannot see the Aadhaar a student uploaded cannot do that checking.
-   *
-   * What has not changed is that the value is a short-lived signed link rather
-   * than a stored path — see StudentsService.toProfileView.
-   */
+  /** Admins DO see the identity documents. */
   it('carries the identity documents', () => {
     const withDocs = {
       ...detail,
@@ -137,9 +128,9 @@ describe('admin student contracts', () => {
   });
 
   /**
-   * A malformed JSON column reads as "nothing recorded" rather than reaching a
-   * screen that assumes an array — these are written by hand and by older
-   * builds, and a crash on someone else's data is not the student's problem.
+   * A malformed JSON column reads as "nothing recorded" rather than reaching a screen that assumes
+   * an array — these are written by hand and by older builds, and a crash on someone else's data is
+   * not the student's problem.
    */
   it('refuses education history that is not a list of entries', () => {
     const junk = { ...detail, profile: { ...profile, educationDetails: 'BSc' } };
@@ -185,9 +176,7 @@ describe('createStudentSchema — an absent name is not an invalid one', () => {
   });
 
   it('accepts an EMPTY name field — the regression', () => {
-    // `.min(1).optional()` rejected '': optional permits undefined, never the
-    // empty string. An admin form whose name box was simply left alone could
-    // therefore not be submitted at all, and the message blamed the name.
+    // `.min(1).optional()` rejected '': optional permits undefined, never the empty string.
     const parsed = createStudentSchema.parse({ mobile: '9876543210', fullName: '' });
     assert.equal(parsed.fullName, undefined);
   });

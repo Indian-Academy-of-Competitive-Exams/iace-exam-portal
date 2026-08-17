@@ -29,8 +29,8 @@ import {
 } from './support/fakes';
 
 /**
- * The orchestration. Most of what matters here is what the API refuses to
- * disclose: whether a number is registered, and why exactly a login failed.
+ * The orchestration. Most of what matters here is what the API refuses to disclose: whether a
+ * number is registered, and why exactly a login failed.
  */
 
 const MOBILE = '9876543210';
@@ -259,9 +259,8 @@ describe('AuthService — admin', () => {
   });
 
   it('signs in a DEACTIVATED admin, and hands them nothing', async () => {
-    // The point of the change: refusing here would answer a real account with
-    // "invalid credentials", which reads as a typo. They get in, and the app
-    // tells them what actually happened.
+    // The point of the change: refusing here would answer a real account with "invalid credentials",
+    // which reads as a typo. They get in, and the app tells them what actually happened.
     const ctx = build([], [makeAdmin({ id: 'adm_1', isSuperAdmin: false, isActive: false })], {
       adm_1: { [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
     });
@@ -309,10 +308,8 @@ describe('AuthService — admin', () => {
     const { devCode: _devCode, ...realResponse } =
       await real.auth.requestAdminOtp('admin@iace.co.in');
 
-    // Same shape and same numbers as a real send, so the response cannot be
-    // used to enumerate admins — but no code actually goes out. Compared as a
-    // whole object on purpose: a field added to one branch and forgotten in the
-    // other is exactly the difference an attacker would measure.
+    // Same shape and same numbers as a real send, so the response cannot be used to enumerate admins —
+    // but no code actually goes out.
     assert.deepEqual(response, realResponse);
     assert.equal(response.sent, true);
     assert.equal(response.expiresInSec, 300);

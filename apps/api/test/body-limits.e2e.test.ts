@@ -9,14 +9,7 @@ import { IMPORT_ROUTE_PREFIX, registerBodyParsers } from '../src/common/body-par
 import { AppConfigService } from '../src/config/app-config.service';
 import { FakeConfig } from './support/fakes';
 
-/**
- * Two limits, one path boundary. The importer needs megabytes; every other
- * endpoint exchanges small JSON, and giving them all a 10MB allowance would
- * hand an unauthenticated caller a cheap way to make the server allocate.
- *
- * Sizes here are small (4KB / 64KB) so the test stays fast — the behaviour
- * under test is which limit applies to which path, not the numbers themselves.
- */
+/** Two limits, one path boundary. */
 
 const DEFAULT_LIMIT = '4kb';
 const IMPORT_LIMIT = '64kb';

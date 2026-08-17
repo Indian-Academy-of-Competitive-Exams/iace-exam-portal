@@ -32,9 +32,8 @@ const STUDENT_INCLUDE = {
 } as const satisfies Prisma.StudentInclude;
 
 /**
- * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that
- * writes them, `imports` excepted (see its own note; a bulk roster is one
- * statement per file rather than per row).
+ * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
+ * excepted (see its own note; a bulk roster is one statement per file rather than per row).
  */
 @Injectable()
 export class StudentsService {
@@ -51,9 +50,7 @@ export class StudentsService {
     const where = studentWhere(query);
     const skip = (query.page - 1) * query.pageSize;
 
-    // One round trip for the rows and one for the count. The count is what
-    // makes "page 4 of 37" possible, and it is the half that gets expensive
-    // first — revisit with a keyset cursor if a branch ever outgrows it.
+    // One round trip for the rows and one for the count.
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.student.findMany({
         where,
@@ -88,14 +85,7 @@ export class StudentsService {
     };
   }
 
-  /**
-   * A stored profile as the API returns it.
-   *
-   * The three document columns hold object KEYS, not URLs. The bucket is
-   * private, so a key is unopenable by a browser — every read swaps them for
-   * short-lived signed links, and nothing anywhere holds a permanent URL to
-   * somebody's Aadhaar.
-   */
+  /** A stored profile as the API returns it. */
   private async toProfileView(profile: {
     motherName: string | null;
     fatherName: string | null;
@@ -125,9 +115,8 @@ export class StudentsService {
       photoUrl,
       aadhaarUrl,
       panUrl,
-      // Parsed rather than cast: this is JSON written by an older build or by
-      // hand, and a malformed row should read as "nothing recorded" rather than
-      // reach a screen that assumes an array.
+      // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row
+      // should read as "nothing recorded" rather than reach a screen that assumes an array.
       educationDetails:
         educationEntrySchema.array().safeParse(profile.educationDetails).data ?? null,
       pastExamHistory: pastExamEntrySchema.array().safeParse(profile.pastExamHistory).data ?? null,
@@ -143,11 +132,7 @@ export class StudentsService {
   // Writing
   // ==========================================================================
 
-  /**
-   * Creates a student before their first login. `mobile` is the join key: when
-   * they eventually sign up, the OTP flow upserts on it and finds THIS row, so
-   * their group membership is already in place rather than lost to a duplicate.
-   */
+  /** Creates a student before their first login. */
   async create(input: CreateStudentBody): Promise<StudentDetail> {
     const existing = await this.prisma.student.findUnique({ where: { mobile: input.mobile } });
     if (existing) {
@@ -175,11 +160,7 @@ export class StudentsService {
     return this.detail(student.id);
   }
 
-  /**
-   * A patch: an omitted key is left alone, an explicit null clears the field.
-   * The two are different on purpose — "I did not touch the address" and "the
-   * address is wrong, remove it" must not collapse into the same request.
-   */
+  /** A patch: an omitted key is left alone, an explicit null clears the field. */
   async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
     const student = await this.prisma.student.findUnique({
       where: { id },
@@ -188,11 +169,7 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     if (input.groupIds) {
-      // The rule is "do not strip a student's LAST group", not "every student
-      // must have one". A self-signed-up student has none until an admin
-      // assigns them, and refusing unconditionally made their record
-      // unsaveable — an admin could not even correct their name without
-      // picking a group they may not know yet.
+      // The rule is "do not strip a student's LAST group", not "every student must have one".
       if (input.groupIds.length === 0 && student.groups.length > 0) {
         throw new AppException(
           ErrorCodes.VALIDATION_ERROR,
@@ -238,31 +215,13 @@ export class StudentsService {
     return this.detail(id);
   }
 
-  /**
-   * Confirms there is a student to act on, without reading anything about them.
-   *
-   * Exists so a caller can check BEFORE doing expensive work it would then have
-   * to undo — `me` calls it ahead of pushing a file to S3, rather than
-   * discovering the student is gone once the object is already stored.
-   */
+  /** Confirms there is a student to act on, without reading anything about them. */
   async assertExists(id: string): Promise<void> {
     const student = await this.prisma.student.findUnique({ where: { id }, select: { id: true } });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
   }
 
-  /**
-   * Points a profile at a stored document and recomputes `profileCompleted`.
-   *
-   * The write lives here rather than in whoever handled the upload because
-   * `StudentProfile` is this module's table (docs/03 §5), and `profileCompleted`
-   * is a STORED column: a second writer that set the column but not the flag
-   * would leave a student who has just uploaded their last document still being
-   * nudged to upload it.
-   *
-   * The flag is recomputed from the merged profile, not from the one column
-   * this call touched — see `update` above, which does the same for the same
-   * reason.
-   */
+  /** Points a profile at a stored document and recomputes `profileCompleted`. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
     const student = await this.prisma.student.findUnique({
       where: { id },
@@ -324,10 +283,8 @@ export class StudentsService {
       mobile: row.mobile,
       fullName: row.fullName,
       isActive: row.isActive,
-      // The hash itself never leaves this method — only whether one exists.
-      // A PIN the INSTITUTE set is not a sign-in. Counting it as one would
-      // turn "never signed in" — the list of people to chase — into "was never
-      // imported", the moment the first roster is uploaded.
+      // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is
+      // not a sign-in.
       hasSignedIn: row.pinHash !== null && !row.pinIsDefault,
       hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,

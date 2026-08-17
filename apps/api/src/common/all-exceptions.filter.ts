@@ -21,9 +21,8 @@ import {
 import { ensureRequestId, type RequestWithId } from './request-id';
 
 /**
- * The Prisma failures that mean something to a user rather than to us. Every
- * other P-code is our bug and is reported as INTERNAL.
- * https://www.prisma.io/docs/orm/reference/error-reference
+ * The Prisma failures that mean something to a user rather than to us. Every other P-code is our
+ * bug and is reported as INTERNAL. https://www.prisma.io/docs/orm/reference/error-reference
  */
 const PRISMA_ERROR_CODES = {
   UNIQUE_CONSTRAINT_VIOLATION: 'P2002',
@@ -31,16 +30,8 @@ const PRISMA_ERROR_CODES = {
 } as const;
 
 /**
- * The single exit for everything thrown anywhere in the API — controllers,
- * guards, pipes, Prisma, a stray TypeError. `@Catch()` with no argument means
- * no exception can route around it, which is what makes the failure envelope a
- * guarantee rather than a convention.
- *
- * Two rules:
- *   - the client gets a stable `code` and a message safe to display;
- *   - anything we did not anticipate is logged in full, with the requestId, and
- *     reported as a bare INTERNAL. Stack traces, SQL and driver text never
- *     cross the wire.
+ * The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma,
+ * a stray TypeError.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -136,10 +127,7 @@ function translate(exception: unknown): Translated {
     };
   }
 
-  // 5. Express-style errors. body-parser and friends throw plain Errors
-  //    decorated with a numeric status rather than HttpExceptions, so without
-  //    this an oversized body answers 500 — blaming us for what the client did,
-  //    and logging a stack at ERROR that anyone can trigger at will.
+  // 5.
   const status = expressStatusOf(exception);
   if (status !== null) {
     return {
@@ -156,9 +144,9 @@ function translate(exception: unknown): Translated {
 }
 
 /**
- * The numeric status an Express middleware error carries, if it is a client
- * error. 5xx is deliberately excluded: a middleware failing on our side is our
- * bug and belongs in the INTERNAL path, stack and all.
+ * The numeric status an Express middleware error carries, if it is a client error. 5xx is
+ * deliberately excluded: a middleware failing on our side is our bug and belongs in the INTERNAL
+ * path, stack and all.
  */
 function expressStatusOf(exception: unknown): number | null {
   if (typeof exception !== 'object' || exception === null) return null;
@@ -185,15 +173,7 @@ function internal(): Translated {
   };
 }
 
-/**
- * A ZodError keyed by its FULL dotted path — `profile.dob`, not `profile`.
- *
- * The first segment alone was not enough: every problem inside a nested object
- * collapsed onto the object's name, so a bad date of birth and a bad mother's
- * name were indistinguishable, and neither could be shown against the input
- * that caused it. Issues about the body as a whole have no path and land under
- * `_`, where a form shows them as a summary.
- */
+/** A ZodError keyed by its FULL dotted path — `profile.dob`, not `profile`. */
 export function fieldErrorsFrom(error: ZodError): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
 

@@ -50,9 +50,8 @@ describe('TokenService', () => {
     const tokens = build();
     const refresh = await tokens.signRefresh(STUDENT_CLAIMS);
 
-    // The two are signed with SEPARATE secrets precisely so a leaked access
-    // secret cannot mint 30-day refresh tokens — and so the long-lived token
-    // cannot be presented as the short-lived one.
+    // The two are signed with SEPARATE secrets precisely so a leaked access secret cannot mint 30-day
+    // refresh tokens — and so the long-lived token cannot be presented as the short-lived one.
     await assert.rejects(
       () => tokens.verifyAccess(refresh),
       (e: unknown) => AppException.is(e) && e.code === 'UNAUTHENTICATED',
@@ -132,9 +131,8 @@ describe('TokenService', () => {
   it('mints a DIFFERENT refresh token every time, even within one second', async () => {
     const tokens = build();
 
-    // iat has one-second resolution, so without a per-token jti these come back
-    // identical — and session rotation, which compares token hashes, quietly
-    // stops rotating anything.
+    // iat has one-second resolution, so without a per-token jti these come back identical — and
+    // session rotation, which compares token hashes, quietly stops rotating anything.
     const first = await tokens.signRefresh(STUDENT_CLAIMS);
     const second = await tokens.signRefresh(STUDENT_CLAIMS);
 

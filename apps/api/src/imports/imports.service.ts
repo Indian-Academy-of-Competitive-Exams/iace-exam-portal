@@ -26,18 +26,12 @@ import { type CsvTable } from './csv';
 import { readUploadedTable } from './workbook';
 
 /**
- * How many PINs to hash at once. Node's default libuv threadpool is 4 threads,
- * so more would queue anyway while multiplying the transient memory.
+ * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue
+ * anyway while multiplying the transient memory.
  */
 const HASH_CONCURRENCY = 4;
 
-/**
- * Owns no tables (docs/03 §5). It writes `Student` and the `Student`⇄`Group`
- * link on behalf of the students and groups modules — the one place in the API
- * where that is true, because a roster upload is a bulk operation over both and
- * splitting it in two would cost a round trip per row. Revisit if `imports`
- * ever moves off the core deployable.
- */
+/** Owns no tables (docs/03 §5). */
 @Injectable()
 export class ImportsService {
   constructor(
@@ -52,20 +46,15 @@ export class ImportsService {
   }
 
   /**
-   * Applies the plan. Re-plans from the same input rather than trusting a
-   * preview the client sends back: the file may have changed, and a client that
-   * can hand us a plan can hand us any plan.
-   *
-   * Only valid rows are written. One bad number must not cost the other 399.
+   * Applies the plan. Re-plans from the same input rather than trusting a preview the client sends
+   * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
    */
   async commitStudents(file: Buffer): Promise<StudentImportResult> {
     const plan = await this.previewStudents(file);
 
-    // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so
-    // doing it inside the write loop made a 1,000-row roster thirteen seconds
-    // of a single request sitting idle on one core. Node runs argon2 on the
-    // libuv threadpool, so a handful at a time is most of the win for none of
-    // the memory (each hash allocates ~19MB while it runs).
+    // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
+    // write loop made a 1,000-row roster thirteen seconds of a single request sitting idle on one
+    // core.
     const pinHashes = await this.hashStartingPins(
       plan.rows.filter((row) => row.willReceiveDefaultPin && row.mobile).map((row) => row.mobile!),
     );
@@ -92,9 +81,8 @@ export class ImportsService {
         await this.prisma.student.update({
           where: { id: row.existingStudentId },
           data: {
-            // An empty name column means "no opinion", not "clear the name". An
-            // existing student also keeps whatever PIN they have — see the
-            // planner: `willReceiveDefaultPin` is false once they chose one.
+            // An empty name column means "no opinion", not "clear the name". An existing student also keeps
+            // whatever PIN they have — see the planner: `willReceiveDefaultPin` is false once they chose one.
             ...(row.fullName === null ? {} : { fullName: row.fullName }),
             ...startingPin,
             ...groups,
@@ -113,10 +101,8 @@ export class ImportsService {
   }
 
   /**
-   * Mobile → the hash of that student's starting PIN.
-   *
-   * Bounded concurrency rather than Promise.all over the whole file: argon2 is
-   * memory-hard by design, and a thousand at once would ask for ~19GB.
+   * Mobile -> the hash of that student's starting PIN. Bounded concurrency, not
+   * Promise.all: argon2 is memory-hard, and a thousand at once would ask for ~19GB.
    */
   private async hashStartingPins(mobiles: string[]): Promise<Map<string, string>> {
     const hashes = new Map<string, string>();
@@ -140,11 +126,7 @@ export class ImportsService {
     return planGroupMemberImport(table, await this.groupContextFor(groupId, table));
   }
 
-  /**
-   * Applies it. Re-plans from the file rather than trusting a plan the client
-   * sends back, for the same reason the student import does: the file may have
-   * changed, and a client that can hand us a plan can hand us any plan.
-   */
+  /** Applies it. */
   async commitGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportResult> {
     const plan = await this.previewGroupMembers(groupId, file);
 
@@ -200,9 +182,8 @@ export class ImportsService {
   }
 
   /**
-   * Loads only what this file refers to — the mobiles it lists and the groups
-   * it names — rather than the whole table, so a 5,000-row roster is two
-   * bounded queries and not a table scan per line.
+   * Loads only what this file refers to — the mobiles it lists and the groups it names — rather than
+   * the whole table, so a 5,000-row roster is two bounded queries and not a table scan per line.
    */
   private async contextFor(table: CsvTable): Promise<ImportContext> {
     const mobiles = mobilesIn(table);
@@ -234,13 +215,7 @@ export class ImportsService {
   }
 }
 
-/**
- * Group name → every group carrying it, one per branch.
- *
- * Names are canonical in the database, so the key needs no folding — but a
- * name can legitimately belong to several branches, and the importer has to be
- * able to tell that apart from a name that matches nothing.
- */
+/** Group name → every group carrying it, one per branch. */
 function groupsByCanonicalName(
   groups: { id: string; name: string; branch: { name: string } }[],
 ): Map<string, ImportGroup[]> {

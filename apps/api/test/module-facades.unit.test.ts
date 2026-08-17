@@ -8,18 +8,11 @@ import { StudentsService } from '../src/students/students.service';
 import { FakeConfig, FakePrisma, FakeRedis, makeBranch, makeStudent } from './support/fakes';
 
 /**
- * The three seams docs/03 §4 names, exercised through the facade rather than
- * the internals they used to reach for.
- *
- * The point of each test is the same: the facade must do the thing the caller
- * was previously doing for itself. A delegation that compiles but drops a step
- * — hashes without the pepper, skips the active check, writes the column but
- * not the flag — is exactly the failure this refactor could have introduced,
- * and none of it would have shown up as a type error.
+ * The three seams docs/03 §4 names, exercised through the facade rather than the internals they
+ * used to reach for.
  */
 
-// ---------------------------------------------------------------------------
-// imports → auth
+// --------------------------------------------------------------------------- imports → auth
 // ---------------------------------------------------------------------------
 
 function authService(): { auth: AuthService; pin: PinService } {
@@ -43,9 +36,7 @@ describe('AuthService.hashPin — the importer’s seam into auth', () => {
   it('produces a hash the login path will accept', async () => {
     const { auth, pin } = authService();
 
-    // The guarantee, end to end: a PIN the IMPORTER hashed must verify against
-    // the same PIN at LOGIN. Anything less — a different pepper, a different
-    // argon2 profile — is a roster that uploads cleanly and then cannot sign in.
+    // The guarantee, end to end: a PIN the IMPORTER hashed must verify against the same PIN at LOGIN.
     const hash = await auth.hashPin('9876');
 
     assert.equal(await pin.verify(hash, '9876'), true);
@@ -61,15 +52,12 @@ describe('AuthService.hashPin — the importer’s seam into auth', () => {
 
     const hash = await auth.hashPin('9876');
 
-    // Four digits is 10,000 candidates. If the pepper were ever dropped from
-    // this path, a leaked Student table would fall in under a second — and the
-    // only visible symptom would be that this assertion started passing.
+    // Four digits is 10,000 candidates.
     assert.equal(await unpeppered.verify(hash, '9876'), false);
   });
 });
 
-// ---------------------------------------------------------------------------
-// groups → branches
+// --------------------------------------------------------------------------- groups → branches
 // ---------------------------------------------------------------------------
 
 describe('BranchesService.assertUsable — the groups seam into branches', () => {
@@ -77,9 +65,9 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
     new BranchesService(new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService());
 
   it('accepts an active branch', async () => {
-    // doesNotReject rather than a bare call: "it did not throw" is the whole
-    // assertion, and writing it down is what stops the test passing later for
-    // the wrong reason — a method that silently stopped checking anything.
+    // doesNotReject rather than a bare call: "it did not throw" is the whole assertion, and writing it
+    // down is what stops the test passing later for the wrong reason — a method that silently stopped
+    // checking anything.
     await assert.doesNotReject(() => usable().assertUsable('br_1'));
   });
 
@@ -88,9 +76,7 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
       new FakePrisma([], [], [makeBranch({ id: 'br_1', isActive: false })]).asService(),
     );
 
-    // The failure this exists to prevent: a group created under a centre that
-    // has stopped taking them. The message has to land on `branchId` or the
-    // admin sees a banner and no indication of which input was wrong.
+    // The failure this exists to prevent: a group created under a centre that has stopped taking them.
     const error = await service.assertUsable('br_1').catch((e: unknown) => e);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -106,8 +92,7 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
   });
 });
 
-// ---------------------------------------------------------------------------
-// me → students
+// --------------------------------------------------------------------------- me → students
 // ---------------------------------------------------------------------------
 
 function studentsWith(student = makeStudent()) {

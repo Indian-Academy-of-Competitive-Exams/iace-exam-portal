@@ -20,9 +20,9 @@ async function withFeature(
 
 describe('AdminsService — features', () => {
   it('creates BOTH permission rows with the feature', async () => {
-    // The failure this prevents: a feature with only a READ row is one whose
-    // WRITE grants can never be made — grant() updates an existing row, so it
-    // would have nothing to update and would fail at the moment somebody tried.
+    // The failure this prevents: a feature with only a READ row is one whose WRITE grants can never be
+    // made — grant() updates an existing row, so it would have nothing to update and would fail at the
+    // moment somebody tried.
     const ctx = build();
 
     const feature = await ctx.service.createFeature({ key: FEATURE_KEYS.TEST_MANAGEMENT });
@@ -111,10 +111,8 @@ describe('AdminsService — grants', () => {
   });
 
   it('carries a key the code does not know about', async () => {
-    // The key set is OPEN: a super admin registers sectors as the product
-    // grows, and one no controller checks YET must still round-trip. Dropping
-    // it would silently discard a grant somebody deliberately made — and
-    // discard it again on every refresh, so it would never stick.
+    // The key set is OPEN: a super admin registers sectors as the product grows, and one no controller
+    // checks YET must still round-trip.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
     await ctx.service.createFeature({ key: 'REPORTING_DASHBOARD' });
     await ctx.service.grant({
@@ -177,9 +175,9 @@ describe('AdminsService — admins', () => {
 
 describe('AdminsService — setActive', () => {
   it('prunes every grant, so reactivating never silently restores access', async () => {
-    // THE failure this feature exists to prevent. adminIds is a denormalized
-    // array with no foreign key, so nothing else would ever remove the id: the
-    // grants would sit there and come back the moment the account did.
+    // THE failure this feature exists to prevent. adminIds is a denormalized array with no foreign
+    // key, so nothing else would ever remove the id: the grants would sit there and come back the
+    // moment the account did.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
     await withFeature(ctx);
     await withFeature(ctx, FEATURE_KEYS.TEST_MANAGEMENT);
@@ -202,11 +200,8 @@ describe('AdminsService — setActive', () => {
   });
 
   it('switches the account off WITHOUT removing it', async () => {
-    // Deactivation is not deletion. The account still exists, still signs in
-    // (so it can be told what happened), and still appears in the admins list
-    // marked Deactivated. An Admin row is never removed at all — createdById
-    // on everything they made points at it — which is why the model carries no
-    // deletedAt for this to get wrong.
+    // Deactivation is not deletion. The account still exists, still signs in (so it can be told what
+    // happened), and still appears in the admins list marked Deactivated.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
 
     await ctx.service.setActive('adm_1', false, ACTOR);
@@ -279,9 +274,7 @@ describe('AdminsService — setActive', () => {
   });
 
   it('does NOT hand back the grants deactivation took away', async () => {
-    // The rule that keeps deactivation a removal rather than a pause. If
-    // reactivating restored access, switching someone off would only ever be
-    // temporary, and nobody would be able to tell what they still hold.
+    // The rule that keeps deactivation a removal rather than a pause.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
     await ctx.service.createFeature({ key: FEATURE_KEYS.STUDENT_MANAGEMENT });
     await ctx.service.grant({

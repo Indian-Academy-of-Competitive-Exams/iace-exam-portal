@@ -1,10 +1,4 @@
-/**
- * Auth's own internal shapes.
- *
- * `AuthenticatedUser` deliberately is NOT here — it is the one type every other
- * controller has to name, so it lives in `common/security` (docs/03 §4).
- * Everything below is auth's business alone.
- */
+/** Auth's own internal shapes. */
 
 /** The Redis-resident half of a session. Never written to Postgres. */
 export interface StoredSession {

@@ -24,15 +24,8 @@ import { ResponseInterceptor } from './common/response.interceptor';
 import { RequestIdMiddleware } from './common/request-id';
 
 /**
- * Guards run in registration order and every route is protected by default —
- * a new endpoint is authenticated unless it explicitly opts out with @Public().
- * That way forgetting a decorator locks a route down instead of exposing it.
- *
- * The response envelope is enforced the same way: registering the interceptor
- * and the filter here (rather than per-controller) means a new endpoint is
- * wrapped whether or not its author knew about the envelope. Between the two,
- * every byte the API sends is either `{ success: true, ... }` or
- * `{ success: false, ... }`.
+ * Guards run in registration order and every route is protected by default — a new endpoint is
+ * authenticated unless it explicitly opts out with @Public().
  */
 @Module({
   imports: [

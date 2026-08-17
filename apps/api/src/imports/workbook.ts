@@ -7,13 +7,7 @@ import {
 } from '@iace/contracts';
 import { normaliseHeader, readCsvTable, type CsvTable } from './csv';
 
-/**
- * Reading the roster an admin actually has.
- *
- * They keep it in Excel, so that is what the importer takes. A .csv is still
- * accepted without saying so loudly: it is what other systems export, it opens
- * in Excel anyway, and refusing one would be a rule with no purpose behind it.
- */
+/** Reading the roster an admin actually has. */
 
 /** A workbook is a ZIP; every .xlsx starts with the local file header "PK". */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
@@ -22,22 +16,14 @@ export function looksLikeWorkbook(buffer: Buffer): boolean {
   return buffer.subarray(0, ZIP_MAGIC.length).equals(ZIP_MAGIC);
 }
 
-/**
- * Whether the bytes are some other binary format wearing a .xlsx name.
- *
- * Without this, a JPEG reaches the CSV reader and comes back as
- * `The file needs a "mobile" column. Found: ����notanexcel` — a message that
- * describes the wrong problem in unreadable characters. A NUL byte does not
- * occur in the text files this importer is meant to take.
- */
+/** Whether the bytes are some other binary format wearing a .xlsx name. */
 function looksBinary(buffer: Buffer): boolean {
   return buffer.subarray(0, 512).includes(0x00);
 }
 
 /**
- * Turns an uploaded file into the same table the CSV path produces, so
- * everything downstream — validation, line numbers, the preview — is one code
- * path with one set of rules.
+ * Turns an uploaded file into the same table the CSV path produces, so everything downstream —
+ * validation, line numbers, the preview — is one code path with one set of rules.
  */
 export async function readUploadedTable(buffer: Buffer): Promise<CsvTable> {
   if (buffer.length === 0) {
@@ -72,9 +58,8 @@ async function readWorkbookTable(buffer: Buffer): Promise<CsvTable> {
     );
   }
 
-  // The first sheet, always. Asking which one is a question an admin exporting
-  // from their own system cannot answer, and guessing by name would break the
-  // moment somebody renamed it.
+  // The first sheet, always. Asking which one is a question an admin exporting from their own system
+  // cannot answer, and guessing by name would break the moment somebody renamed it.
   const sheet = workbook.worksheets[0];
   if (!sheet) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That workbook has no sheets');
 
@@ -106,14 +91,7 @@ async function readWorkbookTable(buffer: Buffer): Promise<CsvTable> {
   return { headers: headers.filter(Boolean), rows };
 }
 
-/**
- * A cell as the admin sees it.
- *
- * The awkward ones are all mobile numbers: Excel stores a bare 9876543210 as a
- * number, and `String(value)` on a large one yields "9.87654e+9". Formulas come
- * back as an object holding their result, and a cell someone styled arrives as
- * rich text in fragments.
- */
+/** A cell as the admin sees it. */
 function cellText(cell: ExcelJS.Cell): string {
   const value: unknown = cell.value;
 
@@ -127,13 +105,7 @@ function cellText(cell: ExcelJS.Cell): string {
   return scalarText(value);
 }
 
-/**
- * The shapes ExcelJS hands back for a cell that is not a plain scalar.
- *
- * Split from `cellText` because the two are different questions — "what kind of
- * value is this" and "which of ExcelJS's wrappers is this" — and reading them
- * as one nested chain is what made the original hard to check.
- */
+/** The shapes ExcelJS hands back for a cell that is not a plain scalar. */
 function objectCellText(value: object): string {
   // Styled text arrives in fragments, one per run of formatting.
   if ('richText' in value && Array.isArray(value.richText)) {
@@ -147,19 +119,12 @@ function objectCellText(value: object): string {
   }
   if ('hyperlink' in value) return scalarText((value as { hyperlink: unknown }).hyperlink);
 
-  // An ExcelJS shape we do not know. Empty rather than String(value), which
-  // yields the literal text "[object Object]" — that then fails validation with
-  // a message about the wrong thing entirely.
+  // An ExcelJS shape we do not know. Empty rather than String(value), which yields the literal text
+  // "[object Object]" — that then fails validation with a message about the wrong thing entirely.
   return '';
 }
 
-/**
- * A value ExcelJS handed back inside a wrapper.
- *
- * Only primitives become text. Anything else reads as empty rather than as the
- * literal "[object Object]", which would travel on into validation and be
- * reported as a bad mobile number instead of an unreadable cell.
- */
+/** A value ExcelJS handed back inside a wrapper. */
 function scalarText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return numberText(value);
@@ -173,14 +138,7 @@ function numberText(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : String(value);
 }
 
-/**
- * The sample file the UI offers.
- *
- * Built from the same column list the parser matches on, so it cannot document
- * a format the importer does not accept — a hand-maintained sample drifts the
- * first time a column is renamed, and takes every admin who downloaded it with
- * it.
- */
+/** The sample file the UI offers. */
 export function buildStudentTemplate(): Promise<Buffer> {
   return buildTemplate({
     sheetName: 'Students',
@@ -226,9 +184,8 @@ async function buildTemplate(options: {
 
   for (const example of examples) sheet.addRow(example);
 
-  // Mobile numbers are text, not numbers: left as numeric, Excel drops a
-  // leading zero and shows long ones in exponent form, and the file that comes
-  // back is full of "9.87654E+09".
+  // Mobile numbers are text, not numbers: left as numeric, Excel drops a leading zero and shows long
+  // ones in exponent form, and the file that comes back is full of "9.87654E+09".
   sheet.getColumn(1).numFmt = '@';
 
   const notes = workbook.addWorksheet('How to use');

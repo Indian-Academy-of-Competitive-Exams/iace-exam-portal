@@ -6,13 +6,8 @@ import { ConsoleMessageSender } from '../src/common/messaging/console-message-se
 import { MESSAGE_CHANNELS, MESSAGE_KINDS, type OutboundMessage } from '../src/common/messaging';
 
 /**
- * The dev sender's only job is to be READABLE, and the thing that stops it
- * being readable is a row wider than the border it is drawn inside. That was
- * the state of it until this test existed: the OTP body ran straight through
- * the right-hand edge of its own box.
- *
- * A box is worth a test precisely because nothing else will ever catch it —
- * it is a log line, so it is never asserted on and never fails a build.
+ * The dev sender's only job is to be READABLE, and the thing that stops it being readable is a row
+ * wider than the border it is drawn inside.
  */
 function render(over: Partial<OutboundMessage> = {}): string[] {
   const logged: string[] = [];

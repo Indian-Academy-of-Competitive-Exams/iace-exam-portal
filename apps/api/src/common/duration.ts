@@ -1,10 +1,6 @@
 const UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
 
-/**
- * Seconds as something worth showing a user: "15 minutes", "1 hour", "24 hours".
- * `Math.ceil(sec / 60)` alone produces "1440 minute(s)" for a day-long lockout,
- * which reads as a bug rather than a policy.
- */
+/** Seconds as something worth showing a user: "15 minutes", "1 hour", "24 hours". */
 export function secondsToHuman(seconds: number): string {
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
 
@@ -15,9 +11,9 @@ export function secondsToHuman(seconds: number): string {
 }
 
 /**
- * Turns a JWT-style duration ("15m", "30d", "900") into seconds. We need the
- * numeric value alongside the string: jsonwebtoken takes the string, while
- * clients and Redis TTLs need the number.
+ * Turns a JWT-style duration ("15m", "30d", "900") into seconds. We need the numeric value
+ * alongside the string: jsonwebtoken takes the string, while clients and Redis TTLs need the
+ * number.
  */
 export function durationToSeconds(value: string): number {
   const match = /^(\d+)\s*([smhd])?$/.exec(value.trim());

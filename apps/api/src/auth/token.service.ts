@@ -19,8 +19,8 @@ export interface RefreshTokenClaims {
 }
 
 /**
- * Access and refresh tokens are signed with SEPARATE secrets, so a leaked
- * access secret cannot be used to mint long-lived refresh tokens.
+ * Access and refresh tokens are signed with SEPARATE secrets, so a leaked access secret cannot be
+ * used to mint long-lived refresh tokens.
  */
 @Injectable()
 export class TokenService {
@@ -40,23 +40,13 @@ export class TokenService {
   signAccess(claims: AccessTokenClaims): Promise<string> {
     return this.jwt.signAsync(claims, {
       secret: this.config.get('JWT_ACCESS_SECRET'),
-      // Seconds, not the raw "15m" string: jsonwebtoken's typed `expiresIn`
-      // only accepts its own literal union, and this is the same value the
-      // Redis session TTL uses.
+      // Seconds, not the raw "15m" string: jsonwebtoken's typed `expiresIn` only accepts its own literal
+      // union, and this is the same value the Redis session TTL uses.
       expiresIn: this.accessTtlSec,
     });
   }
 
-  /**
-   * `jti` is what makes each refresh token unique.
-   *
-   * Without it the payload is just {sub, actor, sid, iat, exp} — and `iat` has
-   * one-second resolution, so refreshing inside the same second as the previous
-   * signing produced a BYTE-IDENTICAL token. Rotation then stored the hash of a
-   * token equal to the old one, silently turning "every use mints a new token
-   * and invalidates the old" into a no-op, and disarming the reuse detection
-   * that depends on it.
-   */
+  /** `jti` is what makes each refresh token unique. */
   signRefresh(claims: RefreshTokenClaims): Promise<string> {
     return this.jwt.signAsync(
       { ...claims, jti: randomUUID() },

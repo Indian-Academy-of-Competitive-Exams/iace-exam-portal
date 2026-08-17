@@ -24,18 +24,7 @@ import { Actors, CurrentUser, RequiresSuperAdmin } from '../common/security';
 import { type AuthenticatedUser } from '../common/security';
 import { AdminsService } from './admins.service';
 
-/**
- * Admin management, features and grants.
- *
- * Every route is `@RequiresSuperAdmin`, at the class level, deliberately: this
- * is the controller that decides who can do what, and gating it on a feature
- * permission would mean the permission system could be used to grant control of
- * itself. There is no feature key for this screen and there should not be one.
- *
- * The one thing that is NOT here is an admin reading their own permissions —
- * that lives on the `me`/auth surface, because it is a fact about the caller
- * rather than an administrative action.
- */
+/** Admin management, features and grants. */
 @Controller('admin')
 @Actors(ActorTypes.ADMIN)
 @RequiresSuperAdmin()
@@ -67,11 +56,7 @@ export class AdminsController {
     return this.admins.update(id, body);
   }
 
-  /**
-   * Both directions, one route — the same shape students already use. It was a
-   * DELETE, which read as "remove this admin" and never did: the row survives
-   * because `createdById` on everything they made points at it.
-   */
+  /** Both directions, one route — the same shape students already use. */
   @Patch('admins/:id/active')
   setActive(
     @Param('id') id: string,
@@ -98,12 +83,7 @@ export class AdminsController {
     return this.admins.grant(body);
   }
 
-  /**
-   * The tuple is in the path, not a body — see the note on ADMIN_FEATURE_ROUTES.
-   * Both params are parsed against their enums rather than trusted: they arrive
-   * as strings from a URL, and an unparsed one would reach Prisma as a level it
-   * has no row for.
-   */
+  /** The tuple is in the path, not a body — see the note on ADMIN_FEATURE_ROUTES. */
   @Delete('features/:featureKey/permissions/:level/:adminId')
   revoke(
     @Param('featureKey') featureKey: string,

@@ -4,11 +4,7 @@ import { AppException } from '@iace/contracts';
 import { PinService } from '../src/auth/pin/pin.service';
 import { FakeConfig, FakeRedis } from './support/fakes';
 
-/**
- * The PIN is a 4-digit secret — 10,000 possibilities. What keeps it safe is the
- * pepper (offline) and the escalating lockout (online), so those are what these
- * assert, not just "hash then verify".
- */
+/** The PIN is a 4-digit secret — 10,000 possibilities. */
 
 const MOBILE = '9876543210';
 

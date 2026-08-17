@@ -1,11 +1,4 @@
-/**
- * Queue names live here so producers and processors can never disagree.
- *
- * SCORING is the one that matters for scale: on submit the API enqueues a job
- * and returns immediately, so a spike of thousands of simultaneous submissions
- * becomes a draining queue instead of thousands of synchronous DB writes.
- * It is a placeholder in Phase 0 — the evaluator arrives with the test engine.
- */
+/** Queue names live here so producers and processors can never disagree. */
 export const QUEUE_NAMES = {
   SCORING: 'scoring',
 } as const;

@@ -6,9 +6,8 @@ import { QUEUE_NAMES } from './queues';
 import { ScoringProcessor } from './scoring.processor';
 
 /**
- * BullMQ over the same Redis instance, on its own connection: workers issue
- * blocking commands (BRPOPLPUSH), which would stall the application client.
- * `maxRetriesPerRequest: null` is required by BullMQ.
+ * BullMQ over the same Redis instance, on its own connection: workers issue blocking commands
+ * (BRPOPLPUSH), which would stall the application client.
  */
 @Global()
 @Module({

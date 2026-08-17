@@ -13,8 +13,8 @@ describe('branchDeletionBlocker', () => {
   });
 
   /**
-   * The failure this exists to prevent: a branch is tidied away, its groups go
-   * with it, and every student in them silently loses the route to their tests.
+   * The failure this exists to prevent: a branch is tidied away, its groups go with it, and every
+   * student in them silently loses the route to their tests.
    */
   it('refuses a branch that still has groups, and says how many', () => {
     const blocker = branchDeletionBlocker({ groupCount: 3, isGlobal: false });
@@ -63,8 +63,8 @@ describe('createBranchSchema', () => {
 // ============================================================================
 
 /**
- * A page permission must not become a way to invent a branch. `groups.manage`
- * is grantable; the branch list every group is created against is not.
+ * A page permission must not become a way to invent a branch. `groups.manage` is grantable; the
+ * branch list every group is created against is not.
  */
 describe('SuperAdminGuard', () => {
   const guardFor = (required: boolean | undefined, user: unknown) => {

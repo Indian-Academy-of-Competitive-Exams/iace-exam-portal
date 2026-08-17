@@ -31,15 +31,8 @@ import { AuthService, deviceFrom } from '../auth';
 import { MeService } from './me.service';
 
 /**
- * The signed-in student's own account.
- *
- * No ids in any route. The subject is always `user.id` from the token, which is
- * what makes it impossible to shape a request that reaches another student's
- * record — there is no parameter to tamper with.
- *
- * No `@RequiresPage`: page permissions are an ADMIN concept. `@Actors(STUDENT)`
- * is the whole authorisation rule here, and it is the one that matters — an
- * admin token must not be able to call these either.
+ * The signed-in student's own account. No ids in any route — the subject is always
+ * `user.id` from the token, so no request shape can reach another student's record.
  */
 /** The two fields we use off a multipart upload — see imports.controller.ts. */
 interface UploadedFileLike {
@@ -69,13 +62,7 @@ export class MeController {
     return this.me.update(user.id, body);
   }
 
-  /**
-   * A photo or an identity document.
-   *
-   * The KIND is in the path and validated against a fixed list, so a request
-   * cannot name the column it writes to. The file is checked for type and size
-   * before it reaches storage — see documents.ts.
-   */
+  /** A photo or an identity document. */
   @Post('documents/:kind')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(DOCUMENT_FILE_FIELD))
@@ -89,8 +76,7 @@ export class MeController {
 
   /**
    * Ends every OTHER session and returns a fresh one for this device — see
-   * AuthService.changeStudentPin. The client must store the returned tokens:
-   * the ones it is holding stopped working the moment this succeeded.
+   * AuthService.changeStudentPin.
    */
   @Post('pin')
   @HttpCode(HttpStatus.OK)

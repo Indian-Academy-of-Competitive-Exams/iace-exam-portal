@@ -14,16 +14,8 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { ZodBody } from '../src/common/zod-validation.pipe';
 
-// Note the asymmetry below: errors are CONSTRUCTED with `ErrorCodes.X`, but
-// assertions compare against the literal string on purpose. Asserting against
-// the constant would be tautological — it would still pass if someone changed
-// the constant's value, which is exactly the wire-contract break these tests
-// exist to catch.
-//
-// ---------------------------------------------------------------------------
-// Test doubles. Nest only ever asks these objects for the few things the
-// interceptor and the filter actually use.
-// ---------------------------------------------------------------------------
+// Note the asymmetry below: errors are CONSTRUCTED with `ErrorCodes.X`, but assertions compare
+// against the literal string on purpose.
 
 function httpHost(request: Record<string, unknown> = {}) {
   const sent = { status: 0, body: undefined as unknown };
@@ -183,10 +175,8 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('maps an Express-style client error instead of blaming itself', () => {
-    // What body-parser throws for an oversized body: a plain Error with a
-    // numeric status, not an HttpException. Before this branch it fell through
-    // to INTERNAL, so the client saw a 500 and we logged a stack at ERROR for
-    // something the client did — trivially triggerable alert noise.
+    // What body-parser throws for an oversized body: a plain Error with a numeric status, not an
+    // HttpException.
     const tooLarge = Object.assign(new Error('request entity too large'), {
       status: 413,
       statusCode: 413,

@@ -19,12 +19,7 @@ import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import { FakeConfig, FakeRedis, NO_DEVICE } from './support/fakes';
 
-/**
- * The authorisation boundary. These guards decide who reaches what, and the
- * REAL Reflector reads metadata off REAL decorators below — a stubbed reflector
- * would pass even if a decorator stopped writing the metadata the guard reads,
- * which is precisely the failure that would open a route up silently.
- */
+/** The authorisation boundary. */
 
 /** Stands in for a controller, so the decorators under test are really applied. */
 class ProbeController {
@@ -170,9 +165,7 @@ describe('JwtAuthGuard', () => {
     const { token, sid, sub } = await signIn(ctx);
     await ctx.sessions.revoke(ActorTypes.STUDENT, sub, sid);
 
-    // The JWT has NOT expired. This Redis check is the only reason logout takes
-    // effect immediately rather than whenever the access token happens to run
-    // out — lose it and a signed-out student keeps their access for 15 minutes.
+    // The JWT has NOT expired.
     const { context } = probe(ProbeController.prototype.plainRoute, authed(token));
 
     await assert.rejects(
@@ -266,9 +259,8 @@ describe('ActorGuard', () => {
   });
 
   it('refuses a student token on an admin route, valid though the token is', async () => {
-    // Students and admins are separate tables with separate rules. Both hold
-    // perfectly good JWTs; this is the only thing keeping one out of the other's
-    // routes.
+    // Students and admins are separate tables with separate rules. Both hold perfectly good JWTs; this
+    // is the only thing keeping one out of the other's routes.
     const { context } = probe(ProbeController.prototype.adminOnly, user(ActorTypes.STUDENT));
 
     assert.throws(
@@ -386,18 +378,15 @@ describe('FeaturePermissionGuard', () => {
   });
 
   it('lets a super admin through without the grant', async () => {
-    // How the hand-inserted bootstrap account reaches every screen before any
-    // grants exist. If this stopped working, a fresh deployment would be
-    // unusable and there is no seed to fall back on.
+    // How the hand-inserted bootstrap account reaches every screen before any grants exist. If this
+    // stopped working, a fresh deployment would be unusable and there is no seed to fall back on.
     const { context } = probe(ProbeController.prototype.managesQuestions, admin({}, true));
 
     assert.equal(await guard.canActivate(context), true);
   });
 
   it('refuses a deactivated admin, even one who is a super admin', async () => {
-    // THE guarantee this change exists for. A deactivated super admin who
-    // still bypassed every check would be the single account deactivation
-    // cannot switch off, so the check sits BEFORE the bypass.
+    // THE guarantee this change exists for.
     const { context } = probe(ProbeController.prototype.managesQuestions, admin({}, true, false));
 
     assert.throws(

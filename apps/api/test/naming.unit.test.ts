@@ -8,10 +8,9 @@ import {
 } from '@iace/contracts';
 
 /**
- * Branch and group names are the vocabulary access is routed through, and the
- * failure these rules exist to prevent is the near-duplicate: two rows that
- * mean one thing, that no uniqueness check catches, and that quietly split a
- * batch in half.
+ * Branch and group names are the vocabulary access is routed through, and the failure these rules
+ * exist to prevent is the near-duplicate: two rows that mean one thing, that no uniqueness check
+ * catches, and that quietly split a batch in half.
  */
 describe('canonicalName — one spelling per name', () => {
   it('folds case, so a name cannot be entered twice by shouting', () => {

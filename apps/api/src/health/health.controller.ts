@@ -5,11 +5,7 @@ import { RedisService } from '../redis/redis.service';
 import { StorageService } from '../storage/storage.service';
 import { Public } from '../common/security';
 
-/**
- * Liveness + readiness in one. Always answers 200 so a load balancer can read
- * the body: `status` degrades to "degraded" when any dependency is down, which
- * is more useful during an incident than a connection refused.
- */
+/** Liveness + readiness in one. */
 @Controller('health')
 export class HealthController {
   private readonly startedAt = Date.now();

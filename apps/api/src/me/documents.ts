@@ -8,23 +8,9 @@ import {
 } from '@iace/contracts';
 import { type ProfileDocumentColumn } from '../students';
 
-/**
- * The rules for a student's uploaded photo and identity documents.
- *
- * Pure, so they can be checked without S3 or a database — which matters here
- * more than most places, because the failure modes are quiet: a file accepted
- * under the wrong extension, or a key that lets one student's upload land on
- * another's record.
- */
+/** The rules for a student's uploaded photo and identity documents. */
 
-/**
- * Which profile column each kind writes to. The client never chooses this.
- *
- * The column type comes from the students module, which owns `StudentProfile`:
- * adding a document kind that writes somewhere `profileCompleted` does not look
- * at then fails to compile here, rather than shipping as a profile that can
- * never be completed.
- */
+/** Which profile column each kind writes to. The client never chooses this. */
 const COLUMN_FOR: Record<DocumentKind, ProfileDocumentColumn> = {
   [DOCUMENT_KINDS.PHOTO]: 'photoUrl',
   [DOCUMENT_KINDS.AADHAAR]: 'aadhaarUrl',
@@ -42,18 +28,7 @@ const EXTENSIONS: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
-/**
- * Where an upload is stored.
- *
- * The student id comes from the TOKEN and is the first path segment, so one
- * student's upload cannot be written under another's prefix however the request
- * is shaped. The timestamp means re-uploading never overwrites in place —
- * a half-finished PUT cannot leave someone with a corrupt Aadhaar and no way
- * back to the old one.
- *
- * The extension is derived from the verified content type, never from the
- * filename the browser sent: `passport.jpg.exe` is a filename, not a fact.
- */
+/** Where an upload is stored. */
 export function documentKey(
   studentId: string,
   kind: DocumentKind,
@@ -64,12 +39,7 @@ export function documentKey(
   return `students/${studentId}/${kind}-${now}.${extension}`;
 }
 
-/**
- * Whether this file may be stored, and why not if it may not.
- *
- * A photo has to be an image: a PDF headshot is not one, and every screen that
- * later renders it as an <img> would show a broken box instead.
- */
+/** Whether this file may be stored, and why not if it may not. */
 export function checkDocument(
   kind: DocumentKind,
   file: { size: number; mimetype: string } | undefined,

@@ -31,9 +31,8 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { GroupsService } from './groups.service';
 
 /**
- * Groups. Members are READ through `/admin/students?groupId=…`, which already
- * pages, searches and filters — a second member-list endpoint would be the same
- * query with its own bugs.
+ * Groups. Members are READ through `/admin/students?groupId=…`, which already pages, searches and
+ * filters — a second member-list endpoint would be the same query with its own bugs.
  */
 @Controller('admin/groups')
 @Actors(ActorTypes.ADMIN)

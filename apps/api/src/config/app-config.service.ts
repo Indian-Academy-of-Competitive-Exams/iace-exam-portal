@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { NODE_ENVS, type Env } from './env.schema';
 
 /**
- * Typed accessor over the zod-validated env. Inject this, not ConfigService —
- * every key is checked against `Env`, so a typo is a compile error.
+ * Typed accessor over the zod-validated env. Inject this, not ConfigService — every key is checked
+ * against `Env`, so a typo is a compile error.
  */
 @Injectable()
 export class AppConfigService {
@@ -22,13 +22,7 @@ export class AppConfigService {
     return this.get('NODE_ENV') === NODE_ENVS.DEVELOPMENT;
   }
 
-  /**
-   * `BODY_LIMIT_IMPORT` as a number of bytes.
-   *
-   * body-parser takes the "10mb" form, multipart uploads need a count, and the
-   * two must be the same limit — a second env var would eventually disagree
-   * with the first, and an upload would pass one check and fail the other.
-   */
+  /** `BODY_LIMIT_IMPORT` as a number of bytes. */
   get importLimitBytes(): number {
     return bytesOf(this.get('BODY_LIMIT_IMPORT'));
   }

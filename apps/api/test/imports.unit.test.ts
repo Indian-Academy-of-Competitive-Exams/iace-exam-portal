@@ -10,10 +10,8 @@ import {
 } from '../src/imports/student-import';
 
 /**
- * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts
- * every column right, and the import succeeds with the wrong data in the wrong
- * fields. Each case below is a real spreadsheet behaviour, which is why they
- * are enumerated rather than assumed.
+ * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
+ * the import succeeds with the wrong data in the wrong fields.
  */
 
 describe('parseCsv', () => {
@@ -90,9 +88,8 @@ describe('readCsvTable', () => {
   });
 
   it('does not shift line numbers after a blank line — the regression', () => {
-    // Blank lines are dropped, so deriving the number from the row's INDEX
-    // reported every row after one a line early. An error pointing at the wrong
-    // row is worse than one pointing nowhere: the admin "fixes" a good row.
+    // Blank lines are dropped, so deriving the number from the row's INDEX reported every row after
+    // one a line early.
     const table = readCsvTable('mobile\n9876543210\n\n9876543211\n\n\n9876543212');
 
     assert.deepEqual(
@@ -176,9 +173,8 @@ describe('planStudentImport', () => {
   });
 
   /**
-   * The failure this prevents: a name that two centres share is resolved by
-   * picking the first, and a Kukatpally roster quietly enrols into Ameerpet.
-   * Nothing about that looks wrong afterwards.
+   * The failure this prevents: a name that two centres share is resolved by picking the first, and a
+   * Kukatpally roster quietly enrols into Ameerpet. Nothing about that looks wrong afterwards.
    */
   it('refuses a name that exists in more than one branch, and names them', () => {
     const plan = planStudentImport(
@@ -296,9 +292,9 @@ describe('planStudentImport — the starting PIN', () => {
   });
 
   /**
-   * The failure this exists to prevent: re-importing last term's roster resets
-   * the PIN of every student who had chosen one, handing all of those accounts
-   * back to whoever holds the sheet — and nothing about the import looks wrong.
+   * The failure this exists to prevent: re-importing last term's roster resets the PIN of every
+   * student who had chosen one, handing all of those accounts back to whoever holds the sheet — and
+   * nothing about the import looks wrong.
    */
   it('never resets a PIN the student chose', () => {
     const plan = planStudentImport(readCsvTable('mobile\n9000000001'), context());
@@ -336,8 +332,8 @@ describe('the columns an admin actually writes', () => {
   });
 
   /**
-   * Every one of these is a real file somebody will try: last month's template,
-   * a roster exported from another system, a sheet typed by hand.
+   * Every one of these is a real file somebody will try: last month's template, a roster exported
+   * from another system, a sheet typed by hand.
    */
   it('accepts the other names the same column goes by', () => {
     for (const header of ['mobile', 'Phone', 'Contact Number', 'MOBILE_NO']) {
@@ -356,9 +352,8 @@ describe('the columns an admin actually writes', () => {
 });
 
 /**
- * These build the lookups the import runs before planning anything. They read
- * the file through the SAME column resolution the planner uses — and once did
- * not, which is the bug below.
+ * These build the lookups the import runs before planning anything. They read the file through the
+ * SAME column resolution the planner uses — and once did not, which is the bug below.
  */
 describe('what the import looks up before it plans', () => {
   it('collects the mobile numbers under the readable header', () => {
@@ -368,11 +363,9 @@ describe('what the import looks up before it plans', () => {
   });
 
   /**
-   * The failure this exists to prevent, found by re-importing a file rather
-   * than by any unit test: reading the raw `mobile` key while the sheet said
-   * "Mobile Number" matched nothing, so every row of a RE-import looked new.
-   * The preview said "create" in confident green, and the commit would then
-   * collide on the unique mobile instead of updating the student who had it.
+   * The failure this exists to prevent, found by re-importing a file rather than by any unit test:
+   * reading the raw `mobile` key while the sheet said "Mobile Number" matched nothing, so every row
+   * of a RE-import looked new.
    */
   it('finds them under every spelling of the column', () => {
     for (const header of ['Mobile Number', 'mobile', 'Phone', 'CONTACT_NUMBER']) {
@@ -393,13 +386,7 @@ describe('what the import looks up before it plans', () => {
   });
 });
 
-/**
- * Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by
- * design. A 5,000-row roster is over a minute of hashing before a single row
- * is written: the request times out and the admin cannot tell how much of it
- * applied. Refusing up front, with a number and an instruction, is the better
- * answer.
- */
+/** Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by design. */
 describe('how big a file may be', () => {
   const fileOf = (rows: number) =>
     [

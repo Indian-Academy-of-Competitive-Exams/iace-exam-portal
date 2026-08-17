@@ -1,27 +1,11 @@
 import { type ActorTypes } from '@iace/contracts';
 
-/**
- * Everything the platform sends OUTWARD, behind one interface (docs/03 §10).
- *
- * It started life as `OtpSender` and would have stayed that way until the day
- * "your result is ready" needed sending, at which point there would have been
- * two delivery abstractions, two places holding provider credentials, and two
- * answers to "is this allowed in production". Generalising it while OTP is
- * still the only caller costs one indirection now and settles that.
- *
- * A sender implements DELIVERY, not policy. It does not decide whether to send,
- * how often, or to whom — those are the caller's, which is why nothing here
- * touches Redis or the database.
- */
+/** Everything the platform sends OUTWARD, behind one interface (docs/03 §10). */
 
 /** DI token for the active provider. */
 export const MESSAGE_SENDER = Symbol('MESSAGE_SENDER');
 
-/**
- * How a message reaches someone. `IN_APP` is the `Notification` table rather
- * than a third-party provider, which is exactly why it belongs in the same
- * list: the caller says what to send and to whom, not which vendor to call.
- */
+/** How a message reaches someone. */
 export const MESSAGE_CHANNELS = {
   SMS: 'sms',
   EMAIL: 'email',
@@ -30,14 +14,7 @@ export const MESSAGE_CHANNELS = {
 
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[keyof typeof MESSAGE_CHANNELS];
 
-/**
- * What the message IS. A provider needs this: MSG91 sends a DLT-registered
- * template per message type, not free text, so "which template" has to be part
- * of the message rather than something a sender infers from its body.
- *
- * Only OTP is sent today. The rest are declared so the next caller picks a name
- * from a list instead of inventing one.
- */
+/** What the message IS. */
 export const MESSAGE_KINDS = {
   OTP: 'otp',
   /** TODO(docs/03 §10): sent when a scoring job finishes. */
@@ -61,11 +38,7 @@ export interface OutboundMessage {
   subject?: string;
   /** The rendered message. A template provider may ignore it and use `data`. */
   body: string;
-  /**
-   * Template variables. Kept separate from `body` because a DLT-registered SMS
-   * template is filled in by the provider, not by us — the body is what a
-   * console or SMTP sender shows when there is no template to fill.
-   */
+  /** Template variables. */
   data?: Record<string, string | number>;
 }
 

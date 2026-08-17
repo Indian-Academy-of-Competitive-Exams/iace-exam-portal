@@ -26,9 +26,8 @@ describe('dobSchema', () => {
   });
 
   it('REFUSES a future date', () => {
-    // A DOB is one of the three fields the pre-test gate collects, so a
-    // mistyped year does not merely sit in a profile — it marks a student
-    // ready for a test on data that cannot be true.
+    // A DOB is one of the three fields the pre-test gate collects, so a mistyped year does not merely
+    // sit in a profile — it marks a student ready for a test on data that cannot be true.
     for (const future of [shift(1), shift(400), '2999-01-01']) {
       const parsed = dobSchema.safeParse(future);
       assert.equal(parsed.success, false, `expected ${future} to be refused`);

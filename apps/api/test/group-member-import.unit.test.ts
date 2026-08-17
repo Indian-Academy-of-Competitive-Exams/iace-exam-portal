@@ -30,8 +30,8 @@ describe('planGroupMemberImport', () => {
   });
 
   /**
-   * Re-uploading last week's list with ten new numbers on the end is how this
-   * actually gets used. Calling the existing members errors would bury the ten.
+   * Re-uploading last week's list with ten new numbers on the end is how this actually gets used.
+   * Calling the existing members errors would bury the ten.
    */
   it('treats an existing member as fine, not as an error', () => {
     const result = plan('Mobile Number\n9876543211');
@@ -43,8 +43,8 @@ describe('planGroupMemberImport', () => {
   });
 
   /**
-   * The failure this prevents: a mistyped number silently enrols a person who
-   * does not exist, and the group looks one student larger than it is.
+   * The failure this prevents: a mistyped number silently enrols a person who does not exist, and
+   * the group looks one student larger than it is.
    */
   it('reports a number belonging to nobody, and never enrols them', () => {
     const result = plan('Mobile Number\n9999999999');
@@ -108,9 +108,8 @@ describe('planGroupMemberImport', () => {
   });
 
   /**
-   * A header row and nothing else is what an admin gets by downloading the
-   * sample and uploading it back untouched. It is not an error, it just does
-   * nothing — and it must not read as "everything failed".
+   * A header row and nothing else is what an admin gets by downloading the sample and uploading it
+   * back untouched.
    */
   it('handles a file with a header and no rows', () => {
     const result = plan('Mobile Number');

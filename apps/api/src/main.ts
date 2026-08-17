@@ -8,9 +8,8 @@ import { REQUEST_ID_HEADER } from './common/request-id';
 import { registerBodyParsers } from './common/body-parsers';
 
 async function bootstrap(): Promise<void> {
-  // bodyParser: false so the limits in registerBodyParsers are the only ones
-  // that apply — Nest's default parser would otherwise be installed first, and
-  // first parser wins.
+  // bodyParser: false so the limits in registerBodyParsers are the only ones that apply — Nest's
+  // default parser would otherwise be installed first, and first parser wins.
   const app = await NestFactory.create(AppModule, { bufferLogs: false, bodyParser: false });
   const config = app.get(AppConfigService);
 

@@ -20,14 +20,7 @@ import {
 } from '../../common/messaging';
 import { type StoredOtp } from '../auth.types';
 
-/**
- * OTP lifecycle. Every piece of state — the code hash, the attempt counter and
- * the resend cooldown — lives in Redis under a TTL and NEVER touches Postgres,
- * so expiry is the datastore's job and there is nothing to clean up.
- *
- * The plaintext code exists only in memory long enough to be delivered; Redis
- * holds an HMAC of it.
- */
+/** OTP lifecycle. */
 @Injectable()
 export class OtpService {
   constructor(
@@ -100,9 +93,8 @@ export class OtpService {
   }
 
   /**
-   * Consumes the pending code. Throws on wrong/expired codes and burns the
-   * challenge once the attempt cap is hit, so a code cannot be brute-forced
-   * inside its TTL.
+   * Consumes the pending code. Throws on wrong/expired codes and burns the challenge once the
+   * attempt cap is hit, so a code cannot be brute-forced inside its TTL.
    */
   async verify(actor: ActorType, identifier: string, code: string): Promise<void> {
     const key = redisKeys.otp(actor, identifier);
@@ -152,10 +144,8 @@ export class OtpService {
 }
 
 /**
- * Students are reached on the mobile number they signed up with, admins on
- * their email address — the same split the two identity tables have. It lives
- * beside the only caller rather than in the messaging module, because it is a
- * fact about how THIS platform's actors are contacted, not about delivery.
+ * Students are reached on the mobile number they signed up with, admins on their email address —
+ * the same split the two identity tables have.
  */
 function channelFor(actor: ActorType): MessageChannel {
   return actor === ActorTypes.STUDENT ? MESSAGE_CHANNELS.SMS : MESSAGE_CHANNELS.EMAIL;

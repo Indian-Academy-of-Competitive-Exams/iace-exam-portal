@@ -45,16 +45,8 @@ export class AdminsService {
   // ==========================================================================
 
   /**
-   * What this admin has been granted, as the map the token carries.
-   *
-   * One indexed read: the GIN index on `adminIds` makes "rows whose array
-   * contains X" cheap, which is the whole reason the grant list is
-   * denormalized. Called on every login and refresh, so it must stay one query.
-   *
-   * WRITE wins over READ when both are somehow granted. That should not happen
-   * — the UI grants one level — but resolving it here means a duplicated grant
-   * degrades to the more permissive single answer rather than to whichever row
-   * the database happened to return first, which would be non-deterministic.
+   * The grant map a token carries. One indexed read — the GIN index on `adminIds` is why
+   * the list is denormalized — and WRITE wins if both levels are somehow held.
    */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
     const rows = await this.prisma.featurePermission.findMany({
@@ -62,10 +54,7 @@ export class AdminsService {
       select: { level: true, feature: { select: { key: true } } },
     });
 
-    // Every key is carried, including ones no controller checks yet. The set is
-    // open — a super admin registers sectors as the product grows — so
-    // filtering to the code's known keys would silently drop a grant that was
-    // deliberately made, and drop it again on every refresh.
+    // Every key is carried, including ones no controller checks yet.
     const permissions: AdminPermissions = {};
     for (const row of rows) {
       const key = row.feature.key;
@@ -79,15 +68,7 @@ export class AdminsService {
   // Admins
   // ==========================================================================
 
-  /**
-   * Returns the full Paginated shape, not just items+total.
-   *
-   * `isPaginated` in the response interceptor requires all four keys before it
-   * will split the payload into data + meta. Miss one and the whole object is
-   * wrapped as `data`, the client validates an object against an array schema,
-   * and the only symptom is "Unexpected response shape from API" — which points
-   * at the client rather than at the handler that actually got it wrong.
-   */
+  /** Returns the full Paginated shape, not just items+total. */
   async list(query: AdminListQuery): Promise<Paginated<AdminDto>> {
     const where = {
       ...(query.activeOnly === undefined ? {} : { isActive: query.activeOnly }),
@@ -123,10 +104,8 @@ export class AdminsService {
   }
 
   async create(input: CreateAdminBody, createdById: string): Promise<AdminDto> {
-    // Pre-checked like every other create here; the global filter still maps a
-    // racing P2002 to the same CONFLICT, so the check is for the message rather
-    // than for correctness. The email arrives lowercased from the schema, so
-    // this catches the real duplicate and not a differently-cased one.
+    // Pre-checked like every other create here; the global filter still maps a racing P2002 to the
+    // same CONFLICT, so the check is for the message rather than for correctness.
     const clash = await this.prisma.admin.findUnique({ where: { email: input.email } });
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'An admin with that email already exists', {
@@ -162,20 +141,8 @@ export class AdminsService {
   }
 
   /**
-   * Switch an account off, or back on.
-   *
-   * Deactivating prunes every grant in the same transaction as the flag. The
-   * pruning is the point: `adminIds` is a denormalized array with no foreign
-   * key, so nothing else would ever remove the id, and one transaction means
-   * there is no window where the account is off but the grants are not.
-   *
-   * REACTIVATING DOES NOT GIVE THEM BACK. They were revoked, and quietly
-   * restoring them would make deactivation a pause rather than a removal — the
-   * one thing it must not be. A restored admin comes back able to sign in and
-   * holding nothing, and a super admin re-grants what they should have.
-   *
-   * The row is never removed either way: `createdById` on everything they made
-   * points at it, and the account still appears in the list marked Deactivated.
+   * Deactivating prunes every grant in the same transaction as the flag: `adminIds` has no
+   * foreign key, so nothing else removes the id. Reactivating does NOT give them back.
    */
   async setActive(id: string, isActive: boolean, actingAdminId: string): Promise<AdminDto> {
     if (!isActive && id === actingAdminId) {
@@ -192,9 +159,8 @@ export class AdminsService {
       return this.toAdminDto(row, await this.permissionsFor(id));
     }
 
-    // The update returns the row, so the transaction hands back what to
-    // report — no second read, and no chance of reporting a state that
-    // something else changed in between.
+    // The update returns the row, so the transaction hands back what to report — no second read, and
+    // no chance of reporting a state that something else changed in between.
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.admin.update({ where: { id }, data: { isActive: false } });
 
@@ -226,14 +192,7 @@ export class AdminsService {
     return rows.map((row) => this.toFeatureDto(row));
   }
 
-  /**
-   * Register a feature, with BOTH its permission rows.
-   *
-   * One transaction, because a feature with only a READ row is a feature whose
-   * WRITE grants silently cannot be made — the grant path updates an existing
-   * row and would have nothing to update. Creating them together means a grant
-   * is always an array update and never has to consider whether the row exists.
-   */
+  /** Register a feature, with BOTH its permission rows. */
   async createFeature(input: { key: string; description?: string }): Promise<FeatureDto> {
     const clash = await this.prisma.feature.findUnique({ where: { key: input.key } });
     if (clash) {
@@ -268,14 +227,7 @@ export class AdminsService {
     return this.changeGrant(input, 'remove');
   }
 
-  /**
-   * Add or remove one admin id in one feature+level row.
-   *
-   * Read-modify-write inside a transaction rather than an array push: two
-   * grants issued at the same moment would otherwise last-write-wins and one
-   * would vanish. The row is locked for the duration, which is fine — this is
-   * an administrative action measured in clicks per week, not per second.
-   */
+  /** Add or remove one admin id in one feature+level row. */
   private async changeGrant(
     input: PermissionGrantBody,
     action: 'add' | 'remove',
@@ -316,14 +268,7 @@ export class AdminsService {
   // Student sync — trigger only
   // ==========================================================================
 
-  /**
-   * Pull students from the institute's main portal.
-   *
-   * TODO: implement the fetch. Everything around this method is finished —
-   * contracts, route, guard, client and button — so landing the real sync is a
-   * change to this body and nothing else. It deliberately does NOT touch the
-   * bulk importer, which is a separate, working path.
-   */
+  /** Pull students from the institute's main portal. */
   // No await yet — the body is a stub. `async` stays so the signature does not
   // change when the real fetch lands.
   async triggerStudentSync(): Promise<StudentSyncResult> {
@@ -346,8 +291,8 @@ export class AdminsService {
   }
 
   /**
-   * Exists AND is switched on — the right check before a grant, because
-   * granting to a deactivated admin hands back what deactivation just removed.
+   * Exists AND is switched on — the right check before a grant, because granting to a deactivated
+   * admin hands back what deactivation just removed.
    */
   private async requireActive(id: string): Promise<void> {
     const admin = await this.prisma.admin.findUnique({

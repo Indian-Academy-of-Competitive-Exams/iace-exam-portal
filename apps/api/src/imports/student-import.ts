@@ -11,25 +11,9 @@ import {
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable } from './csv';
 
-/**
- * Decides what a roster file WOULD do, without doing any of it.
- *
- * Pure on purpose: preview and commit must agree exactly, and the only way to
- * guarantee that is for both to run this same function over the same input.
- * A preview that says "42 will be created" and a commit that creates 41 is
- * worse than no preview at all.
- *
- * Forgiving, per the importer rule: a bad row is reported against its line
- * number and the rest of the file still goes in.
- */
+/** Decides what a roster file WOULD do, without doing any of it. */
 
-/**
- * Finds a column's value however its header was spelled.
- *
- * The sheet says "Mobile Number"; a roster exported from somewhere else says
- * "Phone"; last month's template said "mobile". All three mean the same column,
- * and every one of them is a file an admin will actually try to import.
- */
+/** Finds a column's value however its header was spelled. */
 export function columnValue(row: CsvRow, key: StudentImportColumnKey): string {
   const column = STUDENT_IMPORT_COLUMNS.find((candidate) => candidate.key === key);
   for (const alias of column?.aliases ?? []) {
@@ -61,24 +45,11 @@ export interface ImportGroup {
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<string, { id: string; fullName: string | null; hasPin: boolean }>;
-  /**
-   * Canonical group name → every group with that name, one per branch.
-   *
-   * A list rather than a single group, because a name is only unique WITHIN a
-   * branch. An unqualified name that matches two of them is a question, not a
-   * guess — see `resolveGroup`.
-   */
+  /** Canonical group name → every group with that name, one per branch. */
   groupsByName: Map<string, ImportGroup[]>;
 }
 
-/**
- * Turns one cell entry into a group, or into the reason it could not be one.
- *
- * Groups are never created implicitly: a typo would otherwise become a real
- * group that grants access to nothing and that nobody notices. And an
- * ambiguous name is never resolved by picking the first — that would put a
- * student in the wrong centre's batch, which reads as success everywhere.
- */
+/** Turns one cell entry into a group, or into the reason it could not be one. */
 export function resolveGroup(
   entry: string,
   groupsByName: Map<string, ImportGroup[]>,
@@ -106,14 +77,8 @@ export function resolveGroup(
 }
 
 /**
- * Which mobile numbers a file mentions — what the import loads existing
- * students by, rather than scanning the table once per row.
- *
- * Pure and exported so it is TESTED. It once read `row.values.mobile` while the
- * sheet's header said "Mobile Number", so it matched nothing: every row in a
- * re-import looked new, and the commit collided on the unique mobile instead of
- * updating the student who already had it. Nothing about the preview looked
- * wrong — it said "create" in confident green.
+ * Which mobile numbers a file mentions — what the import loads existing students by, rather than
+ * scanning the table once per row.
  */
 export function mobilesIn(table: CsvTable): string[] {
   const mobiles = new Set<string>();
@@ -185,11 +150,7 @@ function missingHeaders(headers: string[]): string[] {
   ];
 }
 
-/**
- * Refused up front rather than part-way through. See IMPORT_MAX_ROWS: the cost
- * is the per-student PIN hash, and a file this size would time out mid-write
- * leaving the admin unable to tell what had applied.
- */
+/** Refused up front rather than part-way through. */
 function tooManyRows(table: CsvTable): string[] {
   if (table.rows.length <= IMPORT_MAX_ROWS) return [];
   return [
@@ -204,13 +165,7 @@ function actionFor(errorCount: number, exists: boolean): StudentImportRow['actio
   return exists ? 'update' : 'create';
 }
 
-/**
- * The name column, or the reason it is not usable.
- *
- * A blank name is absent, not invalid — plenty of rosters have numbers before
- * they have names. "Kumari, Asha" is a spreadsheet artefact, and letting it
- * through means it greets the student that way forever.
- */
+/** The name column, or the reason it is not usable. */
 function readName(row: CsvRow): { fullName: string | null; error?: string } {
   const raw = columnValue(row, 'fullName').trim();
   if (raw === '') return { fullName: null };
@@ -220,12 +175,7 @@ function readName(row: CsvRow): { fullName: string | null; error?: string } {
   return { fullName: null, error: parsed.error.issues[0]?.message ?? 'That name is not valid' };
 }
 
-/**
- * The mobile column, or the reason it is not usable.
- *
- * Also records the number against its line, so the SECOND appearance of a
- * number in one file is reported rather than counted as another student.
- */
+/** The mobile column, or the reason it is not usable. */
 function readMobile(
   row: CsvRow,
   seenInFile: Map<string, number>,
@@ -274,14 +224,7 @@ function readGroups(
   return { groupNames, groupIds, errors };
 }
 
-/**
- * One row's plan.
- *
- * Each column is read by its own function above. They were inline, and between
- * them made a function nobody could check against the rules it was supposed to
- * be applying — which for the thing that decides who gets enrolled is the wrong
- * place to save a few lines.
- */
+/** One row's plan. */
 function planRow(
   row: CsvRow,
   context: ImportContext,

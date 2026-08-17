@@ -14,9 +14,8 @@ import {
 } from '../src/groups/group-rules';
 
 /**
- * Access runs Student → Group → TestSeries → Test, so both rules here exist to
- * stop a routine bit of housekeeping from silently revoking someone's access.
- * They are the reason a delete or a removal can be refused at all.
+ * Access runs Student → Group → TestSeries → Test, so both rules here exist to stop a routine bit
+ * of housekeeping from silently revoking someone's access.
  */
 
 describe('groupDeletionBlocker', () => {
@@ -25,9 +24,8 @@ describe('groupDeletionBlocker', () => {
   });
 
   it('refuses while students are still in it, and says how many', () => {
-    // Deleting a populated group strips every member's route to their tests —
-    // and since a student must stay in at least one, could leave them able to
-    // reach nothing at all.
+    // Deleting a populated group strips every member's route to their tests — and since a student must
+    // stay in at least one, could leave them able to reach nothing at all.
     const blocker = groupDeletionBlocker({ studentCount: 12, testSeriesCount: 0 });
 
     assert.ok(blocker);
@@ -83,9 +81,9 @@ describe("emptying a student's batches", () => {
   });
 
   it('allows an empty set for a student who already has none — the regression', () => {
-    // Self-signed-up students have no group until an admin assigns one, and
-    // refusing unconditionally made their record unsaveable: an admin could
-    // not correct a name without first picking a group they may not know.
+    // Self-signed-up students have no group until an admin assigns one, and refusing unconditionally
+    // made their record unsaveable: an admin could not correct a name without first picking a group
+    // they may not know.
     assert.equal(refuses(0, []), false);
   });
 
@@ -124,8 +122,8 @@ describe('group contracts', () => {
   });
 
   /**
-   * A group's branch is half of its identity AND half of its uniqueness.
-   * Moving it would silently change which name it collides with.
+   * A group's branch is half of its identity AND half of its uniqueness. Moving it would silently
+   * change which name it collides with.
    */
   it('refuses to move a group between branches on update', () => {
     assert.equal('branchId' in updateGroupSchema.parse({ branchId: 'b2' } as never), false);

@@ -20,13 +20,8 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { StudentsService } from './students.service';
 
 /**
- * The admin-side student directory.
- *
- * `@Actors(ADMIN)` is the hard boundary — a student's token is a perfectly
- * valid JWT and must not reach here. `@RequiresFeature` is the finer one, and
- * it is per route rather than per class on purpose: reading the directory needs
- * READ, changing a student needs WRITE, and a class-level decorator would
- * collapse that distinction and make READ meaningless.
+ * The admin-side student directory. `@Actors(ADMIN)` is the hard boundary — a student's
+ * token is a valid JWT and must not reach here. `@RequiresFeature` is per route: read vs write.
  */
 @Controller('admin/students')
 @Actors(ActorTypes.ADMIN)

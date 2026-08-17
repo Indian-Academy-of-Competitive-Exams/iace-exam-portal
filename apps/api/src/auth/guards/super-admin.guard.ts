@@ -4,15 +4,8 @@ import { ActorTypes, AppException, ErrorCodes } from '@iace/contracts';
 import { SUPER_ADMIN_KEY, type AuthenticatedUser } from '../../common/security';
 
 /**
- * Super-admin-only routes.
- *
- * Deliberately NOT a page permission: a page can be granted, and the things
- * behind this guard are the ones every other admin's choices are made from —
- * the branch list first among them. Granting "groups.manage" must not become a
- * way to invent a new branch.
- *
- * Read routes stay on the page permission, because an admin who can create a
- * group has to be able to see the branches to pick one.
+ * Super-admin-only routes. Deliberately NOT a feature permission: these gate the list
+ * every other admin's choices are made from, so granting one must not open them.
  */
 @Injectable()
 export class SuperAdminGuard implements CanActivate {

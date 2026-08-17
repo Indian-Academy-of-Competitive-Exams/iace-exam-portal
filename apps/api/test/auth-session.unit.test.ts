@@ -5,9 +5,8 @@ import { SessionService } from '../src/auth/session.service';
 import { FakeRedis, NO_DEVICE } from './support/fakes';
 
 /**
- * Sessions live only in Redis. Two properties earn that: logout takes effect at
- * once, and a replayed refresh token is detectable because tokens rotate. Both
- * are asserted here rather than assumed.
+ * Sessions live only in Redis. Two properties earn that: logout takes effect at once, and a
+ * replayed refresh token is detectable because tokens rotate.
  */
 
 const SUBJECT = 'stu_1';

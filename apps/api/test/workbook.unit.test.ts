@@ -34,13 +34,7 @@ describe('readUploadedTable — Excel', () => {
     });
   });
 
-  /**
-   * The failure this exists to prevent. Excel stores a bare 9876543210 as a
-   * NUMBER, and the obvious String(value) yields "9876543210" for some and
-   * "9.87654321e+9" for others depending on how it was entered. Either way a
-   * whole column of numbers becomes unimportable and the admin is told their
-   * mobile numbers are invalid.
-   */
+  /** The failure this exists to prevent. */
   it('reads a mobile stored as a number as plain digits', async () => {
     const table = await readUploadedTable(
       await workbook([
@@ -63,11 +57,7 @@ describe('readUploadedTable — Excel', () => {
     assert.deepEqual(table.headers, ['mobile', 'fullname', 'groups']);
   });
 
-  /**
-   * Row numbers must be the ones Excel shows. An error saying "line 7" that
-   * means the 7th non-empty row sends the admin to the wrong row of a 400-row
-   * sheet — which is worse than no line number at all.
-   */
+  /** Row numbers must be the ones Excel shows. */
   it('reports the sheet row number, not a count of the rows it kept', async () => {
     const table = await readUploadedTable(
       await workbook([['mobile'], ['9876543210'], [''], ['9876543211']]),
@@ -102,8 +92,8 @@ describe('readUploadedTable — Excel', () => {
 
 describe('readUploadedTable — what it accepts', () => {
   /**
-   * Sniffed from the bytes, not the filename: a .csv renamed to .xlsx is still
-   * a CSV, and the spreadsheet reader's error for one is unreadable.
+   * Sniffed from the bytes, not the filename: a .csv renamed to .xlsx is still a CSV, and the
+   * spreadsheet reader's error for one is unreadable.
    */
   it('still reads a CSV, whatever it was called', async () => {
     const table = await readUploadedTable(Buffer.from('mobile,fullName\n9876543210,Asha\n'));
@@ -129,9 +119,8 @@ describe('readUploadedTable — what it accepts', () => {
   });
 
   /**
-   * A JPEG named .xlsx used to reach the CSV reader and come back as
-   * `needs a "mobile" column. Found: ����notanexcel` — the wrong problem,
-   * described in unreadable characters.
+   * A JPEG named .xlsx used to reach the CSV reader and come back as `needs a "mobile" column.
+   * Found: ����notanexcel` — the wrong problem, described in unreadable characters.
    */
   it('refuses another binary format wearing an .xlsx name', async () => {
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
@@ -162,12 +151,7 @@ describe('readUploadedTable — what it accepts', () => {
 });
 
 describe('buildStudentTemplate', () => {
-  /**
-   * The sample is generated from the same column list the parser matches on.
-   * This is what holds that true: a sample documenting a format the importer
-   * rejects is worse than none, because every admin downloads it once and
-   * keeps using their copy.
-   */
+  /** The sample is generated from the same column list the parser matches on. */
   it('produces a file this importer can actually read back', async () => {
     const table = await readUploadedTable(await buildStudentTemplate());
 
@@ -185,8 +169,8 @@ describe('buildStudentTemplate', () => {
   });
 
   /**
-   * The headers are read by office staff filling the sheet in, not by us. A
-   * camelCase header row asks them to read our variable names.
+   * The headers are read by office staff filling the sheet in, not by us. A camelCase header row
+   * asks them to read our variable names.
    */
   it('names its columns the way a person would', async () => {
     const workbook = new ExcelJS.Workbook();

@@ -1,24 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 
-/**
- * Turns the roster's filters into a Prisma query.
- *
- * Pure, and separate from the service, because this is where a filter quietly
- * goes wrong: an absent filter that narrows anyway, or a pair of filters that
- * stop combining, both look like a working screen showing the wrong people.
- * Testing it needs no database.
- *
- * Every condition is pushed onto an AND list rather than merged into one
- * object. That is not a style choice — it is the fix for a real bug. Three of
- * these filters describe `groups` and two describe `OR`, and in an object
- * literal the last spread silently wins: filtering "never signed in" and then
- * typing a name dropped the status filter entirely, and the roster showed
- * everyone while looking exactly right. A list cannot overwrite itself.
- *
- * Every filter is ABSENT-OR-APPLIED — never "false means don't care". A
- * three-state control (any / yes / no) has to be able to ask for `false`.
- */
+/** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
   const and: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
@@ -65,13 +48,7 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   return and.length === 0 ? {} : { AND: and };
 }
 
-/**
- * An inclusive day range over a timestamp column.
- *
- * `joinedTo` is the END of that day, not its midnight. A range of 3rd–3rd that
- * matched nothing because everyone enrolled after 00:00 is the kind of empty
- * table an admin reads as "there are none".
- */
+/** An inclusive day range over a timestamp column. */
 function dateRange(
   from: string | undefined,
   to: string | undefined,
@@ -86,12 +63,7 @@ function dateRange(
   };
 }
 
-/**
- * Ordering, always tie-broken by id.
- *
- * Without the tie-break, rows sharing a sort value can come back in a different
- * order on each query — which pages a student twice and hides another entirely.
- */
+/** Ordering, always tie-broken by id. */
 export function studentOrderBy(sort: StudentSort): Prisma.StudentOrderByWithRelationInput[] {
   switch (sort) {
     case STUDENT_SORTS.OLDEST:

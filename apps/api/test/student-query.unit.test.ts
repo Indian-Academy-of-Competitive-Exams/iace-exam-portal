@@ -22,9 +22,8 @@ const assertHas = (params: Record<string, string>, condition: unknown) => {
 
 describe('studentWhere — an absent filter narrows nothing', () => {
   /**
-   * The failure this exists to prevent: a filter nobody set still restricts the
-   * list, and the roster quietly shows a subset of the students while looking
-   * exactly like the whole thing.
+   * The failure this exists to prevent: a filter nobody set still restricts the list, and the roster
+   * quietly shows a subset of the students while looking exactly like the whole thing.
    */
   it('is empty when nothing was asked for', () => {
     assert.deepEqual(studentWhere(query()), {});
@@ -37,8 +36,8 @@ describe('studentWhere — an absent filter narrows nothing', () => {
 
 describe('studentWhere — three-state filters', () => {
   /**
-   * `false` is a question, not a default. A control offering any/yes/no must be
-   * able to ask for "no", so absent and false cannot collapse into each other.
+   * `false` is a question, not a default. A control offering any/yes/no must be able to ask for
+   * "no", so absent and false cannot collapse into each other.
    */
   it('tells absent apart from false, for every boolean filter', () => {
     for (const field of ['isActive', 'preTestReady', 'profileCompleted'] as const) {
@@ -48,11 +47,7 @@ describe('studentWhere — three-state filters', () => {
     }
   });
 
-  /**
-   * A PIN the institute handed out is not a sign-in. Counting it as one turns
-   * "never signed in" — the list of people to chase — into "was never
-   * imported", the moment the first roster is uploaded.
-   */
+  /** A PIN the institute handed out is not a sign-in. */
   it('reads neverSignedIn as "has no PIN OF THEIR OWN", both ways round', () => {
     assertHas({ neverSignedIn: 'true' }, { OR: [{ pinHash: null }, { pinIsDefault: true }] });
     assertHas({ neverSignedIn: 'false' }, { pinHash: { not: null }, pinIsDefault: false });
@@ -75,8 +70,8 @@ describe('studentWhere — access-shaped filters', () => {
   });
 
   /**
-   * A branch has no students of its own — it has groups, and those have
-   * members. Asking the student table for a branchId directly would find none.
+   * A branch has no students of its own — it has groups, and those have members. Asking the student
+   * table for a branchId directly would find none.
    */
   it('finds a branch through the groups under it', () => {
     assertHas({ branchId: 'b1' }, { groups: { some: { branchId: 'b1' } } });
@@ -108,12 +103,7 @@ describe('studentWhere — joined between', () => {
   });
 });
 
-/**
- * Every case here once silently LOST a filter. Three conditions describe
- * `groups` and two describe `OR`; merged into one object, the last spread won
- * and the earlier filter vanished without a trace — the roster showed more
- * people than were asked for and looked completely normal doing it.
- */
+/** Every case here once silently LOST a filter. */
 describe('studentWhere — filters COMBINE rather than overwrite each other', () => {
   it('keeps the group filter when a branch is chosen too', () => {
     const params = { groupId: 'g1', branchId: 'b1' };
@@ -129,8 +119,8 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   });
 
   /**
-   * The likeliest one to be hit: pick "Never signed in", then type a name. The
-   * status filter used to disappear and the search ran across everyone.
+   * The likeliest one to be hit: pick "Never signed in", then type a name. The status filter used to
+   * disappear and the search ran across everyone.
    */
   it('keeps "never signed in" when a search is typed', () => {
     const params = { neverSignedIn: 'true', q: 'ravi' };
@@ -185,9 +175,8 @@ describe('studentOrderBy', () => {
   });
 
   /**
-   * Without a tie-break, rows sharing a sort value can come back in a different
-   * order per query — which shows one student on two pages and hides another
-   * entirely.
+   * Without a tie-break, rows sharing a sort value can come back in a different order per query —
+   * which shows one student on two pages and hides another entirely.
    */
   it('always tie-breaks on id, whatever the sort', () => {
     for (const sort of Object.values(STUDENT_SORTS)) {

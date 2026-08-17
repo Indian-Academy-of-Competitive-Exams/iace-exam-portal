@@ -3,11 +3,8 @@ import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
 
 /**
- * The application Redis connection: OTP codes, sessions, device binding, rate
- * limiting, live test state and leaderboards. BullMQ gets its own connection
- * (it issues blocking commands), so nothing here contends with the queues.
- *
- * Nothing stored through this service is ever mirrored into Postgres.
+ * The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test
+ * state and leaderboards.
  */
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {

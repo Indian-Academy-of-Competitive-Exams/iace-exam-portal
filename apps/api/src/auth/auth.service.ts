@@ -29,13 +29,8 @@ import {
 import { type DeviceContext } from './auth.types';
 
 /**
- * Owns `Admin` and `Page` (docs/03 §5) — and READS `Student` for credentials,
- * which the students module owns. That split is deliberate: a PIN hash is a
- * credential, not profile data, and putting login behind the students facade
- * would make the students module a dependency of every sign-in.
- *
- * Sessions, OTP codes and device binding are Redis-only and are never written
- * to Postgres at all.
+ * Owns `Admin` and `Page` (docs/03 §5) — and READS `Student` for credentials, which the students
+ * module owns.
  */
 @Injectable()
 export class AuthService {
@@ -50,28 +45,17 @@ export class AuthService {
   ) {}
 
   // ==========================================================================
-  // Students — OTP once at signup, a 4-digit PIN every day after
-  //
-  // An SMS per login was the vendor's habit and the students' complaint: it is
-  // slow, it costs money, and it fails exactly when the hall is full and the
-  // network is not. So the OTP proves the number once (and again if the PIN is
-  // forgotten); the PIN carries every ordinary login.
+  // Students — OTP once at signup, a 4-digit PIN every day after An SMS per login was the vendor's
+  // habit and the students' complaint: it is slow, it costs money, and it fails exactly when the
+  // hall is full and the network is not.
   // ==========================================================================
 
-  /**
-   * Serves both signup and PIN reset. Any valid-looking mobile gets a code —
-   * registered or not, active or not — so the endpoint answers identically in
-   * every case and cannot be used to discover who has an account.
-   */
+  /** Serves both signup and PIN reset. */
   async requestStudentOtp(mobile: string): Promise<OtpRequestResponse> {
     return this.otp.request(ActorTypes.STUDENT, mobile);
   }
 
-  /**
-   * Proves the number and hands back a short-lived ticket. Deliberately does
-   * NOT sign anyone in: the account does not exist until a PIN is chosen, so
-   * an abandoned signup leaves no half-made student behind.
-   */
+  /** Proves the number and hands back a short-lived ticket. */
   async verifyStudentOtp(mobile: string, code: string): Promise<PinSetupTicket> {
     await this.otp.verify(ActorTypes.STUDENT, mobile, code);
 
@@ -90,9 +74,8 @@ export class AuthService {
   }
 
   /**
-   * Redeems the ticket. One code path for both cases — signup creates the
-   * student, a reset overwrites the hash — because they differ only in whether
-   * the row already exists.
+   * Redeems the ticket. One code path for both cases — signup creates the student, a reset
+   * overwrites the hash — because they differ only in whether the row already exists.
    */
   async setStudentPin(
     mobile: string,
@@ -105,9 +88,8 @@ export class AuthService {
     const pinHash = await this.pin.hash(pin);
     const student = await this.prisma.student.upsert({
       where: { mobile },
-      // pinIsDefault false in both branches: this PIN is the student's own,
-      // whether they are new or replacing the one an import gave them. Leaving
-      // it set would keep prompting them to change a PIN they just chose.
+      // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or
+      // replacing the one an import gave them.
       create: { mobile, pinHash, pinIsDefault: false },
       update: { pinHash, pinIsDefault: false },
     });
@@ -125,17 +107,9 @@ export class AuthService {
   }
 
   /**
-   * Replacing a PIN the student already knows.
-   *
-   * The current one is checked even though the caller holds a valid session: an
-   * open session on a shared machine — a library, a friend's phone — would
-   * otherwise be enough to lock the real owner out of their own account. Wrong
-   * attempts climb the same lockout ladder as login, so this cannot be used as
-   * an unlimited oracle for guessing a PIN that login refuses to let you guess.
-   *
-   * Returns a FRESH session. Every other one dies with the old PIN — that is
-   * most of the point — but signing the student out of the device they are
-   * standing at, as a punishment for doing the safe thing, is not.
+   * Replacing a PIN the student already knows. The current one is checked despite the
+   * session: one left open on a shared machine would otherwise lock the owner out.
+   * Wrong attempts climb the same ladder, and the response is a FRESH session.
    */
   async changeStudentPin(
     studentId: string,
@@ -180,9 +154,8 @@ export class AuthService {
   }
 
   /**
-   * The everyday login. Unknown number, no PIN set and wrong PIN are one
-   * answer and one duration, so neither the message nor the clock says whether
-   * the number is registered.
+   * The everyday login. Unknown number, no PIN set and wrong PIN are one answer and one duration, so
+   * neither the message nor the clock says whether the number is registered.
    */
   async loginStudent(
     mobile: string,
@@ -213,15 +186,7 @@ export class AuthService {
   // Admins — email + OTP
   // ==========================================================================
 
-  /**
-   * No self-signup: the admin must already exist. A DEACTIVATED one still gets
-   * a code — they are allowed in specifically so the app can tell them their
-   * access was removed, and silently swallowing the code here would strand
-   * them at a login screen that appears to be broken.
-   *
-   * The response is identical either way, so the endpoint cannot be used to
-   * enumerate admins — an unknown address simply never receives a code.
-   */
+  /** No self-signup: the admin must already exist. */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
     if (!admin) {
@@ -242,11 +207,7 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.otp.verify(ActorTypes.ADMIN, email, code);
 
-    // Deliberately NOT gated on isActive. A deactivated admin signs in and is
-    // told what happened; refusing them here would answer a real account with
-    // "invalid credentials", which reads as a typo and sends them to reset a
-    // password they do not have. Existing is now the only condition — there is
-    // no second flag that can quietly deny a real account.
+    // Deliberately NOT gated on isActive.
     const admin = await this.prisma.admin.findUnique({ where: { email } });
     if (!admin) {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
@@ -266,15 +227,8 @@ export class AuthService {
   }
 
   /**
-   * Hashes a PIN the way a chosen one is hashed — same argon2 profile, same
-   * pepper — for the bulk importer, which seeds a starting PIN so an uploaded
-   * roster can sign in the same day.
-   *
-   * A facade method rather than the importer reaching for `PinService`
-   * directly (docs/03 §4.1). The pepper and the cost parameters are auth's, and
-   * the day either changes, every hash in the system has to change with it: a
-   * second module holding its own reference to the hasher is how one of them
-   * quietly keeps the old settings.
+   * Hashes a PIN the way a chosen one is hashed — same argon2 profile, same pepper — for the bulk
+   * importer, which seeds a starting PIN so an uploaded roster can sign in the same day.
    */
   hashPin(pin: string): Promise<string> {
     return this.pin.hash(pin);
@@ -339,19 +293,7 @@ export class AuthService {
   // Internals
   // ==========================================================================
 
-  /**
-   * Announces a PIN change, AFTER the sessions are already revoked.
-   *
-   * The revocation is not moved onto this event and must not be: ending every
-   * other session is the security guarantee of a reset, and a guarantee cannot
-   * depend on a listener being registered. The event exists for the reactions
-   * that come later — telling the student their PIN changed, noting the device
-   * it happened from — which are things it is acceptable to miss one of.
-   *
-   * Both paths emit. They differ in how the student proved themselves (an OTP
-   * versus the old PIN), not in what happened to their sessions, and a listener
-   * that cares about the difference has `reason` to look at.
-   */
+  /** Announces a PIN change, AFTER the sessions are already revoked. */
   private announcePinReset(studentId: string, mobile: string, reason: PinResetReason): void {
     this.events.emit(DOMAIN_EVENTS.STUDENT_PIN_RESET, { studentId, mobile, reason });
   }
@@ -389,12 +331,7 @@ export class AuthService {
     return { accessToken, refreshToken, expiresInSec: this.tokens.accessTtlSec };
   }
 
-  /**
-   * `preTestReady` rides along on every identity read.
-   * TODO(pre-test gate): the attempt-start endpoint refuses (or rather, prompts)
-   * on `preTestReady === false` once the test engine exists — mother's name,
-   * father's name and DOB are collected there, then the flag is recomputed.
-   */
+  /** `preTestReady` rides along on every identity read. */
   private studentIdentity(student: Student): StudentIdentity {
     return {
       actor: ActorTypes.STUDENT,
@@ -428,16 +365,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * The grant map a token carries.
-   *
-   * Empty for a super admin, who bypasses every check, so the query would be
-   * work whose result is never read. Empty for a deactivated admin too — their
-   * rows are pruned on deactivation, but reading it off `isActive` means the
-   * answer does not depend on that cleanup having succeeded.
-   *
-   * Read through the admins facade rather than its tables (docs/03 §4.2).
-   */
+  /** The grant map a token carries. */
   private async adminGrants(admin: {
     id: string;
     isSuperAdmin: boolean;

@@ -29,12 +29,7 @@ interface GroupRow {
   _count: { students: number; testSeries: number };
 }
 
-/**
- * Owns `Group` and the `Group`⇄`Student` membership link (docs/03 §5). It
- * READS `Branch` and `Student` to validate what it is asked to attach, and asks
- * `BranchesService` rather than deciding for itself whether a branch will have
- * it.
- */
+/** Owns `Group` and the `Group`⇄`Student` membership link (docs/03 §5). */
 @Injectable()
 export class GroupsService {
   constructor(
@@ -136,9 +131,8 @@ export class GroupsService {
   // ==========================================================================
 
   /**
-   * Adding is a set operation: a student already in the group is left alone
-   * rather than treated as an error, because selecting a whole page and adding
-   * it is the normal way this gets used.
+   * Adding is a set operation: a student already in the group is left alone rather than treated as
+   * an error, because selecting a whole page and adding it is the normal way this gets used.
    */
   async addMembers(id: string, studentIds: string[]): Promise<AddGroupMembersResult> {
     const group = await this.prisma.group.findUnique({
@@ -200,9 +194,9 @@ export class GroupsService {
   // ==========================================================================
 
   /**
-   * Names are canonical by the time they arrive, so this compares the real
-   * thing: "SSC CGL Morning" and "ssc cgl  morning" are both SSC CGL MORNING
-   * and the second one is caught here rather than created beside the first.
+   * Names are canonical by the time they arrive, so this compares the real thing: "SSC CGL Morning"
+   * and "ssc cgl morning" are both SSC CGL MORNING and the second one is caught here rather than
+   * created beside the first.
    */
   private async assertNameFree(branchId: string, name: string): Promise<void> {
     const clash = await this.prisma.group.findUnique({

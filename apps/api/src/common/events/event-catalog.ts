@@ -1,17 +1,4 @@
-/**
- * Every cross-module event in the platform, declared in one place (docs/03 §6).
- *
- * The rule this file serves: a cross-module *reaction* goes through here as an
- * event, while a cross-module *query* stays a typed facade call. The difference
- * is what happens at extraction — an event handler relocates to another service
- * by moving a file, and a direct method call does not.
- *
- * Most of the catalog is DECLARED AND UNWIRED, on purpose. The producers do not
- * exist yet (exam, scoring, notifications are all `planned` in §5), and naming
- * the events now is what stops each of those modules inventing its own shape
- * for the same fact when it arrives. A stub here is a decision made early, not
- * dead code.
- */
+/** Every cross-module event in the platform, declared in one place (docs/03 §6). */
 
 export const DOMAIN_EVENTS = {
   /** A student pressed submit. TODO(docs/03 §6): emit from the exam module. */
@@ -77,9 +64,8 @@ export interface StudentPinResetEvent {
 }
 
 /**
- * Name → payload. `emit` is typed off this, so an event cannot be published
- * with the wrong shape and a handler cannot claim a shape the producer never
- * sends.
+ * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
+ * and a handler cannot claim a shape the producer never sends.
  */
 export interface DomainEventPayloads {
   [DOMAIN_EVENTS.ATTEMPT_SUBMITTED]: AttemptSubmittedEvent;

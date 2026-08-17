@@ -8,15 +8,7 @@ import { map, type Observable } from 'rxjs';
 import { isPaginated, type ApiSuccess } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
 
-/**
- * Wraps every successful handler return in the success envelope. Registered
- * globally, so controllers return plain data — or a `{ items, page, pageSize,
- * total }` page for lists — and never build an envelope themselves. Combined
- * with the exception filter, that makes a non-envelope response impossible.
- *
- * The one way around it is a handler that writes to the raw response itself
- * (`@Res()`), which is why nothing here does.
- */
+/** Wraps every successful handler return in the success envelope. */
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {

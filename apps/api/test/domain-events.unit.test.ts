@@ -21,15 +21,7 @@ import {
   type FakeStudent,
 } from './support/fakes';
 
-/**
- * The event seam (docs/03 §6).
- *
- * Two things are worth asserting and they pull in opposite directions: the
- * producer must ANNOUNCE what happened, and the announcement must never be able
- * to affect what happened. A bus that swallows everything satisfies the second
- * and fails the first; one that propagates satisfies the first and turns a
- * completed PIN reset into a 500 the day someone adds a bad listener.
- */
+/** The event seam (docs/03 §6). */
 
 const MOBILE = '9876543210';
 
@@ -100,16 +92,7 @@ describe('student.pin_reset', () => {
     assert.equal(events.of(DOMAIN_EVENTS.STUDENT_PIN_RESET).length, 1);
   });
 
-  /**
-   * The guarantee the event must never take over. Revoking every other session
-   * IS the security property of a reset, so it stays a direct call that has
-   * already completed by the time anything is published — and a listener that
-   * blows up afterwards must not turn that completed reset into a failure the
-   * student is told about.
-   *
-   * The REAL bus and a REAL emitter, because the catch inside the bus is the
-   * whole subject: a fake that recorded the emit would pass either way.
-   */
+  /** The guarantee the event must never take over. */
   it('completes the reset even when a listener throws', async () => {
     const emitter = new EventEmitter2({ wildcard: false, delimiter: '.' });
     emitter.on(DOMAIN_EVENTS.STUDENT_PIN_RESET, () => {
@@ -154,10 +137,7 @@ describe('DomainEventBus', () => {
       throw new Error('handler is broken');
     });
 
-    // EventEmitter2 rethrows a synchronous listener error straight into the
-    // caller's stack. Without the catch inside the bus, this would fail — and
-    // in production it would fail as a 500 on a PIN reset that had ALREADY
-    // succeeded, leaving the student told it did not work when it did.
+    // EventEmitter2 rethrows a synchronous listener error straight into the caller's stack.
     assert.doesNotThrow(() =>
       bus.emit(DOMAIN_EVENTS.STUDENT_PIN_RESET, {
         studentId: 'stu_1',
@@ -168,9 +148,9 @@ describe('DomainEventBus', () => {
   });
 
   /**
-   * Dotted names are names, not namespaces. With wildcards on, a listener for
-   * `paperQuestion.*` would receive both DROPPED and BONUS — two different
-   * corrections with opposite effects on a score.
+   * Dotted names are names, not namespaces. With wildcards on, a listener for `paperQuestion.*`
+   * would receive both DROPPED and BONUS — two different corrections with opposite effects on a
+   * score.
    */
   it('treats a dotted event name as opaque', () => {
     const emitter = new EventEmitter2({ wildcard: false, delimiter: '.' });

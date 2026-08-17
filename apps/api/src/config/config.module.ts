@@ -5,10 +5,8 @@ import { AppConfigService } from './app-config.service';
 import { validateEnv } from './env.schema';
 
 /**
- * Env lives in a single `.env` at the repo root — one file for the API, the
- * Prisma CLI and docker compose, so they can never drift apart. `validate`
- * replaces the raw process env with the parsed/coerced object, which is what
- * AppConfigService reads.
+ * Env lives in a single `.env` at the repo root — one file for the API, the Prisma CLI and docker
+ * compose, so they can never drift apart.
  */
 @Global()
 @Module({

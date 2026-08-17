@@ -8,17 +8,7 @@ import {
 import { columnValue } from './student-import';
 import { type CsvRow, type CsvTable } from './csv';
 
-/**
- * Planning a bulk add into ONE group.
- *
- * Same rules as the student import — preview first, errors against their line
- * number, only valid rows written — over a much smaller question: a list of
- * mobile numbers, and the group is the screen the admin is already on.
- *
- * A number that belongs to nobody is REPORTED, never enrolled. Creating a
- * student from a bare number would put someone in a batch under a name nobody
- * ever typed, and the student import is where enrolling belongs.
- */
+/** Planning a bulk add into ONE group. */
 
 export interface GroupMemberContext {
   group: { id: string; name: string; branchName: string };
@@ -139,9 +129,8 @@ function planRow(
     mobile,
     studentId: student.id,
     studentName: student.fullName,
-    // Already a member is a fine thing to be. Re-uploading last week's list
-    // with ten new numbers on the end is how this actually gets used, and
-    // calling that an error would bury the ten.
+    // Already a member is a fine thing to be. Re-uploading last week's list with ten new numbers on
+    // the end is how this actually gets used, and calling that an error would bury the ten.
     action: context.memberIds.has(student.id) ? 'already' : 'add',
     errors: [],
   };
