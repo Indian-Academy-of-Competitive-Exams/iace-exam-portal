@@ -23,7 +23,8 @@ function resolve(path: string): ColorFn {
 describe('preset colour tokens', () => {
   const cases = [
     'background',
-    'foreground',
+    'foreground.DEFAULT',
+    'foreground.secondary',
     'primary.DEFAULT',
     'destructive.DEFAULT',
     'info.subtle',

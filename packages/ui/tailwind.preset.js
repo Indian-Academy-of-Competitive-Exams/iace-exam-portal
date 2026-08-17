@@ -69,7 +69,13 @@ module.exports = {
       colors: {
         background: token('--background'),
         surface: { DEFAULT: token('--surface'), 2: token('--surface-2') },
-        foreground: token('--foreground'),
+        // `secondary` is the dimmer body ink — quieter than --foreground, not
+        // as quiet as --muted-foreground. It was missing here while
+        // `text-foreground-secondary` was already written in the app shell, and
+        // an undeclared colour is not an error in Tailwind: the class matches
+        // nothing, no CSS is emitted, and the text simply inherits. Two of the
+        // shell's labels have been rendering at full foreground weight since.
+        foreground: { DEFAULT: token('--foreground'), secondary: token('--foreground-secondary') },
         border: token('--border'),
         input: token('--input'),
         ring: token('--ring'),
@@ -84,6 +90,14 @@ module.exports = {
           DEFAULT: token('--primary'),
           hover: token('--primary-hover'),
           foreground: token('--primary-foreground'),
+          // The quiet brand pair — a tinted ground with brand-coloured ink, for
+          // marking something as current without shouting. `subtle`/`ink` were
+          // declared in tokens.css and used by the sidebar's active row, but
+          // never mapped here, so `bg-primary-subtle text-primary-ink` emitted
+          // nothing at all: the selected nav item lost its idle styling and
+          // gained none of its own, leaving no visible current page.
+          subtle: token('--primary-subtle'),
+          ink: token('--primary-ink'),
         },
         secondary: {
           DEFAULT: token('--secondary'),
