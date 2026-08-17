@@ -26,13 +26,7 @@ import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
-/**
- * Named once so the banner and the field mapping cannot drift apart.
- *
- * The nested paths are the names the FORM registers. The server keys its errors
- * the same way (`profile.dob`), and `applyFieldErrors` also matches on the leaf,
- * so either spelling lands on the right input.
- */
+/** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
   'fullName',
   'profile.motherName',
@@ -43,14 +37,7 @@ const FORM_FIELDS = [
   'profile.gender',
 ] as const;
 
-/**
- * The student's own details.
- *
- * The three pre-test fields sit at the top, in their own card, because they are
- * the ones that stop a hall ticket being issued. Everything below is optional
- * and says so — a form that treats a middle name with the same weight as a date
- * of birth teaches the reader that none of it matters.
- */
+/** The three pre-test fields sit in their own card; everything below is optional and says so. */
 export function ProfilePage() {
   const queryClient = useQueryClient();
 
@@ -82,9 +69,7 @@ export function ProfilePage() {
   }, [me.data, reset]);
 
   const save = useMutation({
-    // The central handler announces the outcome — see createAppQueryClient.
-    // `fields` is what keeps a validation failure OFF the toast and on the
-    // input that caused it.
+    // `fields` keeps a validation failure off the toast and on the input that caused it.
     meta: { success: 'Your details have been saved.', fields: FORM_FIELDS },
     mutationFn: (values: UpdateMeInput) => api.me.update(values),
     onSuccess: (updated) => {

@@ -4,19 +4,8 @@ import { Alert, Button } from '@iace/ui';
 import { ROUTES } from '../lib/constants';
 
 /**
- * The pre-test gate: mother's name, father's name and date of birth.
- *
- * A PROMPT, never a wall. These three go on the hall ticket and the answer
- * sheet, so a test taken without them is a result nobody can match to a person
- * — but a student sitting down five minutes before a paper starts must not be
- * met by a form they cannot skip. It asks, and it keeps asking, and it lets
- * them past.
- *
- * `profileCompleted` — the full profile — never appears here. That one is a
- * nudge and nothing more.
- *
- * TODO(exam engine): render this on the way into a test as well as here, and
- * carry the student back to where they were once they have filled it in.
+ * The pre-test gate: mother's name, father's name, DOB. A PROMPT, never a wall.
+ * Rendered on the profile only; the exam engine will also show it on the way into a test.
  */
 export function PreTestPrompt({ preTestReady }: Readonly<{ preTestReady: boolean }>) {
   if (preTestReady) return null;

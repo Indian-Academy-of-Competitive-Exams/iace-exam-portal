@@ -13,20 +13,8 @@ import {
 } from '@iace/ui';
 
 /**
- * A list of rows a student adds to: schooling, or exams sat elsewhere.
- *
- * One component for both, because they are the same interaction — add a row,
- * fill some of it in, remove one you got wrong — and two copies would have
- * drifted the first time either changed.
- *
- * Every field inside a row is optional except the first. A student who
- * remembers sitting SSC CGL but not the year should be able to record that
- * rather than being stopped by a form that wants all of it.
- *
- * The row is a GRID, not a flex line. Flex sizes each row to its own contents,
- * so a long institution name in one row pushed that row's Year box out of line
- * with the Year box above it. A grid template makes the columns a property of
- * the list rather than of whichever row happens to be widest.
+ * Rows a student adds to: schooling, or exams sat elsewhere. Every field but the first
+ * is optional. A GRID, not flex, or one long name pushes that row's columns out of line.
  */
 export function HistoryEditor<T extends FieldValues>({
   control,

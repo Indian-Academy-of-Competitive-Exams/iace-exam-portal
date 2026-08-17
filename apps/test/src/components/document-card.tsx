@@ -7,16 +7,8 @@ import { api } from '../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../lib/constants';
 
 /**
- * One uploadable thing: a photo, an Aadhaar, a PAN.
- *
- * Built as a fixed column — preview, name, button, rules — so three of them
- * side by side line up whatever each one holds. Left to flow, a card holding a
- * document and one holding nothing came out different heights, and a row of
- * them stepped down the page.
- *
- * The preview IS the link. Someone checking what we hold should be able to
- * click the thing they are looking at, rather than find a line of text beside
- * it.
+ * One uploadable thing. A fixed column — preview, name, button, rules — so three
+ * side by side line up whatever each holds. The preview IS the link.
  */
 export function DocumentCard({
   kind,
@@ -30,9 +22,7 @@ export function DocumentCard({
     meta: { success: `${label} saved.` },
     mutationFn: (file: File) => api.me.uploadDocument(kind, file),
     onSuccess: (me: Me) => {
-      // The response IS the refreshed profile, so the card shows the new file
-      // without a second request — and the identity carries profileCompleted,
-      // which this upload may have just changed.
+      // The response IS the refreshed profile, so no second request is needed.
       queryClient.setQueryData(PROFILE_QUERY_KEY, me);
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
     },
@@ -93,13 +83,7 @@ export function DocumentCard({
   );
 }
 
-/**
- * The container the file lives in.
- *
- * A fixed aspect box, the same size whether it holds a photo, a PDF or nothing
- * — which is what keeps a row of cards aligned. An image is shown; a PDF cannot
- * be, so it says so rather than rendering a broken frame.
- */
+/** A fixed aspect box, the same size whether it holds a photo, a PDF or nothing. */
 function Preview({ url, label }: Readonly<{ url: string | null; label: string }>) {
   const shell =
     'flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-md border';
@@ -142,13 +126,8 @@ function Preview({ url, label }: Readonly<{ url: string | null; label: string }>
 }
 
 /**
- * Whether the stored object is a PDF.
- *
- * Read from the key's extension inside the signed URL, which is ours: the key
- * is built from the VERIFIED content type on upload, so the extension is a fact
- * about the bytes rather than something a browser claimed. The query string is
- * dropped first — it is full of signature characters, and matching ".pdf"
- * against the whole URL would eventually hit one by accident.
+ * From the key's extension, which we built from the verified content type on upload.
+ * The query string is dropped first: its signature characters would eventually match.
  */
 function isPdf(url: string): boolean {
   const path = url.split('?')[0] ?? '';

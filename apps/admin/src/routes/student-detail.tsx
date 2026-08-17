@@ -65,13 +65,7 @@ function toFormValues(student: StudentDetail): FormValues {
   };
 }
 
-/**
- * One uploaded document, if it exists.
- *
- * Opens in a new tab: these are signed links with a short life, and navigating
- * the admin away from the record they were reading to look at a PDF means
- * finding their way back.
- */
+/** One uploaded document. Opens in a new tab — these are short-lived signed links. */
 function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | null }>) {
   if (!url) {
     return <Badge variant="neutral">{label} — not uploaded</Badge>;
@@ -118,14 +112,10 @@ export function StudentDetailPage() {
     },
   });
 
-  // useWatch rather than form.watch(): the latter returns a fresh function each
-  // render and cannot be memoized, so it re-renders the picker on every keystroke
-  // anywhere in the form.
+  // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
   const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
 
-  // The form is created before the student arrives, so seed it on load — and
-  // only when the id changes, or an in-progress edit would be wiped by a
-  // background refetch.
+  // Seeded on load and only when the id changes, or a refetch wipes an in-progress edit.
   useEffect(() => {
     if (student.data) form.reset(toFormValues(student.data));
   }, [student.data?.id]);
@@ -135,9 +125,7 @@ export function StudentDetailPage() {
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
-        // Only send membership when it actually changed: an omitted key means
-        // "leave it alone", which is the truthful thing to say about a set of
-        // checkboxes nobody touched.
+        // An omitted key means "leave it alone", which is true of checkboxes nobody touched.
         ...(form.formState.dirtyFields.groupIds ? { groupIds: values.groupIds } : {}),
         profile: {
           motherName: orNull(values.motherName),
@@ -179,9 +167,7 @@ export function StudentDetailPage() {
     },
   });
 
-  // Shaped like the page it stands in for — a heading, then the two cards —
-  // so the header does not appear on top of a line of text and then shove it
-  // down when the record lands.
+  // Shaped like the page it stands in for: a heading, then the two cards.
   if (student.isPending) {
     return (
       <div className="flex flex-col gap-5">
@@ -372,10 +358,7 @@ export function StudentDetailPage() {
           <Card>
             <CardContent className="flex flex-col gap-3 pt-6">
               {save.error ? (
-                // Always says something HERE, beside the button that was just
-                // clicked. When every detail is already on a field, that field
-                // may be a card away and off screen, and a save that reports
-                // nothing where you are looking reads as a dead button.
+                // Says something beside the button: the offending field may be a card away.
                 <Alert variant="danger">Check the highlighted fields above.</Alert>
               ) : null}
               {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}

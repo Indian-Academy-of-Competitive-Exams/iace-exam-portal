@@ -23,13 +23,8 @@ import { SuperAdminOnly } from '../components/super-admin-only';
 type Level = PermissionLevel | null;
 
 /**
- * The edits made since the last save, keyed by feature.
- *
- * A DIFF rather than a copy of the whole map, which is what lets a background
- * refetch land mid-edit without consequence: an untouched feature reads through
- * to whatever the server now says, and only the boxes actually ticked hold their
- * pending value. A full copy would have to be re-seeded from every refetch, and
- * that effect is the standard way a form like this eats someone's work.
+ * The edits since the last save. A DIFF, not a copy: an untouched feature reads
+ * through to the server, so a refetch mid-edit cannot eat unsaved work.
  */
 type Draft = ReadonlyMap<string, Level>;
 
@@ -56,15 +51,8 @@ const isReduction = ({ from, to }: Change) =>
   to === null || (from === PERMISSION_LEVELS.WRITE && to === PERMISSION_LEVELS.READ);
 
 /**
- * Who holds what, one admin at a time.
- *
- * By admin rather than by feature, because granting is something you do TO a
- * person: someone has just been created, or has changed job, and the question
- * is "what should they have" — all of it at once, rather than one feature at a
- * time with the rest out of sight.
- *
- * Every panel starts open. The list is short, and a screen whose content sits
- * behind N clicks is one you can neither scan nor find-in-page.
+ * Who holds what, one admin at a time — granting is something you do TO a person.
+ * Every panel starts open, so the screen can be scanned and found in.
  */
 export function PermissionsPage() {
   const queryClient = useQueryClient();
@@ -79,11 +67,7 @@ export function PermissionsPage() {
       api.admin.admins.list({ page: 1, pageSize: PAGE_SIZE_FOR_PICKERS, activeOnly: 'true' }),
   });
 
-  /**
-   * Both caches. A grant changes the feature's holder list AND the admin's
-   * permission map, and the checkboxes render off the second — invalidating
-   * only one leaves them showing the state from before the save.
-   */
+  /** Both caches: a grant changes the feature's holders and the admin's permission map. */
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: FEATURES_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: ADMINS_QUERY_KEY });
@@ -135,17 +119,8 @@ export function PermissionsPage() {
 // ---------------------------------------------------------------------------
 
 /**
- * One admin's access, edited as a set and saved as one act.
- *
- * It used to fire a request per checkbox. That made the grid the one screen in
- * the app where an irreversible-feeling change happened with no confirmation —
- * and confirming each tick was not the answer either, because setting up a new
- * admin is a dozen ticks and a dozen dialogs is how someone learns to click
- * through dialogs without reading them. So the ticks are free and the SAVE is
- * the deliberate step: one dialog, listing exactly what is about to change.
- *
- * The draft lives here rather than in the grid so the summary row can carry the
- * unsaved count — a panel folded shut must not hide pending work.
+ * One admin's access, edited as a set: the ticks are free and the SAVE is the deliberate step.
+ * The draft lives here so the summary row can show the unsaved count when the panel is shut.
  */
 function AdminPanel({
   admin,
@@ -179,11 +154,7 @@ function AdminPanel({
 
   const save = useMutation({
     meta: { success: `Access updated for ${admin.email}.` },
-    /**
-     * One feature at a time, revoking before granting so both levels are never
-     * held at once. The server resolves that case to WRITE anyway, but a row
-     * saying one thing while the screen says another is its own bug.
-     */
+    /** One feature at a time, revoking before granting so both levels are never held at once. */
     mutationFn: async () => {
       for (const change of changes) {
         if (change.from) {
@@ -203,14 +174,8 @@ function AdminPanel({
       }
     },
     /**
-     * The draft is dropped whether this succeeded or failed, and the caches are
-     * refetched either way.
-     *
-     * A failure halfway through leaves the earlier features already changed, so
-     * the only honest thing the grid can show afterwards is what the server
-     * actually holds. Keeping the draft would leave ticks claiming to be pending
-     * that had in fact been applied. The toast says it failed; the boxes say
-     * where it got to.
+     * Dropped whether this succeeded or failed: a run that stopped halfway has already
+     * changed the earlier features, so only the server knows where it got to.
      */
     onSettled: () => {
       setDraft(new Map<string, Level>());
@@ -235,9 +200,7 @@ function AdminPanel({
       meta={<PanelMeta admin={admin} features={features} changes={changes} heldCount={heldCount} />}
     >
       {admin.isSuperAdmin ? (
-        // No checkboxes. A super admin bypasses every check, so a grant would be
-        // a row that changes nothing — rendering the controls would imply that
-        // ticking them mattered.
+        // No checkboxes: a super admin bypasses every check, so a grant changes nothing.
         <p className="text-sm text-muted-foreground">
           Bypasses every feature check, so there is nothing to grant. Remove super admin on the
           Admins screen to give them specific access instead.
@@ -309,12 +272,7 @@ function AdminPanel({
   );
 }
 
-/**
- * The badge on the summary row.
- *
- * Unsaved work wins the slot, because this row is all that is visible once the
- * panel is folded shut, and a draft nobody can see is a draft somebody loses.
- */
+/** Unsaved work wins the slot: this row is all that is visible once the panel is shut. */
 function PanelMeta({
   admin,
   features,
@@ -402,11 +360,7 @@ function FeatureRow({
   onSetLevel: (key: string, next: Level) => void;
 }>) {
   const hasWrite = level === PERMISSION_LEVELS.WRITE;
-  /**
-   * Write implies read, so read is ticked and locked whenever write is held.
-   * The tick is a consequence rather than a choice, and leaving it clickable
-   * would offer "write but not read" — a state the server cannot represent.
-   */
+  /** Write implies read, so read is locked while write is held. */
   const hasRead = level !== null;
 
   return (
@@ -432,9 +386,7 @@ function FeatureRow({
           checked={hasWrite}
           disabled={disabled}
           aria-label={`Write access to ${feature.key} for ${admin.email}`}
-          // Un-ticking write removes the grant outright rather than demoting to
-          // read: the box you clicked is the thing that goes away, and read is
-          // one click back if that is what was meant.
+          // Un-ticking write removes the grant rather than demoting to read.
           onChange={(event) =>
             onSetLevel(feature.key, event.target.checked ? PERMISSION_LEVELS.WRITE : null)
           }

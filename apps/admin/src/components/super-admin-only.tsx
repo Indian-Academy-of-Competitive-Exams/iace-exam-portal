@@ -3,17 +3,8 @@ import { Alert, PageHeader } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 
 /**
- * The three super-admin screens share one gate, so they cannot drift into
- * saying three different things when somebody reaches them without the right.
- *
- * It renders a refusal rather than redirecting. A redirect to the dashboard
- * looks like the link was broken; this says what happened, which is the
- * difference between a product that refused you and one that lost you.
- *
- * This is NOT the security boundary — every endpoint behind these screens is
- * `@RequiresSuperAdmin` server-side. Reaching this component with a pasted URL
- * gets you a page that renders and then fails every request it makes, so the
- * gate exists to make that a sentence instead of a wall of errors.
+ * One gate for the three super-admin screens. Renders a refusal rather than redirecting.
+ * Not the security boundary — every endpoint behind them is `@RequiresSuperAdmin`.
  */
 export function SuperAdminOnly({
   title,

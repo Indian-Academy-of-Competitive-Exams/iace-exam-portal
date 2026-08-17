@@ -35,21 +35,10 @@ import { ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
 /**
- * Adding students to ONE group from a list of mobile numbers.
- *
- * The group comes from the URL rather than a column in the sheet: it is the
- * group the admin came from, so it cannot be mistyped, and one file cannot
- * scatter students across batches nobody looked at.
- *
- * Add only. Removing someone takes away their route to a test, which is a
- * single visible act on that student, not something a spreadsheet does quietly.
+ * Adds students to ONE group, taken from the URL rather than a column, so it cannot be mistyped.
+ * Add only — removing a student's route to a test is a visible act, not a spreadsheet's.
  */
-/**
- * The three requests this screen makes, and the file they act on.
- *
- * Lifted out of the component because the component's job is layout — reading
- * the wiring and the markup as one thing is what made it hard to follow.
- */
+/** The three requests this screen makes, and the file they act on. */
 function useMemberImport(groupId: string) {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -234,13 +223,7 @@ export function ImportGroupMembersPage() {
   );
 }
 
-/**
- * What is wrong with the FILE, and what the import did to it.
- *
- * Request failures are not here — those go to a toast, from the one handler in
- * createAppQueryClient. What stays is the file's own report: a missing column is
- * a fact about the thing on screen, not news about a request.
- */
+/** What is wrong with the FILE. Request failures go to the toast handler instead. */
 function ImportBanners({
   groupId,
   fileErrors,

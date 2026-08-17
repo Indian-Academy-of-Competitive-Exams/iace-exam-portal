@@ -36,15 +36,7 @@ import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { useFilters } from '../lib/use-filters';
 const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
 
-/**
- * The column set, built OUTSIDE the component.
- *
- * `cell` is a render prop — an arrow returning JSX — and a static analyser
- * cannot tell that apart from a component declared inside another component,
- * which is a real bug (a new component type every render, so React remounts
- * the subtree and loses its state). Defining them out here makes the
- * distinction explicit rather than something a reader has to infer.
- */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
 function groupColumns(): DataTableColumn<GroupSummary>[] {
   return [
     {

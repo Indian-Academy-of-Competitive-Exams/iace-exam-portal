@@ -2,22 +2,8 @@ import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /**
- * Filters kept in the URL rather than in component state.
- *
- * This is what makes a link into a screen and the screen's own controls the
- * same thing. Held in `useState`, a filter set by a link is simply ignored —
- * the Branches page linked to `/groups?branchId=…` for a week and the Groups
- * page never read it, so the link looked broken while every control worked.
- *
- * It also means a filtered roster can be sent to someone, and the back button
- * returns to what you were looking at instead of an unfiltered list.
- *
- * The PAGE is not kept here. Every filter change has to reset it — page 4 of
- * the old result set is usually past the end of the new one, and an empty table
- * reads as "there are none" rather than "you are too far in" — and that reset
- * belongs with the page state itself, which each screen owns. This once
- * deleted a `page` param that was never written, which read as a guarantee it
- * was not making.
+ * Filters in the URL, so a link into a screen and its own controls are the same state.
+ * The PAGE is not here: every filter change has to reset it, and that belongs with the page state.
  */
 export function useFilters<K extends string>(): {
   get: (key: K) => string;

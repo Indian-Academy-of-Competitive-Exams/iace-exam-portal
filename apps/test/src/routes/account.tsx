@@ -19,12 +19,7 @@ import { useAuth } from '../providers/auth';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
 
-/**
- * Changing the PIN.
- *
- * Reachable on its own, and also where the forced replacement lands when a
- * student is still on the PIN an import gave them.
- */
+/** Changing the PIN. Also where the forced replacement lands for an import's default PIN. */
 export function AccountPage() {
   const { identity: student } = useAuth();
   const onDefaultPin = student?.hasDefaultPin ?? false;
@@ -53,11 +48,7 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
     mutationFn: (values: ChangePinInput) => api.me.changePin(values),
     onSuccess: (session) => {
       form.reset();
-      // Storing the returned session is NOT optional: changing the PIN revoked
-      // every session opened with the old one, including this device's. The
-      // tokens in hand stopped working the moment this succeeded. It also
-      // carries the identity with hasDefaultPin now false, which is what takes
-      // the forced prompt away.
+      // Not optional: the change revoked every session opened with the old PIN, including this one.
       signIn(session);
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),

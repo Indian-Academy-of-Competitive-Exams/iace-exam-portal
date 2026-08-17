@@ -19,14 +19,7 @@ import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
 import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
-/**
- * The student's profile, as it stands.
- *
- * A read-only view first, and editing behind a button. A form is the right tool
- * for changing things and the wrong one for checking them — a student who wants
- * to know whether their photo went through should not have to read it out of an
- * input box.
- */
+/** The profile as it stands, with editing behind a button — a form is for changing, not checking. */
 export function ProfileViewPage() {
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
@@ -140,13 +133,7 @@ export function ProfileViewPage() {
   );
 }
 
-/**
- * What is left to do, as a list rather than a percentage.
- *
- * "60% complete" tells a student they are not finished without telling them
- * what to do about it. Each line names one thing and links to where it is
- * filled in.
- */
+/** What is left to do, as a list rather than a percentage. Each line links to where it is filled in. */
 function Completion({ me }: Readonly<{ me: Me }>) {
   const profile = me.profile;
   const items = [

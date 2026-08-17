@@ -35,11 +35,7 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
-/**
- * Preview, then commit. Nothing is written until the admin has seen exactly
- * what would happen — and a file with three bad rows still imports the other
- * 397 rather than being refused whole.
- */
+/** Preview, then commit. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [plan, setPlan] = useState<StudentImportPlan | null>(null);
@@ -64,11 +60,7 @@ export function ImportStudentsPage() {
     onSuccess: (blob) => saveBlob(blob, STUDENT_IMPORT_TEMPLATE_FILENAME),
   });
 
-  /**
-   * Choosing a file previews it immediately. The two-step "choose, then press
-   * Preview" was a button that did nothing an admin had asked for — they
-   * picked the file BECAUSE they wanted to see it.
-   */
+  /** Choosing a file previews it at once — that is why they chose it. */
   const choose = (chosen: File | undefined) => {
     if (!chosen) return;
     setFile(chosen);

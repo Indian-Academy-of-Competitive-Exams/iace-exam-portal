@@ -10,14 +10,8 @@ import { api, signOutSignal, tokenStore } from '../lib/api';
 import { ME_QUERY_KEY } from '../lib/constants';
 
 /**
- * This app's session. All of the behaviour is in `createAuth`; what is here is
- * the three things that are genuinely this app's — which actor counts as a
- * session, where its identity is cached, and which client it reads through —
- * plus one read that only makes sense for an admin.
- *
- * `ActorTypes.ADMIN` is doing real work: a student's token is a perfectly valid
- * JWT and must not be a session in the admin app. The server enforces the same
- * split with `@Actors`.
+ * This app's session: the actor, the cache key, the client, and one admin-only read.
+ * `ActorTypes.ADMIN` is load-bearing — a student's JWT is valid and is not a session here.
  */
 export const { AuthProvider, useAuth } = createAuth<
   AdminIdentity,
@@ -34,20 +28,12 @@ export const { AuthProvider, useAuth } = createAuth<
     },
   },
   /**
-   * Mirrors the server-side FeaturePermissionGuard exactly, and shares the rule
-   * with it: `satisfiesLevel` is the same function the guard calls, imported
-   * rather than reimplemented. The two answering differently is precisely the
-   * bug where the UI renders a button the API then refuses — which reads to the
-   * user as a broken product rather than as a permission they lack.
-   *
-   * Admin-only by design: a student identity has no grants, so a shared `can`
-   * would be a function that can only ever answer false.
+   * Mirrors FeaturePermissionGuard, sharing `satisfiesLevel` rather than reimplementing it.
+   * The two disagreeing is the bug where the UI offers a button the API refuses.
    */
   extend: (admin) => ({
     can: (key: string, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
-      // isActive first, and it gates the super-admin bypass too — the same
-      // order the server's FeaturePermissionGuard uses, because the two
-      // answering differently is the bug where a visible control is refused.
+      // isActive first, gating the super-admin bypass too — the server's order.
       admin !== null &&
       admin.isActive &&
       (admin.isSuperAdmin || satisfiesLevel(admin.permissions[key], level)),

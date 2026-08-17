@@ -15,10 +15,7 @@ import { FeaturesPage } from './routes/features';
 import { PermissionsPage } from './routes/permissions';
 import { ROUTES } from './lib/constants';
 
-/**
- * Everything authed renders inside AppShell, so the header and nav are defined
- * once. ProtectedRoute is the outer gate; the shell is the layout inside it.
- */
+/** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
 export function App() {
   const { identity, isLoading } = useAuth();
 

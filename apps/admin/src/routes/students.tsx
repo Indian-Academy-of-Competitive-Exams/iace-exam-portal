@@ -78,10 +78,7 @@ const EXTRA_FILTERS = ALL_FILTERS.filter(
   (key) => !['q', 'status', 'sort'].includes(key),
 ) as readonly FilterKey[];
 
-/**
- * The query params take 'true' | 'false' — a filter is absent or applied, and
- * `false` is a question ("not ready yet") rather than "don't care".
- */
+/** `false` is a question ("not ready yet"), not "don't care" — absent is "don't care". */
 function asBooleanParam(value: string): 'true' | 'false' | undefined {
   return value === 'true' || value === 'false' ? value : undefined;
 }
@@ -98,15 +95,7 @@ const STATUS_QUERY: Record<
   defaultpin: { hasDefaultPin: 'true' },
 };
 
-/**
- * The column set, built OUTSIDE the component.
- *
- * `cell` is a render prop — an arrow returning JSX — and a static analyser
- * cannot tell that apart from a component declared inside another component,
- * which is a real bug (a new component type every render, so React remounts
- * the subtree and loses its state). Defining them out here makes the
- * distinction explicit rather than something a reader has to infer.
- */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentColumns(): DataTableColumn<StudentSummary>[] {
   return [
     { key: 'name', header: 'Student', cell: (s) => <StudentNameCell student={s} /> },
@@ -164,21 +153,12 @@ export function StudentsPage() {
   const extraCount = filters.activeCount(EXTRA_FILTERS);
   const filtersOpen = showAll || extraCount > 0;
 
-  /**
-   * Every group, a page at a time.
-   *
-   * A plain select over one capped request ends at the first hundred and looks
-   * complete — a multi-branch institute's later groups would simply not exist
-   * as far as this filter is concerned. The search is server-side for the same
-   * reason: filtering what happens to be loaded is not filtering.
-   */
+  /** Every group, a page at a time, searched server-side — filtering what loaded is not filtering. */
   const [groupSearch, setGroupSearch] = useState('');
   const groupPages = useInfinitePages({
     queryKey: ['admin', 'groups', 'filter', branchId, groupSearch],
     fetchPage: (page) =>
-      // PAGE_SIZE_MAX per request — the cap stays what it was; what changed is
-      // that reaching the end of one page now fetches the next instead of
-      // being where the list quietly stops.
+      // PAGE_SIZE_MAX per request; reaching the end of a page fetches the next.
       api.admin.groups.list({
         page,
         pageSize: PAGE_SIZE_MAX,
@@ -363,9 +343,7 @@ export function StudentsPage() {
                   {...control}
                   value={groupId}
                   onChange={(next) => filters.set({ groupId: next })}
-                  // The chosen group is very often outside the page that
-                  // happens to be loaded; without this the control would look
-                  // like it had lost the selection.
+                  // The chosen group is often outside the loaded page.
                   selectedLabel={
                     group.data ? `${group.data.branch.name} / ${group.data.name}` : undefined
                   }
@@ -491,13 +469,7 @@ export function StudentsPage() {
   );
 }
 
-/**
- * Where a student is with signing in — four states, in the order they matter.
- *
- * Written as a list rather than a chain of ternaries because that is what it
- * is: adding a fifth state to a nested conditional means finding the right rung
- * of the ladder, and putting it on the wrong one silently hides another.
- */
+/** Four sign-in states, in the order they matter. A list, not a chain of ternaries. */
 function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
   if (!student.isActive) return <Badge variant="danger">Deactivated</Badge>;
   if (student.hasSignedIn) return <Badge variant="success">Active</Badge>;
@@ -508,11 +480,8 @@ function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
 }
 
 /**
- * The student's name, capped so one long name cannot widen the column.
- *
- * The tooltip hangs off the link rather than a span inside it, so the same
- * thing that reveals the full name on hover reveals it on keyboard focus —
- * there is one target, not a focusable link wrapping a hoverable span.
+ * The name, capped so one long one cannot widen the column. The tooltip hangs off
+ * the link, so hover and keyboard focus reveal it from the same target.
  */
 function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
   const name = student.fullName;
@@ -535,14 +504,8 @@ function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
 }
 
 /**
- * A student's groups, in exactly one line however many there are.
- *
- * Listing them all wrapped the cell over several lines and let one long,
- * admin-typed group name widen the column until the rest of the table was
- * pushed sideways — the row height stopped matching its neighbours and the
- * columns stopped lining up. So: the first name, truncated to the column, and a
- * count standing in for the rest. Hovering either reveals what was cut, and the
- * group filter above the table is the way to actually see who is in what.
+ * A student's groups in one line: the first name truncated, then a count for the rest.
+ * The group filter above the table is the way to actually see who is in what.
  */
 function GroupsCell({ groups }: Readonly<{ groups: GroupRef[] }>) {
   return (
@@ -566,13 +529,7 @@ function GroupsCell({ groups }: Readonly<{ groups: GroupRef[] }>) {
 
 const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'groupIds'] as const;
 
-/**
- * Adds a student before they have signed up.
- *
- * The mobile number is the join key: when they later sign up with it, the OTP
- * flow upserts onto THIS row, so the groups picked here are already in place
- * rather than lost to a duplicate.
- */
+/** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
 function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -673,14 +630,7 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
 
 // ---------------------------------------------------------------------------
 
-/**
- * Pull students from the institute's main portal.
- *
- * Super admin only, and a no-op today: the endpoint, the types and this button
- * are finished, and the service body is a stub. It reports what actually
- * happened rather than claiming success, because a button that says "Synced"
- * while doing nothing is worse than one that says it is not built yet.
- */
+/** Pulls students from the main portal. Super admin only, and a stub today — it says so. */
 function SyncStudentsButton() {
   const { identity: admin } = useAuth();
   const [confirming, setConfirming] = useState(false);

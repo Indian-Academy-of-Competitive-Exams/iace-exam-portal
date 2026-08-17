@@ -8,14 +8,8 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 
 /**
- * Picks the groups a student belongs to.
- *
- * Searching is server-side, because there is no useful cap on how many groups a
- * multi-branch institute has. That creates one hazard worth naming: a group the
- * admin has already ticked can fall outside the current results, and a checkbox
- * that vanishes looks exactly like a selection that was undone. So anything
- * already selected is pinned above the results and stays visible whatever the
- * search says.
+ * Picks the groups a student belongs to, searched server-side.
+ * Anything already ticked is pinned above the results, or it would vanish on a search.
  */
 /** Placeholder rows have no identity of their own, so their keys are fixed. */
 const PLACEHOLDER_KEYS = ['a', 'b', 'c', 'd'];
@@ -52,18 +46,8 @@ export function GroupPicker({
   const results = groups.data?.items ?? [];
 
   /**
-   * Names for the groups that can be pinned: the ones the student already
-   * belongs to, plus any the admin has ticked in this session.
-   *
-   * Recorded when a box is TICKED rather than accumulated from every search
-   * result — that is the only moment a name becomes worth remembering, and it
-   * keeps this a plain event-handler update instead of state derived from a
-   * query inside an effect.
-   *
-   * Pinning cannot work off the current results alone: a group ticked and then
-   * searched away is in neither `known` nor the new results, so it would
-   * vanish — indistinguishable from having been unticked, while the counter
-   * still insists one is selected.
+   * Names for the pinnable groups, recorded when a box is ticked.
+   * The current results cannot supply them: a ticked group can be searched away.
    */
   const [namesById, setNamesById] = useState<Map<string, string>>(
     () => new Map(known.map((group) => [group.id, labelFor(group)])),
@@ -139,13 +123,7 @@ export function GroupPicker({
   );
 }
 
-/**
- * What the picker shows: the list, a loading line, or the reason it is empty.
- *
- * Three states, and the empty one is not "no results" — it means the institute
- * has no groups at all, which a student cannot reach a single test without. It
- * says so, and links to where you fix it.
- */
+/** The list, the wait, or the empty case — which means no groups exist at all. */
 function GroupPickerBody({
   hasAnyGroups,
   isPending,
@@ -153,10 +131,7 @@ function GroupPickerBody({
 }: Readonly<{ hasAnyGroups: boolean; isPending: boolean; children: React.ReactNode }>) {
   if (hasAnyGroups) return <>{children}</>;
   if (isPending) {
-    // The picker is a list of checkbox rows in a bordered box, and it knows
-    // that before the groups arrive — so it holds the box open at roughly the
-    // right height instead of showing a line of text that the list then shoves
-    // down the form.
+    // Holds the box open at roughly the right height while the groups arrive.
     return (
       <div className="flex flex-col gap-2 rounded-md border border-border p-2">
         {PLACEHOLDER_KEYS.map((key) => (
@@ -179,11 +154,7 @@ function GroupPickerBody({
   );
 }
 
-/**
- * A group is named by its branch as well as itself: two centres may both run a
- * "SSC CGL MORNING", and a pinned checkbox showing only the name would not say
- * which one is ticked.
- */
+/** Branch-qualified: two centres may both run a "SSC CGL MORNING". */
 function labelFor(group: GroupRef): string {
   return `${group.branchName} / ${group.name}`;
 }

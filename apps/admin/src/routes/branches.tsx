@@ -33,15 +33,7 @@ import { applyFieldErrors } from '@iace/app-kit';
 
 const NEW_BRANCH_FIELDS = ['name'] as const;
 
-/**
- * The column set, built OUTSIDE the component.
- *
- * `cell` is a render prop — an arrow returning JSX — and a static analyser
- * cannot tell that apart from a component declared inside another component,
- * which is a real bug (a new type every render, so React remounts the subtree
- * and loses its state). Defining them out here makes the distinction explicit
- * rather than something a reader has to infer.
- */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
 function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableColumn<Branch>[] {
   return [
     {
@@ -94,14 +86,7 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
   ];
 }
 
-/**
- * The branch list — deliberately the smallest screen in the app.
- *
- * Everyone who can manage groups can READ it, because they have to pick from it
- * when creating one. Only a super admin can change it, which is the entire
- * reason branches stopped being a free-text field: an admin creating a group
- * should choose from the centres that exist, not name one and hope it matches.
- */
+/** Anyone managing groups may read the list, because they pick from it. Only a super admin writes. */
 export function BranchesPage() {
   const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
@@ -221,13 +206,7 @@ function NewBranchCard({
 
 // ---------------------------------------------------------------------------
 
-/**
- * The two things a branch row can be asked to do.
- *
- * Named rather than a pair of booleans: the row can be asking one question at a
- * time, and `confirmingDelete && confirmingRetire` is a state that would render
- * two dialogs on top of each other.
- */
+/** One question at a time: two booleans could render two dialogs at once. */
 const BRANCH_CONFIRMS = {
   DELETE: 'delete',
   RETIRE: 'retire',
@@ -235,16 +214,8 @@ const BRANCH_CONFIRMS = {
 type BranchConfirm = (typeof BRANCH_CONFIRMS)[keyof typeof BRANCH_CONFIRMS];
 
 /**
- * What a row lets you do — nothing at all, or retire and delete.
- *
- * A component rather than a conditional chain because the first state is
- * "render nothing" — flattening that into a ternary once put the Retire and
- * Delete buttons in front of admins who are not allowed to press them.
- *
- * The buttons only ASK. Both dialogs live with the mutations in
- * `BranchRowActions`, because a dialog that stays open while its request is in
- * flight needs the pending flag, and threading two of those back down here was
- * four more props for no reader's benefit.
+ * The buttons only ask; both dialogs live with the mutations in `BranchRowActions`.
+ * A component, not a ternary, because the first state is "render nothing".
  */
 function BranchActions({
   branch,

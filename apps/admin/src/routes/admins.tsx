@@ -38,25 +38,10 @@ import { SuperAdminOnly } from '../components/super-admin-only';
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
 
 /**
- * Who can get into the admin app, and who is a super admin.
- *
- * Super admin only, and deliberately so: this is the screen that decides who
- * decides. Gating it on a feature permission would let the permission system be
- * used to hand out control of itself.
- *
- * There is no delete. An admin id is referenced by `createdById` on everything
- * they made, so the row has to survive; deactivating is what actually stops
- * them signing in, and it prunes their grants on the way out.
+ * Who can get into the admin app. Super admin only — this screen decides who decides.
+ * No delete: `createdById` references the row, so deactivating is what stops a sign-in.
  */
-/**
- * The column set, built OUTSIDE the component.
- *
- * `cell` is a render prop — an arrow returning JSX — and a static analyser
- * cannot tell that apart from a component declared inside another component,
- * which is a real bug (a new component type every render, so React remounts
- * the subtree and loses its state). Defining them out here makes the
- * distinction explicit rather than something a reader has to infer.
- */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
 function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
   return [
     { key: 'email', header: 'Email', className: 'font-medium', cell: (a) => a.email },
@@ -168,11 +153,7 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
     return <span className="text-sm text-muted-foreground">Everything (bypass)</span>;
   }
 
-  // The admin's OWN keys, not the code's list: a super admin may have
-  // registered a sector no controller checks yet, and a grant on it is real.
-  // localeCompare, not bare sort(): the default sorts by UTF-16 code unit,
-  // which is only accidentally right for ASCII keys and silently wrong the
-  // first time one is not.
+  // The admin's own keys, not the code's list. localeCompare, not the UTF-16 default.
   const held = Object.keys(admin.permissions).sort((a, b) => a.localeCompare(b));
   if (held.length === 0) {
     return <span className="text-sm text-muted-foreground">Nothing yet</span>;
@@ -190,13 +171,7 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   );
 }
 
-/**
- * Switch an account off, or back on.
- *
- * One control for both, because they are one decision seen from two sides —
- * and an account with no action at all beside it (which is what a deactivated
- * row used to show) reads as permanently stuck rather than as switched off.
- */
+/** Switch an account off, or back on — one control, because it is one decision. */
 function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
   const [confirming, setConfirming] = useState(false);
 
@@ -275,16 +250,10 @@ function NewAdminCard({
     defaultValues: { email: '', fullName: '', isSuperAdmin: false },
   });
 
-  // useWatch, not form.watch: the latter returns a fresh function each render,
-  // which makes React Compiler skip memoising the whole component (see the
-  // same call in students.tsx).
+  // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const isSuperAdmin = useWatch({ control: form.control, name: 'isSuperAdmin' }) ?? false;
 
-  /**
-   * Held between "submit" and "yes": the form has already validated, and the
-   * dialog is the last thing between a typed email and an account that can sign
-   * in to this app.
-   */
+  /** Held between "submit" and "yes" — the form has already validated. */
   const [pending, setPending] = useState<CreateAdminInput | null>(null);
 
   const create = useMutation({

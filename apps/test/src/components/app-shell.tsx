@@ -7,14 +7,7 @@ import { NAV_ITEMS, PROFILE_QUERY_KEY, USER_MENU_ITEMS } from '../lib/constants'
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
-/**
- * The student's shell: the shared chrome, this app's nav, and its own idea of
- * who is signed in.
- *
- * Narrower than the admin's on purpose. A student arrives to do one thing —
- * take a test, or read what happened in the last one — and a page that runs the
- * full width of a monitor makes finding it harder rather than easier.
- */
+/** The student's shell. Narrower than the admin's: they arrive to do one thing. */
 export function AppShell() {
   const { identity: student, signOut } = useAuth();
   // Shared cache entry with the profile screens, so a new photo shows in the

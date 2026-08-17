@@ -31,10 +31,7 @@ const codeFormSchema = z.object({ code: otpCodeSchema });
 const EMAIL_FIELDS = ['email'] as const;
 const CODE_FIELDS = ['code'] as const;
 
-/**
- * Email + OTP. There is no admin self-signup — the account must already exist
- * and be active, so an unknown address simply never receives a code.
- */
+/** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
   const { identity: admin, signIn } = useAuth();
   const navigate = useNavigate();
@@ -93,9 +90,7 @@ function EmailStep({
   });
 
   const requestOtp = useMutation({
-    // `fields` so a wrong code or PIN lands ONLY on the input the reader is
-    // about to retype — without it the same complaint arrives twice, once on
-    // the field and once in a toast.
+    // `fields` keeps the complaint on the input rather than also in a toast.
     meta: { fields: EMAIL_FIELDS },
     mutationFn: (values: { email: string }) => api.auth.requestAdminOtp(values),
     onSuccess: (response, values) => onSent(values.email, response),

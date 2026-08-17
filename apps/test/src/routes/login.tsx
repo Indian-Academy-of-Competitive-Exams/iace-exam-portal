@@ -45,22 +45,15 @@ const OTP_INTENTS = {
 } as const;
 type OtpIntent = (typeof OTP_INTENTS)[keyof typeof OTP_INTENTS];
 
-// The fields each form owns. The server keys `fieldErrors` by the same names
-// (it validates with the same schemas), so a message lands on the input that
-// caused it; anything keyed otherwise falls back to the banner.
+// The fields each form owns; the server keys `fieldErrors` by the same names.
 const SIGN_IN_FIELDS = ['mobile', 'pin'] as const;
 const MOBILE_FIELDS = ['mobile'] as const;
 const CODE_FIELDS = ['code'] as const;
 const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
 
 /**
- * Signing in is mobile + a 4-digit PIN. An OTP appears exactly twice: creating
- * the account, and recovering a forgotten PIN — both of which land on the same
- * three screens (mobile → code → choose a PIN).
- *
- * Signup and reset are separate buttons rather than a lookup on the number:
- * asking the server "does this mobile exist?" would answer that question for
- * anyone who asked.
+ * Mobile + a 4-digit PIN. An OTP appears twice: signup, and recovering a forgotten PIN.
+ * Separate buttons rather than a lookup — "does this mobile exist?" is not a question to answer.
  */
 type Step =
   | { kind: 'signIn' }
@@ -146,9 +139,7 @@ function SignInStep({
   });
 
   const login = useMutation({
-    // `fields` so a wrong code or PIN lands ONLY on the input the reader is
-    // about to retype — without it the same complaint arrives twice, once on
-    // the field and once in a toast.
+    // `fields` keeps the complaint on the input rather than also in a toast.
     meta: { fields: SIGN_IN_FIELDS },
     mutationFn: (values: { mobile: string; pin: string }) => api.auth.loginStudent(values),
     onSuccess: onSignedIn,
@@ -419,11 +410,7 @@ function SetPinStep({
 // Shared bits
 // ---------------------------------------------------------------------------
 
-/**
- * The step's icon. Brand-tinted rather than the muted grey square it was — at
- * 10% the tint reads as an accent, not as a filled state, and it gives each
- * card a focal point instead of opening on a bare heading.
- */
+/** The step's icon, brand-tinted at 10% so it reads as an accent rather than a filled state. */
 
 /** The mobile input is identical on three of the four screens. */
 function MobileField({
@@ -448,13 +435,9 @@ function MobileField({
           {...register}
           autoFocus={autoFocus}
           autoComplete="tel"
-          // Room to paste a +91-prefixed number; normaliseMobile trims it back
-          // to the ten digits we store. A flat cap of 10 would truncate the
-          // paste first and silently keep the WRONG ten digits.
+          // Room for a +91 paste; a flat cap of 10 would keep the wrong ten digits.
           maxLength={15}
-          // digits first, THEN normalise: normaliseMobile only strips
-          // separators and a country code, so composing the other way round
-          // let letters straight through on paste.
+          // Digits first, then normalise: the other order lets letters through on paste.
           sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
           placeholder="98765 43210"
           prefix="+91"

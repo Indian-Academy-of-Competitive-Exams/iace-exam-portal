@@ -11,12 +11,7 @@ import {
 import { type NavItem } from '@iace/app-kit';
 import { FEATURE_KEYS } from '@iace/contracts';
 
-/**
- * App-level string vocabularies. Anything that appears in more than one place —
- * or that a typo would break silently — is named here rather than written
- * inline. Shared, cross-app values (actor types, error codes) live in
- * `@iace/contracts`; these are the ones only this SPA cares about.
- */
+/** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
 export const ROUTES = {
@@ -40,27 +35,15 @@ export const ROUTES = {
 } as const;
 
 /**
- * A NavItem plus the one thing the shared shape deliberately does not carry.
- *
- * `superAdminOnly` is NOT a feature key and must never become one: Admins,
- * Features and Permissions are the screens that decide who decides, so gating
- * them on a grantable permission would let the permission system hand out
- * control of itself. It stays app-local — @iace/app-kit has no concept of a
- * super admin, and giving it one would be teaching the shared chrome about
- * this product's authorisation model.
+ * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
+ * the screens it gates are the ones that decide who decides.
  */
 export interface AdminNavItem extends NavItem {
   superAdminOnly?: boolean;
   children?: AdminNavItem[];
 }
 
-/**
- * The nav, in the order an admin works through it.
- *
- * Sections rather than a flat list now: the shell resolves each one to an
- * accordion or a side panel by child count (NAV_INLINE_MAX_ITEMS), so this file
- * says what belongs together and the chrome decides how it opens.
- */
+/** The nav, in the order an admin works through it. The shell decides how a section opens. */
 export const NAV_ITEMS: readonly AdminNavItem[] = [
   { to: ROUTES.HOME, label: 'Overview', icon: LayoutDashboard },
   {
@@ -86,13 +69,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
   },
 ];
 
-/**
- * Strip what this admin may not see, at every depth.
- *
- * Only `superAdminOnly` — `featureKey` is the shell's job, and doing it twice
- * would be two rules to keep in step. Recursive because a super-admin-only
- * child can sit inside an otherwise visible section.
- */
+/** Strips `superAdminOnly` at every depth. `featureKey` is the shell's job. */
 export function filterAdminNav(
   items: readonly AdminNavItem[],
   isSuperAdmin: boolean,
@@ -106,41 +83,25 @@ export function filterAdminNav(
   }, []);
 }
 
-/**
- * The signed-in admin's identity, cached under one key so `createAuth` and
- * anything that reads the session agree on where it lives.
- */
+/** The signed-in admin's identity, cached under one key. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
 /** Features and their grant lists — shared by the Features and Permissions
  *  screens, so a grant made on one refreshes the other. */
 export const FEATURES_QUERY_KEY = ['admin', 'features'] as const;
 
-/**
- * Admins. Shared for the same reason: a grant changes the feature's holder list
- * AND the admin's permission map, and the Permissions screen renders off the
- * second — so both caches have to be invalidated by whichever screen made the
- * change, or the checkboxes show the state from before the click.
- */
+/** Admins. A grant changes both this and the feature list, so both are invalidated together. */
 export const ADMINS_QUERY_KEY = ['admin', 'admins'] as const;
 
 /**
- * The admin list the Permissions screen assigns from.
- *
- * PAGE_SIZE_MAX, deliberately: this is an assignment surface, not a browse one,
- * and an admin missing from it cannot be granted anything. An institute with
- * more than a hundred admins would need a Combobox over useInfinitePages here
- * (the rule in CLAUDE.md) — flagged rather than pretended away.
+ * The admin list the Permissions screen assigns from. PAGE_SIZE_MAX: an admin
+ * missing from it cannot be granted anything. Past a hundred, this needs a Combobox.
  */
 export const PAGE_SIZE_FOR_PICKERS = 100;
 
 /**
- * localStorage keys OWNED BY THIS APP. Namespaced per app so the SPAs sharing
- * one origin never read each other's session.
- *
- * The theme key is deliberately absent: it belongs to the design system
- * (`THEME_STORAGE_KEY` in @iace/ui) and is shared on purpose — one person, one
- * origin, one choice of palette.
+ * localStorage keys owned by this app, namespaced so the SPAs never read each other's.
+ * The theme key is absent on purpose: it belongs to @iace/ui and is shared.
  */
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',

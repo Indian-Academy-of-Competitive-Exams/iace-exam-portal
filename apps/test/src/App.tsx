@@ -9,11 +9,7 @@ import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
 import { ProfileViewPage } from './routes/profile-view';
 
-/**
- * Phase 0 routing: a login screen and one authed shell. The real map (Report
- * dashboard as the landing page, Tests, Bookmarks, Documents, Announcements)
- * arrives with the features themselves.
- */
+/** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
   const { identity, isLoading } = useAuth();
 

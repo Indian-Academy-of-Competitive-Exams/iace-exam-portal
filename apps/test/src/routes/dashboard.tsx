@@ -16,15 +16,8 @@ import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /**
- * Where a student lands.
- *
- * Deliberately almost empty. In V1 this becomes the Report dashboard — rank,
- * percentile, the last paper — and anything put here now is something that has
- * to be taken away then. It carries no header of its own: the shell already has
- * one, and having both drew two navbars down the page.
- *
- * TODO(access): the test list here is Student -> Group -> TestSeries -> Test;
- * there are no direct grants to check.
+ * Where a student lands, almost empty until this becomes the Report dashboard.
+ * Its test list will come from Student -> Group -> TestSeries -> Test; there are no direct grants.
  */
 export function DashboardPage() {
   const { identity: student } = useAuth();

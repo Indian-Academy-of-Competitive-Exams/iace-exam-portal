@@ -2,15 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type Branch } from '@iace/contracts';
 import { api } from './api';
 
-/**
- * The branch list, unpaged.
- *
- * Fetching all of them in one go is right here and nowhere else in the app:
- * branches are a deliberately small, slow-moving list that only a super admin
- * adds to, and every screen that touches a group needs the whole thing at once
- * to render a picker. `staleTime` is long for the same reason — re-fetching a
- * list that changes a few times a year on every mount is pure noise.
- */
+/** The branch list, unpaged and long-cached: a small list that changes a few times a year. */
 export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
   const { activeOnly } = options;
 

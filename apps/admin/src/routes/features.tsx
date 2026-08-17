@@ -34,31 +34,10 @@ import { SuperAdminOnly } from '../components/super-admin-only';
 const NEW_FEATURE_FIELDS = ['key', 'description'] as const;
 
 /**
- * Register the sectors of the product that can be granted.
- *
- * The key IS the name — one value, so the two can never disagree about what a
- * feature is called — and it is typed, not chosen: the set is open, and a super
- * admin adds sectors as the product grows. It is normalised rather than
- * rejected, so "student management" becomes STUDENT_MANAGEMENT and a key that
- * differs only in case or spacing is impossible instead of merely reported.
- *
- * Every feature is a peer. There are no categories and no sub-features: the key
- * IS the feature, and one registered today sits at exactly the same level as
- * STUDENT_MANAGEMENT — same row shape, same two permission levels, same
- * treatment by the guard.
- *
- * Nothing is seeded. A key with no row here grants nobody anything, which is
- * the safe direction to fail.
+ * Registers the grantable sectors. The key IS the name, typed and normalised, so
+ * a case- or space-different duplicate is impossible. Every feature is a peer; nothing is seeded.
  */
-/**
- * The column set, built OUTSIDE the component.
- *
- * `cell` is a render prop — an arrow returning JSX — and a static analyser
- * cannot tell that apart from a component declared inside another component,
- * which is a real bug (a new component type every render, so React remounts
- * the subtree and loses its state). Defining them out here makes the
- * distinction explicit rather than something a reader has to infer.
- */
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
 function featureColumns(): DataTableColumn<Feature>[] {
   return [
     {
@@ -187,12 +166,7 @@ function NewFeatureCard({
                 placeholder="STUDENT_MANAGEMENT"
                 autoFocus
                 onChange={(event) => {
-                  // Normalise in the field itself, not just on submit, so the
-                  // super admin reads the key they are actually creating rather
-                  // than discovering after the fact that their spaces became
-                  // underscores. Same rewrite-before-the-handler pattern as
-                  // NumericInput, so react-hook-form and zod only ever see the
-                  // normalised value.
+                  // Normalised in the field, not on submit, so they read the key they are creating.
                   const drafted = featureKeyDraft(event.currentTarget.value);
                   if (event.currentTarget.value !== drafted) event.currentTarget.value = drafted;
                   return control.onChange(event);
