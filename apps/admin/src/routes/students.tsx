@@ -199,8 +199,6 @@ export function StudentsPage() {
 
   const columns = useMemo(() => studentColumns(), []);
 
-  // The create form sits in the header slot, and unframes the page while it is
-  // open: pinned, a form that tall would leave the table no height to scroll in.
   const header = (
     <>
       <PageHeader

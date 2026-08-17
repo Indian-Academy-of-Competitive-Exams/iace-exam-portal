@@ -14,14 +14,8 @@ export const DEACTIVATED_MEMBER_MESSAGE =
   'That student is deactivated. Reactivate them before adding them to a group.';
 
 /**
- * Whether an add may go ahead, given how many of the students joining are deactivated.
- *
- * A deactivated student keeps the groups they were already in — deactivation is reversible
- * and rewrites no history — but gains no new ones. A group is a route to a test, so granting
- * one to a revoked account hands back exactly what the deactivation took away.
- *
- * Here rather than in the API's `groups` module because both `students` and `imports` enforce
- * it too, and reaching into a sibling module's rules is a boundary break (docs/03 §4).
+ * A deactivated student keeps the groups they are in but gains none: a group is a route
+ * to a test. Counted over the students JOINING, never everyone named.
  */
 export function deactivatedMemberBlocker(deactivatedCount: number): string | null {
   if (deactivatedCount < 1) return null;

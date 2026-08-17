@@ -2,22 +2,18 @@ import * as React from 'react';
 import { Card } from './card';
 
 /**
- * The app shell's content wrapper. It lives beside `data-page-frame` below rather
- * than in the shell so the attribute and the selector matching it cannot drift.
+ * The app shell's content wrapper. Here rather than in the shell so this and the
+ * `data-page-frame` below cannot drift apart. Unsupported `:has()` just scrolls.
  */
 export const PAGE_CONTENT_CLASS = [
-  // The padding is unconditional: a framed page is a flex child, so it shortens to
-  // fit rather than needing the room. Zeroing the bottom sat the card on the page edge.
+  // Unconditional: a framed page is a flex child, so it shortens to fit the padding.
   'mx-auto w-full flex-1 overflow-y-auto px-5 py-8',
-  // A framed page scrolls its own body, so the wrapper hands over the height and
-  // stops scrolling. Where `:has()` is unsupported the page simply scrolls.
   'has-[[data-page-frame]]:flex has-[[data-page-frame]]:flex-col',
   'has-[[data-page-frame]]:overflow-hidden',
 ].join(' ');
 
 const TableFrameContext = React.createContext(false);
 
-/** True inside a framed page, where the table body is the only thing that scrolls. */
 export function useInTableFrame(): boolean {
   return React.useContext(TableFrameContext);
 }
@@ -27,10 +23,7 @@ export interface TableFrameProps {
   header?: React.ReactNode;
   /** Pinned inside the card, above the table — filters, a context banner. */
   toolbar?: React.ReactNode;
-  /**
-   * False falls back to a scrolling page. Pass it while an inline create form is
-   * open: pinning a tall form would leave the table no height to scroll in.
-   */
+  /** False scrolls the page instead. Pinning a tall create form leaves no table. */
   framed?: boolean;
   children: React.ReactNode;
 }

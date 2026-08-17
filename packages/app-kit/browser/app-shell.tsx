@@ -27,7 +27,7 @@ const WIDTHS = {
 export type ShellWidth = keyof typeof WIDTHS;
 
 export interface AppShellProps {
-  /** The sections, in the order this app's user works through them. Empty means no nav at all. */
+  /** In the order this app's user works through them. Empty draws no sidebar and no drawer. */
   nav: readonly NavItem[];
   children: ReactNode;
   onSignOut: () => void;
@@ -37,11 +37,10 @@ export interface AppShellProps {
   userAvatar?: ReactNode;
   /** Account screens above Log out. Leaves only; empty leaves just Log out. */
   userMenuItems?: readonly NavItem[];
-  /** Named beside the mark — the admin app labels itself. */
   portal?: string;
-  /** Beside the portal label, for anything the mark itself cannot carry. */
+  /** Beside the portal label — the admin's Super admin badge. */
   brandSuffix?: ReactNode;
-  /** Where the mark leads. It is the only way home: no nav row does that job. */
+  /** The only way home: no nav row does that job. */
   homeTo?: string;
   /** Optional: an app with no permissions passes nothing and every section shows. */
   can?: (featureKey: string) => boolean;
@@ -51,9 +50,7 @@ export interface AppShellProps {
 /**
  * The signed-in chrome: top bar, sidebar, page. Desktop and mobile are different
  * components, not one markup styled twice — rendering both would give two tab orders.
- *
- * A fixed-height frame: the document never scrolls, the content region does. A page
- * can take that height for itself — see `TableFrame`.
+ * A fixed-height frame: the document never scrolls, the content region does.
  */
 export function AppShell({
   nav,
@@ -76,8 +73,6 @@ export function AppShell({
   const items = useMemo(() => filterNavByPermission(nav, can), [nav, can]);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  // An app with one screen has nothing to navigate. Drawing the sidebar anyway
-  // gives it an empty column, and the drawer a button that opens onto nothing.
   const hasNav = items.length > 0;
 
   const home = (
@@ -111,8 +106,6 @@ export function AppShell({
           {home}
           {brandSuffix}
 
-          {/* The account menu is here rather than under the nav so it survives an
-              app with no sidebar. */}
           <div className="flex flex-1 items-center justify-end gap-1">
             <ThemeToggle />
             <UserMenu

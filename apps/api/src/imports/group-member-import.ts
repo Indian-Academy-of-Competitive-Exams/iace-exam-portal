@@ -114,8 +114,7 @@ function planRow(
     errors.push('No student has this number yet — import them as a student first');
   }
 
-  // Only when they would be JOINING: a deactivated student already in the group is not
-  // being granted anything by this file.
+  // Only when JOINING: already a member means this file grants nothing.
   if (student && !student.isActive && !context.memberIds.has(student.id)) {
     errors.push(DEACTIVATED_MEMBER_MESSAGE);
   }

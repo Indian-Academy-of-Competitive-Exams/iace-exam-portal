@@ -35,10 +35,7 @@ export function GroupPicker({
   known: GroupRef[];
   idPrefix: string;
   error?: string;
-  /**
-   * Ticked groups can be unticked, unticked ones cannot be ticked — the shape of the
-   * server's rule for a deactivated student, who may lose a group but not gain one.
-   */
+  /** Unticked boxes lock: a deactivated student may lose a group but not gain one. */
   lockedToSelection?: boolean;
 }>) {
   const [search, setSearch] = useState('');
@@ -101,7 +98,6 @@ export function GroupPicker({
               hint={group.branch.name}
               value={group.id}
               {...register}
-              // `rest` is everything NOT selected, so locking disables the whole of it.
               disabled={lockedToSelection}
               onChange={(event) => {
                 remember({ id: group.id, label: `${group.branch.name} / ${group.name}` });

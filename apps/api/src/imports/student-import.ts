@@ -248,8 +248,7 @@ function planRow(
     name.error,
     number.error,
     ...groups.errors,
-    // Only when the row would grant a group. Editing a deactivated student's name is
-    // fine; handing their account a route to a test is not — see group-rules.ts.
+    // Only when the row grants a group; editing a deactivated student's name is fine.
     existing && !existing.isActive && groupIds.length > 0 ? DEACTIVATED_MEMBER_MESSAGE : undefined,
   ].filter((error): error is string => error !== undefined);
 

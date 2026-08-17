@@ -88,11 +88,7 @@ function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
   return <Badge variant="info">Never signed in</Badge>;
 }
 
-/**
- * Which groups the student is in. A deactivated student may lose one but not gain one, so the
- * unticked boxes lock: the server refuses either way, and offering a control it would refuse is
- * worse than not offering it.
- */
+/** A deactivated student may lose a group but not gain one, so the unticked boxes lock. */
 function GroupsCard({
   isActive,
   known,

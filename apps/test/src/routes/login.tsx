@@ -50,7 +50,6 @@ const MOBILE_FIELDS = ['mobile'] as const;
 const CODE_FIELDS = ['code'] as const;
 const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
 
-/** Centred under the mark, which is the card's only glyph. */
 const STEP_HEADER = 'items-center pt-4 text-center';
 
 /**
@@ -77,8 +76,6 @@ export function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
-      {/* Floated rather than sitting in a header: a bar built to hold one control
-          is a bar the reader has to look past to reach the card. */}
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>

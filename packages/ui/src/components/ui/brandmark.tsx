@@ -2,7 +2,6 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface BrandmarkProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** The portal this copy of the mark names, e.g. `Admin`. */
   portal?: string;
 }
 
@@ -10,7 +9,6 @@ export interface BrandmarkProps extends React.HTMLAttributes<HTMLDivElement> {
 const Brandmark = React.forwardRef<HTMLDivElement, BrandmarkProps>(
   ({ className, portal, ...props }, ref) => (
     <div ref={ref} className={cn('flex items-center gap-2.5', className)} {...props}>
-      {/* Bold letters set tight read as one blot at this size, hence the tracking. */}
       <span className="rounded-md bg-primary px-2.5 py-1.5 text-sm font-extrabold tracking-wide text-primary-foreground">
         IACE
       </span>

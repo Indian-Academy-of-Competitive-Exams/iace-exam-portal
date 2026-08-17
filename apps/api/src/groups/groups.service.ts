@@ -162,9 +162,8 @@ export class GroupsService {
     const toAdd = wanted.filter((studentId) => !existing.has(studentId));
     const joining = new Set(toAdd);
 
-    // Counted over the ones JOINING, not everyone named: a deactivated student already in
-    // this group is not being granted anything, and complaining about them would block an
-    // admin re-submitting a page they had already added.
+    // Over the ones JOINING: a deactivated student already in this group gains nothing,
+    // and refusing them would block re-submitting a page already added.
     const blocker = deactivatedMemberBlocker(
       found.filter((student) => !student.isActive && joining.has(student.id)).length,
     );

@@ -4,11 +4,8 @@ import { Skeleton } from './skeleton';
 import { useInTableFrame } from './table-frame';
 
 /**
- * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar:
- * inside a `TableFrame` it takes the remaining height and scrolls both ways.
- *
- * `border-separate` rather than collapsed — a collapsed table drops the borders on
- * a sticky heading row and refuses a radius on a row, and this table needs both.
+ * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar.
+ * `border-separate`: a collapsed table drops a sticky heading's borders.
  */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => {
@@ -33,8 +30,7 @@ const TableHeader = React.forwardRef<
 TableHeader.displayName = 'TableHeader';
 
 /**
- * Owns the hover, because a heading row is not a target and nothing up there is
- * clickable. Scoping it to `&>tr` keeps it off a `thead` however rows are composed.
+ * Owns the hover, scoped to `&>tr` so it cannot reach a `thead` however rows are composed.
  * The last body row draws no rule — `Pagination` under it has its own `border-t`.
  */
 const TableBody = React.forwardRef<
@@ -56,21 +52,12 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 );
 TableRow.displayName = 'TableRow';
 
-/**
- * The rule between rows. On the cells rather than the row: `border-separate` does
- * not render a `<tr>` border, and a sticky heading keeps a cell border.
- */
+/** On the cells: `border-separate` renders no `<tr>` border, and sticky keeps a cell's. */
 const RULE = 'border-b border-border';
 
 /**
- * The band a row's hover fills: inset 3px top and bottom so it stops short of the
- * rules, rounded at the two ends of the row only — square between columns, or every
- * cell would notch away from its neighbour.
- *
- * A pseudo-element, not the cell's own background: a radius on the cell would round
- * its `border-b` along with the fill, bending the rule away from the table edge.
- * `isolate` keeps `-z-10` behind the text and no further, and the radius is
- * permanent because nothing paints it until the body says so.
+ * A pseudo-element, not the cell's background: a radius on the cell would round its
+ * `border-b` too. Rounded at the row's ends only, or cells notch apart mid-row.
  */
 const HOVER_BAND = [
   'relative isolate',
@@ -101,7 +88,6 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
 );
 TableHead.displayName = 'TableHead';
 
-/** Carries the band the body fills on hover; nothing paints it until then. */
 const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
   ({ className, numeric, ...props }, ref) => (
     <td

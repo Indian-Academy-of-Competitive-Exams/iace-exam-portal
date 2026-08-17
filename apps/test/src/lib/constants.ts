@@ -13,10 +13,7 @@ export const ROUTES = {
   NOT_FOUND: '*',
 } as const;
 
-/**
- * Empty on purpose, so the shell draws no sidebar at all. The mark leads home and
- * Profile and Change PIN live under the account menu.
- */
+/** Empty on purpose: the shell draws no sidebar, the mark leads home. */
 export const NAV_ITEMS: readonly NavItem[] = [];
 
 /** The account screens, under the user menu, above Log out. */

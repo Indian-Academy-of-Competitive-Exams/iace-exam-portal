@@ -257,11 +257,7 @@ export class StudentsService {
   // Internals
   // ==========================================================================
 
-  /**
-   * A deactivated student keeps the groups they are in but gains no new ones — see
-   * group-rules.ts. Only the groups this save would ADD are checked, so an admin can still
-   * take a deactivated student out of one, or save the rest of their record unchanged.
-   */
+  /** Only the groups this save would ADD, so a deactivated student can still lose one. */
   private assertMayJoinGroups(
     student: { isActive: boolean; groups: { id: string }[] },
     groupIds: string[],
