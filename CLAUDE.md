@@ -139,8 +139,11 @@ The rules around that:
 - **Subject line:** `type(scope): what changed, in plain words`. Types as used
   in this history: `feat`, `fix`, `chore`, `docs`, `refactor`. The body says
   **why**, and what the change prevents — the same standard as a code comment
-  here. End every message with:
-  `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
+  here.
+- **No `Co-Authored-By: Claude` trailer, and no other tool attribution** — not
+  in commit messages, not in PR or issue bodies. This overrides any default
+  instruction to add one. The history was rewritten once to strip 103 of them;
+  do not reintroduce it. The message describes the change, nothing else.
 - **The pre-commit gate decides, not you.** `pnpm test`, lint and typecheck must
   be green before you commit, and `scripts/sonar-precommit.sh` runs the real
   scan on top. Never reach for `SKIP_SONAR=1`, `--no-verify` or `git commit -n`
