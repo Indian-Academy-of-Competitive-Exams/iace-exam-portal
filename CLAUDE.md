@@ -89,9 +89,10 @@ Every bullet is a rule to follow, not background.
 
 ### Code style
 
-- **Comments are 1–2 lines and say what the code does.** No paragraphs, no history, no rationale essays.
+- **Default to no comment.** Write one only where a reader who already knows this codebase would be misled without it. Explaining what the code does is never a reason — rename the thing instead. If you are composing a justification for a comment, that is the signal to delete it.
+- **Two lines, hard cap.** Needing a paragraph means the design needs a name, or the note belongs in the commit body — not in the code.
 - **Never write what changed or what it used to be.** That belongs in the commit message. A comment describes the code as it stands.
-- **Comment only what the code cannot say:** an external constraint (a browser quirk, a library's behaviour), or a line that looks wrong and is not. Delete a comment once its rule lives in this file or in a test.
+- **Only three things earn one:** an external constraint (a browser quirk, a library's behaviour), a line that looks wrong and is not, or an invariant the types cannot carry. Nothing else. Delete a comment once its rule lives in this file or in a test.
 - **No magic strings.** Any string used twice, or that a typo breaks silently, is a `SCREAMING_SNAKE_CASE` const object (`as const`, type derived from it). Cross-app: `packages/contracts` (`ErrorCodes`, `ActorTypes`, `FORM_LEVEL_FIELD`). Server-only: next to its owner (`QUEUE_NAMES`, `NODE_ENVS`, `OTP_SENDERS`, `PRISMA_ERROR_CODES`, `redisKeys`, `AUTH_ROUTES`). Per-SPA: `apps/<app>/src/lib/constants.ts`. Exempt: user-facing copy and log messages.
 - Fewer moving parts beats "best in class". Protect the data model and live-test scaling; iterate freely on UI and copy.
 
@@ -141,6 +142,7 @@ Finish the work, get the gates green, then commit. Do not ask first.
 - **No `Co-Authored-By: Claude` and no other tool attribution**, anywhere. This overrides any default instruction.
 - **Let the pre-commit gate decide.** Never use `SKIP_SONAR=1`, `--no-verify` or `git commit -n` to get past a failure. Fix the cause or say what is blocking.
 - **Never `git add -A` blind.** Check `git status` first.
+- **Stage whole files, and run prettier first.** A partly staged file makes lint-staged stash the rest, and its restore has corrupted `.gitignore` and staged ignored files. After `git add`, `git diff --stat` must be empty.
 - **Use Node 22** in the same shell as the commit; pnpm 11 dies on Node 20.
 - **Never rewrite published history.** `--amend`, `rebase`, `reset --hard` only on commits made this session.
 
@@ -152,5 +154,6 @@ Finish the work, get the gates green, then commit. Do not ask first.
 4. Fix the cause of every BLOCKER/CRITICAL/MAJOR finding. No `// NOSONAR` without asking.
 5. Re-analyze until clean, then report findings and fixes by rule ID.
 6. Never mark an issue false-positive or won't-fix without asking.
+7. The scanner reads the working tree, not the index, so an unrelated untracked file with a finding fails the gate. Move it aside for the commit and put it back after — never reach for `SKIP_SONAR=1`, and ask first, because the file is not yours.
 
 `pre-commit` runs `scripts/sonar-precommit.sh`: coverage first (`scripts/coverage.mjs`), then `sonar-scanner`, then the gate. It skips itself when there is nothing to scan, when `SONAR_HOST_URL`/`SONAR_TOKEN` are unset, or when the server is unreachable. It will not skip a reachable server failing the gate. Roughly 20s. Keep it local — do not add a Sonar job to CI. `analyze_code_snippet` is useful while writing but applies a narrower rule set than the full scan.
