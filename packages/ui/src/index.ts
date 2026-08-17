@@ -69,6 +69,16 @@ export {
   type ConfirmDialogProps,
 } from './components/ui/dialog';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  type DropdownMenuItemProps,
+} from './components/ui/dropdown-menu';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination } from './components/ui/pagination';
 export { PageHeader } from './components/ui/page-header';

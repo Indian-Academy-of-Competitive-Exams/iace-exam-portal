@@ -1,8 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import * as Popover from '@radix-ui/react-popover';
 import { LogOut, User } from 'lucide-react';
-import { cn } from '@iace/ui';
+import {
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@iace/ui';
 import { type NavItem } from '../../src';
 
 /**
@@ -16,6 +23,11 @@ import { type NavItem } from '../../src';
  * The entries are a list rather than a fixed Profile link because what belongs
  * to an account differs per app: a student has a profile AND a PIN to change,
  * an admin signs in with an emailed code and has neither.
+ *
+ * A menu, not a popover holding links. The popover it used to be closed on
+ * Escape and on a click outside — but it was an anonymous box: it announced no
+ * count and no position, and the arrow keys did nothing in it. This is a list
+ * of choices, so it says so.
  */
 export function UserMenu({
   label,
@@ -32,16 +44,9 @@ export function UserMenu({
   items?: readonly NavItem[];
   onSignOut: () => void;
 }>) {
-  const [open, setOpen] = useState(false);
-
-  const item = cn(
-    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
-    'text-foreground hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
-  );
-
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <button
           type="button"
           title={collapsed ? label : undefined}
@@ -58,47 +63,29 @@ export function UserMenu({
             <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           )}
         </button>
-      </Popover.Trigger>
+      </DropdownMenuTrigger>
 
-      <Popover.Portal>
-        <Popover.Content
-          side="top"
-          align="start"
-          sideOffset={4}
-          collisionPadding={8}
-          className={cn(
-            'z-[--z-popover] min-w-56 rounded-lg border border-border bg-surface p-1 shadow-lg',
-          )}
-        >
-          <p className="truncate px-2 py-1.5 text-xs text-muted-foreground">{label}</p>
+      <DropdownMenuContent side="top" align="start" className="min-w-56">
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
 
-          {/* Link, not <a href>: an anchor reloads the SPA, which throws away
-              the query cache to move between two screens of the same app. */}
-          {items.map((entry) => (
-            <Link
-              key={entry.label}
-              to={entry.to ?? ''}
-              onClick={() => setOpen(false)}
-              className={item}
-            >
+        {/* Link, not <a href>: an anchor reloads the SPA, which throws away the
+            query cache to move between two screens of the same app. */}
+        {items.map((entry) => (
+          <DropdownMenuItem key={entry.label} asChild>
+            <Link to={entry.to ?? ''}>
               {entry.icon ? <entry.icon className="size-4 shrink-0" aria-hidden /> : null}
               {entry.label}
             </Link>
-          ))}
+          </DropdownMenuItem>
+        ))}
 
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onSignOut();
-            }}
-            className={item}
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden />
-            Log out
-          </button>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        {items.length > 0 ? <DropdownMenuSeparator /> : null}
+
+        <DropdownMenuItem onSelect={onSignOut}>
+          <LogOut className="size-4 shrink-0" aria-hidden />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
