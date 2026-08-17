@@ -90,7 +90,6 @@ export class AdminsService {
    */
   async list(query: AdminListQuery): Promise<Paginated<AdminDto>> {
     const where = {
-      deletedAt: null,
       ...(query.activeOnly === undefined ? {} : { isActive: query.activeOnly }),
       ...(query.q
         ? {
@@ -179,11 +178,11 @@ export class AdminsService {
     await this.requireActive(id);
 
     await this.prisma.$transaction(async (tx) => {
-      // isActive only — NOT deletedAt. Deactivation is not deletion: the
-      // account still exists, still signs in, and still appears in this list
-      // marked Deactivated. Setting deletedAt here also hid the row from
-      // `list`, which filters on it, so the "Deactivated" badge could never
-      // actually be seen.
+      // Deactivation is not deletion: the account still exists, still signs
+      // in, and still appears in this list marked Deactivated. An Admin row is
+      // never removed at all — `createdById` on everything they made points at
+      // it — which is why the model no longer carries a deletedAt to get this
+      // wrong with.
       await tx.admin.update({ where: { id }, data: { isActive: false } });
 
       const holding = await tx.featurePermission.findMany({
@@ -326,7 +325,7 @@ export class AdminsService {
 
   private async requireActive(id: string): Promise<void> {
     const admin = await this.prisma.admin.findFirst({
-      where: { id, deletedAt: null },
+      where: { id },
       select: { id: true, isActive: true },
     });
     if (!admin?.isActive) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');

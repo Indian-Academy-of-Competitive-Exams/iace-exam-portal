@@ -224,7 +224,7 @@ export class AuthService {
    */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin || admin.deletedAt) {
+    if (!admin) {
       return {
         sent: true,
         expiresInSec: this.otpTtlPlaceholder,
@@ -244,10 +244,10 @@ export class AuthService {
     // Deliberately NOT gated on isActive. A deactivated admin signs in and is
     // told what happened; refusing them here would answer a real account with
     // "invalid credentials", which reads as a typo and sends them to reset a
-    // password they do not have. `deletedAt` still refuses — that row is gone,
-    // not switched off.
+    // password they do not have. Existing is now the only condition — there is
+    // no second flag that can quietly deny a real account.
     const admin = await this.prisma.admin.findUnique({ where: { email } });
-    if (!admin || admin.deletedAt) {
+    if (!admin) {
       throw new AppException(ErrorCodes.UNAUTHENTICATED, 'Invalid credentials');
     }
 
@@ -415,7 +415,7 @@ export class AuthService {
     }
 
     const admin = await this.prisma.admin.findUnique({ where: { id } });
-    if (!admin || admin.deletedAt) return null;
+    if (!admin) return null;
     return {
       actor: ActorTypes.ADMIN,
       id: admin.id,

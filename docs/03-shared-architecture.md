@@ -156,7 +156,8 @@ Every autoscale-candidate service must satisfy all of these:
 ## 9. Data-model conventions
 
 - **Timestamps on every model:** `createdAt @default(now())` and `updatedAt @updatedAt` on all tables.
-- **Soft-delete policy:** `deletedAt DateTime?` where records must be recoverable/auditable (Student, Admin, Question, Test, Group, and other user-facing/domain records); hard delete is acceptable only for pure join/ephemeral rows. Decide per model and record the choice.
+- **Soft-delete policy:** `deletedAt DateTime?` where records must be recoverable/auditable (Student, Question, Test, Group, and other user-facing/domain records); hard delete is acceptable only for pure join/ephemeral rows. Decide per model and record the choice.
+  - **`Admin` is the recorded exception — it has no `deletedAt`.** The row is never removed (`createdById` on everything they made points at it) and `isActive` already carries the only state there is. Carrying both gave three auth paths a second flag to read as "this row is gone", which silently denied sign-in to real accounts; in one database the column had also drifted to `DEFAULT CURRENT_TIMESTAMP`, so every new admin was born unreachable. Deactivate, do not delete.
 - **IDs:** one strategy across all models (the existing default — do not mix).
 - **Money/marks:** `Decimal(6,2)`; one shared decimal/format util so FE and BE render marks identically.
 - **Transactions:** a shared Prisma transaction helper for multi-write operations.

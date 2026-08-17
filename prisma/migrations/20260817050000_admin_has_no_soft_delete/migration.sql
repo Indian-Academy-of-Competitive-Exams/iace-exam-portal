@@ -1,0 +1,20 @@
+-- Admin loses `deletedAt`.
+--
+-- Two reasons, and the second is why this is urgent rather than tidy.
+--
+-- 1. The column was never right for this model. An Admin row is never removed:
+--    `createdById` on everything they made points at it, so it has to survive
+--    regardless, and `isActive` already carries the only state that exists.
+--    Nothing in the codebase wrote it; three auth paths READ it as "this row is
+--    gone" and refused to send a sign-in code.
+--
+-- 2. In this database it had acquired `DEFAULT CURRENT_TIMESTAMP` — drift the
+--    migration history never declared, and on Admin alone; every other table's
+--    deletedAt has no default. So every admin INSERTed without naming the
+--    column was born already soft-deleted, and could never receive an OTP. A
+--    new admin was unreachable from the moment they were created.
+--
+-- Dropping the column takes the rogue default with it and makes the state
+-- unrepresentable rather than merely unset. Deviates from the soft-delete
+-- policy in docs/03 §9 deliberately; that section records the exception.
+ALTER TABLE "Admin" DROP COLUMN "deletedAt";

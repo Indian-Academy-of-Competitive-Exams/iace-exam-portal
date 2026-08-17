@@ -524,7 +524,6 @@ interface FakeAdminRow {
   isActive: boolean;
   createdById: string | null;
   createdAt: Date;
-  deletedAt: Date | null;
 }
 
 /**
@@ -562,13 +561,13 @@ export class FakeAdminsPrisma {
         this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email)) ?? null,
       ),
 
-    findFirst: ({ where }: { where: { id: string; deletedAt: null } }) =>
-      Promise.resolve(this.admins.find((a) => a.id === where.id && a.deletedAt === null) ?? null),
+    findFirst: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.admins.find((a) => a.id === where.id) ?? null),
 
     findMany: ({ skip = 0, take = 50 }: { skip?: number; take?: number } = {}) =>
-      Promise.resolve(this.admins.filter((a) => a.deletedAt === null).slice(skip, skip + take)),
+      Promise.resolve(this.admins.slice(skip, skip + take)),
 
-    count: () => Promise.resolve(this.admins.filter((a) => a.deletedAt === null).length),
+    count: () => Promise.resolve(this.admins.length),
 
     create: ({ data }: { data: Partial<FakeAdminRow> & { email: string } }) => {
       const row: FakeAdminRow = {
@@ -579,7 +578,6 @@ export class FakeAdminsPrisma {
         isActive: true,
         createdById: data.createdById ?? null,
         createdAt: new Date(),
-        deletedAt: null,
       };
       this.admins.push(row);
       return Promise.resolve(row);
@@ -706,7 +704,6 @@ export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRo
     isActive: true,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    deletedAt: null,
     ...overrides,
   };
 }

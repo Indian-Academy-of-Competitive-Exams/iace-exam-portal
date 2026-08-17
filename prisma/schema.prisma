@@ -46,7 +46,8 @@
 //   - ExamType, BaseConfig, TestSeries — retired by a flag or by cloning
 //     (`isActive`, `locked`), which is the existing, more informative answer.
 //
-// NOTHING READS `deletedAt` YET. The column is here so the decision is made
+// `Admin` deliberately has none — see the note on that model.
+// NOTHING READS `deletedAt` YET on the models that have it. The column is here so the decision is made
 // once, per model, before there is data to migrate — every query still sees
 // every row. When soft delete IS implemented, note that a deleted row still
 // occupies its unique slot: Student.mobile, Branch.name, SubTopic.name and
@@ -176,16 +177,22 @@ model Student {
 // is inserted by hand (see the README) — nothing in the codebase creates one.
 // After that, super admins create admins/super admins and grant feature access.
 // Super admins bypass feature checks in app logic.
+//
+// NO `deletedAt`, deliberately, and against the general policy in docs/03 §9.
+// An Admin row is never removed: `createdById` on everything they made points
+// at it, so the row has to survive regardless. `isActive` already carries the
+// only state that exists. Having both meant a second flag nothing wrote and
+// three auth paths read as "this row is gone" — set by hand it silently denied
+// sign-in to a real account, twice.
 model Admin {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   fullName     String?
-  isSuperAdmin Boolean   @default(false)
-  isActive     Boolean   @default(true)
+  isSuperAdmin Boolean  @default(false)
+  isActive     Boolean  @default(true)
   createdById  String? // audit: Admin who created this admin
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @default(now()) @updatedAt
-  deletedAt    DateTime? // soft delete — see the conventions note above
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 }
 
 // WRITE covers create + update + delete, and implies READ. Mirrors

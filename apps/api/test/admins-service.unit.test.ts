@@ -201,11 +201,12 @@ describe('AdminsService — deactivate', () => {
     );
   });
 
-  it('switches the account off WITHOUT deleting it', async () => {
+  it('switches the account off WITHOUT removing it', async () => {
     // Deactivation is not deletion. The account still exists, still signs in
     // (so it can be told what happened), and still appears in the admins list
-    // marked Deactivated — which setting deletedAt prevented, because `list`
-    // filters on it, so the badge could never actually be seen.
+    // marked Deactivated. An Admin row is never removed at all — createdById
+    // on everything they made points at it — which is why the model carries no
+    // deletedAt for this to get wrong.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
 
     await ctx.service.deactivate('adm_1', ACTOR);
@@ -213,7 +214,6 @@ describe('AdminsService — deactivate', () => {
     const row = ctx.prisma.admins.find((a) => a.id === 'adm_1');
     assert.ok(row, 'the row must survive — other records reference the id');
     assert.equal(row.isActive, false);
-    assert.equal(row.deletedAt, null, 'deactivated is not deleted');
   });
 
   it('leaves a deactivated admin visible in the list', async () => {
@@ -260,8 +260,10 @@ describe('AdminsService — deactivate', () => {
     );
   });
 
-  it('refuses an admin who is already gone', async () => {
-    const ctx = build([makeAdminRow({ id: 'adm_1', deletedAt: new Date() })]);
+  it('refuses an admin who is already deactivated', async () => {
+    // There is no longer a "deleted" state to test — an Admin row cannot be
+    // removed, so already-off is the only way to be unavailable.
+    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: false })]);
 
     await assert.rejects(
       () => ctx.service.deactivate('adm_1', ACTOR),
