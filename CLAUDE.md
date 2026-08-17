@@ -117,6 +117,45 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - **No magic strings.** Any string that appears in more than one place, or that a typo would break silently, is declared once as a `SCREAMING_SNAKE_CASE` const object (`as const`, with the type derived from it) and referenced everywhere — never re-typed inline. Cross-app vocabularies live in `packages/contracts` (`ErrorCodes`, `ActorTypes`, `FORM_LEVEL_FIELD`); server-only ones next to their owner (`QUEUE_NAMES`, `NODE_ENVS`, `OTP_SENDERS`, `PRISMA_ERROR_CODES`, `redisKeys`, `AUTH_ROUTES`); per-SPA ones in `apps/<app>/src/lib/constants.ts` (`ROUTES`, `THEMES`, `STORAGE_KEYS`). Where the value is dictated by something external (a Prisma `P2002`, a header name), keep the literal as the value and name the constant. **Exempt:** user-facing copy and log messages — those are prose, not identifiers.
 - **Always throw with the `ErrorCodes` constant, never a bare string** — `throw new AppException(ErrorCodes.PIN_LOCKED, '…')`, not `new AppException('PIN_LOCKED', …)`. Both compile (the type is a union of literals), but only the constant breaks at the call site when a code is renamed and is findable by "go to references". Same for any `code:` written into an error object. A new code is added **once**, to `ErrorCodes` in `packages/contracts/src/envelope.ts` — its status and default message are declared beside it, and `Record<ErrorCode, …>` makes a missing entry a compile error. **Every new endpoint follows this: return data, throw `AppException(ErrorCodes.X, …)`, never build an envelope or hand-write a status.**
 
+## Committing (do it without being asked)
+
+**A feature, task or fix is not delivered until it is a commit.** Finish the
+work, get the gates green, then commit — no need to ask, and no need to be told.
+Leaving finished work sitting in the working tree is not "waiting for review",
+it is an unfinished task with a clean-looking `git status` one `git checkout`
+away from gone.
+
+The rules around that:
+
+- **Local only. Never push.** No `git push`, no remote branches, no PRs, no
+  `gh pr create`. Publishing is a separate decision and it is mine.
+- **Commit on the current branch.** Do not branch first — this is a solo repo
+  and `main` is where the work goes. **The one exception:** if HEAD is ever on a
+  `prod` or `test` branch, stop and ask. Neither exists today; if one appears it
+  is a deployment branch and nothing lands on it directly.
+- **One commit per coherent change, not one per session.** Three unrelated
+  things in one turn are three commits. Each one must build and pass on its own
+  — a commit that only compiles because of the next one is not a checkpoint.
+- **Subject line:** `type(scope): what changed, in plain words`. Types as used
+  in this history: `feat`, `fix`, `chore`, `docs`, `refactor`. The body says
+  **why**, and what the change prevents — the same standard as a code comment
+  here. End every message with:
+  `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
+- **The pre-commit gate decides, not you.** `pnpm test`, lint and typecheck must
+  be green before you commit, and `scripts/sonar-precommit.sh` runs the real
+  scan on top. Never reach for `SKIP_SONAR=1`, `--no-verify` or `git commit -n`
+  to get past a failure — fix the cause, or stop and say what is blocking.
+- **Never `git add -A` blind.** Check `git status` first; a stray build
+  artefact, `.env` or scratch file committed once is committed forever.
+- **Node 22 is required for the hook.** Husky's shell defaults to whatever
+  `node` is on PATH, and pnpm 11 dies on Node 20 with
+  `No such built-in module: node:sqlite` — which fails the commit with an error
+  that has nothing to do with the code. Source the right version in the same
+  shell as the commit.
+- **Never rewrite published history.** `git commit --amend`, `rebase` and
+  `reset --hard` are fine on commits made this session and never on anything
+  older. Nothing here is pushed, so the check is "did I make it just now".
+
 ## SonarQube verification (before any commit)
 
 After generating or modifying code, the task is not done until:
