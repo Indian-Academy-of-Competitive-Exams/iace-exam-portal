@@ -3,11 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Avatar, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PROFILE_QUERY_KEY, USER_MENU_ITEMS } from '../lib/constants';
+import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
-/** The student's shell. Narrower than the admin's: they arrive to do one thing. */
+/**
+ * The student's shell. Narrower than the admin's: they arrive to do one thing,
+ * and with no sections there is no sidebar to run beside the page.
+ */
 export function AppShell() {
   const { identity: student, signOut } = useAuth();
   // Shared cache entry with the profile screens, so a new photo shows in the
@@ -18,6 +21,7 @@ export function AppShell() {
     <Shell
       nav={NAV_ITEMS}
       width="narrow"
+      homeTo={ROUTES.HOME}
       onSignOut={() => void signOut()}
       userMenuItems={USER_MENU_ITEMS}
       userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}

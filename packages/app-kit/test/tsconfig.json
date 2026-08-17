@@ -3,11 +3,25 @@
   // and tsx applies a tsconfig only to files it matches, so src/ is listed too.
   // `types` is re-stated because the package itself is browser-scoped — the
   // tests are the only Node code in it.
+  //
+  // @iace/ui's source is listed as well, and not by choice: the shell renders
+  // its components, tsx resolves a single tsconfig for the whole run, and a
+  // .tsx file it does not match gets esbuild's classic JSX transform — which
+  // fails at render with "React is not defined". No `rootDir` for the same
+  // reason: ui's files sit outside this package.
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "..",
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../src/**/*.ts", "../browser/**/*.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../src/**/*.ts",
+    "../src/**/*.tsx",
+    "../browser/**/*.ts",
+    "../browser/**/*.tsx",
+    "../../ui/src/**/*.ts",
+    "../../ui/src/**/*.tsx"
+  ]
 }

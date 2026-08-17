@@ -1,13 +1,4 @@
-import {
-  Building2,
-  KeyRound,
-  Layers,
-  LayoutDashboard,
-  ShieldCheck,
-  ToggleRight,
-  Upload,
-  Users,
-} from 'lucide-react';
+import { Building2, KeyRound, Layers, ShieldCheck, ToggleRight, Upload, Users } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { FEATURE_KEYS } from '@iace/contracts';
 
@@ -43,9 +34,8 @@ export interface AdminNavItem extends NavItem {
   children?: AdminNavItem[];
 }
 
-/** The nav, in the order an admin works through it. The shell decides how a section opens. */
+/** The nav, in the order an admin works through it. Home is the mark, not a row here. */
 export const NAV_ITEMS: readonly AdminNavItem[] = [
-  { to: ROUTES.HOME, label: 'Overview', icon: LayoutDashboard },
   {
     label: 'Students',
     icon: Users,

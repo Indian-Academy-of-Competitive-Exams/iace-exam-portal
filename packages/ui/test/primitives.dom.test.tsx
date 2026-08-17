@@ -6,6 +6,7 @@ import { Progress } from '../src/components/ui/progress';
 import { Spinner, LoadingState } from '../src/components/ui/spinner';
 import { Skeleton, SkeletonParagraph } from '../src/components/ui/skeleton';
 import { Separator } from '../src/components/ui/separator';
+import { Brandmark } from '../src/components/ui/brandmark';
 import { StatRow } from '../src/components/ui/stat-row';
 import { StepIcon } from '../src/components/ui/step-icon';
 import { PinField } from '../src/components/ui/pin-field';
@@ -79,6 +80,26 @@ describe('Separator', () => {
     rerender(<Separator decorative={false} orientation="vertical" />);
     const rule = screen.getByRole('separator');
     assert.equal(rule.getAttribute('aria-orientation'), 'vertical');
+  });
+});
+
+describe('Brandmark', () => {
+  /**
+   * The institute is IACE. A mark that renders an abbreviation, or repeats the
+   * name for a screen reader, reads as a bug in the logo.
+   */
+  it('says the institute name once, in full', () => {
+    const { container } = render(<Brandmark />);
+
+    assert.equal(container.textContent, 'IACE');
+  });
+
+  it('names the portal only when given one', () => {
+    const { container, rerender } = render(<Brandmark portal="Admin" />);
+    assert.ok(screen.getByText('Admin'));
+
+    rerender(<Brandmark />);
+    assert.equal(container.textContent, 'IACE');
   });
 });
 

@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Alert, Badge, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
-import { NAV_ITEMS, filterAdminNav } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /**
  * The admin shell. `can` goes to the shell, which reads `featureKey`;
  * `superAdminOnly` is stripped here because it is not a feature key.
+ * A deactivated admin loses the nav, and with it the sidebar.
  */
 export function AppShell() {
   const { identity: admin, signOut, can } = useAuth();
@@ -25,15 +26,12 @@ export function AppShell() {
       nav={nav}
       can={can}
       width="wide"
+      homeTo={ROUTES.HOME}
+      portal="Admin"
       onSignOut={() => void signOut()}
       userLabel={admin?.email ?? ''}
       // No account entries: an admin signs in with an emailed code and has no profile screen.
-      brandSuffix={
-        <span className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Admin</span>
-          {admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}
-        </span>
-      }
+      brandSuffix={admin?.isSuperAdmin ? <Badge variant="primary">Super admin</Badge> : null}
     >
       {isDeactivated ? <DeactivatedNotice /> : <Outlet />}
     </Shell>

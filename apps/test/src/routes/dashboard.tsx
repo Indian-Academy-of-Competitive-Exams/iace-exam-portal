@@ -1,22 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import {
-  Avatar,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  PageHeader,
-} from '@iace/ui';
+import { Avatar, PageHeader } from '@iace/ui';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { PROFILE_QUERY_KEY } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /**
- * Where a student lands, almost empty until this becomes the Report dashboard.
+ * Where a student lands, bare until this becomes the Report dashboard.
  * Its test list will come from Student -> Group -> TestSeries -> Test; there are no direct grants.
  */
 export function DashboardPage() {
@@ -39,21 +29,6 @@ export function DashboardPage() {
       />
 
       <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Your tests will appear here</CardTitle>
-          <CardDescription>
-            Nothing scheduled yet. When your batch is given a test, it shows up on this page along
-            with your result once it has been marked.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="outline" size="sm" asChild>
-            <Link to={ROUTES.PROFILE}>View your profile</Link>
-          </Button>
-        </CardContent>
-      </Card>
     </>
   );
 }

@@ -9,11 +9,13 @@
     "./components.css": "./src/components.css",
     "./tailwind.preset": "./tailwind.preset.js",
     "./lib/utils": "./src/lib/utils.ts",
-    "./components/*": "./src/components/ui/*.tsx"
+    "./components/*": "./src/components/ui/*.tsx",
+    "./test-support/dom": "./test/support/dom.ts"
   },
   "files": [
     "src",
-    "tailwind.preset.js"
+    "tailwind.preset.js",
+    "test/support"
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json",

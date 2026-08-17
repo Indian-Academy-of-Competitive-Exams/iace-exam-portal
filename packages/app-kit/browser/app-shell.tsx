@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import {
   Brandmark,
   Button,
-  Separator,
   Sheet,
   SheetClose,
   SheetContent,
@@ -27,7 +26,7 @@ const WIDTHS = {
 export type ShellWidth = keyof typeof WIDTHS;
 
 export interface AppShellProps {
-  /** The sections, in the order this app's user works through them. */
+  /** The sections, in the order this app's user works through them. Empty means no nav at all. */
   nav: readonly NavItem[];
   children: ReactNode;
   onSignOut: () => void;
@@ -37,8 +36,12 @@ export interface AppShellProps {
   userAvatar?: ReactNode;
   /** Account screens above Log out. Leaves only; empty leaves just Log out. */
   userMenuItems?: readonly NavItem[];
-  /** Beside the brandmark — the admin app labels itself. */
+  /** Named beside the mark — the admin app labels itself. */
+  portal?: string;
+  /** Beside the portal label, for anything the mark itself cannot carry. */
   brandSuffix?: ReactNode;
+  /** Where the mark leads. It is the only way home: no nav row does that job. */
+  homeTo?: string;
   /** Optional: an app with no permissions passes nothing and every section shows. */
   can?: (featureKey: string) => boolean;
   width?: ShellWidth;
@@ -55,7 +58,9 @@ export function AppShell({
   userLabel,
   userAvatar,
   userMenuItems,
+  portal,
   brandSuffix,
+  homeTo = '/',
   can,
   width = 'wide',
 }: Readonly<AppShellProps>) {
@@ -67,14 +72,17 @@ export function AppShell({
   const items = useMemo(() => filterNavByPermission(nav, can), [nav, can]);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  const userMenu = (
-    <UserMenu
-      label={userLabel}
-      avatar={userAvatar}
-      collapsed={isDesktop && collapsed}
-      items={userMenuItems}
-      onSignOut={onSignOut}
-    />
+  // An app with one screen has nothing to navigate. Drawing the sidebar anyway
+  // gives it an empty column, and the drawer a button that opens onto nothing.
+  const hasNav = items.length > 0;
+
+  const home = (
+    <Link
+      to={homeTo}
+      className="flex min-w-0 items-center rounded-md focus-visible:shadow-focus focus-visible:outline-none"
+    >
+      <Brandmark portal={portal} />
+    </Link>
   );
 
   return (
@@ -83,7 +91,7 @@ export function AppShell({
         <div className="flex items-center gap-3 px-4 py-3">
           {/* Mobile only: the sidebar's stand-in. On desktop the nav is always
               present, never behind a button. */}
-          {!isDesktop ? (
+          {hasNav && !isDesktop ? (
             <Button
               variant="ghost"
               size="sm"
@@ -95,21 +103,28 @@ export function AppShell({
             </Button>
           ) : null}
 
-          <div className="flex min-w-0 items-center gap-3">
-            <Brandmark withWordmark />
-            {brandSuffix}
-          </div>
+          {home}
+          {brandSuffix}
 
-          <div className="flex flex-1 items-center justify-end">
+          {/* The account menu is here rather than under the nav so it survives an
+              app with no sidebar. */}
+          <div className="flex flex-1 items-center justify-end gap-1">
             <ThemeToggle />
+            <UserMenu
+              label={userLabel}
+              avatar={userAvatar}
+              items={userMenuItems}
+              onSignOut={onSignOut}
+            />
           </div>
         </div>
       </header>
 
       <div className="flex">
-        {isDesktop ? (
-          <aside
-            aria-label="Sections"
+        {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
+            a complementary one announces the same region twice. */}
+        {isDesktop && hasNav ? (
+          <div
             className={cn(
               // `sticky` is already the positioned ancestor; adding `relative` makes
               // tailwind-merge drop one of the two.
@@ -121,12 +136,9 @@ export function AppShell({
             {/* mt-8 clears the collapse toggle below, which hangs off the right
                 edge at top-3 and is 24px tall: without it the first nav row sits
                 level with the button and reads as attached to that item. */}
-            <nav className="mt-8 min-h-0 flex-1 overflow-y-auto">
+            <nav aria-label="Sections" className="mt-8 min-h-0 flex-1 overflow-y-auto">
               <SidebarNav items={items} pathname={pathname} collapsed={collapsed} />
             </nav>
-
-            <Separator className="my-2" />
-            {userMenu}
 
             {/*
               On the divider, not in the sidebar. It acts on the boundary
@@ -153,7 +165,7 @@ export function AppShell({
                 <ChevronLeft className="size-3.5" aria-hidden />
               )}
             </button>
-          </aside>
+          </div>
         ) : null}
 
         <main className="min-w-0 flex-1">
@@ -165,14 +177,16 @@ export function AppShell({
           overlay and a panel: it owns the focus trap, Escape, the scroll lock
           and the return of focus to the hamburger — a drawer without those is
           one the reader can tab straight out of, into a page they cannot see. */}
-      {!isDesktop ? (
+      {hasNav && !isDesktop ? (
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
           {/* aria-describedby={undefined}: the panel is a list of links and has
               nothing to describe. Radix otherwise warns in dev that a dialog
               without a description is probably missing one. */}
           <SheetContent side="left" showClose={false} aria-describedby={undefined}>
             <div className="mb-2 flex items-center justify-between">
-              <Brandmark withWordmark />
+              <Link to={homeTo} onClick={closeDrawer} className="rounded-md">
+                <Brandmark />
+              </Link>
               {/* The heading a screen reader announces on arrival. Hidden
                   because the logo beside it is the visible one. */}
               <SheetTitle className="sr-only">Navigation</SheetTitle>
@@ -186,9 +200,6 @@ export function AppShell({
             <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
               <DrawerNav items={items} onNavigate={closeDrawer} />
             </nav>
-
-            <Separator className="my-2" />
-            {userMenu}
           </SheetContent>
         </Sheet>
       ) : null}

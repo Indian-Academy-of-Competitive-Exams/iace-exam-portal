@@ -2,24 +2,23 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface BrandmarkProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Show the wordmark beside the tile. */
-  withWordmark?: boolean;
+  /** The portal this copy of the mark names, e.g. `Admin`. */
+  portal?: string;
 }
 
-/** The IACE mark: a brand-red tile with the initial, optionally with the wordmark. */
+/** The IACE lockup: the full name on a brand-red plate, with the portal beside it. */
 const Brandmark = React.forwardRef<HTMLDivElement, BrandmarkProps>(
-  ({ className, withWordmark = false, ...props }, ref) => (
+  ({ className, portal, ...props }, ref) => (
     <div ref={ref} className={cn('flex items-center gap-2.5', className)} {...props}>
-      <span
-        aria-hidden
-        className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-extrabold tracking-tighter text-primary-foreground"
-      >
-        IA
+      {/* Bold letters set tight read as one blot at this size, hence the tracking. */}
+      <span className="rounded-md bg-primary px-2.5 py-1.5 text-sm font-extrabold tracking-wide text-primary-foreground">
+        IACE
       </span>
-      {withWordmark ? (
-        <span className="text-lg font-semibold tracking-tight text-foreground">IACE</span>
+      {portal ? (
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {portal}
+        </span>
       ) : null}
-      <span className="sr-only">IACE</span>
     </div>
   ),
 );

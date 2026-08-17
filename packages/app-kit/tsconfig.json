@@ -3,5 +3,7 @@
   "compilerOptions": {
     "types": []
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "browser/**/*.ts"]
+  // browser/**/*.tsx is listed explicitly: without it tsc never typechecks the
+  // shell, and tsx falls back to the classic JSX transform for those files.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "browser/**/*.ts", "browser/**/*.tsx"]
 }

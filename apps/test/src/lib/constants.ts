@@ -1,4 +1,4 @@
-import { Home, KeyRound, User } from 'lucide-react';
+import { KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
@@ -13,8 +13,11 @@ export const ROUTES = {
   NOT_FOUND: '*',
 } as const;
 
-/** The nav, deliberately short. Profile and Change PIN live under the account menu instead. */
-export const NAV_ITEMS: readonly NavItem[] = [{ to: ROUTES.HOME, label: 'Home', icon: Home }];
+/**
+ * Empty on purpose, so the shell draws no sidebar at all. The mark leads home and
+ * Profile and Change PIN live under the account menu.
+ */
+export const NAV_ITEMS: readonly NavItem[] = [];
 
 /** The account screens, under the user menu, above Log out. */
 export const USER_MENU_ITEMS: readonly NavItem[] = [

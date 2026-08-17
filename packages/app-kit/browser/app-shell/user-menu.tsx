@@ -13,20 +13,18 @@ import {
 import { type NavItem } from '../../src';
 
 /**
- * Who is signed in, at the bottom of the sidebar, with the account screens and Log out.
+ * Who is signed in, in the top bar, with the account screens and Log out.
  * A menu rather than a popover, so it announces a count and answers the arrow keys.
  */
 export function UserMenu({
   label,
   avatar,
-  collapsed,
   items = [],
   onSignOut,
 }: Readonly<{
   /** Email for an admin, mobile for a student — whatever names the account. */
   label: string;
   avatar?: ReactNode;
-  collapsed: boolean;
   /** Account screens, in menu order. Leaves only — `to` is required here. */
   items?: readonly NavItem[];
   onSignOut: () => void;
@@ -36,29 +34,21 @@ export function UserMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          title={collapsed ? label : undefined}
+          title={label}
           className={cn(
-            'flex items-center gap-2 rounded-md text-sm',
+            'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+            // Capped rather than fluid: an email long enough to matter would
+            // otherwise push the theme toggle off the bar on a narrow screen.
+            'max-w-[12rem] shrink-0',
             'text-foreground-secondary hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
-            collapsed
-              ? // A circle wider than the avatar, so the hover tint reads as a ring
-                // around it. `px-0` left the background exactly the avatar's width,
-                // touching its border on both sides; and a rounded-md box behind a
-                // round image is two different shapes fighting.
-                'size-10 shrink-0 justify-center self-center rounded-full'
-              : 'w-full px-2 py-2',
           )}
         >
           {avatar ?? <User className="size-4 shrink-0" aria-hidden />}
-          {collapsed ? (
-            <span className="sr-only">{label}</span>
-          ) : (
-            <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          )}
+          <span className="hidden min-w-0 truncate sm:block">{label}</span>
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent side="top" align="start" className="min-w-56">
+      <DropdownMenuContent side="bottom" align="end" className="min-w-56">
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
 
         {/* Link, not <a href>: an anchor reloads the SPA, which throws away the

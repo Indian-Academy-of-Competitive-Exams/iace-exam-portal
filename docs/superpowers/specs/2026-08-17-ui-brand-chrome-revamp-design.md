@@ -38,14 +38,16 @@ Four choices were made against rendered mockups (kept in `.superpowers/brainstor
 ### Brandmark
 
 `packages/ui/src/components/ui/brandmark.tsx`. The component renders a plate — `bg-primary`,
-`rounded-md`, matching the radius every other control uses — holding `IACE` in `primary-foreground`
-at `--text-base` and `--weight-bold`, tracked out by `--tracking-wide`. Bold letters set tight read
-as a single blot at this size, so the tracking is doing real work rather than styling.
+`rounded-md`, matching the radius every other control uses — holding `IACE` in `primary-foreground`,
+`text-sm font-extrabold tracking-wide`. Bold letters set tight read as a single blot at this size,
+so the tracking is doing real work rather than styling. Colour and radius come from the tokens
+through the Tailwind preset; the type scale is Tailwind's own, as it is everywhere else in
+`packages/ui` — the preset extends colours, radii and shadows, not `fontSize`.
 
 `withWordmark` is deleted. The word is now always inside the plate, so the prop has nothing left to
-select. A new `portal?: string` renders after the plate at `--text-xs`, uppercase,
-`--weight-semibold`, `--tracking-wide`, in `muted-foreground`. Absent by default, so the component
-stays usable anywhere a bare mark is wanted.
+select. A new `portal?: string` renders after the plate as `text-xs font-semibold uppercase
+tracking-wide text-muted-foreground` — the same micro-caps the sidebar already uses for its section
+labels. Absent by default, so the component stays usable anywhere a bare mark is wanted.
 
 The `sr-only` fallback goes with it — the plate holds real text and reads without help.
 
@@ -68,6 +70,9 @@ The component stays a `div` and never links anywhere. Wrapping it is the caller'
   column.
 - The collapse toggle stays, because the admin still has nav to collapse. The `mt-8` clearance on
   `<nav>` stays with it for the same reason.
+- The sidebar's `<aside aria-label="Sections">` becomes a plain `<div>`, and the `<nav>` inside it
+  takes the label. The aside wrapped nothing but that nav, so it announced the same region twice —
+  once as a complementary landmark and once as a navigation one.
 - The mobile drawer keeps the lockup, which is also a link home, and no longer duplicates the user
   menu now that the header owns it.
 
@@ -109,6 +114,21 @@ Extended in place, in `packages/ui/test/primitives.dom.test.tsx` and the app-kit
 - `portal` renders its label when given, and nothing when omitted.
 - `nav={[]}` renders no navigation landmark and no drawer trigger.
 - The lockup is a link, and it points at `homeTo`.
+
+`packages/app-kit` had no DOM tests, so this adds the plumbing for them: `@testing-library/react`,
+plus `react-router-dom` and `lucide-react` as dev dependencies, since both were peers only and a test
+cannot render the shell without them. The jsdom harness is reused rather than copied —
+`packages/ui` exports it as `@iace/ui/test-support/dom`.
+
+Two tsconfig `include` lists are corrected along the way. `packages/app-kit/tsconfig.json` never
+listed `browser/**/*.tsx`, so the shell — the largest file in the package — had never been
+typechecked, and tsx fell back to the classic JSX transform for it. The test tsconfig additionally
+lists `@iace/ui`'s source, because tsx resolves one tsconfig per run and a `.tsx` file it does not
+match renders as "React is not defined".
+
+A test that renders the shell must pin the viewport: jsdom's `matchMedia` always reports no match, and
+the shell renders a different component per breakpoint rather than one styled twice, so an unpinned
+test silently exercises the mobile tree.
 
 ## Non-goals
 

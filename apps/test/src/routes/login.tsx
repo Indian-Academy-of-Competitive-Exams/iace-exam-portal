@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Info, KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, Info } from 'lucide-react';
 import {
   MOBILE_DIGITS,
   PIN_LENGTH,
@@ -30,7 +30,6 @@ import {
   Field,
   NumericInput,
   PinField,
-  StepIcon,
   ThemeToggle,
   digitsOnly,
 } from '@iace/ui';
@@ -50,6 +49,9 @@ const SIGN_IN_FIELDS = ['mobile', 'pin'] as const;
 const MOBILE_FIELDS = ['mobile'] as const;
 const CODE_FIELDS = ['code'] as const;
 const SET_PIN_FIELDS = ['pin', 'confirmPin'] as const;
+
+/** Centred under the mark, which is the card's only glyph. */
+const STEP_HEADER = 'items-center pt-4 text-center';
 
 /**
  * Mobile + a 4-digit PIN. An OTP appears twice: signup, and recovering a forgotten PIN.
@@ -74,16 +76,19 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
-        <Brandmark withWordmark />
+    <div className="relative flex min-h-screen flex-col bg-background">
+      {/* Floated rather than sitting in a header: a bar built to hold one control
+          is a bar the reader has to look past to reach the card. */}
+      <div className="absolute right-4 top-4">
         <ThemeToggle />
-      </header>
+      </div>
 
       {/* pb-24 pulls the card just above the true centre: dead-centre reads as
           low on a tall screen, and this is the only thing on the page. */}
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
+          <Brandmark className="justify-center px-6 pt-6" />
+
           {step.kind === 'signIn' ? (
             <SignInStep
               onSignedIn={onSignedIn}
@@ -148,8 +153,7 @@ function SignInStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={KeyRound} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>Sign in</CardTitle>
         <CardDescription>Your mobile number and your {PIN_LENGTH}-digit PIN.</CardDescription>
       </CardHeader>
@@ -223,8 +227,7 @@ function MobileStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={Smartphone} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>
           {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
         </CardTitle>
@@ -285,8 +288,7 @@ function CodeStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={ShieldCheck} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>Enter the code</CardTitle>
         <CardDescription>
           Sent to <span className="font-medium text-foreground tabular-nums">+91 {mobile}</span>
@@ -364,8 +366,7 @@ function SetPinStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={KeyRound} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
         <CardDescription>
           {PIN_LENGTH} digits — this is how you&apos;ll sign in from now on. No more codes.
@@ -409,8 +410,6 @@ function SetPinStep({
 // ---------------------------------------------------------------------------
 // Shared bits
 // ---------------------------------------------------------------------------
-
-/** The step's icon, brand-tinted at 10% so it reads as an accent rather than a filled state. */
 
 /** The mobile input is identical on three of the four screens. */
 function MobileField({

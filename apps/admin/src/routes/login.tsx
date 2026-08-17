@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { ArrowLeft, Info, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Info } from 'lucide-react';
 import { otpCodeSchema, requestAdminOtpSchema, type OtpRequestResponse } from '@iace/contracts';
 import {
   Alert,
@@ -18,7 +18,6 @@ import {
   Field,
   Input,
   PinField,
-  StepIcon,
   ThemeToggle,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -31,6 +30,9 @@ const codeFormSchema = z.object({ code: otpCodeSchema });
 const EMAIL_FIELDS = ['email'] as const;
 const CODE_FIELDS = ['code'] as const;
 
+/** Centred under the mark, which is the card's only glyph. */
+const STEP_HEADER = 'items-center pt-4 text-center';
+
 /** Email + OTP. No self-signup: an unknown address simply never receives a code. */
 export function LoginPage() {
   const { identity: admin, signIn } = useAuth();
@@ -41,17 +43,17 @@ export function LoginPage() {
   if (admin) return <Navigate to={ROUTES.HOME} replace />;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
-        <div className="flex items-baseline gap-2">
-          <Brandmark withWordmark />
-          <span className="text-sm font-medium text-muted-foreground">Admin</span>
-        </div>
+    <div className="relative flex min-h-screen flex-col bg-background">
+      {/* Floated rather than sitting in a header: a bar built to hold one control
+          is a bar the reader has to look past to reach the card. */}
+      <div className="absolute right-4 top-4">
         <ThemeToggle />
-      </header>
+      </div>
 
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
+          <Brandmark portal="Admin" className="justify-center px-6 pt-6" />
+
           {email === null || challenge === null ? (
             <EmailStep
               onSent={(value, response) => {
@@ -99,8 +101,7 @@ function EmailStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={Mail} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>Admin sign in</CardTitle>
         <CardDescription>
           Enter your work email and we&apos;ll send you a one-time code.
@@ -163,8 +164,7 @@ function CodeStep({
 
   return (
     <>
-      <CardHeader>
-        <StepIcon icon={ShieldCheck} />
+      <CardHeader className={STEP_HEADER}>
         <CardTitle>Enter the code</CardTitle>
         <CardDescription>
           Sent to <span className="font-medium text-foreground">{email}</span>
@@ -211,7 +211,3 @@ function CodeStep({
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-
-/** Brand-tinted accent, matching the test app. */
