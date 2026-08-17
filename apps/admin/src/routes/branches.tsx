@@ -222,67 +222,64 @@ function NewBranchCard({
 // ---------------------------------------------------------------------------
 
 /**
+ * The two things a branch row can be asked to do.
+ *
+ * Named rather than a pair of booleans: the row can be asking one question at a
+ * time, and `confirmingDelete && confirmingRetire` is a state that would render
+ * two dialogs on top of each other.
+ */
+const BRANCH_CONFIRMS = {
+  DELETE: 'delete',
+  RETIRE: 'retire',
+} as const;
+type BranchConfirm = (typeof BRANCH_CONFIRMS)[keyof typeof BRANCH_CONFIRMS];
+
+/**
  * What a row lets you do — nothing at all, or retire and delete.
  *
  * A component rather than a conditional chain because the first state is
  * "render nothing" — flattening that into a ternary once put the Retire and
  * Delete buttons in front of admins who are not allowed to press them.
+ *
+ * The buttons only ASK. Both dialogs live with the mutations in
+ * `BranchRowActions`, because a dialog that stays open while its request is in
+ * flight needs the pending flag, and threading two of those back down here was
+ * four more props for no reader's benefit.
  */
 function BranchActions({
   branch,
   canEdit,
   busy,
-  confirming,
-  onConfirm,
-  onCancel,
-  onDelete,
-  onToggleActive,
+  onAsk,
 }: Readonly<{
   branch: Branch;
   canEdit: boolean;
   busy: boolean;
-  confirming: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-  onDelete: () => void;
-  onToggleActive: () => void;
+  onAsk: (confirm: BranchConfirm) => void;
 }>) {
   // GLOBAL is never editable, whoever is looking.
   if (!canEdit || branch.isGlobal) return null;
 
   return (
     <span className="inline-flex items-center gap-2">
-      {/* No confirm on this one, deliberately: retiring only stops NEW groups
-          being created here, changes nothing that exists, and the button beside
-          it undoes it. A dialog in front of a reversible switch teaches the
-          reader to click through dialogs. */}
-      <Button size="sm" variant="outline" disabled={busy} onClick={onToggleActive}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => onAsk(BRANCH_CONFIRMS.RETIRE)}
+      >
         <Power aria-hidden />
         {branch.isActive ? 'Retire' : 'Reactivate'}
       </Button>
-      <Button size="sm" variant="ghost" disabled={busy} onClick={onConfirm}>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        onClick={() => onAsk(BRANCH_CONFIRMS.DELETE)}
+      >
         <Trash2 aria-hidden />
         Delete
       </Button>
-
-      {/* Deleting is refused server-side while any group still sits here, so the
-          count decides which of two different questions this is: "confirm an
-          empty shell goes" or "you are about to be told no". Saying which
-          before the click saves a round trip and an error nobody expected. */}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={(open) => (open ? onConfirm() : onCancel())}
-        destructive
-        loading={busy}
-        title={`Delete ${branch.name}?`}
-        description={
-          branch.groupCount === 0
-            ? 'The branch holds no groups, so nothing loses access. This cannot be undone.'
-            : `This branch still holds ${plural(branch.groupCount, 'group')}, and deleting it will be refused. Move or delete those groups first, or retire the branch instead — a retired branch keeps everything it has and simply takes no new groups.`
-        }
-        confirmLabel="Delete branch"
-        onConfirm={onDelete}
-      />
     </span>
   );
 }
@@ -294,7 +291,7 @@ function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
   return <Badge variant="neutral">Retired</Badge>;
 }
 
-/** The mutations a row can run, and the confirm state they share. */
+/** The mutations a row can run, and the question each one asks first. */
 function BranchRowActions({
   branch,
   canEdit,
@@ -304,38 +301,75 @@ function BranchRowActions({
   canEdit: boolean;
   onChanged: () => void;
 }>) {
-  const [confirming, setConfirming] = useState(false);
+  const [asking, setAsking] = useState<BranchConfirm | null>(null);
+  const close = () => setAsking(null);
 
   const remove = useMutation({
     meta: { success: `${branch.name} deleted.` },
     mutationFn: () => api.admin.branches.remove(branch.id),
     onSuccess: () => {
-      setConfirming(false);
+      close();
       onChanged();
     },
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
-    onError: () => setConfirming(false),
+    onError: close,
   });
 
   const setActive = useMutation({
     meta: { success: (): string => `${branch.name} updated.` },
     mutationFn: (isActive: boolean) => api.admin.branches.update(branch.id, { isActive }),
-    onSuccess: onChanged,
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    onError: close,
   });
 
   const busy = remove.isPending || setActive.isPending;
 
   return (
-    <BranchActions
-      branch={branch}
-      canEdit={canEdit}
-      busy={busy}
-      confirming={confirming}
-      onConfirm={() => setConfirming(true)}
-      onCancel={() => setConfirming(false)}
-      onDelete={() => remove.mutate()}
-      onToggleActive={() => setActive.mutate(!branch.isActive)}
-    />
+    <>
+      <BranchActions branch={branch} canEdit={canEdit} busy={busy} onAsk={setAsking} />
+
+      {/* Retiring is reversible, and it still asks. It is not the undo that
+          makes it worth a question — it is that the effect is invisible from
+          here: nothing about this row changes except a badge, and the
+          consequence lands weeks later on somebody else, as a branch that will
+          not accept the group they are trying to create. A switch whose result
+          you cannot see is exactly the one to state out loud. */}
+      <ConfirmDialog
+        open={asking === BRANCH_CONFIRMS.RETIRE}
+        onOpenChange={(open) => !open && close()}
+        loading={setActive.isPending}
+        title={branch.isActive ? `Retire ${branch.name}?` : `Reactivate ${branch.name}?`}
+        description={
+          branch.isActive
+            ? `Nothing it already holds changes — ${plural(branch.groupCount, 'group')} and every student in them keep working exactly as now. What stops is new groups: this branch will no longer be offered when anyone creates one. Reactivating puts it back.`
+            : 'The branch is offered again when anyone creates a group. Nothing else changes.'
+        }
+        confirmLabel={branch.isActive ? 'Retire branch' : 'Reactivate branch'}
+        onConfirm={() => setActive.mutate(!branch.isActive)}
+      />
+
+      {/* Deleting is refused server-side while any group still sits here, so the
+          count decides which of two different questions this is: "confirm an
+          empty shell goes" or "you are about to be told no". Saying which
+          before the click saves a round trip and an error nobody expected. */}
+      <ConfirmDialog
+        open={asking === BRANCH_CONFIRMS.DELETE}
+        onOpenChange={(open) => !open && close()}
+        destructive
+        loading={remove.isPending}
+        title={`Delete ${branch.name}?`}
+        description={
+          branch.groupCount === 0
+            ? 'The branch holds no groups, so nothing loses access. This cannot be undone.'
+            : `This branch still holds ${plural(branch.groupCount, 'group')}, and deleting it will be refused. Move or delete those groups first, or retire the branch instead — a retired branch keeps everything it has and simply takes no new groups.`
+        }
+        confirmLabel="Delete branch"
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }

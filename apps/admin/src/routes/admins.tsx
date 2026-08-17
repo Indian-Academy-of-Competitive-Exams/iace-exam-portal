@@ -211,48 +211,55 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
       setConfirming(false);
       onChanged();
     },
+    onError: () => setConfirming(false),
   });
 
   const busy = setActive.isPending;
 
-  if (!admin.isActive) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        icon={<UserCheck aria-hidden />}
-        loading={busy}
-        onClick={() => setActive.mutate()}
-      >
-        Reactivate
-      </Button>
-    );
-  }
-
   return (
     <>
-      <Button
-        variant="destructive"
-        size="sm"
-        icon={<UserMinus aria-hidden />}
-        loading={busy}
-        onClick={() => setConfirming(true)}
-      >
-        Deactivate
-      </Button>
-      {/* A confirm, because it signs somebody out and drops every grant they
-          hold — and reactivating does NOT bring those back, so re-granting is
-          manual work for whoever does it. Saying so here is the difference
-          between an undo and a surprise. It stays open until the request comes
-          back, so a failure lands on the dialog that caused it. */}
+      {admin.isActive ? (
+        <Button
+          variant="destructive"
+          size="sm"
+          icon={<UserMinus aria-hidden />}
+          loading={busy}
+          onClick={() => setConfirming(true)}
+        >
+          Deactivate
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<UserCheck aria-hidden />}
+          loading={busy}
+          onClick={() => setConfirming(true)}
+        >
+          Reactivate
+        </Button>
+      )}
+
+      {/* Both directions ask, and the reverse one is not politeness: switching an
+          admin back on restores their sign-in and NOT the permissions that were
+          dropped when they went off. Whoever reactivates them will otherwise
+          watch a colleague sign in to an app that shows them nothing, and go
+          looking for a bug. Nowhere else on this screen says it.
+
+          It stays open until the request comes back, so a failure lands on the
+          dialog that caused it. */}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        destructive
+        destructive={admin.isActive}
         loading={busy}
-        title={`Deactivate ${admin.email}?`}
-        description="They are signed out and every permission they hold is removed. Switching them back on does NOT restore those grants — someone has to grant them again, by hand."
-        confirmLabel="Deactivate"
+        title={admin.isActive ? `Deactivate ${admin.email}?` : `Reactivate ${admin.email}?`}
+        description={
+          admin.isActive
+            ? 'They are signed out and every permission they hold is removed. Switching them back on does NOT restore those grants — someone has to grant them again, by hand.'
+            : 'They can sign in again. Their old permissions were removed when they were deactivated and do NOT come back — grant them what they need on the Permissions screen.'
+        }
+        confirmLabel={admin.isActive ? 'Deactivate' : 'Reactivate'}
         onConfirm={() => setActive.mutate()}
       />
     </>

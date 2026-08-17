@@ -171,6 +171,7 @@ export function StudentDetailPage() {
       success: (): string => (detail?.isActive ? 'Student deactivated.' : 'Student reactivated.'),
     },
     mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
+    onError: () => setConfirming(false),
     onSuccess: (updated) => {
       setConfirming(false);
       queryClient.setQueryData(['admin', 'student', id], updated);
@@ -218,25 +219,32 @@ export function StudentDetailPage() {
             variant={detail.isActive ? 'destructive' : 'secondary'}
             size="sm"
             loading={setActive.isPending}
-            // Only one direction asks. Reactivating gives access back, which is
-            // what the reader wants and is undone by the same button; taking it
-            // away stops a student mid-course.
-            onClick={() => (detail.isActive ? setConfirming(true) : setActive.mutate(true))}
+            onClick={() => setConfirming(true)}
           >
             {detail.isActive ? 'Deactivate' : 'Reactivate'}
           </Button>
         }
       />
 
+      {/* Both directions ask, so a control that changes whether somebody can sit
+          an exam never acts on a single click. */}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        destructive
+        destructive={detail.isActive}
         loading={setActive.isPending}
-        title={`Deactivate ${detail.fullName ?? detail.mobile}?`}
-        description="They can no longer sign in, and any test they have not finished is out of reach. Their record, their attempts and their results are all kept, and reactivating lets them straight back in."
-        confirmLabel="Deactivate student"
-        onConfirm={() => setActive.mutate(false)}
+        title={
+          detail.isActive
+            ? `Deactivate ${detail.fullName ?? detail.mobile}?`
+            : `Reactivate ${detail.fullName ?? detail.mobile}?`
+        }
+        description={
+          detail.isActive
+            ? 'They can no longer sign in, and any test they have not finished is out of reach. Their record, their attempts and their results are all kept, and reactivating lets them straight back in.'
+            : 'They can sign in again and reach every test their groups give them. Nothing was lost while they were off.'
+        }
+        confirmLabel={detail.isActive ? 'Deactivate student' : 'Reactivate student'}
+        onConfirm={() => setActive.mutate(!detail.isActive)}
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
