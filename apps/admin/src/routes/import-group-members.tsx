@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, FileUp, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, UserPlus } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
@@ -17,6 +17,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  FileDropzone,
   linkVariants,
   PageHeader,
   Table,
@@ -191,28 +192,13 @@ export function ImportGroupMembersPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground transition-colors hover:border-ring hover:text-foreground">
-                <FileUp className="size-5" aria-hidden />
-                <span className="font-medium text-foreground">
-                  {file ? file.name : 'Choose a file'}
-                </span>
-                <span className="text-xs">
-                  {file
-                    ? `${(file.size / 1024).toFixed(0)} KB — choose another to replace it`
-                    : IMPORT_ACCEPTED_EXTENSIONS.join(' or ')}
-                </span>
-                <input
-                  type="file"
-                  accept={IMPORT_ACCEPTED_EXTENSIONS.join(',')}
-                  className="sr-only"
-                  onChange={(event) => {
-                    choose(event.target.files?.[0]);
-                    // Cleared so choosing the SAME file again still fires: the
-                    // admin has usually just fixed it and saved over the top.
-                    event.target.value = '';
-                  }}
-                />
-              </label>
+              <FileDropzone
+                accept={IMPORT_ACCEPTED_EXTENSIONS.join(',')}
+                file={file}
+                onFileChange={choose}
+                hint={IMPORT_ACCEPTED_EXTENSIONS.join(' or ')}
+                aria-label="Group member list"
+              />
 
               {preview.isPending ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">

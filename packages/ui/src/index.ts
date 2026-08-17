@@ -19,6 +19,11 @@ export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { BadgeList, type BadgeListProps } from './components/ui/badge-list';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
+export {
+  FileDropzone,
+  formatFileSize,
+  type FileDropzoneProps,
+} from './components/ui/file-dropzone';
 export { Select, type SelectProps } from './components/ui/select';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
 export {
