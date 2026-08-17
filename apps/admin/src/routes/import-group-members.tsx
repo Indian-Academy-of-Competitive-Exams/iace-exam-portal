@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Download, UserPlus } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
   FileDropzone,
+  LoadingState,
   linkVariants,
   PageHeader,
   Table,
@@ -200,12 +201,7 @@ export function ImportGroupMembersPage() {
                 aria-label="Group member list"
               />
 
-              {preview.isPending ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Reading the file…
-                </p>
-              ) : null}
+              {preview.isPending ? <LoadingState>Reading the file…</LoadingState> : null}
 
               <Button
                 icon={<UserPlus aria-hidden />}

@@ -35,6 +35,14 @@ export {
   type SearchInputProps,
 } from './components/ui/search-input';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
+export { Separator, type SeparatorProps } from './components/ui/separator';
+export {
+  Spinner,
+  LoadingState,
+  type SpinnerProps,
+  type SpinnerSize,
+  type LoadingStateProps,
+} from './components/ui/spinner';
 export {
   Toaster,
   toast,

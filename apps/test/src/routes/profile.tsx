@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { GENDERS, todayISO, updateMeSchema, type UpdateMeInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
@@ -16,6 +16,7 @@ import {
   CardTitle,
   Field,
   Input,
+  LoadingState,
   PageHeader,
   Select,
   Textarea,
@@ -112,12 +113,7 @@ export function ProfilePage() {
 
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
 
-      {me.isPending && (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading…
-        </p>
-      )}
+      {me.isPending && <LoadingState />}
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {!me.isPending && !me.error && (
         <form

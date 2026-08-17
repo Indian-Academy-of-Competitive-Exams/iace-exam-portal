@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Download, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, Download, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
   FileDropzone,
+  LoadingState,
   linkVariants,
   PageHeader,
   Table,
@@ -185,12 +186,7 @@ export function ImportStudentsPage() {
                 aria-label="Student import file"
               />
 
-              {preview.isPending ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Reading the file…
-                </p>
-              ) : null}
+              {preview.isPending ? <LoadingState>Reading the file…</LoadingState> : null}
 
               <Button
                 icon={<Upload aria-hidden />}

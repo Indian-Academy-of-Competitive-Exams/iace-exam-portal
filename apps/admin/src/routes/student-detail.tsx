@@ -16,6 +16,7 @@ import {
   CardTitle,
   Field,
   Input,
+  LoadingState,
   PageHeader,
   Select,
 } from '@iace/ui';
@@ -173,7 +174,7 @@ export function StudentDetailPage() {
     },
   });
 
-  if (student.isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (student.isPending) return <LoadingState />;
   if (student.error || !student.data) {
     // The reason is on the toast; this only has to stop the page being blank.
     return <Alert variant="danger">Could not load this student.</Alert>;

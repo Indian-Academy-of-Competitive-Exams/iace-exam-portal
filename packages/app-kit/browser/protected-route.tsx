@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Spinner } from '@iace/ui';
 
 /**
  * The gate in front of every authed route.
@@ -22,7 +22,7 @@ export function ProtectedRoute({
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" />
+        <Spinner size="lg" label="Loading" />
       </div>
     );
   }

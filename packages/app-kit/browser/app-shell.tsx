@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
-import { Brandmark, Button, ThemeToggle, cn } from '@iace/ui';
+import { Brandmark, Button, Separator, ThemeToggle, cn } from '@iace/ui';
 import { filterNavByPermission, type NavItem } from '../src';
 import { SidebarNav } from './app-shell/sidebar-nav';
 import { DrawerNav } from './app-shell/drawer-nav';
@@ -143,7 +143,8 @@ export function AppShell({
               <SidebarNav items={items} pathname={pathname} collapsed={collapsed} />
             </nav>
 
-            <div className="mt-2 border-t border-border pt-2">{userMenu}</div>
+            <Separator className="my-2" />
+            {userMenu}
 
             {/*
               On the divider, not in the sidebar. It acts on the boundary
@@ -205,7 +206,8 @@ export function AppShell({
               <DrawerNav items={items} onNavigate={closeDrawer} />
             </nav>
 
-            <div className="mt-2 border-t border-border pt-2">{userMenu}</div>
+            <Separator className="my-2" />
+            {userMenu}
           </div>
         </div>
       ) : null}

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
@@ -269,10 +269,9 @@ function ConfirmDialog({
           <Button
             type="button"
             variant={destructive ? 'destructive' : 'default'}
-            disabled={loading}
+            loading={loading}
             onClick={onConfirm}
           >
-            {loading ? <Loader2 className="animate-spin" aria-hidden /> : null}
             {confirmLabel}
           </Button>
         </DialogFooter>

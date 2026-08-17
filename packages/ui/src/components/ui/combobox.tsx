@@ -1,8 +1,9 @@
 import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Check, ChevronsUpDown, Loader2, Search } from 'lucide-react';
+import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useDebouncedSearch } from './search-input';
+import { Spinner } from './spinner';
 
 /** How close to the end counts as "nearly there", in pixels. */
 const LOAD_MORE_THRESHOLD_PX = 160;
@@ -215,7 +216,7 @@ export function Combobox({
                 showing nothing rather than a spinner that never resolves. */}
             {hasMore ? (
               <div className="flex items-center justify-center gap-2 py-2">
-                <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+                <Spinner />
                 <span className="text-xs text-muted-foreground">
                   {isLoadingMore ? 'Loading more…' : 'Scroll for more'}
                 </span>

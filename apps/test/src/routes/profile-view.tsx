@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Loader2, Pencil } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
 import { type Me } from '@iace/contracts';
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  LoadingState,
   PageHeader,
 } from '@iace/ui';
 import { DocumentCard } from '../components/document-card';
@@ -29,14 +30,7 @@ import { PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 export function ProfileViewPage() {
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
-  if (me.isPending) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
-        Loading…
-      </p>
-    );
-  }
+  if (me.isPending) return <LoadingState />;
 
   if (me.error || !me.data) {
     // The reason is on the toast; this only has to stop the page being blank.

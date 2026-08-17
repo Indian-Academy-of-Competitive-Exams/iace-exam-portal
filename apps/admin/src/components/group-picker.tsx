@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { PAGE_SIZE_MAX, type GroupRef } from '@iace/contracts';
-import { Alert, Checkbox, linkVariants, SearchInput } from '@iace/ui';
+import { Alert, Checkbox, linkVariants, LoadingState, SearchInput, Separator } from '@iace/ui';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -98,9 +98,7 @@ export function GroupPicker({
             />
           ))}
 
-          {pinned.length > 0 && rest.length > 0 ? (
-            <div className="my-1 border-t border-border" />
-          ) : null}
+          {pinned.length > 0 && rest.length > 0 ? <Separator className="my-1" /> : null}
 
           {rest.map((group) => (
             <Checkbox
@@ -151,7 +149,7 @@ function GroupPickerBody({
   children,
 }: Readonly<{ hasAnyGroups: boolean; isPending: boolean; children: React.ReactNode }>) {
   if (hasAnyGroups) return <>{children}</>;
-  if (isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isPending) return <LoadingState />;
 
   return (
     <Alert variant="warning">

@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { PERMISSION_LEVELS, type Admin, type Feature, type PermissionLevel } from '@iace/contracts';
-import { Accordion, Alert, Badge, Card, Checkbox, PageHeader } from '@iace/ui';
+import { Accordion, Alert, Badge, Card, Checkbox, PageHeader, Spinner } from '@iace/ui';
 import { api } from '../lib/api';
 import { ADMINS_QUERY_KEY, FEATURES_QUERY_KEY, PAGE_SIZE_FOR_PICKERS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
@@ -195,9 +195,7 @@ function FeatureRow({
     <div className="flex items-center gap-2 border-b border-border py-1 last:border-b-0">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <code className="truncate">{feature.key}</code>
-        {busy ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
-        ) : null}
+        {busy ? <Spinner size="sm" /> : null}
       </div>
 
       <div className="flex w-20 justify-center">
