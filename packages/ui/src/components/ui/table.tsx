@@ -4,7 +4,7 @@ import { Skeleton } from './skeleton';
 
 /**
  * Data-forward table, per the style guide: quiet uppercase headers, a rule
- * under each row, and numbers in tabular figures so columns of digits line up
+ * BETWEEN rows, and numbers in tabular figures so columns of digits line up
  * rather than wobble.
  *
  * Wrapped in an overflow container because a table is the one thing that
@@ -26,15 +26,43 @@ const TableHeader = React.forwardRef<
 >(({ className, ...props }, ref) => <thead ref={ref} className={cn(className)} {...props} />);
 TableHeader.displayName = 'TableHeader';
 
+/**
+ * The last row draws no rule.
+ *
+ * A rule BETWEEN rows separates them; a rule after the last one is the table
+ * drawing its own bottom edge, and the table is not the last thing in the box —
+ * `Pagination` sits under it with a `border-t` of its own. Two rules landed a
+ * dozen pixels apart at different widths, one spanning the table and one inset
+ * by the pagination's padding, which reads as a rendering fault rather than as
+ * a design. Worse, `TableEmpty` never had a bottom border, so the same table
+ * ended one way with rows in it and another way without.
+ *
+ * Scoped to the body on purpose: the header's rule is the header/body divider
+ * and has to stay, and the header row is the last child of its own `thead`.
+ */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => <tbody ref={ref} className={cn(className)} {...props} />);
+>(({ className, ...props }, ref) => (
+  <tbody ref={ref} className={cn('[&>tr:last-child]:border-b-0', className)} {...props} />
+));
 TableBody.displayName = 'TableBody';
 
+/**
+ * The rule belongs to the row, not to each of its cells.
+ *
+ * Painted on the `<tr>`, which `border-collapse` renders, so "does this row
+ * have a line under it" is one decision in one place. On the cells it was the
+ * same decision repeated per column, and nothing there could see whether its
+ * row was the last one.
+ */
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
-    <tr ref={ref} className={cn('transition-colors hover:bg-muted/50', className)} {...props} />
+    <tr
+      ref={ref}
+      className={cn('border-b border-border transition-colors hover:bg-muted/50', className)}
+      {...props}
+    />
   ),
 );
 TableRow.displayName = 'TableRow';
@@ -49,7 +77,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
     <th
       ref={ref}
       className={cn(
-        'border-b border-border px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
+        'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
         numeric && 'text-right tabular-nums',
         className,
       )}
@@ -64,7 +92,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
     <td
       ref={ref}
       className={cn(
-        'border-b border-border px-3 py-2.5 align-middle text-foreground',
+        'px-3 py-2.5 align-middle text-foreground',
         numeric && 'text-right tabular-nums',
         className,
       )}

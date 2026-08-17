@@ -129,7 +129,12 @@
   table { width:100%; border-collapse:collapse; font-size:13px; }
   thead th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted-foreground);
     padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600; }
-  tbody td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  /* The rule sits BETWEEN rows, so the last one draws none: the table is not
+     the last thing in its box — pagination sits under it with a rule of its
+     own, and two of them a few pixels apart reads as a rendering fault. */
+  tbody tr { border-bottom:1px solid var(--border); }
+  tbody tr:last-child { border-bottom:0; }
+  tbody td { padding:10px 12px; }
   tbody tr:hover { background:var(--muted); }
   td .num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 
