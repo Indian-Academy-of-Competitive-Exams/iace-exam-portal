@@ -14,6 +14,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmDialog,
   DataTable,
   FormActions,
   FormField,
@@ -21,6 +22,7 @@ import {
   Input,
   linkVariants,
   PageHeader,
+  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
@@ -220,7 +222,7 @@ function NewBranchCard({
 // ---------------------------------------------------------------------------
 
 /**
- * What a row lets you do: nothing, confirm a delete, or the ordinary actions.
+ * What a row lets you do — nothing at all, or retire and delete.
  *
  * A component rather than a conditional chain because the first state is
  * "render nothing" — flattening that into a ternary once put the Retire and
@@ -248,31 +250,39 @@ function BranchActions({
   // GLOBAL is never editable, whoever is looking.
   if (!canEdit || branch.isGlobal) return null;
 
-  if (confirming) {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Delete?</span>
-        <Button size="sm" variant="destructive" disabled={busy} onClick={onDelete}>
-          Yes, delete
-        </Button>
-        <Button size="sm" variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
-      </span>
-    );
-  }
-
   return (
     <span className="inline-flex items-center gap-2">
+      {/* No confirm on this one, deliberately: retiring only stops NEW groups
+          being created here, changes nothing that exists, and the button beside
+          it undoes it. A dialog in front of a reversible switch teaches the
+          reader to click through dialogs. */}
       <Button size="sm" variant="outline" disabled={busy} onClick={onToggleActive}>
         <Power aria-hidden />
         {branch.isActive ? 'Retire' : 'Reactivate'}
       </Button>
-      {/* Deleting is refused server-side while any group still sits here. */}
       <Button size="sm" variant="ghost" disabled={busy} onClick={onConfirm}>
         <Trash2 aria-hidden />
         Delete
       </Button>
+
+      {/* Deleting is refused server-side while any group still sits here, so the
+          count decides which of two different questions this is: "confirm an
+          empty shell goes" or "you are about to be told no". Saying which
+          before the click saves a round trip and an error nobody expected. */}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={(open) => (open ? onConfirm() : onCancel())}
+        destructive
+        loading={busy}
+        title={`Delete ${branch.name}?`}
+        description={
+          branch.groupCount === 0
+            ? 'The branch holds no groups, so nothing loses access. This cannot be undone.'
+            : `This branch still holds ${plural(branch.groupCount, 'group')}, and deleting it will be refused. Move or delete those groups first, or retire the branch instead — a retired branch keeps everything it has and simply takes no new groups.`
+        }
+        confirmLabel="Delete branch"
+        onConfirm={onDelete}
+      />
     </span>
   );
 }
@@ -299,7 +309,10 @@ function BranchRowActions({
   const remove = useMutation({
     meta: { success: `${branch.name} deleted.` },
     mutationFn: () => api.admin.branches.remove(branch.id),
-    onSuccess: onChanged,
+    onSuccess: () => {
+      setConfirming(false);
+      onChanged();
+    },
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
     onError: () => setConfirming(false),

@@ -13,6 +13,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmDialog,
+  plural,
   DataTable,
   FormActions,
   FormField,
@@ -270,30 +272,14 @@ function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
   const remove = useMutation({
     meta: { success: `${group.name} deleted.` },
     mutationFn: () => api.admin.groups.remove(group.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] }),
+    onSuccess: () => {
+      setConfirming(false);
+      return queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
+    },
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
     onError: () => setConfirming(false),
   });
-
-  if (confirming) {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Delete?</span>
-        <Button
-          size="sm"
-          variant="destructive"
-          loading={remove.isPending}
-          onClick={() => remove.mutate()}
-        >
-          Yes, delete
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => setConfirming(false)}>
-          Cancel
-        </Button>
-      </span>
-    );
-  }
 
   return (
     <span className="inline-flex items-center gap-1">
@@ -318,6 +304,25 @@ function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
       >
         <Trash2 aria-hidden />
       </Button>
+
+      {/* A group is how a student reaches a test, so deleting one takes access
+          away from everybody in it — which the inline "Delete?" this replaced
+          had no room to say. The member count is the part that changes the
+          answer: nobody deletes a batch of 240 by accident twice. */}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        destructive
+        loading={remove.isPending}
+        title={`Delete ${group.branch.name} / ${group.name}?`}
+        description={
+          group.studentCount === 0
+            ? 'The group is empty, so nobody loses access. This cannot be undone.'
+            : `${plural(group.studentCount, 'student')} reach their tests through this group and will lose that access. The students themselves are not deleted. This cannot be undone.`
+        }
+        confirmLabel="Delete group"
+        onConfirm={() => remove.mutate()}
+      />
     </span>
   );
 }

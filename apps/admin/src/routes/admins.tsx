@@ -273,11 +273,26 @@ function NewAdminCard({
   // same call in students.tsx).
   const isSuperAdmin = useWatch({ control: form.control, name: 'isSuperAdmin' }) ?? false;
 
+  /**
+   * Held between "submit" and "yes": the form has already validated, and the
+   * dialog is the last thing between a typed email and an account that can sign
+   * in to this app.
+   */
+  const [pending, setPending] = useState<CreateAdminInput | null>(null);
+
   const create = useMutation({
     meta: { success: 'Admin created.', fields: NEW_ADMIN_FIELDS },
     mutationFn: (values: CreateAdminInput) => api.admin.admins.create(values),
-    onSuccess: onDone,
-    onError: (error) => applyFieldErrors(error, form.setError, NEW_ADMIN_FIELDS),
+    onSuccess: () => {
+      setPending(null);
+      onDone();
+    },
+    // Back to the form on a refusal — the message belongs on the field that
+    // caused it, and a dialog sitting over that field hides it.
+    onError: (error) => {
+      setPending(null);
+      applyFieldErrors(error, form.setError, NEW_ADMIN_FIELDS);
+    },
   });
 
   return (
@@ -290,7 +305,7 @@ function NewAdminCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
+        <FormRow onSubmit={form.handleSubmit(setPending)}>
           <FormField form={form} name="email" label="Email" className="min-w-64 flex-1">
             {(control) => (
               <Input {...control} type="email" placeholder="name@iace.co.in" autoFocus />
@@ -322,6 +337,32 @@ function NewAdminCard({
             </Button>
           </FormActions>
         </FormRow>
+
+        {/* Creating an admin is creating a way into this app, and a super admin
+            bypasses every permission check there is — including the one on this
+            screen, so the new account can create more of itself. That is worth
+            one deliberate step, and the wording changes with the box, because
+            the two outcomes are not the same size. */}
+        <ConfirmDialog
+          open={pending !== null}
+          onOpenChange={(open) => {
+            if (!open) setPending(null);
+          }}
+          destructive={pending?.isSuperAdmin ?? false}
+          loading={create.isPending}
+          title={
+            pending?.isSuperAdmin
+              ? 'Create a SUPER admin?'
+              : `Create an admin for ${pending?.email ?? ''}?`
+          }
+          description={
+            pending?.isSuperAdmin
+              ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins — including you. Grant it only to someone who already runs the institute.`
+              : 'They will be able to sign in with this email and a one-time code. They hold no permissions until you grant them some on the Permissions screen.'
+          }
+          confirmLabel={pending?.isSuperAdmin ? 'Create super admin' : 'Create admin'}
+          onConfirm={() => pending && create.mutate(pending)}
+        />
       </CardContent>
     </Card>
   );

@@ -14,6 +14,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ConfirmDialog,
   Field,
   Input,
   PageHeader,
@@ -97,6 +98,7 @@ export function StudentDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const student = useQuery({
     queryKey: ['admin', 'student', id],
@@ -170,6 +172,7 @@ export function StudentDetailPage() {
     },
     mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
     onSuccess: (updated) => {
+      setConfirming(false);
       queryClient.setQueryData(['admin', 'student', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
     },
@@ -215,11 +218,25 @@ export function StudentDetailPage() {
             variant={detail.isActive ? 'destructive' : 'secondary'}
             size="sm"
             loading={setActive.isPending}
-            onClick={() => setActive.mutate(!detail.isActive)}
+            // Only one direction asks. Reactivating gives access back, which is
+            // what the reader wants and is undone by the same button; taking it
+            // away stops a student mid-course.
+            onClick={() => (detail.isActive ? setConfirming(true) : setActive.mutate(true))}
           >
             {detail.isActive ? 'Deactivate' : 'Reactivate'}
           </Button>
         }
+      />
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        destructive
+        loading={setActive.isPending}
+        title={`Deactivate ${detail.fullName ?? detail.mobile}?`}
+        description="They can no longer sign in, and any test they have not finished is out of reach. Their record, their attempts and their results are all kept, and reactivating lets them straight back in."
+        confirmLabel="Deactivate student"
+        onConfirm={() => setActive.mutate(false)}
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">

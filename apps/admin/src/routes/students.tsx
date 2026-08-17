@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
   cn,
+  ConfirmDialog,
   Combobox,
   DataTable,
   digitsOnly,
@@ -682,24 +683,45 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
  */
 function SyncStudentsButton() {
   const { identity: admin } = useAuth();
+  const [confirming, setConfirming] = useState(false);
 
   const sync = useMutation({
     mutationFn: () => api.admin.sync.students(),
-    onSuccess: (result) => toast.info(result.message),
+    onSuccess: (result) => {
+      setConfirming(false);
+      toast.info(result.message);
+    },
   });
 
   if (!admin?.isSuperAdmin) return null;
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      icon={<RefreshCw aria-hidden />}
-      loading={sync.isPending}
-      onClick={() => sync.mutate()}
-      title="Pull students from the main portal"
-    >
-      Sync from portal
-    </Button>
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        icon={<RefreshCw aria-hidden />}
+        loading={sync.isPending}
+        onClick={() => setConfirming(true)}
+        title="Pull students from the main portal"
+      >
+        Sync from portal
+      </Button>
+
+      {/* One click, an unknown number of student records written from a system
+          this screen does not control, and no preview of what is about to
+          change — the three things that make an action worth asking about. Its
+          neighbours on this page (import, add student) each show what they
+          would do before they do it; this one cannot, so it asks instead. */}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        loading={sync.isPending}
+        title="Pull students from the main portal?"
+        description="Every student the portal returns is created here, or updated if they already exist. There is no preview and no undo — what the portal says is what this roster will hold."
+        confirmLabel="Pull from portal"
+        onConfirm={() => sync.mutate()}
+      />
+    </>
   );
 }

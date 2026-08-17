@@ -1,4 +1,4 @@
-export { cn } from './lib/utils';
+export { cn, plural } from './lib/utils';
 export { Button, buttonVariants, type ButtonProps } from './components/ui/button';
 export { Input, type InputProps } from './components/ui/input';
 export { NumericInput, digitsOnly, type NumericInputProps } from './components/ui/numeric-input';
