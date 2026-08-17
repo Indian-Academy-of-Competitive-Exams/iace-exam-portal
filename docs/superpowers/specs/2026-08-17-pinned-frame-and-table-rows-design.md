@@ -49,9 +49,13 @@ document. Nothing else needs auditing, which is the whole point of this shape.
 ### How a page opts out of that scroller
 
 The wrapper carries `has-[[data-page-frame]]:` variants that turn it into
-`flex flex-col overflow-hidden` with no bottom padding when a framed page is somewhere inside it. No
-prop, no context, no change to any route. If `:has()` is ever unavailable the page simply scrolls as
-it does now, which is the right way for this to fail.
+`flex flex-col overflow-hidden` when a framed page is somewhere inside it. No prop, no context, no
+change to any route. If `:has()` is ever unavailable the page simply scrolls as it does now, which is
+the right way for this to fail.
+
+Its `py-8` is unconditional. A framed page is a flex child of the wrapper, so it shortens to fit the
+padding rather than needing it removed — zeroing the bottom padding gave the frame the last pixel of
+the viewport and sat the card directly on the page edge.
 
 The whole class string is exported from `packages/ui` as a single const and imported by the shell, so
 the attribute name and the selector that matches it cannot drift apart. Tailwind still sees the

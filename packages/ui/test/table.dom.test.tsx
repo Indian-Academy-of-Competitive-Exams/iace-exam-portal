@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { DataTable, type DataTableColumn } from '../src/components/ui/data-table';
-import { TableFrame } from '../src/components/ui/table-frame';
+import { PAGE_CONTENT_CLASS, TableFrame } from '../src/components/ui/table-frame';
 import { Pagination } from '../src/components/ui/pagination';
 
 afterEach(cleanup);
@@ -110,6 +110,18 @@ describe('table rows', () => {
 });
 
 describe('TableFrame', () => {
+  /**
+   * A framed page stops the wrapper scrolling, not its padding. Zeroing the bottom
+   * gave the frame the last pixel of the viewport and sat the card on the page edge.
+   */
+  it('keeps the page padding it is framed inside', () => {
+    assert.ok(
+      !/pb-0/.test(PAGE_CONTENT_CLASS),
+      'the frame shortens to fit the padding; it does not eat it',
+    );
+    assert.match(PAGE_CONTENT_CLASS, /py-8/);
+  });
+
   /** The shell's content wrapper reacts to this attribute; without it the page scrolls. */
   it('marks the page as framed only when it is', () => {
     const { container, rerender } = render(<TableFrame>{table()}</TableFrame>);
