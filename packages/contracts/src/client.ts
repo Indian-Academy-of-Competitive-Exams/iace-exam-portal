@@ -495,12 +495,18 @@ export function createApiClient(options: ApiClientOptions) {
             schema: adminSchema,
           }),
 
-        /** Soft-delete + prune every grant. Not a hard delete: an admin who
-         *  created records stays referenced by them. */
-        deactivate: (id: string): Promise<NoContent> =>
-          request(ADMIN_ADMIN_ROUTES.deactivate(id), {
-            method: 'DELETE',
-            schema: noContentSchema,
+        /**
+         * Switch an account off or back on.
+         *
+         * Deactivating prunes every grant. Reactivating deliberately does NOT
+         * restore them — they were revoked, and quietly handing them back
+         * would make deactivation a pause rather than a removal.
+         */
+        setActive: (id: string, isActive: boolean): Promise<Admin> =>
+          request(ADMIN_ADMIN_ROUTES.setActive(id), {
+            method: 'PATCH',
+            body: { isActive },
+            schema: adminSchema,
           }),
       },
 

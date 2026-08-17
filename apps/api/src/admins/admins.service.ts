@@ -148,7 +148,9 @@ export class AdminsService {
   }
 
   async update(id: string, input: UpdateAdminBody): Promise<AdminDto> {
-    await this.requireActive(id);
+    // requireAdmin, not requireActive: renaming a deactivated admin, or making
+    // one a super admin before switching them back on, are both reasonable.
+    await this.requireAdmin(id);
     const row = await this.prisma.admin.update({
       where: { id },
       data: {
@@ -160,42 +162,56 @@ export class AdminsService {
   }
 
   /**
-   * Switch the account off, and prune every grant in the same transaction.
+   * Switch an account off, or back on.
    *
-   * The pruning is the point. `adminIds` is a denormalized array with no
-   * foreign key, so nothing else would ever remove the id: a deactivated
-   * admin's grants would sit there indefinitely and come back the moment the
-   * account was reactivated — silently re-granting access somebody revoked by
-   * deactivating them. Doing it in one transaction means there is no window in
-   * which the account is gone but the grants are not.
+   * Deactivating prunes every grant in the same transaction as the flag. The
+   * pruning is the point: `adminIds` is a denormalized array with no foreign
+   * key, so nothing else would ever remove the id, and one transaction means
+   * there is no window where the account is off but the grants are not.
+   *
+   * REACTIVATING DOES NOT GIVE THEM BACK. They were revoked, and quietly
+   * restoring them would make deactivation a pause rather than a removal — the
+   * one thing it must not be. A restored admin comes back able to sign in and
+   * holding nothing, and a super admin re-grants what they should have.
+   *
+   * The row is never removed either way: `createdById` on everything they made
+   * points at it, and the account still appears in the list marked Deactivated.
    */
-  async deactivate(id: string, actingAdminId: string): Promise<void> {
-    if (id === actingAdminId) {
-      // Locking yourself out is recoverable only with database access, so it is
-      // refused rather than confirmed.
+  async setActive(id: string, isActive: boolean, actingAdminId: string): Promise<AdminDto> {
+    if (!isActive && id === actingAdminId) {
+      // Switching yourself off is undone only by another super admin — or, if
+      // you were the last one, only with database access.
       throw new AppException(ErrorCodes.CONFLICT, 'You cannot deactivate your own account');
     }
-    await this.requireActive(id);
+    await this.requireAdmin(id);
 
-    await this.prisma.$transaction(async (tx) => {
-      // Deactivation is not deletion: the account still exists, still signs
-      // in, and still appears in this list marked Deactivated. An Admin row is
-      // never removed at all — `createdById` on everything they made points at
-      // it — which is why the model no longer carries a deletedAt to get this
-      // wrong with.
-      await tx.admin.update({ where: { id }, data: { isActive: false } });
+    if (isActive) {
+      const row = await this.prisma.admin.update({ where: { id }, data: { isActive: true } });
+      // Read the grants back rather than assuming none: a super admin may have
+      // granted something while the account was switched off.
+      return this.toAdminDto(row, await this.permissionsFor(id));
+    }
+
+    // The update returns the row, so the transaction hands back what to
+    // report — no second read, and no chance of reporting a state that
+    // something else changed in between.
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.admin.update({ where: { id }, data: { isActive: false } });
 
       const holding = await tx.featurePermission.findMany({
         where: { adminIds: { has: id } },
         select: { id: true, adminIds: true },
       });
-      for (const row of holding) {
+      for (const perm of holding) {
         await tx.featurePermission.update({
-          where: { id: row.id },
-          data: { adminIds: row.adminIds.filter((adminId) => adminId !== id) },
+          where: { id: perm.id },
+          data: { adminIds: perm.adminIds.filter((adminId) => adminId !== id) },
         });
       }
+      return updated;
     });
+
+    return this.toAdminDto(row, {});
   }
 
   // ==========================================================================
@@ -323,8 +339,18 @@ export class AdminsService {
   // Internals
   // ==========================================================================
 
+  /** Exists at all — the right check when the point is to change their state. */
+  private async requireAdmin(id: string): Promise<void> {
+    const admin = await this.prisma.admin.findUnique({ where: { id }, select: { id: true } });
+    if (!admin) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
+  }
+
+  /**
+   * Exists AND is switched on — the right check before a grant, because
+   * granting to a deactivated admin hands back what deactivation just removed.
+   */
   private async requireActive(id: string): Promise<void> {
-    const admin = await this.prisma.admin.findFirst({
+    const admin = await this.prisma.admin.findUnique({
       where: { id },
       select: { id: true, isActive: true },
     });

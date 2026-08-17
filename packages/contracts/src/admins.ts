@@ -223,6 +223,15 @@ export const createAdminSchema = z.object({
 export type CreateAdminInput = z.input<typeof createAdminSchema>;
 export type CreateAdminBody = z.infer<typeof createAdminSchema>;
 
+/**
+ * Switching an account on or off, both directions through one endpoint —
+ * matching `setStudentActiveSchema`, because it is the same decision about a
+ * different table and two shapes for it would only invite drift.
+ */
+export const setAdminActiveSchema = z.object({ isActive: z.boolean() });
+export type SetAdminActiveInput = z.input<typeof setAdminActiveSchema>;
+export type SetAdminActiveBody = z.infer<typeof setAdminActiveSchema>;
+
 export const updateAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   isSuperAdmin: z.boolean().optional(),
@@ -296,7 +305,13 @@ export const ADMIN_ADMIN_ROUTES = {
   list: '/admin/admins',
   create: '/admin/admins',
   update: (id: string) => `/admin/admins/${id}`,
-  deactivate: (id: string) => `/admin/admins/${id}`,
+  /**
+   * One route for both directions. Deactivating used to be a DELETE, which
+   * read as "remove this admin" — and it never did: the row survives because
+   * `createdById` on everything they made points at it. A PATCH on `active`
+   * says what actually happens, and gives reactivation somewhere to live.
+   */
+  setActive: (id: string) => `/admin/admins/${id}/active`,
 } as const;
 
 export const ADMIN_FEATURE_ROUTES = {

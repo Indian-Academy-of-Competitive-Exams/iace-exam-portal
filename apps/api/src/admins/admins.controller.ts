@@ -1,20 +1,10 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ActorTypes,
   adminListQuerySchema,
   createAdminSchema,
   createFeatureSchema,
+  setAdminActiveSchema,
   featureKeySchema,
   permissionGrantSchema,
   permissionLevelSchema,
@@ -25,6 +15,7 @@ import {
   type CreateAdminBody,
   type Feature,
   type PermissionGrantBody,
+  type SetAdminActiveBody,
   type StudentSyncResult,
   type UpdateAdminBody,
 } from '@iace/contracts';
@@ -77,15 +68,17 @@ export class AdminsController {
   }
 
   /**
-   * 200, not 204. Every response in this API is an envelope, and a 204 carries
-   * no body — so the client would read empty text where it expects
-   * `{ success, data: null, meta }` and fail with "unexpected response shape".
-   * Same reason `branches.remove` is an explicit OK.
+   * Both directions, one route — the same shape students already use. It was a
+   * DELETE, which read as "remove this admin" and never did: the row survives
+   * because `createdById` on everything they made points at it.
    */
-  @Delete('admins/:id')
-  @HttpCode(HttpStatus.OK)
-  async deactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
-    await this.admins.deactivate(id, user.id);
+  @Patch('admins/:id/active')
+  setActive(
+    @Param('id') id: string,
+    @Body(new ZodBody(setAdminActiveSchema)) body: SetAdminActiveBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Admin> {
+    return this.admins.setActive(id, body.isActive, user.id);
   }
 
   @Get('features')

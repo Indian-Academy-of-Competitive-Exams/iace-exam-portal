@@ -175,7 +175,7 @@ describe('AdminsService — admins', () => {
   });
 });
 
-describe('AdminsService — deactivate', () => {
+describe('AdminsService — setActive', () => {
   it('prunes every grant, so reactivating never silently restores access', async () => {
     // THE failure this feature exists to prevent. adminIds is a denormalized
     // array with no foreign key, so nothing else would ever remove the id: the
@@ -191,7 +191,7 @@ describe('AdminsService — deactivate', () => {
       });
     }
 
-    await ctx.service.deactivate('adm_1', ACTOR);
+    await ctx.service.setActive('adm_1', false, ACTOR);
 
     assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {});
     assert.deepEqual(
@@ -209,7 +209,7 @@ describe('AdminsService — deactivate', () => {
     // deletedAt for this to get wrong.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
 
-    await ctx.service.deactivate('adm_1', ACTOR);
+    await ctx.service.setActive('adm_1', false, ACTOR);
 
     const row = ctx.prisma.admins.find((a) => a.id === 'adm_1');
     assert.ok(row, 'the row must survive — other records reference the id');
@@ -218,7 +218,7 @@ describe('AdminsService — deactivate', () => {
 
   it('leaves a deactivated admin visible in the list', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await ctx.service.deactivate('adm_1', ACTOR);
+    await ctx.service.setActive('adm_1', false, ACTOR);
 
     const listed = await ctx.service.list({
       page: 1,
@@ -244,7 +244,7 @@ describe('AdminsService — deactivate', () => {
       });
     }
 
-    await ctx.service.deactivate('adm_1', ACTOR);
+    await ctx.service.setActive('adm_1', false, ACTOR);
 
     assert.deepEqual(await ctx.service.permissionsFor('adm_2'), {
       [FEATURE_KEYS.STUDENT_MANAGEMENT]: PERMISSION_LEVELS.READ,
@@ -255,19 +255,70 @@ describe('AdminsService — deactivate', () => {
     const ctx = build([makeAdminRow({ id: ACTOR })]);
 
     await assert.rejects(
-      () => ctx.service.deactivate(ACTOR, ACTOR),
+      () => ctx.service.setActive(ACTOR, false, ACTOR),
       (error: unknown) => AppException.is(error) && error.code === 'CONFLICT',
     );
   });
 
-  it('refuses an admin who is already deactivated', async () => {
-    // There is no longer a "deleted" state to test — an Admin row cannot be
-    // removed, so already-off is the only way to be unavailable.
-    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: false })]);
+  it('refuses an id that is not an admin at all', async () => {
+    const ctx = build([]);
 
     await assert.rejects(
-      () => ctx.service.deactivate('adm_1', ACTOR),
+      () => ctx.service.setActive('nobody', false, ACTOR),
       (error: unknown) => AppException.is(error) && error.code === 'NOT_FOUND',
+    );
+  });
+
+  it('switches a deactivated admin back on', async () => {
+    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: false })]);
+
+    const restored = await ctx.service.setActive('adm_1', true, ACTOR);
+
+    assert.equal(restored.isActive, true);
+    assert.equal(ctx.prisma.admins.find((a) => a.id === 'adm_1')?.isActive, true);
+  });
+
+  it('does NOT hand back the grants deactivation took away', async () => {
+    // The rule that keeps deactivation a removal rather than a pause. If
+    // reactivating restored access, switching someone off would only ever be
+    // temporary, and nobody would be able to tell what they still hold.
+    const ctx = build([makeAdminRow({ id: 'adm_1' })]);
+    await ctx.service.createFeature({ key: FEATURE_KEYS.STUDENT_MANAGEMENT });
+    await ctx.service.grant({
+      featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
+      level: PERMISSION_LEVELS.WRITE,
+      adminId: 'adm_1',
+    });
+
+    await ctx.service.setActive('adm_1', false, ACTOR);
+    const restored = await ctx.service.setActive('adm_1', true, ACTOR);
+
+    assert.deepEqual(restored.permissions, {}, 'reactivation must not restore grants');
+    assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {});
+  });
+
+  it('shows a grant made while the account was switched off', async () => {
+    // The map is read back rather than assumed empty — a super admin may have
+    // prepared their access before switching them on again.
+    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: false })]);
+    await ctx.service.createFeature({ key: FEATURE_KEYS.TEST_MANAGEMENT });
+    ctx.prisma.permissions
+      .filter((perm) => perm.level === PERMISSION_LEVELS.READ)
+      .forEach((perm) => perm.adminIds.push('adm_1'));
+
+    const restored = await ctx.service.setActive('adm_1', true, ACTOR);
+
+    assert.deepEqual(restored.permissions, {
+      [FEATURE_KEYS.TEST_MANAGEMENT]: PERMISSION_LEVELS.READ,
+    });
+  });
+
+  it('still refuses to switch off the caller, in either direction of the guard', async () => {
+    const ctx = build([makeAdminRow({ id: ACTOR })]);
+
+    await assert.rejects(
+      () => ctx.service.setActive(ACTOR, false, ACTOR),
+      (error: unknown) => AppException.is(error) && error.code === 'CONFLICT',
     );
   });
 });

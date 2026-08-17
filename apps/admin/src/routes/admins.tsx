@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Loader2, Plus, ShieldCheck, UserMinus } from 'lucide-react';
+import { Loader2, Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
   PAGE_SIZE_OPTIONS,
@@ -91,7 +91,7 @@ function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
     {
       key: 'actions',
       className: 'text-right',
-      cell: (a) => <DeactivateButton admin={a} onChanged={refresh} />,
+      cell: (a) => <ActiveToggle admin={a} onChanged={refresh} />,
     },
   ];
 }
@@ -189,32 +189,56 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   );
 }
 
-function DeactivateButton({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
-  const deactivate = useMutation({
-    meta: { success: 'Admin deactivated. Their grants were removed.' },
-    mutationFn: () => api.admin.admins.deactivate(admin.id),
+/**
+ * Switch an account off, or back on.
+ *
+ * One control for both, because they are one decision seen from two sides —
+ * and an account with no action at all beside it (which is what a deactivated
+ * row used to show) reads as permanently stuck rather than as switched off.
+ */
+function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
+  const setActive = useMutation({
+    meta: {
+      success: admin.isActive
+        ? 'Admin deactivated. Their grants were removed.'
+        : 'Admin reactivated. Grant them access again on the Permissions screen.',
+    },
+    mutationFn: () => api.admin.admins.setActive(admin.id, !admin.isActive),
     onSuccess: onChanged,
   });
 
-  if (!admin.isActive) return null;
+  const busy = setActive.isPending;
+
+  if (!admin.isActive) {
+    return (
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => setActive.mutate()}>
+        {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserCheck aria-hidden />}
+        Reactivate
+      </Button>
+    );
+  }
 
   return (
     <Button
       variant="destructive"
       size="sm"
-      disabled={deactivate.isPending}
+      disabled={busy}
       onClick={() => {
         // A confirm, because it signs somebody out and drops every grant they
-        // hold — and re-granting them is manual work for whoever did it.
-        if (!globalThis.confirm(`Deactivate ${admin.email}? Their grants will be removed.`)) return;
-        deactivate.mutate();
+        // hold — and reactivating does NOT bring those back, so re-granting is
+        // manual work for whoever does it. Saying so here is the difference
+        // between an undo and a surprise.
+        if (
+          !globalThis.confirm(
+            `Deactivate ${admin.email}? Their grants are removed and are NOT restored if you switch them back on.`,
+          )
+        ) {
+          return;
+        }
+        setActive.mutate();
       }}
     >
-      {deactivate.isPending ? (
-        <Loader2 className="animate-spin" aria-hidden />
-      ) : (
-        <UserMinus aria-hidden />
-      )}
+      {busy ? <Loader2 className="animate-spin" aria-hidden /> : <UserMinus aria-hidden />}
       Deactivate
     </Button>
   );
