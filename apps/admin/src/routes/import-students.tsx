@@ -22,6 +22,7 @@ import {
   LoadingState,
   linkVariants,
   PageHeader,
+  StatRow,
   Table,
   TableBody,
   TableCell,
@@ -205,11 +206,11 @@ export function ImportStudentsPage() {
                 <CardTitle>What this would do</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
-                <Summary label="Rows read" value={plan.summary.total} />
-                <Summary label="New students" value={plan.summary.willCreate} />
-                <Summary label="Existing students updated" value={plan.summary.willUpdate} />
-                <Summary label="Skipped (have errors)" value={plan.summary.invalid} />
-                <Summary
+                <StatRow label="Rows read" value={plan.summary.total} />
+                <StatRow label="New students" value={plan.summary.willCreate} />
+                <StatRow label="Existing students updated" value={plan.summary.willUpdate} />
+                <StatRow label="Skipped (have errors)" value={plan.summary.invalid} />
+                <StatRow
                   label="Given a starting PIN"
                   value={plan.rows.filter((row) => row.willReceiveDefaultPin).length}
                 />
@@ -219,15 +220,6 @@ export function ImportStudentsPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function Summary({ label, value }: Readonly<{ label: string; value: number }>) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums text-foreground">{value}</span>
-    </div>
   );
 }
 

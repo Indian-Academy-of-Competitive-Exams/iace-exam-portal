@@ -21,6 +21,7 @@ import {
   LoadingState,
   linkVariants,
   PageHeader,
+  StatRow,
   Table,
   TableBody,
   TableCell,
@@ -220,10 +221,10 @@ export function ImportGroupMembersPage() {
                 <CardTitle>What this would do</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
-                <Summary label="Numbers read" value={plan.summary.total} />
-                <Summary label="Will be added" value={plan.summary.willAdd} />
-                <Summary label="Already in this group" value={plan.summary.alreadyMembers} />
-                <Summary label="Skipped (have errors)" value={plan.summary.invalid} />
+                <StatRow label="Numbers read" value={plan.summary.total} />
+                <StatRow label="Will be added" value={plan.summary.willAdd} />
+                <StatRow label="Already in this group" value={plan.summary.alreadyMembers} />
+                <StatRow label="Skipped (have errors)" value={plan.summary.invalid} />
               </CardContent>
             </Card>
           ) : null}
@@ -271,15 +272,6 @@ function ImportBanners({
         </Alert>
       )}
     </>
-  );
-}
-
-function Summary({ label, value }: Readonly<{ label: string; value: number }>) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums text-foreground">{value}</span>
-    </div>
   );
 }
 

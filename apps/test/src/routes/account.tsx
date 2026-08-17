@@ -1,4 +1,4 @@
-import { Controller, useForm, type Control, type FieldPath } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { KeyRound } from 'lucide-react';
@@ -11,9 +11,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Field,
   PageHeader,
-  PinInput,
+  PinField,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
@@ -89,19 +88,21 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
         >
           <PinField
             name="currentPin"
-            control={form.control}
+            form={form}
             label={onDefaultPin ? 'PIN you were given' : 'Current PIN'}
+            length={PIN_LENGTH}
+            masked
             autoComplete="current-password"
-            error={form.formState.errors.currentPin?.message}
             hint={onDefaultPin ? 'The first four digits of your mobile number.' : undefined}
           />
 
           <PinField
             name="newPin"
-            control={form.control}
+            form={form}
             label="New PIN"
+            length={PIN_LENGTH}
+            masked
             autoComplete="new-password"
-            error={form.formState.errors.newPin?.message}
             hint={`${PIN_LENGTH} digits.`}
           />
 
@@ -111,51 +112,5 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
         </form>
       </CardContent>
     </Card>
-  );
-}
-
-/**
- * A PIN as four boxes, wired to react-hook-form.
- *
- * `Controller` rather than `register`: the boxes RENDER the value, so an
- * uncontrolled input would keep the digits somewhere nothing re-reads — and the
- * `form.reset()` after a successful change would leave four filled boxes
- * standing over an empty field.
- */
-function PinField({
-  name,
-  control,
-  label,
-  autoComplete,
-  hint,
-  error,
-}: Readonly<{
-  name: FieldPath<ChangePinInput>;
-  control: Control<ChangePinInput>;
-  label: string;
-  autoComplete: 'current-password' | 'new-password';
-  hint?: string;
-  error?: string;
-}>) {
-  return (
-    <Field htmlFor={name} label={label} hint={hint} error={error}>
-      {(wiring) => (
-        <Controller
-          name={name}
-          control={control}
-          render={({ field: { value, ...field } }) => (
-            <PinInput
-              {...wiring}
-              {...field}
-              value={value}
-              length={PIN_LENGTH}
-              masked
-              autoComplete={autoComplete}
-              invalid={Boolean(error)}
-            />
-          )}
-        />
-      )}
-    </Field>
   );
 }

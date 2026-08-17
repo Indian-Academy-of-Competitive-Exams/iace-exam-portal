@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -17,7 +17,8 @@ import {
   CardTitle,
   Field,
   Input,
-  PinInput,
+  PinField,
+  StepIcon,
   ThemeToggle,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -181,29 +182,16 @@ function CodeStep({
           onSubmit={form.handleSubmit((values) => verify.mutate(values))}
           noValidate
         >
-          <Field htmlFor="code" label="One-time code" error={form.formState.errors.code?.message}>
-            {(wiring) => (
-              <Controller
-                name="code"
-                control={form.control}
-                // Controlled, because the boxes render the value: `register`
-                // would leave the digits in the DOM where nothing draws them.
-                render={({ field: { value, ...field } }) => (
-                  <PinInput
-                    {...wiring}
-                    {...field}
-                    value={value}
-                    // The server decides how long a code is; the boxes follow
-                    // it rather than assuming six.
-                    length={challenge.codeLength}
-                    autoFocus
-                    autoComplete="one-time-code"
-                    invalid={Boolean(form.formState.errors.code)}
-                  />
-                )}
-              />
-            )}
-          </Field>
+          <PinField
+            name="code"
+            form={form}
+            label="One-time code"
+            // The server decides how long a code is; the boxes follow it rather
+            // than assuming six.
+            length={challenge.codeLength}
+            autoFocus
+            autoComplete="one-time-code"
+          />
 
           {challenge.devCode ? (
             <Alert variant="info">
@@ -232,10 +220,3 @@ function CodeStep({
 // ---------------------------------------------------------------------------
 
 /** Brand-tinted accent, matching the test app. */
-function StepIcon({ icon: Icon }: Readonly<{ icon: typeof Mail }>) {
-  return (
-    <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
-      <Icon className="size-5 text-primary" aria-hidden />
-    </div>
-  );
-}

@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-  Controller,
-  useForm,
-  type Control,
-  type FieldPath,
-  type FieldValues,
-  type UseFormRegisterReturn,
-} from 'react-hook-form';
+import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -36,7 +29,8 @@ import {
   CardTitle,
   Field,
   NumericInput,
-  PinInput,
+  PinField,
+  StepIcon,
   ThemeToggle,
   digitsOnly,
 } from '@iace/ui';
@@ -175,20 +169,14 @@ function SignInStep({
           onSubmit={form.handleSubmit((values) => login.mutate(values))}
           noValidate
         >
-          <MobileField
-            autoFocus
-            error={form.formState.errors.mobile?.message}
-            register={form.register('mobile')}
-          />
-          <DigitsField
+          <MobileField autoFocus register={form.register('mobile')} />
+          <PinField
             name="pin"
-            control={form.control}
-            id="pin"
+            form={form}
             label="PIN"
             length={PIN_LENGTH}
             masked
             autoComplete="current-password"
-            error={form.formState.errors.pin?.message}
           />
 
           <Button type="submit" loading={login.isPending}>
@@ -262,11 +250,7 @@ function MobileStep({
           onSubmit={form.handleSubmit((values) => requestOtp.mutate(values))}
           noValidate
         >
-          <MobileField
-            autoFocus
-            error={form.formState.errors.mobile?.message}
-            register={form.register('mobile')}
-          />
+          <MobileField autoFocus register={form.register('mobile')} />
 
           <Button type="submit" loading={requestOtp.isPending}>
             Send code
@@ -324,17 +308,15 @@ function CodeStep({
           onSubmit={form.handleSubmit((values) => verify.mutate(values))}
           noValidate
         >
-          <DigitsField
+          <PinField
             name="code"
-            control={form.control}
-            id="code"
+            form={form}
             label="One-time code"
             // The server decides how long a code is; the boxes follow it rather
             // than assuming six.
             length={challenge.codeLength}
             autoFocus
             autoComplete="one-time-code"
-            error={form.formState.errors.code?.message}
           />
 
           {challenge.devCode ? (
@@ -405,27 +387,23 @@ function SetPinStep({
           onSubmit={form.handleSubmit((values) => setPin.mutate(values))}
           noValidate
         >
-          <DigitsField
+          <PinField
             name="pin"
-            control={form.control}
-            id="pin"
+            form={form}
             label="New PIN"
             length={PIN_LENGTH}
             masked
             autoFocus
             autoComplete="new-password"
             hint={`${PIN_LENGTH} digits — avoid 1234 or all one digit`}
-            error={form.formState.errors.pin?.message}
           />
-          <DigitsField
+          <PinField
             name="confirmPin"
-            control={form.control}
-            id="confirmPin"
+            form={form}
             label="Confirm PIN"
             length={PIN_LENGTH}
             masked
             autoComplete="new-password"
-            error={form.formState.errors.confirmPin?.message}
           />
 
           <Button type="submit" loading={setPin.isPending}>
@@ -446,13 +424,6 @@ function SetPinStep({
  * 10% the tint reads as an accent, not as a filled state, and it gives each
  * card a focal point instead of opening on a bare heading.
  */
-function StepIcon({ icon: Icon }: Readonly<{ icon: typeof KeyRound }>) {
-  return (
-    <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
-      <Icon className="size-5 text-primary" aria-hidden />
-    </div>
-  );
-}
 
 /** The mobile input is identical on three of the four screens. */
 function MobileField({
@@ -489,61 +460,6 @@ function MobileField({
           prefix="+91"
           invalid={Boolean(error)}
           className="tabular-nums"
-        />
-      )}
-    </Field>
-  );
-}
-
-/**
- * A code entered one box per digit \u2014 the PIN and the OTP are the same control.
- *
- * `Controller` rather than `register`, because the boxes are a RENDERING of the
- * value rather than the value itself. An uncontrolled input keeps its digits in
- * the DOM where nothing re-renders, so the boxes would never fill \u2014 and
- * `form.reset()` would clear the field while leaving them filled on screen.
- */
-function DigitsField<TFieldValues extends FieldValues>({
-  name,
-  control,
-  id,
-  label,
-  length,
-  autoComplete,
-  masked,
-  autoFocus,
-  hint,
-  error,
-}: Readonly<{
-  name: FieldPath<TFieldValues>;
-  control: Control<TFieldValues>;
-  id: string;
-  label: string;
-  length: number;
-  autoComplete: 'one-time-code' | 'new-password' | 'current-password';
-  masked?: boolean;
-  autoFocus?: boolean;
-  hint?: string;
-  error?: string;
-}>) {
-  return (
-    <Field htmlFor={id} label={label} hint={hint} error={error}>
-      {(wiring) => (
-        <Controller
-          name={name}
-          control={control}
-          render={({ field: { value, ...field } }) => (
-            <PinInput
-              {...wiring}
-              {...field}
-              value={String(value ?? '')}
-              length={length}
-              masked={masked}
-              autoFocus={autoFocus}
-              autoComplete={autoComplete}
-              invalid={Boolean(error)}
-            />
-          )}
         />
       )}
     </Field>

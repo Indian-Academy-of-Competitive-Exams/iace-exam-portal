@@ -3,6 +3,9 @@ export { Button, buttonVariants, type ButtonProps } from './components/ui/button
 export { Input, type InputProps } from './components/ui/input';
 export { NumericInput, digitsOnly, type NumericInputProps } from './components/ui/numeric-input';
 export { PinInput, type PinInputProps } from './components/ui/pin-input';
+export { PinField, type PinFieldProps } from './components/ui/pin-field';
+export { StatRow, type StatRowProps } from './components/ui/stat-row';
+export { StepIcon, type StepIconProps } from './components/ui/step-icon';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
 export {
