@@ -24,7 +24,13 @@ const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const PACKAGES = [
   { dir: 'apps/api', env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' } },
   { dir: 'packages/contracts', env: {} },
-  { dir: 'packages/ui', env: {} },
+  {
+    dir: 'packages/ui',
+    env: { TSX_TSCONFIG_PATH: 'test/tsconfig.json' },
+    // The component tests render into jsdom, installed before any test loads.
+    imports: ['./test/support/dom.ts'],
+    globs: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+  },
   { dir: 'packages/app-kit', env: {} },
 ];
 
@@ -42,13 +48,14 @@ for (const pkg of PACKAGES) {
       [
         '--import',
         'tsx',
+        ...(pkg.imports ?? []).flatMap((module) => ['--import', module]),
         '--test',
         '--experimental-test-coverage',
         '--test-reporter=lcov',
         `--test-reporter-destination=${join(out, 'lcov.info')}`,
         '--test-reporter=dot',
         '--test-reporter-destination=stdout',
-        'test/**/*.test.ts',
+        ...(pkg.globs ?? ['test/**/*.test.ts']),
       ],
       { cwd, env: { ...process.env, ...pkg.env }, stdio: ['ignore', 'pipe', 'pipe'] },
     );

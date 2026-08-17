@@ -63,13 +63,18 @@ export function useDebouncedSearch(
 ): DebouncedSearch {
   const [draft, setDraft] = React.useState(value);
   const committed = React.useRef(value);
+  /** The last `value` the parent actually gave us — not the last one we sent. */
+  const seen = React.useRef(value);
   const debouncer = React.useRef<Debouncer>(undefined);
   debouncer.current ??= createDebouncer(delay);
 
   React.useEffect(() => {
-    if (value === committed.current) return;
-    committed.current = value;
-    setDraft(value);
+    // Gated on the PARENT having moved, not on `value` differing from our own
+    // commit: a parent that has not applied the commit yet still holds the old
+    // term, and reading that as an outside change puts the old text back.
+    if (value === seen.current) return;
+    seen.current = value;
+    if (value !== committed.current) setDraft(value);
   }, [value]);
 
   // A pending search after unmount would query for a screen nobody is on.

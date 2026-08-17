@@ -16,26 +16,6 @@ const dialog = read('src/components/ui/dialog.tsx');
 const components = read('src/components.css');
 
 describe('dialog', () => {
-  /** Radix focuses the first focusable child, so the choice is taken away from DOM order. */
-  it('gives the opening focus to Cancel, never the destructive button', () => {
-    assert.match(
-      dialog,
-      /onOpenAutoFocus=\{\(event\) => \{\s*event\.preventDefault\(\);\s*cancelRef\.current\?\.focus\(\);/,
-      'ConfirmDialog must move initial focus to the cancel button itself',
-    );
-  });
-
-  /** Dismissing mid-request leaves the reader guessing whether it happened. */
-  it('cannot be dismissed while the action it started is running', () => {
-    for (const handler of ['onEscapeKeyDown', 'onPointerDownOutside', 'onInteractOutside']) {
-      assert.ok(
-        dialog.includes(`${handler}={blockWhileLoading}`),
-        `${handler} must be blocked while loading`,
-      );
-    }
-    assert.match(dialog, /if \(loading\) event\.preventDefault\(\)/);
-  });
-
   /** One definition per component: the raw CSS copy could not trap focus. */
   it('is the only modal definition — components.css declares no .modal', () => {
     assert.ok(!/^\.modal/m.test(components), 'components.css must not declare .modal classes');
