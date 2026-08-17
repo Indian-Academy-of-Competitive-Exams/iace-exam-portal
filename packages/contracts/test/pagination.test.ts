@@ -8,12 +8,7 @@ import {
   paginationQuerySchema,
 } from '../src/envelope';
 
-/**
- * The options the UI offers and the cap the API enforces live beside each
- * other so they cannot drift. These tests are what makes that true: a picker
- * offering a size the server refuses is a control that looks generous and is
- * simply broken.
- */
+/** A picker offering a size the server refuses looks generous and is broken. */
 describe('page size options', () => {
   it('every offered size is one the API will accept', () => {
     for (const size of PAGE_SIZE_OPTIONS) {
@@ -40,11 +35,7 @@ describe('page size options', () => {
     assert.equal(isPageSizeOption(PAGE_SIZE_MAX + 1), false);
   });
 
-  /**
-   * The failure this prevents: a stored preference — a stale localStorage
-   * value, a hand-edited one — is sent verbatim and every list 400s until the
-   * reader thinks to clear their browser storage.
-   */
+  /** A stale stored preference would be sent verbatim and 400 every list. */
   it('rejects the shapes a persisted preference degrades into', () => {
     assert.equal(isPageSizeOption('20'), false);
     assert.equal(isPageSizeOption(null), false);

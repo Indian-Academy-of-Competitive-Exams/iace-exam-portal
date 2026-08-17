@@ -2,35 +2,15 @@ import { z, type ZodType } from 'zod';
 
 // ============================================================================
 // The one response envelope.
-//
-// Every response this API produces has exactly one of two shapes:
-//
 //   success  { success: true,  data, meta }
 //   failure  { success: false, error: { code, message, fieldErrors? }, meta }
-//
-// Nothing else is possible: the API wraps handler returns in a response
-// interceptor and funnels every thrown value through one exception filter, so a
-// controller literally cannot emit another shape. The typed client is the
-// mirror image — it unwraps `data` and throws `AppException` on failure, so
-// React Query only ever sees plain data or a typed error.
-//
-// React to `error.code`. Never string-match `message`: the codes are a stable
-// contract, the wording is not.
+// An interceptor wraps returns and one exception filter maps every throw, so a
+// controller cannot emit another shape. React to `error.code`, never to `message`.
 // ============================================================================
 
 /**
- * The stable error vocabulary, declared once. Add to it; never repurpose an
- * existing member — a code that changes meaning breaks every client that was
- * branching on it, silently.
- *
- * ALWAYS throw with the constant, never the bare string:
- *
- *     throw new AppException(ErrorCodes.PIN_LOCKED, '…');   // yes
- *     throw new AppException('PIN_LOCKED', '…');            // no
- *
- * Both compile — the type is a union of literals — but only the first fails at
- * the call site when a code is renamed, and only the first is findable by
- * "go to references" when you need every place a code is raised.
+ * The stable error vocabulary. Add to it; never repurpose a member.
+ * Throw with the constant — `AppException(ErrorCodes.PIN_LOCKED, …)`, never the bare string.
  */
 export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
@@ -50,10 +30,7 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 export const errorCodeSchema = z.enum(ErrorCodes);
 
-/**
- * The HTTP status each code answers with. Callers should branch on the code,
- * but the status still has to be right for proxies, caches and the browser.
- */
+/** The status each code answers with — right for proxies and caches, even though callers use the code. */
 export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.VALIDATION_ERROR]: 400,
   [ErrorCodes.UNAUTHENTICATED]: 401,
@@ -90,11 +67,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
 // Shapes
 // ============================================================================
 
-/**
- * Rides on every response, success or failure. `requestId` is echoed in the
- * `X-Request-Id` header and in the server log line for the same request, which
- * is what turns a screenshot of an error into a log query.
- */
+/** On every response. `requestId` is echoed in the header and the log line for the same request. */
 export const metaSchema = z.object({
   requestId: z.string(),
   /** List endpoints only. */
@@ -104,17 +77,10 @@ export const metaSchema = z.object({
 });
 export type Meta = z.infer<typeof metaSchema>;
 
-/**
- * The key `fieldErrors` uses for problems that belong to the request as a whole
- * rather than one input — the API writes it, a form shows it as a summary.
- */
+/** The `fieldErrors` key for problems belonging to the whole request rather than one input. */
 export const FORM_LEVEL_FIELD = '_';
 
-/**
- * `fieldErrors` is keyed by form field name and feeds react-hook-form directly.
- * `details` is free-form context for the client (never internals — see the
- * exception filter).
- */
+/** `fieldErrors` feeds react-hook-form directly. `details` is client context, never internals. */
 export const apiErrorSchema = z.object({
   code: errorCodeSchema,
   message: z.string(),
@@ -130,10 +96,7 @@ export const apiFailureSchema = z.object({
 });
 export type ApiFailure = z.infer<typeof apiFailureSchema>;
 
-/**
- * For endpoints whose whole answer is "it worked". `success: true` already says
- * that, so the payload is `null` rather than a second success flag inside it.
- */
+/** For endpoints whose whole answer is "it worked" — the payload is `null`. */
 export const noContentSchema = z.null();
 export type NoContent = z.infer<typeof noContentSchema>;
 
@@ -151,25 +114,15 @@ export function apiSuccessSchema<T extends ZodType>(
 }
 
 // ============================================================================
-// Pagination
-//
-// A list handler returns this shape and the interceptor splits it: `items`
-// becomes `data`, the counts become `meta`. The client reassembles it, so both
-// ends speak in whole pages and only the wire format is split.
+// Pagination. A handler returns this; the interceptor splits `items` into `data`
+// and the counts into `meta`, and the client reassembles it.
 // ============================================================================
 
 /** Defaults every list endpoint shares, so paging behaves the same everywhere. */
 export const PAGE_SIZE_DEFAULT = 20;
 export const PAGE_SIZE_MAX = 100;
 
-/**
- * The sizes a list offers the reader.
- *
- * Shared rather than per-screen so every table asks the same question, and
- * declared beside the cap so an option can never exceed what the API accepts —
- * a picker offering a size the server rejects is a broken control, not a
- * generous one. Guarded by a test.
- */
+/** The sizes a list offers, declared beside the cap so an option cannot exceed it. */
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 
@@ -178,11 +131,7 @@ export function isPageSizeOption(value: unknown): value is PageSizeOption {
   return PAGE_SIZE_OPTIONS.includes(value as PageSizeOption);
 }
 
-/**
- * Query params every list endpoint accepts. `pageSize` is capped rather than
- * trusted: an uncapped page size turns any list into a way to pull the whole
- * table in one request.
- */
+/** `pageSize` is capped, not trusted: uncapped, any list pulls the whole table. */
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(PAGE_SIZE_MAX).default(PAGE_SIZE_DEFAULT),
@@ -225,11 +174,7 @@ export interface AppExceptionOptions {
   cause?: unknown;
 }
 
-/**
- * The one thing the API throws for an expected failure, and the one thing the
- * client throws when a response comes back `success: false`. Both sides then
- * branch on `.code`.
- */
+/** Thrown by the API for an expected failure and by the client on `success: false`. */
 export class AppException extends Error {
   readonly code: ErrorCode;
   readonly httpStatus: number;
@@ -287,11 +232,7 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
   429: ErrorCodes.RATE_LIMITED,
 };
 
-/**
- * For errors that arrive as a bare status with no envelope — a framework 404, a
- * gateway 502, a proxy that never reached us. Anything 5xx is INTERNAL; any
- * other unmapped 4xx means the request itself was unacceptable.
- */
+/** For a bare status with no envelope — a framework 404, a gateway 502. 5xx is INTERNAL. */
 export function errorCodeForStatus(status: number): ErrorCode {
   return (
     STATUS_TO_CODE[status] ?? (status >= 500 ? ErrorCodes.INTERNAL : ErrorCodes.VALIDATION_ERROR)

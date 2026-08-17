@@ -3,20 +3,11 @@ import { newPinSchema, pinSchema } from './common';
 import { studentDetailSchema, updateStudentSchema } from './students';
 
 // ============================================================================
-// The student's own account.
-//
-// Everything here is scoped to the caller by their token — there is no id in
-// any path or body. That is the whole security model of this module: a student
-// cannot address another student's record because there is nowhere to put one.
+// The student's own account, scoped by their token. There is no id in any path
+// or body, so a student cannot address another student's record.
 // ============================================================================
 
-/**
- * What a student may upload, and what each one is for.
- *
- * The kind is in the PATH rather than the body, so a request cannot ask to
- * overwrite a field it did not name — and the server decides which column each
- * kind writes to, not the client.
- */
+/** The kind is in the PATH, so a request cannot overwrite a field it did not name. */
 export const DOCUMENT_KINDS = {
   PHOTO: 'photo',
   AADHAAR: 'aadhaar',
@@ -30,11 +21,7 @@ export const DOCUMENT_KIND_VALUES = Object.values(DOCUMENT_KINDS) as [
 
 export const documentKindSchema = z.enum(DOCUMENT_KIND_VALUES);
 
-/**
- * 5MB. A phone photo of an Aadhaar card is comfortably under it, and the limit
- * is a product rule rather than an environment one — every deployment should
- * refuse the same file.
- */
+/** 5MB — a product rule, not an environment one, so every deployment refuses the same file. */
 export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** What a browser may send. Checked server-side; the picker mirrors it. */
@@ -52,39 +39,21 @@ export function acceptedTypesFor(kind: DocumentKind): readonly string[] {
   return kind === DOCUMENT_KINDS.PHOTO ? PHOTO_ACCEPTED_TYPES : DOCUMENT_ACCEPTED_TYPES;
 }
 
-/**
- * The student's own record.
- *
- * The same shape the admin sees, documents included. It was briefly two
- * schemas, back when admins were kept away from the identity documents — that
- * rule is gone, so one definition is right again.
- */
+/** The student's own record — the same shape the admin sees, documents included. */
 export const meSchema = studentDetailSchema;
 export type Me = z.infer<typeof meSchema>;
 
 /**
- * What a student may change about themselves.
- *
- * `groupIds` is omitted, not optional. Group membership is what grants access
- * to tests, so a student who could set their own groups could enrol themselves
- * in any batch in the institute. Omitting it from the schema means zod strips
- * the key before it ever reaches the service — a request carrying one is not
- * rejected, it simply has no effect.
+ * `groupIds` is omitted, not optional: membership grants test access, and zod strips
+ * the key before the service sees it, so a request carrying one has no effect.
  */
 export const updateMeSchema = updateStudentSchema.omit({ groupIds: true });
 export type UpdateMeInput = z.input<typeof updateMeSchema>;
 export type UpdateMeBody = z.infer<typeof updateMeSchema>;
 
 /**
- * Changing the PIN.
- *
- * The current PIN is required even though the caller is already authenticated:
- * a session left open on a shared machine — a library, a friend's phone —
- * would otherwise be enough to lock the real owner out of their own account.
- *
- * The RESPONSE is a fresh session. Changing a PIN ends every session opened
- * with the old one, which would include the device doing the changing — so a
- * new one is issued for it, and the client must store the tokens it gets back.
+ * The current PIN is required despite the session: one left open on a shared machine
+ * would otherwise lock the owner out. The response is a fresh session — store it.
  */
 export const changePinSchema = z
   .object({

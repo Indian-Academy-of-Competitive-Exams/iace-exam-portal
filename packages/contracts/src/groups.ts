@@ -4,19 +4,9 @@ import { paginationQuerySchema } from './envelope';
 import { groupNameSchema } from './naming';
 
 // ============================================================================
-// Groups — the access unit.
-//
-// Access runs Student → Group → TestSeries → Test, so a group is not a label:
-// it is the only thing that decides which tests a student can reach. Two rules
-// here follow directly from that, and both are enforced server-side:
-//
-//   - a student must remain in at least one group, or they can reach nothing;
-//   - a group that still has students, or is still linked to a test series,
-//     cannot be deleted — removing it would revoke access silently.
-//
-// A group belongs to exactly one branch, chosen from the fixed list, and its
-// name is unique within that branch. Names are canonical (see ./naming), so
-// "SSC CGL Morning" and "ssc cgl  morning" are the same group, not two.
+// Groups — the access unit: Student -> Group -> TestSeries -> Test. Enforced
+// server-side: a student stays in at least one group, and a group with students
+// or a series cannot be deleted. One branch each, name unique within it.
 // ============================================================================
 
 export const groupSummarySchema = z.object({
@@ -52,11 +42,7 @@ export const createGroupSchema = z.object({
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export type CreateGroupBody = z.infer<typeof createGroupSchema>;
 
-/**
- * A group can be renamed and re-described, but NOT moved between branches:
- * its branch is half of its identity and half of its uniqueness, and moving it
- * silently changes which name it collides with.
- */
+/** Renameable, never moved between branches — the branch is half of its uniqueness. */
 export const updateGroupSchema = createGroupSchema.omit({ branchId: true }).partial();
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 export type UpdateGroupBody = z.infer<typeof updateGroupSchema>;

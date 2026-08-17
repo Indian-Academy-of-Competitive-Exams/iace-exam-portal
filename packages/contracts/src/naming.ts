@@ -1,44 +1,23 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Canonical names for branches and groups.
-//
-// These two lists are the vocabulary the whole platform routes access through,
-// and they are typed by hand, by different people, over years. Left free, they
-// drift: "SSC CGL Morning", "ssc cgl morning", "SSC  CGL Morning" and "SSC CGL
-// MORNING " are four rows that mean one thing, and a uniqueness check catches
-// none of them.
-//
-// So a name has exactly one canonical form — UPPERCASE, letters and digits,
-// single-spaced — and input is NORMALISED into it before it is validated. What
-// the admin types is tidied; only characters that cannot be tidied (punctuation,
-// symbols) are refused, with a message that says so.
-//
-// Normalising rather than rejecting is deliberate: rejecting "ssc cgl morning"
-// teaches the admin to shout, but it does not stop the person who shouts a
-// different way. Folding every spelling to one makes the duplicate impossible
-// instead of merely reported.
+// Canonical names for branches and groups: UPPERCASE, letters and digits,
+// single-spaced. Input is NORMALISED into that form before it is validated, so a
+// case- or space-different duplicate is impossible rather than merely reported.
+// Only characters that cannot be tidied — punctuation, symbols — are refused.
 // ============================================================================
 
 /** What a canonical name looks like once normalised. */
 export const CANONICAL_NAME_PATTERN = /^[A-Z0-9]+( [A-Z0-9]+)*$/;
 
-/**
- * Uppercase, collapse every run of whitespace to one space, and trim.
- *
- * Exported because the API normalises on the way in and the admin form shows
- * the result as you type — both must agree exactly, or the preview lies.
- */
+/** Uppercase, collapse whitespace, trim. Shared, or the form's live preview would lie. */
 export function canonicalName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
 const CANONICAL_NAME_MESSAGE = 'Use capital letters, numbers and single spaces only';
 
-/**
- * A canonical name schema. `min`/`max` are on the NORMALISED value, so trailing
- * spaces can never smuggle a name past the length rule.
- */
+/** `min`/`max` apply to the NORMALISED value, so spaces cannot smuggle a name past them. */
 export function canonicalNameSchema(options: { min?: number; max: number; label: string }) {
   const { min = 2, max, label } = options;
 
@@ -63,10 +42,5 @@ export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, labe
 /** e.g. SSC CGL MORNING, RRB JE 2026 B2. */
 export const groupNameSchema = canonicalNameSchema({ max: GROUP_NAME_MAX, label: 'group' });
 
-/**
- * The name of the seeded cross-branch branch.
- *
- * Code identifies it by `Branch.isGlobal`, never by this string — this exists
- * so the seed and its tests spell it one way.
- */
+/** The seeded cross-branch branch. Code identifies it by `isGlobal`, never by this string. */
 export const GLOBAL_BRANCH_NAME = 'GLOBAL';

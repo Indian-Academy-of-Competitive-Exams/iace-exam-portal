@@ -17,10 +17,7 @@ describe('mobileSchema', () => {
   });
 
   it('accepts a number that BEGINS with 91 — the regression', () => {
-    // 91xxxxxxxx is a live Indian series. Stripping the "91" as a country code
-    // left 8 digits and told the owner their own number was invalid, which made
-    // signup impossible for them. The prefix is only a prefix when the length
-    // says so.
+    // 91xxxxxxxx is a live series: the prefix is only a prefix when the length says so.
     assert.equal(parse(mobileSchema, '9123456789'), '9123456789');
     assert.equal(parse(mobileSchema, '9111111119'), '9111111119');
     assert.equal(parse(mobileSchema, '9198765432'), '9198765432');

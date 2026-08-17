@@ -3,11 +3,8 @@ import { paginationQuerySchema } from './envelope';
 import { branchNameSchema } from './naming';
 
 // ============================================================================
-// Branches — the fixed list groups are created under.
-//
-// Only a super admin writes here. That is the whole point: the list moves
-// rarely, and the admin creating a group picks from it rather than typing a
-// centre name and hoping it matches what someone else typed last year.
+// Branches — the fixed list groups are created under. Super admin writes only,
+// so an admin creating a group picks a centre rather than typing one.
 // ============================================================================
 
 export const branchSchema = z.object({
@@ -52,12 +49,7 @@ export const createBranchSchema = z.object({
 export type CreateBranchInput = z.input<typeof createBranchSchema>;
 export type CreateBranchBody = z.infer<typeof createBranchSchema>;
 
-/**
- * A branch is renameable and can be retired, but never reassigned — its groups
- * move with it, so renaming is how a centre changes what it is called.
- * Deactivating keeps history readable while stopping new groups being made
- * under a centre that has closed.
- */
+/** Renameable and retirable, never reassigned. Retiring stops new groups without hiding history. */
 export const updateBranchSchema = z.object({
   name: branchNameSchema.optional(),
   isActive: z.boolean().optional(),

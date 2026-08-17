@@ -11,11 +11,8 @@ import {
 } from './common';
 
 // ============================================================================
-// OTP request
-//
-// Students meet an OTP exactly twice: at signup, and if they forget their PIN.
-// Every ordinary login is mobile + 4-digit PIN. Admins are unchanged — email +
-// OTP, every time.
+// OTP request. Students meet one twice — signup, and a forgotten PIN. Admins,
+// every time. Ordinary student login is mobile + 4-digit PIN.
 // ============================================================================
 
 /** One endpoint serves both student OTP cases (signup and PIN reset): the
@@ -40,12 +37,7 @@ export const otpRequestResponseSchema = z.object({
   sent: z.literal(true),
   expiresInSec: z.number().int(),
   resendAfterSec: z.number().int(),
-  /**
-   * How many digits the code has. The server decides it (`OTP_LENGTH`), so the
-   * login screen must be told rather than assume: it draws one box per digit,
-   * and a screen guessing six against a server sending four asks for two digits
-   * that will never arrive.
-   */
+  /** How many digits the code has. The server decides, and the screen draws one box per digit. */
   codeLength: z.number().int().min(4).max(8),
   /** Dev-only echo of the code — present only when the console sender is active. */
   devCode: z.string().optional(),
@@ -136,19 +128,13 @@ export const studentIdentitySchema = z.object({
   fullName: z.string().nullable(),
   preferredLanguage: z.string(),
   /**
-   * The minimal pre-test details are on file (mother's name + father's name +
-   * DOB). TODO(pre-test gate): the test player asks for these before a test
-   * starts when this is false — a short prompt, never a hard block.
+   * The minimal pre-test details are on file: mother's name, father's name, DOB.
+   * When false the test player prompts for them — never a hard block.
    */
   preTestReady: z.boolean(),
   /**
-   * Still on the PIN an import gave them — the first four digits of their own
-   * number, which anyone holding the roster can work out.
-   *
-   * It rides on the identity rather than needing its own request because the
-   * app has to decide, on the very first render after sign-in, whether to make
-   * them replace it. A second fetch would mean a frame where they are inside
-   * the app on a credential the institute knows.
+   * Still on the PIN an import gave them, which anyone holding the roster can work out.
+   * On the identity because the app must decide on the first render after sign-in.
    */
   hasDefaultPin: z.boolean(),
   /** The FULL optional profile (photo, gender, Aadhaar, PAN, address,
@@ -163,18 +149,9 @@ export const adminIdentitySchema = z.object({
   email: z.string(),
   fullName: z.string().nullable(),
   isSuperAdmin: z.boolean(),
-  /**
-   * False once deactivated. A deactivated admin can still SIGN IN — that is
-   * how they are told what happened, instead of an "invalid credentials" that
-   * reads as a typo — but every check refuses them, super admin included.
-   */
+  /** A deactivated admin can still sign in — that is how they are told — but every check refuses them. */
   isActive: z.boolean(),
-  /**
-   * What this admin may do, by feature key. A super admin bypasses the check
-   * entirely, so theirs is empty — an empty map on a super admin means
-   * "everything", and on anyone else means "nothing". The two are only ever
-   * read together with `isSuperAdmin`, never apart.
-   */
+  /** By feature key, and only ever read together with `isSuperAdmin` — a super admin's is empty. */
   permissions: adminPermissionsSchema,
 });
 export type AdminIdentity = z.infer<typeof adminIdentitySchema>;

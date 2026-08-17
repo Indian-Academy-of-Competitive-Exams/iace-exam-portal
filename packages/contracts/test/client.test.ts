@@ -9,11 +9,7 @@ import {
   type Meta,
 } from '../src/index';
 
-/**
- * The client half of the envelope. The API guarantees the shape; these check
- * the mirror — that callers get unwrapped `data` or a typed throw, and never
- * an envelope, a raw Response, or an untyped error.
- */
+/** Callers get unwrapped `data` or a typed throw — never an envelope or a raw Response. */
 
 const meta: Meta = { requestId: 'req-test-0001' };
 

@@ -1,11 +1,8 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Bulk student import.
-//
-// Forgiving by rule: the file is previewed before anything is written, errors
-// are reported against their line number, and a commit applies ONLY the valid
-// rows rather than refusing the whole file over one bad number.
+// Bulk student import. Previewed before anything is written, errors reported by
+// line, and a commit applies only the valid rows.
 // ============================================================================
 
 /** What a single line would do. `skip` means it has errors and will be left. */
@@ -21,12 +18,7 @@ export const studentImportRowSchema = z.object({
   groupIds: z.array(z.string()),
   /** Set when the number already belongs to a student — this row updates them. */
   existingStudentId: z.string().nullable(),
-  /**
-   * Whether this row hands the student a starting PIN — the first four digits
-   * of their own number. True for everyone new, and for an existing student who
-   * has never had one. NEVER for a student who has chosen their own: an import
-   * must not reset a PIN somebody picked.
-   */
+  /** Whether this row hands out a starting PIN. Never for a student who chose their own. */
   willReceiveDefaultPin: z.boolean(),
   action: studentImportActionSchema,
   errors: z.array(z.string()),
@@ -70,22 +62,10 @@ export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
 /** The multipart field the upload arrives under. Server and client must agree. */
 export const IMPORT_FILE_FIELD = 'file';
 
-/**
- * The most rows one import may carry.
- *
- * Not an arbitrary round number: every NEW student is given a starting PIN, and
- * hashing a PIN with argon2 deliberately costs ~13ms. A 5,000-row roster is
- * over a minute of hashing on one request before a single row is written — it
- * would time out, and the admin would have no idea how much of it had applied.
- * A refusal that says "split it" is a far better answer than a hang.
- */
+/** Bounded by argon2: every new student costs ~13ms of hashing, so a big roster would time out. */
 export const IMPORT_MAX_ROWS = 1000;
 
-/**
- * The .xlsx media type. Named once because it is the kind of string a typo
- * breaks silently — the API sends it as a Content-Type, the file picker offers
- * it, and neither would complain about a wrong one.
- */
+/** The .xlsx media type. A typo here breaks the Content-Type and the file picker silently. */
 export const XLSX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -93,22 +73,9 @@ export const XLSX_CONTENT_TYPE =
 export const IMPORT_ACCEPTED_EXTENSIONS = ['.xlsx', '.csv'] as const;
 
 /**
- * The columns, in order — the ONE definition of the format.
- *
- * The sample workbook is generated from this and the parser matches on it, so
- * the file an admin downloads cannot document a format the importer will not
- * accept. A hand-written sample drifts the first time a column is renamed, and
- * takes everyone who already downloaded it with it.
- *
- * `header` is what a person reads — "Mobile Number", not `mobile`. The file is
- * opened, filled in and passed around by office staff, and a header row written
- * in camelCase asks them to read our variable names.
- *
- * `aliases` is what the parser accepts, already normalised (lowercased, spaces
- * and separators stripped — see normaliseHeader). Every plausible spelling is
- * listed so a roster exported from somewhere else, or last month's template,
- * still imports: being forgiving about the header is the whole point of naming
- * it in more than one way.
+ * The columns, in order — the ONE definition of the format: the sample is generated
+ * from this and the parser matches on it. `header` is what a person reads;
+ * `aliases` is what the parser accepts, normalised, so an older template still imports.
  */
 export const STUDENT_IMPORT_COLUMNS = [
   {
@@ -148,16 +115,8 @@ export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
 
 // ============================================================================
-// Adding students to ONE group, in bulk.
-//
-// A separate, deliberately smaller thing than the student import. The question
-// it answers is "put these people in this batch", the answer is a list of
-// mobile numbers, and the group is the screen you are already on rather than a
-// column in the sheet — so it cannot be typed wrong, and one file cannot
-// scatter students across batches nobody checked.
-//
-// Add only. Removing someone is a single, visible act on that student: it takes
-// away their route to a test, and a sheet is the wrong way to do that quietly.
+// Adding students to ONE group, in bulk: a list of mobile numbers, with the group
+// taken from the screen rather than a column. Add only — removing is a visible act.
 // ============================================================================
 
 /** The one column a membership sheet needs. */
@@ -168,12 +127,8 @@ export const GROUP_MEMBER_IMPORT_COLUMNS = [
 export const GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME = 'iace-group-members-template.xlsx';
 
 /**
- * What one line does.
- *
- * `add` — a student who exists and is not in the group yet.
- * `already` — in it already. Not an error: re-uploading last week's list with
- *   ten new numbers on the end is the normal way this gets used.
- * `skip` — the number is unreadable, repeated, or belongs to nobody.
+ * `add` — exists, not in the group. `already` — in it (not an error, re-uploading is
+ * normal). `skip` — unreadable, repeated, or belongs to nobody.
  */
 export const groupMemberImportActionSchema = z.enum(['add', 'already', 'skip']);
 export type GroupMemberImportAction = z.infer<typeof groupMemberImportActionSchema>;

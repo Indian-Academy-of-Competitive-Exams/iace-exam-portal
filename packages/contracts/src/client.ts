@@ -99,10 +99,7 @@ import {
   type StudentImportResult,
 } from './imports';
 
-/**
- * Drops empty and undefined keys, so an unset filter never becomes
- * `?q=undefined` — which the server would then dutifully search for.
- */
+/** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
 function queryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -139,12 +136,7 @@ interface RequestOptions<T> {
   anonymous?: boolean;
 }
 
-/**
- * The client half of the response envelope. Callers never see it: every method
- * returns unwrapped `data`, or throws an `AppException` carrying the server's
- * `code`, `message` and `fieldErrors`. React Query therefore has exactly one
- * error type to handle, everywhere.
- */
+/** Callers never see the envelope: every method returns `data` or throws an `AppException`. */
 export function createApiClient(options: ApiClientOptions) {
   const {
     baseUrl,
@@ -161,9 +153,7 @@ export function createApiClient(options: ApiClientOptions) {
   let refreshInFlight: Promise<AuthTokens | null> | null = null;
 
   async function send(path: string, method: string, body: unknown, token: string | null) {
-    // A file upload is FormData, and the browser must set its own Content-Type:
-    // the multipart boundary is generated per request, so a hand-written header
-    // produces a body the server cannot split apart.
+    // FormData: the browser must set its own Content-Type, boundary included.
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
     try {
@@ -189,12 +179,7 @@ export function createApiClient(options: ApiClientOptions) {
     }
   }
 
-  /**
-   * Turns a response into either the parsed success envelope or a throw. Both
-   * halves of the envelope are validated: a body that is neither is itself a
-   * failure, because an unrecognised shape must never reach a caller typed as
-   * if it were data.
-   */
+  /** Both halves are validated: an unrecognised shape must never reach a caller typed as data. */
   async function parse<T>(response: Response, schema: ZodType<T>): Promise<ApiSuccess<T>> {
     const text = await response.text();
 
@@ -261,9 +246,7 @@ export function createApiClient(options: ApiClientOptions) {
     const response = await send(path, method, body, getAccessToken());
     if (response.status !== 401) return parse(response, schema);
 
-    // Only an expired/absent session is worth retrying. A 401 that means
-    // "wrong PIN" or "bad OTP" must surface as itself — refreshing would hide
-    // the real code and, worse, could sign a valid session out.
+    // Only an expired session is worth retrying: refreshing on a wrong PIN hides the real code.
     const peeked = await peekFailure(response);
     if (peeked && peeked.error.code !== 'UNAUTHENTICATED') {
       throw AppException.fromFailure(peeked, response.status);
@@ -291,10 +274,7 @@ export function createApiClient(options: ApiClientOptions) {
     return (await envelopeOf(path, opts)).data;
   }
 
-  /**
-   * For list endpoints: recombines `data` with the pagination that travels in
-   * `meta`, so callers work with one whole page object.
-   */
+  /** Recombines `data` with the pagination from `meta`, so callers get one page object. */
   async function requestPaginated<T>(
     path: string,
     opts: RequestOptions<T[]>,
@@ -309,12 +289,8 @@ export function createApiClient(options: ApiClientOptions) {
   }
 
   /**
-   * A binary download, still authenticated and still refresh-aware.
-   *
-   * It cannot go through `parse`: there is no envelope to unwrap, and reading
-   * the body as text to look for one would corrupt the file. A FAILURE still
-   * arrives as an envelope though, so an error is read the normal way and the
-   * caller gets the same typed exception as everywhere else.
+   * A binary download, authenticated and refresh-aware. It cannot go through `parse` —
+   * reading the body as text would corrupt the file — but a FAILURE is still an envelope.
    */
   async function requestBlob(path: string): Promise<Blob> {
     let response = await send(path, 'GET', undefined, getAccessToken());
@@ -470,11 +446,7 @@ export function createApiClient(options: ApiClientOptions) {
           }),
       },
 
-      /**
-       * Admin management, features and grants. Every one of these is super
-       * admin only on the server; the client does not re-state that, because a
-       * check the UI makes and the API does not is theatre.
-       */
+      /** Super admin only, enforced server-side. The client does not re-state it. */
       admins: {
         list: (query: AdminListQueryInput = {}): Promise<Paginated<Admin>> =>
           requestPaginated(`${ADMIN_ADMIN_ROUTES.list}${queryString({ ...query })}`, {
@@ -495,13 +467,7 @@ export function createApiClient(options: ApiClientOptions) {
             schema: adminSchema,
           }),
 
-        /**
-         * Switch an account off or back on.
-         *
-         * Deactivating prunes every grant. Reactivating deliberately does NOT
-         * restore them — they were revoked, and quietly handing them back
-         * would make deactivation a pause rather than a removal.
-         */
+        /** Deactivating prunes every grant. Reactivating does NOT restore them. */
         setActive: (id: string, isActive: boolean): Promise<Admin> =>
           request(ADMIN_ADMIN_ROUTES.setActive(id), {
             method: 'PATCH',
@@ -609,10 +575,7 @@ export function createApiClient(options: ApiClientOptions) {
       },
 
       imports: {
-        /**
-         * The sample workbook. A Blob rather than an envelope: it is a file,
-         * and there is nothing to unwrap.
-         */
+        /** The sample workbook — a Blob, not an envelope. */
         studentTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.studentsTemplate),
 
         /** Writes nothing — this is what the admin reads before committing. */
@@ -660,12 +623,7 @@ function fileBody(file: File): FormData {
   return form;
 }
 
-/**
- * Reads a failure body without consuming the caller's error path.
- *
- * Outside the client factory because it closes over nothing — leaving it inside
- * meant a fresh copy per client, for no reason.
- */
+/** Reads a failure body. Outside the factory because it closes over nothing. */
 async function peekFailure(response: Response) {
   try {
     const parsed = apiFailureSchema.safeParse(await response.clone().json());

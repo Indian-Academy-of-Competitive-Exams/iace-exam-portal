@@ -14,12 +14,7 @@ import {
   ADMIN_FEATURE_ROUTES,
 } from '../src/admins';
 
-/**
- * The guard and the admin app both answer "may this admin do X" and they must
- * answer identically. If they ever disagree the symptom is a button that is
- * visible and then refused, which reads to the user as a broken product rather
- * than a permissions decision. So the rule is one shared function, tested here.
- */
+/** The guard and the UI must answer identically, or a visible button gets refused. */
 describe('satisfiesLevel', () => {
   it('lets WRITE satisfy READ, because seeing is implied by changing', () => {
     assert.equal(satisfiesLevel(PERMISSION_LEVELS.WRITE, PERMISSION_LEVELS.READ), true);
@@ -79,10 +74,7 @@ describe('shared vocabularies', () => {
   });
 
   it('normalises live, so a multi-word key can actually be typed', () => {
-    // The reason featureKeyDraft exists. canonicalFeatureKey strips the
-    // trailing underscore, so applying IT on each keystroke would eat the
-    // separator the moment it appeared and "student management" would arrive as
-    // STUDENTMANAGEMENT — with no way to get an underscore in at all.
+    // Why featureKeyDraft exists: the canonical form strips the separator as it is typed.
     let field = '';
     for (const character of 'student management') field = featureKeyDraft(field + character);
 
