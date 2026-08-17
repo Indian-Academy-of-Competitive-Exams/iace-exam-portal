@@ -141,6 +141,20 @@ describe('AuthService — student login', () => {
     );
   });
 
+  /**
+   * A test-blocked student is the admin's "deactivate", and it must NOT be a lockout: they sign in to
+   * read the results they already have. Gating login on it took their own history away from them.
+   */
+  it('signs a test-blocked student in, and says so on the identity', async () => {
+    const ctx = build();
+    await signUp(ctx, MOBILE, '4813');
+    ctx.prisma.students[0]!.isTestBlocked = true;
+
+    const { identity } = await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
+
+    assert.equal(identity.actor === ActorTypes.STUDENT ? identity.isTestBlocked : null, true);
+  });
+
   it('checks the lockout before the PIN, so a locked number cannot be probed', async () => {
     const ctx = build();
     await signUp(ctx, MOBILE, '4813');

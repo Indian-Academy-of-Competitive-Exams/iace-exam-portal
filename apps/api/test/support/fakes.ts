@@ -260,6 +260,7 @@ export interface FakeStudent {
   preTestReady: boolean;
   profileCompleted: boolean;
   isActive: boolean;
+  isTestBlocked: boolean;
   /** True while the student is still on the PIN the institute set for them. */
   pinIsDefault: boolean;
   createdAt: Date;
@@ -300,6 +301,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     preTestReady: false,
     profileCompleted: false,
     isActive: true,
+    isTestBlocked: false,
     pinIsDefault: false,
     // Fixed, not `new Date()`: a summary serialises this and a moving value would
     // make an assertion on the payload untestable.

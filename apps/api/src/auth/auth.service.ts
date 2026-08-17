@@ -352,6 +352,7 @@ export class AuthService {
       preTestReady: student.preTestReady,
       profileCompleted: student.profileCompleted,
       hasDefaultPin: student.pinIsDefault,
+      isTestBlocked: student.isTestBlocked,
     };
   }
 

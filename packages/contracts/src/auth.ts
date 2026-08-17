@@ -140,6 +140,12 @@ export const studentIdentitySchema = z.object({
   /** The FULL optional profile (photo, gender, Aadhaar, PAN, address,
    *  education). Drives a gentle nudge only — it never gates anything. */
   profileCompleted: z.boolean(),
+  /**
+   * Locked out of STARTING a test, not out of the account: they sign in, and
+   * their results and history stay readable. Login is `isActive`, which is a
+   * different question and is never answered by this one.
+   */
+  isTestBlocked: z.boolean(),
 });
 export type StudentIdentity = z.infer<typeof studentIdentitySchema>;
 
