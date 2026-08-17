@@ -89,6 +89,7 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - `docs/schema-erd.mmd` — ER diagram of the data model.
 - `docs/design/design-system.html` — living style guide (open it to see the system).
 - `packages/ui/` — the design tokens + Tailwind preset that back it.
+- `packages/ui/src/index.ts` — **the component inventory. Read it before building any UI**; it is the fastest answer to "does this already exist".
 - `packages/app-kit/` — shared SPA plumbing (tokens/session, API client, form errors, page size).
 - `prisma/schema.prisma` — **the data model (source of truth).**
 
@@ -107,6 +108,8 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - Protect the hard-to-change decisions (data model, live-test scaling); iterate freely on UI/copy.
 - **One S3 upload path everywhere** (MinIO locally) — never branch upload code by environment.
 - **Design values come only from `packages/ui` tokens** — never a raw hex or one-off spacing in a feature component.
+- **Reach for the shared component first; write a local one last.** Before building any piece of UI, look in **`packages/ui`** (design) and **`packages/app-kit`** (React plumbing) — and if the thing you need is _nearly_ there, extend the shared one rather than writing a private variant beside it. A component earns a place in `apps/` only when it is genuinely about that app's domain (`GroupPicker`, `DocumentCard`, `SuperAdminOnly`): it names a Test-portal or Admin concept, and the other app would have no use for it. Anything describable without naming a domain noun — a row of label-and-number, a tinted step glyph, a field wrapper, a confirm, a drawer — is design-system work, so put it there the first time. **Two copies is not the threshold, it is already the failure**: both copies look right in isolation, only one of them ever gets fixed, and nobody opens two screens side by side to notice. `StatRow`, `StepIcon` and `PinField` each existed twice or more before they moved. When the shared component genuinely cannot serve the case, say why in its doc comment — `PinField` exists because `FormField` hands the control `register`, and a control that _renders_ its own value has to be driven by `Controller`.
+- **A wait for CONTENT is a `Skeleton`; a wait for an ACTION is a `Spinner`.** A table, a list, a card and a form all have a shape that is known before the request returns, so draw it and hold it — a word centred in an empty table drops the column widths and throws the page around when the rows land. `Spinner`/`LoadingState` are for something the reader just did and is waiting on: a button mid-request (use `Button loading`), a toggle mid-save, a chosen file being read. The single exception is a wait with no shape to hold at all — the app deciding whether anyone is signed in, before there is a page. Never hand-roll `<Loader2 className="animate-spin" />`; that decision is made in `packages/ui`.
 - **OTP, sessions, and device binding live in Redis** — never the DB.
 - The importer must be **forgiving**: preview + row-level errors, commit only valid rows.
 - No secrets in code; use env / AWS Secrets Manager. Commit a `.env.example`, never real secrets.
