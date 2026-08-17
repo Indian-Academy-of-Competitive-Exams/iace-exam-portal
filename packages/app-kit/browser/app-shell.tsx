@@ -31,8 +31,11 @@ export interface AppShellProps {
   userLabel: string;
   /** Rendered in the user menu button; falls back to a generic person icon. */
   userAvatar?: ReactNode;
-  /** Where "Profile" goes. Omitted hides the entry. */
-  profileHref?: string;
+  /**
+   * Account screens listed in the user menu above Log out — profile, change
+   * PIN, whatever this app has. Leaves only. Empty leaves just Log out.
+   */
+  userMenuItems?: readonly NavItem[];
   /** Beside the brandmark — the admin app labels itself. */
   brandSuffix?: ReactNode;
   /**
@@ -70,7 +73,7 @@ export function AppShell({
   onSignOut,
   userLabel,
   userAvatar,
-  profileHref,
+  userMenuItems,
   brandSuffix,
   can,
   width = 'wide',
@@ -88,7 +91,7 @@ export function AppShell({
       label={userLabel}
       avatar={userAvatar}
       collapsed={isDesktop && collapsed}
-      profileHref={profileHref}
+      items={userMenuItems}
       onSignOut={onSignOut}
     />
   );

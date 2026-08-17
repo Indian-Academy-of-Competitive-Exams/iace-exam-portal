@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Alert, Badge, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
-import { NAV_ITEMS, ROUTES, filterAdminNav } from '../lib/constants';
+import { NAV_ITEMS, filterAdminNav } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 /**
@@ -40,7 +40,10 @@ export function AppShell() {
       width="wide"
       onSignOut={() => void signOut()}
       userLabel={admin?.email ?? ''}
-      profileHref={ROUTES.HOME}
+      // No account entries: an admin signs in with an emailed code, so there is
+      // no password to change, and there is no admin profile screen. The menu
+      // named "Profile" and pointed at the dashboard — a link that goes
+      // somewhere other than where it says is worse than no link.
       brandSuffix={
         <span className="flex items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground">Admin</span>

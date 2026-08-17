@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Avatar, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, PROFILE_QUERY_KEY, USER_MENU_ITEMS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
@@ -26,7 +26,7 @@ export function AppShell() {
       nav={NAV_ITEMS}
       width="narrow"
       onSignOut={() => void signOut()}
-      profileHref={ROUTES.PROFILE}
+      userMenuItems={USER_MENU_ITEMS}
       userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
       userAvatar={
         <Avatar
@@ -47,7 +47,7 @@ export function AppShell() {
         somebody else could have produced.
 
         It sits INSIDE the shell rather than being a redirect, so the header
-        and Sign out stay reachable and there is no navigation to fight.
+        and Log out stay reachable and there is no navigation to fight.
       */}
       {student?.hasDefaultPin ? <DefaultPinGate /> : <Outlet />}
     </Shell>

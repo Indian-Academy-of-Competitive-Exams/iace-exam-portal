@@ -21,11 +21,18 @@ export const ROUTES = {
 /**
  * The nav, in the order a student needs them. Deliberately short — they came
  * here to take a test, not to administer an account.
+ *
+ * Profile and Change PIN are NOT here. They belong to the account, so they live
+ * under the account — the menu on the student's own name — and putting them in
+ * both places spent two of the three sidebar rows on housekeeping a student
+ * does twice a year.
  */
-export const NAV_ITEMS: readonly NavItem[] = [
-  { to: ROUTES.HOME, label: 'Home', icon: Home },
+export const NAV_ITEMS: readonly NavItem[] = [{ to: ROUTES.HOME, label: 'Home', icon: Home }];
+
+/** The account screens, under the user menu, above Log out. */
+export const USER_MENU_ITEMS: readonly NavItem[] = [
   { to: ROUTES.PROFILE, label: 'Profile', icon: User },
-  { to: ROUTES.ACCOUNT, label: 'Sign-in', icon: KeyRound },
+  { to: ROUTES.ACCOUNT, label: 'Change PIN', icon: KeyRound },
 ];
 
 /**
