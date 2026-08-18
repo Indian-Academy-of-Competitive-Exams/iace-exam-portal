@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import * as Popover from '@radix-ui/react-popover';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@iace/ui';
@@ -45,14 +45,13 @@ function Leaf({
   activePath?: string;
   onNavigate?: () => void;
 }>) {
-  // NavLink's own `isActive` is a prefix match, which leaves /students lit while
-  // /students/import is open. `activeNavPath` has already picked the one winner.
+  // Plain Link, not NavLink: NavLink decides `isActive` by prefix and would both
+  // stamp its own aria-current and append its own class token over the top.
   const isActive = item.to !== undefined && item.to === activePath;
 
   return (
-    <NavLink
+    <Link
       to={item.to ?? '#'}
-      end={item.to === '/'}
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       aria-current={isActive ? 'page' : undefined}
@@ -60,7 +59,7 @@ function Leaf({
     >
       <Glyph item={item} collapsed={collapsed} />
       {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
-    </NavLink>
+    </Link>
   );
 }
 

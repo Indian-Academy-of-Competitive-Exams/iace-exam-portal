@@ -102,3 +102,59 @@ describe('AppShell', () => {
     assert.match(container.firstElementChild?.className ?? '', /overflow-hidden/);
   });
 });
+
+/**
+ * The failure this exists to prevent: a route that extends a sibling's used to light both rows, and
+ * the first attempt at fixing it left `aria-current` on both — NavLink defaults the prop to "page"
+ * and gates it on its own prefix match, so passing `undefined` changed nothing.
+ */
+describe('AppShell — which row is current', () => {
+  const SECTIONED: readonly NavItem[] = [
+    {
+      label: 'Students',
+      children: [
+        { to: '/students', label: 'All students' },
+        { to: '/students/import', label: 'Import students' },
+      ],
+    },
+  ];
+
+  function renderAt(pathname: string) {
+    setDesktop(true);
+    render(
+      <MemoryRouter initialEntries={[pathname]}>
+        <ThemeProvider>
+          <AppShell nav={SECTIONED} userLabel="admin@iace.co.in" onSignOut={() => {}}>
+            <p>content</p>
+          </AppShell>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('marks exactly one row current on a route that extends another', async () => {
+    renderAt('/students/import');
+
+    const section = screen.getByRole('button', { name: /students/i });
+    section.click();
+
+    const current = await screen.findAllByRole('link', { current: 'page' });
+    assert.deepEqual(
+      current.map((link) => link.textContent),
+      ['Import students'],
+    );
+  });
+
+  it('falls back to the parent for a route no row owns', async () => {
+    renderAt('/students/stu_42');
+
+    const section = screen.getByRole('button', { name: /students/i });
+    section.click();
+
+    const current = await screen.findAllByRole('link', { current: 'page' });
+    assert.deepEqual(
+      current.map((link) => link.textContent),
+      ['All students'],
+    );
+  });
+});
