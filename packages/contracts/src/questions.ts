@@ -95,7 +95,6 @@ export const ANSWER_MODES = answerModeSchema.options;
 // ============================================================================
 // Content. Stored as nodes rather than a string so an image or an equation is a
 // node type later, not a parser that has to guess what a string meant.
-// TODO(phase-2): IMAGE (S3 key) and MATH (LaTeX) node types; today text only.
 // ============================================================================
 
 export const CONTENT_NODE_TYPE = {
@@ -171,7 +170,6 @@ export const taxonomyRefSchema = z.object({
 export type TaxonomyRef = z.infer<typeof taxonomyRefSchema>;
 
 export const subjectRefSchema = taxonomyRefSchema;
-export type SubjectRef = TaxonomyRef;
 
 export const subjectSchema = subjectRefSchema.extend({
   code: z.string().nullable(),
@@ -194,7 +192,6 @@ export const topicSchema = topicRefSchema.extend({
 export type Topic = z.infer<typeof topicSchema>;
 
 export const subTopicRefSchema = taxonomyRefSchema;
-export type SubTopicRef = TaxonomyRef;
 
 /** A sub-topic is SHARED: it lists the topics it is linked to, in no one subject. */
 export const subTopicSchema = subTopicRefSchema.extend({
@@ -535,7 +532,7 @@ const languageColumn = (
   width: number,
   language: QuestionLanguage,
   required = false,
-) => ({ key, header, width, required, language, aliases: [header.replace(/_/g, '')] }) as const;
+) => ({ key, header, width, required, language, aliases: [header.replaceAll('_', '')] }) as const;
 
 export const QUESTION_IMPORT_COLUMNS = [
   { key: 'type', header: 'type', width: 14, required: false, aliases: ['type', 'questiontype'] },
@@ -627,7 +624,7 @@ export const QUESTION_IMPORT_SHEETS = {
   LISTS: 'Lists',
 } as const;
 
-/** Bounded so one upload stays a single synchronous request. TODO: BullMQ above this. */
+/** Bounded so one upload stays a single synchronous request. */
 export const QUESTION_IMPORT_MAX_ROWS = 1000;
 
 /** Several tags in one cell. */

@@ -30,10 +30,6 @@ export function questionWhere(
 export function questionOrderBy(sort: QuestionSort): Prisma.QuestionOrderByWithRelationInput[] {
   // `id` last, always: two questions saved in the same millisecond would
   // otherwise page in an order the database is free to change between requests.
-  switch (sort) {
-    case QUESTION_SORTS.OLDEST:
-      return [{ createdAt: 'asc' }, { id: 'asc' }];
-    default:
-      return [{ createdAt: 'desc' }, { id: 'desc' }];
-  }
+  if (sort === QUESTION_SORTS.OLDEST) return [{ createdAt: 'asc' }, { id: 'asc' }];
+  return [{ createdAt: 'desc' }, { id: 'desc' }];
 }

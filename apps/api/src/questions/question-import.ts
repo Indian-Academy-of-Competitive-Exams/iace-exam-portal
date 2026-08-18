@@ -184,8 +184,9 @@ function planRow(
 
   const reported = dedupeIssues(issues);
 
-  const action: QuestionImportAction =
-    reported.length > 0 ? 'skip' : duplicateOf ? 'duplicate' : 'create';
+  let action: QuestionImportAction = 'create';
+  if (reported.length > 0) action = 'skip';
+  else if (duplicateOf) action = 'duplicate';
 
   // Only a row that will really be written claims its stem. A skipped row that
   // held the hash would make the next good copy of the same question a duplicate

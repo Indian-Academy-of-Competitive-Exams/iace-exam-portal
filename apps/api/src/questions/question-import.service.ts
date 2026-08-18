@@ -31,8 +31,6 @@ import { loadTaxonomyCatalog } from './taxonomy-context';
  * commit then re-reads the stored file and re-plans it — it never trusts a plan
  * the client hands back, because a client that can send a plan can send any plan,
  * and because the bank may have gained the same question in between.
- *
- * TODO: synchronous today. Move the commit onto BullMQ if files outgrow one request.
  */
 @Injectable()
 export class QuestionImportService {

@@ -328,6 +328,28 @@ describe('computeStemHash', () => {
     assert.notEqual(hindi, telugu);
   });
 
+  it('ignores option order even where UTF-16 and locale order disagree', () => {
+    // 'café' sorts after 'zebra' by raw UTF-16 code unit, but before it under a
+    // locale-aware compare — a plain .sort() would hash these two as different questions.
+    const first = mcq({
+      options: [
+        { position: 1, isCorrect: false, text: { en: 'apple' } },
+        { position: 2, isCorrect: true, text: { en: 'zebra' } },
+        { position: 3, isCorrect: false, text: { en: 'café' } },
+        { position: 4, isCorrect: false, text: { en: 'mango' } },
+      ],
+    });
+    const shuffled = mcq({
+      options: [
+        { position: 1, isCorrect: false, text: { en: 'café' } },
+        { position: 2, isCorrect: false, text: { en: 'mango' } },
+        { position: 3, isCorrect: true, text: { en: 'zebra' } },
+        { position: 4, isCorrect: false, text: { en: 'apple' } },
+      ],
+    });
+    assert.equal(computeStemHash(first), computeStemHash(shuffled));
+  });
+
   it('hashes a typed answer by its answer, not by options it does not have', () => {
     assert.notEqual(
       computeStemHash(typed()),

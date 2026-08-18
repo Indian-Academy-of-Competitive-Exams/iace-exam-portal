@@ -129,7 +129,7 @@ export function canonicalStemKey(draft: QuestionDraft): string {
   const options = draft.options
     .map((option) => fold(option.text[DEFAULT_LANGUAGE]))
     .filter((text) => text !== '')
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   const correct = draft.options.find((option) => option.isCorrect);
 
   return [stem, options.join('|'), fold(correct?.text[DEFAULT_LANGUAGE])].join('||');

@@ -53,8 +53,6 @@ import { SubTopicPicker, SubjectPicker, TopicPicker } from '../components/taxono
  * The field names mirror the draft the API takes exactly — `stem.en`,
  * `options.2.text.hi` — so a validation failure from the server lands on the
  * input it is about without a translation table in between.
- *
- * TODO(phase-2): images, equations and a rendered preview. Text only here.
  */
 
 type LanguageMap = Record<QuestionLanguage, string>;

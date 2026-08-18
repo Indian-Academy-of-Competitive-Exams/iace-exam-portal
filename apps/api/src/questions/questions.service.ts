@@ -193,7 +193,6 @@ export class QuestionsService {
   /**
    * Search runs as its own query because the stem is JSON: a question is nodes
    * per language, so no column holds the text a `contains` filter would read.
-   * TODO: a generated tsvector column once the bank outgrows a scan.
    */
   private async searchIds(term: string): Promise<string[]> {
     const like = `%${term}%`;
@@ -210,7 +209,8 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
   const fieldErrors: Record<string, string[]> = {};
   for (const issue of issues) {
     const key = issue.field ?? FORM_LEVEL_FIELD;
-    (fieldErrors[key] ??= []).push(issue.message);
+    fieldErrors[key] ??= [];
+    fieldErrors[key].push(issue.message);
   }
   return fieldErrors;
 }

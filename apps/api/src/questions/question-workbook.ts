@@ -290,7 +290,7 @@ function columnLetter(index: number): string {
   let letters = '';
   while (remaining > 0) {
     const position = (remaining - 1) % ALPHABET_SIZE;
-    letters = String.fromCharCode(CHAR_CODE_A + position) + letters;
+    letters = String.fromCodePoint(CHAR_CODE_A + position) + letters;
     remaining = Math.floor((remaining - position - 1) / ALPHABET_SIZE);
   }
   return letters;
