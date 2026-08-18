@@ -91,6 +91,7 @@ Every bullet is a rule to follow, not background.
 
 - **Default to no comment.** Write one only where a reader who already knows this codebase would be misled without it. Explaining what the code does is never a reason — rename the thing instead. If you are composing a justification for a comment, that is the signal to delete it.
 - **Two lines, hard cap.** Needing a paragraph means the design needs a name, or the note belongs in the commit body — not in the code.
+- **A migration file is exempt.** `prisma/migrations/**/*.sql` is a historical record nobody edits again, so its "why" cannot move to a later commit body. Explain the data move at the top of the file, in as many lines as it takes.
 - **Never write what changed or what it used to be.** That belongs in the commit message. A comment describes the code as it stands.
 - **Only three things earn one:** an external constraint (a browser quirk, a library's behaviour), a line that looks wrong and is not, or an invariant the types cannot carry. Nothing else. Delete a comment once its rule lives in this file or in a test.
 - **No magic strings.** Any string used twice, or that a typo breaks silently, is a `SCREAMING_SNAKE_CASE` const object (`as const`, type derived from it). Cross-app: `packages/contracts` (`ErrorCodes`, `ActorTypes`, `FORM_LEVEL_FIELD`). Server-only: next to its owner (`QUEUE_NAMES`, `NODE_ENVS`, `OTP_SENDERS`, `PRISMA_ERROR_CODES`, `redisKeys`, `AUTH_ROUTES`). Per-SPA: `apps/<app>/src/lib/constants.ts`. Exempt: user-facing copy and log messages.
