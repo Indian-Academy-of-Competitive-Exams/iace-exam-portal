@@ -10,7 +10,7 @@ import {
   type StudentImportRow,
   type StudentImportPlan,
 } from '@iace/contracts';
-import { type CsvRow, type CsvTable } from './csv';
+import { type CsvRow, type CsvTable } from '../common/importing';
 
 /** Decides what a roster file WOULD do, without doing any of it. */
 

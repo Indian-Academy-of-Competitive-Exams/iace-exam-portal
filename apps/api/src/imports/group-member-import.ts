@@ -7,7 +7,7 @@ import {
   type GroupMemberImportRow,
 } from '@iace/contracts';
 import { columnValue } from './student-import';
-import { type CsvRow, type CsvTable } from './csv';
+import { type CsvRow, type CsvTable } from '../common/importing';
 
 /** Planning a bulk add into ONE group. */
 

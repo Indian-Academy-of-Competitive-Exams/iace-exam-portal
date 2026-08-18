@@ -24,8 +24,7 @@ import {
   type ImportContext,
   type ImportGroup,
 } from './student-import';
-import { type CsvTable } from './csv';
-import { readUploadedTable } from './workbook';
+import { readUploadedTable, type CsvTable } from '../common/importing';
 
 /**
  * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue

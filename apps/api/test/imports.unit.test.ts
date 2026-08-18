@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
-import { parseCsv, readCsvTable, normaliseHeader } from '../src/imports/csv';
+import { parseCsv, readCsvTable, normaliseHeader } from '../src/common/importing';
 import {
   groupEntriesIn,
   mobilesIn,

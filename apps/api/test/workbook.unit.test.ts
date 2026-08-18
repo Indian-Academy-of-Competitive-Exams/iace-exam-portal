@@ -2,11 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import ExcelJS from 'exceljs';
 import { AppException, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
-import {
-  buildStudentTemplate,
-  looksLikeWorkbook,
-  readUploadedTable,
-} from '../src/imports/workbook';
+import { looksLikeWorkbook, readUploadedTable } from '../src/common/importing';
+import { buildStudentTemplate } from '../src/imports/workbook';
 import { columnValue } from '../src/imports/student-import';
 
 /** Builds a real .xlsx in memory — no fixture files, no disk. */
