@@ -71,9 +71,13 @@ DO $$ BEGIN
 END $$;
 
 ALTER TABLE "ExamType" ALTER COLUMN "code" SET NOT NULL;
-ALTER TABLE "ExamType" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true,
-                       ADD COLUMN "deletedAt" TIMESTAMP(3);
+ALTER TABLE "ExamType" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
 ```
+
+**No `deletedAt`.** The schema's convention block already records the decision — "ExamType, BaseConfig,
+TestSeries — retired by a flag or by cloning" — and until now `ExamType` had no flag to retire it with.
+Adding `isActive` makes that sentence true; adding `deletedAt` would contradict it and give the table a
+column nothing writes.
 
 **B — group state and the two singletons** (commit 2). `Group.isActive BOOLEAN NOT NULL DEFAULT true`,
 then two idempotent seeds:
