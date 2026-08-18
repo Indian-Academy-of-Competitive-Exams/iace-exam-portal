@@ -285,7 +285,7 @@ export const MCQ_OPTION_COUNT = 4;
 export const MARKS_MAX = 999.99;
 
 /** Marks are Decimal(6,2) in the database; more than two places is not a mark. */
-const marksSchema = z.coerce
+export const questionMarksSchema = z.coerce
   .number()
   .min(0, 'Marks cannot be negative')
   .max(MARKS_MAX)
@@ -354,8 +354,8 @@ export const questionDraftSchema = z.object({
   solution: localizedTextSchema.optional(),
   options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_COUNT).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
-  defaultMarks: marksSchema.nullable().optional(),
-  defaultNegativeMarks: marksSchema.nullable().optional(),
+  defaultMarks: questionMarksSchema.nullable().optional(),
+  defaultNegativeMarks: questionMarksSchema.nullable().optional(),
   tags: z.array(tagSchema).max(TAGS_MAX).default([]),
 });
 export type QuestionDraft = z.infer<typeof questionDraftSchema>;

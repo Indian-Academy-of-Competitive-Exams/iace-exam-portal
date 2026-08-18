@@ -15,6 +15,7 @@ import { BranchesModule } from './branches/branches.module';
 import { MeModule } from './me/me.module';
 import { GroupsModule } from './groups/groups.module';
 import { ImportsModule } from './imports/imports.module';
+import { QuestionsModule } from './questions';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
@@ -43,6 +44,7 @@ import { RequestIdMiddleware } from './common/request-id';
     BranchesModule,
     GroupsModule,
     ImportsModule,
+    QuestionsModule,
     HealthModule,
   ],
   providers: [

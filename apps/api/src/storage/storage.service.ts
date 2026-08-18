@@ -67,6 +67,18 @@ export class StorageService implements OnModuleDestroy {
     });
   }
 
+  /**
+   * Reads an object back into memory. For a file the API itself uploaded and
+   * must re-read — an import committing the sheet it previewed — never for
+   * handing bytes to a browser, which gets a signed URL instead.
+   */
+  async read(key: string): Promise<Buffer> {
+    const object = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const body = object.Body;
+    if (!body) throw new Error(`Object ${key} has no body`);
+    return Buffer.from(await body.transformToByteArray());
+  }
+
   async remove(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }

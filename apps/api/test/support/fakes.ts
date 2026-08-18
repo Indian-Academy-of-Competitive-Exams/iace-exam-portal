@@ -750,3 +750,393 @@ export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRo
     ...overrides,
   };
 }
+
+// ============================================================================
+// The question bank. Its own fake, like the admins one: the tables are unrelated
+// to the roster's, and a shared class would only be two fakes in a trench coat.
+// ============================================================================
+
+export interface FakeSubjectRow {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+export interface FakeTopicRow {
+  id: string;
+  name: string;
+  subjectId: string;
+}
+
+export interface FakeSubTopicRow {
+  id: string;
+  name: string;
+  topicIds: string[];
+}
+
+export interface FakeQuestionOptionRow {
+  id: string;
+  questionId: string;
+  position: number;
+  isCorrect: boolean;
+  text: unknown;
+}
+
+export interface FakeQuestionRow {
+  id: string;
+  questionCode: string | null;
+  type: string;
+  subjectId: string;
+  topicId: string | null;
+  subTopicId: string | null;
+  difficulty: string;
+  status: string;
+  isActive: boolean;
+  content: unknown;
+  answerKey: unknown;
+  tags: string[];
+  source: unknown;
+  stemHash: string | null;
+  defaultMarks: number | null;
+  defaultNegativeMarks: number | null;
+  createdById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const FIXED_NOW = new Date('2026-08-18T06:00:00.000Z');
+
+export function makeSubject(overrides: Partial<FakeSubjectRow> = {}): FakeSubjectRow {
+  return { id: 'sub_1', name: 'QUANTITATIVE APTITUDE', code: null, ...overrides };
+}
+
+export function makeTopic(overrides: Partial<FakeTopicRow> = {}): FakeTopicRow {
+  return { id: 'top_1', name: 'ARITHMETIC', subjectId: 'sub_1', ...overrides };
+}
+
+export function makeSubTopic(overrides: Partial<FakeSubTopicRow> = {}): FakeSubTopicRow {
+  return { id: 'stp_1', name: 'PERCENTAGES', topicIds: ['top_1'], ...overrides };
+}
+
+export function makeQuestion(overrides: Partial<FakeQuestionRow> = {}): FakeQuestionRow {
+  return {
+    id: 'qst_1',
+    questionCode: null,
+    type: 'SINGLE_MCQ',
+    subjectId: 'sub_1',
+    topicId: 'top_1',
+    subTopicId: null,
+    difficulty: 'MEDIUM',
+    status: 'ACTIVE',
+    isActive: true,
+    content: { en: { stem: [{ type: 'TEXT', text: 'What is 20% of 150?' }] } },
+    answerKey: null,
+    tags: [],
+    source: null,
+    stemHash: 'hash_1',
+    defaultMarks: null,
+    defaultNegativeMarks: null,
+    createdById: null,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+    ...overrides,
+  };
+}
+
+interface FakeQuestionWhere {
+  AND?: FakeQuestionWhere[];
+  id?: string | { in?: string[]; not?: string };
+  subjectId?: string;
+  topicId?: string;
+  subTopicId?: string;
+  type?: string;
+  difficulty?: string;
+  status?: string;
+  isActive?: boolean;
+  stemHash?: string | { not?: null };
+  tags?: { has?: string };
+  content?: unknown;
+}
+
+export class FakeQuestionBankPrisma {
+  private seq = 0;
+  readonly options: FakeQuestionOptionRow[] = [];
+
+  constructor(
+    readonly questions: FakeQuestionRow[] = [],
+    readonly subjects: FakeSubjectRow[] = [],
+    readonly topics: FakeTopicRow[] = [],
+    readonly subTopics: FakeSubTopicRow[] = [],
+  ) {}
+
+  private id(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}_${this.seq}`;
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  /** The array form, which is how every question-bank service calls it. */
+  $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
+    return Promise.all(operations);
+  }
+
+  /** The search pre-filter. Tests that do not search never reach it. */
+  $queryRaw(): Promise<{ id: string }[]> {
+    return Promise.resolve(this.questions.map((row) => ({ id: row.id })));
+  }
+
+  readonly question = {
+    findMany: ({
+      where,
+      skip = 0,
+      take = 50,
+    }: { where?: FakeQuestionWhere; skip?: number; take?: number } = {}) =>
+      Promise.resolve(
+        this.matching(where)
+          .slice(skip, skip + take)
+          .map((row) => this.hydrate(row)),
+      ),
+
+    count: ({ where }: { where?: FakeQuestionWhere } = {}) =>
+      Promise.resolve(this.matching(where).length),
+
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.questions.find((question) => question.id === where.id);
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
+    findFirst: ({ where }: { where?: FakeQuestionWhere } = {}) => {
+      const row = this.matching(where)[0];
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
+    create: ({ data }: { data: Record<string, unknown> }) => {
+      const row = makeQuestion({
+        ...(data as Partial<FakeQuestionRow>),
+        id: this.id('qst'),
+        subjectId: subjectIdOf(data),
+        topicId: relationIdOf(data, 'topic'),
+        subTopicId: relationIdOf(data, 'subTopic'),
+      });
+      this.questions.push(row);
+      this.writeOptions(row.id, data.options);
+      return Promise.resolve(this.hydrate(row));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.questions.find((question) => question.id === where.id);
+      if (!row) throw new Error(`no question ${where.id}`);
+      const { options, subject, topic, subTopic, ...rest } = data;
+      Object.assign(row, rest);
+      if (subject) row.subjectId = subjectIdOf(data);
+      if (topic !== undefined) row.topicId = relationIdOf(data, 'topic');
+      if (subTopic !== undefined) row.subTopicId = relationIdOf(data, 'subTopic');
+      if (options) this.writeOptions(row.id, options);
+      return Promise.resolve(this.hydrate(row));
+    },
+  };
+
+  readonly questionOption = {
+    deleteMany: ({ where }: { where: { questionId: string } }) => {
+      const kept = this.options.filter((option) => option.questionId !== where.questionId);
+      this.options.length = 0;
+      this.options.push(...kept);
+      return Promise.resolve({ count: 0 });
+    },
+  };
+
+  readonly subject = {
+    findMany: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.subjects
+          .filter((row) => !where?.id?.in || where.id.in.includes(row.id))
+          .map((row) => ({
+            ...row,
+            topics: this.topics
+              .filter((topic) => topic.subjectId === row.id)
+              .map((topic) => ({
+                ...topic,
+                subTopics: this.subTopics.filter((subTopic) =>
+                  subTopic.topicIds.includes(topic.id),
+                ),
+              })),
+          })),
+      ),
+
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
+      Promise.resolve(
+        this.subjects.find((row) => (where.id ? row.id === where.id : row.name === where.name)) ??
+          null,
+      ),
+
+    count: () => Promise.resolve(this.subjects.length),
+
+    create: ({ data }: { data: { name: string; code?: string | null } }) => {
+      const row = makeSubject({ id: this.id('sub'), name: data.name, code: data.code ?? null });
+      this.subjects.push(row);
+      return Promise.resolve({ ...row, _count: { topics: 0, questions: 0 } });
+    },
+  };
+
+  readonly topic = {
+    findMany: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(this.topics.filter((row) => !where?.id?.in || where.id.in.includes(row.id))),
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.topics.find((row) => row.id === where.id) ?? null),
+
+    findFirst: ({ where }: { where: { subjectId?: string; name?: string } }) =>
+      Promise.resolve(
+        this.topics.find(
+          (row) =>
+            (where.subjectId === undefined || row.subjectId === where.subjectId) &&
+            (where.name === undefined || row.name === where.name),
+        ) ?? null,
+      ),
+
+    count: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.topics.filter((row) => !where?.id?.in || where.id.in.includes(row.id)).length,
+      ),
+  };
+
+  readonly subTopic = {
+    findMany: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.subTopics
+          .filter((row) => !where?.id?.in || where.id.in.includes(row.id))
+          .map((row) => ({ ...row, topics: row.topicIds.map((id) => ({ id })) })),
+      ),
+
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
+      Promise.resolve(
+        this.subTopics.find((row) => (where.id ? row.id === where.id : row.name === where.name)) ??
+          null,
+      ),
+
+    findFirst: ({ where }: { where: { name?: string; id?: { not: string } } }) =>
+      Promise.resolve(
+        this.subTopics.find(
+          (row) =>
+            (where.name === undefined || row.name === where.name) &&
+            (where.id?.not === undefined || row.id !== where.id.not),
+        ) ?? null,
+      ),
+
+    count: () => Promise.resolve(this.subTopics.length),
+
+    create: ({ data }: { data: { name: string; topics: { connect: { id: string }[] } } }) => {
+      const row = makeSubTopic({
+        id: this.id('stp'),
+        name: data.name,
+        topicIds: data.topics.connect.map((topic) => topic.id),
+      });
+      this.subTopics.push(row);
+      return Promise.resolve(this.hydrateSubTopic(row));
+    },
+
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: { name?: string; topics?: { connect?: { id: string }[]; set?: { id: string }[] } };
+    }) => {
+      const row = this.subTopics.find((subTopic) => subTopic.id === where.id);
+      if (!row) throw new Error(`no sub-topic ${where.id}`);
+      if (data.name) row.name = data.name;
+      if (data.topics?.set) row.topicIds = data.topics.set.map((topic) => topic.id);
+      if (data.topics?.connect) {
+        row.topicIds = [...new Set([...row.topicIds, ...data.topics.connect.map((t) => t.id)])];
+      }
+      return Promise.resolve(this.hydrateSubTopic(row));
+    },
+  };
+
+  private writeOptions(questionId: string, options: unknown): void {
+    const create = (
+      options as { create?: { position: number; isCorrect: boolean; text: unknown }[] }
+    )?.create;
+    if (!create) return;
+
+    for (const option of create) {
+      this.options.push({ id: this.id('opt'), questionId, ...option });
+    }
+  }
+
+  private hydrate(row: FakeQuestionRow) {
+    const subject = this.subjects.find((candidate) => candidate.id === row.subjectId);
+    const topic = this.topics.find((candidate) => candidate.id === row.topicId);
+    const subTopic = this.subTopics.find((candidate) => candidate.id === row.subTopicId);
+
+    return {
+      ...row,
+      subject: subject ? { id: subject.id, name: subject.name } : { id: row.subjectId, name: '' },
+      topic: topic ? { id: topic.id, name: topic.name } : null,
+      subTopic: subTopic ? { id: subTopic.id, name: subTopic.name } : null,
+      options: this.options
+        .filter((option) => option.questionId === row.id)
+        .sort((a, b) => a.position - b.position),
+    };
+  }
+
+  private hydrateSubTopic(row: FakeSubTopicRow) {
+    return {
+      ...row,
+      topics: row.topicIds.map((id) => {
+        const topic = this.topics.find((candidate) => candidate.id === id);
+        const subject = this.subjects.find((candidate) => candidate.id === topic?.subjectId);
+        return {
+          id,
+          name: topic?.name ?? '',
+          subject: { id: subject?.id ?? '', name: subject?.name ?? '' },
+        };
+      }),
+      _count: { questions: 0 },
+    };
+  }
+
+  private matching(where: FakeQuestionWhere | undefined): FakeQuestionRow[] {
+    return this.questions.filter((row) => matches(row, where));
+  }
+}
+
+function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
+  if (!where) return true;
+  if (where.AND && !where.AND.every((clause) => matches(row, clause))) return false;
+
+  if (typeof where.id === 'string' && row.id !== where.id) return false;
+  if (typeof where.id === 'object') {
+    if (where.id.in && !where.id.in.includes(row.id)) return false;
+    if (where.id.not && row.id === where.id.not) return false;
+  }
+  if (typeof where.stemHash === 'string' && row.stemHash !== where.stemHash) return false;
+  if (typeof where.stemHash === 'object' && where.stemHash.not === null && row.stemHash === null) {
+    return false;
+  }
+  if (where.subjectId && row.subjectId !== where.subjectId) return false;
+  if (where.topicId && row.topicId !== where.topicId) return false;
+  if (where.subTopicId && row.subTopicId !== where.subTopicId) return false;
+  if (where.type && row.type !== where.type) return false;
+  if (where.difficulty && row.difficulty !== where.difficulty) return false;
+  if (where.status && row.status !== where.status) return false;
+  if (where.isActive !== undefined && row.isActive !== where.isActive) return false;
+  if (where.tags?.has && !row.tags.includes(where.tags.has)) return false;
+
+  return true;
+}
+
+function subjectIdOf(data: Record<string, unknown>): string {
+  const connect = (data.subject as { connect?: { id: string } } | undefined)?.connect;
+  return connect?.id ?? (data.subjectId as string) ?? 'sub_1';
+}
+
+function relationIdOf(data: Record<string, unknown>, key: 'topic' | 'subTopic'): string | null {
+  const connect = (data[key] as { connect?: { id: string } } | undefined)?.connect;
+  if (connect?.id) return connect.id;
+  const direct = data[`${key}Id`];
+  return typeof direct === 'string' ? direct : null;
+}
