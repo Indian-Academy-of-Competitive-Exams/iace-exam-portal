@@ -10,6 +10,10 @@ import { GroupsPage } from './routes/groups';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ImportGroupMembersPage } from './routes/import-group-members';
+import { QuestionsPage } from './routes/questions';
+import { QuestionFormPage } from './routes/question-form';
+import { ImportQuestionsPage } from './routes/import-questions';
+import { TaxonomyPage } from './routes/taxonomy';
 import { AdminsPage } from './routes/admins';
 import { FeaturesPage } from './routes/features';
 import { PermissionsPage } from './routes/permissions';
@@ -40,6 +44,13 @@ export function App() {
           <Route path={ROUTES.GROUPS} element={<GroupsPage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
           <Route path={ROUTES.IMPORT_GROUP_MEMBERS_PATTERN} element={<ImportGroupMembersPage />} />
+          <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />
+          {/* Before the :id route, or "new", "import" and "taxonomy" would each
+              be read as a question id. */}
+          <Route path={ROUTES.QUESTION_NEW} element={<QuestionFormPage />} />
+          <Route path={ROUTES.IMPORT_QUESTIONS} element={<ImportQuestionsPage />} />
+          <Route path={ROUTES.TAXONOMY} element={<TaxonomyPage />} />
+          <Route path={ROUTES.QUESTION_PATTERN} element={<QuestionFormPage />} />
           {/* Super-admin screens. The route exists for everyone — the page
               itself refuses, so a pasted URL gets a sentence rather than a
               redirect that looks like a broken link. */}

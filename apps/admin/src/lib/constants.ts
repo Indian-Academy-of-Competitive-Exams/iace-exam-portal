@@ -1,4 +1,14 @@
-import { Building2, KeyRound, Layers, ShieldCheck, ToggleRight, Upload, Users } from 'lucide-react';
+import {
+  BookOpen,
+  Building2,
+  FolderTree,
+  KeyRound,
+  Layers,
+  ShieldCheck,
+  ToggleRight,
+  Upload,
+  Users,
+} from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { FEATURE_KEYS } from '@iace/contracts';
 
@@ -17,6 +27,13 @@ export const ROUTES = {
   IMPORT_GROUP_MEMBERS: (id: string) => `/groups/${id}/students/import`,
   IMPORT_GROUP_MEMBERS_PATTERN: '/groups/:id/students/import',
   IMPORT_STUDENTS: '/students/import',
+  /** The question bank. Import and taxonomy sit under it, before the :id route. */
+  QUESTIONS: '/questions',
+  QUESTION_NEW: '/questions/new',
+  IMPORT_QUESTIONS: '/questions/import',
+  TAXONOMY: '/questions/taxonomy',
+  QUESTION: (id: string) => `/questions/${id}`,
+  QUESTION_PATTERN: '/questions/:id',
   /** Super-admin only: who the admins are, what the sectors are, who holds what. */
   ADMINS: '/admins',
   FEATURES: '/features',
@@ -45,6 +62,16 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
       { to: ROUTES.GROUPS, label: 'Groups', icon: Layers },
       { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
+    ],
+  },
+  {
+    label: 'Question bank',
+    icon: BookOpen,
+    featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
+    children: [
+      { to: ROUTES.QUESTIONS, label: 'All questions', icon: BookOpen },
+      { to: ROUTES.IMPORT_QUESTIONS, label: 'Import questions', icon: Upload },
+      { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
   {

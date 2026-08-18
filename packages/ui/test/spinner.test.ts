@@ -34,6 +34,7 @@ describe('spinners left in the product', () => {
   const ALLOWED = new Set([
     'apps/admin/src/routes/import-students.tsx',
     'apps/admin/src/routes/import-group-members.tsx',
+    'apps/admin/src/routes/import-questions.tsx',
     'packages/ui/src/components/ui/combobox.tsx',
     'packages/app-kit/browser/protected-route.tsx',
   ]);
