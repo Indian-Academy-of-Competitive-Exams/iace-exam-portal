@@ -195,7 +195,7 @@ export function AppShell({
             </div>
 
             <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
-              <DrawerNav items={items} onNavigate={closeDrawer} />
+              <DrawerNav items={items} pathname={pathname} onNavigate={closeDrawer} />
             </nav>
           </SheetContent>
         </Sheet>

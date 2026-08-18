@@ -58,8 +58,25 @@ export function filterNavByPermission(
   }, []);
 }
 
-/** Does this item, or anything under it, point at `pathname`? Marks a collapsed section current. */
-export function isNavItemActive(item: NavItem, pathname: string): boolean {
-  if (item.to && (item.to === pathname || pathname.startsWith(`${item.to}/`))) return true;
-  return (item.children ?? []).some((child) => isNavItemActive(child, pathname));
+function everyNavPath(items: readonly NavItem[]): string[] {
+  return items.flatMap((item) => [
+    ...(item.to ? [item.to] : []),
+    ...everyNavPath(item.children ?? []),
+  ]);
+}
+
+/**
+ * The ONE route the nav should mark current: the longest `to` the path matches, so a route that
+ * extends a sibling's (`/students/import` under `/students`) highlights only the sibling it is.
+ */
+export function activeNavPath(items: readonly NavItem[], pathname: string): string | undefined {
+  return everyNavPath(items)
+    .filter((to) => to === pathname || pathname.startsWith(`${to}/`))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+/** Does this item, or anything under it, own `activePath`? Marks a collapsed section current. */
+export function isNavItemActive(item: NavItem, activePath: string | undefined): boolean {
+  if (activePath !== undefined && item.to === activePath) return true;
+  return (item.children ?? []).some((child) => isNavItemActive(child, activePath));
 }

@@ -16,6 +16,7 @@ export {
   NAV_INLINE_MAX_ITEMS,
   NAV_LAYOUT,
   filterNavByPermission,
+  activeNavPath,
   isNavItemActive,
   isNavSection,
   resolveNavLayout,

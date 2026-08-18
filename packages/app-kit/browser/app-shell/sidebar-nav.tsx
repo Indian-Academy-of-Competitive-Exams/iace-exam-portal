@@ -5,6 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@iace/ui';
 import {
   NAV_LAYOUT,
+  activeNavPath,
   isNavItemActive,
   isNavSection,
   resolveNavLayout,
@@ -36,17 +37,26 @@ function Glyph({ item, collapsed }: Readonly<{ item: NavItem; collapsed: boolean
 function Leaf({
   item,
   collapsed,
+  activePath,
   onNavigate,
-}: Readonly<{ item: NavItem; collapsed: boolean; onNavigate?: () => void }>) {
+}: Readonly<{
+  item: NavItem;
+  collapsed: boolean;
+  activePath?: string;
+  onNavigate?: () => void;
+}>) {
+  // NavLink's own `isActive` is a prefix match, which leaves /students lit while
+  // /students/import is open. `activeNavPath` has already picked the one winner.
+  const isActive = item.to !== undefined && item.to === activePath;
+
   return (
     <NavLink
       to={item.to ?? '#'}
       end={item.to === '/'}
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
-      className={({ isActive }) =>
-        cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && 'justify-center px-0')
-      }
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && 'justify-center px-0')}
     >
       <Glyph item={item} collapsed={collapsed} />
       {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
@@ -60,13 +70,13 @@ function Leaf({
  */
 function SectionPopover({
   item,
-  pathname,
+  activePath,
   collapsed,
   wide,
   onNavigate,
 }: Readonly<{
   item: NavItem;
-  pathname: string;
+  activePath?: string;
   collapsed: boolean;
   wide: boolean;
   onNavigate?: () => void;
@@ -92,7 +102,7 @@ function SectionPopover({
             title={collapsed ? item.label : undefined}
             className={cn(
               ROW,
-              isNavItemActive(item, pathname) || open ? ROW_ACTIVE : ROW_IDLE,
+              isNavItemActive(item, activePath) || open ? ROW_ACTIVE : ROW_IDLE,
               collapsed && 'justify-center px-0',
             )}
           >
@@ -130,7 +140,12 @@ function SectionPopover({
               <ul className="space-y-0.5">
                 {loose.map((child) => (
                   <li key={child.label}>
-                    <Leaf item={child} collapsed={false} onNavigate={close} />
+                    <Leaf
+                      item={child}
+                      collapsed={false}
+                      activePath={activePath}
+                      onNavigate={close}
+                    />
                   </li>
                 ))}
               </ul>
@@ -144,7 +159,12 @@ function SectionPopover({
                 <ul className="space-y-0.5">
                   {(group.children ?? []).map((child) => (
                     <li key={child.label}>
-                      <Leaf item={child} collapsed={false} onNavigate={close} />
+                      <Leaf
+                        item={child}
+                        collapsed={false}
+                        activePath={activePath}
+                        onNavigate={close}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -169,13 +189,20 @@ export function SidebarNav({
   collapsed: boolean;
   onNavigate?: () => void;
 }>): ReactNode {
+  const activePath = activeNavPath(items, pathname);
+
   return (
     <ul className="space-y-0.5">
       {items.map((item) => {
         if (!isNavSection(item)) {
           return (
             <li key={item.label}>
-              <Leaf item={item} collapsed={collapsed} onNavigate={onNavigate} />
+              <Leaf
+                item={item}
+                collapsed={collapsed}
+                activePath={activePath}
+                onNavigate={onNavigate}
+              />
             </li>
           );
         }
@@ -184,7 +211,7 @@ export function SidebarNav({
           <SectionPopover
             key={item.label}
             item={item}
-            pathname={pathname}
+            activePath={activePath}
             collapsed={collapsed}
             wide={wide}
             onNavigate={onNavigate}

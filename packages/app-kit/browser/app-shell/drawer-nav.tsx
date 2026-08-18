@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@iace/ui';
-import { isNavSection, type NavItem } from '../../src';
+import { activeNavPath, isNavSection, type NavItem } from '../../src';
 import { NavLeaf } from './sidebar-nav';
 
 /**
@@ -10,9 +10,11 @@ import { NavLeaf } from './sidebar-nav';
  */
 export function DrawerNav({
   items,
+  pathname,
   onNavigate,
-}: Readonly<{ items: readonly NavItem[]; onNavigate: () => void }>) {
+}: Readonly<{ items: readonly NavItem[]; pathname: string; onNavigate: () => void }>) {
   const [section, setSection] = useState<NavItem | null>(null);
+  const activePath = activeNavPath(items, pathname);
 
   if (section) {
     const children = section.children ?? [];
@@ -38,7 +40,12 @@ export function DrawerNav({
           <ul className="space-y-0.5">
             {loose.map((child) => (
               <li key={child.label}>
-                <NavLeaf item={child} collapsed={false} onNavigate={onNavigate} />
+                <NavLeaf
+                  item={child}
+                  collapsed={false}
+                  activePath={activePath}
+                  onNavigate={onNavigate}
+                />
               </li>
             ))}
           </ul>
@@ -52,7 +59,12 @@ export function DrawerNav({
             <ul className="space-y-0.5">
               {(group.children ?? []).map((child) => (
                 <li key={child.label}>
-                  <NavLeaf item={child} collapsed={false} onNavigate={onNavigate} />
+                  <NavLeaf
+                    item={child}
+                    collapsed={false}
+                    activePath={activePath}
+                    onNavigate={onNavigate}
+                  />
                 </li>
               ))}
             </ul>
@@ -84,7 +96,12 @@ export function DrawerNav({
           </li>
         ) : (
           <li key={item.label}>
-            <NavLeaf item={item} collapsed={false} onNavigate={onNavigate} />
+            <NavLeaf
+              item={item}
+              collapsed={false}
+              activePath={activePath}
+              onNavigate={onNavigate}
+            />
           </li>
         ),
       )}

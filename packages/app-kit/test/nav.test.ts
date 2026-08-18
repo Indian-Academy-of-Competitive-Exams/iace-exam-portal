@@ -4,6 +4,7 @@ import {
   NAV_INLINE_MAX_ITEMS,
   NAV_LAYOUT,
   filterNavByPermission,
+  activeNavPath,
   isNavItemActive,
   isNavSection,
   resolveNavLayout,
@@ -116,6 +117,53 @@ describe('filterNavByPermission', () => {
   });
 });
 
+describe('activeNavPath', () => {
+  const nav = [
+    leaf('Home', { to: '/' }),
+    leaf('Students', {
+      children: [
+        leaf('All students', { to: '/students' }),
+        leaf('Import students', { to: '/students/import' }),
+        leaf('Groups', { to: '/groups' }),
+      ],
+    }),
+    leaf('Questions', {
+      children: [
+        leaf('All questions', { to: '/questions' }),
+        leaf('Subjects and topics', { to: '/questions/taxonomy' }),
+      ],
+    }),
+  ];
+
+  /**
+   * The failure this exists to prevent: a route that EXTENDS a sibling's left both lit, because a
+   * prefix match cannot tell "a page under All students" from "the Import students page".
+   */
+  it('picks the most specific entry, not every entry the path starts with', () => {
+    assert.equal(activeNavPath(nav, '/students/import'), '/students/import');
+    assert.equal(activeNavPath(nav, '/questions/taxonomy'), '/questions/taxonomy');
+  });
+
+  it('still marks the parent for a route no entry owns', () => {
+    // A student's detail page has no nav row of its own, so "All students" is
+    // the honest answer rather than nothing at all.
+    assert.equal(activeNavPath(nav, '/students/stu_42'), '/students');
+  });
+
+  it('matches a whole segment, never half of one', () => {
+    assert.equal(activeNavPath(nav, '/students-archive'), undefined);
+  });
+
+  it('leaves root to an exact match, so it never wins over a real page', () => {
+    assert.equal(activeNavPath(nav, '/'), '/');
+    assert.equal(activeNavPath(nav, '/groups'), '/groups');
+  });
+
+  it('is undefined when the path is outside the nav entirely', () => {
+    assert.equal(activeNavPath(nav, '/exam-types'), undefined);
+  });
+});
+
 describe('isNavItemActive', () => {
   const section = leaf('Students', {
     children: [leaf('All', { to: '/students' }), leaf('Import', { to: '/students/import' })],
@@ -127,9 +175,14 @@ describe('isNavItemActive', () => {
     assert.equal(isNavItemActive(section, '/students/import'), true);
   });
 
-  it('matches a nested path under a leaf, but not a sibling with the same prefix', () => {
-    assert.equal(isNavItemActive(leaf('S', { to: '/students' }), '/students/42'), true);
-    assert.equal(isNavItemActive(leaf('S', { to: '/students' }), '/students-archive'), false);
+  it('takes the resolved path, so a section lights only for the row that won', () => {
+    assert.equal(isNavItemActive(section, '/students'), true);
+    assert.equal(isNavItemActive(leaf('S', { to: '/students' }), '/students'), true);
+    assert.equal(isNavItemActive(leaf('S', { to: '/students' }), '/students/import'), false);
+  });
+
+  it('is false when nothing is active at all', () => {
+    assert.equal(isNavItemActive(section, undefined), false);
   });
 
   it('is false when nothing under it matches', () => {
