@@ -492,9 +492,12 @@ model QuestionOption {
 
 model ExamType {
   id          String   @id @default(cuid())
+  /// UPPERCASE letters/digits, single-spaced — `Group.examType` and
+  /// `Student.enrolledExams` store this string, with no relation to follow.
+  code        String   @unique
   name        String   @unique
-  code        String?  @unique
   description String?
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 

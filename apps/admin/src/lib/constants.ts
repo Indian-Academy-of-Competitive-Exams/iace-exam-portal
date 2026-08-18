@@ -2,6 +2,7 @@ import {
   BookOpen,
   Building2,
   FolderTree,
+  GraduationCap,
   KeyRound,
   Layers,
   ShieldCheck,
@@ -23,6 +24,7 @@ export const ROUTES = {
   STUDENT_PATTERN: '/students/:id',
   GROUPS: '/groups',
   BRANCHES: '/branches',
+  EXAM_TYPES: '/exam-types',
   /** Adding students to ONE group: the group is in the path, not in the file. */
   IMPORT_GROUP_MEMBERS: (id: string) => `/groups/${id}/students/import`,
   IMPORT_GROUP_MEMBERS_PATTERN: '/groups/:id/students/import',
@@ -62,6 +64,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
       { to: ROUTES.GROUPS, label: 'Groups', icon: Layers },
       { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
+      { to: ROUTES.EXAM_TYPES, label: 'Exam types', icon: GraduationCap },
     ],
   },
   {

@@ -236,6 +236,11 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
   }
 
+  /** For the configs module: enrolment is an array of exam-type CODES, with no relation to follow. */
+  countEnrolledIn(code: string): Promise<number> {
+    return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
+  }
+
   /** Points a profile at a stored document and recomputes `profileCompleted`. */
   async saveDocumentKey(id: string, column: ProfileDocumentColumn, key: string): Promise<void> {
     const student = await this.prisma.student.findUnique({

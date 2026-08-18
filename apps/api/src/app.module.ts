@@ -14,6 +14,7 @@ import { StudentsModule } from './students/students.module';
 import { BranchesModule } from './branches/branches.module';
 import { MeModule } from './me/me.module';
 import { GroupsModule } from './groups/groups.module';
+import { ConfigsModule } from './configs';
 import { ImportsModule } from './imports/imports.module';
 import { QuestionsModule } from './questions';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -43,6 +44,7 @@ import { RequestIdMiddleware } from './common/request-id';
     MeModule,
     BranchesModule,
     GroupsModule,
+    ConfigsModule,
     ImportsModule,
     QuestionsModule,
     HealthModule,

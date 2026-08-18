@@ -44,6 +44,7 @@ describe('destructive actions', () => {
       'apps/admin/src/routes/admins.tsx': 'Reactivate',
       'apps/admin/src/routes/student-detail.tsx': 'Reactivate student',
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
+      'apps/admin/src/routes/exam-types.tsx': 'Reactivate exam type',
     };
 
     for (const [relative, label] of Object.entries(toggles)) {
@@ -68,6 +69,18 @@ describe('destructive actions', () => {
     assert.ok(
       branches.includes("'Retire branch'"),
       'retiring a branch must go through a ConfirmDialog',
+    );
+  });
+
+  /** Retiring an exam type is reversible AND asks — its effect lands weeks later, on somebody else. */
+  it('includes retiring an exam type', () => {
+    const examTypes = readFileSync(
+      path.join(REPO_ROOT, 'apps/admin/src/routes/exam-types.tsx'),
+      'utf8',
+    );
+    assert.ok(
+      examTypes.includes("'Retire exam type'"),
+      'retiring an exam type must go through a ConfirmDialog',
     );
   });
 

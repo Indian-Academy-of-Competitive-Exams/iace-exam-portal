@@ -268,6 +268,8 @@ export interface FakeStudent {
   profile: FakeProfile | null;
   /** The groups granted to this student — the column, as Prisma stores it. */
   directGroupIds: string[];
+  /** The exam-type codes this student is enrolled under — the column, as Prisma stores it. */
+  enrolledExams: string[];
 }
 
 export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
@@ -309,6 +311,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     updatedAt: new Date('2026-01-05T09:30:00.000Z'),
     profile: null,
     directGroupIds: [],
+    enrolledExams: [],
     ...overrides,
   };
 }
@@ -339,18 +342,20 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
   };
 }
 
-/** The student filters the fakes answer: two `in` lookups and a grant lookup. */
+/** The student filters the fakes answer: two `in` lookups, a grant lookup and an enrolment lookup. */
 interface StudentWhere {
   id?: { in: string[] };
   mobile?: { in: string[] };
   directGroupIds?: { has: string };
+  enrolledExams?: { has: string };
 }
 
 function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
   return (
     (where.id?.in ? where.id.in.includes(student.id) : true) &&
     (where.mobile?.in ? where.mobile.in.includes(student.mobile) : true) &&
-    (where.directGroupIds ? student.directGroupIds.includes(where.directGroupIds.has) : true)
+    (where.directGroupIds ? student.directGroupIds.includes(where.directGroupIds.has) : true) &&
+    (where.enrolledExams ? student.enrolledExams.includes(where.enrolledExams.has) : true)
   );
 }
 
@@ -363,7 +368,14 @@ export class FakePrisma {
     readonly admins: FakeAdmin[] = [],
     readonly branches: FakeBranch[] = [],
     readonly groups: FakeGroup[] = [],
+    // FIFTH, and nowhere else: every existing call is positional, so an earlier
+    // slot silently rebinds four arrays across nine call sites with no type error.
+    readonly examTypes: FakeExamType[] = [],
   ) {}
+
+  /** Set by a test that needs the exam-type deletion blocker to see a blueprint or a test. */
+  baseConfigCount = 0;
+  testCount = 0;
 
   readonly student = {
     findUnique: ({ where }: { where: { id?: string; mobile?: string } }) =>
@@ -457,12 +469,27 @@ export class FakePrisma {
         this.groups.filter((g) => (where.id?.in ? where.id.in.includes(g.id) : true)),
       ),
 
-    count: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+    count: ({ where = {} }: { where?: { id?: { in: string[] }; examType?: string } } = {}) =>
       Promise.resolve(
-        where?.id?.in
-          ? this.groups.filter((g) => where.id!.in.includes(g.id)).length
-          : this.groups.length,
+        this.groups.filter(
+          (g) =>
+            (where.id?.in ? where.id.in.includes(g.id) : true) &&
+            (where.examType === undefined || g.examType === where.examType),
+        ).length,
       ),
+
+    groupBy: ({ where = {} }: { where?: { examType?: { in: string[] } } } = {}) => {
+      const wanted = where.examType?.in;
+      const counts = new Map<string, number>();
+      for (const g of this.groups) {
+        if (g.examType === null) continue;
+        if (wanted && !wanted.includes(g.examType)) continue;
+        counts.set(g.examType, (counts.get(g.examType) ?? 0) + 1);
+      }
+      return Promise.resolve(
+        [...counts].map(([examType, total]) => ({ examType, _count: { _all: total } })),
+      );
+    },
   };
 
   /** Branches, with the group counts the service reads through `_count`. */
@@ -496,6 +523,47 @@ export class FakePrisma {
     },
   };
 
+  /** Exam types, with the list filters and the CRUD `ExamTypesService` runs. */
+  readonly examType = {
+    findUnique: ({ where }: { where: { id?: string; name?: string; code?: string } }) =>
+      Promise.resolve(this.examTypes.find((e) => matchesExamTypeKey(e, where)) ?? null),
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: { where?: ExamTypeWhere; skip?: number; take?: number } = {}) => {
+      const matched = this.examTypes.filter((e) => matchesExamType(e, where));
+      return Promise.resolve(matched.slice(skip, take === undefined ? undefined : skip + take));
+    },
+
+    count: ({ where = {} }: { where?: ExamTypeWhere } = {}) =>
+      Promise.resolve(this.examTypes.filter((e) => matchesExamType(e, where)).length),
+
+    create: ({ data }: { data: { name: string; code: string } }) => {
+      const created = makeExamType({ ...data, id: `ext_new_${this.nextId++}` });
+      this.examTypes.push(created);
+      return Promise.resolve(created);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const examType = this.examTypes.find((e) => e.id === where.id);
+      if (!examType) throw new Error(`no exam type ${where.id}`);
+      Object.assign(examType, data);
+      return Promise.resolve(examType);
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.examTypes.findIndex((e) => e.id === where.id);
+      const [removed] = this.examTypes.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  /** Nothing in this slice writes them; the deletion blocker only ever reads a count. */
+  readonly baseConfig = { count: () => Promise.resolve(this.baseConfigCount) };
+  readonly test = { count: () => Promise.resolve(this.testCount) };
+
   /** The service reads and counts in one transaction; order is preserved. */
   $transaction = (operations: Promise<unknown>[]) => Promise.all(operations);
 
@@ -524,6 +592,48 @@ export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
     // After the spread, so a caller passing only some fields still gets a count.
     _count: { groups: overrides._count?.groups ?? 0 },
   };
+}
+
+export interface FakeExamType {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+export function makeExamType(overrides: Partial<FakeExamType> = {}): FakeExamType {
+  return {
+    id: 'ext_1',
+    name: 'SSC CGL',
+    code: 'SSC CGL',
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+interface ExamTypeWhere {
+  name?: { contains: string; mode?: 'insensitive' };
+  code?: { in: string[] };
+  isActive?: boolean;
+}
+
+function matchesExamType(examType: FakeExamType, where: ExamTypeWhere): boolean {
+  return (
+    (where.name ? examType.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
+    (where.code ? where.code.in.includes(examType.code) : true) &&
+    (where.isActive === undefined || examType.isActive === where.isActive)
+  );
+}
+
+function matchesExamTypeKey(
+  examType: FakeExamType,
+  where: { id?: string; name?: string; code?: string },
+): boolean {
+  if (where.id !== undefined) return examType.id === where.id;
+  if (where.name !== undefined) return examType.name === where.name;
+  return examType.code === where.code;
 }
 
 /** The device context every session-creating call needs. */
@@ -1104,29 +1214,43 @@ export class FakeQuestionBankPrisma {
   }
 }
 
+function idMatches(row: FakeQuestionRow, id: FakeQuestionWhere['id']): boolean {
+  if (typeof id === 'string') return row.id === id;
+  if (typeof id === 'object') {
+    if (id.in && !id.in.includes(row.id)) return false;
+    if (id.not && row.id === id.not) return false;
+  }
+  return true;
+}
+
+function stemHashMatches(row: FakeQuestionRow, stemHash: FakeQuestionWhere['stemHash']): boolean {
+  if (typeof stemHash === 'string') return row.stemHash === stemHash;
+  if (typeof stemHash === 'object' && stemHash.not === null) return row.stemHash !== null;
+  return true;
+}
+
+type QuestionFieldCheck = (row: FakeQuestionRow, where: FakeQuestionWhere) => boolean;
+
+const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
+  (row, where) => !where.subjectId || row.subjectId === where.subjectId,
+  (row, where) => !where.topicId || row.topicId === where.topicId,
+  (row, where) => !where.subTopicId || row.subTopicId === where.subTopicId,
+  (row, where) => !where.type || row.type === where.type,
+  (row, where) => !where.difficulty || row.difficulty === where.difficulty,
+  (row, where) => !where.status || row.status === where.status,
+  (row, where) => where.isActive === undefined || row.isActive === where.isActive,
+  (row, where) => !where.tags?.has || row.tags.includes(where.tags.has),
+];
+
 function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
   if (!where) return true;
   if (where.AND && !where.AND.every((clause) => matches(row, clause))) return false;
 
-  if (typeof where.id === 'string' && row.id !== where.id) return false;
-  if (typeof where.id === 'object') {
-    if (where.id.in && !where.id.in.includes(row.id)) return false;
-    if (where.id.not && row.id === where.id.not) return false;
-  }
-  if (typeof where.stemHash === 'string' && row.stemHash !== where.stemHash) return false;
-  if (typeof where.stemHash === 'object' && where.stemHash.not === null && row.stemHash === null) {
-    return false;
-  }
-  if (where.subjectId && row.subjectId !== where.subjectId) return false;
-  if (where.topicId && row.topicId !== where.topicId) return false;
-  if (where.subTopicId && row.subTopicId !== where.subTopicId) return false;
-  if (where.type && row.type !== where.type) return false;
-  if (where.difficulty && row.difficulty !== where.difficulty) return false;
-  if (where.status && row.status !== where.status) return false;
-  if (where.isActive !== undefined && row.isActive !== where.isActive) return false;
-  if (where.tags?.has && !row.tags.includes(where.tags.has)) return false;
-
-  return true;
+  return (
+    idMatches(row, where.id) &&
+    stemHashMatches(row, where.stemHash) &&
+    QUESTION_FIELD_CHECKS.every((check) => check(row, where))
+  );
 }
 
 function subjectIdOf(data: Record<string, unknown>): string {

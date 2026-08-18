@@ -65,6 +65,14 @@ import {
   type UpdateBranchInput,
 } from './branches';
 import {
+  ADMIN_EXAM_TYPE_ROUTES,
+  examTypeSchema,
+  type CreateExamTypeInput,
+  type ExamType,
+  type ExamTypeListQueryInput,
+  type UpdateExamTypeInput,
+} from './exam-types';
+import {
   ADMIN_STUDENT_ROUTES,
   studentDetailSchema,
   studentSummarySchema,
@@ -565,6 +573,33 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_BRANCH_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+      },
+
+      examTypes: {
+        list: (query: ExamTypeListQueryInput = {}): Promise<Paginated<ExamType>> =>
+          requestPaginated(`${ADMIN_EXAM_TYPE_ROUTES.list}${queryString({ ...query })}`, {
+            schema: examTypeSchema.array(),
+          }),
+
+        create: (input: CreateExamTypeInput): Promise<ExamType> =>
+          request(ADMIN_EXAM_TYPE_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: examTypeSchema,
+          }),
+
+        update: (id: string, input: UpdateExamTypeInput): Promise<ExamType> =>
+          request(ADMIN_EXAM_TYPE_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: examTypeSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_EXAM_TYPE_ROUTES.remove(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
       },
 
       groups: {

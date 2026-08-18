@@ -9,6 +9,7 @@ import { StudentDetailPage } from './routes/student-detail';
 import { GroupsPage } from './routes/groups';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
+import { ExamTypesPage } from './routes/exam-types';
 import { ImportGroupMembersPage } from './routes/import-group-members';
 import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
@@ -43,6 +44,7 @@ export function App() {
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
           <Route path={ROUTES.GROUPS} element={<GroupsPage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
+          <Route path={ROUTES.EXAM_TYPES} element={<ExamTypesPage />} />
           <Route path={ROUTES.IMPORT_GROUP_MEMBERS_PATTERN} element={<ImportGroupMembersPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />
           {/* Before the :id route, or "new", "import" and "taxonomy" would each

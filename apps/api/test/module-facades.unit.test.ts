@@ -4,8 +4,16 @@ import { AppException, ErrorCodes } from '@iace/contracts';
 import { AuthService } from '../src/auth/auth.service';
 import { PinService } from '../src/auth/pin/pin.service';
 import { BranchesService } from '../src/branches/branches.service';
+import { GroupsService } from '../src/groups';
 import { StudentsService } from '../src/students/students.service';
-import { FakeConfig, FakePrisma, FakeRedis, makeBranch, makeStudent } from './support/fakes';
+import {
+  FakeConfig,
+  FakePrisma,
+  FakeRedis,
+  makeBranch,
+  makeGroup,
+  makeStudent,
+} from './support/fakes';
 
 /**
  * The three seams docs/03 §4 names, exercised through the facade rather than the internals they
@@ -155,5 +163,44 @@ describe('StudentsService.assertExists', () => {
     const error = await service.assertExists('stu_gone').catch((e: unknown) => e);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+});
+
+// --------------------------------------------------------------------------- configs → groups /
+// students ---------------------------------------------------------------------------
+
+describe('the counts the configs module asks for', () => {
+  /**
+   * The failure these prevent: the code lives in `Group.examType` and `Student.enrolledExams` as
+   * free text, so `configs` has nothing to join on and would otherwise read the two tables itself.
+   */
+  it('GroupsService.countByExamType counts groups carrying the code', async () => {
+    const prisma = new FakePrisma(
+      [],
+      [],
+      [],
+      [
+        makeGroup({ id: 'grp_1', examType: 'SSC CGL' }),
+        makeGroup({ id: 'grp_2', examType: 'SSC CGL' }),
+        makeGroup({ id: 'grp_3', examType: 'RRB JE' }),
+      ],
+    );
+    const groups = new GroupsService(prisma.asService(), null as never);
+
+    assert.equal(await groups.countByExamType('SSC CGL'), 2);
+    assert.equal(await groups.countByExamType('SSC CHSL'), 0);
+  });
+
+  it('StudentsService.countEnrolledIn counts students enrolled under the code', async () => {
+    const prisma = new FakePrisma([
+      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
+      makeStudent({ id: 'stu_2', enrolledExams: ['SSC CGL', 'RRB JE'] }),
+      makeStudent({ id: 'stu_3', enrolledExams: [] }),
+    ]);
+    const students = new StudentsService(prisma.asService(), null as never);
+
+    assert.equal(await students.countEnrolledIn('SSC CGL'), 2);
+    assert.equal(await students.countEnrolledIn('RRB JE'), 1);
+    assert.equal(await students.countEnrolledIn('SSC CHSL'), 0);
   });
 });

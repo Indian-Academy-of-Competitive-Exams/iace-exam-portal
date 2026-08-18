@@ -18,7 +18,7 @@ function appsDeclaring(name: string): string[] {
  * one of them gets fixed, and nobody compares two screens side by side.
  */
 describe('components that live in the design system', () => {
-  for (const name of ['StatRow', 'StepIcon', 'PinField']) {
+  for (const name of ['StatRow', 'StepIcon', 'PinField', 'MultiCombobox']) {
     it(`${name} is not re-declared inside an app`, () => {
       assert.deepEqual(appsDeclaring(name), [], `import ${name} from @iace/ui`);
     });

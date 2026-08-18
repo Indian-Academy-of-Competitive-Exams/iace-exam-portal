@@ -83,6 +83,23 @@ export class GroupsService {
     return toSummary(group, await this.studentCount(id));
   }
 
+  /** For the configs module: `Group.examType` stores the code, with no relation to follow. */
+  countByExamType(code: string): Promise<number> {
+    return this.prisma.group.count({ where: { examType: code } });
+  }
+
+  /** The same count for a whole page of codes, in one query rather than one per row. */
+  async countsByExamTypes(codes: string[]): Promise<Map<string, number>> {
+    if (codes.length === 0) return new Map();
+
+    const rows = await this.prisma.group.groupBy({
+      by: ['examType'],
+      where: { examType: { in: codes } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.examType ?? '', row._count._all]));
+  }
+
   async create(input: CreateGroupBody): Promise<GroupSummary> {
     await this.branches.assertUsable(input.branchId);
     await this.assertNameFree(null, input.name);

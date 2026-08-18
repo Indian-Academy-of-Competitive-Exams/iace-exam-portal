@@ -96,6 +96,7 @@ export {
   type ConfirmDialogProps,
 } from './components/ui/dialog';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
+export { MultiCombobox, type MultiComboboxProps } from './components/ui/multi-combobox';
 export {
   DropdownMenu,
   DropdownMenuTrigger,
