@@ -4093,12 +4093,11 @@ Expected: `AssertionError: 0 !== 1` on the exam-group count, and `[ { directGrou
 
 - [ ] **Step 3: Implement** — in `apps/api/src/groups/groups.service.ts`, add `GROUP_REACH`, `groupReach` to the `@iace/contracts` import, replace the two count privates with one public method, and rewire `list`/`detail`/`remove`:
 
-````ts
 In `list`, the new filter joins the where clause it already builds:
 
 ```ts
       ...(query.acceptsGrants ? { type: { in: [...GROUP_TYPES_ACCEPTING_GRANTS] } } : {}),
-````
+```
 
 adding `GROUP_TYPES_ACCEPTING_GRANTS` to the same `@iace/contracts` import.
 
@@ -6278,49 +6277,50 @@ const groups = useQuery({
 
 and the empty state at `:148-156`, which now means something narrower than it says, becomes:
 
-````tsx
-    <Alert variant="warning">
-      <span>
-        No scholarship or non-IACE group exists yet — those are the only ones granted student by
-        student.{' '}
-        <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
-          Create a group
-        </Link>
-        .
-      </span>
-    </Alert>
+```tsx
+<Alert variant="warning">
+  <span>
+    No scholarship or non-IACE group exists yet — those are the only ones granted student by
+    student.{' '}
+    <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
+      Create a group
+    </Link>
+    .
+  </span>
+</Alert>
+```
+
+- [ ] **Step 5: The two switches beside the card**
 
 Replace the single mutation and dialog with two of each. State becomes `const [blockConfirm, setBlockConfirm] = useState(false); const [signInConfirm, setSignInConfirm] = useState(false);`, and:
 
 ```ts
-  const setTestBlocked = useMutation({
-    meta: {
-      success: (): string =>
-        detail?.isTestBlocked ? 'Tests allowed again.' : 'Blocked from tests.',
-    },
-    mutationFn: (isTestBlocked: boolean) =>
-      api.admin.students.setTestBlocked(id, { isTestBlocked }),
-    onError: () => setBlockConfirm(false),
-    onSuccess: (updated) => {
-      setBlockConfirm(false);
-      queryClient.setQueryData(['admin', 'student', id], updated);
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
-    },
-  });
+const setTestBlocked = useMutation({
+  meta: {
+    success: (): string => (detail?.isTestBlocked ? 'Tests allowed again.' : 'Blocked from tests.'),
+  },
+  mutationFn: (isTestBlocked: boolean) => api.admin.students.setTestBlocked(id, { isTestBlocked }),
+  onError: () => setBlockConfirm(false),
+  onSuccess: (updated) => {
+    setBlockConfirm(false);
+    queryClient.setQueryData(['admin', 'student', id], updated);
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+  },
+});
 
-  const setActive = useMutation({
-    meta: {
-      success: (): string => (detail?.isActive ? 'Sign-in suspended.' : 'Sign-in restored.'),
-    },
-    mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
-    onError: () => setSignInConfirm(false),
-    onSuccess: (updated) => {
-      setSignInConfirm(false);
-      queryClient.setQueryData(['admin', 'student', id], updated);
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
-    },
-  });
-````
+const setActive = useMutation({
+  meta: {
+    success: (): string => (detail?.isActive ? 'Sign-in suspended.' : 'Sign-in restored.'),
+  },
+  mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
+  onError: () => setSignInConfirm(false),
+  onSuccess: (updated) => {
+    setSignInConfirm(false);
+    queryClient.setQueryData(['admin', 'student', id], updated);
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+  },
+});
+```
 
 The header action, with the sign-in control gated the way `branches.tsx` gates its row actions:
 
@@ -6417,7 +6417,7 @@ and the form grid renders the new card first in the right-hand column:
 
 Imports to add: `type UseFormReturn` from `react-hook-form`; `Combobox, MultiCombobox` from `@iace/ui`; `PROGRAM_MAX, STUDENT_TYPE, STUDENT_TYPES, type StudentType` from `@iace/contracts` (`STUDENT_TYPES` is produced by Task 40); `STUDENT_TYPE_LABELS` from `../lib/constants`; `useExamTypes` from `../lib/use-exam-types`; `useBranches` from `../lib/use-branches`; `useAuth` from `../providers/auth`.
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 6: Run the tests**
 
 ```bash
 cd /Users/harshithdiyyala/Projects/iace/packages/ui && pnpm test && cd /Users/harshithdiyyala/Projects/iace/apps/admin && pnpm typecheck
