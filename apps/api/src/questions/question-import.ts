@@ -44,8 +44,8 @@ const CODE = QUESTION_VALIDATION_CODE;
 export interface ImportDedupContext {
   /** stemHash -> the id of the question that already has it. */
   questionIdByHash: Map<string, string>;
-  /** Codes already taken, so a sheet cannot claim one twice. */
-  takenCodes: Set<string>;
+  /** questionCode -> the question holding it, so a sheet cannot claim one twice. */
+  questionIdByCode: Map<string, string>;
 }
 
 export interface PlannedRow extends QuestionImportRow {
@@ -161,23 +161,28 @@ function planRow(
   // fixing one column should see the rest of that row's problems in the same pass.
   issues.push(...validateQuestion(draft, catalog.context));
 
-  const code = draft.questionCode;
-  if (code && (dedup.takenCodes.has(code) || codesInFile.has(code))) {
-    issues.push({
-      code: CODE.QUESTION_CODE_TAKEN,
-      message: `The code ${code} is already used by another question`,
-      field: 'questionCode',
-      column: 'question_code',
-    });
-  } else if (code) {
-    codesInFile.add(code);
-  }
-
   const languages = languagesIn(draft.stem);
   const stemHash = blank(draft.stem[DEFAULT_LANGUAGE] ?? '') ? null : computeStemHash(draft);
-  const reported = dedupeIssues(issues);
-
   const duplicateOf = stemHash ? duplicateFor(stemHash, dedup, lineByHash) : null;
+
+  // Only a row that would be written can clash: a row that is already in the
+  // bank is carrying the code it was imported with, and re-uploading last
+  // week's sheet must not turn every coded row into an error.
+  const code = draft.questionCode;
+  if (code && !duplicateOf) {
+    if (dedup.questionIdByCode.has(code) || codesInFile.has(code)) {
+      issues.push({
+        code: CODE.QUESTION_CODE_TAKEN,
+        message: `The code ${code} is already used by another question`,
+        field: 'questionCode',
+        column: 'question_code',
+      });
+    } else {
+      codesInFile.add(code);
+    }
+  }
+
+  const reported = dedupeIssues(issues);
 
   const action: QuestionImportAction =
     reported.length > 0 ? 'skip' : duplicateOf ? 'duplicate' : 'create';

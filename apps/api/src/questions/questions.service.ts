@@ -138,7 +138,6 @@ export class QuestionsService {
       subTopicId: draft.subTopicId ?? null,
       difficulty: draft.difficulty,
       status: draft.status,
-      isActive: true,
       questionCode: draft.questionCode ?? null,
       content: built.content as Prisma.InputJsonValue,
       answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,

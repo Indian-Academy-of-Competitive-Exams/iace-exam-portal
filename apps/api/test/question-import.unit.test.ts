@@ -50,7 +50,7 @@ function catalog(): TaxonomyCatalog {
 
 const noDedup = (): ImportDedupContext => ({
   questionIdByHash: new Map(),
-  takenCodes: new Set(),
+  questionIdByCode: new Map(),
 });
 
 /** A full MCQ row, by column key, before any override. */
@@ -222,7 +222,7 @@ describe('the question sheet — duplicates', () => {
     const first = plan([MCQ_ROW]).rows[0]!;
     const dedup: ImportDedupContext = {
       questionIdByHash: new Map([[first.stemHash!, 'q_existing']]),
-      takenCodes: new Set(),
+      questionIdByCode: new Map(),
     };
 
     const result = plan([MCQ_ROW], dedup);
@@ -256,7 +256,7 @@ describe('the question sheet — duplicates', () => {
   it('refuses a question code the bank has already given out', () => {
     const dedup: ImportDedupContext = {
       questionIdByHash: new Map(),
-      takenCodes: new Set(['QA-001']),
+      questionIdByCode: new Map([['QA-001', 'q_existing']]),
     };
     const row = plan([{ ...MCQ_ROW, question_code: 'qa-001' }], dedup).rows[0]!;
     assert.ok(
@@ -270,6 +270,22 @@ describe('the question sheet — duplicates', () => {
       { ...MCQ_ROW, stem_en: 'What is 30% of 150?', question_code: 'QA-001' },
     ]);
     assert.equal(result.rows[1]!.action, 'skip');
+  });
+
+  it('re-uploading a sheet is duplicates, not a pile of code clashes', () => {
+    // The row is already in the bank, carrying the code it was imported with.
+    // Reporting that code as taken would make the normal way to use this — add
+    // ten questions to last week's file and upload it again — look like errors.
+    const coded = { ...MCQ_ROW, question_code: 'QA-001' };
+    const first = plan([coded]).rows[0]!;
+
+    const result = plan([coded], {
+      questionIdByHash: new Map([[first.stemHash!, 'q_existing']]),
+      questionIdByCode: new Map([['QA-001', 'q_existing']]),
+    });
+
+    assert.equal(result.rows[0]!.action, 'duplicate');
+    assert.deepEqual(result.rows[0]!.issues, []);
   });
 });
 

@@ -133,15 +133,15 @@ export class QuestionImportService {
     });
 
     const questionIdByHash = new Map<string, string>();
-    const takenCodes = new Set<string>();
+    const questionIdByCode = new Map<string, string>();
     for (const row of rows) {
       if (row.stemHash && !questionIdByHash.has(row.stemHash)) {
         questionIdByHash.set(row.stemHash, row.id);
       }
-      if (row.questionCode) takenCodes.add(row.questionCode);
+      if (row.questionCode) questionIdByCode.set(row.questionCode, row.id);
     }
 
-    return { questionIdByHash, takenCodes };
+    return { questionIdByHash, questionIdByCode };
   }
 }
 

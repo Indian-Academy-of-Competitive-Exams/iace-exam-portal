@@ -165,6 +165,17 @@ describe('QuestionsService — retiring and status', () => {
     assert.equal(all.total, 2);
   });
 
+  it('leaves a retired question retired when it is edited', async () => {
+    // Saving an edit must not quietly put a question back into every future draw.
+    const { questions } = build();
+    const created = await questions.create(draft(), ADMIN);
+    await questions.setActive(created.id, { isActive: false });
+
+    const edited = await questions.update(created.id, draft({ difficulty: DIFFICULTY_LEVEL.HIGH }));
+
+    assert.equal(edited.isActive, false);
+  });
+
   it('moves a question to a status the bank filters on', async () => {
     const { questions } = build();
     const created = await questions.create(draft(), ADMIN);
