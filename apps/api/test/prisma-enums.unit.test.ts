@@ -8,8 +8,11 @@ import {
   AUDIT_ACTOR_TYPE,
   AUDIT_FEATURE,
   BRANCH_TYPE,
+  DIFFICULTY_LEVEL,
   GROUP_TYPE,
   IMPORT_SOURCE,
+  QUESTION_STATUS,
+  QUESTION_TYPE,
   STUDENT_TYPE,
   actorTypeSchema,
 } from '@iace/contracts';
@@ -29,6 +32,9 @@ const MIRRORED = {
   AuditFeature: AUDIT_FEATURE,
   AuditAction: AUDIT_ACTION,
   AuditActorType: AUDIT_ACTOR_TYPE,
+  QuestionType: QUESTION_TYPE,
+  DifficultyLevel: DIFFICULTY_LEVEL,
+  QuestionStatus: QUESTION_STATUS,
 } as const;
 
 function prismaEnum(name: string): string[] {

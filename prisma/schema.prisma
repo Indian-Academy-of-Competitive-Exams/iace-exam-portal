@@ -84,6 +84,7 @@ enum DifficultyLevel {
 
 enum QuestionType {
   SINGLE_MCQ // V1. Extensible later.
+  TEXT_FIELD // a typed answer, compared against answerKey rather than chosen
 }
 
 enum QuestionStatus {
@@ -439,7 +440,15 @@ model Question {
   defaultMarks         Decimal?        @db.Decimal(6, 2)
   defaultNegativeMarks Decimal?        @db.Decimal(6, 2)
   status               QuestionStatus  @default(ACTIVE)
+  // Retired rather than removed: excluded from every future draw and hidden
+  // from the bank, while the papers that already hold it are untouched.
+  isActive             Boolean         @default(true)
   content              Json // { "<lang>": { "stem": <rich>, "solution": <rich> } }
+  // TEXT_FIELD only: { mode, answers: { "<lang>": "..." }, tolerance }
+  answerKey            Json?
+  tags                 String[]        @default([])
+  // Where it came from: { kind: MANUAL | IMPORT, importLogId, line }
+  source               Json?
   stemHash             String? // dedup detection
   createdById          String? // audit (Admin id)
   createdAt            DateTime        @default(now())
@@ -453,6 +462,7 @@ model Question {
   paperQuestions PaperQuestion[]
 
   @@index([subjectId, difficulty, status]) // auto-draw filter
+  @@index([isActive])
   @@index([topicId])
   @@index([subTopicId])
   @@index([stemHash])
