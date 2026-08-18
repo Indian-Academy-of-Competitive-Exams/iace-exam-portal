@@ -84,7 +84,7 @@ export function LoginPage() {
           low on a tall screen, and this is the only thing on the page. */}
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
-          <Brandmark className="justify-center px-6 pt-6" />
+          <Brandmark size="lg" className="justify-center px-6 pt-7" />
 
           {step.kind === 'signIn' ? (
             <SignInStep
