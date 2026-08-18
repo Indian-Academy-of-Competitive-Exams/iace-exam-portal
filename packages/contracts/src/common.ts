@@ -89,5 +89,28 @@ export const newPinSchema = pinSchema
   )
   .refine((v) => !SEQUENTIAL_PINS.has(v), 'Avoid a PIN in counting order');
 
+// ============================================================================
+// List-query params. Shared because a filter that parses differently in two
+// modules is a filter that means two things.
+// ============================================================================
+
+/** A query param that is present-or-absent, never "false means don't care". */
+export const optionalBooleanQuery = () =>
+  z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true'));
+
+/** The free-text box every list carries. Blank is absent, not a search for "". */
+export const SEARCH_QUERY_MAX = 64;
+
+export const searchQuery = () =>
+  z
+    .string()
+    .trim()
+    .max(SEARCH_QUERY_MAX)
+    .optional()
+    .transform((v) => (v === '' ? undefined : v));
+
 // The failure shape lives in ./envelope — there is one response envelope for
 // the whole API, and NestJS's default error body is not it.

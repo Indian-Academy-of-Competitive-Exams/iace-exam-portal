@@ -9,5 +9,6 @@ export * from './me';
 export * from './branches';
 export * from './groups';
 export * from './imports';
+export * from './questions';
 export * from './health';
 export * from './client';

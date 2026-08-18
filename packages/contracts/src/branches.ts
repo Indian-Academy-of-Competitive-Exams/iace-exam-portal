@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { branchNameSchema } from './naming';
 
@@ -38,17 +39,9 @@ export const branchRefSchema = z.object({
 export type BranchRef = z.infer<typeof branchRefSchema>;
 
 export const branchListQuerySchema = paginationQuerySchema.extend({
-  q: z
-    .string()
-    .trim()
-    .max(64)
-    .optional()
-    .transform((v) => (v === '' ? undefined : v)),
+  q: searchQuery(),
   /** Group creation only offers active branches; the admin screen shows all. */
-  activeOnly: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  activeOnly: optionalBooleanQuery(),
 });
 export type BranchListQuery = z.infer<typeof branchListQuerySchema>;
 export type BranchListQueryInput = z.input<typeof branchListQuerySchema>;

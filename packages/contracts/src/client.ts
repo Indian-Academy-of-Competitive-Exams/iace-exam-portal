@@ -99,6 +99,39 @@ import {
   type StudentImportResult,
 } from './imports';
 
+import {
+  ADMIN_QUESTION_ROUTES,
+  ADMIN_TAXONOMY_ROUTES,
+  QUESTION_IMPORT_ROUTES,
+  questionDetailSchema,
+  questionImportPlanSchema,
+  questionImportResultSchema,
+  questionSummarySchema,
+  subTopicSchema,
+  subjectSchema,
+  topicSchema,
+  type CreateSubTopicInput,
+  type CreateSubjectInput,
+  type CreateTopicInput,
+  type QuestionDetail,
+  type QuestionDraftInput,
+  type QuestionImportPlan,
+  type QuestionImportResult,
+  type QuestionListQueryInput,
+  type QuestionSummary,
+  type SetQuestionActiveInput,
+  type SetQuestionStatusInput,
+  type SubTopic,
+  type SubTopicListQueryInput,
+  type Subject,
+  type SubjectListQueryInput,
+  type Topic,
+  type TopicListQueryInput,
+  type UpdateSubTopicInput,
+  type UpdateSubjectInput,
+  type UpdateTopicInput,
+} from './questions';
+
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
 function queryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams();
@@ -574,6 +607,108 @@ export function createApiClient(options: ApiClientOptions) {
           }),
       },
 
+      /**
+       * Subject -> Topic -> SubTopic. A sub-topic is SHARED: creating one links an
+       * existing row where the name already exists rather than minting a second.
+       */
+      taxonomy: {
+        listSubjects: (query: SubjectListQueryInput = {}): Promise<Paginated<Subject>> =>
+          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.subjects}${queryString({ ...query })}`, {
+            schema: subjectSchema.array(),
+          }),
+
+        createSubject: (input: CreateSubjectInput): Promise<Subject> =>
+          request(ADMIN_TAXONOMY_ROUTES.subjects, {
+            method: 'POST',
+            body: input,
+            schema: subjectSchema,
+          }),
+
+        updateSubject: (id: string, input: UpdateSubjectInput): Promise<Subject> =>
+          request(ADMIN_TAXONOMY_ROUTES.subject(id), {
+            method: 'PATCH',
+            body: input,
+            schema: subjectSchema,
+          }),
+
+        listTopics: (query: TopicListQueryInput = {}): Promise<Paginated<Topic>> =>
+          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.topics}${queryString({ ...query })}`, {
+            schema: topicSchema.array(),
+          }),
+
+        createTopic: (input: CreateTopicInput): Promise<Topic> =>
+          request(ADMIN_TAXONOMY_ROUTES.topics, {
+            method: 'POST',
+            body: input,
+            schema: topicSchema,
+          }),
+
+        updateTopic: (id: string, input: UpdateTopicInput): Promise<Topic> =>
+          request(ADMIN_TAXONOMY_ROUTES.topic(id), {
+            method: 'PATCH',
+            body: input,
+            schema: topicSchema,
+          }),
+
+        listSubTopics: (query: SubTopicListQueryInput = {}): Promise<Paginated<SubTopic>> =>
+          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.subTopics}${queryString({ ...query })}`, {
+            schema: subTopicSchema.array(),
+          }),
+
+        createSubTopic: (input: CreateSubTopicInput): Promise<SubTopic> =>
+          request(ADMIN_TAXONOMY_ROUTES.subTopics, {
+            method: 'POST',
+            body: input,
+            schema: subTopicSchema,
+          }),
+
+        updateSubTopic: (id: string, input: UpdateSubTopicInput): Promise<SubTopic> =>
+          request(ADMIN_TAXONOMY_ROUTES.subTopic(id), {
+            method: 'PATCH',
+            body: input,
+            schema: subTopicSchema,
+          }),
+      },
+
+      questions: {
+        list: (query: QuestionListQueryInput = {}): Promise<Paginated<QuestionSummary>> =>
+          requestPaginated(`${ADMIN_QUESTION_ROUTES.list}${queryString({ ...query })}`, {
+            schema: questionSummarySchema.array(),
+          }),
+
+        detail: (id: string): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.get(id), { schema: questionDetailSchema }),
+
+        create: (input: QuestionDraftInput): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: questionDetailSchema,
+          }),
+
+        update: (id: string, input: QuestionDraftInput): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: questionDetailSchema,
+          }),
+
+        /** Retire or restore. An inactive question is drawn into no future paper. */
+        setActive: (id: string, input: SetQuestionActiveInput): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.setActive(id), {
+            method: 'PATCH',
+            body: input,
+            schema: questionDetailSchema,
+          }),
+
+        setStatus: (id: string, input: SetQuestionStatusInput): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.setStatus(id), {
+            method: 'PATCH',
+            body: input,
+            schema: questionDetailSchema,
+          }),
+      },
+
       imports: {
         /** The sample workbook — a Blob, not an envelope. */
         studentTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.studentsTemplate),
@@ -608,6 +743,26 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: fileBody(file),
             schema: groupMemberImportResultSchema,
+          }),
+        /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
+        questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),
+
+        /**
+         * Uploads once. The file is kept and an import run opened, so committing
+         * names the run rather than sending the same megabytes a second time.
+         */
+        previewQuestions: (file: File): Promise<QuestionImportPlan> =>
+          request(QUESTION_IMPORT_ROUTES.preview, {
+            method: 'POST',
+            body: fileBody(file),
+            schema: questionImportPlanSchema,
+          }),
+
+        commitQuestions: (importLogId: string): Promise<QuestionImportResult> =>
+          request(QUESTION_IMPORT_ROUTES.commit, {
+            method: 'POST',
+            body: { importLogId },
+            schema: questionImportResultSchema,
           }),
       },
     },
