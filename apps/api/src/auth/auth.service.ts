@@ -196,16 +196,18 @@ export class AuthService {
   // Admins — email + OTP
   // ==========================================================================
 
-  /** No self-signup: the admin must already exist. */
+  /**
+   * No self-signup, so an unknown email is told so rather than answered with a success: a silent
+   * "sent" left somebody waiting for a code that was never going to arrive.
+   */
   async requestAdminOtp(email: string): Promise<OtpRequestResponse> {
     const admin = await this.prisma.admin.findUnique({ where: { email } });
     if (!admin) {
-      return {
-        sent: true,
-        expiresInSec: this.otpTtlPlaceholder,
-        resendAfterSec: this.otpCooldownPlaceholder,
-        codeLength: this.otpCodeLengthPlaceholder,
-      };
+      throw new AppException(ErrorCodes.ADMIN_NOT_REGISTERED, undefined, {
+        fieldErrors: {
+          email: ['That email has no admin account. Ask a super admin to create one for you.'],
+        },
+      });
     }
     return this.otp.request(ActorTypes.ADMIN, email);
   }
@@ -384,19 +386,5 @@ export class AuthService {
   }): Promise<AdminPermissions> {
     if (admin.isSuperAdmin || !admin.isActive) return {};
     return this.admins.permissionsFor(admin.id);
-  }
-
-  // Values echoed for unknown admins; they must match the real policy exactly
-  // or the difference becomes an enumeration oracle.
-  private get otpTtlPlaceholder(): number {
-    return this.otp.ttlSec;
-  }
-
-  private get otpCooldownPlaceholder(): number {
-    return this.otp.cooldownSec;
-  }
-
-  private get otpCodeLengthPlaceholder(): number {
-    return this.otp.codeLength;
   }
 }

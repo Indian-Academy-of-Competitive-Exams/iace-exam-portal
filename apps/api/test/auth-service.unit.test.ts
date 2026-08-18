@@ -7,6 +7,7 @@ import {
   PERMISSION_LEVELS,
   type AdminPermissions,
   AppException,
+  ErrorCodes,
 } from '@iace/contracts';
 import { AuthService } from '../src/auth/auth.service';
 import { type AdminsService } from '../src/admins';
@@ -314,22 +315,31 @@ describe('AuthService — admin', () => {
     assert.deepEqual(ctx.adminsFacade.calls, [], 'a super admin needs no grant query');
   });
 
-  it('answers identically for an unknown admin, but sends nothing', async () => {
+  /**
+   * Admins cannot self-register, so "we sent it" to an address with no account is a lie that costs a
+   * support ticket. The trade is deliberate: this endpoint will say which addresses are admins.
+   */
+  it('refuses an unknown admin instead of pretending to send', async () => {
     const ctx = build();
-    const real = build([], [makeAdmin({ email: 'admin@iace.co.in' })]);
 
-    const response = await ctx.auth.requestAdminOtp('nobody@example.com');
-    const { devCode: _devCode, ...realResponse } =
-      await real.auth.requestAdminOtp('admin@iace.co.in');
+    const error = await ctx.auth.requestAdminOtp('nobody@example.com').then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
 
-    // Same shape and same numbers as a real send, so the response cannot be used to enumerate admins —
-    // but no code actually goes out.
-    assert.deepEqual(response, realResponse);
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.ADMIN_NOT_REGISTERED);
+    assert.ok(error.fieldErrors?.email?.[0], 'the message belongs on the email field');
+    assert.equal(ctx.sender.sent.length, 0, 'nothing is sent to an address with no account');
+  });
+
+  it('still sends for an admin that exists', async () => {
+    const ctx = build([], [makeAdmin({ email: 'admin@iace.co.in' })]);
+
+    const response = await ctx.auth.requestAdminOtp('admin@iace.co.in');
+
     assert.equal(response.sent, true);
-    assert.equal(response.expiresInSec, 300);
-    assert.equal(response.resendAfterSec, 45);
-    assert.equal(response.codeLength, 6);
-    assert.equal(ctx.sender.sent.length, 0);
+    assert.equal(ctx.sender.sent.length, 1);
   });
 
   it('does not let a student OTP satisfy the admin endpoint', async () => {

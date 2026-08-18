@@ -23,6 +23,7 @@ export const ErrorCodes = {
   OTP_EXPIRED: 'OTP_EXPIRED',
   PIN_LOCKED: 'PIN_LOCKED',
   PIN_INVALID: 'PIN_INVALID',
+  ADMIN_NOT_REGISTERED: 'ADMIN_NOT_REGISTERED',
   INTERNAL: 'INTERNAL',
 } as const;
 
@@ -40,6 +41,7 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.RATE_LIMITED]: 429,
   // A wrong or stale credential is an authentication failure, not a malformed
   // request — the body was perfectly well-formed.
+  [ErrorCodes.ADMIN_NOT_REGISTERED]: 404,
   [ErrorCodes.OTP_INVALID]: 401,
   [ErrorCodes.OTP_EXPIRED]: 401,
   [ErrorCodes.PIN_INVALID]: 401,
@@ -60,6 +62,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.OTP_EXPIRED]: 'That code has expired — request a new one',
   [ErrorCodes.PIN_INVALID]: 'Incorrect mobile number or PIN',
   [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts — try again later',
+  [ErrorCodes.ADMIN_NOT_REGISTERED]:
+    'That email has no admin account. Ask a super admin to create one for you.',
   [ErrorCodes.INTERNAL]: 'Something went wrong. Please try again.',
 };
 

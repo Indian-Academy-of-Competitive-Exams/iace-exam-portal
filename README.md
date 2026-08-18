@@ -70,7 +70,8 @@ VALUES (
 );
 ```
 
-Locally: `docker compose exec -T postgres psql -U postgres -d iace -c "<the statement above>"`.
+Locally: `docker compose exec -T postgres psql -U iace -d iace -c "<the statement above>"`.
+(`iace` is `POSTGRES_USER` in `docker-compose.yml`; there is no `postgres` role in this image.)
 
 That account bypasses every feature check, so it can immediately register `Feature` rows and grant them. Everything after the first row is done in the UI.
 
