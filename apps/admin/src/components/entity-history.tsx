@@ -70,9 +70,8 @@ function HistoryBody({
 }
 
 /**
- * The audit trail for one record, read where "who changed this" is actually asked —
- * on the record itself. Takes a feature and an entity id so a group or branch detail
- * screen can reuse it without a rewrite.
+ * Takes a feature and an entity id rather than a studentId, so a group or branch
+ * detail screen can reuse this unchanged.
  */
 export function EntityHistory({
   feature,

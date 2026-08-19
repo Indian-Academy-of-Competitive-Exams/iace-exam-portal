@@ -42,11 +42,8 @@ function diffLabel(field: string, diff: { from: unknown; to: unknown }): string 
 }
 
 /**
- * Diffs render as `field: from → to`, capped and truncated the same way `AccessCell`
- * (`students.tsx`) caps a badge row — a rich-text question diff is exactly the kind of value
- * that must not force the row wide. An import-sourced row carries no diff at all —
- * `recordImportRows` writes one thin entry per touched entity, by design — so it links to the
- * Imports tab, which is where that run's actual status and counts live.
+ * An import-sourced row carries no diff — `recordImportRows` writes one thin entry per touched
+ * entity, by design — so it links to the Imports tab, where that run's status and counts live.
  */
 export function ChangedCell({ row }: Readonly<{ row: RowAction }>) {
   if (row.changed) {
