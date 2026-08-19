@@ -11,6 +11,7 @@ import {
 import { GroupsService } from '../src/groups/groups.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { type ExamTypesService } from '../src/configs';
+import { AuditContext } from '../src/audit';
 import { FakePrisma, makeBranch, makeGroup, makeStudent } from './support/fakes';
 
 /**
@@ -46,8 +47,9 @@ function serviceWith(
   const examTypes = new StubExamTypes();
   const service = new GroupsService(
     prisma.asService(),
-    new BranchesService(prisma.asService()),
+    new BranchesService(prisma.asService(), new AuditContext()),
     examTypes.asService(),
+    new AuditContext(),
   );
   return { service, prisma, examTypes };
 }

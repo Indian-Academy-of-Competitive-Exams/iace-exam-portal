@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   questionDraftSchema,
@@ -17,6 +19,7 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit, TOGGLE_ACTIONS } from '../audit';
 import { QuestionsService } from './questions.service';
 
 /** The question bank itself. Every route is gated on QUESTION_MANAGEMENT. */
@@ -39,6 +42,7 @@ export class QuestionsController {
     return this.questions.detail(id);
   }
 
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(
@@ -50,6 +54,7 @@ export class QuestionsController {
     return this.questions.create(body, user.id);
   }
 
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
@@ -59,6 +64,7 @@ export class QuestionsController {
     return this.questions.update(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.QUESTION, TOGGLE_ACTIONS.signIn)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id/active')
   setActive(
@@ -68,6 +74,7 @@ export class QuestionsController {
     return this.questions.setActive(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id/status')
   setStatus(

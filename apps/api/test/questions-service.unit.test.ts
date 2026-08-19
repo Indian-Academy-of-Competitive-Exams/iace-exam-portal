@@ -15,6 +15,7 @@ import {
 } from '@iace/contracts';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
+import { AuditContext } from '../src/audit';
 import {
   FakeQuestionBankPrisma,
   makeQuestion,
@@ -35,8 +36,8 @@ function build(questions = [] as ReturnType<typeof makeQuestion>[]) {
 
   return {
     prisma,
-    questions: new QuestionsService(prisma.asService()),
-    taxonomy: new TaxonomyService(prisma.asService()),
+    questions: new QuestionsService(prisma.asService(), new AuditContext()),
+    taxonomy: new TaxonomyService(prisma.asService(), new AuditContext()),
   };
 }
 

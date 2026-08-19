@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  fieldDiff,
   type CreateSubTopicBody,
   type CreateSubjectBody,
   type CreateTopicBody,
@@ -18,6 +19,7 @@ import {
   type UpdateTopicBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditContext } from '../audit';
 
 const SUBJECT_INCLUDE = {
   _count: { select: { topics: true, questions: true } },
@@ -37,6 +39,11 @@ type SubjectRow = Prisma.SubjectGetPayload<{ include: typeof SUBJECT_INCLUDE }>;
 type TopicRow = Prisma.TopicGetPayload<{ include: typeof TOPIC_INCLUDE }>;
 type SubTopicRow = Prisma.SubTopicGetPayload<{ include: typeof SUB_TOPIC_INCLUDE }>;
 
+/** What each taxonomy level's audit diff covers — one `AuditFeature` value per level. */
+export const AUDITED_SUBJECT_FIELDS = ['name', 'code'] as const;
+export const AUDITED_TOPIC_FIELDS = ['name'] as const;
+export const AUDITED_SUB_TOPIC_FIELDS = ['name', 'topicIds'] as const;
+
 /**
  * Owns `Subject`, `Topic` and `SubTopic` (docs/03 §5). Names arrive canonical
  * from the schemas, so a case- or space-different duplicate cannot be created —
@@ -45,7 +52,10 @@ type SubTopicRow = Prisma.SubTopicGetPayload<{ include: typeof SUB_TOPIC_INCLUDE
  */
 @Injectable()
 export class TaxonomyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   // ==========================================================================
   // Subjects
@@ -87,18 +97,24 @@ export class TaxonomyService {
   }
 
   async updateSubject(id: string, body: UpdateSubjectBody): Promise<Subject> {
-    await this.requireSubject(id);
+    const subject = await this.requireSubject(id);
 
-    return toSubject(
-      await this.prisma.subject.update({
-        where: { id },
-        data: {
-          ...(body.name === undefined ? {} : { name: body.name }),
-          ...(body.code === undefined ? {} : { code: body.code }),
-        },
-        include: SUBJECT_INCLUDE,
-      }),
+    const changes = {
+      ...(body.name === undefined ? {} : { name: body.name }),
+      ...(body.code === undefined ? {} : { code: body.code }),
+    };
+
+    const updated = await this.prisma.subject.update({
+      where: { id },
+      data: changes,
+      include: SUBJECT_INCLUDE,
+    });
+
+    this.auditContext.setChanged(
+      fieldDiff(subject, { ...subject, ...changes }, AUDITED_SUBJECT_FIELDS),
     );
+
+    return toSubject(updated);
   }
 
   // ==========================================================================
@@ -158,13 +174,17 @@ export class TaxonomyService {
       });
     }
 
-    return toTopic(
-      await this.prisma.topic.update({
-        where: { id },
-        data: { name: body.name },
-        include: TOPIC_INCLUDE,
-      }),
-    );
+    const changes = { name: body.name };
+
+    const updated = await this.prisma.topic.update({
+      where: { id },
+      data: changes,
+      include: TOPIC_INCLUDE,
+    });
+
+    this.auditContext.setChanged(fieldDiff(topic, { ...topic, ...changes }, AUDITED_TOPIC_FIELDS));
+
+    return toTopic(updated);
   }
 
   // ==========================================================================
@@ -224,7 +244,7 @@ export class TaxonomyService {
 
   /** `topicIds` REPLACES the links: the screen holds the whole set, not a delta. */
   async updateSubTopic(id: string, body: UpdateSubTopicBody): Promise<SubTopic> {
-    await this.requireSubTopic(id);
+    const subTopic = await this.requireSubTopic(id);
     if (body.topicIds) await this.requireTopics(body.topicIds);
 
     if (body.name) {
@@ -240,18 +260,28 @@ export class TaxonomyService {
       }
     }
 
-    return toSubTopic(
-      await this.prisma.subTopic.update({
-        where: { id },
-        data: {
-          ...(body.name ? { name: body.name } : {}),
-          ...(body.topicIds
-            ? { topics: { set: body.topicIds.map((topicId) => ({ id: topicId })) } }
-            : {}),
-        },
-        include: SUB_TOPIC_INCLUDE,
-      }),
+    const changes = {
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.topicIds
+        ? { topics: { set: body.topicIds.map((topicId) => ({ id: topicId })) } }
+        : {}),
+    };
+
+    const updated = await this.prisma.subTopic.update({
+      where: { id },
+      data: changes,
+      include: SUB_TOPIC_INCLUDE,
+    });
+
+    this.auditContext.setChanged(
+      fieldDiff(
+        auditFieldsOfSubTopic(subTopic),
+        auditFieldsOfSubTopic(updated),
+        AUDITED_SUB_TOPIC_FIELDS,
+      ),
     );
+
+    return toSubTopic(updated);
   }
 
   // ==========================================================================
@@ -273,7 +303,10 @@ export class TaxonomyService {
   }
 
   private async requireSubTopic(id: string) {
-    const row = await this.prisma.subTopic.findUnique({ where: { id } });
+    const row = await this.prisma.subTopic.findUnique({
+      where: { id },
+      include: { topics: { select: { id: true } } },
+    });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such sub-topic');
     return row;
   }
@@ -319,4 +352,18 @@ function toSubTopic(row: SubTopicRow): SubTopic {
     })),
     questionCount: row._count.questions,
   };
+}
+
+/** `topics`, the M:N relation, flattened to ids — sorted so an unchanged set never reads as a
+ * reorder. Not `localeCompare`: two machines must never order the same id set differently. */
+function auditFieldsOfSubTopic(row: { name: string; topics: { id: string }[] }): {
+  name: string;
+  topicIds: string[];
+} {
+  return { name: row.name, topicIds: row.topics.map((topic) => topic.id).sort(byCodeUnit) };
+}
+
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
 }

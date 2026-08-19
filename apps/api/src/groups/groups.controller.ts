@@ -11,6 +11,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  AUDIT_FEATURE,
+  AUDIT_ACTION,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   ActorTypes,
@@ -28,6 +30,7 @@ import {
 } from '@iace/contracts';
 import { Actors, RequiresFeature } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { GroupsService } from './groups.service';
 
 /**
@@ -53,12 +56,14 @@ export class GroupsController {
     return this.groups.detail(id);
   }
 
+  @Audit(AUDIT_FEATURE.GROUP, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(@Body(new ZodBody(createGroupSchema)) body: CreateGroupBody): Promise<GroupSummary> {
     return this.groups.create(body);
   }
 
+  @Audit(AUDIT_FEATURE.GROUP, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
@@ -69,6 +74,7 @@ export class GroupsController {
   }
 
   /** Refused while anything still depends on the group. */
+  @Audit(AUDIT_FEATURE.GROUP, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
@@ -76,6 +82,7 @@ export class GroupsController {
     return this.groups.remove(id);
   }
 
+  @Audit(AUDIT_FEATURE.GROUP, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/students')
   @HttpCode(HttpStatus.OK)
@@ -86,6 +93,7 @@ export class GroupsController {
     return this.groups.addMembers(id, body.studentIds);
   }
 
+  @Audit(AUDIT_FEATURE.GROUP, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id/students/:studentId')
   @HttpCode(HttpStatus.OK)

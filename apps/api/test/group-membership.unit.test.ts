@@ -32,6 +32,7 @@ function servicesWith(
       prisma.asService(),
       undefined as unknown as BranchesService,
       undefined as unknown as ExamTypesService,
+      new AuditContext(),
     ),
     studentsService: new StudentsService(
       prisma.asService(),

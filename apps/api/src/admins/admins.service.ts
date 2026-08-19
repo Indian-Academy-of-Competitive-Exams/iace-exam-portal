@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
+  AUDIT_FEATURE,
   ErrorCodes,
   PERMISSION_LEVELS,
+  fieldDiff,
   type Admin as AdminDto,
   type AdminListQuery,
   type AdminPermissions,
+  type AuditFeature,
   type CreateAdminBody,
   type Feature as FeatureDto,
+  type FieldDiff,
   type PermissionGrantBody,
   type Paginated,
   type PermissionLevel,
@@ -15,6 +19,7 @@ import {
   type UpdateAdminBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditContext } from '../audit';
 
 /** Both rows a feature always has. Created together, never separately. */
 const BOTH_LEVELS = [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE] as const;
@@ -36,9 +41,29 @@ interface FeatureRow {
   permissions: { level: PermissionLevel; adminIds: string[] }[];
 }
 
+/** What an admin's audit diff covers — every column the admin screens can change. */
+export const AUDITED_ADMIN_FIELDS = ['fullName', 'isSuperAdmin'] as const;
+
+/** A grant has no row to name, so it is filed against the admin it was made about. */
+export function permissionAuditEntity(
+  grant: { adminId: string; key: string; level: string },
+  revoked = false,
+): { feature: AuditFeature; entityId: string; changed: FieldDiff } {
+  return {
+    feature: AUDIT_FEATURE.FEATURE_PERMISSION,
+    entityId: grant.adminId,
+    changed: {
+      [grant.key]: revoked ? { from: grant.level, to: null } : { from: null, to: grant.level },
+    },
+  };
+}
+
 @Injectable()
 export class AdminsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   // ==========================================================================
   // The facade auth consumes
@@ -129,7 +154,7 @@ export class AdminsService {
   async update(id: string, input: UpdateAdminBody): Promise<AdminDto> {
     // requireAdmin, not requireActive: renaming a deactivated admin, or making
     // one a super admin before switching them back on, are both reasonable.
-    await this.requireAdmin(id);
+    const before = await this.requireAdmin(id);
     const row = await this.prisma.admin.update({
       where: { id },
       data: {
@@ -137,6 +162,11 @@ export class AdminsService {
         ...(input.isSuperAdmin === undefined ? {} : { isSuperAdmin: input.isSuperAdmin }),
       },
     });
+
+    this.auditContext.setChanged(
+      fieldDiff(auditFieldsOf(before), auditFieldsOf(row), AUDITED_ADMIN_FIELDS),
+    );
+
     return this.toAdminDto(row, await this.permissionsFor(id));
   }
 
@@ -150,10 +180,11 @@ export class AdminsService {
       // you were the last one, only with database access.
       throw new AppException(ErrorCodes.CONFLICT, 'You cannot deactivate your own account');
     }
-    await this.requireAdmin(id);
+    const before = await this.requireAdmin(id);
 
     if (isActive) {
       const row = await this.prisma.admin.update({ where: { id }, data: { isActive: true } });
+      this.auditContext.setChanged({ isActive: { from: before.isActive, to: true } });
       // Read the grants back rather than assuming none: a super admin may have
       // granted something while the account was switched off.
       return this.toAdminDto(row, await this.permissionsFor(id));
@@ -177,6 +208,7 @@ export class AdminsService {
       return updated;
     });
 
+    this.auditContext.setChanged({ isActive: { from: before.isActive, to: false } });
     return this.toAdminDto(row, {});
   }
 
@@ -241,12 +273,19 @@ export class AdminsService {
     }
     await this.requireActive(input.adminId);
 
+    // Neither route carries an `:id` param and both return a Feature, so the interceptor's
+    // fallback would file the row against the feature rather than the admin it was made about.
+    this.auditContext.setEntityId(input.adminId);
+
     await this.prisma.$transaction(async (tx) => {
       const row = await tx.featurePermission.findUnique({
         where: { featureId_level: { featureId: feature.id, level: input.level } },
         select: { id: true, adminIds: true },
       });
       if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'That permission row is missing');
+
+      const held = row.adminIds.includes(input.adminId);
+      const moved = action === 'add' ? !held : held;
 
       const without = row.adminIds.filter((id) => id !== input.adminId);
       await tx.featurePermission.update({
@@ -255,6 +294,15 @@ export class AdminsService {
         // entry, not two, and a duplicate would survive a single revoke.
         data: { adminIds: action === 'add' ? [...without, input.adminId] : without },
       });
+
+      // Membership that did not move is not a grant that happened.
+      if (moved) {
+        const { changed } = permissionAuditEntity(
+          { adminId: input.adminId, key: input.featureKey, level: input.level },
+          action === 'remove',
+        );
+        this.auditContext.setChanged(changed);
+      }
     });
 
     const updated = await this.prisma.feature.findUniqueOrThrow({
@@ -285,9 +333,15 @@ export class AdminsService {
   // ==========================================================================
 
   /** Exists at all — the right check when the point is to change their state. */
-  private async requireAdmin(id: string): Promise<void> {
-    const admin = await this.prisma.admin.findUnique({ where: { id }, select: { id: true } });
+  private async requireAdmin(
+    id: string,
+  ): Promise<Pick<AdminRow, 'id' | 'fullName' | 'isSuperAdmin' | 'isActive'>> {
+    const admin = await this.prisma.admin.findUnique({
+      where: { id },
+      select: { id: true, fullName: true, isSuperAdmin: true, isActive: true },
+    });
     if (!admin) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
+    return admin;
   }
 
   /**
@@ -350,4 +404,10 @@ export class AdminsService {
       ) as FeatureDto['grants'],
     };
   }
+}
+
+function auditFieldsOf(
+  row: Pick<AdminRow, 'fullName' | 'isSuperAdmin'>,
+): Pick<AdminRow, 'fullName' | 'isSuperAdmin'> {
+  return { fullName: row.fullName, isSuperAdmin: row.isSuperAdmin };
 }

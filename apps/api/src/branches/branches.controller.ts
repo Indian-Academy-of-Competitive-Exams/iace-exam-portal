@@ -11,6 +11,8 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  AUDIT_FEATURE,
+  AUDIT_ACTION,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   ActorTypes,
@@ -25,6 +27,7 @@ import {
 } from '@iace/contracts';
 import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { BranchesService } from './branches.service';
 
 /**
@@ -44,12 +47,14 @@ export class BranchesController {
     return this.branches.list(query);
   }
 
+  @Audit(AUDIT_FEATURE.BRANCH, AUDIT_ACTION.CREATE)
   @Post()
   @RequiresSuperAdmin()
   create(@Body(new ZodBody(createBranchSchema)) body: CreateBranchBody): Promise<Branch> {
     return this.branches.create(body);
   }
 
+  @Audit(AUDIT_FEATURE.BRANCH, AUDIT_ACTION.UPDATE)
   @Patch(':id')
   @RequiresSuperAdmin()
   update(
@@ -60,6 +65,7 @@ export class BranchesController {
   }
 
   /** Refused while any group still sits under the branch, and always for GLOBAL. */
+  @Audit(AUDIT_FEATURE.BRANCH, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

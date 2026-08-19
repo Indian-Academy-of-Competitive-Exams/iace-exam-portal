@@ -8,12 +8,13 @@ import {
   type BranchListQuery,
 } from '@iace/contracts';
 import { BranchesService } from '../src/branches/branches.service';
+import { AuditContext } from '../src/audit';
 import { FakePrisma, makeBranch } from './support/fakes';
 
 /** The branch list, exercised through the service rather than its rule helpers. */
 function serviceWith(branches = [makeBranch()]) {
   const prisma = new FakePrisma([], [], branches);
-  return { service: new BranchesService(prisma.asService()), prisma };
+  return { service: new BranchesService(prisma.asService(), new AuditContext()), prisma };
 }
 
 /** A parsed query, the way the controller's pipe would hand one over. */

@@ -8,6 +8,7 @@ import {
   GROUP_TYPES_ACCEPTING_GRANTS,
   acceptsDirectGrants,
   deactivatedMemberBlocker,
+  fieldDiff,
   groupReach,
   groupShapeIssue,
   type AddGroupMembersResult,
@@ -23,6 +24,7 @@ import {
 import { BranchesService } from '../branches';
 import { ExamTypesService } from '../configs';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditContext } from '../audit';
 import { groupDeletionBlocker, groupEditBlocker } from './group-rules';
 
 const GROUP_INCLUDE = {
@@ -42,6 +44,15 @@ interface GroupRow {
   _count: { testSeries: number };
 }
 
+/** What a group's audit diff covers. `branchIds` is the relation flattened to ids. */
+export const AUDITED_GROUP_FIELDS = [
+  'name',
+  'examType',
+  'branchIds',
+  'description',
+  'isActive',
+] as const;
+
 /** Owns `Group` and the `Group`⇄`Student` membership link (docs/03 §5). */
 @Injectable()
 export class GroupsService {
@@ -51,6 +62,7 @@ export class GroupsService {
     // Mutual: `configs` counts groups per exam type, and groups validate against the catalog.
     @Inject(forwardRef(() => ExamTypesService))
     private readonly examTypes: ExamTypesService,
+    private readonly auditContext: AuditContext,
   ) {}
 
   async list(query: GroupListQuery): Promise<Paginated<GroupSummary>> {
@@ -148,19 +160,26 @@ export class GroupsService {
     if (name !== group.name || examType !== group.examType)
       await this.assertNameFree(examType, name, id);
 
+    const updatedColumns = {
+      ...(input.name === undefined ? {} : { name: input.name }),
+      ...(input.examType === undefined ? {} : { examType: input.examType }),
+      ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+      ...(input.branchIds
+        ? { branches: { set: input.branchIds.map((branchId) => ({ id: branchId })) } }
+        : {}),
+    };
+
     const updated = await this.prisma.group.update({
       where: { id },
-      data: {
-        ...(input.name === undefined ? {} : { name: input.name }),
-        ...(input.examType === undefined ? {} : { examType: input.examType }),
-        ...(input.description === undefined ? {} : { description: input.description }),
-        ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
-        ...(input.branchIds
-          ? { branches: { set: input.branchIds.map((branchId) => ({ id: branchId })) } }
-          : {}),
-      },
+      data: updatedColumns,
       include: GROUP_INCLUDE,
     });
+
+    this.auditContext.setChanged(
+      fieldDiff(auditFieldsOf(group), auditFieldsOf(updated), AUDITED_GROUP_FIELDS),
+    );
+
     return toSummary(updated, await this.studentCountFor(updated));
   }
 
@@ -258,6 +277,9 @@ export class GroupsService {
       ),
     );
 
+    // Requesting a re-add of an existing member is a no-op, and a no-op leaves nothing to log.
+    if (toAdd.length > 0) this.auditContext.setChanged({ members: { from: null, to: toAdd } });
+
     return { added: toAdd.length, alreadyMembers: wanted.length - toAdd.length };
   }
 
@@ -276,6 +298,8 @@ export class GroupsService {
       where: { id: studentId },
       data: { directGroupIds: student.directGroupIds.filter((groupId) => groupId !== id) },
     });
+
+    this.auditContext.setChanged({ members: { from: studentId, to: null } });
   }
 
   // ==========================================================================
@@ -310,6 +334,21 @@ export class GroupsService {
       return this.prisma.student.count({ where: { enrolledExams: { has: group.examType } } });
     return this.prisma.student.count({ where: { directGroupIds: { has: group.id } } });
   }
+}
+
+function auditFieldsOf(row: GroupRow): Pick<
+  GroupRow,
+  'name' | 'examType' | 'description' | 'isActive'
+> & {
+  branchIds: string[];
+} {
+  return {
+    name: row.name,
+    examType: row.examType,
+    description: row.description,
+    isActive: row.isActive,
+    branchIds: row.branches.map((branch) => branch.id),
+  };
 }
 
 function toSummary(row: GroupRow, studentCount: number): GroupSummary {

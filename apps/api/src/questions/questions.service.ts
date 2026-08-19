@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   QUESTION_SOURCE_KIND,
+  fieldDiff,
   plainTextOf,
   type LocalizedContent,
   type LocalizedRich,
@@ -20,6 +21,7 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditContext } from '../audit';
 import { buildContent, languagesIn, stemPreviewOf, validateQuestion } from './question-core';
 import { questionOrderBy, questionWhere } from './question-query';
 import { taxonomyForIds } from './taxonomy-context';
@@ -33,10 +35,30 @@ const QUESTION_INCLUDE = {
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
 
+/** Excludes localized content — spelling changes as often as meaning. `correctOptionPositions`
+ * is keyed to `position`, not `id`: `update()` deletes and recreates options on every save. */
+export const AUDITED_QUESTION_FIELDS = [
+  'type',
+  'subjectId',
+  'topicId',
+  'subTopicId',
+  'difficulty',
+  'questionCode',
+  'status',
+  'isActive',
+  'defaultMarks',
+  'defaultNegativeMarks',
+  'correctOptionPositions',
+  'answerKey',
+] as const;
+
 /** Owns `Question` and `QuestionOption` (docs/03 §5) — the only module that writes them. */
 @Injectable()
 export class QuestionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   async list(query: QuestionListQuery): Promise<Paginated<QuestionSummary>> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;
@@ -88,7 +110,7 @@ export class QuestionsService {
    * this question into a paper yet — a locked test copies its own PaperQuestion.
    */
   async update(id: string, draft: QuestionDraft): Promise<QuestionDetail> {
-    await this.require(id);
+    const question = await this.require(id);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
@@ -104,29 +126,41 @@ export class QuestionsService {
       }),
     ]);
 
+    this.auditContext.setChanged(
+      fieldDiff(auditFieldsOf(question), auditFieldsOf(row), AUDITED_QUESTION_FIELDS),
+    );
+
     return toDetail(row);
   }
 
   async setActive(id: string, body: SetQuestionActiveBody): Promise<QuestionDetail> {
-    await this.require(id);
-    return toDetail(
-      await this.prisma.question.update({
-        where: { id },
-        data: { isActive: body.isActive },
-        include: QUESTION_INCLUDE,
-      }),
+    const question = await this.require(id);
+    const updated = await this.prisma.question.update({
+      where: { id },
+      data: { isActive: body.isActive },
+      include: QUESTION_INCLUDE,
+    });
+
+    this.auditContext.setChanged(
+      fieldDiff(auditFieldsOf(question), auditFieldsOf(updated), AUDITED_QUESTION_FIELDS),
     );
+
+    return toDetail(updated);
   }
 
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
-    await this.require(id);
-    return toDetail(
-      await this.prisma.question.update({
-        where: { id },
-        data: { status: body.status },
-        include: QUESTION_INCLUDE,
-      }),
+    const question = await this.require(id);
+    const updated = await this.prisma.question.update({
+      where: { id },
+      data: { status: body.status },
+      include: QUESTION_INCLUDE,
+    });
+
+    this.auditContext.setChanged(
+      fieldDiff(auditFieldsOf(question), auditFieldsOf(updated), AUDITED_QUESTION_FIELDS),
     );
+
+    return toDetail(updated);
   }
 
   /** The columns a draft decides, shared by create and update. */
@@ -213,6 +247,42 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
     fieldErrors[key].push(issue.message);
   }
   return fieldErrors;
+}
+
+/** `options`, kept only as the scoring key: the sorted positions of the ones marked correct. */
+function auditFieldsOf(
+  row: QuestionRow,
+): Pick<
+  QuestionRow,
+  | 'type'
+  | 'subjectId'
+  | 'topicId'
+  | 'subTopicId'
+  | 'difficulty'
+  | 'questionCode'
+  | 'status'
+  | 'isActive'
+  | 'defaultMarks'
+  | 'defaultNegativeMarks'
+  | 'answerKey'
+> & { correctOptionPositions: number[] } {
+  return {
+    type: row.type,
+    subjectId: row.subjectId,
+    topicId: row.topicId,
+    subTopicId: row.subTopicId,
+    difficulty: row.difficulty,
+    questionCode: row.questionCode,
+    status: row.status,
+    isActive: row.isActive,
+    defaultMarks: row.defaultMarks,
+    defaultNegativeMarks: row.defaultNegativeMarks,
+    answerKey: row.answerKey,
+    correctOptionPositions: row.options
+      .filter((option) => option.isCorrect)
+      .map((option) => option.position)
+      .sort((a, b) => a - b),
+  };
 }
 
 function toSummary(row: QuestionRow): QuestionSummary {

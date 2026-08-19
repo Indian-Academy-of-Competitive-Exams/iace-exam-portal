@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  fieldDiff,
   type CreateExamTypeBody,
   type ExamType,
   type ExamTypeListQuery,
@@ -12,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { type GroupsService } from '../groups';
 import { type StudentsService } from '../students';
+import { AuditContext } from '../audit';
 import {
   examTypeDeletionBlocker,
   examTypeEditBlocker,
@@ -26,6 +28,9 @@ interface ExamTypeRow {
   isActive: boolean;
   createdAt: Date;
 }
+
+/** What an exam type's audit diff covers — every column an edit can change. */
+export const AUDITED_EXAM_TYPE_FIELDS = ['name', 'code', 'isActive'] as const;
 
 /** Owns `ExamType` (docs/03 §5) — the only module that writes it. */
 @Injectable()
@@ -50,6 +55,7 @@ export class ExamTypesService {
       ),
     )
     private readonly students: StudentsService,
+    private readonly auditContext: AuditContext,
   ) {}
 
   async list(query: ExamTypeListQuery): Promise<Paginated<ExamType>> {
@@ -114,6 +120,11 @@ export class ExamTypesService {
     }
 
     const updated = await this.prisma.examType.update({ where: { id }, data: changes });
+
+    this.auditContext.setChanged(
+      fieldDiff(examType, { ...examType, ...changes }, AUDITED_EXAM_TYPE_FIELDS),
+    );
+
     return toExamType(updated, await this.groups.countByExamType(updated.code));
   }
 

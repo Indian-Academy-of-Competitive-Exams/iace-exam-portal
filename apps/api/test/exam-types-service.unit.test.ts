@@ -13,6 +13,7 @@ import { ExamTypesService } from '../src/configs/exam-types.service';
 import { SUPER_ADMIN_KEY } from '../src/common/security';
 import { GroupsService } from '../src/groups';
 import { StudentsService } from '../src/students';
+import { AuditContext } from '../src/audit';
 import { type FakeExamType, FakePrisma, makeExamType, makeGroup } from './support/fakes';
 
 /** The catalog, exercised through the service rather than its rule helpers. */
@@ -20,7 +21,7 @@ function serviceWith(examTypes: FakeExamType[] = [makeExamType()], groups = [mak
   const prisma = new FakePrisma([], [], [], groups, examTypes);
   const service = new ExamTypesService(
     prisma.asService(),
-    new GroupsService(prisma.asService(), null as never, null as never),
+    new GroupsService(prisma.asService(), null as never, null as never, new AuditContext()),
     new StudentsService(
       prisma.asService(),
       null as never,
@@ -28,6 +29,7 @@ function serviceWith(examTypes: FakeExamType[] = [makeExamType()], groups = [mak
       null as never,
       null as never,
     ),
+    new AuditContext(),
   );
   return { service, prisma };
 }

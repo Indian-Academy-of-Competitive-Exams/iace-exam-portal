@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   createExamTypeSchema,
   examTypeListQuerySchema,
   FEATURE_KEYS,
@@ -25,6 +27,7 @@ import {
 } from '@iace/contracts';
 import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { ExamTypesService } from './exam-types.service';
 
 /**
@@ -44,6 +47,7 @@ export class ExamTypesController {
     return this.examTypes.list(query);
   }
 
+  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.CREATE)
   @Post()
   @RequiresSuperAdmin()
   create(@Body(new ZodBody(createExamTypeSchema)) body: CreateExamTypeBody): Promise<ExamType> {
@@ -51,6 +55,7 @@ export class ExamTypesController {
   }
 
   /** The code is refused once any group or enrolment stores it — see `examTypeEditBlocker`. */
+  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.UPDATE)
   @Patch(':id')
   @RequiresSuperAdmin()
   update(
@@ -60,6 +65,7 @@ export class ExamTypesController {
     return this.examTypes.update(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

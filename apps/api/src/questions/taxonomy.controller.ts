@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   createSubTopicSchema,
@@ -28,6 +30,7 @@ import {
 } from '@iace/contracts';
 import { Actors, RequiresFeature } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { TaxonomyService } from './taxonomy.service';
 
 /**
@@ -48,12 +51,14 @@ export class TaxonomyController {
     return this.taxonomy.listSubjects(query);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_SUBJECT, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('subjects')
   createSubject(@Body(new ZodBody(createSubjectSchema)) body: CreateSubjectBody): Promise<Subject> {
     return this.taxonomy.createSubject(body);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_SUBJECT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch('subjects/:id')
   updateSubject(
@@ -71,12 +76,14 @@ export class TaxonomyController {
     return this.taxonomy.listTopics(query);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_TOPIC, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('topics')
   createTopic(@Body(new ZodBody(createTopicSchema)) body: CreateTopicBody): Promise<Topic> {
     return this.taxonomy.createTopic(body);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_TOPIC, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch('topics/:id')
   updateTopic(
@@ -94,6 +101,7 @@ export class TaxonomyController {
     return this.taxonomy.listSubTopics(query);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_SUB_TOPIC, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('sub-topics')
   createSubTopic(
@@ -102,6 +110,7 @@ export class TaxonomyController {
     return this.taxonomy.createSubTopic(body);
   }
 
+  @Audit(AUDIT_FEATURE.TAXONOMY_SUB_TOPIC, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch('sub-topics/:id')
   updateSubTopic(

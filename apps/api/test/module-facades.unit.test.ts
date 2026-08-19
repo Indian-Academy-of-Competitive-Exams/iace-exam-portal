@@ -6,6 +6,7 @@ import { PinService } from '../src/auth/pin/pin.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { GroupsService } from '../src/groups';
 import { StudentsService } from '../src/students/students.service';
+import { AuditContext } from '../src/audit';
 import {
   FakeConfig,
   FakePrisma,
@@ -70,7 +71,10 @@ describe('AuthService.hashPin — the importer’s seam into auth', () => {
 
 describe('BranchesService.assertUsable — the groups seam into branches', () => {
   const usable = () =>
-    new BranchesService(new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService());
+    new BranchesService(
+      new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService(),
+      new AuditContext(),
+    );
 
   it('accepts an active branch', async () => {
     // doesNotReject rather than a bare call: "it did not throw" is the whole assertion, and writing it
@@ -82,6 +86,7 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
   it('refuses a retired branch, keyed to the field the form shows', async () => {
     const service = new BranchesService(
       new FakePrisma([], [], [makeBranch({ id: 'br_1', isActive: false })]).asService(),
+      new AuditContext(),
     );
 
     // The failure this exists to prevent: a group created under a centre that has stopped taking them.
@@ -92,7 +97,7 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
   });
 
   it('refuses a branch that does not exist', async () => {
-    const service = new BranchesService(new FakePrisma([], [], []).asService());
+    const service = new BranchesService(new FakePrisma([], [], []).asService(), new AuditContext());
 
     const error = await service.assertUsable('br_missing').catch((e: unknown) => e);
     assert.ok(AppException.is(error));
@@ -194,7 +199,12 @@ describe('the counts the configs module asks for', () => {
         makeGroup({ id: 'grp_3', examType: 'RRB JE' }),
       ],
     );
-    const groups = new GroupsService(prisma.asService(), null as never, null as never);
+    const groups = new GroupsService(
+      prisma.asService(),
+      null as never,
+      null as never,
+      new AuditContext(),
+    );
 
     assert.equal(await groups.countByExamType('SSC CGL'), 2);
     assert.equal(await groups.countByExamType('SSC CHSL'), 0);

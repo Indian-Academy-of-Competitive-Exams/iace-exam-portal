@@ -357,6 +357,16 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
   );
 }
 
+/** Deep enough that mutating the original after this — `update` does, in place — leaves the
+ * copy alone: the nested `profile` object and the `directGroupIds` array need their own copy. */
+function cloneStudent(student: FakeStudent): FakeStudent {
+  return {
+    ...student,
+    profile: student.profile ? { ...student.profile } : null,
+    directGroupIds: [...student.directGroupIds],
+  };
+}
+
 export interface FakeGroup {
   id: string;
   name: string;
@@ -415,11 +425,14 @@ export class FakePrisma {
   testCount = 0;
 
   readonly student = {
-    findUnique: ({ where }: { where: { id?: string; mobile?: string } }) =>
-      Promise.resolve(
-        this.students.find((s) => (where.id ? s.id === where.id : s.mobile === where.mobile)) ??
-          null,
-      ),
+    // A copy, not the live row: `update` mutates in place, and a caller that reads a row
+    // before writing to it — to diff before against after — must see it as it was.
+    findUnique: ({ where }: { where: { id?: string; mobile?: string } }) => {
+      const row = this.students.find((s) =>
+        where.id ? s.id === where.id : s.mobile === where.mobile,
+      );
+      return Promise.resolve(row ? cloneStudent(row) : null);
+    },
 
     /** `where.id.in`, `where.mobile.in` and a grant lookup — all the membership paths ask for. */
     findMany: ({ where = {} }: { where?: StudentWhere }) =>
@@ -831,10 +844,12 @@ export class FakeAdminsPrisma {
   }
 
   readonly admin = {
-    findUnique: ({ where }: { where: { id?: string; email?: string } }) =>
-      Promise.resolve(
-        this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email)) ?? null,
-      ),
+    // A copy, not the live row: `update` mutates in place, and a caller that reads a row
+    // before writing to it — to diff before against after — must see it as it was.
+    findUnique: ({ where }: { where: { id?: string; email?: string } }) => {
+      const row = this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email));
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     findFirst: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.admins.find((a) => a.id === where.id) ?? null),

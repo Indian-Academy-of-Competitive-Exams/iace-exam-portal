@@ -114,7 +114,9 @@ describe('audit vocabulary', () => {
       'QUESTION',
       'TEST',
       'EXAM_TYPE',
-      'TAXONOMY',
+      'TAXONOMY_SUBJECT',
+      'TAXONOMY_TOPIC',
+      'TAXONOMY_SUB_TOPIC',
       'FEATURE_PERMISSION',
     ]);
     assert.deepEqual(Object.keys(AUDIT_ACTION), [

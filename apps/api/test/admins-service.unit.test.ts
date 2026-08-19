@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
+import { AuditContext } from '../src/audit';
 import { FakeAdminsPrisma, makeAdminRow } from './support/fakes';
 
 function build(admins = [makeAdminRow()]) {
   const prisma = new FakeAdminsPrisma(admins);
-  return { prisma, service: new AdminsService(prisma.asService()) };
+  return { prisma, service: new AdminsService(prisma.asService(), new AuditContext()) };
 }
 
 const ACTOR = 'adm_actor';

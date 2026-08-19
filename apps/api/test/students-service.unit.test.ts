@@ -47,7 +47,7 @@ function serviceWith(
       prisma.asService(),
       undefined as unknown as StorageService,
       examTypes.asService(),
-      new BranchesService(prisma.asService()),
+      new BranchesService(prisma.asService(), new AuditContext()),
       new AuditContext(),
     ),
   };

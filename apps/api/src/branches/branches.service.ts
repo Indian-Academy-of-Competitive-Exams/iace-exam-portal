@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
+  fieldDiff,
   type Branch,
   type BranchListQuery,
   type BranchType,
@@ -11,6 +12,7 @@ import {
   type UpdateBranchBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditContext } from '../audit';
 import { branchDeletionBlocker, branchEditBlocker, INACTIVE_BRANCH_MESSAGE } from './branch-rules';
 
 const BRANCH_INCLUDE = {
@@ -26,10 +28,15 @@ interface BranchRow {
   _count: { groups: number };
 }
 
+export const AUDITED_BRANCH_FIELDS = ['name', 'isActive'] as const;
+
 /** Owns `Branch` (docs/03 §5) — the only module that writes it. */
 @Injectable()
 export class BranchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditContext: AuditContext,
+  ) {}
 
   /**
    * Whether a branch may take something new — used by whoever is about to attach to one. Throws with
@@ -103,14 +110,21 @@ export class BranchesService {
       }
     }
 
+    const updatedColumns = {
+      ...(input.name === undefined ? {} : { name: input.name }),
+      ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+    };
+
     const updated = await this.prisma.branch.update({
       where: { id },
-      data: {
-        ...(input.name === undefined ? {} : { name: input.name }),
-        ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
-      },
+      data: updatedColumns,
       include: BRANCH_INCLUDE,
     });
+
+    this.auditContext.setChanged(
+      fieldDiff(branch, { ...branch, ...updatedColumns }, AUDITED_BRANCH_FIELDS),
+    );
+
     return toBranch(updated);
   }
 

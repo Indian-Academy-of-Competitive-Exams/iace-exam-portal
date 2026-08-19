@@ -15,6 +15,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { type Request } from 'express';
 import {
   ActorTypes,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   DOCUMENT_FILE_FIELD,
   changePinSchema,
   documentKindSchema,
@@ -27,6 +29,7 @@ import {
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam } from '../common/zod-validation.pipe';
+import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
 import { MeService } from './me.service';
 
@@ -54,6 +57,7 @@ export class MeController {
     return this.me.profile(user.id);
   }
 
+  @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)
   @Patch()
   update(
     @CurrentUser() user: AuthenticatedUser,
@@ -63,6 +67,7 @@ export class MeController {
   }
 
   /** A photo or an identity document. */
+  @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)
   @Post('documents/:kind')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(DOCUMENT_FILE_FIELD))
