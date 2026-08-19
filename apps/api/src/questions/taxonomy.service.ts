@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  AUDIT_ACTION,
   AppException,
   ErrorCodes,
   fieldDiff,
@@ -223,15 +224,29 @@ export class TaxonomyService {
   async createSubTopic(body: CreateSubTopicBody): Promise<SubTopic> {
     await this.requireTopics(body.topicIds);
 
-    const existing = await this.prisma.subTopic.findUnique({ where: { name: body.name } });
+    const existing = await this.prisma.subTopic.findUnique({
+      where: { name: body.name },
+      include: SUB_TOPIC_INCLUDE,
+    });
     if (existing) {
-      return toSubTopic(
-        await this.prisma.subTopic.update({
-          where: { id: existing.id },
-          data: { topics: { connect: body.topicIds.map((id) => ({ id })) } },
-          include: SUB_TOPIC_INCLUDE,
-        }),
+      const updated = await this.prisma.subTopic.update({
+        where: { id: existing.id },
+        data: { topics: { connect: body.topicIds.map((id) => ({ id })) } },
+        include: SUB_TOPIC_INCLUDE,
+      });
+
+      // The row was already there, so this linked topics onto it. A second CREATE against it,
+      // with an empty `changed`, would describe neither what happened nor what changed.
+      this.auditContext.setAction(AUDIT_ACTION.UPDATE);
+      this.auditContext.setChanged(
+        fieldDiff(
+          auditFieldsOfSubTopic(existing),
+          auditFieldsOfSubTopic(updated),
+          AUDITED_SUB_TOPIC_FIELDS,
+        ),
       );
+
+      return toSubTopic(updated);
     }
 
     return toSubTopic(

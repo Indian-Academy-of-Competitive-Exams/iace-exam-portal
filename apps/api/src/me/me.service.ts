@@ -41,12 +41,15 @@ export class MeService {
     const before = await this.students.detail(studentId);
     const updated = await this.students.update(studentId, input);
 
-    // Replaces `StudentsService.update`'s own diff: this route means the profile,
-    // and — with no `:id` param reaching it — names the entity itself.
+    const columns = this.auditContext.current()?.changed;
+    const profile = updated.profile
+      ? fieldDiff(before.profile, updated.profile, AUDITED_PROFILE_FIELDS)
+      : null;
+
+    // Merged over `StudentsService.update`'s diff, never replacing it: this route can rename the
+    // student too, and replacing it filed that as a change with nothing in it.
     this.auditContext.setEntityId(studentId);
-    this.auditContext.setChanged(
-      updated.profile ? fieldDiff(before.profile, updated.profile, AUDITED_PROFILE_FIELDS) : null,
-    );
+    this.auditContext.setChanged(columns || profile ? { ...columns, ...profile } : null);
 
     return updated;
   }

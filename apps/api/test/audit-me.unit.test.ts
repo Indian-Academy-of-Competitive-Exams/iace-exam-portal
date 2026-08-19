@@ -106,6 +106,46 @@ describe('MeService.update — the entity and diff a student’s own edit contri
     });
   });
 
+  /**
+   * The failure this prevents: this route can rename the student as well as edit their profile.
+   * Replacing StudentsService.update's diff instead of merging it filed a self-rename as an
+   * UPDATE row whose `changed` held nothing — a row asserting a change while showing none.
+   */
+  it('keeps the student-column half of the diff when a student renames themselves', async () => {
+    const ctx = build([
+      makeStudent({
+        id: 'stu_1',
+        fullName: 'Asha',
+        profile: makeProfile({ motherName: 'Lakshmi' }),
+      }),
+    ]);
+
+    await ctx.auditContext.run(async () => {
+      await ctx.me.update('stu_1', {
+        fullName: 'Asha Rani',
+        profile: { motherName: 'Laxmi' },
+      });
+
+      assert.deepEqual(ctx.auditContext.current()?.changed, {
+        fullName: { from: 'Asha', to: 'Asha Rani' },
+        motherName: { from: 'Lakshmi', to: 'Laxmi' },
+      });
+    });
+  });
+
+  /** A rename with no profile row at all still has to reach the log. */
+  it('reports the rename when the student has no profile row yet', async () => {
+    const ctx = build([makeStudent({ id: 'stu_1', fullName: 'Asha', profile: null })]);
+
+    await ctx.auditContext.run(async () => {
+      await ctx.me.update('stu_1', { fullName: 'Asha Rani' });
+
+      assert.deepEqual(ctx.auditContext.current()?.changed, {
+        fullName: { from: 'Asha', to: 'Asha Rani' },
+      });
+    });
+  });
+
   it('reports nothing for a save that changed nothing', async () => {
     const ctx = build([
       makeStudent({ id: 'stu_1', profile: makeProfile({ motherName: 'Lakshmi' }) }),

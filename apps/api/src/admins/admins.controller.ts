@@ -77,7 +77,8 @@ export class AdminsController {
     return this.admins.listFeatures();
   }
 
-  @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.CREATE)
+  /** Deliberately unaudited: FEATURE_PERMISSION rows name an Admin, and registering a key grants
+   *  nobody anything. Filing a Feature id under it made the column mean two tables. */
   @Post('features')
   createFeature(
     @Body(new ZodBody(createFeatureSchema)) body: { key: string; description?: string },

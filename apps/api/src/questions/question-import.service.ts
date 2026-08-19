@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AuditFeature, ImportSource, Prisma } from '@prisma/client';
 import {
   AppException,
+  AUDIT_ACTION,
   ErrorCodes,
   QUESTION_IMPORT_SHEETS,
   QUESTION_SOURCE_KIND,
@@ -10,6 +11,7 @@ import {
   type QuestionImportResult,
 } from '@iace/contracts';
 import { IMPORT_LOG_STATUS, importFileKey, readUploadedTable } from '../common/importing';
+import { AuditService } from '../audit';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { buildContent } from './question-core';
@@ -34,9 +36,12 @@ import { loadTaxonomyCatalog } from './taxonomy-context';
  */
 @Injectable()
 export class QuestionImportService {
+  private readonly logger = new Logger(QuestionImportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Generated per request: it carries the taxonomy as it stands right now. */
@@ -82,11 +87,24 @@ export class QuestionImportService {
         row.action === 'create' && row.draft !== null,
     );
 
-    await this.prisma.$transaction(
+    const created = await this.prisma.$transaction(
       creatable.map((row) =>
         this.prisma.question.create({ data: rowData(row, log.id, log.actorId) }),
       ),
     );
+
+    try {
+      await this.audit.recordImportRows(
+        log.id,
+        AuditFeature.QUESTION,
+        created.map((question) => ({ entityId: question.id, action: AUDIT_ACTION.CREATE })),
+        log.actorId,
+      );
+    } catch (error) {
+      // The questions are already durable; losing their audit rows is a cost, never a reason to
+      // report an import that happened as one that did not.
+      this.logger.error(`Row actions for import ${log.id} were not recorded`, error);
+    }
 
     const result: QuestionImportResult = {
       ...planning.summary,

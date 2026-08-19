@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
+import { AUDIT_ACTION, AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
 import { AUDITED_EXAM_TYPE_FIELDS, ExamTypesService } from '../src/configs/exam-types.service';
 import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 import { TaxonomyController } from '../src/questions/taxonomy.controller';
@@ -206,6 +206,46 @@ describe('TaxonomyService.updateSubTopic — driven live, the diff a real edit c
       assert.deepEqual(auditContext.current()?.changed, {
         name: { from: 'ALGEBRA', to: 'ALGEBRA BASICS' },
       });
+    });
+  });
+});
+
+describe('TaxonomyService.createSubTopic — driven live, what a resolve really was', () => {
+  /**
+   * The failure this prevents: sub-topic names are unique table-wide, so `create` links an
+   * existing row far more often than it makes one. Logged as a second CREATE with an empty
+   * `changed`, the row claims something that never happened and hides the link that did.
+   */
+  it('logs an UPDATE with the topicIds it added when the name already existed', async () => {
+    const prisma = new FakeQuestionBankPrisma(
+      [],
+      [],
+      [makeTopic({ id: 'top_1' }), makeTopic({ id: 'top_2' })],
+      [makeSubTopic({ id: 'stp_1', name: 'PERCENTAGES', topicIds: ['top_1'] })],
+    );
+    const auditContext = new AuditContext();
+    const service = new TaxonomyService(prisma.asService(), auditContext);
+
+    await auditContext.run(async () => {
+      await service.createSubTopic({ name: 'PERCENTAGES', topicIds: ['top_2'] });
+
+      assert.equal(auditContext.current()?.action, AUDIT_ACTION.UPDATE);
+      assert.deepEqual(auditContext.current()?.changed, {
+        topicIds: { from: ['top_1'], to: ['top_1', 'top_2'] },
+      });
+    });
+  });
+
+  /** A name nothing holds is a real create, and the decorator's CREATE is left to stand. */
+  it('leaves the action alone when it really did create the row', async () => {
+    const prisma = new FakeQuestionBankPrisma([], [], [makeTopic({ id: 'top_1' })], []);
+    const auditContext = new AuditContext();
+    const service = new TaxonomyService(prisma.asService(), auditContext);
+
+    await auditContext.run(async () => {
+      await service.createSubTopic({ name: 'RATIOS', topicIds: ['top_1'] });
+
+      assert.equal(auditContext.current()?.action, null);
     });
   });
 });

@@ -1,11 +1,14 @@
+import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUDIT_FEATURE, FEATURE_KEYS, PERMISSION_LEVELS, fieldDiff } from '@iace/contracts';
+import { AdminsController } from '../src/admins/admins.controller';
 import {
   AdminsService,
   AUDITED_ADMIN_FIELDS,
   permissionAuditEntity,
 } from '../src/admins/admins.service';
+import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 import { AuditContext } from '../src/audit';
 import { FakeAdminsPrisma, makeAdminRow } from './support/fakes';
 
@@ -21,6 +24,23 @@ describe('the admin audit diff', () => {
     assert.deepEqual(fieldDiff(before, { ...before, isSuperAdmin: true }, AUDITED_ADMIN_FIELDS), {
       isSuperAdmin: { from: false, to: true },
     });
+  });
+});
+
+describe('what files under FEATURE_PERMISSION', () => {
+  const routeOf = (handler: keyof AdminsController) =>
+    Reflect.getMetadata(AUDIT_KEY, AdminsController.prototype[handler]) as AuditRoute | undefined;
+
+  /**
+   * The failure this prevents: `entityId` under FEATURE_PERMISSION is an Admin id, set deliberately
+   * by changeGrant. `POST admin/features` has no `:id` and returns a Feature, so the interceptor
+   * fell back to the Feature's own id — making one column point at two tables, and reading as a
+   * permission grant when registering a key grants nobody anything.
+   */
+  it('files only the two grant routes, never feature registration', () => {
+    assert.equal(routeOf('grant')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);
+    assert.equal(routeOf('revoke')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);
+    assert.equal(routeOf('createFeature'), undefined);
   });
 });
 

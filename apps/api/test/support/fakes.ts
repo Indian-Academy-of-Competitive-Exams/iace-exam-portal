@@ -240,7 +240,7 @@ export class FakeMessageSender implements MessageSender {
  * In-memory `StorageService`, typed against the two methods it stands in for so a signature
  * drift here fails the build rather than surfacing as a confusing test failure.
  */
-export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize'> {
+export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize' | 'read'> {
   objects = new Map<string, Buffer>();
   failNextUpload = false;
   private readonly reportedSizes = new Map<string, number>();
@@ -260,6 +260,12 @@ export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize'
   objectSize(key: string): Promise<number | null> {
     if (this.reportedSizes.has(key)) return Promise.resolve(this.reportedSizes.get(key) ?? null);
     return Promise.resolve(this.objects.get(key)?.byteLength ?? null);
+  }
+
+  read(key: string): Promise<Buffer> {
+    const object = this.objects.get(key);
+    if (!object) return Promise.reject(new Error(`no object ${key}`));
+    return Promise.resolve(object);
   }
 }
 
@@ -1354,6 +1360,40 @@ export class FakeQuestionBankPrisma {
   $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
     return Promise.all(operations);
   }
+
+  readonly importLogs: Array<Record<string, unknown>> = [];
+  readonly rowActionLogs: Array<Record<string, unknown>> = [];
+
+  /** What a question sheet's two steps touch: the preview opens the run, the commit closes it. */
+  readonly importLog = {
+    create: ({ data }: { data: Record<string, unknown> }) => {
+      const row = { id: `imp_${this.importLogs.length + 1}`, ...data };
+      this.importLogs.push(row);
+      return Promise.resolve(row);
+    },
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.importLogs.find((row) => row.id === where.id) ?? null),
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.importLogs.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no import log ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
+  readonly rowActionLog = {
+    createMany: ({ data }: { data: Array<Record<string, unknown>> }) => {
+      for (const item of data) {
+        this.rowActionLogs.push({
+          id: `ral_${this.rowActionLogs.length + 1}`,
+          ...omittedAsNull(item),
+        });
+      }
+      return Promise.resolve({ count: data.length });
+    },
+  };
 
   /** The search pre-filter. Tests that do not search never reach it. */
   $queryRaw(): Promise<{ id: string }[]> {

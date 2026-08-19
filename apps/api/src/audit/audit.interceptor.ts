@@ -53,7 +53,7 @@ export class AuditInterceptor implements NestInterceptor {
 
     this.events.emit(DOMAIN_EVENTS.AUDIT_ROW_ACTION, {
       feature: route.feature,
-      action: resolveAuditAction(route, request.body),
+      action: store?.action ?? resolveAuditAction(route, request.body),
       entityId,
       actorType: actorTypeOf(request.user),
       actorId: request.user?.id ?? null,

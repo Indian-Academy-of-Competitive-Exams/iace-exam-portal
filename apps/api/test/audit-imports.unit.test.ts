@@ -4,14 +4,26 @@ import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
   IMPORT_SOURCE,
+  QUESTION_IMPORT_COLUMNS,
   type AuditAction,
   type AuditFeature,
+  type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
+import { QuestionImportService } from '../src/questions/question-import.service';
 import { IMPORT_LOG_STATUS } from '../src/common/importing';
-import { FakePrisma, FakeStorage, makeGroup, makeStudent } from './support/fakes';
+import {
+  FakePrisma,
+  FakeQuestionBankPrisma,
+  FakeStorage,
+  makeGroup,
+  makeStudent,
+  makeSubTopic,
+  makeSubject,
+  makeTopic,
+} from './support/fakes';
 
 /** Reaches the private closer directly — see the describe block that uses it for why. */
 type ImportsServiceInternals = {
@@ -391,5 +403,97 @@ describe('ImportsService.commitGroupMembers — what an import run actually left
       { updated: log.updated, skipped: log.skipped, failed: log.failed },
       { updated: 1, skipped: 1, failed: 1 },
     );
+  });
+});
+
+// ============================================================================
+// The third importer. It predates this slice and was the one ImportLog producer
+// already in the tree, so it was in no task's file list — and wrote no audit at
+// all while editing a single question by hand wrote one.
+// ============================================================================
+
+/** A complete MCQ row, by column key. No commas in any value: this is written out as CSV. */
+const QUESTION_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
+  subject: 'Quantitative Aptitude',
+  topic: 'Arithmetic',
+  subtopic: 'Percentages',
+  difficulty: 'medium',
+  option1_en: '25',
+  option2_en: '30',
+  option3_en: '35',
+  option4_en: '40',
+  correct_option: '2',
+};
+
+function questionSheet(...stems: string[]): Buffer {
+  const header = QUESTION_IMPORT_COLUMNS.map((column) => column.header).join(',');
+  const lines = stems.map((stem) =>
+    QUESTION_IMPORT_COLUMNS.map(
+      (column) => ({ ...QUESTION_ROW, stem_en: stem })[column.key as QuestionImportColumnKey] ?? '',
+    ).join(','),
+  );
+  return Buffer.from([header, ...lines].join('\n'));
+}
+
+function questionBank() {
+  const prisma = new FakeQuestionBankPrisma(
+    [],
+    [makeSubject({ id: 'sub_1' })],
+    [makeTopic({ id: 'top_1' })],
+    [makeSubTopic({ id: 'stp_1' })],
+  );
+  const storage = new FakeStorage();
+  return {
+    prisma,
+    storage,
+    service: new QuestionImportService(
+      prisma.asService(),
+      storage as never,
+      new AuditService(prisma.asService()),
+    ),
+  };
+}
+
+describe('QuestionImportService.commit — the rows a question sheet leaves behind', () => {
+  /**
+   * The failure this prevents: a thousand-question import leaving zero RowActionLog rows, so the
+   * Imports tab lists the run and nothing reachable from the Activity tab, or from a question's
+   * own history, can say where any of those questions came from.
+   */
+  it('writes one audit row per created question, pointing at the run', async () => {
+    const { prisma, service } = questionBank();
+
+    await service.preview(questionSheet('What is 20% of 150?', 'What is 30% of 200?'), 'adm_1');
+    const logId = prisma.importLogs[0]!.id as string;
+
+    const result = await service.commit(logId);
+
+    assert.equal(result.created, 2);
+    assert.deepEqual(
+      prisma.rowActionLogs.map((row) => ({
+        entityId: row.entityId,
+        action: row.action,
+        feature: row.feature,
+        importLogId: row.importLogId,
+        actorId: row.actorId,
+      })),
+      prisma.questions.map((question) => ({
+        entityId: question.id,
+        action: AUDIT_ACTION.CREATE,
+        feature: AUDIT_FEATURE.QUESTION,
+        importLogId: logId,
+        actorId: 'adm_1',
+      })),
+    );
+  });
+
+  /** Same trade the roster importer makes: the sheet in S3 is what stands in for per-row diffs. */
+  it('stores no diff for an imported question', async () => {
+    const { prisma, service } = questionBank();
+
+    await service.preview(questionSheet('What is 20% of 150?'), 'adm_1');
+    await service.commit(prisma.importLogs[0]!.id as string);
+
+    assert.equal(prisma.rowActionLogs[0]?.changed, null);
   });
 });
