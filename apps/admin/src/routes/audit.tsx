@@ -20,10 +20,6 @@ import {
   Pagination,
   Select,
   TableFrame,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   type DataTableColumn,
 } from '@iace/ui';
 import { useInfinitePages, useListQuery } from '@iace/app-kit';
@@ -33,16 +29,14 @@ import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTOR_TYPE_LABELS,
   AUDIT_FEATURE_LABELS,
-  AUDIT_TAB,
   IMPORT_SOURCE_LABELS,
-  type AuditTabValue,
 } from '../lib/constants';
 import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
 
-/** The Activity tab's own filters — what the empty-state wording and the filter count read. */
+/** The Activity screen's filters — what the empty-state wording and the filter count read. */
 const ROW_ACTION_FILTERS = ['feature', 'action', 'actorId'] as const;
-type FilterKey = (typeof ROW_ACTION_FILTERS)[number] | 'tab' | 'run';
+type ActivityFilterKey = (typeof ROW_ACTION_FILTERS)[number];
 
 const IMPORT_STATUS_LABELS: Readonly<Record<ImportLogStatus, string>> = {
   [IMPORT_LOG_STATUS.PREVIEWED]: 'Previewed',
@@ -147,13 +141,10 @@ function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[]
   ];
 }
 
-export function AuditPage() {
+export function AuditActivityPage() {
   const { identity } = useAuth();
   const isSuperAdmin = identity?.isSuperAdmin ?? false;
-  const filters = useFilters<FilterKey>();
-
-  const tab = (filters.get('tab') || AUDIT_TAB.ACTIVITY) as AuditTabValue;
-  const highlightRunId = filters.get('run');
+  const filters = useFilters<ActivityFilterKey>();
 
   const feature = filters.get('feature');
   const action = filters.get('action');
@@ -165,40 +156,27 @@ export function AuditPage() {
   const actorPages = useInfinitePages({
     queryKey: ['admin', 'admins', 'filter', actorSearch],
     fetchPage: (page) => api.admin.admins.list({ page, pageSize: PAGE_SIZE_MAX, q: actorSearch }),
-    enabled: isSuperAdmin && tab === AUDIT_TAB.ACTIVITY,
+    enabled: isSuperAdmin,
   });
 
-  const rowActionQuery = {
-    feature: (feature || undefined) as AuditFeature | undefined,
-    action: (action || undefined) as AuditAction | undefined,
-    actorId: isSuperAdmin ? actorId || undefined : undefined,
-  };
-
-  // Each tab fetches only while it's the one on screen — switching tabs doesn't
-  // run both queries in the background.
   const activity = useListQuery({
     queryKey: ['admin', 'audit', 'row-actions'],
-    filters: rowActionQuery,
+    filters: {
+      feature: (feature || undefined) as AuditFeature | undefined,
+      action: (action || undefined) as AuditAction | undefined,
+      actorId: isSuperAdmin ? actorId || undefined : undefined,
+    },
     fetchPage: (params) => api.admin.audit.rowActions(params),
-    enabled: tab === AUDIT_TAB.ACTIVITY,
   });
 
-  const imports = useListQuery({
-    queryKey: ['admin', 'audit', 'imports'],
-    filters: {},
-    fetchPage: (params) => api.admin.audit.imports(params),
-    enabled: tab === AUDIT_TAB.IMPORTS,
-  });
-
-  const activityColumns = useMemo(() => auditColumns(), []);
-  const importsColumns = useMemo(() => importColumns(highlightRunId), [highlightRunId]);
+  const columns = useMemo(() => auditColumns(), []);
 
   // The chosen admin is often outside the loaded combobox pages; the loaded
   // rows already carry their name, and that is the one place left to find it.
   const selectedActorLabel =
     activity.items.find((row) => row.actorId === actorId)?.actorName ?? undefined;
 
-  const activityToolbar = (
+  const toolbar = (
     <>
       <Alert variant="info" className="mb-4">
         <span>
@@ -267,52 +245,61 @@ export function AuditPage() {
   );
 
   return (
-    <Tabs
-      value={tab}
-      onValueChange={(value) => filters.set({ tab: value, run: '' })}
-      className="flex min-h-0 flex-1 flex-col"
-    >
-      <div className="shrink-0">
+    <TableFrame
+      header={
         <PageHeader
           title="Audit log"
-          description="Every create, update, status change and import run across the platform."
+          description="Every create, update and status change across the platform."
         />
+      }
+      toolbar={toolbar}
+    >
+      <DataTable
+        columns={columns}
+        rows={activity.items}
+        rowKey={(row) => row.id}
+        isLoading={activity.isLoading}
+        empty={
+          filters.activeCount(ROW_ACTION_FILTERS) > 0
+            ? `No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days.`
+            : `No activity in the last ${AUDIT_WINDOW_DAYS} days.`
+        }
+        footer={activity.hasLoaded ? <Pagination {...activity.pagination} /> : null}
+      />
+    </TableFrame>
+  );
+}
 
-        <TabsList className="mb-4">
-          <TabsTrigger value={AUDIT_TAB.ACTIVITY}>Activity</TabsTrigger>
-          <TabsTrigger value={AUDIT_TAB.IMPORTS}>Imports</TabsTrigger>
-        </TabsList>
-      </div>
+export function AuditImportsPage() {
+  // `run` comes in from an audit row's "view run" link — the run it names is badged, not filtered to.
+  const filters = useFilters<'run'>();
+  const highlightRunId = filters.get('run');
 
-      <TabsContent value={AUDIT_TAB.ACTIVITY} className="flex min-h-0 flex-1 flex-col p-0">
-        <TableFrame toolbar={activityToolbar}>
-          <DataTable
-            columns={activityColumns}
-            rows={activity.items}
-            rowKey={(row) => row.id}
-            isLoading={activity.isLoading}
-            empty={
-              filters.activeCount(ROW_ACTION_FILTERS) > 0
-                ? `No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days.`
-                : `No activity in the last ${AUDIT_WINDOW_DAYS} days.`
-            }
-            footer={activity.hasLoaded ? <Pagination {...activity.pagination} /> : null}
-          />
-        </TableFrame>
-      </TabsContent>
+  const imports = useListQuery({
+    queryKey: ['admin', 'audit', 'imports'],
+    filters: {},
+    fetchPage: (params) => api.admin.audit.imports(params),
+  });
 
-      <TabsContent value={AUDIT_TAB.IMPORTS} className="flex min-h-0 flex-1 flex-col p-0">
-        <TableFrame>
-          <DataTable
-            columns={importsColumns}
-            rows={imports.items}
-            rowKey={(row) => row.id}
-            isLoading={imports.isLoading}
-            empty="No import runs yet."
-            footer={imports.hasLoaded ? <Pagination {...imports.pagination} /> : null}
-          />
-        </TableFrame>
-      </TabsContent>
-    </Tabs>
+  const columns = useMemo(() => importColumns(highlightRunId), [highlightRunId]);
+
+  return (
+    <TableFrame
+      header={
+        <PageHeader
+          title="Import runs"
+          description="Every import run — previewed, committed or failed — and what each one touched."
+        />
+      }
+    >
+      <DataTable
+        columns={columns}
+        rows={imports.items}
+        rowKey={(row) => row.id}
+        isLoading={imports.isLoading}
+        empty="No import runs yet."
+        footer={imports.hasLoaded ? <Pagination {...imports.pagination} /> : null}
+      />
+    </TableFrame>
   );
 }

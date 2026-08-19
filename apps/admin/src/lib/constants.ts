@@ -51,8 +51,9 @@ export const ROUTES = {
   ADMINS: '/admins',
   FEATURES: '/features',
   PERMISSIONS: '/permissions',
-  /** Every admin reaches this — the service, not the route, scopes what they see. */
+  /** Every admin reaches these — the service, not the route, scopes what they see. */
   AUDIT: '/audit',
+  AUDIT_IMPORTS: '/audit/imports',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
@@ -109,10 +110,6 @@ export const AUDIT_ACTOR_TYPE_LABELS: Readonly<Record<AuditActorType, string>> =
   SYSTEM: 'System',
 };
 
-/** The audit screen's two tabs, also read from the URL — shared with `ChangedCell`'s link back to Imports. */
-export const AUDIT_TAB = { ACTIVITY: 'activity', IMPORTS: 'imports' } as const;
-export type AuditTabValue = (typeof AUDIT_TAB)[keyof typeof AUDIT_TAB];
-
 /** How an import run's rows got here — also the fallback when a run has no actor. */
 export const IMPORT_SOURCE_LABELS: Readonly<Record<ImportSource, string>> = {
   INDIVIDUAL: 'Added by hand',
@@ -165,7 +162,14 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     ],
   },
   // Not superAdminOnly: every admin reaches this, scoped to their own rows.
-  { to: ROUTES.AUDIT, label: 'Audit log', icon: History },
+  {
+    label: 'Audit log',
+    icon: History,
+    children: [
+      { to: ROUTES.AUDIT, label: 'Activity', icon: History },
+      { to: ROUTES.AUDIT_IMPORTS, label: 'Imports', icon: Upload },
+    ],
+  },
 ];
 
 /** Strips `superAdminOnly` at every depth. `featureKey` is the shell's job. */

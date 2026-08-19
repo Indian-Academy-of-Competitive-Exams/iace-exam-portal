@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { AuditAction, RowAction } from '@iace/contracts';
 import { Badge, BadgeList, linkVariants, TruncatedText } from '@iace/ui';
-import { AUDIT_TAB, ROUTES } from './constants';
+import { ROUTES } from './constants';
 
 /**
  * How an audit row renders, shared by the global Audit screen and any per-entity
@@ -43,7 +43,7 @@ function diffLabel(field: string, diff: { from: unknown; to: unknown }): string 
 
 /**
  * An import-sourced row carries no diff — `recordImportRows` writes one thin entry per touched
- * entity, by design — so it links to the Imports tab, where that run's status and counts live.
+ * entity, by design — so it links to Import runs, where that run's status and counts live.
  */
 export function ChangedCell({ row }: Readonly<{ row: RowAction }>) {
   if (row.changed) {
@@ -66,10 +66,7 @@ export function ChangedCell({ row }: Readonly<{ row: RowAction }>) {
 
   if (row.importLogId) {
     return (
-      <Link
-        to={`${ROUTES.AUDIT}?tab=${AUDIT_TAB.IMPORTS}&run=${row.importLogId}`}
-        className={linkVariants()}
-      >
+      <Link to={`${ROUTES.AUDIT_IMPORTS}?run=${row.importLogId}`} className={linkVariants()}>
         From an import — view run
       </Link>
     );

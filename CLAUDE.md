@@ -107,6 +107,10 @@ Every bullet is a rule to follow, not background.
 
 ### UI behaviour
 
+- **Build the screen the way the app already builds that kind of screen. Deviate only for a reason you can state in one sentence.** Open two screens that already do this job before writing a third. A one-off costs the reader everything they learned on every other screen.
+  - **List screen:** `TableFrame` with the `PageHeader` in `header`, filters in `toolbar`, `DataTable` + `Pagination` inside. Not a bare fragment, not a hand-rolled header above a card.
+  - **Navigation:** every destination sits under a section in `NAV_ITEMS`. A lone top-level row is the deviation, not the shortcut. A section's sub-screens are nav children with their own routes — in-page `Tabs` are for views of ONE record (a question's languages), never for what the left menu should be listing.
+  - Same rule for confirm dialogs, empty-state wording, badge vocabulary, date formatting and filter placement: one vocabulary per app, and it is whichever one is already there.
 - **Confirm before anything that destroys, revokes, grants, or changes what somebody can do** — `ConfirmDialog`, never a chip in a row. Name the consequence, include the count (`studentCount`, `groupCount`). **A toggle confirms in both directions.** Confirm even when reversible if the effect is invisible from where it happens (retiring a branch).
   - Skip the dialog only when the screen already previews exactly what it would do (import commit).
   - Where per-click confirmation would be absurd, **batch the clicks**: hold the draft as a **diff against the server**, show the pending count where a collapsed section still shows it, confirm once listing every change, and drop the draft after a save whether it succeeded or failed.
