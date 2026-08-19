@@ -111,7 +111,7 @@ Rejected after checking the code:
 - **Student:** `PATCH /me` and document uploads only, as `STUDENT_PROFILE / UPDATE` with `actorType: STUDENT`.
 - **Script:** `POST admins/sync/students` writes student rows without a signed-in admin. It logs with `actorType: SCRIPT` and a null `actorId`, under `ImportSource.SCRIPT`, reusing the import path below rather than the request path — there is no interceptor on a job that no one called.
 
-`AuditActorType` already carries `ADMIN`, `STUDENT`, `SCRIPT` and `SYSTEM`. `SYSTEM` stays unused until something writes rows on its own schedule; the retention purge, when built, is its first user.
+`AuditActorType` already carries `ADMIN`, `STUDENT`, `SCRIPT` and `SYSTEM`. `SYSTEM` is used by the archive job (see Retention).
 
 ### Imports
 
@@ -155,17 +155,53 @@ Following the repo's UI rules: `Combobox` + `useInfinitePages` for the actor pic
 
 No `ConfirmDialog` anywhere: the feature is read-only. No one edits or deletes an audit row, super admin included. That property is what makes the log worth keeping.
 
-## Retention
+## Retention: 30 days hot, then archived to S3
 
 §8 says "+ retention policy" and stops. Resolved:
 
-- **`RowActionLog`: 24 months.**
-- **`ImportLog`: kept indefinitely** — it is one row per run, and its `fileS3Key` is the evidence a row-level diff was traded away for.
-- **Import files in S3: 24 months**, matching the row actions they explain.
+- **`RowActionLog`: 30 days in Postgres.** Older rows are written to S3 and deleted from the table.
+- **`ImportLog`: kept indefinitely.** One row per run, and it is the index into the import files — losing it would orphan objects nothing can name.
+- **Import files in S3: indefinite**, for the same reason: for import-sourced rows the sheet is the only record of what was overwritten.
 
-**Enforcement is deferred, deliberately, and this is not a TBD.** Estimated volume: admin CRUD across ~2K students is a few thousand rows a year; a weekly thousand-row import adds ~50K. Well under a million rows a year, on a table whose read path is a covered index. A purge job would be a scheduled process protecting nothing for several years.
+At 30 days the archive job is not optional and not a follow-up — it is the only thing standing between this design and a table that silently loses history. It ships with the feature.
 
-The policy is stated so the decision exists; the job is a follow-up, to be built when the table passes ~5M rows or when a compliance requirement names a shorter window. What must **not** happen is a purge that silently deletes without the policy being written down first.
+### What the archive is
+
+One gzipped NDJSON object per **closed UTC day**:
+
+```
+audit/row-actions/YYYY/MM/DD.ndjson.gz
+```
+
+One JSON object per line, exactly the columns of `RowActionLog` with actor display names resolved at archive time — names are resolvable now and may not be later, and an archive nobody can read without a live database is not an archive.
+
+NDJSON because it needs no library to read, streams line by line at any size, and survives a schema addition: a new column is a new key, not a broken file.
+
+### The job
+
+A daily repeatable BullMQ job on the existing queue infrastructure (`QUEUE_NAMES` gains `AUDIT_ARCHIVE`), running as `actorType: SYSTEM` — the first user of that value.
+
+Order matters and is the whole safety argument:
+
+1. Select every row for one closed day older than the 30-day window.
+2. Write the object to S3.
+3. **Verify it landed** (HEAD, and byte count against what was written).
+4. Only then delete that day's rows, bounded by the same `createdAt` window.
+
+A failure at any step leaves the rows in Postgres and retries the next day. Rows are never deleted on the strength of an S3 write that was not confirmed. Re-running a day overwrites the same key and deletes the same bounded window, so the job is idempotent and safe to replay after an outage.
+
+It processes one day per run and never touches the current day, so a partially-written day cannot be archived and flushed underneath a request that is still adding to it.
+
+### What this costs, stated plainly
+
+A question asked more than 30 days after the fact — "who blocked this student last term" — is no longer answerable from a screen. It is answerable from an object in S3, by someone who goes and reads it.
+
+The design does two things so that is a path rather than a dead end:
+
+- The `/audit` screen and the embedded History section **state their window**: "Showing the last 30 days. Older activity is archived — see `audit/row-actions/`." A History section that silently renders empty for an old student would be read as "nothing ever happened to them", which is worse than no feature.
+- The archive key is derived from the date alone, so finding the right object needs no index and no tool.
+
+Restoring an archived day into Postgres is **not** built in V1. The objects are plain NDJSON; if it is ever needed often enough to automate, that is a follow-up with a real requirement behind it.
 
 ## Testing
 
@@ -176,6 +212,9 @@ Per repo rules, tests ship in the same commit and run with no infrastructure.
 - `AuditListener` — writes the row; a throwing write is swallowed and does not reach the producer.
 - Self-scoping — a normal admin's request carrying another admin's `actorId` still returns only their own rows. This is the failure the feature exists to prevent, so it is asserted at the service, not the controller.
 - Per-feature: one test each asserting the row lands **with a populated diff**, which is what catches a forgotten `before` contribution.
+- Archive job — the failure it exists to prevent: **a failed or unverified S3 write deletes nothing.** Assert rows survive when the upload throws, and when the verification step disagrees with what was written. Also: the current day is never archived; a replayed day is idempotent; an empty day writes no object and deletes nothing.
+
+The archive tests use the in-memory fakes in `apps/api/test/support/fakes.ts` with a fake storage adapter, so they run with no S3 and no Postgres, per the repo rule.
 
 ## Build order
 
@@ -184,9 +223,12 @@ Per repo rules, tests ship in the same commit and run with no infrastructure.
 3. Remaining admin features: groups, branches, exam types, questions, taxonomy, admins, feature permissions.
 4. Student side: `PATCH /me` and document uploads.
 5. Imports: student and group-member importers gain the `ImportLog` lifecycle; per-row thin entries with `importLogId`.
-6. Read API with server-side scoping, then the `/audit` screen, then the embedded History section.
+6. Read API with server-side scoping, then the `/audit` screen, then the embedded History section — both stating the 30-day window.
+7. The archive job: S3 writer, verification, bounded delete, daily schedule.
 
 Steps 1–2 are the slice that proves the design. Nothing after step 2 changes its shape.
+
+Step 7 must not ship later than step 5. Imports are what make this table grow, and 30-day retention with no archive is data loss on a schedule.
 
 ## Open questions
 
