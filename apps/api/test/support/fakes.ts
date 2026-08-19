@@ -508,8 +508,12 @@ export class FakePrisma {
 
   /** Groups as the write and grant paths use them — the membership itself lives on the student. */
   readonly group = {
-    findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.groups.find((g) => g.id === where.id) ?? null),
+    // A copy, not the live row — same reason as `student.findUnique` above: `update` mutates
+    // the found row in place, and a before/after diff needs the "before" to hold still.
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.groups.find((g) => g.id === where.id);
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     groupBy: ({ where = {} }: { where?: { examType?: { in: string[] } } } = {}) => {
       const wanted = where.examType?.in;
@@ -600,10 +604,11 @@ export class FakePrisma {
 
   /** Branches, with the group counts the service reads through `_count`. */
   readonly branch = {
-    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
-      Promise.resolve(
-        this.branches.find((b) => (where.id ? b.id === where.id : b.name === where.name)) ?? null,
-      ),
+    // A copy, not the live row — same reason as `student.findUnique` above.
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) => {
+      const row = this.branches.find((b) => (where.id ? b.id === where.id : b.name === where.name));
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     findMany: ({
       where = {},
@@ -641,8 +646,11 @@ export class FakePrisma {
 
   /** Exam types, with the list filters and the CRUD `ExamTypesService` runs. */
   readonly examType = {
-    findUnique: ({ where }: { where: { id?: string; name?: string; code?: string } }) =>
-      Promise.resolve(this.examTypes.find((e) => matchesExamTypeKey(e, where)) ?? null),
+    // A copy, not the live row — same reason as `student.findUnique` above.
+    findUnique: ({ where }: { where: { id?: string; name?: string; code?: string } }) => {
+      const row = this.examTypes.find((e) => matchesExamTypeKey(e, where));
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     findMany: ({
       where = {},
@@ -1213,11 +1221,11 @@ export class FakeQuestionBankPrisma {
           })),
       ),
 
-    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
-      Promise.resolve(
-        this.subjects.find((row) => (where.id ? row.id === where.id : row.name === where.name)) ??
-          null,
-      ),
+    // A copy, not the live row — same reason as `FakePrisma.student.findUnique`.
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) => {
+      const row = this.subjects.find((r) => (where.id ? r.id === where.id : r.name === where.name));
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     count: () => Promise.resolve(this.subjects.length),
 
@@ -1226,14 +1234,37 @@ export class FakeQuestionBankPrisma {
       this.subjects.push(row);
       return Promise.resolve({ ...row, _count: { topics: 0, questions: 0 } });
     },
+
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: { name?: string; code?: string | null };
+    }) => {
+      const row = this.subjects.find((subject) => subject.id === where.id);
+      if (!row) throw new Error(`no subject ${where.id}`);
+      if (data.name !== undefined) row.name = data.name;
+      if (data.code !== undefined) row.code = data.code;
+      return Promise.resolve({
+        ...row,
+        _count: {
+          topics: this.topics.filter((topic) => topic.subjectId === row.id).length,
+          questions: this.questions.filter((question) => question.subjectId === row.id).length,
+        },
+      });
+    },
   };
 
   readonly topic = {
     findMany: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
       Promise.resolve(this.topics.filter((row) => !where?.id?.in || where.id.in.includes(row.id))),
 
-    findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.topics.find((row) => row.id === where.id) ?? null),
+    // A copy, not the live row — same reason as `FakePrisma.student.findUnique`.
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.topics.find((r) => r.id === where.id);
+      return Promise.resolve(row ? { ...row } : null);
+    },
 
     findFirst: ({ where }: { where: { subjectId?: string; name?: string } }) =>
       Promise.resolve(
@@ -1248,6 +1279,21 @@ export class FakeQuestionBankPrisma {
       Promise.resolve(
         this.topics.filter((row) => !where?.id?.in || where.id.in.includes(row.id)).length,
       ),
+
+    update: ({ where, data }: { where: { id: string }; data: { name?: string } }) => {
+      const row = this.topics.find((topic) => topic.id === where.id);
+      if (!row) throw new Error(`no topic ${where.id}`);
+      if (data.name !== undefined) row.name = data.name;
+      const subject = this.subjects.find((candidate) => candidate.id === row.subjectId);
+      return Promise.resolve({
+        ...row,
+        subject: subject ? { id: subject.id, name: subject.name } : { id: row.subjectId, name: '' },
+        _count: {
+          subTopics: this.subTopics.filter((subTopic) => subTopic.topicIds.includes(row.id)).length,
+          questions: this.questions.filter((question) => question.topicId === row.id).length,
+        },
+      });
+    },
   };
 
   readonly subTopic = {
@@ -1258,11 +1304,14 @@ export class FakeQuestionBankPrisma {
           .map((row) => ({ ...row, topics: row.topicIds.map((id) => ({ id })) })),
       ),
 
-    findUnique: ({ where }: { where: { id?: string; name?: string } }) =>
-      Promise.resolve(
-        this.subTopics.find((row) => (where.id ? row.id === where.id : row.name === where.name)) ??
-          null,
-      ),
+    // A copy with its own `topics` array — the `include` the service asks for — not the live row:
+    // same reason as `FakePrisma.student.findUnique`.
+    findUnique: ({ where }: { where: { id?: string; name?: string } }) => {
+      const row = this.subTopics.find((r) =>
+        where.id ? r.id === where.id : r.name === where.name,
+      );
+      return Promise.resolve(row ? { ...row, topics: row.topicIds.map((id) => ({ id })) } : null);
+    },
 
     findFirst: ({ where }: { where: { name?: string; id?: { not: string } } }) =>
       Promise.resolve(

@@ -2,14 +2,26 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUDIT_FEATURE, fieldDiff } from '@iace/contracts';
-import { AUDITED_EXAM_TYPE_FIELDS } from '../src/configs/exam-types.service';
+import { AUDITED_EXAM_TYPE_FIELDS, ExamTypesService } from '../src/configs/exam-types.service';
 import { AUDIT_KEY, type AuditRoute } from '../src/audit/audit.decorator';
 import { TaxonomyController } from '../src/questions/taxonomy.controller';
 import {
   AUDITED_SUBJECT_FIELDS,
   AUDITED_SUB_TOPIC_FIELDS,
   AUDITED_TOPIC_FIELDS,
+  TaxonomyService,
 } from '../src/questions/taxonomy.service';
+import { AuditContext } from '../src/audit';
+import { GroupsService } from '../src/groups';
+import { StudentsService } from '../src/students';
+import {
+  FakePrisma,
+  FakeQuestionBankPrisma,
+  makeExamType,
+  makeSubTopic,
+  makeSubject,
+  makeTopic,
+} from './support/fakes';
 
 describe('the exam type audit diff', () => {
   it('covers every column an exam type edit can change', () => {
@@ -98,5 +110,102 @@ describe('the taxonomy routes file under three distinct features', () => {
       featureOf('createSubTopic'),
     ];
     assert.equal(new Set(features).size, 3);
+  });
+});
+
+// ============================================================================
+// Driving the real services inside a live AuditContext, the way the interceptor
+// actually reads it. Everything above is `fieldDiff` against hand-built objects,
+// which cannot catch a wiring mistake in the service or in the fake it runs
+// against. `updateSubject`/`updateTopic` could not even be driven this way until
+// now — `FakeQuestionBankPrisma.subject`/`.topic` had no `update` at all — and
+// `.subTopic.findUnique` handed back the same row `update` then mutated, so its
+// diff would have read `null` too.
+// ============================================================================
+
+describe('ExamTypesService.update — driven live, the diff a real edit contributes', () => {
+  it('reports a rename', async () => {
+    const prisma = new FakePrisma(
+      [],
+      [],
+      [],
+      [],
+      [makeExamType({ id: 'ext_1', name: 'SSC CGL', code: 'SSC CGL' })],
+    );
+    const auditContext = new AuditContext();
+    const service = new ExamTypesService(
+      prisma.asService(),
+      new GroupsService(prisma.asService(), null as never, null as never, new AuditContext()),
+      new StudentsService(
+        prisma.asService(),
+        null as never,
+        null as never,
+        null as never,
+        new AuditContext(),
+      ),
+      auditContext,
+    );
+
+    await auditContext.run(async () => {
+      await service.update('ext_1', { name: 'SSC CGL TIER 1' });
+      assert.deepEqual(auditContext.current()?.changed, {
+        name: { from: 'SSC CGL', to: 'SSC CGL TIER 1' },
+      });
+    });
+  });
+});
+
+describe('TaxonomyService.updateSubject — driven live, the diff a real edit contributes', () => {
+  it('reports a code change', async () => {
+    const prisma = new FakeQuestionBankPrisma(
+      [],
+      [makeSubject({ id: 'sub_1', name: 'QUANTITATIVE APTITUDE', code: null })],
+    );
+    const auditContext = new AuditContext();
+    const service = new TaxonomyService(prisma.asService(), auditContext);
+
+    await auditContext.run(async () => {
+      await service.updateSubject('sub_1', { code: 'QA' });
+      assert.deepEqual(auditContext.current()?.changed, { code: { from: null, to: 'QA' } });
+    });
+  });
+});
+
+describe('TaxonomyService.updateTopic — driven live, the diff a real edit contributes', () => {
+  it('reports a rename', async () => {
+    const prisma = new FakeQuestionBankPrisma(
+      [],
+      [makeSubject({ id: 'sub_1' })],
+      [makeTopic({ id: 'top_1', name: 'ARITHMETIC', subjectId: 'sub_1' })],
+    );
+    const auditContext = new AuditContext();
+    const service = new TaxonomyService(prisma.asService(), auditContext);
+
+    await auditContext.run(async () => {
+      await service.updateTopic('top_1', { name: 'ARITHMETIC BASICS' });
+      assert.deepEqual(auditContext.current()?.changed, {
+        name: { from: 'ARITHMETIC', to: 'ARITHMETIC BASICS' },
+      });
+    });
+  });
+});
+
+describe('TaxonomyService.updateSubTopic — driven live, the diff a real edit contributes', () => {
+  it('reports a rename', async () => {
+    const prisma = new FakeQuestionBankPrisma(
+      [],
+      [],
+      [makeTopic({ id: 'top_1' })],
+      [makeSubTopic({ id: 'stp_1', name: 'ALGEBRA', topicIds: ['top_1'] })],
+    );
+    const auditContext = new AuditContext();
+    const service = new TaxonomyService(prisma.asService(), auditContext);
+
+    await auditContext.run(async () => {
+      await service.updateSubTopic('stp_1', { name: 'ALGEBRA BASICS' });
+      assert.deepEqual(auditContext.current()?.changed, {
+        name: { from: 'ALGEBRA', to: 'ALGEBRA BASICS' },
+      });
+    });
   });
 });

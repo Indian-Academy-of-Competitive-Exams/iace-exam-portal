@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
-import { AUDIT_ACTION, fieldDiff } from '@iace/contracts';
+import {
+  AUDIT_ACTION,
+  DIFFICULTY_LEVEL,
+  fieldDiff,
+  questionDraftSchema,
+  type QuestionDraftInput,
+} from '@iace/contracts';
 import { TOGGLE_ACTIONS } from '../src/audit/audit.decorator';
-import { AUDITED_QUESTION_FIELDS } from '../src/questions/questions.service';
+import { AUDITED_QUESTION_FIELDS, QuestionsService } from '../src/questions/questions.service';
+import { AuditContext } from '../src/audit';
+import { FakeQuestionBankPrisma, makeSubTopic, makeSubject, makeTopic } from './support/fakes';
 
 describe('the question audit diff', () => {
   it('covers the columns a question edit can change', () => {
@@ -106,5 +114,74 @@ describe('the question audit diff', () => {
    */
   it('uses the sign-in style toggle vocabulary for a question retire', () => {
     assert.equal(TOGGLE_ACTIONS.signIn({ isActive: false }), AUDIT_ACTION.DEACTIVATE);
+  });
+});
+
+// ============================================================================
+// Driving QuestionsService.update inside a live AuditContext, the way the
+// interceptor actually reads it. Everything above is `fieldDiff` against
+// hand-built objects, which cannot catch a wiring mistake in the service.
+// ============================================================================
+
+function build() {
+  const prisma = new FakeQuestionBankPrisma([], [makeSubject()], [makeTopic()], [makeSubTopic()]);
+  const auditContext = new AuditContext();
+  return {
+    prisma,
+    auditContext,
+    questions: new QuestionsService(prisma.asService(), auditContext),
+  };
+}
+
+function draft(over: Partial<QuestionDraftInput> = {}) {
+  return questionDraftSchema.parse({
+    subjectId: 'sub_1',
+    topicId: 'top_1',
+    subTopicId: 'stp_1',
+    difficulty: DIFFICULTY_LEVEL.MEDIUM,
+    stem: { en: 'What is 20% of 150?' },
+    options: [
+      { position: 1, isCorrect: false, text: { en: '25' } },
+      { position: 2, isCorrect: true, text: { en: '30' } },
+      { position: 3, isCorrect: false, text: { en: '35' } },
+      { position: 4, isCorrect: false, text: { en: '40' } },
+    ],
+    ...over,
+  });
+}
+
+describe('QuestionsService.update — driven live, the diff a real edit contributes', () => {
+  /**
+   * The one case that would have caught the original id-keyed bug: `update()` deletes and
+   * recreates every option, so a save that only rewrites their text mints new option ids while
+   * the correct one stays at the same position. That must report the real change (difficulty)
+   * and, in the same diff, no `correctOptionPositions` entry at all.
+   */
+  it('reports a real change but no correctOptionPositions change when a save only regenerates option ids', async () => {
+    const ctx = build();
+    const created = await ctx.questions.create(draft(), 'adm_1');
+
+    await ctx.auditContext.run(async () => {
+      await ctx.questions.update(
+        created.id,
+        draft({
+          difficulty: DIFFICULTY_LEVEL.HIGH,
+          stem: { en: 'What is 20% of 150, rounded?' },
+          options: [
+            { position: 1, isCorrect: false, text: { en: '20' } },
+            { position: 2, isCorrect: true, text: { en: '30' } },
+            { position: 3, isCorrect: false, text: { en: '45' } },
+            { position: 4, isCorrect: false, text: { en: '50' } },
+          ],
+        }),
+      );
+
+      const changed = ctx.auditContext.current()?.changed;
+      assert.deepEqual(changed?.difficulty, {
+        from: DIFFICULTY_LEVEL.MEDIUM,
+        to: DIFFICULTY_LEVEL.HIGH,
+      });
+      assert.ok(changed && !('correctOptionPositions' in changed));
+    });
   });
 });
