@@ -4923,15 +4923,18 @@ The scanner reads the working tree, not the index, and this file fails the gate 
 - [ ] **Step 4: Stage whole files and commit**
 
 ```bash
-cd /Users/harshithdiyyala/Projects/iace && git add prisma/schema.prisma prisma/migrations/20260818120000_group_state_and_singletons README.md packages/contracts/src/groups.ts packages/ui/test/confirm-destructive.test.ts apps/api/src/groups apps/api/src/students apps/api/src/imports apps/api/test apps/admin/src/routes/groups.tsx apps/admin/src/routes/student-detail.tsx apps/admin/src/lib/constants.ts && git diff --stat && git commit -m "feat(groups): make a group's type, exam and branches settable" -m "A group's type decides how it finds its students, and nothing wrote it: every
+cd /Users/harshithdiyyala/Projects/iace && git add prisma/schema.prisma prisma/migrations/20260818120000_group_state_and_singletons README.md packages/contracts/src/groups.ts packages/contracts/src/naming.ts packages/contracts/src/students.ts packages/ui/test/confirm-destructive.test.ts apps/api/src/groups apps/api/src/configs apps/api/src/students apps/api/src/imports apps/api/test apps/admin/src/routes/groups.tsx apps/admin/src/routes/student-detail.tsx apps/admin/src/lib/constants.ts && git diff --stat && git commit -m "feat(groups): make a group's type, exam and branches settable" -m "A group's type decides how it finds its students, and nothing wrote it: every
 group was EXAM with a null exam code, so an enrolment matched nothing and a
 count over directGroupIds reported 0 for batches of thousands. The delete
 dialog then told the admin 'the group is empty, so nobody loses access'.
 
-Group.isActive lands with the migration that seeds the two singletons the
-model assumes and no code creates: the ALL STUDENTS group and the ONLINE
-branch. Both inserts are guarded on the type, so a database that already
-holds one gains no second.
+Group.isActive lands with the migration that settles the two singletons the
+model assumes. The ALL STUDENTS group is seeded — nothing else creates it.
+The virtual branch already existed, created by an earlier migration and
+typed VIRTUAL by another, so it is renamed from GLOBAL to ONLINE rather
+than inserted: the old name described the isGlobal flag that no longer
+exists, and branchEditBlocker deliberately refuses that rename through the
+UI. Both statements are guarded so a second run changes nothing.
 
 studentCount, the deletion blocker, the confirm dialog and the roster's
 group filter now run one rule (groupReach): an enrolment, the whole roster,
