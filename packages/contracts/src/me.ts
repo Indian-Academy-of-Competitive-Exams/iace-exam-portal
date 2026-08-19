@@ -44,10 +44,14 @@ export const meSchema = studentDetailSchema;
 export type Me = z.infer<typeof meSchema>;
 
 /**
- * `groupIds` is omitted, not optional: membership grants test access, and zod strips
- * the key before the service sees it, so a request carrying one has no effect.
+ * An allowlist, never an omit: everything a student may set about themselves is named here, so
+ * a field added to the admin patch cannot become self-writable by forgetting to exclude it.
  */
-export const updateMeSchema = updateStudentSchema.omit({ groupIds: true });
+export const updateMeSchema = updateStudentSchema.pick({
+  fullName: true,
+  preferredLanguage: true,
+  profile: true,
+});
 export type UpdateMeInput = z.input<typeof updateMeSchema>;
 export type UpdateMeBody = z.infer<typeof updateMeSchema>;
 

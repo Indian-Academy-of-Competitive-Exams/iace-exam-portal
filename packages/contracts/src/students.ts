@@ -244,6 +244,10 @@ export const updateStudentProfileSchema = z.object({
   pastExamHistory: z.array(pastExamEntrySchema).max(PROFILE_LIST_MAX).optional(),
 });
 
+/** An enrolment reaches every EXAM and PROGRAM group for that code, so it is a route to a test. */
+export const BLOCKED_ENROLMENT_MESSAGE =
+  'That student is blocked from tests. Lift the block before enrolling them in another exam.';
+
 export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
   fullName: blankClears(personNameSchema),

@@ -165,6 +165,36 @@ describe('StudentsService.update — the access fields', () => {
     assert.deepEqual(prisma.students[0]?.enrolledExams, []);
   });
 
+  /**
+   * The failure this prevents: an enrolment reaches every EXAM and PROGRAM group carrying that
+   * code, so adding one to a blocked student hands back what the block took away.
+   */
+  it('refuses a new enrolment for a student blocked from tests', async () => {
+    const { service, prisma } = serviceWith([
+      makeStudent({ id: 'stu_1', isTestBlocked: true, enrolledExams: ['SSC CGL'] }),
+    ]);
+
+    const error = await service.update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] }).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+
+    assert.ok(error instanceof AppException);
+    assert.match(error.message, /blocked from tests/i);
+    assert.deepEqual(error.fieldErrors?.enrolledExams, [error.message]);
+    assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL'], 'and writes nothing');
+  });
+
+  it('still lets a blocked student be un-enrolled — the block takes access, never gives it', async () => {
+    const { service, prisma } = serviceWith([
+      makeStudent({ id: 'stu_1', isTestBlocked: true, enrolledExams: ['SSC CGL', 'RRB JE'] }),
+    ]);
+
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+
+    assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
+  });
+
   it('clears the programme and the branch when the patch says null', async () => {
     const { service, prisma } = serviceWith([
       makeStudent({ id: 'stu_1', program: 'One year classroom', currentBranchId: 'br_1' }),

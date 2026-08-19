@@ -1,6 +1,7 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import {
   AppException,
+  BLOCKED_ENROLMENT_MESSAGE,
   DIRECT_GRANT_MESSAGE,
   ErrorCodes,
   GROUP_TYPES_ACCEPTING_GRANTS,
@@ -219,8 +220,11 @@ export class StudentsService {
       await this.assertGroupsAcceptGrants(student.directGroupIds, input.groupIds);
       this.assertMayJoinGroups(student, input.groupIds);
     }
-    if (input.enrolledExams?.length) {
-      await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+    if (input.enrolledExams) {
+      this.assertMayEnrol(student, input.enrolledExams);
+      if (input.enrolledExams.length) {
+        await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+      }
     }
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
@@ -334,6 +338,21 @@ export class StudentsService {
         fieldErrors: { groupIds: [blocker] },
       });
     }
+  }
+
+  /** Only the exams this save would ADD, so a blocked student can still be un-enrolled. */
+  private assertMayEnrol(
+    student: { isTestBlocked: boolean; enrolledExams: string[] },
+    enrolledExams: string[],
+  ): void {
+    if (!student.isTestBlocked) return;
+
+    const already = new Set(student.enrolledExams);
+    if (!enrolledExams.some((code) => !already.has(code))) return;
+
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, BLOCKED_ENROLMENT_MESSAGE, {
+      fieldErrors: { [ENROLLED_EXAMS_FIELD]: [BLOCKED_ENROLMENT_MESSAGE] },
+    });
   }
 
   /** Only the groups this save would ADD, so a grant made before the rule is still removable. */
