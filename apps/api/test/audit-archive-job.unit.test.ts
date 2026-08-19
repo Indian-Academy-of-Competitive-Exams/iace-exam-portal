@@ -4,10 +4,13 @@ import { describe, it } from 'node:test';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { archiveKeyFor } from '../src/audit/audit-archive';
 import {
+  AUDIT_ARCHIVE_LOCK_TTL_SEC,
   AUDIT_ARCHIVE_PAGE_SIZE,
   AuditArchiveProcessor,
 } from '../src/audit/audit-archive.processor';
-import { FakePrisma, FakeStorage } from './support/fakes';
+import { AuditService } from '../src/audit/audit.service';
+import { redisKeys } from '../src/redis/redis.keys';
+import { FakePrisma, FakeRedis, FakeStorage, makeAdmin } from './support/fakes';
 
 const NOW = new Date('2026-04-10T02:00:00Z');
 const OLD_DAY = new Date('2026-03-11T09:00:00Z');
@@ -15,6 +18,7 @@ const OLD_DAY = new Date('2026-03-11T09:00:00Z');
 function withRows(count: number) {
   const prisma = new FakePrisma();
   const storage = new FakeStorage();
+  const redis = new FakeRedis();
   for (let index = 0; index < count; index += 1) {
     prisma.rowActionLogs.push({
       id: `ral_${index}`,
@@ -28,7 +32,17 @@ function withRows(count: number) {
       importLogId: null,
     });
   }
-  return { prisma, storage, job: new AuditArchiveProcessor(prisma as never, storage as never) };
+  return {
+    prisma,
+    storage,
+    redis,
+    job: new AuditArchiveProcessor(
+      prisma as never,
+      storage as never,
+      redis.asService(),
+      new AuditService(prisma.asService()),
+    ),
+  };
 }
 
 describe('AuditArchiveProcessor', () => {
@@ -118,6 +132,72 @@ describe('AuditArchiveProcessor', () => {
 
     assert.equal(result?.rows, 1);
     assert.deepEqual(prisma.rowActionLogs.map((row) => row.id).sort(), ['ral_after', 'ral_before']);
+  });
+
+  /**
+   * The failure this prevents: BullMQ locks a job, not a day, and stalled-job recovery exists
+   * because those locks expire. Two workers on one day is one of them reading page 2 after the
+   * other's deleteMany, uploading its short body over the complete object, and verifying it
+   * against its own buffer — which passes. The rows in between are gone from Postgres and S3.
+   */
+  it('leaves a day alone while another worker holds it', async () => {
+    const { prisma, storage, redis, job } = withRows(3);
+    const held = await redis.acquireLock(
+      redisKeys.auditArchiveDay('2026-03-11'),
+      AUDIT_ARCHIVE_LOCK_TTL_SEC,
+    );
+
+    assert.equal(held, true);
+    assert.equal(await job.archiveOneDay(NOW), null);
+    assert.equal(prisma.rowActionLogs.length, 3);
+    assert.equal(storage.objects.size, 0);
+  });
+
+  /** Released, not left to expire: the next day of the same backlog run has to be able to start. */
+  it('frees the day it archived, so a following run is not locked out', async () => {
+    const { redis, job } = withRows(3);
+
+    await job.archiveOneDay(NOW);
+
+    assert.equal(
+      await redis.acquireLock(redisKeys.auditArchiveDay('2026-03-11'), AUDIT_ARCHIVE_LOCK_TTL_SEC),
+      true,
+    );
+  });
+
+  /** Released even when the day failed, or one bad upload locks that day out for 15 minutes. */
+  it('frees the day when the upload throws', async () => {
+    const { storage, redis, job } = withRows(3);
+    storage.failNextUpload = true;
+
+    await assert.rejects(() => job.archiveOneDay(NOW));
+
+    assert.equal(
+      await redis.acquireLock(redisKeys.auditArchiveDay('2026-03-11'), AUDIT_ARCHIVE_LOCK_TTL_SEC),
+      true,
+    );
+  });
+
+  /**
+   * The failure this prevents: the archived object is the only surviving copy of these rows, and
+   * bare cuids in it mean the one question it exists to answer — who did this — needs a database
+   * that may not have the row, or may not exist, by the time anyone asks.
+   */
+  it('resolves actor names into the archive rather than leaving bare ids', async () => {
+    const { prisma, storage, job } = withRows(2);
+    prisma.admins.push(makeAdmin({ id: 'adm_1', fullName: 'R Kumar' }));
+
+    const result = await job.archiveOneDay(NOW);
+
+    const lines = gunzipSync(storage.objects.get(result!.key)!)
+      .toString('utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { actorId: string; actorName: string });
+    assert.deepEqual(
+      lines.map((line) => line.actorName),
+      ['R Kumar', 'R Kumar'],
+    );
   });
 
   /**

@@ -2,6 +2,9 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
 
+/** The value is never read — a lock is the key's existence. */
+const LOCK_HELD = '1';
+
 /**
  * The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test
  * state and leaderboards.
@@ -53,6 +56,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async del(...keys: string[]): Promise<void> {
     if (keys.length > 0) await this.client.del(...keys);
+  }
+
+  /** True only for the caller that took it; everyone else is refused until the TTL runs out. */
+  async acquireLock(key: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, LOCK_HELD, 'EX', ttlSec, 'NX')) === 'OK';
   }
 
   /** Remaining TTL in seconds, or 0 when the key is gone / has no expiry. */

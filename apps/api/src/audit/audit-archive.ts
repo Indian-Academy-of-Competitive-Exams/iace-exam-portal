@@ -14,8 +14,8 @@ export function archiveKeyFor(day: Date): string {
 }
 
 /**
- * `JSON.stringify` escapes newlines, so one row is always exactly one line.
- * Trailing newline on non-empty input only; a reader should skip blank lines regardless.
+ * The trailing newline is load-bearing: the processor concatenates one gzip member per page, and
+ * it is what keeps a page boundary from landing mid-record. `JSON.stringify` escapes newlines.
  */
 export function toNdjson(rows: readonly object[]): Buffer {
   if (rows.length === 0) return gzipSync('');

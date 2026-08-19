@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { type RowActionLog } from '@prisma/client';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { redisKeys } from '../redis/redis.keys';
 import { StorageService } from '../storage/storage.service';
 import { QUEUE_NAMES } from '../queue/queues';
+import { AuditService } from './audit.service';
 import { AUDIT_RETENTION_DAYS, archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
 
 /** Caps one run's catch-up so a long outage logs a warning instead of running forever. */
@@ -11,6 +15,10 @@ export const AUDIT_ARCHIVE_MAX_DAYS_PER_RUN = 14;
 
 /** Rows read and compressed per page, so one day never sits in memory as a single array. */
 export const AUDIT_ARCHIVE_PAGE_SIZE = 1000;
+
+/** Long enough to page and upload the largest realistic day; the lock is the only thing between
+ *  two workers on one day, and BullMQ's job lock expires on a stall. */
+export const AUDIT_ARCHIVE_LOCK_TTL_SEC = 900;
 
 interface PendingDay {
   gte: Date;
@@ -32,6 +40,8 @@ export class AuditArchiveProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly redis: RedisService,
+    private readonly audit: AuditService,
   ) {
     super();
   }
@@ -108,6 +118,22 @@ export class AuditArchiveProcessor extends WorkerHost {
   ): Promise<{ key: string; rows: number } | null> {
     this.assertWindow(gte, lt, eligibleBefore);
 
+    // Without this, a second worker's page read can land after the first one's delete: it uploads
+    // its short body over the complete object, verifies against itself, and the rest is gone.
+    const lock = redisKeys.auditArchiveDay(gte.toISOString().slice(0, 10));
+    if (!(await this.redis.acquireLock(lock, AUDIT_ARCHIVE_LOCK_TTL_SEC))) {
+      this.logger.warn(`Another worker holds ${lock}; leaving that day for the next run`);
+      return null;
+    }
+
+    try {
+      return await this.writeAndDrop(gte, lt);
+    } finally {
+      await this.redis.del(lock);
+    }
+  }
+
+  private async writeAndDrop(gte: Date, lt: Date): Promise<{ key: string; rows: number } | null> {
     const key = archiveKeyFor(gte);
     const pages: Buffer[] = [];
     let rowCount = 0;
@@ -120,7 +146,7 @@ export class AuditArchiveProcessor extends WorkerHost {
         take: AUDIT_ARCHIVE_PAGE_SIZE,
       });
       if (page.length === 0) break;
-      pages.push(toNdjson(page));
+      pages.push(toNdjson(await this.withActorNames(page)));
       rowCount += page.length;
 
       const last = page.at(-1);
@@ -144,6 +170,16 @@ export class AuditArchiveProcessor extends WorkerHost {
     await this.prisma.rowActionLog.deleteMany({ where: { createdAt: { gte, lt } } });
     this.logger.log(`Archived ${rowCount} audit rows to ${key}`);
     return { key, rows: rowCount };
+  }
+
+  /** Resolved here, not at read time: an archive that needs a live database to say who did
+   *  something is not an archive. */
+  private async withActorNames(page: readonly RowActionLog[]): Promise<object[]> {
+    const names = await this.audit.namesFor(page);
+    return page.map((row) => ({
+      ...row,
+      actorName: row.actorId ? (names.get(row.actorId) ?? null) : null,
+    }));
   }
 
   /** The three things that make deleting by `[gte, lt)` safe, checked independent of the caller. */

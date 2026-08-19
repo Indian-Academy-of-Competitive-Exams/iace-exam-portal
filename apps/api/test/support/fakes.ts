@@ -71,7 +71,14 @@ export class FakeRedis {
   readonly client = {
     get: (key: string): Promise<string | null> => Promise.resolve(this.text(key) ?? null),
 
-    set: (key: string, value: string, mode?: string, ttlSec?: number): Promise<'OK'> => {
+    set: (
+      key: string,
+      value: string,
+      mode?: string,
+      ttlSec?: number,
+      condition?: string,
+    ): Promise<'OK' | null> => {
+      if (condition === 'NX' && this.live(key)) return Promise.resolve(null);
       this.store.set(key, {
         value,
         expiresAtMs: mode === 'EX' && ttlSec ? this.nowMs + ttlSec * 1000 : null,
@@ -147,6 +154,10 @@ export class FakeRedis {
   async ttl(key: string): Promise<number> {
     const ttl = await this.client.ttl(key);
     return Math.max(ttl, 0);
+  }
+
+  async acquireLock(key: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, '1', 'EX', ttlSec, 'NX')) === 'OK';
   }
 
   asService(): RedisService {

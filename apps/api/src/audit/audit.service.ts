@@ -54,6 +54,7 @@ function dateRange(
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** `changed` on a CREATE is not a snapshot: `fieldDiff` drops a field that is null on both sides. */
   async record(event: AuditRowActionEvent): Promise<void> {
     await this.prisma.rowActionLog.create({
       data: {
@@ -193,7 +194,7 @@ export class AuditService {
   }
 
   /** One `findMany` per identity table per page — never one lookup per row. */
-  private async namesFor(
+  async namesFor(
     rows: readonly { actorId: string | null; actorType: string }[],
   ): Promise<Map<string, string>> {
     const adminIds = rows

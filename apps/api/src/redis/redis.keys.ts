@@ -34,4 +34,7 @@ export const redisKeys = {
   /** Index of a subject's live session ids — powers "sign out everywhere". */
   sessionIndex: (actor: ActorType, subjectId: string) =>
     `sessions:${actor.toLowerCase()}:${subjectId}`,
+
+  /** Held while one worker archives one UTC day of audit rows, keyed `YYYY-MM-DD`. */
+  auditArchiveDay: (day: string) => `audit:archive:${day}`,
 } as const;
