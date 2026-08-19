@@ -526,6 +526,18 @@ export class FakePrisma {
   baseConfigCount = 0;
   testCount = 0;
 
+  /** How many student writes to allow before the rest throw — a commit that dies mid-loop. */
+  studentWriteLimit: number | null = null;
+  private studentWrites = 0;
+
+  private guardStudentWrite(): void {
+    if (this.studentWriteLimit === null) return;
+    this.studentWrites += 1;
+    if (this.studentWrites > this.studentWriteLimit) {
+      throw new Error('student write failed');
+    }
+  }
+
   readonly student = {
     // A copy, not the live row: `update` mutates in place, and a caller that reads a row
     // before writing to it — to diff before against after — must see it as it was.
@@ -544,6 +556,7 @@ export class FakePrisma {
       Promise.resolve(this.students.filter((s) => matchesStudent(s, where)).length),
 
     create: ({ data }: { data: Partial<FakeStudent> & { mobile: string } }) => {
+      this.guardStudentWrite();
       const created = makeStudent({ ...data, id: `stu_new_${this.nextId++}` });
       this.students.push(created);
       return Promise.resolve(created);
@@ -583,6 +596,7 @@ export class FakePrisma {
         directGroupIds?: string[] | { push: string };
       };
     }) => {
+      this.guardStudentWrite();
       const student = this.students.find((s) => s.id === where.id);
       if (!student) throw new Error(`no student ${where.id}`);
 

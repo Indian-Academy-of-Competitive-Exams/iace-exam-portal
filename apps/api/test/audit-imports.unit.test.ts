@@ -1,15 +1,31 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AUDIT_ACTION, AUDIT_FEATURE, IMPORT_SOURCE } from '@iace/contracts';
+import {
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
+  IMPORT_SOURCE,
+  type AuditAction,
+  type AuditFeature,
+} from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
 import { IMPORT_LOG_STATUS } from '../src/common/importing';
 import { FakePrisma, FakeStorage, makeGroup, makeStudent } from './support/fakes';
 
-/** Reaches the two private helpers directly — see the describe blocks that use it for why. */
+/** Reaches the private closer directly — see the describe block that uses it for why. */
 type ImportsServiceInternals = {
-  failRun: (logId: string, fileErrors: readonly string[], error: unknown) => Promise<void>;
+  closeRun: (
+    logId: string,
+    status: string,
+    written: {
+      feature: AuditFeature;
+      rowActions: readonly { entityId: string; action: AuditAction }[];
+      counts: { created: number; updated: number; skipped: number; failed: number };
+      actorId: string;
+    },
+    failure?: { fileErrors: readonly string[]; error: unknown },
+  ) => Promise<void>;
 };
 
 describe('AuditService.recordImportRows', () => {
@@ -187,7 +203,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
    * The failure this prevents: a run that dies partway must not read as a clean commit, and the
    * rows it half-wrote must not be audited as if the whole file went through.
    */
-  it('marks the run FAILED and writes no row actions when the commit throws partway', async () => {
+  it('marks the run FAILED and writes no row actions when it throws before writing anything', async () => {
     const prisma = new FakePrisma();
     const service = new ImportsService(
       prisma.asService(),
@@ -206,6 +222,46 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     assert.equal(log.status, IMPORT_LOG_STATUS.FAILED);
     assert.match(log.errors?.message ?? '', /argon2 unavailable/);
     assert.equal(prisma.rowActionLogs.length, 0);
+  });
+
+  /**
+   * The failure this prevents: the loop is not a transaction, so a throw on row three leaves rows
+   * one and two in the database. Discarding the accumulated row actions and closing the run at zero
+   * would leave those two students created by nobody, under a run that says it created nothing —
+   * no audit entry at all, plus a durable record contradicting what happened.
+   */
+  it('records the rows it did write when the commit throws partway through the loop', async () => {
+    const prisma = new FakePrisma();
+    prisma.studentWriteLimit = 2;
+    const service = new ImportsService(
+      prisma.asService(),
+      fakeAuth(),
+      new FakeStorage() as never,
+      new AuditService(prisma.asService()),
+    );
+
+    await assert.rejects(
+      () =>
+        service.commitStudents(Buffer.from('mobile\n9000000001\n9000000002\n9000000003'), 'adm_1'),
+      /student write failed/,
+    );
+
+    assert.equal(prisma.students.length, 2);
+    assert.deepEqual(
+      prisma.rowActionLogs.map((row) => ({ entityId: row.entityId, action: row.action })),
+      prisma.students.map((student) => ({
+        entityId: student.id,
+        action: AUDIT_ACTION.CREATE,
+      })),
+    );
+
+    const log = prisma.importLogs[0] as {
+      status: string;
+      created: number;
+      updated: number;
+    };
+    assert.equal(log.status, IMPORT_LOG_STATUS.FAILED);
+    assert.deepEqual({ created: log.created, updated: log.updated }, { created: 2, updated: 0 });
   });
 
   /**
@@ -243,7 +299,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
   });
 });
 
-describe('ImportsService — failRun preserves what openRun already recorded', () => {
+describe('ImportsService — a failed close preserves what openRun already recorded', () => {
   /**
    * `plan.fileErrors` is only ever non-empty when there is nothing left to write, so this path
    * cannot be reached through a real commit — exercised directly against the private helper.
@@ -267,10 +323,16 @@ describe('ImportsService — failRun preserves what openRun already recorded', (
       },
     });
 
-    await (service as unknown as ImportsServiceInternals).failRun(
+    await (service as unknown as ImportsServiceInternals).closeRun(
       opened.id,
-      ['Missing the "Mobile Number" column'],
-      new Error('db exploded'),
+      IMPORT_LOG_STATUS.FAILED,
+      {
+        feature: AUDIT_FEATURE.STUDENT,
+        rowActions: [],
+        counts: { created: 0, updated: 0, skipped: 0, failed: 0 },
+        actorId: 'adm_1',
+      },
+      { fileErrors: ['Missing the "Mobile Number" column'], error: new Error('db exploded') },
     );
 
     const failed = prisma.importLogs.find((row) => row.id === opened.id) as {

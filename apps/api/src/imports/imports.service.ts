@@ -36,6 +36,7 @@ import {
   importFileKey,
   readUploadedTable,
   type CsvTable,
+  type ImportLogStatus,
 } from '../common/importing';
 
 /**
@@ -43,6 +44,14 @@ import {
  * anyway while multiplying the transient memory.
  */
 const HASH_CONCURRENCY = 4;
+
+/** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
+interface RunOutcome {
+  feature: AuditFeature;
+  rowActions: readonly { entityId: string; action: AuditAction }[];
+  counts: { created: number; updated: number; skipped: number; failed: number };
+  actorId: string;
+}
 
 /** Owns no tables (docs/03 §5). */
 @Injectable()
@@ -72,6 +81,13 @@ export class ImportsService {
     let created = 0;
     let updated = 0;
     const rowActions: { entityId: string; action: AuditAction }[] = [];
+    // A thunk, not a value: the failure path has to close on the rows the loop already wrote.
+    const written = (): RunOutcome => ({
+      feature: AUDIT_FEATURE.STUDENT,
+      rowActions,
+      counts: { created, updated, skipped: 0, failed: plan.summary.invalid },
+      actorId,
+    });
 
     try {
       // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
@@ -134,17 +150,14 @@ export class ImportsService {
         }
       }
     } catch (error) {
-      await this.failRun(logId, plan.fileErrors, error);
+      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
+        fileErrors: plan.fileErrors,
+        error,
+      });
       throw error;
     }
 
-    await this.finishRun(
-      logId,
-      AUDIT_FEATURE.STUDENT,
-      rowActions,
-      { created, updated, skipped: 0, failed: plan.summary.invalid },
-      actorId,
-    );
+    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
   }
@@ -192,6 +205,9 @@ export class ImportsService {
       .filter((row) => row.action === 'add' && row.studentId)
       .map((row) => row.studentId as string);
 
+    const skipped = plan.summary.alreadyMembers;
+    const failed = plan.summary.invalid;
+
     try {
       // The planner already left out anyone holding this grant, so a push cannot
       // duplicate one.
@@ -204,23 +220,29 @@ export class ImportsService {
         ),
       );
     } catch (error) {
-      await this.failRun(logId, plan.fileErrors, error);
+      // One transaction, so a failure wrote nothing — the counts a failed run reports are the
+      // file's own, never the grants it was going to add.
+      await this.closeRun(
+        logId,
+        IMPORT_LOG_STATUS.FAILED,
+        {
+          feature: AUDIT_FEATURE.STUDENT,
+          rowActions: [],
+          counts: { created: 0, updated: 0, skipped, failed },
+          actorId,
+        },
+        { fileErrors: plan.fileErrors, error },
+      );
       throw error;
     }
 
     // Every added row is an existing student gaining a grant — never a create.
-    await this.finishRun(
-      logId,
-      AUDIT_FEATURE.STUDENT,
-      toAdd.map((studentId) => ({ entityId: studentId, action: AUDIT_ACTION.UPDATE })),
-      {
-        created: 0,
-        updated: toAdd.length,
-        skipped: plan.summary.alreadyMembers,
-        failed: plan.summary.invalid,
-      },
+    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, {
+      feature: AUDIT_FEATURE.STUDENT,
+      rowActions: toAdd.map((studentId) => ({ entityId: studentId, action: AUDIT_ACTION.UPDATE })),
+      counts: { created: 0, updated: toAdd.length, skipped, failed },
       actorId,
-    );
+    });
 
     return { ...plan.summary, added: toAdd.length };
   }
@@ -325,11 +347,7 @@ export class ImportsService {
   // run and its rows are always logged under AUDIT_FEATURE.STUDENT.
   // ==========================================================================
 
-  /**
-   * Opens the run — only a commit calls this. A preview writes nothing and can be abandoned, and
-   * `ImportLog`/its S3 object are kept indefinitely, so a row for an abandoned preview would be
-   * storage with nothing behind it, forever.
-   */
+  /** Only a commit opens a run: a row for an abandoned preview is storage nothing ever resolves. */
   private async openRun(
     file: Buffer,
     total: number,
@@ -355,43 +373,41 @@ export class ImportsService {
   }
 
   /**
-   * The writes already happened by the time this runs, so nothing here may report the run as
-   * failed. Recording its rows is attempted and, on its own, swallowed — the run still closes as
-   * COMMITTED even if the audit write does not land.
+   * Both endings, one path: the rows are recorded before the status is written, and a failure to
+   * record them is swallowed, because by now the writes they describe already happened.
    */
-  private async finishRun(
+  private async closeRun(
     logId: string,
-    feature: AuditFeature,
-    rowActions: readonly { entityId: string; action: AuditAction }[],
-    counts: { created: number; updated: number; skipped: number; failed: number },
-    actorId: string,
+    status: ImportLogStatus,
+    written: RunOutcome,
+    failure?: { fileErrors: readonly string[]; error: unknown },
   ): Promise<void> {
     try {
-      await this.audit.recordImportRows(logId, feature, rowActions, actorId);
+      await this.audit.recordImportRows(
+        logId,
+        written.feature,
+        written.rowActions,
+        written.actorId,
+      );
     } catch (error) {
       this.logger.error(`Row actions for import ${logId} were not recorded`, error);
     }
 
     await this.prisma.importLog.update({
       where: { id: logId },
-      data: { ...counts, status: IMPORT_LOG_STATUS.COMMITTED, finishedAt: new Date() },
-    });
-  }
-
-  private async failRun(
-    logId: string,
-    fileErrors: readonly string[],
-    error: unknown,
-  ): Promise<void> {
-    await this.prisma.importLog.update({
-      where: { id: logId },
       data: {
-        status: IMPORT_LOG_STATUS.FAILED,
+        ...written.counts,
+        status,
         finishedAt: new Date(),
-        errors: {
-          ...(fileErrors.length > 0 ? { fileErrors } : {}),
-          message: error instanceof Error ? error.message : String(error),
-        },
+        ...(failure
+          ? {
+              errors: {
+                ...(failure.fileErrors.length > 0 ? { fileErrors: failure.fileErrors } : {}),
+                message:
+                  failure.error instanceof Error ? failure.error.message : String(failure.error),
+              },
+            }
+          : {}),
       },
     });
   }
