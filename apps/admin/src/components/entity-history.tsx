@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { AUDIT_WINDOW_DAYS, type AuditFeature, type RowAction } from '@iace/contracts';
 import {
+  Alert,
   Badge,
   Card,
   CardContent,
@@ -12,6 +13,7 @@ import {
 import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
 import { api } from '../lib/api';
 import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS } from '../lib/constants';
+import { useAuth } from '../providers/auth';
 
 /** Enough to answer "who did this recently" without becoming its own paginated screen. */
 const HISTORY_LIMIT = 10;
@@ -37,11 +39,18 @@ function HistoryRow({ row }: Readonly<{ row: RowAction }>) {
   );
 }
 
-/** The wait, the rows, or the empty case — same three-way split as `GroupPickerBody`. */
+/** The wait, the failure, the rows, or the empty case. An empty list has to mean empty. */
 function HistoryBody({
   isPending,
+  isError,
+  emptyMessage,
   rows,
-}: Readonly<{ isPending: boolean; rows: readonly RowAction[] }>) {
+}: Readonly<{
+  isPending: boolean;
+  isError: boolean;
+  emptyMessage: string;
+  rows: readonly RowAction[];
+}>) {
   if (isPending) {
     return (
       <div className="flex flex-col gap-3">
@@ -52,12 +61,18 @@ function HistoryBody({
     );
   }
 
-  if (rows.length === 0) {
+  if (isError) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No activity in the last {AUDIT_WINDOW_DAYS} days.
-      </p>
+      <Alert variant="danger">
+        <span>
+          This history could not be loaded, so nothing here says what happened. Try again.
+        </span>
+      </Alert>
     );
+  }
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (
@@ -85,17 +100,31 @@ export function EntityHistory({
 
   const rows = history.data?.items ?? [];
 
+  // The server scopes a normal admin to their own rows, so an unqualified "no activity" would
+  // read as "nothing ever happened to this record" — which is what this card exists to avoid.
+  const { identity } = useAuth();
+  const mine = !(identity?.isSuperAdmin ?? false);
+
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle>History</CardTitle>
         <CardDescription>
-          Showing the last {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is
-          not shown here.
+          {mine ? 'Your activity on this record over' : 'Activity on this record over'} the last{' '}
+          {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is not shown here.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <HistoryBody isPending={history.isPending} rows={rows} />
+        <HistoryBody
+          isPending={history.isPending}
+          isError={history.isError}
+          emptyMessage={
+            mine
+              ? `No activity of yours on this record in the last ${AUDIT_WINDOW_DAYS} days.`
+              : `No activity in the last ${AUDIT_WINDOW_DAYS} days.`
+          }
+          rows={rows}
+        />
       </CardContent>
     </Card>
   );
