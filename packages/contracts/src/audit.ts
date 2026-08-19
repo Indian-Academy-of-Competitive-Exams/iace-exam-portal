@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from './envelope';
+import { importSourceSchema } from './imports';
 
 // ============================================================================
 // The audit trail: one row per data change (`RowActionLog`) and one per import
@@ -110,3 +112,60 @@ export function fieldDiff<T extends object>(
 
   return Object.keys(diff).length === 0 ? null : diff;
 }
+
+// ============================================================================
+// Read contracts: what the audit screens fetch and render.
+// ============================================================================
+
+/** What the screens promise, and what the archive job enforces. One number, two consumers. */
+export const AUDIT_WINDOW_DAYS = 30;
+
+export const rowActionSchema = z.object({
+  id: z.string(),
+  feature: auditFeatureSchema,
+  entityId: z.string(),
+  action: auditActionSchema,
+  actorType: auditActorTypeSchema,
+  actorId: z.string().nullable(),
+  /** Resolved server-side — the column is a plain id with no FK. */
+  actorName: z.string().nullable(),
+  changed: z.record(z.string(), z.object({ from: z.unknown(), to: z.unknown() })).nullable(),
+  importLogId: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type RowAction = z.infer<typeof rowActionSchema>;
+
+export const rowActionListQuerySchema = paginationQuerySchema.extend({
+  feature: auditFeatureSchema.optional(),
+  action: auditActionSchema.optional(),
+  entityId: z.string().optional(),
+  /** Ignored for anyone but a super admin — the service forces its own value. */
+  actorId: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export type RowActionListQuery = z.infer<typeof rowActionListQuerySchema>;
+export type RowActionListQueryInput = z.input<typeof rowActionListQuerySchema>;
+
+export const importLogSchema = z.object({
+  id: z.string(),
+  feature: auditFeatureSchema,
+  source: importSourceSchema,
+  actorId: z.string().nullable(),
+  /** Resolved server-side — the column is a plain id with no FK. */
+  actorName: z.string().nullable(),
+  total: z.number().int(),
+  created: z.number().int(),
+  updated: z.number().int(),
+  skipped: z.number().int(),
+  failed: z.number().int(),
+  status: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+});
+export type ImportLogSummary = z.infer<typeof importLogSchema>;
+
+export const ADMIN_AUDIT_ROUTES = {
+  rowActions: '/admin/audit/row-actions',
+  imports: '/admin/audit/imports',
+} as const;

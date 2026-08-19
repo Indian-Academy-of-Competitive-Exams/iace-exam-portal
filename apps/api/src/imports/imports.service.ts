@@ -138,12 +138,13 @@ export class ImportsService {
       throw error;
     }
 
-    await this.finishRun(logId, AUDIT_FEATURE.STUDENT, rowActions, {
-      created,
-      updated,
-      skipped: 0,
-      failed: plan.summary.invalid,
-    });
+    await this.finishRun(
+      logId,
+      AUDIT_FEATURE.STUDENT,
+      rowActions,
+      { created, updated, skipped: 0, failed: plan.summary.invalid },
+      actorId,
+    );
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
   }
@@ -218,6 +219,7 @@ export class ImportsService {
         skipped: plan.summary.alreadyMembers,
         failed: plan.summary.invalid,
       },
+      actorId,
     );
 
     return { ...plan.summary, added: toAdd.length };
@@ -362,9 +364,10 @@ export class ImportsService {
     feature: AuditFeature,
     rowActions: readonly { entityId: string; action: AuditAction }[],
     counts: { created: number; updated: number; skipped: number; failed: number },
+    actorId: string,
   ): Promise<void> {
     try {
-      await this.audit.recordImportRows(logId, feature, rowActions);
+      await this.audit.recordImportRows(logId, feature, rowActions, actorId);
     } catch (error) {
       this.logger.error(`Row actions for import ${logId} were not recorded`, error);
     }

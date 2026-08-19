@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Prisma } from '@prisma/client';
-import { AUDIT_ACTION, AUDIT_FEATURE, fieldDiff } from '../src/audit';
+import {
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
+  AUDIT_WINDOW_DAYS,
+  fieldDiff,
+  importLogSchema,
+  rowActionListQuerySchema,
+  rowActionSchema,
+} from '../src/audit';
 
 describe('fieldDiff', () => {
   it('reports only the fields that actually changed', () => {
@@ -134,5 +142,91 @@ describe('audit vocabulary', () => {
   it('uses each key as its own value, so the wire format is the enum name', () => {
     for (const [key, value] of Object.entries(AUDIT_FEATURE)) assert.equal(key, value);
     for (const [key, value] of Object.entries(AUDIT_ACTION)) assert.equal(key, value);
+  });
+});
+
+describe('audit read contracts', () => {
+  it('carries the actor name, so a page needs no second lookup in the browser', () => {
+    const row = {
+      id: 'ral_1',
+      feature: 'STUDENT',
+      entityId: 'stu_1',
+      action: 'BLOCK',
+      actorType: 'ADMIN',
+      actorId: 'adm_1',
+      actorName: 'R Kumar',
+      changed: { isTestBlocked: { from: false, to: true } },
+      importLogId: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    assert.equal(rowActionSchema.safeParse(row).success, true);
+  });
+
+  /** An unknown actor is a script or a deleted identity, not a parse failure. */
+  it('allows a row with no actor', () => {
+    const parsed = rowActionSchema.safeParse({
+      id: 'ral_1',
+      feature: 'STUDENT',
+      entityId: 'stu_1',
+      action: 'IMPORT',
+      actorType: 'SCRIPT',
+      actorId: null,
+      actorName: null,
+      changed: null,
+      importLogId: 'imp_1',
+      createdAt: new Date().toISOString(),
+    });
+
+    assert.equal(parsed.success, true);
+  });
+
+  it('refuses an oversized page rather than quietly clamping it', () => {
+    assert.equal(rowActionListQuerySchema.safeParse({ pageSize: '101' }).success, false);
+    assert.equal(rowActionListQuerySchema.parse({ pageSize: '100' }).pageSize, 100);
+  });
+
+  it('states the window the screens promise', () => {
+    assert.equal(AUDIT_WINDOW_DAYS, 30);
+  });
+
+  it('parses a valid import log summary', () => {
+    const row = {
+      id: 'imp_1',
+      feature: 'STUDENT',
+      source: 'SHEET',
+      actorId: 'adm_1',
+      actorName: 'R Kumar',
+      total: 10,
+      created: 8,
+      updated: 1,
+      skipped: 1,
+      failed: 0,
+      status: 'DONE',
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+    };
+
+    assert.equal(importLogSchema.safeParse(row).success, true);
+  });
+
+  it('refuses a source outside ImportSource, so a bad column value fails loudly', () => {
+    const row = {
+      id: 'imp_1',
+      feature: 'STUDENT',
+      source: 'NOT_A_REAL_SOURCE',
+      actorId: null,
+      actorName: null,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      status: 'DONE',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+    };
+
+    assert.equal(importLogSchema.safeParse(row).success, false);
   });
 });

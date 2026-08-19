@@ -6,6 +6,7 @@ import { QueueModule } from '../queue/queue.module';
 import { QUEUE_NAMES } from '../queue/queues';
 import { AuditArchiveProcessor } from './audit-archive.processor';
 import { AuditContext } from './audit.context';
+import { AuditController } from './audit.controller';
 import { AuditListener } from './audit.listener';
 import { AuditService } from './audit.service';
 
@@ -13,6 +14,7 @@ import { AuditService } from './audit.service';
 @Global()
 @Module({
   imports: [PrismaModule, QueueModule],
+  controllers: [AuditController],
   providers: [AuditService, AuditListener, AuditContext, AuditArchiveProcessor],
   exports: [AuditService, AuditContext],
 })

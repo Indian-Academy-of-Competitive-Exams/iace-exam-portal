@@ -1,0 +1,103 @@
+import { useQuery } from '@tanstack/react-query';
+import { AUDIT_WINDOW_DAYS, type AuditFeature, type RowAction } from '@iace/contracts';
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+} from '@iace/ui';
+import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
+import { api } from '../lib/api';
+import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS } from '../lib/constants';
+
+/** Enough to answer "who did this recently" without becoming its own paginated screen. */
+const HISTORY_LIMIT = 10;
+
+/** Placeholder rows have no identity of their own, so their keys are fixed. */
+const PLACEHOLDER_KEYS = ['a', 'b', 'c'];
+
+/** One entry: when, who, the action, and what changed — or where to find it. */
+function HistoryRow({ row }: Readonly<{ row: RowAction }>) {
+  return (
+    <li className="flex flex-col gap-1.5 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Badge variant={ACTION_BADGE_VARIANT[row.action]}>{AUDIT_ACTION_LABELS[row.action]}</Badge>
+        <span className="font-medium">
+          {row.actorName ?? AUDIT_ACTOR_TYPE_LABELS[row.actorType]}
+        </span>
+        <span className="text-muted-foreground">
+          {WHEN_FORMATTER.format(new Date(row.createdAt))}
+        </span>
+      </div>
+      <ChangedCell row={row} />
+    </li>
+  );
+}
+
+/** The wait, the rows, or the empty case — same three-way split as `GroupPickerBody`. */
+function HistoryBody({
+  isPending,
+  rows,
+}: Readonly<{ isPending: boolean; rows: readonly RowAction[] }>) {
+  if (isPending) {
+    return (
+      <div className="flex flex-col gap-3">
+        {PLACEHOLDER_KEYS.map((key) => (
+          <Skeleton key={key} variant="text" />
+        ))}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No activity in the last {AUDIT_WINDOW_DAYS} days.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col">
+      {rows.map((row) => (
+        <HistoryRow key={row.id} row={row} />
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The audit trail for one record, read where "who changed this" is actually asked —
+ * on the record itself. Takes a feature and an entity id so a group or branch detail
+ * screen can reuse it without a rewrite.
+ */
+export function EntityHistory({
+  feature,
+  entityId,
+  className,
+}: Readonly<{ feature: AuditFeature; entityId: string; className?: string }>) {
+  const history = useQuery({
+    queryKey: ['admin', 'audit', 'row-actions', 'entity', feature, entityId],
+    queryFn: () => api.admin.audit.rowActions({ feature, entityId, pageSize: HISTORY_LIMIT }),
+  });
+
+  const rows = history.data?.items ?? [];
+
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>History</CardTitle>
+        <CardDescription>
+          Showing the last {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is
+          not shown here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <HistoryBody isPending={history.isPending} rows={rows} />
+      </CardContent>
+    </Card>
+  );
+}

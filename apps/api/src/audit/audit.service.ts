@@ -1,8 +1,53 @@
 import { Injectable } from '@nestjs/common';
-import { type Prisma } from '@prisma/client';
-import { AUDIT_ACTOR_TYPE, type AuditAction, type AuditFeature } from '@iace/contracts';
+import { type ImportLog, type Prisma, type RowActionLog } from '@prisma/client';
+import {
+  AUDIT_ACTOR_TYPE,
+  AppException,
+  ErrorCodes,
+  type AuditAction,
+  type AuditFeature,
+  type ImportLogSummary,
+  type Paginated,
+  type PaginationQuery,
+  type RowAction,
+  type RowActionListQuery,
+} from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { type AuditRowActionEvent } from '../common/events/event-catalog';
+
+/** Enough of the authenticated caller to scope a read — never the whole `AuthenticatedUser`. */
+export interface AuditViewer {
+  id: string;
+  isSuperAdmin: boolean;
+  isActive: boolean;
+}
+
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A calendar-day bound, the same YYYY-MM-DD shape `student-query.ts`'s dateRange expects. */
+function parseDateOnlyBound(value: string, field: 'from' | 'to'): Date {
+  const boundary = field === 'from' ? 'T00:00:00.000Z' : 'T23:59:59.999Z';
+  const parsed = DATE_ONLY_PATTERN.test(value) ? new Date(`${value}${boundary}`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    const message = `${field} must be a date in YYYY-MM-DD form`;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+      fieldErrors: { [field]: [message] },
+    });
+  }
+  return parsed;
+}
+
+/** An inclusive-both-ends window over `createdAt`, or nothing if neither bound was given. */
+function dateRange(
+  from: string | undefined,
+  to: string | undefined,
+): Prisma.DateTimeFilter | undefined {
+  if (!from && !to) return undefined;
+  return {
+    ...(from ? { gte: parseDateOnlyBound(from, 'from') } : {}),
+    ...(to ? { lte: parseDateOnlyBound(to, 'to') } : {}),
+  };
+}
 
 /** Owns `RowActionLog` — the only module that writes it. */
 @Injectable()
@@ -28,6 +73,7 @@ export class AuditService {
     importLogId: string,
     feature: AuditFeature,
     rows: readonly { entityId: string; action: AuditAction }[],
+    actorId: string | null,
   ): Promise<void> {
     if (rows.length === 0) return;
 
@@ -37,10 +83,150 @@ export class AuditService {
         entityId: row.entityId,
         action: row.action,
         actorType: AUDIT_ACTOR_TYPE.ADMIN,
-        actorId: null,
+        actorId,
         changed: undefined,
         importLogId,
       })),
     });
+  }
+
+  /** A normal admin's `actorId` filter is overwritten with their own id — never trusted from the query. */
+  async listRowActions(
+    query: RowActionListQuery,
+    viewer: AuditViewer,
+  ): Promise<Paginated<RowAction>> {
+    this.assertActive(viewer);
+    const range = dateRange(query.from, query.to);
+    const where: Prisma.RowActionLogWhereInput = {
+      ...(query.feature ? { feature: query.feature } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.entityId ? { entityId: query.entityId } : {}),
+      ...(query.actorId ? { actorId: query.actorId } : {}),
+      ...(range ? { createdAt: range } : {}),
+    };
+    if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+
+    const skip = (query.page - 1) * query.pageSize;
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.rowActionLog.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+      }),
+      this.prisma.rowActionLog.count({ where }),
+    ]);
+
+    const names = await this.namesFor(rows);
+
+    return {
+      items: rows.map((row) => this.toRowAction(row, names)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
+  }
+
+  /** Same scoping rule as `listRowActions` — imports are always admin-initiated, so only `admin` resolves. */
+  async listImports(
+    query: PaginationQuery,
+    viewer: AuditViewer,
+  ): Promise<Paginated<ImportLogSummary>> {
+    this.assertActive(viewer);
+    const where: Prisma.ImportLogWhereInput = {};
+    if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+
+    const skip = (query.page - 1) * query.pageSize;
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.importLog.findMany({
+        where,
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: query.pageSize,
+      }),
+      this.prisma.importLog.count({ where }),
+    ]);
+
+    const names = await this.namesFor(
+      rows.map((row) => ({ actorId: row.actorId, actorType: AUDIT_ACTOR_TYPE.ADMIN })),
+    );
+
+    return {
+      items: rows.map((row) => this.toImportSummary(row, names)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
+  }
+
+  private toRowAction(row: RowActionLog, names: Map<string, string>): RowAction {
+    return {
+      id: row.id,
+      feature: row.feature,
+      entityId: row.entityId,
+      action: row.action,
+      actorType: row.actorType,
+      actorId: row.actorId,
+      actorName: row.actorId ? (names.get(row.actorId) ?? null) : null,
+      changed: row.changed as RowAction['changed'],
+      importLogId: row.importLogId,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  private toImportSummary(row: ImportLog, names: Map<string, string>): ImportLogSummary {
+    return {
+      id: row.id,
+      feature: row.feature,
+      source: row.source,
+      actorId: row.actorId,
+      actorName: row.actorId ? (names.get(row.actorId) ?? null) : null,
+      total: row.total,
+      created: row.created,
+      updated: row.updated,
+      skipped: row.skipped,
+      failed: row.failed,
+      status: row.status,
+      startedAt: row.startedAt.toISOString(),
+      finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
+    };
+  }
+
+  /** One `findMany` per identity table per page — never one lookup per row. */
+  private async namesFor(
+    rows: readonly { actorId: string | null; actorType: string }[],
+  ): Promise<Map<string, string>> {
+    const adminIds = rows
+      .filter((row) => row.actorType === AUDIT_ACTOR_TYPE.ADMIN && row.actorId)
+      .map((row) => row.actorId as string);
+    const studentIds = rows
+      .filter((row) => row.actorType === AUDIT_ACTOR_TYPE.STUDENT && row.actorId)
+      .map((row) => row.actorId as string);
+
+    const [admins, students] = await this.prisma.$transaction([
+      this.prisma.admin.findMany({
+        where: { id: { in: adminIds } },
+        select: { id: true, fullName: true, email: true },
+      }),
+      this.prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, fullName: true, mobile: true },
+      }),
+    ]);
+
+    const names = new Map<string, string>();
+    // Admin rows are never deleted, so `fullName` resolves; `email` only backstops a blank name.
+    for (const admin of admins) names.set(admin.id, admin.fullName ?? admin.email);
+    for (const student of students) names.set(student.id, student.fullName ?? student.mobile);
+    return names;
+  }
+
+  /** Signed in but switched off may read nothing here — same rule `FeaturePermissionGuard` enforces. */
+  private assertActive(viewer: AuditViewer): void {
+    if (viewer.isActive) return;
+    throw new AppException(
+      ErrorCodes.FORBIDDEN,
+      'Your account has been deactivated — ask a super admin to restore it',
+    );
   }
 }

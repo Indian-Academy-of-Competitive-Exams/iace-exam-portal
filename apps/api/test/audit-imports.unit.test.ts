@@ -16,14 +16,33 @@ describe('AuditService.recordImportRows', () => {
   it('writes one thin row per touched entity, all pointing at the run', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows('imp_1', AUDIT_FEATURE.STUDENT, [
-      { entityId: 'stu_1', action: AUDIT_ACTION.CREATE },
-      { entityId: 'stu_2', action: AUDIT_ACTION.UPDATE },
-    ]);
+    await new AuditService(prisma as never).recordImportRows(
+      'imp_1',
+      AUDIT_FEATURE.STUDENT,
+      [
+        { entityId: 'stu_1', action: AUDIT_ACTION.CREATE },
+        { entityId: 'stu_2', action: AUDIT_ACTION.UPDATE },
+      ],
+      'adm_1',
+    );
 
     assert.equal(prisma.rowActionLogs.length, 2);
     assert.equal(prisma.rowActionLogs[0]?.importLogId, 'imp_1');
     assert.equal(prisma.rowActionLogs[1]?.action, AUDIT_ACTION.UPDATE);
+  });
+
+  /** The failure this prevents: an import's rows carrying no actor, so a normal admin can never find their own run. */
+  it('attributes every row to the admin who ran the import', async () => {
+    const prisma = new FakePrisma();
+
+    await new AuditService(prisma as never).recordImportRows(
+      'imp_1',
+      AUDIT_FEATURE.STUDENT,
+      [{ entityId: 'stu_1', action: AUDIT_ACTION.CREATE }],
+      'adm_1',
+    );
+
+    assert.equal(prisma.rowActionLogs[0]?.actorId, 'adm_1');
   });
 
   /**
@@ -33,9 +52,12 @@ describe('AuditService.recordImportRows', () => {
   it('never stores a diff for an imported row', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows('imp_1', AUDIT_FEATURE.STUDENT, [
-      { entityId: 'stu_1', action: AUDIT_ACTION.CREATE },
-    ]);
+    await new AuditService(prisma as never).recordImportRows(
+      'imp_1',
+      AUDIT_FEATURE.STUDENT,
+      [{ entityId: 'stu_1', action: AUDIT_ACTION.CREATE }],
+      'adm_1',
+    );
 
     assert.equal(prisma.rowActionLogs[0]?.changed, null);
   });
@@ -43,7 +65,12 @@ describe('AuditService.recordImportRows', () => {
   it('writes nothing for an import that touched nothing', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows('imp_1', AUDIT_FEATURE.STUDENT, []);
+    await new AuditService(prisma as never).recordImportRows(
+      'imp_1',
+      AUDIT_FEATURE.STUDENT,
+      [],
+      'adm_1',
+    );
 
     assert.equal(prisma.rowActionLogs.length, 0);
   });
@@ -149,7 +176,9 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       ],
     );
     assert.equal(
-      prisma.rowActionLogs.every((row) => row.importLogId === log.id && row.changed === null),
+      prisma.rowActionLogs.every(
+        (row) => row.importLogId === log.id && row.changed === null && row.actorId === 'adm_1',
+      ),
       true,
     );
   });
@@ -281,8 +310,12 @@ describe('ImportsService.commitGroupMembers — what an import run actually left
     assert.equal(result.added, 1);
     assert.equal(prisma.rowActionLogs.length, 1);
     assert.deepEqual(
-      { entityId: prisma.rowActionLogs[0]?.entityId, action: prisma.rowActionLogs[0]?.action },
-      { entityId: 'stu_a', action: AUDIT_ACTION.UPDATE },
+      {
+        entityId: prisma.rowActionLogs[0]?.entityId,
+        action: prisma.rowActionLogs[0]?.action,
+        actorId: prisma.rowActionLogs[0]?.actorId,
+      },
+      { entityId: 'stu_a', action: AUDIT_ACTION.UPDATE, actorId: 'adm_1' },
     );
 
     const log = prisma.importLogs[0] as {

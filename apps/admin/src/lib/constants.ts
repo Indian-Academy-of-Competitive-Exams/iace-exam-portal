@@ -3,6 +3,7 @@ import {
   Building2,
   FolderTree,
   GraduationCap,
+  History,
   KeyRound,
   Layers,
   ShieldCheck,
@@ -15,7 +16,11 @@ import {
   FEATURE_KEYS,
   GROUP_TYPE,
   STUDENT_TYPE,
+  type AuditAction,
+  type AuditActorType,
+  type AuditFeature,
   type GroupType,
+  type ImportSource,
   type StudentType,
 } from '@iace/contracts';
 
@@ -46,6 +51,8 @@ export const ROUTES = {
   ADMINS: '/admins',
   FEATURES: '/features',
   PERMISSIONS: '/permissions',
+  /** Every admin reaches this — the service, not the route, scopes what they see. */
+  AUDIT: '/audit',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
@@ -64,6 +71,54 @@ export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
   [STUDENT_TYPE.ONLINE]: 'Online',
   [STUDENT_TYPE.OFFLINE]: 'At a branch',
   [STUDENT_TYPE.NON_IACE]: 'Not an IACE student',
+};
+
+/** What an audit row's `feature` is called on screen. */
+export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
+  STUDENT: 'Student',
+  STUDENT_PROFILE: 'Student profile',
+  GROUP: 'Group',
+  BRANCH: 'Branch',
+  ADMIN: 'Admin',
+  QUESTION: 'Question',
+  TEST: 'Test',
+  EXAM_TYPE: 'Exam type',
+  TAXONOMY_SUBJECT: 'Subject',
+  TAXONOMY_TOPIC: 'Topic',
+  TAXONOMY_SUB_TOPIC: 'Sub-topic',
+  FEATURE_PERMISSION: 'Feature permission',
+};
+
+/** What an audit row's `action` is called on screen. */
+export const AUDIT_ACTION_LABELS: Readonly<Record<AuditAction, string>> = {
+  CREATE: 'Created',
+  UPDATE: 'Updated',
+  DELETE: 'Deleted',
+  ACTIVATE: 'Activated',
+  DEACTIVATE: 'Deactivated',
+  BLOCK: 'Blocked',
+  UNBLOCK: 'Unblocked',
+  IMPORT: 'Imported',
+};
+
+/** What an audit row's `actorType` is called on screen — the fallback when there is no `actorName`. */
+export const AUDIT_ACTOR_TYPE_LABELS: Readonly<Record<AuditActorType, string>> = {
+  ADMIN: 'Admin',
+  STUDENT: 'Student',
+  SCRIPT: 'Script',
+  SYSTEM: 'System',
+};
+
+/** The audit screen's two tabs, also read from the URL — shared with `ChangedCell`'s link back to Imports. */
+export const AUDIT_TAB = { ACTIVITY: 'activity', IMPORTS: 'imports' } as const;
+export type AuditTabValue = (typeof AUDIT_TAB)[keyof typeof AUDIT_TAB];
+
+/** How an import run's rows got here — also the fallback when a run has no actor. */
+export const IMPORT_SOURCE_LABELS: Readonly<Record<ImportSource, string>> = {
+  INDIVIDUAL: 'Added by hand',
+  SHEET: 'Uploaded sheet',
+  SCRIPT: 'Portal sync',
+  SELF_SIGNUP: 'Self sign-up',
 };
 
 /**
@@ -109,6 +164,8 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.PERMISSIONS, label: 'Permissions', icon: KeyRound },
     ],
   },
+  // Not superAdminOnly: every admin reaches this, scoped to their own rows.
+  { to: ROUTES.AUDIT, label: 'Audit log', icon: History },
 ];
 
 /** Strips `superAdminOnly` at every depth. `featureKey` is the shell's job. */

@@ -9,7 +9,16 @@ import {
   type ApiSuccess,
   type NoContent,
   type Paginated,
+  type PaginationQueryInput,
 } from './envelope';
+import {
+  ADMIN_AUDIT_ROUTES,
+  importLogSchema,
+  rowActionSchema,
+  type ImportLogSummary,
+  type RowAction,
+  type RowActionListQueryInput,
+} from './audit';
 import {
   AUTH_ROUTES,
   authSessionResponseSchema,
@@ -806,6 +815,18 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: { importLogId },
             schema: questionImportResultSchema,
+          }),
+      },
+
+      audit: {
+        rowActions: (query: RowActionListQueryInput = {}): Promise<Paginated<RowAction>> =>
+          requestPaginated(`${ADMIN_AUDIT_ROUTES.rowActions}${queryString({ ...query })}`, {
+            schema: rowActionSchema.array(),
+          }),
+
+        imports: (query: PaginationQueryInput = {}): Promise<Paginated<ImportLogSummary>> =>
+          requestPaginated(`${ADMIN_AUDIT_ROUTES.imports}${queryString({ ...query })}`, {
+            schema: importLogSchema.array(),
           }),
       },
     },

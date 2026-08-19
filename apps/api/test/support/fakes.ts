@@ -445,6 +445,69 @@ function omittedAsNull<T extends Record<string, unknown>>(data: T): T {
   return result;
 }
 
+interface RowActionLogWhere {
+  feature?: string;
+  action?: string;
+  entityId?: string;
+  actorId?: string;
+  createdAt?: { gte?: Date; lt?: Date; lte?: Date };
+  id?: { gt?: string };
+}
+
+/** The archive job's day/cursor scan and the read API's filtered page share this one matcher. */
+function matchesRowActionLog(row: Record<string, unknown>, where: RowActionLogWhere): boolean {
+  const at = row.createdAt as Date;
+  const id = row.id as string;
+  return (
+    (where.feature === undefined || row.feature === where.feature) &&
+    (where.action === undefined || row.action === where.action) &&
+    (where.entityId === undefined || row.entityId === where.entityId) &&
+    (where.actorId === undefined || row.actorId === where.actorId) &&
+    (where.createdAt?.gte === undefined || at >= where.createdAt.gte) &&
+    (where.createdAt?.lt === undefined || at < where.createdAt.lt) &&
+    (where.createdAt?.lte === undefined || at <= where.createdAt.lte) &&
+    (where.id?.gt === undefined || id > where.id.gt)
+  );
+}
+
+type OrderSpec = Record<string, 'asc' | 'desc' | undefined>;
+
+/**
+ * Prisma's `orderBy` takes one sort object or several, applied in order as tiebreakers — this
+ * mirrors both shapes so a fake needs no bespoke sort for every new call site.
+ */
+function sortByKeys<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  orderBy: OrderSpec | OrderSpec[] | undefined,
+): T[] {
+  let specs: OrderSpec[];
+  if (orderBy === undefined) {
+    specs = [];
+  } else if (Array.isArray(orderBy)) {
+    specs = orderBy;
+  } else {
+    specs = [orderBy];
+  }
+  const keys = specs.flatMap((spec) =>
+    Object.entries(spec).filter(
+      (entry): entry is [string, 'asc' | 'desc'] => entry[1] !== undefined,
+    ),
+  );
+  if (keys.length === 0) return [...rows];
+
+  return [...rows].sort((a, b) => {
+    for (const [key, direction] of keys) {
+      const [av, bv] = [a[key], b[key]];
+      const cmp =
+        av instanceof Date && bv instanceof Date
+          ? av.getTime() - bv.getTime()
+          : String(av).localeCompare(String(bv));
+      if (cmp !== 0) return direction === 'desc' ? -cmp : cmp;
+    }
+    return 0;
+  });
+}
+
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
 export class FakePrisma {
   private nextId = 1;
@@ -543,6 +606,9 @@ export class FakePrisma {
       Promise.resolve(
         this.admins.find((a) => (where.id ? a.id === where.id : a.email === where.email)) ?? null,
       ),
+
+    findMany: ({ where = {} }: { where?: { id?: { in: string[] } } } = {}) =>
+      Promise.resolve(this.admins.filter((a) => !where.id?.in || where.id.in.includes(a.id))),
   };
 
   /** Groups as the write and grant paths use them — the membership itself lives on the student. */
@@ -749,43 +815,28 @@ export class FakePrisma {
       return Promise.resolve({ count: data.length });
     },
     /**
-     * Covers both call shapes the archive job makes: the day-picker's `createdAt.lt` scan
-     * ordered oldest-first, and one day's own `id`-cursor page within a fixed `[gte, lt)`.
+     * Covers every call shape in play: the archive job's day-picker `createdAt.lt` scan and
+     * `id`-cursor page, and the read API's filtered, skip/take page.
      */
     findMany: ({
       where = {},
       orderBy,
+      skip = 0,
       take,
     }: {
-      where?: { createdAt?: { gte?: Date; lt?: Date }; id?: { gt?: string } };
-      orderBy?: { createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' };
+      where?: RowActionLogWhere;
+      orderBy?: OrderSpec | OrderSpec[];
+      skip?: number;
       take?: number;
     } = {}) => {
-      let rows = this.rowActionLogs.filter((row) => {
-        const at = row.createdAt as Date;
-        const id = row.id as string;
-        return (
-          (where.createdAt?.gte === undefined || at >= where.createdAt.gte) &&
-          (where.createdAt?.lt === undefined || at < where.createdAt.lt) &&
-          (where.id?.gt === undefined || id > where.id.gt)
-        );
-      });
-
-      let sortKey: 'createdAt' | 'id' | undefined;
-      if (orderBy?.createdAt) sortKey = 'createdAt';
-      else if (orderBy?.id) sortKey = 'id';
-      if (sortKey) {
-        const direction = (orderBy?.createdAt ?? orderBy?.id) === 'desc' ? -1 : 1;
-        rows = [...rows].sort((a, b) => {
-          const [av, bv] = [a[sortKey], b[sortKey]];
-          return av instanceof Date && bv instanceof Date
-            ? direction * (av.getTime() - bv.getTime())
-            : direction * String(av).localeCompare(String(bv));
-        });
-      }
-
-      return Promise.resolve(take === undefined ? rows : rows.slice(0, take));
+      const rows = sortByKeys(
+        this.rowActionLogs.filter((row) => matchesRowActionLog(row, where)),
+        orderBy,
+      );
+      return Promise.resolve(take === undefined ? rows.slice(skip) : rows.slice(skip, skip + take));
     },
+    count: ({ where = {} }: { where?: RowActionLogWhere } = {}) =>
+      Promise.resolve(this.rowActionLogs.filter((row) => matchesRowActionLog(row, where)).length),
     /** A missing `gte`/`lt` is unbounded on that side, the way Postgres reads an omitted clause. */
     deleteMany: ({ where }: { where: { createdAt: { gte?: Date; lt?: Date } } }) => {
       const before = this.rowActionLogs.length;
@@ -819,6 +870,33 @@ export class FakePrisma {
       Object.assign(row, omittedAsNull(data));
       return Promise.resolve(row);
     },
+
+    findMany: ({
+      where = {},
+      orderBy,
+      skip = 0,
+      take,
+    }: {
+      where?: { actorId?: string };
+      orderBy?: OrderSpec | OrderSpec[];
+      skip?: number;
+      take?: number;
+    } = {}) => {
+      const rows = sortByKeys(
+        this.importLogs.filter(
+          (row) => where.actorId === undefined || row.actorId === where.actorId,
+        ),
+        orderBy,
+      );
+      return Promise.resolve(take === undefined ? rows.slice(skip) : rows.slice(skip, skip + take));
+    },
+
+    count: ({ where = {} }: { where?: { actorId?: string } } = {}) =>
+      Promise.resolve(
+        this.importLogs.filter(
+          (row) => where.actorId === undefined || row.actorId === where.actorId,
+        ).length,
+      ),
   };
 
   /** The service reads and counts in one transaction; order is preserved. */

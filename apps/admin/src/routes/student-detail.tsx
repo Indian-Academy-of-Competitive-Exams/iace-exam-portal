@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormRegisterReturn, type UseFormReturn } from 'react-hook-form';
 import { ArrowLeft, FileText, Save } from 'lucide-react';
 import {
+  AUDIT_FEATURE,
   PROGRAM_MAX,
   STUDENT_TYPE,
   STUDENT_TYPES,
@@ -33,6 +34,7 @@ import {
   Skeleton,
   SkeletonParagraph,
 } from '@iace/ui';
+import { EntityHistory } from '../components/entity-history';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
@@ -488,6 +490,8 @@ export function StudentDetailPage() {
           <DocumentLink label="PAN" url={detail.profile?.panUrl} />
         </CardContent>
       </Card>
+
+      <EntityHistory feature={AUDIT_FEATURE.STUDENT} entityId={detail.id} className="mb-5" />
 
       <form
         className="grid gap-5 lg:grid-cols-2"

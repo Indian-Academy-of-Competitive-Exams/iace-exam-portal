@@ -18,6 +18,7 @@ import { TaxonomyPage } from './routes/taxonomy';
 import { AdminsPage } from './routes/admins';
 import { FeaturesPage } from './routes/features';
 import { PermissionsPage } from './routes/permissions';
+import { AuditPage } from './routes/audit';
 import { ROUTES } from './lib/constants';
 
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
@@ -59,6 +60,7 @@ export function App() {
           <Route path={ROUTES.ADMINS} element={<AdminsPage />} />
           <Route path={ROUTES.FEATURES} element={<FeaturesPage />} />
           <Route path={ROUTES.PERMISSIONS} element={<PermissionsPage />} />
+          <Route path={ROUTES.AUDIT} element={<AuditPage />} />
         </Route>
       </Route>
       <Route path={ROUTES.NOT_FOUND} element={<Navigate to={ROUTES.HOME} replace />} />
