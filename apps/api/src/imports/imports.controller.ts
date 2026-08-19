@@ -70,11 +70,8 @@ export class ImportsController {
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  preview(
-    @CurrentUser() user: AuthenticatedUser,
-    @UploadedFile() file?: UploadedFileLike,
-  ): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(this.bufferOf(file), user.id);
+  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(this.bufferOf(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -109,10 +106,9 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewGroupMembers(
     @Param('groupId') groupId: string,
-    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<GroupMemberImportPlan> {
-    return this.imports.previewGroupMembers(groupId, this.bufferOf(file), user.id);
+    return this.imports.previewGroupMembers(groupId, this.bufferOf(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)

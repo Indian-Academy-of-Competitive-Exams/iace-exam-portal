@@ -491,7 +491,6 @@ describe('ImportsService.previewStudents — the roster group load, against real
 
     const plan = await service.previewStudents(
       Buffer.from('mobile,groups\n9876543210,SSC CGL / MERIT 2026'),
-      'adm_1',
     );
 
     assert.equal(plan.rows[0]?.action, 'skip');

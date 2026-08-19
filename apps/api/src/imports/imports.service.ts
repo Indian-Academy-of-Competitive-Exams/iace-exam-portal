@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AppException,
   AUDIT_ACTION,
@@ -8,6 +8,7 @@ import {
   IMPORT_SOURCE,
   STUDENT_TYPE,
   type AuditAction,
+  type AuditFeature,
   type GroupMemberImportPlan,
   type GroupMemberImportResult,
   type StudentImportPlan,
@@ -46,6 +47,8 @@ const HASH_CONCURRENCY = 4;
 /** Owns no tables (docs/03 §5). */
 @Injectable()
 export class ImportsService {
+  private readonly logger = new Logger(ImportsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
@@ -53,10 +56,9 @@ export class ImportsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** What the file would do. Writes nothing but the run itself — see `openRun`. */
-  async previewStudents(file: Buffer, actorId: string): Promise<StudentImportPlan> {
-    const { plan } = await this.planStudentsRun(file, actorId);
-    return plan;
+  /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
+  async previewStudents(file: Buffer): Promise<StudentImportPlan> {
+    return this.planStudents(file);
   }
 
   /**
@@ -64,7 +66,12 @@ export class ImportsService {
    * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
    */
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
-    const { plan, logId } = await this.planStudentsRun(file, actorId);
+    const plan = await this.planStudents(file);
+    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+
+    let created = 0;
+    let updated = 0;
+    const rowActions: { entityId: string; action: AuditAction }[] = [];
 
     try {
       // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
@@ -81,10 +88,6 @@ export class ImportsService {
       const grantsById = await this.grantsFor(
         plan.rows.map((row) => row.existingStudentId).filter((id): id is string => id !== null),
       );
-
-      let created = 0;
-      let updated = 0;
-      const rowActions: { entityId: string; action: AuditAction }[] = [];
 
       for (const row of plan.rows) {
         if (row.action === 'skip' || !row.mobile) continue;
@@ -130,22 +133,24 @@ export class ImportsService {
           rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
         }
       }
-
-      const result: StudentImportResult = {
-        ...plan.summary,
-        created,
-        updated,
-        skipped: plan.summary.invalid,
-      };
-
-      await this.closeRun(logId, { created, updated, skipped: 0, failed: plan.summary.invalid });
-      await this.audit.recordImportRows(logId, AUDIT_FEATURE.STUDENT, rowActions);
-
-      return result;
     } catch (error) {
-      await this.failRun(logId, error);
+      await this.failRun(logId, plan.fileErrors, error);
       throw error;
     }
+
+    await this.finishRun(logId, AUDIT_FEATURE.STUDENT, rowActions, {
+      created,
+      updated,
+      skipped: 0,
+      failed: plan.summary.invalid,
+    });
+
+    return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+  }
+
+  private async planStudents(file: Buffer): Promise<StudentImportPlan> {
+    const table = await readUploadedTable(file);
+    return planStudentImport(table, await this.contextFor(table));
   }
 
   /**
@@ -168,14 +173,9 @@ export class ImportsService {
   // Adding students to one group
   // ==========================================================================
 
-  /** What the file would add to this group. Writes nothing but the run itself — see `openRun`. */
-  async previewGroupMembers(
-    groupId: string,
-    file: Buffer,
-    actorId: string,
-  ): Promise<GroupMemberImportPlan> {
-    const { plan } = await this.planGroupMembersRun(groupId, file, actorId);
-    return plan;
+  /** What the file would add to this group. Writes nothing. */
+  async previewGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportPlan> {
+    return this.planGroupMembers(groupId, file);
   }
 
   /** Applies it. */
@@ -184,13 +184,14 @@ export class ImportsService {
     file: Buffer,
     actorId: string,
   ): Promise<GroupMemberImportResult> {
-    const { plan, logId } = await this.planGroupMembersRun(groupId, file, actorId);
+    const plan = await this.planGroupMembers(groupId, file);
+    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+
+    const toAdd = plan.rows
+      .filter((row) => row.action === 'add' && row.studentId)
+      .map((row) => row.studentId as string);
 
     try {
-      const toAdd = plan.rows
-        .filter((row) => row.action === 'add' && row.studentId)
-        .map((row) => row.studentId as string);
-
       // The planner already left out anyone holding this grant, so a push cannot
       // duplicate one.
       await this.prisma.$transaction(
@@ -201,36 +202,30 @@ export class ImportsService {
           }),
         ),
       );
+    } catch (error) {
+      await this.failRun(logId, plan.fileErrors, error);
+      throw error;
+    }
 
-      await this.closeRun(logId, {
+    // Every added row is an existing student gaining a grant — never a create.
+    await this.finishRun(
+      logId,
+      AUDIT_FEATURE.STUDENT,
+      toAdd.map((studentId) => ({ entityId: studentId, action: AUDIT_ACTION.UPDATE })),
+      {
         created: 0,
         updated: toAdd.length,
         skipped: plan.summary.alreadyMembers,
         failed: plan.summary.invalid,
-      });
-      // Every added row is an existing student gaining a grant — never a create.
-      await this.audit.recordImportRows(
-        logId,
-        AUDIT_FEATURE.STUDENT,
-        toAdd.map((studentId) => ({ entityId: studentId, action: AUDIT_ACTION.UPDATE })),
-      );
+      },
+    );
 
-      return { ...plan.summary, added: toAdd.length };
-    } catch (error) {
-      await this.failRun(logId, error);
-      throw error;
-    }
+    return { ...plan.summary, added: toAdd.length };
   }
 
-  private async planGroupMembersRun(
-    groupId: string,
-    file: Buffer,
-    actorId: string,
-  ): Promise<{ plan: GroupMemberImportPlan; logId: string }> {
+  private async planGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportPlan> {
     const table = await readUploadedTable(file);
-    const plan = planGroupMemberImport(table, await this.groupContextFor(groupId, table));
-    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
-    return { plan, logId };
+    return planGroupMemberImport(table, await this.groupContextFor(groupId, table));
   }
 
   private async groupContextFor(groupId: string, table: CsvTable): Promise<GroupMemberContext> {
@@ -328,21 +323,10 @@ export class ImportsService {
   // run and its rows are always logged under AUDIT_FEATURE.STUDENT.
   // ==========================================================================
 
-  private async planStudentsRun(
-    file: Buffer,
-    actorId: string,
-  ): Promise<{ plan: StudentImportPlan; logId: string }> {
-    const table = await readUploadedTable(file);
-    const plan = planStudentImport(table, await this.contextFor(table));
-    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
-    return { plan, logId };
-  }
-
   /**
-   * Opens a run: stores the sheet under the run's own id, so the sheet a commit re-plans is always
-   * the one its `ImportLog` row points at. Called for every preview AND every commit — a commit
-   * re-plans rather than trusting a client-sent plan, so it opens its own fresh run rather than
-   * reusing one a separate preview call opened.
+   * Opens the run — only a commit calls this. A preview writes nothing and can be abandoned, and
+   * `ImportLog`/its S3 object are kept indefinitely, so a row for an abandoned preview would be
+   * storage with nothing behind it, forever.
    */
   private async openRun(
     file: Buffer,
@@ -368,23 +352,43 @@ export class ImportsService {
     return log.id;
   }
 
-  private async closeRun(
+  /**
+   * The writes already happened by the time this runs, so nothing here may report the run as
+   * failed. Recording its rows is attempted and, on its own, swallowed — the run still closes as
+   * COMMITTED even if the audit write does not land.
+   */
+  private async finishRun(
     logId: string,
+    feature: AuditFeature,
+    rowActions: readonly { entityId: string; action: AuditAction }[],
     counts: { created: number; updated: number; skipped: number; failed: number },
   ): Promise<void> {
+    try {
+      await this.audit.recordImportRows(logId, feature, rowActions);
+    } catch (error) {
+      this.logger.error(`Row actions for import ${logId} were not recorded`, error);
+    }
+
     await this.prisma.importLog.update({
       where: { id: logId },
       data: { ...counts, status: IMPORT_LOG_STATUS.COMMITTED, finishedAt: new Date() },
     });
   }
 
-  private async failRun(logId: string, error: unknown): Promise<void> {
+  private async failRun(
+    logId: string,
+    fileErrors: readonly string[],
+    error: unknown,
+  ): Promise<void> {
     await this.prisma.importLog.update({
       where: { id: logId },
       data: {
         status: IMPORT_LOG_STATUS.FAILED,
         finishedAt: new Date(),
-        errors: { message: error instanceof Error ? error.message : String(error) },
+        errors: {
+          ...(fileErrors.length > 0 ? { fileErrors } : {}),
+          message: error instanceof Error ? error.message : String(error),
+        },
       },
     });
   }
