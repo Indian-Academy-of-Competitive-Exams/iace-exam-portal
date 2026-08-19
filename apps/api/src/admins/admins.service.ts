@@ -44,6 +44,9 @@ interface FeatureRow {
 /** What an admin's audit diff covers — every column the admin screens can change. */
 export const AUDITED_ADMIN_FIELDS = ['fullName', 'isSuperAdmin'] as const;
 
+/** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
+const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
+
 /** A grant has no row to name, so it is filed against the admin it was made about. */
 export function permissionAuditEntity(
   grant: { adminId: string; key: string; level: string },
@@ -184,7 +187,9 @@ export class AdminsService {
 
     if (isActive) {
       const row = await this.prisma.admin.update({ where: { id }, data: { isActive: true } });
-      this.auditContext.setChanged({ isActive: { from: before.isActive, to: true } });
+      this.auditContext.setChanged(
+        fieldDiff(before, { ...before, isActive: true }, AUDITED_ACTIVE_FIELDS),
+      );
       // Read the grants back rather than assuming none: a super admin may have
       // granted something while the account was switched off.
       return this.toAdminDto(row, await this.permissionsFor(id));
@@ -208,7 +213,9 @@ export class AdminsService {
       return updated;
     });
 
-    this.auditContext.setChanged({ isActive: { from: before.isActive, to: false } });
+    this.auditContext.setChanged(
+      fieldDiff(before, { ...before, isActive: false }, AUDITED_ACTIVE_FIELDS),
+    );
     return this.toAdminDto(row, {});
   }
 

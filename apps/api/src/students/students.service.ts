@@ -50,6 +50,10 @@ export const AUDITED_STUDENT_FIELDS = [
   'isTestBlocked',
 ] as const;
 
+/** The single column each toggle route moves — the same `fieldDiff` definition of "changed". */
+const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
+const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
+
 /**
  * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
  * excepted (see its own note; a bulk roster is one statement per file rather than per row).
@@ -278,10 +282,10 @@ export class StudentsService {
         : {}),
     };
 
-    await this.prisma.student.update({ where: { id }, data: updatedColumns });
+    const updated = await this.prisma.student.update({ where: { id }, data: updatedColumns });
 
     this.auditContext.setChanged(
-      fieldDiff(student, { ...student, ...updatedColumns }, AUDITED_STUDENT_FIELDS),
+      fieldDiff(auditFieldsOf(student), auditFieldsOf(updated), AUDITED_STUDENT_FIELDS),
     );
 
     return this.detail(id);
@@ -328,7 +332,9 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     await this.prisma.student.update({ where: { id }, data: { isActive } });
-    this.auditContext.setChanged({ isActive: { from: student.isActive, to: isActive } });
+    this.auditContext.setChanged(
+      fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
+    );
     return this.detail(id);
   }
 
@@ -341,9 +347,9 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     await this.prisma.student.update({ where: { id }, data: { isTestBlocked } });
-    this.auditContext.setChanged({
-      isTestBlocked: { from: student.isTestBlocked, to: isTestBlocked },
-    });
+    this.auditContext.setChanged(
+      fieldDiff(student, { ...student, isTestBlocked }, AUDITED_TEST_BLOCKED_FIELDS),
+    );
     return this.detail(id);
   }
 
@@ -448,6 +454,33 @@ export class StudentsService {
 }
 
 /** The named groups behind a student's grants, in name order; unknown ids drop out. */
+/** Every column `AUDITED_STUDENT_FIELDS` names, and nothing else. */
+interface AuditedStudentColumns {
+  fullName: string | null;
+  studentType: StudentType;
+  enrolledExams: string[];
+  program: string | null;
+  currentBranchId: string | null;
+  directGroupIds: string[];
+  isActive: boolean;
+  isTestBlocked: boolean;
+}
+
+/** The audited columns off a real row, so a relation write in the update payload can never be
+ *  diffed as if it were one. The shape groups, admins, questions and sub-topics already use. */
+function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
+  return {
+    fullName: row.fullName,
+    studentType: row.studentType,
+    enrolledExams: row.enrolledExams,
+    program: row.program,
+    currentBranchId: row.currentBranchId,
+    directGroupIds: row.directGroupIds,
+    isActive: row.isActive,
+    isTestBlocked: row.isTestBlocked,
+  };
+}
+
 function namesOf(groupIds: string[], named: Map<string, GroupRef>): GroupRef[] {
   return groupIds
     .map((id) => named.get(id))

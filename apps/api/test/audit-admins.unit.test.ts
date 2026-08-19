@@ -251,3 +251,38 @@ describe('AdminsService.setActive — the isActive diff', () => {
     });
   });
 });
+
+describe('AdminsService.setActive — driven live, so a toggle that moved nothing says nothing', () => {
+  it('reports a deactivation', async () => {
+    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: true })]);
+
+    await ctx.auditContext.run(async () => {
+      await ctx.service.setActive('adm_1', false, 'adm_super');
+
+      assert.deepEqual(ctx.auditContext.current()?.changed, {
+        isActive: { from: true, to: false },
+      });
+    });
+  });
+
+  /**
+   * The failure this prevents: re-activating an already-active admin filed
+   * `{ isActive: { from: true, to: true } }`. FEATURE_PERMISSION and ADMIN are the rows a security
+   * question is answered from, so one asserting a change that did not happen is the worst place
+   * for this noise to land.
+   */
+  it('reports nothing when the toggle did not move, in either direction', async () => {
+    const ctx = build([makeAdminRow({ id: 'adm_1', isActive: true })]);
+
+    await ctx.auditContext.run(async () => {
+      await ctx.service.setActive('adm_1', true, 'adm_super');
+      assert.equal(ctx.auditContext.current()?.changed, null);
+    });
+
+    const off = build([makeAdminRow({ id: 'adm_2', isActive: false })]);
+    await off.auditContext.run(async () => {
+      await off.service.setActive('adm_2', false, 'adm_super');
+      assert.equal(off.auditContext.current()?.changed, null);
+    });
+  });
+});

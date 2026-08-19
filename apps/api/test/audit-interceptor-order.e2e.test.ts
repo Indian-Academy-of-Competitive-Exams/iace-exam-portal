@@ -9,6 +9,7 @@ import { ResponseInterceptor } from '../src/common/response.interceptor';
 import { DomainEventBus } from '../src/common/events';
 import { DOMAIN_EVENTS, type AuditRowActionEvent } from '../src/common/events/event-catalog';
 import { Audit, AuditContext, AuditInterceptor } from '../src/audit';
+import { AppModule } from '../src/app.module';
 
 /**
  * End to end over real HTTP, through a real Nest app wired the way AppModule wires the two
@@ -80,5 +81,27 @@ describe('AuditInterceptor registered after ResponseInterceptor (audit e2e)', ()
     assert.equal(body.data.id, 'probe_1');
     assert.equal(events.length, 1);
     assert.equal(events[0]?.entityId, 'probe_1');
+  });
+
+  /**
+   * The failure this prevents: the test above proves WHY the order matters, but it pins its own
+   * fixture — swapping the two entries in `app.module.ts` leaves it green. This one reads the
+   * shipped wiring, so the ordering the docblock above describes is actually guarded.
+   */
+  it('registers AuditInterceptor after ResponseInterceptor in AppModule itself', () => {
+    const providers = (Reflect.getMetadata('providers', AppModule) ?? []) as {
+      provide?: unknown;
+      useClass?: unknown;
+    }[];
+    const interceptors = providers
+      .filter((provider) => provider?.provide === APP_INTERCEPTOR)
+      .map((provider) => provider.useClass);
+
+    const response = interceptors.indexOf(ResponseInterceptor);
+    const audit = interceptors.indexOf(AuditInterceptor);
+
+    assert.notEqual(response, -1, 'ResponseInterceptor is not an APP_INTERCEPTOR in AppModule');
+    assert.notEqual(audit, -1, 'AuditInterceptor is not an APP_INTERCEPTOR in AppModule');
+    assert.ok(audit > response, 'AuditInterceptor must be registered after ResponseInterceptor');
   });
 });

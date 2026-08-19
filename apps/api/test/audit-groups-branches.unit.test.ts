@@ -4,7 +4,7 @@ import { fieldDiff } from '@iace/contracts';
 import { AUDITED_GROUP_FIELDS, GroupsService } from '../src/groups/groups.service';
 import { AUDITED_BRANCH_FIELDS, BranchesService } from '../src/branches/branches.service';
 import { AuditContext } from '../src/audit';
-import { FakePrisma, makeBranch, makeGroup } from './support/fakes';
+import { FakePrisma, makeBranch, makeGroup, makeStudent } from './support/fakes';
 
 describe('the group audit diff', () => {
   it('covers every column a group edit can change', () => {
@@ -115,6 +115,59 @@ describe('GroupsService.update — driven live, the diff a real edit contributes
       assert.deepEqual(auditContext.current()?.changed, {
         branchIds: { from: ['br_a'], to: ['br_b'] },
       });
+    });
+  });
+});
+
+describe('GroupsService membership — driven live, the one diff no field list describes', () => {
+  function build(students = [makeStudent({ id: 'stu_1' })]) {
+    const prisma = new FakePrisma(students, [], [], [makeGroup({ id: 'grp_1' })]);
+    const auditContext = new AuditContext();
+    const service = new GroupsService(
+      prisma.asService(),
+      new BranchesService(prisma.asService(), new AuditContext()),
+      null as never,
+      auditContext,
+    );
+    return { prisma, auditContext, service };
+  }
+
+  it('reports exactly the students it added, never the whole requested set', async () => {
+    const { auditContext, service } = build([
+      makeStudent({ id: 'stu_1' }),
+      makeStudent({ id: 'stu_2', mobile: '9000000002', directGroupIds: ['grp_1'] }),
+    ]);
+
+    await auditContext.run(async () => {
+      const result = await service.addMembers('grp_1', ['stu_1', 'stu_2']);
+
+      assert.deepEqual(result, { added: 1, alreadyMembers: 1 });
+      assert.deepEqual(auditContext.current()?.changed, { members: { from: null, to: ['stu_1'] } });
+    });
+  });
+
+  /** Re-submitting a page that was already added moved nobody, and a no-op is not a change. */
+  it('reports nothing when every requested student was already a member', async () => {
+    const { auditContext, service } = build([
+      makeStudent({ id: 'stu_1', directGroupIds: ['grp_1'] }),
+    ]);
+
+    await auditContext.run(async () => {
+      await service.addMembers('grp_1', ['stu_1']);
+
+      assert.equal(auditContext.current()?.changed, null);
+    });
+  });
+
+  it('reports a removal as the student leaving', async () => {
+    const { auditContext, service } = build([
+      makeStudent({ id: 'stu_1', directGroupIds: ['grp_1'] }),
+    ]);
+
+    await auditContext.run(async () => {
+      await service.removeMember('grp_1', 'stu_1');
+
+      assert.deepEqual(auditContext.current()?.changed, { members: { from: 'stu_1', to: null } });
     });
   });
 });
