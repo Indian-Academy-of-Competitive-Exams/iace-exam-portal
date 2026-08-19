@@ -1,11 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import {
   AppException,
   DIRECT_GRANT_MESSAGE,
   ErrorCodes,
   GROUP_TYPES_ACCEPTING_GRANTS,
   IMPORT_SOURCE,
-  STUDENT_TYPE,
   deactivatedMemberBlocker,
   educationEntrySchema,
   pastExamEntrySchema,
@@ -16,10 +15,13 @@ import {
   type StudentDetail,
   type StudentListQuery,
   type StudentSummary,
+  type StudentType,
   type UpdateStudentBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { BranchesService } from '../branches';
+import { ExamTypesService } from '../configs';
 
 /** How long a signed link to somebody's identity document stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
@@ -28,6 +30,10 @@ import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from '
 
 /** What names a group on a student's row — the group ids themselves are a column. */
 const GROUP_REF_SELECT = { id: true, name: true, examType: true } as const;
+
+/** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
+const ENROLLED_EXAMS_FIELD = 'enrolledExams';
+const CURRENT_BRANCH_ID_FIELD = 'currentBranchId';
 
 /**
  * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
@@ -38,6 +44,9 @@ export class StudentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    @Inject(forwardRef(() => ExamTypesService))
+    private readonly examTypes: ExamTypesService,
+    private readonly branches: BranchesService,
   ) {}
 
   // ==========================================================================
@@ -82,6 +91,8 @@ export class StudentsService {
     return {
       ...this.toSummary(student, namesOf(student.directGroupIds, named)),
       preferredLanguage: student.preferredLanguage,
+      program: student.program,
+      currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
     };
@@ -173,14 +184,21 @@ export class StudentsService {
     // A new student holds nothing yet, so every requested id is being ADDED — the diff `update`
     // runs against `directGroupIds` is against an empty list here.
     await this.assertGroupsAcceptGrants([], input.groupIds ?? []);
+    if (input.enrolledExams?.length) {
+      await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+    }
+    if (input.currentBranchId) {
+      await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
+    }
 
     const student = await this.prisma.student.create({
       data: {
         mobile: input.mobile,
         fullName: input.fullName ?? null,
-        // An admin adding one student by hand is adding an online one; the
-        // roster import is where the type is chosen per row.
-        studentType: STUDENT_TYPE.ONLINE,
+        studentType: input.studentType,
+        enrolledExams: input.enrolledExams ?? [],
+        program: input.program ?? null,
+        currentBranchId: input.currentBranchId ?? null,
         createdVia: IMPORT_SOURCE.INDIVIDUAL,
         directGroupIds: input.groupIds ?? [],
       },
@@ -201,6 +219,12 @@ export class StudentsService {
       await this.assertGroupsAcceptGrants(student.directGroupIds, input.groupIds);
       this.assertMayJoinGroups(student, input.groupIds);
     }
+    if (input.enrolledExams?.length) {
+      await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+    }
+    if (input.currentBranchId) {
+      await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
+    }
 
     const profilePatch = input.profile;
     // Spread of the EXISTING profile then the patch: readiness is decided on
@@ -216,6 +240,10 @@ export class StudentsService {
         ...(input.preferredLanguage === undefined
           ? {}
           : { preferredLanguage: input.preferredLanguage }),
+        ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
+        ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
+        ...(input.program === undefined ? {} : { program: input.program }),
+        ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
         ...(input.groupIds ? { directGroupIds: input.groupIds } : {}),
         ...(profilePatch
           ? {
@@ -278,16 +306,25 @@ export class StudentsService {
     return this.detail(id);
   }
 
+  /** Sign-in is untouched: they keep their history and their session, and cannot start a test. */
+  async setTestBlocked(id: string, isTestBlocked: boolean): Promise<StudentDetail> {
+    const student = await this.prisma.student.findUnique({ where: { id }, select: { id: true } });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    await this.prisma.student.update({ where: { id }, data: { isTestBlocked } });
+    return this.detail(id);
+  }
+
   // ==========================================================================
   // Internals
   // ==========================================================================
 
-  /** Only the groups this save would ADD, so a deactivated student can still lose one. */
+  /** Only the groups this save would ADD, so a blocked student can still lose one. */
   private assertMayJoinGroups(
-    student: { isActive: boolean; directGroupIds: string[] },
+    student: { isTestBlocked: boolean; directGroupIds: string[] },
     groupIds: string[],
   ): void {
-    if (student.isActive) return;
+    if (!student.isTestBlocked) return;
 
     const already = new Set(student.directGroupIds);
     const joining = new Set(groupIds.filter((id) => !already.has(id)));
@@ -331,7 +368,10 @@ export class StudentsService {
       id: string;
       mobile: string;
       fullName: string | null;
+      studentType: StudentType;
+      enrolledExams: string[];
       isActive: boolean;
+      isTestBlocked: boolean;
       pinHash: string | null;
       pinIsDefault: boolean;
       preTestReady: boolean;
@@ -344,7 +384,10 @@ export class StudentsService {
       id: row.id,
       mobile: row.mobile,
       fullName: row.fullName,
+      studentType: row.studentType,
+      enrolledExams: row.enrolledExams,
       isActive: row.isActive,
+      isTestBlocked: row.isTestBlocked,
       // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is
       // not a sign-in.
       hasSignedIn: row.pinHash !== null && !row.pinIsDefault,

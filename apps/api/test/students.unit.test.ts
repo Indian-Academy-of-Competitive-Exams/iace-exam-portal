@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   createStudentSchema,
+  STUDENT_TYPE,
   studentDetailSchema,
   studentSummarySchema,
   updateStudentSchema,
@@ -98,7 +99,10 @@ describe('admin student contracts', () => {
     id: 'stu_1',
     mobile: '9876543210',
     fullName: 'Asha',
+    studentType: STUDENT_TYPE.OFFLINE,
+    enrolledExams: [],
     isActive: true,
+    isTestBlocked: false,
     hasSignedIn: true,
     hasDefaultPin: false,
     preTestReady: true,
@@ -106,6 +110,8 @@ describe('admin student contracts', () => {
     groups: [{ id: 'g1', name: 'SSC MORNING', examType: 'SSC CGL' }],
     createdAt: new Date().toISOString(),
     preferredLanguage: 'en',
+    program: null,
+    currentBranchId: null,
     updatedAt: new Date().toISOString(),
     profile,
   };
@@ -170,34 +176,53 @@ describe('admin student contracts', () => {
 
 describe('createStudentSchema — an absent name is not an invalid one', () => {
   it('accepts a student with no name at all', () => {
-    // Only the mobile is required. A roster often has numbers before names.
-    const parsed = createStudentSchema.parse({ mobile: '9876543210' });
+    // Only the mobile and the type are required. A roster often has numbers before names.
+    const parsed = createStudentSchema.parse({
+      mobile: '9876543210',
+      studentType: STUDENT_TYPE.ONLINE,
+    });
     assert.equal(parsed.fullName, undefined);
   });
 
   it('accepts an EMPTY name field — the regression', () => {
     // `.min(1).optional()` rejected '': optional permits undefined, never the empty string.
-    const parsed = createStudentSchema.parse({ mobile: '9876543210', fullName: '' });
+    const parsed = createStudentSchema.parse({
+      mobile: '9876543210',
+      studentType: STUDENT_TYPE.ONLINE,
+      fullName: '',
+    });
     assert.equal(parsed.fullName, undefined);
   });
 
   it('treats a whitespace-only name as absent too', () => {
     assert.equal(
-      createStudentSchema.parse({ mobile: '9876543210', fullName: '   ' }).fullName,
+      createStudentSchema.parse({
+        mobile: '9876543210',
+        studentType: STUDENT_TYPE.ONLINE,
+        fullName: '   ',
+      }).fullName,
       undefined,
     );
   });
 
   it('keeps a real name, trimmed', () => {
     assert.equal(
-      createStudentSchema.parse({ mobile: '9876543210', fullName: '  Meera Rao ' }).fullName,
+      createStudentSchema.parse({
+        mobile: '9876543210',
+        studentType: STUDENT_TYPE.ONLINE,
+        fullName: '  Meera Rao ',
+      }).fullName,
       'Meera Rao',
     );
   });
 
   it('still refuses an absurdly long name', () => {
     assert.equal(
-      createStudentSchema.safeParse({ mobile: '9876543210', fullName: 'x'.repeat(200) }).success,
+      createStudentSchema.safeParse({
+        mobile: '9876543210',
+        studentType: STUDENT_TYPE.ONLINE,
+        fullName: 'x'.repeat(200),
+      }).success,
       false,
     );
   });

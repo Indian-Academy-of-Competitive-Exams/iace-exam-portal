@@ -105,7 +105,10 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
 
 function studentsWith(student = makeStudent()) {
   const prisma = new FakePrisma([student]);
-  return { service: new StudentsService(prisma.asService(), null as never), student };
+  return {
+    service: new StudentsService(prisma.asService(), null as never, null as never, null as never),
+    student,
+  };
 }
 
 describe('StudentsService.saveDocumentKey — the me seam into students', () => {
@@ -197,7 +200,12 @@ describe('the counts the configs module asks for', () => {
       makeStudent({ id: 'stu_2', enrolledExams: ['SSC CGL', 'RRB JE'] }),
       makeStudent({ id: 'stu_3', enrolledExams: [] }),
     ]);
-    const students = new StudentsService(prisma.asService(), null as never);
+    const students = new StudentsService(
+      prisma.asService(),
+      null as never,
+      null as never,
+      null as never,
+    );
 
     assert.equal(await students.countEnrolledIn('SSC CGL'), 2);
     assert.equal(await students.countEnrolledIn('RRB JE'), 1);

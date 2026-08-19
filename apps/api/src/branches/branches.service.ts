@@ -35,16 +35,16 @@ export class BranchesService {
    * Whether a branch may take something new — used by whoever is about to attach to one. Throws with
    * the message the form should show; returns quietly when the branch is fine.
    */
-  async assertUsable(branchId: string): Promise<void> {
+  async assertUsable(branchId: string, fieldKey = 'branchId'): Promise<void> {
     const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such branch', {
-        fieldErrors: { branchId: ['Pick a branch'] },
+        fieldErrors: { [fieldKey]: ['Pick a branch'] },
       });
     }
     if (!branch.isActive) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
-        fieldErrors: { branchId: [INACTIVE_BRANCH_MESSAGE] },
+        fieldErrors: { [fieldKey]: [INACTIVE_BRANCH_MESSAGE] },
       });
     }
   }

@@ -24,25 +24,15 @@ export function studentWhere(
   const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
 
   if (query.isActive !== undefined) add({ isActive: query.isActive });
+  if (query.isTestBlocked !== undefined) add({ isTestBlocked: query.isTestBlocked });
   if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
   if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
   if (query.groupId) add(membersOf(query.groupId, group));
   // The branch a student attends is a column of its own — no join.
   if (query.branchId) add({ currentBranchId: query.branchId });
-  if (query.ungrouped !== undefined) {
-    add({ directGroupIds: { isEmpty: query.ungrouped } });
-  }
-
-  // Matches `hasSignedIn` exactly — a PIN the institute set does not count, or
-  // the filter and the badge beside it would disagree.
-  if (query.neverSignedIn !== undefined) {
-    add(
-      query.neverSignedIn
-        ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
-        : { pinHash: { not: null }, pinIsDefault: false },
-    );
-  }
+  if (query.ungrouped !== undefined) add(ownAccessFilter(query.ungrouped));
+  if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
 
@@ -62,6 +52,26 @@ export function studentWhere(
   // An empty AND is a valid Prisma filter, but returning {} keeps "no filters"
   // obvious to anyone reading a log or a test.
   return and.length === 0 ? {} : { AND: and };
+}
+
+/** Access of the student's own: an enrolment, or a grant. The all-students group reaches them anyway. */
+function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
+  // BOTH empty: an EXAM group is reached by an enrolment, with no grant row.
+  const noneOfTheirOwn = {
+    enrolledExams: { isEmpty: true },
+    directGroupIds: { isEmpty: true },
+  } satisfies Prisma.StudentWhereInput;
+  return hasNoneOfTheirOwn ? noneOfTheirOwn : { NOT: noneOfTheirOwn };
+}
+
+/**
+ * Matches `hasSignedIn` exactly — a PIN the institute set does not count, or the filter and the
+ * badge beside it would disagree.
+ */
+function signedInFilter(neverSignedIn: boolean): Prisma.StudentWhereInput {
+  return neverSignedIn
+    ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
+    : { pinHash: { not: null }, pinIsDefault: false };
 }
 
 /** The same three cases `GroupsService.studentCountFor` counts, so the link and the count agree. */

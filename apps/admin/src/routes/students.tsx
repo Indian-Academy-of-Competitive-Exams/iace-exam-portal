@@ -11,12 +11,13 @@ import {
   PERMISSION_LEVELS,
   PAGE_SIZE_MAX,
   STUDENT_SORTS,
+  STUDENT_TYPE,
+  STUDENT_TYPES,
   todayISO,
   createStudentSchema,
   normaliseMobile,
   qualifiedGroupName,
   type CreateStudentInput,
-  type GroupRef,
   type StudentSort,
   type StudentSummary,
 } from '@iace/contracts';
@@ -38,6 +39,7 @@ import {
   FormField,
   Input,
   linkVariants,
+  MultiCombobox,
   NumericInput,
   PageHeader,
   Pagination,
@@ -54,12 +56,13 @@ import {
 } from '@iace/ui';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors, useInfinitePages, useListQuery } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
+import { useExamTypes } from '../lib/use-exam-types';
 import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
-type StatusFilter = 'all' | 'active' | 'inactive' | 'invited' | 'defaultpin';
+type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked' | 'invited' | 'defaultpin';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
 const ALL_FILTERS = [
@@ -89,14 +92,24 @@ function asBooleanParam(value: string): 'true' | 'false' | undefined {
 /** Each filter is one query shape; keeping them together stops them contradicting. */
 const STATUS_QUERY: Record<
   StatusFilter,
-  { isActive?: 'true' | 'false'; neverSignedIn?: 'true'; hasDefaultPin?: 'true' }
+  {
+    isActive?: 'true' | 'false';
+    isTestBlocked?: 'true';
+    neverSignedIn?: 'true';
+    hasDefaultPin?: 'true';
+  }
 > = {
   all: {},
   active: { isActive: 'true' },
   inactive: { isActive: 'false' },
+  blocked: { isTestBlocked: 'true' },
   invited: { neverSignedIn: 'true' },
   defaultpin: { hasDefaultPin: 'true' },
 };
+
+/** A GLOBAL-only student has both empty too, which neither field can see — see the copy at its call site. */
+const hasNoOwnAccess = (student: StudentSummary): boolean =>
+  student.enrolledExams.length === 0 && student.groups.length === 0;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentColumns(): DataTableColumn<StudentSummary>[] {
@@ -109,18 +122,28 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
       cell: (s) => s.mobile,
     },
     {
-      key: 'groups',
-      header: 'Groups',
+      key: 'access',
+      header: 'Access',
       cell: (s) =>
-        s.groups.length === 0 ? (
-          // A student in no group can reach no test, so this is a problem to
-          // show rather than an empty cell.
-          <Badge variant="warning">No group</Badge>
+        hasNoOwnAccess(s) ? (
+          // Neither enrolled nor granted — not the same as "no access": GLOBAL
+          // reaches everyone, and this query cannot see that.
+          <Badge variant="warning">No enrolment or grant</Badge>
         ) : (
-          <GroupsCell groups={s.groups} />
+          <AccessCell student={s} />
         ),
     },
-    { key: 'status', header: 'Status', cell: (s) => <SignInStatus student={s} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (s) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <SignInStatus student={s} />
+          {/* Its own badge: being unable to start a test is not a sign-in state. */}
+          {s.isTestBlocked ? <Badge variant="danger">Blocked from tests</Badge> : null}
+        </div>
+      ),
+    },
     {
       key: 'pretest',
       header: 'Pre-test details',
@@ -131,6 +154,24 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
       ),
     },
   ];
+}
+
+/**
+ * Everything a student reaches tests through, in one line: enrolments and grants together, the
+ * first shown and the rest behind a count. Deduplicated, because a code and a group name can match.
+ */
+function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
+  const labels = [...new Set([...student.enrolledExams, ...student.groups.map((g) => g.name)])];
+
+  return (
+    <BadgeList items={labels} label={(entry) => entry} className="max-w-[12rem]">
+      {(entry) => (
+        <Badge className="min-w-0 shrink">
+          <TruncatedText>{entry}</TruncatedText>
+        </Badge>
+      )}
+    </BadgeList>
+  );
 }
 
 export function StudentsPage() {
@@ -284,7 +325,8 @@ export function StudentsPage() {
           >
             <option value="all">All students</option>
             <option value="active">Active</option>
-            <option value="inactive">Deactivated</option>
+            <option value="inactive">Sign-in suspended</option>
+            <option value="blocked">Blocked from tests</option>
             <option value="invited">Never signed in</option>
             <option value="defaultpin">Still on the default PIN</option>
           </Select>
@@ -397,8 +439,8 @@ export function StudentsPage() {
 
           <Field
             htmlFor="filter-ungrouped"
-            label="Group membership"
-            hint="A student in no group can reach no test."
+            label="Access"
+            hint="No enrolment and no grant of their own — not the same as no access."
           >
             {(control) => (
               <Select
@@ -407,8 +449,8 @@ export function StudentsPage() {
                 onChange={(event) => filters.set({ ungrouped: event.target.value })}
               >
                 <option value="">Any</option>
-                <option value="true">In no group</option>
-                <option value="false">In at least one</option>
+                <option value="true">No enrolment or grant</option>
+                <option value="false">Has an enrolment or grant</option>
               </Select>
             )}
           </Field>
@@ -476,7 +518,7 @@ export function StudentsPage() {
 
 /** Four sign-in states, in the order they matter. A list, not a chain of ternaries. */
 function SignInStatus({ student }: Readonly<{ student: StudentSummary }>) {
-  if (!student.isActive) return <Badge variant="danger">Deactivated</Badge>;
+  if (!student.isActive) return <Badge variant="danger">Sign-in suspended</Badge>;
   if (student.hasSignedIn) return <Badge variant="success">Active</Badge>;
   // Its own state on purpose: they CAN sign in, but on a PIN anyone holding the
   // roster can work out. "Never signed in" would hide that.
@@ -508,31 +550,15 @@ function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
   );
 }
 
-/**
- * A student's groups in one line: the first name truncated, then a count for the rest.
- * The group filter above the table is the way to actually see who is in what.
- */
-function GroupsCell({ groups }: Readonly<{ groups: GroupRef[] }>) {
-  return (
-    <BadgeList
-      items={groups}
-      label={(group) => group.name}
-      className="max-w-[12rem]"
-      // The visible one is still truncated to the column: a long group name
-      // would otherwise widen the cell on its own.
-    >
-      {(group) => (
-        <Badge className="min-w-0 shrink">
-          <TruncatedText>{group.name}</TruncatedText>
-        </Badge>
-      )}
-    </BadgeList>
-  );
-}
-
 // ---------------------------------------------------------------------------
 
-const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'groupIds'] as const;
+const NEW_STUDENT_FIELDS = [
+  'mobile',
+  'fullName',
+  'studentType',
+  'enrolledExams',
+  'groupIds',
+] as const;
 
 /** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
 function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
@@ -541,10 +567,18 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
 
   const form = useForm<CreateStudentInput>({
     resolver: zodResolver(createStudentSchema),
-    defaultValues: { mobile: '', fullName: '', groupIds: [] },
+    defaultValues: {
+      mobile: '',
+      fullName: '',
+      studentType: STUDENT_TYPE.ONLINE,
+      enrolledExams: [],
+      groupIds: [],
+    },
   });
 
   const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
+  const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const examTypes = useExamTypes({ activeOnly: true });
 
   const create = useMutation({
     meta: {
@@ -556,6 +590,8 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
         mobile: values.mobile,
         // An untouched name field is "not known yet", not an empty name.
         fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
+        studentType: values.studentType,
+        enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
         groupIds: values.groupIds?.length ? values.groupIds : undefined,
       }),
     onSuccess: (student) => {
@@ -570,8 +606,8 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
       <CardHeader>
         <CardTitle>Add a student</CardTitle>
         <CardDescription>
-          Only the mobile number is required. They will set their own PIN the first time they sign
-          in, and land on this same record.
+          The mobile number and the student type are required. They will set their own PIN the first
+          time they sign in, and land on this same record.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -605,6 +641,50 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
               className="min-w-56 flex-1"
             >
               {(control) => <Input {...control} />}
+            </FormField>
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <FormField
+              form={form}
+              name="studentType"
+              label="Student type"
+              className="min-w-56 flex-1"
+            >
+              {(control) => (
+                <Select {...control}>
+                  {STUDENT_TYPES.map((value) => (
+                    <option key={value} value={value}>
+                      {STUDENT_TYPE_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </FormField>
+
+            <FormField
+              form={form}
+              name="enrolledExams"
+              label="Enrolled exams"
+              hint="How they reach an exam or programme group"
+              className="min-w-56 flex-1"
+            >
+              {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+                <MultiCombobox
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  value={enrolledExams}
+                  onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+                  items={examTypes.map((examType) => ({
+                    value: examType.code,
+                    label: examType.code,
+                    hint: examType.name,
+                  }))}
+                  placeholder="None yet"
+                  emptyLabel="No exam type matches that"
+                />
+              )}
             </FormField>
           </div>
 

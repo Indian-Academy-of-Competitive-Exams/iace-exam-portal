@@ -77,6 +77,7 @@ import {
   studentDetailSchema,
   studentSummarySchema,
   type CreateStudentInput,
+  type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentListQueryInput,
   type StudentSummary,
@@ -483,6 +484,13 @@ export function createApiClient(options: ApiClientOptions) {
           request(ADMIN_STUDENT_ROUTES.setActive(id), {
             method: 'PATCH',
             body: { isActive },
+            schema: studentDetailSchema,
+          }),
+
+        setTestBlocked: (id: string, input: SetStudentTestBlockedBody): Promise<StudentDetail> =>
+          request(ADMIN_STUDENT_ROUTES.setTestBlocked(id), {
+            method: 'PATCH',
+            body: input,
             schema: studentDetailSchema,
           }),
       },

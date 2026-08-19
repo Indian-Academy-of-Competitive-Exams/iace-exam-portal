@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, GROUP_TYPE } from '@iace/contracts';
+import { AppException, ErrorCodes, GROUP_TYPE, STUDENT_TYPE } from '@iace/contracts';
 import { GroupsService } from '../src/groups/groups.service';
 import { StudentsService } from '../src/students/students.service';
 import { type BranchesService } from '../src/branches/branches.service';
@@ -35,13 +35,19 @@ function servicesWith(
     studentsService: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
+      undefined as unknown as ExamTypesService,
+      undefined as unknown as BranchesService,
     ),
   };
 }
 
 const active = (over = {}) => makeStudent({ id: 'stu_active', mobile: '9876543210', ...over });
+/**
+ * ONLY `isTestBlocked`. `isActive` deliberately stays true: with both set, this file would pass
+ * against a half-flipped codebase, which is the exact thing it was written to catch.
+ */
 const deactivated = (over = {}) =>
-  makeStudent({ id: 'stu_off', mobile: '9000000000', isActive: false, ...over });
+  makeStudent({ id: 'stu_off', mobile: '9000000000', isTestBlocked: true, ...over });
 
 describe('GroupsService.addMembers — deactivated students', () => {
   it('adds an active student', async () => {
@@ -63,7 +69,7 @@ describe('GroupsService.addMembers — deactivated students', () => {
 
     assert.ok(error instanceof AppException);
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.match(error.message, /deactivated/i);
+    assert.match(error.message, /blocked from tests/i);
     assert.deepEqual(
       prisma.students[0]?.directGroupIds,
       [],
@@ -104,6 +110,21 @@ describe('GroupsService.addMembers — deactivated students', () => {
     assert.equal(result.added, 0);
     assert.equal(result.alreadyMembers, 1);
   });
+
+  /**
+   * Sign-in and test access are separate switches. Somebody whose sign-in is suspended still
+   * belongs to their course, and an admin arranging next term's groups must not be stopped.
+   */
+  it('adds a student whose sign-in is suspended but whose tests are not blocked', async () => {
+    const { groups, prisma } = servicesWith([
+      makeStudent({ id: 'stu_nosignin', mobile: '9111111111', isActive: false }),
+    ]);
+
+    const result = await groups.addMembers(MORNING, ['stu_nosignin']);
+
+    assert.equal(result.added, 1);
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
+  });
 });
 
 describe('StudentsService.update — deactivated students', () => {
@@ -124,7 +145,7 @@ describe('StudentsService.update — deactivated students', () => {
     );
 
     assert.ok(error instanceof AppException);
-    assert.match(error.message, /deactivated/i);
+    assert.match(error.message, /blocked from tests/i);
     assert.ok(error.fieldErrors?.groupIds);
     assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING], 'nothing changed');
   });
@@ -144,6 +165,16 @@ describe('StudentsService.update — deactivated students', () => {
       detail.groups.map((group) => group.id),
       [MORNING],
     );
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
+  });
+
+  it('lets a student whose sign-in is suspended join a group', async () => {
+    const { studentsService, prisma } = servicesWith([
+      makeStudent({ id: 'stu_nosignin', mobile: '9111111111', isActive: false }),
+    ]);
+
+    await studentsService.update('stu_nosignin', { groupIds: [MORNING] });
+
     assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
   });
 });
@@ -192,7 +223,7 @@ describe('StudentsService.create — the grant path from the "Add a student" for
     );
 
     const error = await studentsService
-      .create({ mobile: '9876543210', groupIds: [MORNING] })
+      .create({ mobile: '9876543210', studentType: STUDENT_TYPE.ONLINE, groupIds: [MORNING] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -207,7 +238,11 @@ describe('StudentsService.create — the grant path from the "Add a student" for
       [makeGroup({ id: EVENING, type: GROUP_TYPE.SCHOLARSHIP })],
     );
 
-    await studentsService.create({ mobile: '9876543210', groupIds: [EVENING] });
+    await studentsService.create({
+      mobile: '9876543210',
+      studentType: STUDENT_TYPE.ONLINE,
+      groupIds: [EVENING],
+    });
 
     assert.deepEqual(prisma.students[0]?.directGroupIds, [EVENING]);
   });

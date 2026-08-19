@@ -18,7 +18,7 @@ import { type CsvRow, type CsvTable } from '../common/importing';
 export interface GroupMemberContext {
   group: GroupRef & { type: GroupType };
   /** Mobile → the student it resolves to, for the numbers this file lists. */
-  studentsByMobile: Map<string, { id: string; fullName: string | null; isActive: boolean }>;
+  studentsByMobile: Map<string, { id: string; fullName: string | null; isTestBlocked: boolean }>;
   /** Who is in the group already. */
   memberIds: Set<string>;
 }
@@ -124,7 +124,7 @@ function planRow(
   }
 
   // Only when JOINING: already a member means this file grants nothing.
-  if (student && !student.isActive && !context.memberIds.has(student.id)) {
+  if (student?.isTestBlocked && !context.memberIds.has(student.id)) {
     errors.push(DEACTIVATED_MEMBER_MESSAGE);
   }
 

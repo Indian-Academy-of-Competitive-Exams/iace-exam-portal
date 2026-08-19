@@ -202,7 +202,7 @@ export class GroupsService {
   /**
    * Adding is a set operation: a student already in the group is left alone rather than treated as
    * an error, because selecting a whole page and adding it is the normal way this gets used.
-   * A deactivated student joining refuses the whole add — see `deactivatedMemberBlocker`.
+   * A student blocked from tests joining refuses the whole add — see `deactivatedMemberBlocker`.
    */
   async addMembers(id: string, studentIds: string[]): Promise<AddGroupMembersResult> {
     const group = await this.prisma.group.findUnique({
@@ -220,7 +220,7 @@ export class GroupsService {
     const wanted = [...new Set(studentIds)];
     const found = await this.prisma.student.findMany({
       where: { id: { in: wanted } },
-      select: { id: true, isActive: true, directGroupIds: true },
+      select: { id: true, isTestBlocked: true, directGroupIds: true },
     });
     if (found.length !== wanted.length) {
       throw new AppException(
@@ -238,10 +238,10 @@ export class GroupsService {
     const toAdd = wanted.filter((studentId) => !existing.has(studentId));
     const joining = new Set(toAdd);
 
-    // Over the ones JOINING: a deactivated student already in this group gains nothing,
+    // Over the ones JOINING: a blocked student already in this group gains nothing,
     // and refusing them would block re-submitting a page already added.
     const blocker = deactivatedMemberBlocker(
-      found.filter((student) => !student.isActive && joining.has(student.id)).length,
+      found.filter((student) => student.isTestBlocked && joining.has(student.id)).length,
     );
     if (blocker) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {

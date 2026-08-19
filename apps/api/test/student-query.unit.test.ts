@@ -45,7 +45,12 @@ describe('studentWhere — three-state filters', () => {
    * "no", so absent and false cannot collapse into each other.
    */
   it('tells absent apart from false, for every boolean filter', () => {
-    for (const field of ['isActive', 'preTestReady', 'profileCompleted'] as const) {
+    for (const field of [
+      'isActive',
+      'isTestBlocked',
+      'preTestReady',
+      'profileCompleted',
+    ] as const) {
       assert.equal(conditionsFor().length, 0, `${field} must be absent by default`);
       assertHas({ [field]: 'false' }, { [field]: false });
       assertHas({ [field]: 'true' }, { [field]: true });
@@ -63,9 +68,19 @@ describe('studentWhere — three-state filters', () => {
     assert.equal(conditionsFor().length, 0);
   });
 
-  it('reads ungrouped as "holds no grant at all", both ways round', () => {
-    assertHas({ ungrouped: 'true' }, { directGroupIds: { isEmpty: true } });
-    assertHas({ ungrouped: 'false' }, { directGroupIds: { isEmpty: false } });
+  /**
+   * "Reaches no test" is enrolments AND grants, not grants alone. Reading only `directGroupIds`
+   * fired on every correctly enrolled student, which made the amber badge meaningless.
+   */
+  it('reads ungrouped as "no enrolment AND no grant", both ways round', () => {
+    assertHas(
+      { ungrouped: 'true' },
+      { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } },
+    );
+    assertHas(
+      { ungrouped: 'false' },
+      { NOT: { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } } },
+    );
   });
 });
 
@@ -111,16 +126,21 @@ describe('studentWhere — joined between', () => {
 /** Every case here once silently LOST a filter. */
 describe('studentWhere — filters COMBINE rather than overwrite each other', () => {
   it('keeps the group filter when a branch is chosen too', () => {
-    const params = { groupId: 'g1', branchId: 'b1' };
+    const params = { groupId: 'g1', branchId: 'b1', isTestBlocked: 'true' };
 
     assertHas(params, { directGroupIds: { has: 'g1' } });
     assertHas(params, { currentBranchId: 'b1' });
-    assert.equal(conditionsFor(params).length, 2);
+    assertHas(params, { isTestBlocked: true });
+    assert.equal(conditionsFor(params).length, 3);
   });
 
   it('keeps the group filter alongside the ungrouped one', () => {
-    assertHas({ groupId: 'g1', ungrouped: 'false' }, { directGroupIds: { has: 'g1' } });
-    assertHas({ groupId: 'g1', ungrouped: 'false' }, { directGroupIds: { isEmpty: false } });
+    const params = { groupId: 'g1', ungrouped: 'false' };
+
+    assertHas(params, { directGroupIds: { has: 'g1' } });
+    assertHas(params, {
+      NOT: { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } },
+    });
   });
 
   /**
@@ -153,12 +173,13 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
       groupId: 'g1',
       branchId: 'b1',
       isActive: 'true',
+      isTestBlocked: 'false',
       preTestReady: 'false',
       neverSignedIn: 'true',
       joinedFrom: '2026-01-01',
     });
 
-    assert.equal(conditions.length, 7, 'every filter must survive');
+    assert.equal(conditions.length, 8, 'every filter must survive');
   });
 
   it('searches a mobile number and a name together', () => {

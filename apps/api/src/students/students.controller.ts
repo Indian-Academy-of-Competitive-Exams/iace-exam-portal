@@ -5,17 +5,19 @@ import {
   ActorTypes,
   createStudentSchema,
   setStudentActiveSchema,
+  setStudentTestBlockedSchema,
   studentListQuerySchema,
   updateStudentSchema,
   type CreateStudentBody,
   type Paginated,
   type SetStudentActiveBody,
+  type SetStudentTestBlockedBody,
   type StudentDetail,
   type StudentListQuery,
   type StudentSummary,
   type UpdateStudentBody,
 } from '@iace/contracts';
-import { Actors, RequiresFeature } from '../common/security';
+import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { StudentsService } from './students.service';
 
@@ -58,12 +60,21 @@ export class StudentsController {
     return this.students.update(id, body);
   }
 
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @RequiresSuperAdmin()
   @Patch(':id/active')
   setActive(
     @Param('id') id: string,
     @Body(new ZodBody(setStudentActiveSchema)) body: SetStudentActiveBody,
   ): Promise<StudentDetail> {
     return this.students.setActive(id, body.isActive);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/test-blocked')
+  setTestBlocked(
+    @Param('id') id: string,
+    @Body(new ZodBody(setStudentTestBlockedSchema)) body: SetStudentTestBlockedBody,
+  ): Promise<StudentDetail> {
+    return this.students.setTestBlocked(id, body.isTestBlocked);
   }
 }

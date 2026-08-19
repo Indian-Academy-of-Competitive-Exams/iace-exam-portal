@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch, type UseFormRegisterReturn } from 'react-hook-form';
+import { useForm, useWatch, type UseFormRegisterReturn, type UseFormReturn } from 'react-hook-form';
 import { ArrowLeft, FileText, Save } from 'lucide-react';
-import { todayISO, type Gender, type GroupRef, type StudentDetail } from '@iace/contracts';
+import {
+  PROGRAM_MAX,
+  STUDENT_TYPE,
+  STUDENT_TYPES,
+  todayISO,
+  type Gender,
+  type GroupRef,
+  type StudentDetail,
+  type StudentType,
+} from '@iace/contracts';
 import {
   Alert,
   Avatar,
@@ -14,9 +23,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Combobox,
   ConfirmDialog,
   Field,
   Input,
+  MultiCombobox,
   PageHeader,
   Select,
   Skeleton,
@@ -24,11 +35,18 @@ import {
 } from '@iace/ui';
 import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { useBranches } from '../lib/use-branches';
+import { useExamTypes } from '../lib/use-exam-types';
+import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
 
 interface FormValues {
   fullName: string;
+  studentType: StudentType;
+  enrolledExams: string[];
+  program: string;
+  currentBranchId: string;
   motherName: string;
   fatherName: string;
   dob: string;
@@ -40,6 +58,10 @@ interface FormValues {
 
 const FORM_FIELDS = [
   'fullName',
+  'studentType',
+  'enrolledExams',
+  'program',
+  'currentBranchId',
   'motherName',
   'fatherName',
   'dob',
@@ -55,6 +77,10 @@ const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
 function toFormValues(student: StudentDetail): FormValues {
   return {
     fullName: student.fullName ?? '',
+    studentType: student.studentType,
+    enrolledExams: [...student.enrolledExams],
+    program: student.program ?? '',
+    currentBranchId: student.currentBranchId ?? '',
     motherName: student.profile?.motherName ?? '',
     fatherName: student.profile?.fatherName ?? '',
     dob: student.profile?.dob ?? '',
@@ -88,15 +114,107 @@ function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
   return <Badge variant="info">Never signed in</Badge>;
 }
 
-/** A deactivated student may lose a group but not gain one, so the unticked boxes lock. */
+/** Where a student sits relative to the institute — the four fields access resolves through. */
+function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
+  const examTypes = useExamTypes({ activeOnly: true });
+  const branches = useBranches({ activeOnly: true });
+  // Unfiltered: a student's current branch can be one that has since been retired, and
+  // it must still resolve to a name rather than the raw id `branches` no longer carries.
+  const allBranches = useBranches();
+  const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
+  const currentBranchName = allBranches.find((branch) => branch.id === currentBranchId)?.name;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Access</CardTitle>
+        <CardDescription>
+          Enrolments are how a student reaches an exam or programme group — no membership is added
+          for them. Scholarship and non-IACE groups are granted below instead.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Field
+          htmlFor="studentType"
+          label="Student type"
+          error={form.formState.errors.studentType?.message}
+        >
+          {(control) => (
+            <Select {...control} {...form.register('studentType')}>
+              {STUDENT_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {STUDENT_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+
+        <Field
+          htmlFor="enrolledExams"
+          label="Enrolled exams"
+          hint="Every exam or programme group under these is reachable."
+          error={form.formState.errors.enrolledExams?.message}
+        >
+          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+            <MultiCombobox
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              value={enrolledExams}
+              onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+              items={examTypes.map((examType) => ({
+                value: examType.code,
+                label: examType.code,
+                hint: examType.name,
+              }))}
+              placeholder="No exams yet"
+              emptyLabel="No exam type matches that"
+            />
+          )}
+        </Field>
+
+        <Field htmlFor="program" label="Programme" error={form.formState.errors.program?.message}>
+          {(control) => (
+            <Input {...control} maxLength={PROGRAM_MAX} {...form.register('program')} />
+          )}
+        </Field>
+
+        <Field
+          htmlFor="currentBranchId"
+          label="Current branch"
+          hint="The centre they attend now — what scheduling reads."
+          error={form.formState.errors.currentBranchId?.message}
+        >
+          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+            <Combobox
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              value={currentBranchId}
+              selectedLabel={currentBranchName}
+              onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
+              items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+              placeholder="Not recorded"
+              emptyLabel="No branch matches that"
+            />
+          )}
+        </Field>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** A blocked student may lose a grant but not gain one, so the unticked boxes lock. */
 function GroupsCard({
-  isActive,
+  isTestBlocked,
   known,
   selectedIds,
   register,
   error,
 }: Readonly<{
-  isActive: boolean;
+  isTestBlocked: boolean;
   known: GroupRef[];
   selectedIds: string[];
   register: UseFormRegisterReturn;
@@ -105,21 +223,21 @@ function GroupsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Groups</CardTitle>
+        <CardTitle>Group grants</CardTitle>
         <CardDescription>
-          Scholarship and non-IACE groups, granted to this student alone. Their exam batches come
-          from their enrolments, not from here.
+          Scholarship and non-IACE groups, given student by student. Exam and programme groups are
+          not here — they follow the enrolments above.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {isActive ? null : (
+        {isTestBlocked ? (
           <Alert variant="info">
             <span>
-              Deactivated, so no new grant can be added here — existing ones can still be revoked.
-              This card does not control their exam access, which is unaffected either way.
+              Blocked from tests, so no new group can be granted. Their current grants can still be
+              taken away, or lift the block first.
             </span>
           </Alert>
-        )}
+        ) : null}
 
         <GroupPicker
           idPrefix="group"
@@ -127,10 +245,104 @@ function GroupsCard({
           selectedIds={selectedIds}
           known={known}
           error={error}
-          lockedToSelection={!isActive}
+          lockedToSelection={isTestBlocked}
         />
       </CardContent>
     </Card>
+  );
+}
+
+/** The two switches that decide what a student may do: sit tests, and sign in at all. */
+function StudentStateSwitches({ detail }: Readonly<{ detail: StudentDetail }>) {
+  const queryClient = useQueryClient();
+  const [blockConfirm, setBlockConfirm] = useState(false);
+  const [signInConfirm, setSignInConfirm] = useState(false);
+  const isSuperAdmin = useAuth().identity?.isSuperAdmin ?? false;
+  const { id, isActive, isTestBlocked } = detail;
+  const name = detail.fullName ?? detail.mobile;
+
+  const applyUpdate = (updated: StudentDetail) => {
+    queryClient.setQueryData(['admin', 'student', id], updated);
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+  };
+
+  const setTestBlocked = useMutation({
+    meta: {
+      success: (): string => (isTestBlocked ? 'Tests allowed again.' : 'Blocked from tests.'),
+    },
+    mutationFn: (next: boolean) => api.admin.students.setTestBlocked(id, { isTestBlocked: next }),
+    onError: () => setBlockConfirm(false),
+    onSuccess: (updated) => {
+      setBlockConfirm(false);
+      applyUpdate(updated);
+    },
+  });
+
+  const setActive = useMutation({
+    meta: {
+      success: (): string => (isActive ? 'Sign-in suspended.' : 'Sign-in restored.'),
+    },
+    mutationFn: (next: boolean) => api.admin.students.setActive(id, next),
+    onError: () => setSignInConfirm(false),
+    onSuccess: (updated) => {
+      setSignInConfirm(false);
+      applyUpdate(updated);
+    },
+  });
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        variant={isTestBlocked ? 'secondary' : 'destructive'}
+        size="sm"
+        loading={setTestBlocked.isPending}
+        onClick={() => setBlockConfirm(true)}
+      >
+        {isTestBlocked ? 'Allow tests' : 'Block from tests'}
+      </Button>
+      {isSuperAdmin ? (
+        <Button
+          variant="outline"
+          size="sm"
+          loading={setActive.isPending}
+          onClick={() => setSignInConfirm(true)}
+        >
+          {isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+        </Button>
+      ) : null}
+
+      {/* Both directions ask, so a control that changes whether somebody can sit
+          an exam never acts on a single click. */}
+      <ConfirmDialog
+        open={blockConfirm}
+        onOpenChange={setBlockConfirm}
+        destructive={!isTestBlocked}
+        loading={setTestBlocked.isPending}
+        title={isTestBlocked ? `Allow ${name} to sit tests again?` : `Block ${name} from tests?`}
+        description={
+          isTestBlocked
+            ? 'They can start tests again straight away, on everything their enrolments and grants reach. Nothing was lost while it was on.'
+            : 'They can still sign in and see every test they have already sat, and their results. They cannot start a new one until this is lifted. A session they already have open is not signed out.'
+        }
+        confirmLabel={isTestBlocked ? 'Allow tests' : 'Block from tests'}
+        onConfirm={() => setTestBlocked.mutate(!isTestBlocked)}
+      />
+
+      <ConfirmDialog
+        open={signInConfirm}
+        onOpenChange={setSignInConfirm}
+        destructive={isActive}
+        loading={setActive.isPending}
+        title={isActive ? `Suspend sign-in for ${name}?` : `Restore sign-in for ${name}?`}
+        description={
+          isActive
+            ? 'They cannot sign in at all, on any device. A session they already have open is not revoked — it lasts until its token expires. Their record, attempts and results are kept.'
+            : 'They can sign in again. Whether they may sit a test is the other switch, and this does not change it.'
+        }
+        confirmLabel={isActive ? 'Suspend sign-in' : 'Restore sign-in'}
+        onConfirm={() => setActive.mutate(!isActive)}
+      />
+    </div>
   );
 }
 
@@ -138,7 +350,6 @@ export function StudentDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
-  const [confirming, setConfirming] = useState(false);
 
   const student = useQuery({
     queryKey: ['admin', 'student', id],
@@ -148,6 +359,10 @@ export function StudentDetailPage() {
   const form = useForm<FormValues>({
     defaultValues: {
       fullName: '',
+      studentType: STUDENT_TYPE.ONLINE,
+      enrolledExams: [],
+      program: '',
+      currentBranchId: '',
       motherName: '',
       fatherName: '',
       dob: '',
@@ -171,7 +386,13 @@ export function StudentDetailPage() {
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
-        // An omitted key means "leave it alone", which is true of checkboxes nobody touched.
+        studentType: values.studentType,
+        program: orNull(values.program),
+        currentBranchId: orNull(values.currentBranchId),
+        // An omitted key means "leave it alone", which is true of a list nobody touched.
+        ...(form.formState.dirtyFields.enrolledExams
+          ? { enrolledExams: values.enrolledExams }
+          : {}),
         ...(form.formState.dirtyFields.groupIds ? { groupIds: values.groupIds } : {}),
         profile: {
           motherName: orNull(values.motherName),
@@ -197,19 +418,6 @@ export function StudentDetailPage() {
           .querySelector('[aria-invalid="true"], [role="alert"]')
           ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       });
-    },
-  });
-
-  const setActive = useMutation({
-    meta: {
-      success: (): string => (detail?.isActive ? 'Student deactivated.' : 'Student reactivated.'),
-    },
-    mutationFn: (isActive: boolean) => api.admin.students.setActive(id, isActive),
-    onError: () => setConfirming(false),
-    onSuccess: (updated) => {
-      setConfirming(false);
-      queryClient.setQueryData(['admin', 'student', id], updated);
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
     },
   });
 
@@ -246,37 +454,7 @@ export function StudentDetailPage() {
       <PageHeader
         title={detail.fullName ?? detail.mobile}
         description={`+91 ${detail.mobile}`}
-        action={
-          <Button
-            variant={detail.isActive ? 'destructive' : 'secondary'}
-            size="sm"
-            loading={setActive.isPending}
-            onClick={() => setConfirming(true)}
-          >
-            {detail.isActive ? 'Deactivate' : 'Reactivate'}
-          </Button>
-        }
-      />
-
-      {/* Both directions ask, so a control that changes whether somebody can sit
-          an exam never acts on a single click. */}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        destructive={detail.isActive}
-        loading={setActive.isPending}
-        title={
-          detail.isActive
-            ? `Deactivate ${detail.fullName ?? detail.mobile}?`
-            : `Reactivate ${detail.fullName ?? detail.mobile}?`
-        }
-        description={
-          detail.isActive
-            ? 'They can no longer sign in, and any test they have not finished is out of reach. Their record, their attempts and their results are all kept, and reactivating lets them straight back in.'
-            : 'They can sign in again and reach every test their groups give them. Nothing was lost while they were off.'
-        }
-        confirmLabel={detail.isActive ? 'Deactivate student' : 'Reactivate student'}
-        onConfirm={() => setActive.mutate(!detail.isActive)}
+        action={<StudentStateSwitches detail={detail} />}
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -286,7 +464,8 @@ export function StudentDetailPage() {
           fallback={detail.mobile}
           size="md"
         />
-        {!detail.isActive ? <Badge variant="danger">Deactivated</Badge> : null}
+        {!detail.isActive ? <Badge variant="danger">Sign-in suspended</Badge> : null}
+        {detail.isTestBlocked ? <Badge variant="danger">Blocked from tests</Badge> : null}
         <SignInBadge detail={detail} />
         <Badge variant={detail.preTestReady ? 'success' : 'neutral'}>
           Pre-test details {detail.preTestReady ? 'on file' : 'needed'}
@@ -383,8 +562,10 @@ export function StudentDetailPage() {
         </Card>
 
         <div className="flex flex-col gap-5">
+          <AccessCard form={form} />
+
           <GroupsCard
-            isActive={detail.isActive}
+            isTestBlocked={detail.isTestBlocked}
             known={detail.groups}
             selectedIds={selectedGroupIds}
             register={form.register('groupIds')}

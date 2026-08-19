@@ -35,14 +35,15 @@ export function GroupPicker({
   known: GroupRef[];
   idPrefix: string;
   error?: string;
-  /** Unticked boxes lock: a deactivated student may lose a group but not gain one. */
+  /** Unticked boxes lock: a student blocked from tests may lose a grant but not gain one. */
   lockedToSelection?: boolean;
 }>) {
   const [search, setSearch] = useState('');
 
   const groups = useQuery({
     queryKey: ['admin', 'groups', 'picker', search],
-    queryFn: () => api.admin.groups.list({ q: search, pageSize: PAGE_SIZE_MAX }),
+    queryFn: () =>
+      api.admin.groups.list({ q: search, pageSize: PAGE_SIZE_MAX, acceptsGrants: 'true' }),
     placeholderData: keepPreviousData,
   });
 
@@ -148,7 +149,8 @@ function GroupPickerBody({
   return (
     <Alert variant="warning">
       <span>
-        No groups yet — a student reaches tests only through one.{' '}
+        No scholarship or non-IACE group exists yet — those are the only ones granted student by
+        student.{' '}
         <Link to={ROUTES.GROUPS} className={linkVariants({ variant: 'inline' })}>
           Create a group
         </Link>

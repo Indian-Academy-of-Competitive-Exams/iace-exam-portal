@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Avatar, PageHeader } from '@iace/ui';
+import { Alert, Avatar, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/constants';
@@ -46,7 +46,14 @@ export function AppShell() {
         It sits INSIDE the shell rather than being a redirect, so the header
         and Log out stay reachable and there is no navigation to fight.
       */}
-      {student?.hasDefaultPin ? <DefaultPinGate /> : <Outlet />}
+      {student?.hasDefaultPin ? (
+        <DefaultPinGate />
+      ) : (
+        <>
+          {student?.isTestBlocked ? <TestBlockedBanner /> : null}
+          <Outlet />
+        </>
+      )}
     </Shell>
   );
 }
@@ -59,6 +66,23 @@ function DefaultPinGate() {
         description="One step before you can carry on. It takes a moment."
       />
       <ChangePinCard onDefaultPin />
+    </div>
+  );
+}
+
+/**
+ * A banner and not a gate: sign-in, history and results are all still theirs, and the server is
+ * what refuses a new attempt. Saying nothing would leave them pressing Start and being turned away.
+ */
+function TestBlockedBanner() {
+  return (
+    <div className="mb-5">
+      <Alert variant="warning">
+        <span>
+          Tests are on hold for you at the moment. Everything you have already sat, and your
+          results, stay here. Ask at your branch office to have it lifted.
+        </span>
+      </Alert>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { type GroupsModule } from '../groups';
-import { StudentsModule } from '../students';
+import { type StudentsModule } from '../students';
 import { ExamTypesController } from './exam-types.controller';
 import { ExamTypesService } from './exam-types.service';
 
@@ -14,7 +14,11 @@ import { ExamTypesService } from './exam-types.service';
     forwardRef(
       () => (module.require('../groups') as { GroupsModule: typeof GroupsModule }).GroupsModule,
     ),
-    forwardRef(() => StudentsModule),
+    // Same reason as `groups` above: `students` now imports this module for `assertUsable`.
+    forwardRef(
+      () =>
+        (module.require('../students') as { StudentsModule: typeof StudentsModule }).StudentsModule,
+    ),
   ],
   controllers: [ExamTypesController],
   providers: [ExamTypesService],

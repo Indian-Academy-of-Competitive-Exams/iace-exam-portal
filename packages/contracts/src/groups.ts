@@ -33,16 +33,16 @@ export function qualifiedGroupName(group: { name: string; examType: string | nul
 }
 
 export const DEACTIVATED_MEMBER_MESSAGE =
-  'That student is deactivated. Reactivate them before adding them to a group.';
+  'That student is blocked from tests. Lift the block before granting them a group.';
 
 /**
- * A deactivated student keeps the groups they are in but gains none: a group is a route
- * to a test. Counted over the students JOINING, never everyone named.
+ * A student blocked from tests keeps the groups they are in but gains none: a group is a
+ * route to a test. Counted over the students JOINING, never everyone named.
  */
-export function deactivatedMemberBlocker(deactivatedCount: number): string | null {
-  if (deactivatedCount < 1) return null;
-  if (deactivatedCount === 1) return DEACTIVATED_MEMBER_MESSAGE;
-  return `${deactivatedCount} of those students are deactivated. Reactivate them before adding them to a group.`;
+export function deactivatedMemberBlocker(blockedCount: number): string | null {
+  if (blockedCount < 1) return null;
+  if (blockedCount === 1) return DEACTIVATED_MEMBER_MESSAGE;
+  return `${blockedCount} of those students are blocked from tests. Lift the block before granting them a group.`;
 }
 
 /** The two types a student is put into one at a time. Every other type is reached by who they are. */

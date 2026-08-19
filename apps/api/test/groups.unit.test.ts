@@ -88,15 +88,15 @@ describe('deactivatedMemberBlocker', () => {
   });
 
   /**
-   * A group is a route to a test, so granting one to a deactivated account hands back
-   * exactly what the deactivation took away — quietly, and without reactivating them.
+   * A group is a route to a test, so granting one to a student blocked from tests hands back
+   * exactly what the block took away — quietly, and without lifting it.
    */
-  it('refuses an add that includes a deactivated student', () => {
+  it('refuses an add that includes a student blocked from tests', () => {
     const blocker = deactivatedMemberBlocker(1);
 
     assert.ok(blocker);
-    assert.match(blocker, /deactivated/i);
-    assert.match(blocker, /reactivate/i, 'and says what to do about it');
+    assert.match(blocker, /blocked from tests/i);
+    assert.match(blocker, /lift the block/i, 'and says what to do about it');
   });
 
   it('says how many, because an admin reads this message', () => {

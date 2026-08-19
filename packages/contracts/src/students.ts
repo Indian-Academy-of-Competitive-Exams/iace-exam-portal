@@ -60,6 +60,8 @@ export const STUDENT_TYPE = {
 } as const;
 export const studentTypeSchema = z.enum(STUDENT_TYPE);
 export type StudentType = z.infer<typeof studentTypeSchema>;
+/** The same values as a list, for building a picker without restating them — as `GENDERS` does. */
+export const STUDENT_TYPES = studentTypeSchema.options;
 
 export const groupRefSchema = z.object({
   id: z.string(),
@@ -73,7 +75,12 @@ export const studentSummarySchema = z.object({
   id: z.string(),
   mobile: z.string(),
   fullName: z.string().nullable(),
+  studentType: studentTypeSchema,
+  /** ExamType codes. An EXAM or PROGRAM group is reached by matching one, with no membership row. */
+  enrolledExams: z.array(z.string()),
   isActive: z.boolean(),
+  /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
+  isTestBlocked: z.boolean(),
   /** Whether a PIN has ever been set — an admin-created student exists but has never signed in. */
   hasSignedIn: z.boolean(),
   /** Still on an import's default PIN, which anyone holding the roster can guess. */
@@ -115,6 +122,10 @@ export type PastExamEntry = z.infer<typeof pastExamEntrySchema>;
 /** How many rows either list may hold. A profile is not a CV. */
 export const PROFILE_LIST_MAX = 12;
 
+/** The course they are on — free text on the row, never queried, so it is capped and left alone. */
+export const PROGRAM_MAX = 120;
+export const programSchema = z.string().trim().max(PROGRAM_MAX);
+
 /** Everything the admin may see — note what is NOT here (see the file header). */
 export const studentProfileSchema = z.object({
   motherName: z.string().nullable(),
@@ -137,6 +148,8 @@ export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
 export const studentDetailSchema = studentSummarySchema.extend({
   preferredLanguage: z.string(),
+  program: z.string().nullable(),
+  currentBranchId: z.string().nullable(),
   updatedAt: z.string(),
   profile: studentProfileSchema.nullable(),
 });
@@ -159,6 +172,7 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Everyone in any group under this branch — "who does this centre teach". */
   branchId: z.string().optional(),
   isActive: optionalBooleanQuery(),
+  isTestBlocked: optionalBooleanQuery(),
   /** Admin-created students who have never set a PIN of their own. */
   neverSignedIn: optionalBooleanQuery(),
   /** Still on the starting PIN an import gave them — a list worth chasing. */
@@ -209,6 +223,10 @@ export const createStudentSchema = z.object({
   mobile: mobileSchema,
   // An empty box means "not known yet". `.min(1).optional()` rejects '', which blocks submit.
   fullName: blankIsAbsent(personNameSchema),
+  studentType: studentTypeSchema,
+  enrolledExams: z.array(z.string()).optional(),
+  program: blankIsAbsent(programSchema),
+  currentBranchId: blankIsAbsent(z.string().min(1)),
   groupIds: z.array(z.string()).optional(),
 });
 export type CreateStudentInput = z.input<typeof createStudentSchema>;
@@ -230,6 +248,11 @@ export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
   fullName: blankClears(personNameSchema),
   preferredLanguage: z.string().trim().min(2).max(8).optional(),
+  studentType: studentTypeSchema.optional(),
+  /** Replaces the enrolments wholesale — an empty array is a real answer. */
+  enrolledExams: z.array(z.string()).optional(),
+  program: blankClears(programSchema),
+  currentBranchId: blankClears(z.string().min(1)),
   /** Replaces the student's direct grants wholesale — an empty array is a valid patch. */
   groupIds: z.array(z.string()).optional(),
   profile: updateStudentProfileSchema.optional(),
@@ -240,6 +263,9 @@ export type UpdateStudentBody = z.infer<typeof updateStudentSchema>;
 export const setStudentActiveSchema = z.object({ isActive: z.boolean() });
 export type SetStudentActiveBody = z.infer<typeof setStudentActiveSchema>;
 
+export const setStudentTestBlockedSchema = z.object({ isTestBlocked: z.boolean() });
+export type SetStudentTestBlockedBody = z.infer<typeof setStudentTestBlockedSchema>;
+
 /** Admin routes are namespaced so a future student-facing `/students` cannot collide. */
 export const ADMIN_STUDENT_ROUTES = {
   list: '/admin/students',
@@ -247,4 +273,5 @@ export const ADMIN_STUDENT_ROUTES = {
   detail: (id: string) => `/admin/students/${id}`,
   update: (id: string) => `/admin/students/${id}`,
   setActive: (id: string) => `/admin/students/${id}/active`,
+  setTestBlocked: (id: string) => `/admin/students/${id}/test-blocked`,
 } as const;

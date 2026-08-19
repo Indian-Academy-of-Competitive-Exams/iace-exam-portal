@@ -11,7 +11,13 @@ import {
   Users,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { FEATURE_KEYS, GROUP_TYPE, type GroupType } from '@iace/contracts';
+import {
+  FEATURE_KEYS,
+  GROUP_TYPE,
+  STUDENT_TYPE,
+  type GroupType,
+  type StudentType,
+} from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
@@ -51,6 +57,13 @@ export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
   [GROUP_TYPE.PROGRAM]: 'Program',
   [GROUP_TYPE.SCHOLARSHIP]: 'Scholarship',
   [GROUP_TYPE.NON_IACE]: 'Non-IACE',
+};
+
+/** What each student type is called on screen. The enum values are never shown raw. */
+export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
+  [STUDENT_TYPE.ONLINE]: 'Online',
+  [STUDENT_TYPE.OFFLINE]: 'At a branch',
+  [STUDENT_TYPE.NON_IACE]: 'Not an IACE student',
 };
 
 /**

@@ -11,10 +11,10 @@ import {
 const context = (): GroupMemberContext => ({
   group: { id: 'g1', name: 'MERIT 2026', examType: null, type: GROUP_TYPE.SCHOLARSHIP },
   studentsByMobile: new Map([
-    ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari', isActive: true }],
-    ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja', isActive: true }],
-    ['9876543212', { id: 'stu_other', fullName: null, isActive: true }],
-    ['9000000000', { id: 'stu_off', fullName: 'Deactivated Devi', isActive: false }],
+    ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari', isTestBlocked: false }],
+    ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja', isTestBlocked: false }],
+    ['9876543212', { id: 'stu_other', fullName: null, isTestBlocked: false }],
+    ['9000000000', { id: 'stu_off', fullName: 'Blocked Bhanu', isTestBlocked: true }],
   ]),
   memberIds: new Set(['stu_member']),
 });
@@ -33,19 +33,19 @@ describe('planGroupMemberImport', () => {
 
   /**
    * A group is a route to a test, so a roster must not quietly hand one back to an account
-   * somebody deactivated. A row-level error, not a file-level refusal: the other 199 names in
-   * the file are fine and should still go in.
+   * that is blocked from taking them. A row-level error, not a file-level refusal: the other
+   * 199 names in the file are fine and should still go in.
    */
-  it('skips a deactivated student, and says why', () => {
+  it('skips a student blocked from tests, and says why', () => {
     const result = plan('Mobile Number\n9000000000');
 
     assert.equal(result.rows[0]?.action, 'skip');
-    assert.match(result.rows[0]?.errors[0] ?? '', /deactivated/i);
+    assert.match(result.rows[0]?.errors[0] ?? '', /blocked from tests/i);
     assert.equal(result.summary.willAdd, 0);
     assert.equal(result.summary.invalid, 1);
   });
 
-  it('adds the rest of the file around a deactivated row', () => {
+  it('adds the rest of the file around a blocked row', () => {
     const result = plan('Mobile Number\n9000000000\n9876543210');
 
     assert.equal(result.rows[1]?.action, 'add');

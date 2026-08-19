@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   EARLIEST_BIRTH_YEAR,
+  STUDENT_TYPE,
   createStudentSchema,
   dobSchema,
   personNameSchema,
@@ -96,12 +97,24 @@ describe('personNameSchema', () => {
 describe('the name rules reach the student schemas', () => {
   it('refuses a comma on create, and still allows no name at all', () => {
     assert.equal(
-      createStudentSchema.safeParse({ mobile: '9876543210', fullName: 'Kumari, Asha' }).success,
+      createStudentSchema.safeParse({
+        mobile: '9876543210',
+        studentType: STUDENT_TYPE.ONLINE,
+        fullName: 'Kumari, Asha',
+      }).success,
       false,
     );
-    assert.equal(createStudentSchema.safeParse({ mobile: '9876543210' }).success, true);
     assert.equal(
-      createStudentSchema.safeParse({ mobile: '9876543210', fullName: '' }).success,
+      createStudentSchema.safeParse({ mobile: '9876543210', studentType: STUDENT_TYPE.ONLINE })
+        .success,
+      true,
+    );
+    assert.equal(
+      createStudentSchema.safeParse({
+        mobile: '9876543210',
+        studentType: STUDENT_TYPE.ONLINE,
+        fullName: '',
+      }).success,
       true,
     );
   });

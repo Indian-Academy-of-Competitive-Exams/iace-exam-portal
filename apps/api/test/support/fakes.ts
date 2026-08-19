@@ -1,10 +1,12 @@
 import {
   BRANCH_TYPE,
   GROUP_TYPE,
+  STUDENT_TYPE,
   type AdminPermissions,
   type BranchType,
   type GroupType,
   type PermissionLevel,
+  type StudentType,
 } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
@@ -258,6 +260,10 @@ export interface FakeStudent {
   mobile: string;
   pinHash: string | null;
   fullName: string | null;
+  studentType: StudentType;
+  enrolledExams: string[];
+  program: string | null;
+  currentBranchId: string | null;
   preferredLanguage: string;
   preTestReady: boolean;
   profileCompleted: boolean;
@@ -270,8 +276,6 @@ export interface FakeStudent {
   profile: FakeProfile | null;
   /** The groups granted to this student — the column, as Prisma stores it. */
   directGroupIds: string[];
-  /** The exam-type codes this student is enrolled under — the column, as Prisma stores it. */
-  enrolledExams: string[];
   deletedAt: Date | null;
 }
 
@@ -302,6 +306,10 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     mobile: '9876543210',
     pinHash: null,
     fullName: null,
+    studentType: STUDENT_TYPE.ONLINE,
+    enrolledExams: [],
+    program: null,
+    currentBranchId: null,
     preferredLanguage: 'en',
     preTestReady: false,
     profileCompleted: false,
@@ -314,7 +322,6 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     updatedAt: new Date('2026-01-05T09:30:00.000Z'),
     profile: null,
     directGroupIds: [],
-    enrolledExams: [],
     deletedAt: null,
     ...overrides,
   };

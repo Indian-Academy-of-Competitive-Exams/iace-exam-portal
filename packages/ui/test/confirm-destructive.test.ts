@@ -10,6 +10,9 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const NEEDS_CONFIRMING = [
   /api\.admin\.\w+\.remove\(/,
   /api\.admin\.\w+\.setActive\(/,
+  /api\.admin\.\w+\.setTestBlocked\(/,
+  /api\.admin\.\w+\.addMembers\(/,
+  /api\.admin\.\w+\.removeMember\(/,
   /api\.admin\.admins\.create\(/,
   /api\.admin\.sync\./,
   /api\.admin\.features\.revoke\(/,
@@ -42,7 +45,7 @@ describe('destructive actions', () => {
   it('ask in both directions of a toggle', () => {
     const toggles = {
       'apps/admin/src/routes/admins.tsx': 'Reactivate',
-      'apps/admin/src/routes/student-detail.tsx': 'Reactivate student',
+      'apps/admin/src/routes/student-detail.tsx': 'Allow tests',
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
       'apps/admin/src/routes/exam-types.tsx': 'Reactivate exam type',
       'apps/admin/src/routes/groups.tsx': 'Reactivate group',
@@ -54,11 +57,30 @@ describe('destructive actions', () => {
         source.includes(`'${label}'`),
         `${relative}: the reverse direction must reach a ConfirmDialog too`,
       );
+      // Keyed to the shape, not to one mutation's name — the identifier gets renamed.
       assert.ok(
-        !/onClick=\{\(\) => setActive\.mutate\(/.test(source),
+        !/onClick=\{\(\) => \w+\.mutate\(/.test(source),
         `${relative}: a toggle must not fire straight from a click`,
       );
     }
+  });
+
+  /** Sign-in and test access are separate switches, and each asks on its own terms. */
+  it('ask separately about sign-in and about sitting tests', () => {
+    const detail = readFileSync(
+      path.join(REPO_ROOT, 'apps/admin/src/routes/student-detail.tsx'),
+      'utf8',
+    );
+
+    assert.ok(
+      detail.includes("'Block from tests'"),
+      'blocking tests must go through a ConfirmDialog',
+    );
+    assert.ok(
+      detail.includes("'Suspend sign-in'"),
+      'suspending sign-in must go through a ConfirmDialog',
+    );
+    assert.ok(detail.includes("'Restore sign-in'"), 'the reverse of sign-in must ask too');
   });
 
   /** Retiring a branch is reversible AND asks — see the note above. */

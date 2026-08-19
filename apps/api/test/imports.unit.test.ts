@@ -116,11 +116,14 @@ describe('readCsvTable', () => {
 const context = (): ImportContext => ({
   existingByMobile: new Map([
     // Chose their own PIN already — an import must never reset it.
-    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true, isActive: true }],
+    [
+      '9000000001',
+      { id: 'stu_existing', fullName: 'Already Here', hasPin: true, isTestBlocked: false },
+    ],
     // Added by an admin and never signed in: this one still needs a starting PIN.
-    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false, isActive: true }],
-    // Deactivated: a roster must not hand this account a group back.
-    ['9000000003', { id: 'stu_off', fullName: 'Gone Away', hasPin: true, isActive: false }],
+    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false, isTestBlocked: false }],
+    // Blocked from tests: a roster must not hand this account a group back.
+    ['9000000003', { id: 'stu_off', fullName: 'Gone Away', hasPin: true, isTestBlocked: true }],
   ]),
   // Names are canonical in the database, and a name is unique only within an
   // exam type — "SSC CGL MORNING" is taught for two exams here on purpose.
@@ -151,21 +154,21 @@ describe('planStudentImport', () => {
   });
 
   /**
-   * The student importer also grants groups, so it is a way back in for a deactivated
-   * account. Row-level, so the rest of the roster still imports.
+   * The student importer also grants groups, so it is a way back in for an account blocked
+   * from tests. Row-level, so the rest of the roster still imports.
    */
-  it('refuses to put a deactivated student into a group', () => {
+  it('refuses to put a student blocked from tests into a group', () => {
     const plan = planStudentImport(
       readCsvTable('mobile,groups\n9000000003,SSC CGL EVENING'),
       context(),
     );
 
     assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /deactivated/i);
+    assert.match(plan.rows[0]?.errors[0] ?? '', /blocked from tests/i);
   });
 
   /** Their record is still editable — the rule is about gaining a group, not about the row. */
-  it('leaves a deactivated student alone when the row names no group', () => {
+  it('leaves a student blocked from tests alone when the row names no group', () => {
     const plan = planStudentImport(readCsvTable('mobile,fullName\n9000000003,New Name'), context());
 
     assert.equal(plan.rows[0]?.action, 'update');

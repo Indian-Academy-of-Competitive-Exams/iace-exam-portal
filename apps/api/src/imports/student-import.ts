@@ -47,7 +47,7 @@ export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<
     string,
-    { id: string; fullName: string | null; hasPin: boolean; isActive: boolean }
+    { id: string; fullName: string | null; hasPin: boolean; isTestBlocked: boolean }
   >;
   /** Canonical group name → every group with that name, one per exam type. */
   groupsByName: Map<string, ImportGroup[]>;
@@ -255,8 +255,8 @@ function planRow(
     name.error,
     number.error,
     ...groups.errors,
-    // Only when the row grants a group; editing a deactivated student's name is fine.
-    existing && !existing.isActive && groupIds.length > 0 ? DEACTIVATED_MEMBER_MESSAGE : undefined,
+    // Only when the row grants a group; editing a blocked student's name is fine.
+    existing?.isTestBlocked && groupIds.length > 0 ? DEACTIVATED_MEMBER_MESSAGE : undefined,
   ].filter((error): error is string => error !== undefined);
 
   const action = actionFor(errors.length, Boolean(existing));

@@ -11,7 +11,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { type GroupsService } from '../groups';
-import { StudentsService } from '../students';
+import { type StudentsService } from '../students';
 import {
   examTypeDeletionBlocker,
   examTypeEditBlocker,
@@ -41,7 +41,15 @@ export class ExamTypesService {
       ),
     )
     private readonly groups: GroupsService,
-    @Inject(forwardRef(() => StudentsService)) private readonly students: StudentsService,
+    // Same reason as `groups` above: `students` now imports this module for `assertUsable`.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../students') as { StudentsService: typeof StudentsService })
+            .StudentsService,
+      ),
+    )
+    private readonly students: StudentsService,
   ) {}
 
   async list(query: ExamTypeListQuery): Promise<Paginated<ExamType>> {
