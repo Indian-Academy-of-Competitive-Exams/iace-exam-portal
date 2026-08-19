@@ -72,9 +72,18 @@ export function resolveGroup(
   if (matches.length === 0) return { error: `No group called "${name}"` };
   if (matches.length === 1) return { group: matches[0]! };
 
-  const exams = matches.map((group) => group.examType ?? '—').join(', ');
+  const exams = matches
+    .map((group) => group.examType)
+    .filter((examCode): examCode is string => examCode !== null);
+
+  if (exams.length === 0) {
+    return {
+      error: `"${name}" matches more than one group — rename one of them, or add these students from the group's own screen`,
+    };
+  }
+
   return {
-    error: `"${name}" exists under more than one exam (${exams}) — write it as "${matches[0]!.examType} ${EXAM_QUALIFIER} ${name}"`,
+    error: `"${name}" exists under more than one exam (${exams.join(', ')}) — write it as "${exams[0]} ${EXAM_QUALIFIER} ${name}"`,
   };
 }
 

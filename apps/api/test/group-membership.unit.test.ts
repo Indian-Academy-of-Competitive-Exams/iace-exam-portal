@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes } from '@iace/contracts';
+import { AppException, ErrorCodes, GROUP_TYPE } from '@iace/contracts';
 import { GroupsService } from '../src/groups/groups.service';
 import { StudentsService } from '../src/students/students.service';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type StorageService } from '../src/storage/storage.service';
+import { type ExamTypesService } from '../src/configs';
 import { FakePrisma, makeGroup, makeStudent } from './support/fakes';
 
 /**
@@ -26,7 +27,11 @@ function servicesWith(
   const prisma = new FakePrisma(students, [], [], groupRows);
   return {
     prisma,
-    groups: new GroupsService(prisma.asService(), undefined as unknown as BranchesService),
+    groups: new GroupsService(
+      prisma.asService(),
+      undefined as unknown as BranchesService,
+      undefined as unknown as ExamTypesService,
+    ),
     studentsService: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
@@ -140,5 +145,70 @@ describe('StudentsService.update — deactivated students', () => {
       [MORNING],
     );
     assert.deepEqual(prisma.students[0]?.directGroupIds, [MORNING]);
+  });
+});
+
+describe('StudentsService.update — the grant path from the detail form', () => {
+  it('refuses to add a group that is reached by an enrolment', async () => {
+    const { studentsService, prisma } = servicesWith(
+      [active()],
+      [makeGroup({ id: MORNING, type: GROUP_TYPE.EXAM, examType: 'SSC CGL' })],
+    );
+
+    const error = await studentsService
+      .update('stu_active', { groupIds: [MORNING] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.groupIds);
+    assert.deepEqual(prisma.students[0]?.directGroupIds, []);
+  });
+
+  /** Diffed against what they hold: a grant made before the rule existed is still removable. */
+  it('lets a stale grant be dropped without re-checking it', async () => {
+    const { studentsService, prisma } = servicesWith(
+      [active({ directGroupIds: [MORNING, EVENING] })],
+      [
+        makeGroup({ id: MORNING, type: GROUP_TYPE.EXAM, examType: 'SSC CGL' }),
+        makeGroup({ id: EVENING, type: GROUP_TYPE.SCHOLARSHIP }),
+      ],
+    );
+
+    await studentsService.update('stu_active', { groupIds: [EVENING] });
+
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [EVENING]);
+  });
+});
+
+describe('StudentsService.create — the grant path from the "Add a student" form', () => {
+  /**
+   * The failure this prevents: creating straight into an EXAM/GLOBAL group is the same no-op grant
+   * as adding one after the fact, on the path an admin actually uses day to day.
+   */
+  it('refuses to create a student holding a group reached by an enrolment', async () => {
+    const { studentsService, prisma } = servicesWith(
+      [],
+      [makeGroup({ id: MORNING, type: GROUP_TYPE.EXAM, examType: 'SSC CGL' })],
+    );
+
+    const error = await studentsService
+      .create({ mobile: '9876543210', groupIds: [MORNING] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.groupIds);
+    assert.equal(prisma.students.length, 0);
+  });
+
+  /** Nothing is held yet, so this is the create-time equivalent of a fresh grant — every id is joining. */
+  it('creates a student holding a scholarship group', async () => {
+    const { studentsService, prisma } = servicesWith(
+      [],
+      [makeGroup({ id: EVENING, type: GROUP_TYPE.SCHOLARSHIP })],
+    );
+
+    await studentsService.create({ mobile: '9876543210', groupIds: [EVENING] });
+
+    assert.deepEqual(prisma.students[0]?.directGroupIds, [EVENING]);
   });
 });

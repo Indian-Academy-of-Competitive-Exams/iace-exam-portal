@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DIRECT_GRANT_MESSAGE, GROUP_TYPE } from '@iace/contracts';
 import { readCsvTable } from '../src/common/importing';
 import {
   mobilesInMemberFile,
@@ -8,7 +9,7 @@ import {
 } from '../src/imports/group-member-import';
 
 const context = (): GroupMemberContext => ({
-  group: { id: 'g1', name: 'SSC CGL MORNING', examType: 'SSC CGL' },
+  group: { id: 'g1', name: 'MERIT 2026', examType: null, type: GROUP_TYPE.SCHOLARSHIP },
   studentsByMobile: new Map([
     ['9876543210', { id: 'stu_new', fullName: 'Asha Kumari', isActive: true }],
     ['9876543211', { id: 'stu_member', fullName: 'Ravi Teja', isActive: true }],
@@ -106,8 +107,8 @@ describe('planGroupMemberImport', () => {
   it('carries the group so the preview can name what it is adding to', () => {
     assert.deepEqual(plan('Mobile Number\n9876543210').group, {
       id: 'g1',
-      name: 'SSC CGL MORNING',
-      examType: 'SSC CGL',
+      name: 'MERIT 2026',
+      examType: null,
     });
   });
 
@@ -162,5 +163,22 @@ describe('mobilesInMemberFile', () => {
     assert.deepEqual(mobilesInMemberFile(readCsvTable('Mobile Number\nrubbish\n\n9876543210')), [
       '9876543210',
     ]);
+  });
+});
+
+describe('planGroupMemberImport — a group a sheet cannot grant', () => {
+  /**
+   * A file-level refusal, not a row error: the group is fixed for the whole upload, so two hundred
+   * identical red lines would say the same thing two hundred times and inflate the invalid count.
+   */
+  it('refuses the whole file for a group reached by an enrolment', () => {
+    const result = planGroupMemberImport(readCsvTable('Mobile Number\n9876543210'), {
+      ...context(),
+      group: { id: 'g2', name: 'SSC CGL MORNING', examType: 'SSC CGL', type: GROUP_TYPE.EXAM },
+    });
+
+    assert.deepEqual(result.fileErrors, [DIRECT_GRANT_MESSAGE]);
+    assert.deepEqual(result.rows, []);
+    assert.equal(result.summary.willAdd, 0);
   });
 });

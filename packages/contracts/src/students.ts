@@ -230,7 +230,7 @@ export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
   fullName: blankClears(personNameSchema),
   preferredLanguage: z.string().trim().min(2).max(8).optional(),
-  /** Replaces membership wholesale. A student must stay in at least one group. */
+  /** Replaces the student's direct grants wholesale — an empty array is a valid patch. */
   groupIds: z.array(z.string()).optional(),
   profile: updateStudentProfileSchema.optional(),
 });

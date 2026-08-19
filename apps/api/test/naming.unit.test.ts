@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  branchNameSchema,
-  canonicalName,
-  groupNameSchema,
-  GLOBAL_BRANCH_NAME,
-} from '@iace/contracts';
+import { branchNameSchema, canonicalName, groupNameSchema } from '@iace/contracts';
 
 /**
  * Branch and group names are the vocabulary access is routed through, and the failure these rules
@@ -84,7 +79,7 @@ describe('branchNameSchema', () => {
     assert.equal(branchNameSchema.safeParse('A'.repeat(61)).success, false);
   });
 
-  it('leaves the seeded GLOBAL name canonical', () => {
-    assert.equal(branchNameSchema.parse(GLOBAL_BRANCH_NAME), GLOBAL_BRANCH_NAME);
+  it('leaves an already-canonical name unchanged', () => {
+    assert.equal(branchNameSchema.parse('ONLINE'), 'ONLINE');
   });
 });

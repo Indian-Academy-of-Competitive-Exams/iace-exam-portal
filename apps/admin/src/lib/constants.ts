@@ -11,7 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { FEATURE_KEYS } from '@iace/contracts';
+import { FEATURE_KEYS, GROUP_TYPE, type GroupType } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
@@ -43,6 +43,15 @@ export const ROUTES = {
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
+
+/** What a group type is called on screen. */
+export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
+  [GROUP_TYPE.GLOBAL]: 'All students',
+  [GROUP_TYPE.EXAM]: 'Exam',
+  [GROUP_TYPE.PROGRAM]: 'Program',
+  [GROUP_TYPE.SCHOLARSHIP]: 'Scholarship',
+  [GROUP_TYPE.NON_IACE]: 'Non-IACE',
+};
 
 /**
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:

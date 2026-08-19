@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { IMPORT_MAX_ROWS } from '@iace/contracts';
+import { GROUP_TYPE, IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
 import { parseCsv, readCsvTable, normaliseHeader } from '../src/common/importing';
 import {
@@ -8,6 +8,9 @@ import {
   planStudentImport,
   type ImportContext,
 } from '../src/imports/student-import';
+import { ImportsService } from '../src/imports/imports.service';
+import { type AuthService } from '../src/auth';
+import { FakePrisma, makeGroup } from './support/fakes';
 
 /**
  * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
@@ -428,5 +431,61 @@ describe('how big a file may be', () => {
     assert.deepEqual(plan.rows, [], 'nothing should be planned');
     assert.match(plan.fileErrors[0] ?? '', new RegExp(`${IMPORT_MAX_ROWS + 1} rows`));
     assert.match(plan.fileErrors[0] ?? '', /split it/);
+  });
+});
+
+describe('resolveGroup — an ambiguous name with no exam to tell them apart', () => {
+  /** The old message interpolated a null and read "write it as null / MERIT 2026". */
+  it('never offers a qualified form it cannot build', () => {
+    const plan = planStudentImport(readCsvTable('mobile,groups\n9876543210,MERIT 2026'), {
+      existingByMobile: new Map(),
+      groupsByName: new Map([
+        [
+          'MERIT 2026',
+          [
+            { id: 'g_a', name: 'MERIT 2026', examType: null },
+            { id: 'g_b', name: 'MERIT 2026', examType: null },
+          ],
+        ],
+      ]),
+    });
+
+    const error = plan.rows[0]?.errors[0] ?? '';
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.doesNotMatch(error, /null/);
+    assert.match(error, /more than one/);
+  });
+});
+
+describe('ImportsService.previewStudents — the roster group load, against real Prisma filters', () => {
+  /**
+   * Proven against `contextFor`'s actual query, not a hand-built `groupsByName` map: if the
+   * `type: { in: GROUP_TYPES_ACCEPTING_GRANTS }` clause were ever dropped, the EXAM group below
+   * would load and this row would silently resolve to a grant instead of erroring.
+   */
+  it('never resolves a same-named group reached by an enrolment, only the one that can be granted', async () => {
+    const prisma = new FakePrisma(
+      [],
+      [],
+      [],
+      [
+        makeGroup({
+          id: 'g_merit',
+          name: 'MERIT 2026',
+          type: GROUP_TYPE.SCHOLARSHIP,
+          examType: null,
+        }),
+        makeGroup({ id: 'g_exam', name: 'MERIT 2026', type: GROUP_TYPE.EXAM, examType: 'SSC CGL' }),
+      ],
+    );
+    const service = new ImportsService(prisma.asService(), undefined as unknown as AuthService);
+
+    const plan = await service.previewStudents(
+      Buffer.from('mobile,groups\n9876543210,SSC CGL / MERIT 2026'),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.deepEqual(plan.rows[0]?.groupIds, []);
+    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "MERIT 2026" for "SSC CGL"/);
   });
 });

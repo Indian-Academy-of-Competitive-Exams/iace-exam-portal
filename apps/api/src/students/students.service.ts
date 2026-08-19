@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
+  DIRECT_GRANT_MESSAGE,
   ErrorCodes,
+  GROUP_TYPES_ACCEPTING_GRANTS,
   IMPORT_SOURCE,
   STUDENT_TYPE,
   deactivatedMemberBlocker,
@@ -21,7 +23,7 @@ import { StorageService } from '../storage/storage.service';
 
 /** How long a signed link to somebody's identity document stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
-import { studentOrderBy, studentWhere } from './student-query';
+import { studentOrderBy, studentWhere, type GroupAccessRef } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 
 /** What names a group on a student's row — the group ids themselves are a column. */
@@ -43,7 +45,7 @@ export class StudentsService {
   // ==========================================================================
 
   async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
-    const where = studentWhere(query);
+    const where = studentWhere(query, await this.groupFilter(query.groupId));
     const skip = (query.page - 1) * query.pageSize;
 
     // One round trip for the rows and one for the count.
@@ -95,6 +97,15 @@ export class StudentsService {
       select: GROUP_REF_SELECT,
     });
     return new Map(groups.map((group) => [group.id, group]));
+  }
+
+  /** One lookup before the where-clause: the group's type decides who counts as being in it. */
+  private async groupFilter(groupId: string | undefined): Promise<GroupAccessRef | null> {
+    if (!groupId) return null;
+    return this.prisma.group.findUnique({
+      where: { id: groupId },
+      select: { id: true, type: true, examType: true },
+    });
   }
 
   /** A stored profile as the API returns it. */
@@ -159,6 +170,9 @@ export class StudentsService {
     }
 
     await this.assertGroupsExist(input.groupIds);
+    // A new student holds nothing yet, so every requested id is being ADDED — the diff `update`
+    // runs against `directGroupIds` is against an empty list here.
+    await this.assertGroupsAcceptGrants([], input.groupIds ?? []);
 
     const student = await this.prisma.student.create({
       data: {
@@ -183,15 +197,8 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     if (input.groupIds) {
-      // The rule is "do not strip a student's LAST group", not "every student must have one".
-      if (input.groupIds.length === 0 && student.directGroupIds.length > 0) {
-        throw new AppException(
-          ErrorCodes.VALIDATION_ERROR,
-          'A student must stay in at least one group',
-          { fieldErrors: { groupIds: ['Pick at least one group'] } },
-        );
-      }
       await this.assertGroupsExist(input.groupIds);
+      await this.assertGroupsAcceptGrants(student.directGroupIds, input.groupIds);
       this.assertMayJoinGroups(student, input.groupIds);
     }
 
@@ -288,6 +295,22 @@ export class StudentsService {
     if (blocker) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
         fieldErrors: { groupIds: [blocker] },
+      });
+    }
+  }
+
+  /** Only the groups this save would ADD, so a grant made before the rule is still removable. */
+  private async assertGroupsAcceptGrants(current: string[], requested: string[]): Promise<void> {
+    const already = new Set(current);
+    const joining = requested.filter((id) => !already.has(id));
+    if (joining.length === 0) return;
+
+    const refused = await this.prisma.group.count({
+      where: { id: { in: joining }, type: { notIn: [...GROUP_TYPES_ACCEPTING_GRANTS] } },
+    });
+    if (refused > 0) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, DIRECT_GRANT_MESSAGE, {
+        fieldErrors: { groupIds: [DIRECT_GRANT_MESSAGE] },
       });
     }
   }

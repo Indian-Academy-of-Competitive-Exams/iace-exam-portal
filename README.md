@@ -77,6 +77,10 @@ That account bypasses every feature check, so it can immediately register `Featu
 
 **Feature rows are not seeded either.** A super admin registers each one from the Features screen using a key from `FEATURE_KEYS` in `@iace/contracts`. A key with no row grants nobody anything, which is the safe direction to fail.
 
+The all-students group (`GLOBAL`) is created, and the virtual branch is renamed to `ONLINE`, by
+`20260818120000_group_state_and_singletons`. There is still no seed script: run the migrations and
+both rows are there.
+
 ### The API response envelope
 
 Every response has one of two shapes, and no endpoint can produce a third:

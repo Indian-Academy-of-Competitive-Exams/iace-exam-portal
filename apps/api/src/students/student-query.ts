@@ -1,8 +1,25 @@
 import { Prisma } from '@prisma/client';
-import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
+import {
+  GROUP_REACH,
+  STUDENT_SORTS,
+  groupReach,
+  type GroupType,
+  type StudentListQuery,
+  type StudentSort,
+} from '@iace/contracts';
+
+/** Enough of a group to know how it reaches its students. */
+export interface GroupAccessRef {
+  id: string;
+  type: GroupType;
+  examType: string | null;
+}
 
 /** Turns the roster's filters into a Prisma query. */
-export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
+export function studentWhere(
+  query: StudentListQuery,
+  group?: GroupAccessRef | null,
+): Prisma.StudentWhereInput {
   const and: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
 
@@ -10,9 +27,8 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
   if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
-  // A grant is an id in a column on the student, and the branch is another one:
-  // neither is a join any more.
-  if (query.groupId) add({ directGroupIds: { has: query.groupId } });
+  if (query.groupId) add(membersOf(query.groupId, group));
+  // The branch a student attends is a column of its own — no join.
   if (query.branchId) add({ currentBranchId: query.branchId });
   if (query.ungrouped !== undefined) {
     add({ directGroupIds: { isEmpty: query.ungrouped } });
@@ -46,6 +62,20 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   // An empty AND is a valid Prisma filter, but returning {} keeps "no filters"
   // obvious to anyone reading a log or a test.
   return and.length === 0 ? {} : { AND: and };
+}
+
+/** The same three cases `GroupsService.studentCountFor` counts, so the link and the count agree. */
+function membersOf(
+  groupId: string,
+  group: GroupAccessRef | null | undefined,
+): Prisma.StudentWhereInput {
+  if (!group) return { directGroupIds: { has: groupId } };
+
+  const reach = groupReach(group);
+  if (reach === GROUP_REACH.EVERYONE) return { deletedAt: null };
+  if (reach === GROUP_REACH.ENROLMENT && group.examType)
+    return { enrolledExams: { has: group.examType } };
+  return { directGroupIds: { has: group.id } };
 }
 
 /** An inclusive day range over a timestamp column. */

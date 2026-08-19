@@ -185,7 +185,7 @@ describe('the counts the configs module asks for', () => {
         makeGroup({ id: 'grp_3', examType: 'RRB JE' }),
       ],
     );
-    const groups = new GroupsService(prisma.asService(), null as never);
+    const groups = new GroupsService(prisma.asService(), null as never, null as never);
 
     assert.equal(await groups.countByExamType('SSC CGL'), 2);
     assert.equal(await groups.countByExamType('SSC CHSL'), 0);

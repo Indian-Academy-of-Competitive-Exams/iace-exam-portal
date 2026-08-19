@@ -45,6 +45,7 @@ describe('destructive actions', () => {
       'apps/admin/src/routes/student-detail.tsx': 'Reactivate student',
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
       'apps/admin/src/routes/exam-types.tsx': 'Reactivate exam type',
+      'apps/admin/src/routes/groups.tsx': 'Reactivate group',
     };
 
     for (const [relative, label] of Object.entries(toggles)) {

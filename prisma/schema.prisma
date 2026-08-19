@@ -805,6 +805,8 @@ model Group {
   type        GroupType
   /// ExamType code — set for EXAM and PROGRAM, null for the rest.
   examType    String?
+  /// Retired: keeps its history and its members, takes no new ones.
+  isActive    Boolean   @default(true)
   description String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now()) @updatedAt

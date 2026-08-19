@@ -10,7 +10,7 @@ import {
   type UpdateExamTypeBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { GroupsService } from '../groups';
+import { type GroupsService } from '../groups';
 import { StudentsService } from '../students';
 import {
   examTypeDeletionBlocker,
@@ -32,7 +32,15 @@ interface ExamTypeRow {
 export class ExamTypesService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => GroupsService)) private readonly groups: GroupsService,
+    // `require`, not a static import: a top-level import here re-enters the still-loading `groups`
+    // barrel and throws; a CommonJS `require` tolerates the partial circular load instead.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../groups') as { GroupsService: typeof GroupsService }).GroupsService,
+      ),
+    )
+    private readonly groups: GroupsService,
     @Inject(forwardRef(() => StudentsService)) private readonly students: StudentsService,
   ) {}
 

@@ -107,15 +107,16 @@ function GroupsCard({
       <CardHeader>
         <CardTitle>Groups</CardTitle>
         <CardDescription>
-          A student reaches tests only through a group, so they must stay in at least one.
+          Scholarship and non-IACE groups, granted to this student alone. Their exam batches come
+          from their enrolments, not from here.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {isActive ? null : (
           <Alert variant="info">
             <span>
-              Deactivated, so no new group can be added — a group is how a student reaches a test.
-              Their current groups can still be removed, or reactivate them first.
+              Deactivated, so no new grant can be added here — existing ones can still be revoked.
+              This card does not control their exam access, which is unaffected either way.
             </span>
           </Alert>
         )}

@@ -36,11 +36,8 @@ export function canonicalNameSchema(options: { min?: number; max: number; label:
 export const BRANCH_NAME_MAX = 60;
 export const GROUP_NAME_MAX = 80;
 
-/** e.g. AMEERPET, RTC X ROADS, GLOBAL. */
+/** e.g. AMEERPET, RTC X ROADS, ONLINE. */
 export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, label: 'branch' });
 
 /** e.g. SSC CGL MORNING, RRB JE 2026 B2. */
 export const groupNameSchema = canonicalNameSchema({ max: GROUP_NAME_MAX, label: 'group' });
-
-/** The seeded branch with no address. Code identifies it by its `type`, never by this string. */
-export const GLOBAL_BRANCH_NAME = 'GLOBAL';

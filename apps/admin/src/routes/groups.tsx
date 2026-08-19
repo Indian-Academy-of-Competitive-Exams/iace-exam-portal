@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2, UserPlus, X } from 'lucide-react';
+import { Plus, Power, Trash2, UserPlus, X } from 'lucide-react';
 import {
+  acceptsDirectGrants,
   BRANCH_TYPE,
+  CREATABLE_GROUP_TYPES,
   createGroupSchema,
+  GROUP_TYPE,
   qualifiedGroupName,
+  requiresExamType,
   type BranchRef,
   type CreateGroupInput,
   type GroupSummary,
@@ -21,6 +25,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Combobox,
   ConfirmDialog,
   plural,
   DataTable,
@@ -29,6 +34,7 @@ import {
   FormRow,
   Input,
   linkVariants,
+  MultiCombobox,
   PageHeader,
   Pagination,
   SearchInput,
@@ -38,15 +44,24 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { ROUTES } from '../lib/constants';
+import { GROUP_TYPE_LABELS, ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
+import { useExamTypes } from '../lib/use-exam-types';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 import { FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { useFilters } from '../lib/use-filters';
-const NEW_GROUP_FIELDS = ['name', 'branchId'] as const;
+
+const NEW_GROUP_FIELDS = ['name', 'type', 'examType', 'branchIds'] as const;
+
+/** One question at a time: two booleans could render two dialogs at once. */
+const GROUP_CONFIRMS = {
+  DELETE: 'delete',
+  RETIRE: 'retire',
+} as const;
+type GroupConfirm = (typeof GROUP_CONFIRMS)[keyof typeof GROUP_CONFIRMS];
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
-function groupColumns(): DataTableColumn<GroupSummary>[] {
+function groupColumns(refresh: () => void): DataTableColumn<GroupSummary>[] {
   return [
     {
       key: 'name',
@@ -60,18 +75,36 @@ function groupColumns(): DataTableColumn<GroupSummary>[] {
       ),
     },
     {
+      key: 'type',
+      header: 'Type',
+      cell: (group) => <Badge variant="neutral">{GROUP_TYPE_LABELS[group.type]}</Badge>,
+    },
+    {
+      key: 'exam',
+      header: 'Exam',
+      cell: (group) => group.examType ?? <span className="text-muted-foreground">—</span>,
+    },
+    {
       key: 'branches',
       header: 'Branches',
       cell: (group) => <BranchesCell branches={group.branches} />,
     },
     { key: 'students', header: 'Students', numeric: true, cell: (g) => g.studentCount },
     { key: 'series', header: 'Test series', numeric: true, cell: (g) => g.testSeriesCount },
+    { key: 'status', header: 'Status', cell: (group) => <GroupStatus group={group} /> },
     {
       key: 'actions',
       className: 'text-right',
-      cell: (group) => <GroupActions group={group} />,
+      cell: (group) => <GroupRowActions group={group} onChanged={refresh} />,
     },
   ];
+}
+
+/** Three states, listed. See BranchStatus in branches.tsx for the reasoning. */
+function GroupStatus({ group }: Readonly<{ group: GroupSummary }>) {
+  if (group.type === GROUP_TYPE.GLOBAL) return <Badge variant="info">System</Badge>;
+  if (group.isActive) return <Badge variant="success">Active</Badge>;
+  return <Badge variant="neutral">Retired</Badge>;
 }
 
 /** Every centre a group is offered at: the first, then a focusable count for the rest. */
@@ -112,7 +145,12 @@ export function GroupsPage() {
   const allBranches = useBranches();
   const branch = allBranches.find((candidate) => candidate.id === branchId);
 
-  const columns = useMemo(() => groupColumns(), []);
+  const refresh = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] }),
+    [queryClient],
+  );
+
+  const columns = useMemo(() => groupColumns(refresh), [refresh]);
 
   const header = (
     <>
@@ -212,12 +250,18 @@ function NewGroupCard({
 }: Readonly<{ onDone: () => void; onCancel: () => void }>) {
   const form = useForm<CreateGroupInput>({
     resolver: zodResolver(createGroupSchema),
-    defaultValues: { name: '', branchId: '' },
+    defaultValues: { name: '', type: GROUP_TYPE.EXAM, examType: undefined, branchIds: [] },
   });
 
-  // Only ACTIVE branches: a closed centre stays in the list for the groups that
-  // already reference it, but nothing new is created under one.
+  const type = useWatch({ control: form.control, name: 'type' });
+  const examType = useWatch({ control: form.control, name: 'examType' });
+  const branchIds = useWatch({ control: form.control, name: 'branchIds' }) ?? [];
+  const reachedByExam = requiresExamType(type);
+
+  // Only ACTIVE ones: a closed centre and a retired exam stay in the list for
+  // what already references them, but nothing new is created under one.
   const branches = useBranches({ activeOnly: true });
+  const examTypes = useExamTypes({ activeOnly: true });
 
   const create = useMutation({
     meta: { success: 'Group created.', fields: NEW_GROUP_FIELDS },
@@ -231,31 +275,78 @@ function NewGroupCard({
       <CardHeader>
         <CardTitle>New group</CardTitle>
         <CardDescription>
-          Pick the branch, then name the group. Names are stored in capitals, so &ldquo;SSC CGL
-          Morning&rdquo; and &ldquo;ssc cgl morning&rdquo; are the same group and cannot both exist
-          in one branch.
+          The type decides who reaches it: an exam group takes everybody enrolled in that exam, a
+          scholarship group takes the students you put in it. Names are stored in capitals, so “SSC
+          CGL Morning” and “ssc cgl morning” are the same group.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField
-            form={form}
-            name="branchId"
-            label="Branch"
-            hint="Only a super admin can add a branch."
-            className="min-w-48 flex-1"
-          >
+          <FormField form={form} name="type" label="Type" className="min-w-44 flex-1">
             {(control) => (
-              <Select {...control} autoFocus>
-                <option value="">Pick a branch…</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
+              <Select
+                {...control}
+                autoFocus
+                onChange={(event) => {
+                  void control.onChange(event);
+                  if (!requiresExamType(event.target.value as GroupSummary['type'])) {
+                    form.setValue('examType', undefined);
+                    form.setValue('branchIds', []);
+                  }
+                }}
+              >
+                {CREATABLE_GROUP_TYPES.map((option) => (
+                  <option key={option} value={option}>
+                    {GROUP_TYPE_LABELS[option]}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
+
+          {reachedByExam ? (
+            <FormField
+              form={form}
+              name="examType"
+              label="Exam"
+              hint="Students enrolled in this exam reach the group."
+              className="min-w-48 flex-1"
+            >
+              {({ id }) => (
+                <Combobox
+                  id={id}
+                  aria-label="Exam"
+                  value={examType ?? ''}
+                  onChange={(next) =>
+                    form.setValue('examType', next || undefined, { shouldValidate: true })
+                  }
+                  items={examTypes.map((exam) => ({
+                    value: exam.code,
+                    label: exam.name,
+                    hint: exam.code,
+                  }))}
+                  placeholder="Pick the exam…"
+                  emptyLabel="No active exam type"
+                />
+              )}
+            </FormField>
+          ) : null}
+
+          {reachedByExam ? (
+            <FormField form={form} name="branchIds" label="Branches" className="min-w-56 flex-1">
+              {({ id }) => (
+                <MultiCombobox
+                  id={id}
+                  aria-label="Branches"
+                  value={branchIds}
+                  onChange={(next) => form.setValue('branchIds', next, { shouldValidate: true })}
+                  items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                  placeholder="Pick the centres…"
+                  emptyLabel="No active branch"
+                />
+              )}
+            </FormField>
+          ) : null}
 
           <FormField form={form} name="name" label="Group name" className="min-w-56 flex-1">
             {(control) => (
@@ -286,53 +377,115 @@ function NewGroupCard({
 
 // ---------------------------------------------------------------------------
 
-function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
-  const [confirming, setConfirming] = useState(false);
-  const queryClient = useQueryClient();
-
-  const remove = useMutation({
-    meta: { success: `${group.name} deleted.` },
-    mutationFn: () => api.admin.groups.remove(group.id),
-    onSuccess: () => {
-      setConfirming(false);
-      return queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
-    },
-    // Drop out of the confirm on failure, or the row is left asking a question
-    // that has already been answered.
-    onError: () => setConfirming(false),
-  });
+/** The buttons only ask; both dialogs live with the mutations in `GroupRowActions`. */
+function GroupActions({
+  group,
+  busy,
+  onAsk,
+}: Readonly<{ group: GroupSummary; busy: boolean; onAsk: (confirm: GroupConfirm) => void }>) {
+  if (group.type === GROUP_TYPE.GLOBAL) return null;
 
   return (
     <span className="inline-flex items-center gap-1">
-      {/* Bulk membership lives on the group, not on a sheet: the group is the
-          screen you are already on, so it cannot be mistyped. */}
-      <Button size="sm" variant="outline" asChild>
-        <Link to={ROUTES.IMPORT_GROUP_MEMBERS(group.id)}>
-          <UserPlus aria-hidden />
-          Add students
-        </Link>
+      {/* Only the types a grant means anything for. An exam group is reached by
+          an enrolment, so there is nobody to add here. */}
+      {acceptsDirectGrants(group.type) ? (
+        <Button size="sm" variant="outline" asChild>
+          <Link to={ROUTES.IMPORT_GROUP_MEMBERS(group.id)}>
+            <UserPlus aria-hidden />
+            Add students
+          </Link>
+        </Button>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => onAsk(GROUP_CONFIRMS.RETIRE)}
+      >
+        <Power aria-hidden />
+        {group.isActive ? 'Retire' : 'Reactivate'}
       </Button>
       <Button
         size="sm"
         variant="ghost"
         aria-label={`Delete ${group.name}`}
-        onClick={() => {
-          // Clear the last refusal: it described the group as it was before the
-          // admin went and moved the students.
-          remove.reset();
-          setConfirming(true);
-        }}
+        disabled={busy}
+        onClick={() => onAsk(GROUP_CONFIRMS.DELETE)}
       >
         <Trash2 aria-hidden />
       </Button>
+    </span>
+  );
+}
+
+function GroupRowActions({
+  group,
+  onChanged,
+}: Readonly<{ group: GroupSummary; onChanged: () => void }>) {
+  const [asking, setAsking] = useState<GroupConfirm | null>(null);
+  const close = () => setAsking(null);
+
+  const remove = useMutation({
+    meta: { success: `${group.name} deleted.` },
+    mutationFn: () => api.admin.groups.remove(group.id),
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    // Drop out of the confirm on failure, or the row is left asking a question
+    // that has already been answered.
+    onError: close,
+  });
+
+  const setActive = useMutation({
+    meta: { success: (): string => `${group.name} updated.` },
+    mutationFn: (isActive: boolean) => api.admin.groups.update(group.id, { isActive }),
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    onError: close,
+  });
+
+  const busy = remove.isPending || setActive.isPending;
+
+  return (
+    <>
+      <GroupActions
+        group={group}
+        busy={busy}
+        onAsk={(confirm) => {
+          // Clear the last refusal: it described the group as it was before the
+          // admin went and moved the students.
+          remove.reset();
+          setAsking(confirm);
+        }}
+      />
+
+      {/* Retiring is reversible and still asks: nothing about this row changes
+          except a badge, and the consequence lands later on somebody else. */}
+      <ConfirmDialog
+        open={asking === GROUP_CONFIRMS.RETIRE}
+        onOpenChange={close}
+        loading={setActive.isPending}
+        title={
+          group.isActive ? `Retire ${qualifiedGroupName(group)}?` : `Reactivate ${group.name}?`
+        }
+        description={
+          group.isActive
+            ? `${plural(group.studentCount, 'student')} keep the access they have. The group takes no new students and stops being offered when a test series is set up.`
+            : 'The group is offered again and can take new students.'
+        }
+        confirmLabel={group.isActive ? 'Retire group' : 'Reactivate group'}
+        onConfirm={() => setActive.mutate(!group.isActive)}
+      />
 
       {/* A group is how a student reaches a test, so deleting one takes access
-          away from everybody in it — which the inline "Delete?" this replaced
-          had no room to say. The member count is the part that changes the
-          answer: nobody deletes a batch of 240 by accident twice. */}
+          away from everybody it reaches — the dialog's count says how many. */}
       <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
+        open={asking === GROUP_CONFIRMS.DELETE}
+        onOpenChange={close}
         destructive
         loading={remove.isPending}
         title={`Delete ${qualifiedGroupName(group)}?`}
@@ -344,6 +497,6 @@ function GroupActions({ group }: Readonly<{ group: GroupSummary }>) {
         confirmLabel="Delete group"
         onConfirm={() => remove.mutate()}
       />
-    </span>
+    </>
   );
 }

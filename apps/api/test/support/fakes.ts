@@ -1,7 +1,9 @@
 import {
   BRANCH_TYPE,
+  GROUP_TYPE,
   type AdminPermissions,
   type BranchType,
+  type GroupType,
   type PermissionLevel,
 } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
@@ -270,6 +272,7 @@ export interface FakeStudent {
   directGroupIds: string[];
   /** The exam-type codes this student is enrolled under — the column, as Prisma stores it. */
   enrolledExams: string[];
+  deletedAt: Date | null;
 }
 
 export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
@@ -312,21 +315,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     profile: null,
     directGroupIds: [],
     enrolledExams: [],
-    ...overrides,
-  };
-}
-
-export interface FakeGroup {
-  id: string;
-  name: string;
-  examType: string | null;
-}
-
-export function makeGroup(overrides: Partial<FakeGroup> = {}): FakeGroup {
-  return {
-    id: 'grp_1',
-    name: 'SSC CGL MORNING',
-    examType: null,
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -342,12 +331,13 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
   };
 }
 
-/** The student filters the fakes answer: two `in` lookups, a grant lookup and an enrolment lookup. */
+/** The student filters the fakes answer: two `in` lookups, and the three ways a group reaches one. */
 interface StudentWhere {
   id?: { in: string[] };
   mobile?: { in: string[] };
   directGroupIds?: { has: string };
   enrolledExams?: { has: string };
+  deletedAt?: null;
 }
 
 function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
@@ -355,8 +345,48 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
     (where.id?.in ? where.id.in.includes(student.id) : true) &&
     (where.mobile?.in ? where.mobile.in.includes(student.mobile) : true) &&
     (where.directGroupIds ? student.directGroupIds.includes(where.directGroupIds.has) : true) &&
-    (where.enrolledExams ? student.enrolledExams.includes(where.enrolledExams.has) : true)
+    (where.enrolledExams ? student.enrolledExams.includes(where.enrolledExams.has) : true) &&
+    (where.deletedAt === undefined ? true : student.deletedAt === null)
   );
+}
+
+export interface FakeGroup {
+  id: string;
+  name: string;
+  type: GroupType;
+  examType: string | null;
+  description: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  branches: { id: string; name: string; type: BranchType }[];
+  _count: { testSeries: number };
+}
+
+export function makeGroup(overrides: Partial<FakeGroup> = {}): FakeGroup {
+  return {
+    id: 'grp_1',
+    name: 'SSC CGL MORNING',
+    // The type that takes a student one at a time: most fakes here are grant paths.
+    type: GROUP_TYPE.SCHOLARSHIP,
+    examType: null,
+    description: null,
+    isActive: true,
+    createdAt: new Date('2026-01-05T09:30:00.000Z'),
+    branches: [],
+    ...overrides,
+    // After the spread, so a caller passing only some fields still gets a count.
+    _count: { testSeries: overrides._count?.testSeries ?? 0 },
+  };
+}
+
+/** What the service writes: scalars, plus branches connected on create and replaced on update. */
+interface GroupWriteData {
+  name?: string;
+  type?: GroupType;
+  examType?: string | null;
+  description?: string | null;
+  isActive?: boolean;
+  branches?: { connect?: { id: string }[]; set?: { id: string }[] };
 }
 
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
@@ -390,6 +420,12 @@ export class FakePrisma {
 
     count: ({ where = {} }: { where?: StudentWhere } = {}) =>
       Promise.resolve(this.students.filter((s) => matchesStudent(s, where)).length),
+
+    create: ({ data }: { data: Partial<FakeStudent> & { mobile: string } }) => {
+      const created = makeStudent({ ...data, id: `stu_new_${this.nextId++}` });
+      this.students.push(created);
+      return Promise.resolve(created);
+    },
 
     upsert: ({
       where,
@@ -450,33 +486,10 @@ export class FakePrisma {
       ),
   };
 
-  /** Groups as the grant paths read them — the membership itself lives on the student. */
+  /** Groups as the write and grant paths use them — the membership itself lives on the student. */
   readonly group = {
     findUnique: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.groups.find((g) => g.id === where.id) ?? null),
-
-    findFirst: ({ where }: { where: { name?: string; examType?: string | null } }) =>
-      Promise.resolve(
-        this.groups.find(
-          (g) =>
-            (where.name === undefined || g.name === where.name) &&
-            (where.examType === undefined || g.examType === where.examType),
-        ) ?? null,
-      ),
-
-    findMany: ({ where = {} }: { where?: { id?: { in: string[] } } } = {}) =>
-      Promise.resolve(
-        this.groups.filter((g) => (where.id?.in ? where.id.in.includes(g.id) : true)),
-      ),
-
-    count: ({ where = {} }: { where?: { id?: { in: string[] }; examType?: string } } = {}) =>
-      Promise.resolve(
-        this.groups.filter(
-          (g) =>
-            (where.id?.in ? where.id.in.includes(g.id) : true) &&
-            (where.examType === undefined || g.examType === where.examType),
-        ).length,
-      ),
 
     groupBy: ({ where = {} }: { where?: { examType?: { in: string[] } } } = {}) => {
       const wanted = where.examType?.in;
@@ -490,7 +503,80 @@ export class FakePrisma {
         [...counts].map(([examType, total]) => ({ examType, _count: { _all: total } })),
       );
     },
+
+    findFirst: ({
+      where,
+    }: {
+      where: { name?: string; examType?: string | null; id?: { not: string } };
+    }) =>
+      Promise.resolve(
+        this.groups.find(
+          (g) =>
+            (where.name === undefined || g.name === where.name) &&
+            (where.examType === undefined || g.examType === where.examType) &&
+            (where.id?.not === undefined || g.id !== where.id.not),
+        ) ?? null,
+      ),
+
+    findMany: ({
+      where = {},
+    }: { where?: { id?: { in: string[] }; type?: { in: GroupType[] } } } = {}) =>
+      Promise.resolve(
+        this.groups.filter(
+          (g) =>
+            (!where.id?.in || where.id.in.includes(g.id)) &&
+            (!where.type?.in || where.type.in.includes(g.type)),
+        ),
+      ),
+
+    count: ({
+      where = {},
+    }: {
+      where?: { id?: { in: string[] }; examType?: string; type?: { notIn: GroupType[] } };
+    } = {}) =>
+      Promise.resolve(
+        this.groups.filter(
+          (g) =>
+            (!where.id?.in || where.id.in.includes(g.id)) &&
+            (where.examType === undefined || g.examType === where.examType) &&
+            !where.type?.notIn?.includes(g.type),
+        ).length,
+      ),
+
+    create: ({ data }: { data: GroupWriteData }) => {
+      const { branches, ...scalars } = data;
+      const created = makeGroup({
+        ...scalars,
+        id: `grp_new_${this.nextId++}`,
+        branches: this.branchRefs((branches?.connect ?? []).map((branch) => branch.id)),
+      });
+      this.groups.push(created);
+      return Promise.resolve(created);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: GroupWriteData }) => {
+      const group = this.groups.find((g) => g.id === where.id);
+      if (!group) throw new Error(`no group ${where.id}`);
+
+      const { branches, ...scalars } = data;
+      Object.assign(group, scalars);
+      if (branches?.set) group.branches = this.branchRefs(branches.set.map((b) => b.id));
+      return Promise.resolve(group);
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.groups.findIndex((g) => g.id === where.id);
+      const [removed] = this.groups.splice(index, 1);
+      return Promise.resolve(removed);
+    },
   };
+
+  private branchRefs(ids: string[]): { id: string; name: string; type: BranchType }[] {
+    return ids.map((id) => {
+      const branch = this.branches.find((candidate) => candidate.id === id);
+      return { id, name: branch?.name ?? id, type: branch?.type ?? BRANCH_TYPE.PHYSICAL };
+    });
+  }
 
   /** Branches, with the group counts the service reads through `_count`. */
   readonly branch = {
@@ -499,7 +585,17 @@ export class FakePrisma {
         this.branches.find((b) => (where.id ? b.id === where.id : b.name === where.name)) ?? null,
       ),
 
-    findMany: () => Promise.resolve([...this.branches]),
+    findMany: ({
+      where = {},
+    }: { where?: { isActive?: boolean; name?: { contains: string } } } = {}) =>
+      Promise.resolve(
+        this.branches.filter(
+          (b) =>
+            (where.isActive === undefined || b.isActive === where.isActive) &&
+            (where.name?.contains === undefined ||
+              b.name.toLowerCase().includes(where.name.contains.toLowerCase())),
+        ),
+      ),
 
     count: () => Promise.resolve(this.branches.length),
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
+  GROUP_TYPES_ACCEPTING_GRANTS,
   IMPORT_SOURCE,
   STUDENT_TYPE,
   type GroupMemberImportPlan,
@@ -163,7 +164,7 @@ export class ImportsService {
   private async groupContextFor(groupId: string, table: CsvTable): Promise<GroupMemberContext> {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
-      select: { id: true, name: true, examType: true },
+      select: { id: true, name: true, examType: true, type: true },
     });
     if (!group) throw new AppException(ErrorCodes.NOT_FOUND, 'No such group');
 
@@ -214,7 +215,12 @@ export class ImportsService {
           })
         : Promise.resolve([]),
       groupNames.length
-        ? this.prisma.group.findMany({ select: { id: true, name: true, examType: true } })
+        ? this.prisma.group.findMany({
+            // A roster grants groups student by student, so only the types that means anything for
+            // are loadable. Anything else falls through to "No group called X".
+            where: { type: { in: [...GROUP_TYPES_ACCEPTING_GRANTS] } },
+            select: { id: true, name: true, examType: true },
+          })
         : Promise.resolve([]),
     ]);
 

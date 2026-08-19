@@ -20,7 +20,7 @@ function serviceWith(examTypes: FakeExamType[] = [makeExamType()], groups = [mak
   const prisma = new FakePrisma([], [], [], groups, examTypes);
   const service = new ExamTypesService(
     prisma.asService(),
-    new GroupsService(prisma.asService(), null as never),
+    new GroupsService(prisma.asService(), null as never, null as never),
     new StudentsService(prisma.asService(), null as never),
   );
   return { service, prisma };

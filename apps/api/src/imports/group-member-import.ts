@@ -1,10 +1,14 @@
 import {
   DEACTIVATED_MEMBER_MESSAGE,
+  DIRECT_GRANT_MESSAGE,
   GROUP_MEMBER_IMPORT_COLUMNS,
   IMPORT_MAX_ROWS,
+  acceptsDirectGrants,
   mobileSchema,
   type GroupMemberImportPlan,
   type GroupMemberImportRow,
+  type GroupRef,
+  type GroupType,
 } from '@iace/contracts';
 import { columnValue } from './student-import';
 import { type CsvRow, type CsvTable } from '../common/importing';
@@ -12,7 +16,7 @@ import { type CsvRow, type CsvTable } from '../common/importing';
 /** Planning a bulk add into ONE group. */
 
 export interface GroupMemberContext {
-  group: { id: string; name: string; examType: string | null };
+  group: GroupRef & { type: GroupType };
   /** Mobile → the student it resolves to, for the numbers this file lists. */
   studentsByMobile: Map<string, { id: string; fullName: string | null; isActive: boolean }>;
   /** Who is in the group already. */
@@ -23,15 +27,20 @@ export function planGroupMemberImport(
   table: CsvTable,
   context: GroupMemberContext,
 ): GroupMemberImportPlan {
+  const { type, ...group } = context.group;
   const empty = { total: 0, willAdd: 0, alreadyMembers: 0, invalid: 0 };
 
+  if (!acceptsDirectGrants(type)) {
+    return { group, rows: [], summary: empty, fileErrors: [DIRECT_GRANT_MESSAGE] };
+  }
+
   if (table.headers.length === 0) {
-    return { group: context.group, rows: [], summary: empty, fileErrors: ['That file is empty'] };
+    return { group, rows: [], summary: empty, fileErrors: ['That file is empty'] };
   }
 
   const fileErrors = [...missingHeaders(table.headers), ...tooManyRows(table)];
   if (fileErrors.length > 0) {
-    return { group: context.group, rows: [], summary: empty, fileErrors };
+    return { group, rows: [], summary: empty, fileErrors };
   }
 
   // A number listed twice would otherwise be counted as two additions while
@@ -40,7 +49,7 @@ export function planGroupMemberImport(
   const rows = table.rows.map((row) => planRow(row, context, seenInFile));
 
   return {
-    group: context.group,
+    group,
     rows,
     summary: {
       total: rows.length,
