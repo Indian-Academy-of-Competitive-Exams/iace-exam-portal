@@ -10,7 +10,8 @@ import {
 } from '../src/imports/student-import';
 import { ImportsService } from '../src/imports/imports.service';
 import { type AuthService } from '../src/auth';
-import { FakePrisma, makeGroup } from './support/fakes';
+import { type AuditService } from '../src/audit';
+import { FakePrisma, FakeStorage, makeGroup } from './support/fakes';
 
 /**
  * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
@@ -481,10 +482,16 @@ describe('ImportsService.previewStudents — the roster group load, against real
         makeGroup({ id: 'g_exam', name: 'MERIT 2026', type: GROUP_TYPE.EXAM, examType: 'SSC CGL' }),
       ],
     );
-    const service = new ImportsService(prisma.asService(), undefined as unknown as AuthService);
+    const service = new ImportsService(
+      prisma.asService(),
+      undefined as unknown as AuthService,
+      new FakeStorage() as never,
+      undefined as unknown as AuditService,
+    );
 
     const plan = await service.previewStudents(
       Buffer.from('mobile,groups\n9876543210,SSC CGL / MERIT 2026'),
+      'adm_1',
     );
 
     assert.equal(plan.rows[0]?.action, 'skip');

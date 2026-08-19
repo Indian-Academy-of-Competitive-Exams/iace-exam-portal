@@ -27,7 +27,7 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
-import { Actors, RequiresFeature } from '../common/security';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
 import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';
@@ -65,21 +65,27 @@ export class ImportsController {
     response.send(await buildStudentTemplate());
   }
 
-  /** Writes nothing — this is what the admin reads before committing. */
+  /** Writes no students — this is what the admin reads before committing. */
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(this.bufferOf(file));
+  preview(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(this.bufferOf(file), user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('students/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  commit(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportResult> {
-    return this.imports.commitStudents(this.bufferOf(file));
+  commit(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<StudentImportResult> {
+    return this.imports.commitStudents(this.bufferOf(file), user.id);
   }
 
   // ==========================================================================
@@ -103,9 +109,10 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewGroupMembers(
     @Param('groupId') groupId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<GroupMemberImportPlan> {
-    return this.imports.previewGroupMembers(groupId, this.bufferOf(file));
+    return this.imports.previewGroupMembers(groupId, this.bufferOf(file), user.id);
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -114,9 +121,10 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   commitGroupMembers(
     @Param('groupId') groupId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<GroupMemberImportResult> {
-    return this.imports.commitGroupMembers(groupId, this.bufferOf(file));
+    return this.imports.commitGroupMembers(groupId, this.bufferOf(file), user.id);
   }
 
   /**

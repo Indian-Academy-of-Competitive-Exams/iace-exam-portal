@@ -1,6 +1,7 @@
 /** Queue names live here so producers and processors can never disagree. */
 export const QUEUE_NAMES = {
   SCORING: 'scoring',
+  AUDIT_ARCHIVE: 'audit-archive',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

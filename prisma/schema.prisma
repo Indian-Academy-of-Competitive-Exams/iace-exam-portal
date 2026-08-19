@@ -891,6 +891,7 @@ model RowActionLog {
 
   @@index([feature, entityId, actorId, createdAt])
   @@index([importLogId])
+  @@index([createdAt])
 }
 
 // ============================================================================

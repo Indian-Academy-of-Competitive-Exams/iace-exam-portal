@@ -25,6 +25,7 @@ import { ScoringProcessor } from './scoring.processor';
       }),
     }),
     BullModule.registerQueue({ name: QUEUE_NAMES.SCORING }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.AUDIT_ARCHIVE }),
   ],
   providers: [ScoringProcessor],
   exports: [BullModule],

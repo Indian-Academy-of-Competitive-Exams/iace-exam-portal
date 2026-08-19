@@ -3,6 +3,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -81,6 +82,17 @@ export class StorageService implements OnModuleDestroy {
 
   async remove(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /** Bytes, or null on any HEAD failure — missing, forbidden, network — logged either way. */
+  async objectSize(key: string): Promise<number | null> {
+    try {
+      const head = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return head.ContentLength ?? null;
+    } catch (error) {
+      this.logger.warn(`objectSize(${key}) failed, treating as missing: ${String(error)}`);
+      return null;
+    }
   }
 
   /** Used by /health — proves credentials and the bucket are both good. */

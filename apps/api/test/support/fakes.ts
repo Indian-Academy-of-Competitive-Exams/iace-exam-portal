@@ -12,6 +12,7 @@ import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
 import { type PrismaService } from '../../src/prisma/prisma.service';
+import { type StorageService } from '../../src/storage/storage.service';
 import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import {
@@ -224,6 +225,35 @@ export class FakeMessageSender implements MessageSender {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * In-memory `StorageService`, typed against the two methods it stands in for so a signature
+ * drift here fails the build rather than surfacing as a confusing test failure.
+ */
+export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize'> {
+  objects = new Map<string, Buffer>();
+  failNextUpload = false;
+  private readonly reportedSizes = new Map<string, number>();
+
+  upload(key: string, body: Buffer | Uint8Array | string, _contentType?: string) {
+    if (this.failNextUpload) return Promise.reject(new Error('s3 is down'));
+    const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body as Uint8Array | string);
+    this.objects.set(key, buffer);
+    return Promise.resolve({ key, url: `memory://${key}` });
+  }
+
+  /** Lets a test make `objectSize` disagree with what one specific key actually holds. */
+  reportSize(key: string, size: number): void {
+    this.reportedSizes.set(key, size);
+  }
+
+  objectSize(key: string): Promise<number | null> {
+    if (this.reportedSizes.has(key)) return Promise.resolve(this.reportedSizes.get(key) ?? null);
+    return Promise.resolve(this.objects.get(key)?.byteLength ?? null);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 /** The `StudentProfile` columns the flags and the document writes look at. */
 export interface FakeProfile {
   motherName: string | null;
@@ -404,6 +434,15 @@ interface GroupWriteData {
   description?: string | null;
   isActive?: boolean;
   branches?: { connect?: { id: string }[]; set?: { id: string }[] };
+}
+
+/** An omitted field takes its column default — for every nullable column here, that is null. */
+function omittedAsNull<T extends Record<string, unknown>>(data: T): T {
+  const result = { ...data };
+  for (const key of Object.keys(result)) {
+    if (result[key as keyof T] === undefined) (result as Record<string, unknown>)[key] = null;
+  }
+  return result;
 }
 
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
@@ -692,7 +731,11 @@ export class FakePrisma {
 
   rowActionLog = {
     create: ({ data }: { data: Record<string, unknown> }) => {
-      const row = { id: `ral_${this.rowActionLogs.length + 1}`, createdAt: new Date(), ...data };
+      const row = {
+        id: `ral_${this.rowActionLogs.length + 1}`,
+        createdAt: new Date(),
+        ...omittedAsNull(data),
+      };
       this.rowActionLogs.push(row);
       return Promise.resolve(row);
     },
@@ -701,9 +744,80 @@ export class FakePrisma {
         this.rowActionLogs.push({
           id: `ral_${this.rowActionLogs.length + 1}`,
           createdAt: new Date(),
-          ...item,
+          ...omittedAsNull(item),
         });
       return Promise.resolve({ count: data.length });
+    },
+    /**
+     * Covers both call shapes the archive job makes: the day-picker's `createdAt.lt` scan
+     * ordered oldest-first, and one day's own `id`-cursor page within a fixed `[gte, lt)`.
+     */
+    findMany: ({
+      where = {},
+      orderBy,
+      take,
+    }: {
+      where?: { createdAt?: { gte?: Date; lt?: Date }; id?: { gt?: string } };
+      orderBy?: { createdAt?: 'asc' | 'desc'; id?: 'asc' | 'desc' };
+      take?: number;
+    } = {}) => {
+      let rows = this.rowActionLogs.filter((row) => {
+        const at = row.createdAt as Date;
+        const id = row.id as string;
+        return (
+          (where.createdAt?.gte === undefined || at >= where.createdAt.gte) &&
+          (where.createdAt?.lt === undefined || at < where.createdAt.lt) &&
+          (where.id?.gt === undefined || id > where.id.gt)
+        );
+      });
+
+      let sortKey: 'createdAt' | 'id' | undefined;
+      if (orderBy?.createdAt) sortKey = 'createdAt';
+      else if (orderBy?.id) sortKey = 'id';
+      if (sortKey) {
+        const direction = (orderBy?.createdAt ?? orderBy?.id) === 'desc' ? -1 : 1;
+        rows = [...rows].sort((a, b) => {
+          const [av, bv] = [a[sortKey], b[sortKey]];
+          return av instanceof Date && bv instanceof Date
+            ? direction * (av.getTime() - bv.getTime())
+            : direction * String(av).localeCompare(String(bv));
+        });
+      }
+
+      return Promise.resolve(take === undefined ? rows : rows.slice(0, take));
+    },
+    /** A missing `gte`/`lt` is unbounded on that side, the way Postgres reads an omitted clause. */
+    deleteMany: ({ where }: { where: { createdAt: { gte?: Date; lt?: Date } } }) => {
+      const before = this.rowActionLogs.length;
+      this.rowActionLogs = this.rowActionLogs.filter((row) => {
+        const at = row.createdAt as Date;
+        const inWindow =
+          (where.createdAt.gte === undefined || at >= where.createdAt.gte) &&
+          (where.createdAt.lt === undefined || at < where.createdAt.lt);
+        return !inWindow;
+      });
+      return Promise.resolve({ count: before - this.rowActionLogs.length });
+    },
+  };
+
+  importLogs: Array<Record<string, unknown>> = [];
+
+  importLog = {
+    create: ({ data }: { data: Record<string, unknown> }) => {
+      const row = {
+        id: `imp_${this.importLogs.length + 1}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...omittedAsNull(data),
+      };
+      this.importLogs.push(row);
+      return Promise.resolve(row);
+    },
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.importLogs.find((r) => r.id === where.id);
+      if (!row) throw new Error(`no import log ${where.id}`);
+      Object.assign(row, omittedAsNull(data));
+      return Promise.resolve(row);
     },
   };
 

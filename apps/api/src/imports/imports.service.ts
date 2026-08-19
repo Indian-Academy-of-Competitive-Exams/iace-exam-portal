@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
+  AUDIT_ACTION,
+  AUDIT_FEATURE,
   ErrorCodes,
   GROUP_TYPES_ACCEPTING_GRANTS,
   IMPORT_SOURCE,
   STUDENT_TYPE,
+  type AuditAction,
   type GroupMemberImportPlan,
   type GroupMemberImportResult,
   type StudentImportPlan,
@@ -12,6 +15,8 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth';
+import { AuditService } from '../audit';
+import { StorageService } from '../storage/storage.service';
 import { defaultPinFor } from './default-pin';
 import {
   mobilesInMemberFile,
@@ -25,7 +30,12 @@ import {
   type ImportContext,
   type ImportGroup,
 } from './student-import';
-import { readUploadedTable, type CsvTable } from '../common/importing';
+import {
+  IMPORT_LOG_STATUS,
+  importFileKey,
+  readUploadedTable,
+  type CsvTable,
+} from '../common/importing';
 
 /**
  * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue
@@ -39,78 +49,103 @@ export class ImportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly storage: StorageService,
+    private readonly audit: AuditService,
   ) {}
 
-  /** What the file would do. Writes nothing. */
-  async previewStudents(file: Buffer): Promise<StudentImportPlan> {
-    const table = await readUploadedTable(file);
-    return planStudentImport(table, await this.contextFor(table));
+  /** What the file would do. Writes nothing but the run itself — see `openRun`. */
+  async previewStudents(file: Buffer, actorId: string): Promise<StudentImportPlan> {
+    const { plan } = await this.planStudentsRun(file, actorId);
+    return plan;
   }
 
   /**
    * Applies the plan. Re-plans from the same input rather than trusting a preview the client sends
    * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
    */
-  async commitStudents(file: Buffer): Promise<StudentImportResult> {
-    const plan = await this.previewStudents(file);
+  async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
+    const { plan, logId } = await this.planStudentsRun(file, actorId);
 
-    // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
-    // write loop made a 1,000-row roster thirteen seconds of a single request sitting idle on one
-    // core.
-    const pinHashes = await this.hashStartingPins(
-      plan.rows.filter((row) => row.willReceiveDefaultPin && row.mobile).map((row) => row.mobile!),
-    );
+    try {
+      // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
+      // write loop made a 1,000-row roster thirteen seconds of a single request sitting idle on one
+      // core.
+      const pinHashes = await this.hashStartingPins(
+        plan.rows
+          .filter((row) => row.willReceiveDefaultPin && row.mobile)
+          .map((row) => row.mobile!),
+      );
 
-    // The grants each existing student already holds, so adding a group to them
-    // is a union rather than a duplicate — one bounded read, not one per row.
-    const grantsById = await this.grantsFor(
-      plan.rows.map((row) => row.existingStudentId).filter((id): id is string => id !== null),
-    );
+      // The grants each existing student already holds, so adding a group to them
+      // is a union rather than a duplicate — one bounded read, not one per row.
+      const grantsById = await this.grantsFor(
+        plan.rows.map((row) => row.existingStudentId).filter((id): id is string => id !== null),
+      );
 
-    let created = 0;
-    let updated = 0;
+      let created = 0;
+      let updated = 0;
+      const rowActions: { entityId: string; action: AuditAction }[] = [];
 
-    for (const row of plan.rows) {
-      if (row.action === 'skip' || !row.mobile) continue;
+      for (const row of plan.rows) {
+        if (row.action === 'skip' || !row.mobile) continue;
 
-      // A starting PIN, so an uploaded roster can sign in the same day — marked
-      // as ours, not theirs. See default-pin.ts for the trade.
-      const startingPin = row.willReceiveDefaultPin
-        ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
-        : {};
+        // A starting PIN, so an uploaded roster can sign in the same day — marked
+        // as ours, not theirs. See default-pin.ts for the trade.
+        const startingPin = row.willReceiveDefaultPin
+          ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
+          : {};
 
-      if (row.existingStudentId) {
-        // Groups are added, never replaced: a roster for one group must not
-        // remove a student from the others they are already in.
-        const grants = new Set([...(grantsById.get(row.existingStudentId) ?? []), ...row.groupIds]);
+        if (row.existingStudentId) {
+          // Groups are added, never replaced: a roster for one group must not
+          // remove a student from the others they are already in.
+          const grants = new Set([
+            ...(grantsById.get(row.existingStudentId) ?? []),
+            ...row.groupIds,
+          ]);
 
-        await this.prisma.student.update({
-          where: { id: row.existingStudentId },
-          data: {
-            // An empty name column means "no opinion", not "clear the name". An existing student also keeps
-            // whatever PIN they have — see the planner: `willReceiveDefaultPin` is false once they chose one.
-            ...(row.fullName === null ? {} : { fullName: row.fullName }),
-            ...startingPin,
-            directGroupIds: [...grants],
-          },
-        });
-        updated += 1;
-      } else {
-        await this.prisma.student.create({
-          data: {
-            mobile: row.mobile,
-            fullName: row.fullName,
-            studentType: STUDENT_TYPE.ONLINE,
-            createdVia: IMPORT_SOURCE.SHEET,
-            directGroupIds: row.groupIds,
-            ...startingPin,
-          },
-        });
-        created += 1;
+          await this.prisma.student.update({
+            where: { id: row.existingStudentId },
+            data: {
+              // An empty name column means "no opinion", not "clear the name". An existing student also keeps
+              // whatever PIN they have — see the planner: `willReceiveDefaultPin` is false once they chose one.
+              ...(row.fullName === null ? {} : { fullName: row.fullName }),
+              ...startingPin,
+              directGroupIds: [...grants],
+            },
+          });
+          updated += 1;
+          rowActions.push({ entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE });
+        } else {
+          const student = await this.prisma.student.create({
+            data: {
+              mobile: row.mobile,
+              fullName: row.fullName,
+              studentType: STUDENT_TYPE.ONLINE,
+              createdVia: IMPORT_SOURCE.SHEET,
+              directGroupIds: row.groupIds,
+              ...startingPin,
+            },
+          });
+          created += 1;
+          rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
+        }
       }
-    }
 
-    return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+      const result: StudentImportResult = {
+        ...plan.summary,
+        created,
+        updated,
+        skipped: plan.summary.invalid,
+      };
+
+      await this.closeRun(logId, { created, updated, skipped: 0, failed: plan.summary.invalid });
+      await this.audit.recordImportRows(logId, AUDIT_FEATURE.STUDENT, rowActions);
+
+      return result;
+    } catch (error) {
+      await this.failRun(logId, error);
+      throw error;
+    }
   }
 
   /**
@@ -133,32 +168,69 @@ export class ImportsService {
   // Adding students to one group
   // ==========================================================================
 
-  /** What the file would add to this group. Writes nothing. */
-  async previewGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportPlan> {
-    const table = await readUploadedTable(file);
-    return planGroupMemberImport(table, await this.groupContextFor(groupId, table));
+  /** What the file would add to this group. Writes nothing but the run itself — see `openRun`. */
+  async previewGroupMembers(
+    groupId: string,
+    file: Buffer,
+    actorId: string,
+  ): Promise<GroupMemberImportPlan> {
+    const { plan } = await this.planGroupMembersRun(groupId, file, actorId);
+    return plan;
   }
 
   /** Applies it. */
-  async commitGroupMembers(groupId: string, file: Buffer): Promise<GroupMemberImportResult> {
-    const plan = await this.previewGroupMembers(groupId, file);
+  async commitGroupMembers(
+    groupId: string,
+    file: Buffer,
+    actorId: string,
+  ): Promise<GroupMemberImportResult> {
+    const { plan, logId } = await this.planGroupMembersRun(groupId, file, actorId);
 
-    const toAdd = plan.rows
-      .filter((row) => row.action === 'add' && row.studentId)
-      .map((row) => row.studentId as string);
+    try {
+      const toAdd = plan.rows
+        .filter((row) => row.action === 'add' && row.studentId)
+        .map((row) => row.studentId as string);
 
-    // The planner already left out anyone holding this grant, so a push cannot
-    // duplicate one.
-    await this.prisma.$transaction(
-      toAdd.map((studentId) =>
-        this.prisma.student.update({
-          where: { id: studentId },
-          data: { directGroupIds: { push: groupId } },
-        }),
-      ),
-    );
+      // The planner already left out anyone holding this grant, so a push cannot
+      // duplicate one.
+      await this.prisma.$transaction(
+        toAdd.map((studentId) =>
+          this.prisma.student.update({
+            where: { id: studentId },
+            data: { directGroupIds: { push: groupId } },
+          }),
+        ),
+      );
 
-    return { ...plan.summary, added: toAdd.length };
+      await this.closeRun(logId, {
+        created: 0,
+        updated: toAdd.length,
+        skipped: plan.summary.alreadyMembers,
+        failed: plan.summary.invalid,
+      });
+      // Every added row is an existing student gaining a grant — never a create.
+      await this.audit.recordImportRows(
+        logId,
+        AUDIT_FEATURE.STUDENT,
+        toAdd.map((studentId) => ({ entityId: studentId, action: AUDIT_ACTION.UPDATE })),
+      );
+
+      return { ...plan.summary, added: toAdd.length };
+    } catch (error) {
+      await this.failRun(logId, error);
+      throw error;
+    }
+  }
+
+  private async planGroupMembersRun(
+    groupId: string,
+    file: Buffer,
+    actorId: string,
+  ): Promise<{ plan: GroupMemberImportPlan; logId: string }> {
+    const table = await readUploadedTable(file);
+    const plan = planGroupMemberImport(table, await this.groupContextFor(groupId, table));
+    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+    return { plan, logId };
   }
 
   private async groupContextFor(groupId: string, table: CsvTable): Promise<GroupMemberContext> {
@@ -249,6 +321,72 @@ export class ImportsService {
       select: { id: true, directGroupIds: true },
     });
     return new Map(students.map((student) => [student.id, student.directGroupIds]));
+  }
+
+  // ==========================================================================
+  // ImportLog lifecycle — both importers only ever touch Student rows, so the
+  // run and its rows are always logged under AUDIT_FEATURE.STUDENT.
+  // ==========================================================================
+
+  private async planStudentsRun(
+    file: Buffer,
+    actorId: string,
+  ): Promise<{ plan: StudentImportPlan; logId: string }> {
+    const table = await readUploadedTable(file);
+    const plan = planStudentImport(table, await this.contextFor(table));
+    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+    return { plan, logId };
+  }
+
+  /**
+   * Opens a run: stores the sheet under the run's own id, so the sheet a commit re-plans is always
+   * the one its `ImportLog` row points at. Called for every preview AND every commit — a commit
+   * re-plans rather than trusting a client-sent plan, so it opens its own fresh run rather than
+   * reusing one a separate preview call opened.
+   */
+  private async openRun(
+    file: Buffer,
+    total: number,
+    fileErrors: readonly string[],
+    actorId: string,
+  ): Promise<string> {
+    const log = await this.prisma.importLog.create({
+      data: {
+        feature: AUDIT_FEATURE.STUDENT,
+        source: IMPORT_SOURCE.SHEET,
+        actorId,
+        total,
+        status: IMPORT_LOG_STATUS.PREVIEWED,
+        errors: fileErrors.length > 0 ? { fileErrors } : undefined,
+      },
+    });
+
+    const key = importFileKey(AUDIT_FEATURE.STUDENT, log.id);
+    await this.storage.upload(key, file);
+    await this.prisma.importLog.update({ where: { id: log.id }, data: { fileS3Key: key } });
+
+    return log.id;
+  }
+
+  private async closeRun(
+    logId: string,
+    counts: { created: number; updated: number; skipped: number; failed: number },
+  ): Promise<void> {
+    await this.prisma.importLog.update({
+      where: { id: logId },
+      data: { ...counts, status: IMPORT_LOG_STATUS.COMMITTED, finishedAt: new Date() },
+    });
+  }
+
+  private async failRun(logId: string, error: unknown): Promise<void> {
+    await this.prisma.importLog.update({
+      where: { id: logId },
+      data: {
+        status: IMPORT_LOG_STATUS.FAILED,
+        finishedAt: new Date(),
+        errors: { message: error instanceof Error ? error.message : String(error) },
+      },
+    });
   }
 }
 
