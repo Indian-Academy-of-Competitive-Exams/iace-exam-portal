@@ -5,6 +5,7 @@ import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { type ExamTypesService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
+import { AuditContext } from '../src/audit';
 import { FakePrisma, makeBranch, makeStudent } from './support/fakes';
 
 /**
@@ -47,6 +48,7 @@ function serviceWith(
       undefined as unknown as StorageService,
       examTypes.asService(),
       new BranchesService(prisma.asService()),
+      new AuditContext(),
     ),
   };
 }

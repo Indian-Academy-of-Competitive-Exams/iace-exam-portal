@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
+  AUDIT_FEATURE,
+  AUDIT_ACTION,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   ActorTypes,
@@ -19,6 +21,7 @@ import {
 } from '@iace/contracts';
 import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
+import { Audit, TOGGLE_ACTIONS } from '../audit';
 import { StudentsService } from './students.service';
 
 /**
@@ -45,12 +48,14 @@ export class StudentsController {
     return this.students.detail(id);
   }
 
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(@Body(new ZodBody(createStudentSchema)) body: CreateStudentBody): Promise<StudentDetail> {
     return this.students.create(body);
   }
 
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
@@ -60,6 +65,7 @@ export class StudentsController {
     return this.students.update(id, body);
   }
 
+  @Audit(AUDIT_FEATURE.STUDENT, TOGGLE_ACTIONS.signIn)
   @RequiresSuperAdmin()
   @Patch(':id/active')
   setActive(
@@ -69,6 +75,7 @@ export class StudentsController {
     return this.students.setActive(id, body.isActive);
   }
 
+  @Audit(AUDIT_FEATURE.STUDENT, TOGGLE_ACTIONS.tests)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id/test-blocked')
   setTestBlocked(

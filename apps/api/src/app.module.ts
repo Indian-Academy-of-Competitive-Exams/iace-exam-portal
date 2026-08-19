@@ -7,6 +7,7 @@ import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './common/events';
 import { MessagingModule } from './common/messaging';
+import { AuditModule, AuditInterceptor, AuditContextMiddleware } from './audit';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminsModule } from './admins';
@@ -38,6 +39,7 @@ import { RequestIdMiddleware } from './common/request-id';
     StorageModule,
     EventsModule,
     MessagingModule,
+    AuditModule,
     AuthModule,
     AdminsModule,
     StudentsModule,
@@ -52,6 +54,7 @@ import { RequestIdMiddleware } from './common/request-id';
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ActorGuard },
     { provide: APP_GUARD, useClass: FeaturePermissionGuard },
@@ -61,6 +64,6 @@ import { RequestIdMiddleware } from './common/request-id';
 export class AppModule implements NestModule {
   /** Runs before everything else, so the id exists for guards and the filter. */
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, AuditContextMiddleware).forRoutes('*');
   }
 }

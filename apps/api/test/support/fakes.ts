@@ -237,17 +237,17 @@ export interface FakeProfile {
 
 /** Records what was published instead of publishing it. */
 export class FakeEventBus {
-  readonly published: { event: DomainEventName; payload: unknown }[] = [];
+  readonly events: { name: DomainEventName; payload: Record<string, unknown> }[] = [];
 
-  emit<K extends DomainEventName>(event: K, payload: DomainEventPayloads[K]): void {
-    this.published.push({ event, payload });
+  emit<K extends DomainEventName>(name: K, payload: DomainEventPayloads[K]): void {
+    this.events.push({ name, payload: payload as unknown as Record<string, unknown> });
   }
 
   /** Every payload published under one name, in order. */
-  of<K extends DomainEventName>(event: K): DomainEventPayloads[K][] {
-    return this.published
-      .filter((entry) => entry.event === event)
-      .map((entry) => entry.payload as DomainEventPayloads[K]);
+  of<K extends DomainEventName>(name: K): DomainEventPayloads[K][] {
+    return this.events
+      .filter((entry) => entry.name === name)
+      .map((entry) => entry.payload as unknown as DomainEventPayloads[K]);
   }
 
   asService(): DomainEventBus {
@@ -666,6 +666,25 @@ export class FakePrisma {
   /** Nothing in this slice writes them; the deletion blocker only ever reads a count. */
   readonly baseConfig = { count: () => Promise.resolve(this.baseConfigCount) };
   readonly test = { count: () => Promise.resolve(this.testCount) };
+
+  rowActionLogs: Array<Record<string, unknown>> = [];
+
+  rowActionLog = {
+    create: ({ data }: { data: Record<string, unknown> }) => {
+      const row = { id: `ral_${this.rowActionLogs.length + 1}`, createdAt: new Date(), ...data };
+      this.rowActionLogs.push(row);
+      return Promise.resolve(row);
+    },
+    createMany: ({ data }: { data: Array<Record<string, unknown>> }) => {
+      for (const item of data)
+        this.rowActionLogs.push({
+          id: `ral_${this.rowActionLogs.length + 1}`,
+          createdAt: new Date(),
+          ...item,
+        });
+      return Promise.resolve({ count: data.length });
+    },
+  };
 
   /** The service reads and counts in one transaction; order is preserved. */
   $transaction = (operations: Promise<unknown>[]) => Promise.all(operations);

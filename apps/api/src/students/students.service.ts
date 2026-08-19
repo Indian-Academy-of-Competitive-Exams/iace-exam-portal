@@ -8,6 +8,7 @@ import {
   IMPORT_SOURCE,
   deactivatedMemberBlocker,
   educationEntrySchema,
+  fieldDiff,
   pastExamEntrySchema,
   type Gender,
   type CreateStudentBody,
@@ -23,6 +24,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { BranchesService } from '../branches';
 import { ExamTypesService } from '../configs';
+import { AuditContext } from '../audit';
 
 /** How long a signed link to somebody's identity document stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
@@ -36,6 +38,18 @@ const GROUP_REF_SELECT = { id: true, name: true, examType: true } as const;
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
 const CURRENT_BRANCH_ID_FIELD = 'currentBranchId';
 
+/** What a student's audit diff covers — every column the admin screens can change. */
+export const AUDITED_STUDENT_FIELDS = [
+  'fullName',
+  'studentType',
+  'enrolledExams',
+  'program',
+  'currentBranchId',
+  'directGroupIds',
+  'isActive',
+  'isTestBlocked',
+] as const;
+
 /**
  * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
  * excepted (see its own note; a bulk roster is one statement per file rather than per row).
@@ -48,6 +62,7 @@ export class StudentsService {
     @Inject(forwardRef(() => ExamTypesService))
     private readonly examTypes: ExamTypesService,
     private readonly branches: BranchesService,
+    private readonly auditContext: AuditContext,
   ) {}
 
   // ==========================================================================
@@ -237,34 +252,37 @@ export class StudentsService {
       ? { ...student.profile, ...stripUndefined(profilePatch) }
       : student.profile;
 
-    await this.prisma.student.update({
-      where: { id },
-      data: {
-        ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
-        ...(input.preferredLanguage === undefined
-          ? {}
-          : { preferredLanguage: input.preferredLanguage }),
-        ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
-        ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
-        ...(input.program === undefined ? {} : { program: input.program }),
-        ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
-        ...(input.groupIds ? { directGroupIds: input.groupIds } : {}),
-        ...(profilePatch
-          ? {
-              profile: {
-                upsert: {
-                  create: toProfileData(profilePatch),
-                  update: toProfileData(profilePatch),
-                },
+    const updatedColumns = {
+      ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
+      ...(input.preferredLanguage === undefined
+        ? {}
+        : { preferredLanguage: input.preferredLanguage }),
+      ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
+      ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
+      ...(input.program === undefined ? {} : { program: input.program }),
+      ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
+      ...(input.groupIds ? { directGroupIds: input.groupIds } : {}),
+      ...(profilePatch
+        ? {
+            profile: {
+              upsert: {
+                create: toProfileData(profilePatch),
+                update: toProfileData(profilePatch),
               },
-              // Recomputed from the MERGED profile, not the patch: editing only
-              // the mother's name must not decide readiness on that field alone.
-              preTestReady: isPreTestReady(nextProfile as never),
-              profileCompleted: isProfileCompleted(nextProfile as never),
-            }
-          : {}),
-      },
-    });
+            },
+            // Recomputed from the MERGED profile, not the patch: editing only
+            // the mother's name must not decide readiness on that field alone.
+            preTestReady: isPreTestReady(nextProfile as never),
+            profileCompleted: isProfileCompleted(nextProfile as never),
+          }
+        : {}),
+    };
+
+    await this.prisma.student.update({ where: { id }, data: updatedColumns });
+
+    this.auditContext.setChanged(
+      fieldDiff(student, { ...student, ...updatedColumns }, AUDITED_STUDENT_FIELDS),
+    );
 
     return this.detail(id);
   }
@@ -303,19 +321,29 @@ export class StudentsService {
 
   /** Deactivation is reversible and keeps history; there is no hard delete. */
   async setActive(id: string, isActive: boolean): Promise<StudentDetail> {
-    const student = await this.prisma.student.findUnique({ where: { id } });
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      select: { id: true, isActive: true },
+    });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     await this.prisma.student.update({ where: { id }, data: { isActive } });
+    this.auditContext.setChanged({ isActive: { from: student.isActive, to: isActive } });
     return this.detail(id);
   }
 
   /** Sign-in is untouched: they keep their history and their session, and cannot start a test. */
   async setTestBlocked(id: string, isTestBlocked: boolean): Promise<StudentDetail> {
-    const student = await this.prisma.student.findUnique({ where: { id }, select: { id: true } });
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      select: { id: true, isTestBlocked: true },
+    });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     await this.prisma.student.update({ where: { id }, data: { isTestBlocked } });
+    this.auditContext.setChanged({
+      isTestBlocked: { from: student.isTestBlocked, to: isTestBlocked },
+    });
     return this.detail(id);
   }
 

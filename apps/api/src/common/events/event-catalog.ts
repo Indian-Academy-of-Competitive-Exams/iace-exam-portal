@@ -1,5 +1,12 @@
 /** Every cross-module event in the platform, declared in one place (docs/03 §6). */
 
+import {
+  type AuditAction,
+  type AuditActorType,
+  type AuditFeature,
+  type FieldDiff,
+} from '@iace/contracts';
+
 export const DOMAIN_EVENTS = {
   /** A student pressed submit. TODO(docs/03 §6): emit from the exam module. */
   ATTEMPT_SUBMITTED: 'attempt.submitted',
@@ -13,6 +20,8 @@ export const DOMAIN_EVENTS = {
   PAPER_QUESTION_BONUS: 'paperQuestion.bonus',
   /** A student's PIN changed and every session was revoked. WIRED — see auth. */
   STUDENT_PIN_RESET: 'student.pin_reset',
+  /** An audited write succeeded. WIRED — see the audit module. */
+  AUDIT_ROW_ACTION: 'audit.row_action',
 } as const;
 
 export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
@@ -63,6 +72,17 @@ export interface StudentPinResetEvent {
   reason: PinResetReason;
 }
 
+export interface AuditRowActionEvent {
+  feature: AuditFeature;
+  action: AuditAction;
+  entityId: string;
+  actorType: AuditActorType;
+  actorId: string | null;
+  changed: FieldDiff | null;
+  importLogId: string | null;
+  requestId: string;
+}
+
 /**
  * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
  * and a handler cannot claim a shape the producer never sends.
@@ -74,4 +94,5 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.PAPER_QUESTION_DROPPED]: PaperQuestionCorrectedEvent;
   [DOMAIN_EVENTS.PAPER_QUESTION_BONUS]: PaperQuestionCorrectedEvent;
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
+  [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
 }
