@@ -19,6 +19,16 @@ export const IMPORT_SOURCE = {
 export const importSourceSchema = z.enum(IMPORT_SOURCE);
 export type ImportSource = z.infer<typeof importSourceSchema>;
 
+/** Where an import run got to. A plain string column, so this is the whole vocabulary. */
+export const IMPORT_LOG_STATUS = {
+  /** The file is stored and planned; nothing has been written yet. */
+  PREVIEWED: 'PREVIEWED',
+  COMMITTED: 'COMMITTED',
+  FAILED: 'FAILED',
+} as const;
+export const importLogStatusSchema = z.enum(IMPORT_LOG_STATUS);
+export type ImportLogStatus = z.infer<typeof importLogStatusSchema>;
+
 /** What a single line would do. `skip` means it has errors and will be left. */
 export const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
 export type StudentImportAction = z.infer<typeof studentImportActionSchema>;

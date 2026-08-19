@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { firstValueFrom, of, throwError } from 'rxjs';
-import { AUDIT_ACTION, AUDIT_FEATURE, ActorTypes } from '@iace/contracts';
+import { AUDIT_ACTION, AUDIT_ACTOR_TYPE, AUDIT_FEATURE, ActorTypes } from '@iace/contracts';
 import { DOMAIN_EVENTS } from '../src/common/events/event-catalog';
 import { AuditContext } from '../src/audit/audit.context';
 import { AuditInterceptor } from '../src/audit/audit.interceptor';
@@ -112,7 +112,28 @@ describe('AuditInterceptor', () => {
       interceptor.intercept(execution, { handle: () => of({ id: 'stu_9' }) } as never),
     );
 
-    assert.equal(bus.events[0]?.payload.actorType, 'STUDENT');
+    assert.equal(bus.events[0]?.payload.actorType, AUDIT_ACTOR_TYPE.STUDENT);
     assert.equal(bus.events[0]?.payload.actorId, 'stu_9');
+  });
+
+  /**
+   * The failure this prevents: with no token, `actorTypeOf` fell through to ADMIN and filed a row
+   * with a null actorId under it — the log naming an admin for something no admin did. "Unreachable"
+   * was a claim about a guard registered in another file, not about this function.
+   */
+  it('records a request with no authenticated user as SCRIPT, never ADMIN', async () => {
+    const route = { feature: AUDIT_FEATURE.STUDENT, action: AUDIT_ACTION.UPDATE };
+    const { bus, interceptor, execution } = harness(route, {
+      ...ADMIN_REQUEST,
+      params: { id: 'stu_1' },
+      user: undefined,
+    });
+
+    await firstValueFrom(
+      interceptor.intercept(execution, { handle: () => of({ id: 'stu_1' }) } as never),
+    );
+
+    assert.equal(bus.events[0]?.payload.actorType, AUDIT_ACTOR_TYPE.SCRIPT);
+    assert.equal(bus.events[0]?.payload.actorId, null);
   });
 });

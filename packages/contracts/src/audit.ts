@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './envelope';
-import { importSourceSchema } from './imports';
+import { importLogStatusSchema, importSourceSchema } from './imports';
+import { dateOnlySchema } from './students';
 
 // ============================================================================
 // The audit trail: one row per data change (`RowActionLog`) and one per import
@@ -141,8 +142,8 @@ export const rowActionListQuerySchema = paginationQuerySchema.extend({
   entityId: z.string().optional(),
   /** Ignored for anyone but a super admin — the service forces its own value. */
   actorId: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
+  from: dateOnlySchema.optional(),
+  to: dateOnlySchema.optional(),
 });
 export type RowActionListQuery = z.infer<typeof rowActionListQuerySchema>;
 export type RowActionListQueryInput = z.input<typeof rowActionListQuerySchema>;
@@ -159,7 +160,7 @@ export const importLogSchema = z.object({
   updated: z.number().int(),
   skipped: z.number().int(),
   failed: z.number().int(),
-  status: z.string(),
+  status: importLogStatusSchema,
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
 });

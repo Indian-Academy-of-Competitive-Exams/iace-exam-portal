@@ -4,13 +4,14 @@ import {
   AppException,
   AUDIT_ACTION,
   ErrorCodes,
+  IMPORT_LOG_STATUS,
   QUESTION_IMPORT_SHEETS,
   QUESTION_SOURCE_KIND,
   XLSX_CONTENT_TYPE,
   type QuestionImportPlan,
   type QuestionImportResult,
 } from '@iace/contracts';
-import { IMPORT_LOG_STATUS, importFileKey, readUploadedTable } from '../common/importing';
+import { importFileKey, readUploadedTable } from '../common/importing';
 import { AuditService } from '../audit';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';

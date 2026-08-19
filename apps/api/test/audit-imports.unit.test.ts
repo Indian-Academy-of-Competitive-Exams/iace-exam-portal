@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
+  IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
   QUESTION_IMPORT_COLUMNS,
   type AuditAction,
@@ -13,7 +14,6 @@ import { AuditService } from '../src/audit/audit.service';
 import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
-import { IMPORT_LOG_STATUS } from '../src/common/importing';
 import {
   FakePrisma,
   FakeQuestionBankPrisma,

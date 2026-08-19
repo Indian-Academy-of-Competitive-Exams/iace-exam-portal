@@ -10,6 +10,7 @@ import {
   rowActionListQuerySchema,
   rowActionSchema,
 } from '../src/audit';
+import { IMPORT_LOG_STATUS } from '../src/imports';
 
 describe('fieldDiff', () => {
   it('reports only the fields that actually changed', () => {
@@ -202,12 +203,34 @@ describe('audit read contracts', () => {
       updated: 1,
       skipped: 1,
       failed: 0,
-      status: 'DONE',
+      status: IMPORT_LOG_STATUS.COMMITTED,
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
     };
 
     assert.equal(importLogSchema.safeParse(row).success, true);
+  });
+
+  /** The failure this prevents: `status` was a bare string, so a fixture could assert `'DONE'` —
+   *  a value nothing in the system writes — and the parse would happily accept it. */
+  it('refuses a status outside IMPORT_LOG_STATUS', () => {
+    const row = {
+      id: 'imp_1',
+      feature: 'STUDENT',
+      source: 'SHEET',
+      actorId: null,
+      actorName: null,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      status: 'DONE',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+    };
+
+    assert.equal(importLogSchema.safeParse(row).success, false);
   });
 
   it('refuses a source outside ImportSource, so a bad column value fails loudly', () => {
@@ -222,7 +245,7 @@ describe('audit read contracts', () => {
       updated: 0,
       skipped: 0,
       failed: 0,
-      status: 'DONE',
+      status: IMPORT_LOG_STATUS.COMMITTED,
       startedAt: new Date().toISOString(),
       finishedAt: null,
     };

@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   AUDIT_WINDOW_DAYS,
+  IMPORT_LOG_STATUS,
   PAGE_SIZE_MAX,
   auditActionSchema,
   auditFeatureSchema,
   type AuditAction,
   type AuditFeature,
+  type ImportLogStatus,
   type ImportLogSummary,
   type RowAction,
 } from '@iace/contracts';
@@ -42,16 +44,15 @@ import { useAuth } from '../providers/auth';
 const ROW_ACTION_FILTERS = ['feature', 'action', 'actorId'] as const;
 type FilterKey = (typeof ROW_ACTION_FILTERS)[number] | 'tab' | 'run';
 
-/** Mirrors `apps/api`'s `IMPORT_LOG_STATUS` — the contract leaves `status` a plain string on purpose. */
-const IMPORT_STATUS_LABELS: Readonly<Record<string, string>> = {
-  PREVIEWED: 'Previewed',
-  COMMITTED: 'Committed',
-  FAILED: 'Failed',
+const IMPORT_STATUS_LABELS: Readonly<Record<ImportLogStatus, string>> = {
+  [IMPORT_LOG_STATUS.PREVIEWED]: 'Previewed',
+  [IMPORT_LOG_STATUS.COMMITTED]: 'Committed',
+  [IMPORT_LOG_STATUS.FAILED]: 'Failed',
 };
-const IMPORT_STATUS_VARIANT: Readonly<Record<string, 'neutral' | 'success' | 'danger'>> = {
-  PREVIEWED: 'neutral',
-  COMMITTED: 'success',
-  FAILED: 'danger',
+const IMPORT_STATUS_VARIANT: Readonly<Record<ImportLogStatus, 'neutral' | 'success' | 'danger'>> = {
+  [IMPORT_LOG_STATUS.PREVIEWED]: 'neutral',
+  [IMPORT_LOG_STATUS.COMMITTED]: 'success',
+  [IMPORT_LOG_STATUS.FAILED]: 'danger',
 };
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */

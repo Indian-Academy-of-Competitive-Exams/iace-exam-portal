@@ -5,10 +5,12 @@ import {
   AUDIT_FEATURE,
   ErrorCodes,
   GROUP_TYPES_ACCEPTING_GRANTS,
+  IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
   STUDENT_TYPE,
   type AuditAction,
   type AuditFeature,
+  type ImportLogStatus,
   type GroupMemberImportPlan,
   type GroupMemberImportResult,
   type StudentImportPlan,
@@ -31,13 +33,7 @@ import {
   type ImportContext,
   type ImportGroup,
 } from './student-import';
-import {
-  IMPORT_LOG_STATUS,
-  importFileKey,
-  readUploadedTable,
-  type CsvTable,
-  type ImportLogStatus,
-} from '../common/importing';
+import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 
 /**
  * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue

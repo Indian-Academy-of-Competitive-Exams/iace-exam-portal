@@ -71,6 +71,7 @@ function idOf(payload: unknown): string | null {
 }
 
 function actorTypeOf(user: AuthenticatedUser | undefined): AuditActorType {
-  if (user?.actor === ActorTypes.STUDENT) return AUDIT_ACTOR_TYPE.STUDENT;
-  return AUDIT_ACTOR_TYPE.ADMIN;
+  // No token is not an admin. Defaulting to ADMIN made the log name somebody who did nothing.
+  if (!user) return AUDIT_ACTOR_TYPE.SCRIPT;
+  return user.actor === ActorTypes.STUDENT ? AUDIT_ACTOR_TYPE.STUDENT : AUDIT_ACTOR_TYPE.ADMIN;
 }

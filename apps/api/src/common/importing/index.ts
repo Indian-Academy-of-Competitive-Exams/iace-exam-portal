@@ -9,4 +9,4 @@ export {
   type RawCsvRow,
 } from './csv';
 export { looksLikeWorkbook, readUploadedTable, type ReadSheetOptions } from './sheet-reader';
-export { IMPORT_LOG_STATUS, importFileKey, type ImportLogStatus } from './import-log';
+export { importFileKey } from './import-log';

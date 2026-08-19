@@ -4,8 +4,10 @@ import {
   AUDIT_ACTOR_TYPE,
   AppException,
   ErrorCodes,
+  dateOnlySchema,
   type AuditAction,
   type AuditFeature,
+  type ImportLogStatus,
   type ImportLogSummary,
   type Paginated,
   type PaginationQuery,
@@ -22,12 +24,11 @@ export interface AuditViewer {
   isActive: boolean;
 }
 
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A calendar-day bound, the same YYYY-MM-DD shape `student-query.ts`'s dateRange expects. */
+/** A calendar-day bound. `rowActionListQuerySchema` already rejects anything else; this is what
+ *  keeps a direct caller from reaching Prisma with an Invalid Date. */
 function parseDateOnlyBound(value: string, field: 'from' | 'to'): Date {
   const boundary = field === 'from' ? 'T00:00:00.000Z' : 'T23:59:59.999Z';
-  const parsed = DATE_ONLY_PATTERN.test(value) ? new Date(`${value}${boundary}`) : null;
+  const parsed = dateOnlySchema.safeParse(value).success ? new Date(`${value}${boundary}`) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) {
     const message = `${field} must be a date in YYYY-MM-DD form`;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
@@ -187,7 +188,8 @@ export class AuditService {
       updated: row.updated,
       skipped: row.skipped,
       failed: row.failed,
-      status: row.status,
+      // The column is a plain string; IMPORT_LOG_STATUS is the only vocabulary written to it.
+      status: row.status as ImportLogStatus,
       startedAt: row.startedAt.toISOString(),
       finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
     };
