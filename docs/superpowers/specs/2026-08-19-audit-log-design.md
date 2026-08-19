@@ -1,7 +1,7 @@
 # Audit Log — Design
 
 **Date:** 2026-08-19
-**Status:** approved design, not yet planned
+**Status:** implemented. See `docs/superpowers/plans/2026-08-19-audit-log.md` for the plan and the git history from `88c89ec` for the work. Sections below marked **As built** record where the shipped code deliberately differs from the original design.
 **Supersedes nothing.** Implements `docs/04-students-groups-access-model.md` §8 and resolves the retention policy that section leaves open.
 
 ## Goal
@@ -49,7 +49,11 @@ Subscribes to `AUDIT_ROW_ACTION` and writes the `RowActionLog` row. Failure is l
 
 **No BullMQ queue.** The bus is the transport. Audit writes are small and low-volume (admin CRUD), and the durability a queue would add is not worth a second moving part. If a compliance requirement later demands no-loss-on-crash, the listener is the single place that changes.
 
-### The `before` snapshot
+### The diff a service contributes
+
+**As built:** the design had services attach a `before` snapshot for the interceptor to diff. The shipped code has each service compute the diff itself with `fieldDiff` and contribute the result. Only the service holds both the row it read and the DTO shape it returns; an interceptor diffing one against the other would have to guess how they map. `fieldDiff` still lives in `packages/contracts` exactly as designed.
+
+### Where the snapshot comes from
 
 A request-scoped context object the service fills where it already has the row:
 
@@ -96,7 +100,7 @@ Rejected after checking the code:
 `AuditFeature` gains:
 
 - `EXAM_TYPE` — `configs` has full CRUD and no feature value
-- `TAXONOMY` — subject, topic and sub-topic writes
+- `TAXONOMY_SUBJECT`, `TAXONOMY_TOPIC`, `TAXONOMY_SUB_TOPIC` — one per level. **As built:** the design named a single `TAXONOMY` value. That could not identify a row once its entity was deleted, and `DELETE` is an audited action, so the value was split before anything shipped.
 - `FEATURE_PERMISSION` — `POST features/permissions` and `DELETE features/:key/permissions/:level/:adminId` are how an admin gains or loses the right to do everything else; this is the one write where a wrong answer is a security question
 
 `AuditAction` gains `BLOCK` and `UNBLOCK`.
@@ -229,6 +233,19 @@ The archive tests use the in-memory fakes in `apps/api/test/support/fakes.ts` wi
 Steps 1–2 are the slice that proves the design. Nothing after step 2 changes its shape.
 
 Step 7 must not ship later than step 5. Imports are what make this table grow, and 30-day retention with no archive is data loss on a schedule.
+
+## As built — decisions taken during implementation
+
+- **Feature registration is not audited.** `POST admin/features` creates a `Feature` row. It was briefly audited under `FEATURE_PERMISSION`, which filed a Feature id in a column where every other row holds an Admin id. Minting a new `AuditFeature` value for it was rejected because a Postgres enum value can never be retracted, and this section names only two permission routes. Grant and revoke remain audited against the admin they concern, so the "who can do what" trail is complete — a feature that exists but has no grant confers nothing.
+- **A `CREATE` row's `changed` is not a snapshot.** Fields that are null both before and after are omitted, so a create records only the fields that received a value.
+- **The archive's trailing newline is load-bearing.** The job compresses each 1000-row page separately and concatenates the gzip members; the trailing newline is what stops a page boundary falling mid-record. It is not merely POSIX convention.
+- **A day is archived under a Redis lock keyed on that day**, held across select → write → verify → delete. Without it, two workers could overwrite a complete object with a partial one after the complete rows were deleted.
+- **The archive resolves actor names at write time**, so an object stays readable without a live database.
+
+## Known gaps at handover
+
+- **A deactivated admin keeps access until their token expires.** `isActive` is enforced inside `FeaturePermissionGuard` and `SuperAdminGuard`; a route carrying neither never checks it. The audit routes are always-on and so carry neither — `AuditService` checks the flag itself. The general gap remains: `ActorGuard` does not check it, and `AdminsService.setActive` does not revoke Redis sessions, so the window is the JWT TTL. Fixing it properly is a platform change, not an audit one.
+- **`AuditFeature.TEST` has no producer.** No attempts module exists — the exam engine is step 4 of the mock-test build order. The value is declared and unused.
 
 ## Open questions
 
