@@ -3,6 +3,7 @@ import {
   PERMISSION_LEVELS,
   satisfiesLevel,
   type AdminIdentity,
+  type FeatureKey,
   type PermissionLevel,
 } from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
@@ -15,7 +16,7 @@ import { ME_QUERY_KEY } from '../lib/constants';
  */
 export const { AuthProvider, useAuth } = createAuth<
   AdminIdentity,
-  { can: (key: string, level?: PermissionLevel) => boolean }
+  { can: (key: FeatureKey, level?: PermissionLevel) => boolean }
 >({
   actor: ActorTypes.ADMIN,
   queryKey: ME_QUERY_KEY,
@@ -32,7 +33,7 @@ export const { AuthProvider, useAuth } = createAuth<
    * The two disagreeing is the bug where the UI offers a button the API refuses.
    */
   extend: (admin) => ({
-    can: (key: string, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
+    can: (key: FeatureKey, level: PermissionLevel = PERMISSION_LEVELS.READ) =>
       // isActive first, gating the super-admin bypass too — the server's order.
       admin !== null &&
       admin.isActive &&

@@ -32,15 +32,13 @@ describe('what files under FEATURE_PERMISSION', () => {
     Reflect.getMetadata(AUDIT_KEY, AdminsController.prototype[handler]) as AuditRoute | undefined;
 
   /**
-   * The failure this prevents: `entityId` under FEATURE_PERMISSION is an Admin id, set deliberately
-   * by changeGrant. `POST admin/features` has no `:id` and returns a Feature, so the interceptor
-   * fell back to the Feature's own id — making one column point at two tables, and reading as a
-   * permission grant when registering a key grants nobody anything.
+   * `entityId` under FEATURE_PERMISSION is an Admin id, set deliberately by changeGrant. Reading
+   * the key list is not a change and is filed nowhere.
    */
-  it('files only the two grant routes, never feature registration', () => {
+  it('files the two grant routes, and nothing for reading the list', () => {
     assert.equal(routeOf('grant')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);
     assert.equal(routeOf('revoke')?.feature, AUDIT_FEATURE.FEATURE_PERMISSION);
-    assert.equal(routeOf('createFeature'), undefined);
+    assert.equal(routeOf('listFeatures'), undefined);
   });
 });
 
@@ -81,23 +79,14 @@ function build(admins = [makeAdminRow({ id: 'adm_1' })]) {
   return { prisma, auditContext, service: new AdminsService(prisma.asService(), auditContext) };
 }
 
-async function withFeature(
-  ctx: ReturnType<typeof build>,
-  key: string = FEATURE_KEYS.STUDENT_MANAGEMENT,
-): Promise<void> {
-  await ctx.service.createFeature({ key });
-}
-
 describe('AdminsService grant/revoke — the entity the row is filed against', () => {
   /**
    * The failure this prevents: both routes return a Feature and neither has an `:id` param, so the
-   * interceptor's fallback (`request.params.id ?? idOf(payload)`) would file the row against the
-   * feature's own cuid — a perfectly valid-looking id that is simply the wrong entity, forever.
+   * interceptor's fallback (`request.params.id ?? idOf(payload)`) would file the row against
+   * something that is not the admin the grant was made about.
    */
   it('grant sets the entity id to the admin, not the feature the call returns', async () => {
     const ctx = build();
-    await withFeature(ctx);
-    const featureId = ctx.prisma.features[0]?.id;
 
     const feature = await ctx.auditContext.run(async () => {
       const result = await ctx.service.grant({
@@ -109,13 +98,11 @@ describe('AdminsService grant/revoke — the entity the row is filed against', (
       return result;
     });
 
-    // What the id-from-payload fallback would have picked instead — a different, valid-looking id.
-    assert.equal(feature.id, featureId);
+    assert.equal(feature.key, FEATURE_KEYS.STUDENT_MANAGEMENT);
   });
 
   it('revoke sets the entity id to the admin too', async () => {
     const ctx = build();
-    await withFeature(ctx);
     await ctx.service.grant({
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
       level: PERMISSION_LEVELS.WRITE,
@@ -136,7 +123,6 @@ describe('AdminsService grant/revoke — the entity the row is filed against', (
 describe('AdminsService grant/revoke — idempotent, so the diff reports what actually moved', () => {
   it('a first grant reports the level going from null to the grant', async () => {
     const ctx = build();
-    await withFeature(ctx);
 
     await ctx.auditContext.run(async () => {
       await ctx.service.grant({
@@ -156,7 +142,6 @@ describe('AdminsService grant/revoke — idempotent, so the diff reports what ac
    */
   it('re-granting a permission already held changes nothing, and logs nothing', async () => {
     const ctx = build();
-    await withFeature(ctx);
     await ctx.service.grant({
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
       level: PERMISSION_LEVELS.WRITE,
@@ -175,7 +160,6 @@ describe('AdminsService grant/revoke — idempotent, so the diff reports what ac
 
   it('revoking a permission never held changes nothing, and logs nothing', async () => {
     const ctx = build();
-    await withFeature(ctx);
 
     await ctx.auditContext.run(async () => {
       await ctx.service.revoke({
@@ -189,7 +173,6 @@ describe('AdminsService grant/revoke — idempotent, so the diff reports what ac
 
   it('a real revoke reports the level going away', async () => {
     const ctx = build();
-    await withFeature(ctx);
     await ctx.service.grant({
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
       level: PERMISSION_LEVELS.READ,

@@ -1,25 +1,8 @@
 import { Prisma } from '@prisma/client';
-import {
-  GROUP_REACH,
-  STUDENT_SORTS,
-  groupReach,
-  type GroupType,
-  type StudentListQuery,
-  type StudentSort,
-} from '@iace/contracts';
-
-/** Enough of a group to know how it reaches its students. */
-export interface GroupAccessRef {
-  id: string;
-  type: GroupType;
-  examType: string | null;
-}
+import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 
 /** Turns the roster's filters into a Prisma query. */
-export function studentWhere(
-  query: StudentListQuery,
-  group?: GroupAccessRef | null,
-): Prisma.StudentWhereInput {
+export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
   const and: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
 
@@ -28,10 +11,9 @@ export function studentWhere(
   if (query.preTestReady !== undefined) add({ preTestReady: query.preTestReady });
   if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
-  if (query.groupId) add(membersOf(query.groupId, group));
   // The branch a student attends is a column of its own — no join.
   if (query.branchId) add({ currentBranchId: query.branchId });
-  if (query.ungrouped !== undefined) add(ownAccessFilter(query.ungrouped));
+  if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
   if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
@@ -54,12 +36,12 @@ export function studentWhere(
   return and.length === 0 ? {} : { AND: and };
 }
 
-/** Access of the student's own: an enrolment, or a grant. The all-students group reaches them anyway. */
+/** What a student reaches a series by: an exam enrolment or a program. An explicit grant is
+ *  a row of its own and is not counted here. */
 function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
-  // BOTH empty: an EXAM group is reached by an enrolment, with no grant row.
   const noneOfTheirOwn = {
     enrolledExams: { isEmpty: true },
-    directGroupIds: { isEmpty: true },
+    programs: { isEmpty: true },
   } satisfies Prisma.StudentWhereInput;
   return hasNoneOfTheirOwn ? noneOfTheirOwn : { NOT: noneOfTheirOwn };
 }
@@ -72,20 +54,6 @@ function signedInFilter(neverSignedIn: boolean): Prisma.StudentWhereInput {
   return neverSignedIn
     ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
     : { pinHash: { not: null }, pinIsDefault: false };
-}
-
-/** The same three cases `GroupsService.studentCountFor` counts, so the link and the count agree. */
-function membersOf(
-  groupId: string,
-  group: GroupAccessRef | null | undefined,
-): Prisma.StudentWhereInput {
-  if (!group) return { directGroupIds: { has: groupId } };
-
-  const reach = groupReach(group);
-  if (reach === GROUP_REACH.EVERYONE) return { deletedAt: null };
-  if (reach === GROUP_REACH.ENROLMENT && group.examType)
-    return { enrolledExams: { has: group.examType } };
-  return { directGroupIds: { has: group.id } };
 }
 
 /** An inclusive day range over a timestamp column. */

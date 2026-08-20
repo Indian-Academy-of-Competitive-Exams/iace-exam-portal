@@ -113,7 +113,6 @@ export function ImportStudentsPage() {
                 <TableHead numeric>Line</TableHead>
                 <TableHead>Mobile</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Groups</TableHead>
                 <TableHead>What happens</TableHead>
               </TableRow>
             </TableHeader>
@@ -223,9 +222,6 @@ function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
       </TableCell>
       <TableCell className="tabular-nums">{row.mobile ?? '—'}</TableCell>
       <TableCell>{row.fullName ?? <span className="text-muted-foreground">—</span>}</TableCell>
-      <TableCell className="text-muted-foreground">
-        {row.groupNames.length ? row.groupNames.join(', ') : '—'}
-      </TableCell>
       <TableCell>
         {row.action !== 'skip' ? (
           <span className="flex flex-wrap items-center gap-1.5">

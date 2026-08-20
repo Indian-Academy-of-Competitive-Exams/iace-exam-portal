@@ -4,7 +4,6 @@ import {
   Header,
   HttpCode,
   HttpStatus,
-  Param,
   Post,
   Res,
   UploadedFile,
@@ -18,19 +17,16 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
-  GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
-  type GroupMemberImportPlan,
-  type GroupMemberImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildGroupMemberTemplate, buildStudentTemplate } from './workbook';
+import { buildStudentTemplate } from './workbook';
 
 /** The two fields we use off a multipart upload. */
 interface UploadedFileLike {
@@ -83,44 +79,6 @@ export class ImportsController {
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
     return this.imports.commitStudents(this.bufferOf(file), user.id);
-  }
-
-  // ==========================================================================
-  // Adding students to one group The group is in the PATH, not in the file: it is the screen the
-  // admin is on, so it cannot be mistyped, and one sheet cannot scatter students across batches
-  // nobody checked.
-  // ==========================================================================
-
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get('groups/members/template')
-  @Header('Content-Type', XLSX_CONTENT_TYPE)
-  @Header('Content-Disposition', `attachment; filename="${GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME}"`)
-  @Header('Cache-Control', 'no-store')
-  async groupMemberTemplate(@Res() response: Response): Promise<void> {
-    response.send(await buildGroupMemberTemplate());
-  }
-
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Post('groups/:groupId/members/preview')
-  @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  previewGroupMembers(
-    @Param('groupId') groupId: string,
-    @UploadedFile() file?: UploadedFileLike,
-  ): Promise<GroupMemberImportPlan> {
-    return this.imports.previewGroupMembers(groupId, this.bufferOf(file));
-  }
-
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post('groups/:groupId/members/commit')
-  @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  commitGroupMembers(
-    @Param('groupId') groupId: string,
-    @CurrentUser() user: AuthenticatedUser,
-    @UploadedFile() file?: UploadedFileLike,
-  ): Promise<GroupMemberImportResult> {
-    return this.imports.commitGroupMembers(groupId, this.bufferOf(file), user.id);
   }
 
   /**

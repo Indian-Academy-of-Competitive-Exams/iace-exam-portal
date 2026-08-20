@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Pencil } from 'lucide-react';
-import { qualifiedGroupName, type Me } from '@iace/contracts';
+import { type Me } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -76,16 +76,14 @@ export function ProfileViewPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Photo and documents</CardTitle>
+            <CardTitle>Your photo</CardTitle>
             <CardDescription>
-              Only you and the institute can see these. Each replaces the last — nothing is shared
-              anywhere else.
+              Only you and the institute can see it, and a new one replaces the last. Aadhaar and
+              PAN are checked at the centre — their images are never uploaded or stored here.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-3">
             <DocumentCard kind="photo" label="Passport photo" url={profile?.photoUrl ?? null} />
-            <DocumentCard kind="aadhaar" label="Aadhaar" url={profile?.aadhaarUrl ?? null} />
-            <DocumentCard kind="pan" label="PAN" url={profile?.panUrl ?? null} />
           </CardContent>
         </Card>
 
@@ -112,22 +110,6 @@ export function ProfileViewPage() {
             trailing: entry.year ? String(entry.year) : '',
           }))}
         />
-
-        {me.data.groups.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Your groups</CardTitle>
-              <CardDescription>Your tests come through these.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {me.data.groups.map((group) => (
-                <Badge key={group.id} variant="primary">
-                  {qualifiedGroupName(group)}
-                </Badge>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
       </div>
     </>
   );
@@ -142,8 +124,6 @@ function Completion({ me }: Readonly<{ me: Me }>) {
     { label: 'Date of birth', done: Boolean(profile?.dob), preTest: true },
     { label: 'Gender', done: Boolean(profile?.gender), preTest: false },
     { label: 'Passport photo', done: Boolean(profile?.photoUrl), preTest: false },
-    { label: 'Aadhaar', done: Boolean(profile?.aadhaarUrl), preTest: false },
-    { label: 'PAN', done: Boolean(profile?.panUrl), preTest: false },
   ];
   const outstanding = items.filter((item) => !item.done);
 

@@ -1,10 +1,11 @@
 import {
   BRANCH_TYPE,
-  GROUP_TYPE,
+  EXAM_FAMILY,
   STUDENT_TYPE,
   type AdminPermissions,
   type BranchType,
-  type GroupType,
+  type ExamFamily,
+  type FeatureKey,
   type PermissionLevel,
   type StudentType,
 } from '@iace/contracts';
@@ -278,8 +279,8 @@ export interface FakeProfile {
   dob: Date | null;
   gender: string | null;
   photoUrl: string | null;
-  aadhaarUrl: string | null;
-  panUrl: string | null;
+  aadhaarVerified: boolean;
+  panVerified: boolean;
 }
 
 /** Records what was published instead of publishing it. */
@@ -309,7 +310,7 @@ export interface FakeStudent {
   fullName: string | null;
   studentType: StudentType;
   enrolledExams: string[];
-  program: string | null;
+  programs: string[];
   currentBranchId: string | null;
   preferredLanguage: string;
   preTestReady: boolean;
@@ -321,8 +322,6 @@ export interface FakeStudent {
   createdAt: Date;
   updatedAt: Date;
   profile: FakeProfile | null;
-  /** The groups granted to this student — the column, as Prisma stores it. */
-  directGroupIds: string[];
   deletedAt: Date | null;
 }
 
@@ -333,8 +332,8 @@ export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
     dob: null,
     gender: null,
     photoUrl: null,
-    aadhaarUrl: null,
-    panUrl: null,
+    aadhaarVerified: false,
+    panVerified: false,
     ...overrides,
   };
 }
@@ -355,7 +354,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     fullName: null,
     studentType: STUDENT_TYPE.ONLINE,
     enrolledExams: [],
-    program: null,
+    programs: [],
     currentBranchId: null,
     preferredLanguage: 'en',
     preTestReady: false,
@@ -368,7 +367,6 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     createdAt: new Date('2026-01-05T09:30:00.000Z'),
     updatedAt: new Date('2026-01-05T09:30:00.000Z'),
     profile: null,
-    directGroupIds: [],
     deletedAt: null,
     ...overrides,
   };
@@ -385,72 +383,33 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
   };
 }
 
-/** The student filters the fakes answer: two `in` lookups, and the three ways a group reaches one. */
+/** The student filters the fakes answer: the `in` lookups, an enrolment, and live-only. */
 interface StudentWhere {
-  id?: { in: string[] };
-  mobile?: { in: string[] };
-  directGroupIds?: { has: string };
+  id?: string | { in: string[] };
+  mobile?: string | { in: string[] };
   enrolledExams?: { has: string };
   deletedAt?: null;
 }
 
 function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
   return (
-    (where.id?.in ? where.id.in.includes(student.id) : true) &&
-    (where.mobile?.in ? where.mobile.in.includes(student.mobile) : true) &&
-    (where.directGroupIds ? student.directGroupIds.includes(where.directGroupIds.has) : true) &&
+    matchesKey(student.id, where.id) &&
+    matchesKey(student.mobile, where.mobile) &&
     (where.enrolledExams ? student.enrolledExams.includes(where.enrolledExams.has) : true) &&
     (where.deletedAt === undefined ? true : student.deletedAt === null)
   );
 }
 
+/** A column filter that is either an exact value or an `in` list. */
+function matchesKey(value: string, filter: string | { in: string[] } | undefined): boolean {
+  if (filter === undefined) return true;
+  return typeof filter === 'string' ? value === filter : filter.in.includes(value);
+}
+
 /** Deep enough that mutating the original after this — `update` does, in place — leaves the
- * copy alone: the nested `profile` object and the `directGroupIds` array need their own copy. */
+ * copy alone: the nested `profile` object needs its own copy. */
 function cloneStudent(student: FakeStudent): FakeStudent {
-  return {
-    ...student,
-    profile: student.profile ? { ...student.profile } : null,
-    directGroupIds: [...student.directGroupIds],
-  };
-}
-
-export interface FakeGroup {
-  id: string;
-  name: string;
-  type: GroupType;
-  examType: string | null;
-  description: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  branches: { id: string; name: string; type: BranchType }[];
-  _count: { testSeries: number };
-}
-
-export function makeGroup(overrides: Partial<FakeGroup> = {}): FakeGroup {
-  return {
-    id: 'grp_1',
-    name: 'SSC CGL MORNING',
-    // The type that takes a student one at a time: most fakes here are grant paths.
-    type: GROUP_TYPE.SCHOLARSHIP,
-    examType: null,
-    description: null,
-    isActive: true,
-    createdAt: new Date('2026-01-05T09:30:00.000Z'),
-    branches: [],
-    ...overrides,
-    // After the spread, so a caller passing only some fields still gets a count.
-    _count: { testSeries: overrides._count?.testSeries ?? 0 },
-  };
-}
-
-/** What the service writes: scalars, plus branches connected on create and replaced on update. */
-interface GroupWriteData {
-  name?: string;
-  type?: GroupType;
-  examType?: string | null;
-  description?: string | null;
-  isActive?: boolean;
-  branches?: { connect?: { id: string }[]; set?: { id: string }[] };
+  return { ...student, profile: student.profile ? { ...student.profile } : null };
 }
 
 /** An omitted field takes its column default — for every nullable column here, that is null. */
@@ -533,15 +492,8 @@ export class FakePrisma {
     readonly students: FakeStudent[] = [],
     readonly admins: FakeAdmin[] = [],
     readonly branches: FakeBranch[] = [],
-    readonly groups: FakeGroup[] = [],
-    // FIFTH, and nowhere else: every existing call is positional, so an earlier
-    // slot silently rebinds four arrays across nine call sites with no type error.
-    readonly examTypes: FakeExamType[] = [],
+    readonly exams: FakeExam[] = [],
   ) {}
-
-  /** Set by a test that needs the exam-type deletion blocker to see a blueprint or a test. */
-  baseConfigCount = 0;
-  testCount = 0;
 
   /** How many student writes to allow before the rest throw — a commit that dies mid-loop. */
   studentWriteLimit: number | null = null;
@@ -558,10 +510,14 @@ export class FakePrisma {
   readonly student = {
     // A copy, not the live row: `update` mutates in place, and a caller that reads a row
     // before writing to it — to diff before against after — must see it as it was.
-    findUnique: ({ where }: { where: { id?: string; mobile?: string } }) => {
-      const row = this.students.find((s) =>
-        where.id ? s.id === where.id : s.mobile === where.mobile,
-      );
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.students.find((s) => s.id === where.id);
+      return Promise.resolve(row ? cloneStudent(row) : null);
+    },
+
+    /** `mobile` is unique only among live rows, so every lookup by it is a filtered read. */
+    findFirst: ({ where = {} }: { where?: StudentWhere } = {}) => {
+      const row = this.students.find((s) => matchesStudent(s, where));
       return Promise.resolve(row ? cloneStudent(row) : null);
     },
 
@@ -579,29 +535,9 @@ export class FakePrisma {
       return Promise.resolve(created);
     },
 
-    upsert: ({
-      where,
-      create,
-      update,
-    }: {
-      where: { mobile: string };
-      create: Partial<FakeStudent> & { mobile: string };
-      update: Partial<FakeStudent>;
-    }) => {
-      const existing = this.students.find((s) => s.mobile === where.mobile);
-      if (existing) {
-        Object.assign(existing, update);
-        return Promise.resolve(existing);
-      }
-      const created = makeStudent({ ...create, id: `stu_new_${this.nextId++}` });
-      this.students.push(created);
-      return Promise.resolve(created);
-    },
-
     /**
-     * Enough of a nested write for the profile and grant paths: scalar columns are assigned,
-     * `profile.upsert` creates the row or merges into it, and `directGroupIds` takes either a
-     * whole array or a `push`, exactly as Prisma would.
+     * Enough of a nested write for the profile path: scalar columns are assigned, and
+     * `profile.upsert` creates the row or merges into it, exactly as Prisma would.
      */
     update: ({
       where,
@@ -610,18 +546,14 @@ export class FakePrisma {
       where: { id: string };
       data: Record<string, unknown> & {
         profile?: { upsert: { create: Partial<FakeProfile>; update: Partial<FakeProfile> } };
-        directGroupIds?: string[] | { push: string };
       };
     }) => {
       this.guardStudentWrite();
       const student = this.students.find((s) => s.id === where.id);
       if (!student) throw new Error(`no student ${where.id}`);
 
-      const { profile, directGroupIds, ...scalars } = data;
+      const { profile, ...scalars } = data;
       Object.assign(student, scalars);
-
-      if (Array.isArray(directGroupIds)) student.directGroupIds = [...directGroupIds];
-      else if (directGroupIds) student.directGroupIds.push(directGroupIds.push);
 
       if (profile) {
         student.profile = student.profile
@@ -642,107 +574,17 @@ export class FakePrisma {
       Promise.resolve(this.admins.filter((a) => !where.id?.in || where.id.in.includes(a.id))),
   };
 
-  /** Groups as the write and grant paths use them — the membership itself lives on the student. */
-  readonly group = {
-    // A copy, not the live row — same reason as `student.findUnique` above: `update` mutates
-    // the found row in place, and a before/after diff needs the "before" to hold still.
+  /** Branches, with the student counts the service reads through `_count`. */
+  readonly branch = {
+    // A copy, not the live row — same reason as `student.findUnique` above.
     findUnique: ({ where }: { where: { id: string } }) => {
-      const row = this.groups.find((g) => g.id === where.id);
+      const row = this.branches.find((b) => b.id === where.id);
       return Promise.resolve(row ? { ...row } : null);
     },
 
-    groupBy: ({ where = {} }: { where?: { examType?: { in: string[] } } } = {}) => {
-      const wanted = where.examType?.in;
-      const counts = new Map<string, number>();
-      for (const g of this.groups) {
-        if (g.examType === null) continue;
-        if (wanted && !wanted.includes(g.examType)) continue;
-        counts.set(g.examType, (counts.get(g.examType) ?? 0) + 1);
-      }
-      return Promise.resolve(
-        [...counts].map(([examType, total]) => ({ examType, _count: { _all: total } })),
-      );
-    },
-
-    findFirst: ({
-      where,
-    }: {
-      where: { name?: string; examType?: string | null; id?: { not: string } };
-    }) =>
-      Promise.resolve(
-        this.groups.find(
-          (g) =>
-            (where.name === undefined || g.name === where.name) &&
-            (where.examType === undefined || g.examType === where.examType) &&
-            (where.id?.not === undefined || g.id !== where.id.not),
-        ) ?? null,
-      ),
-
-    findMany: ({
-      where = {},
-    }: { where?: { id?: { in: string[] }; type?: { in: GroupType[] } } } = {}) =>
-      Promise.resolve(
-        this.groups.filter(
-          (g) =>
-            (!where.id?.in || where.id.in.includes(g.id)) &&
-            (!where.type?.in || where.type.in.includes(g.type)),
-        ),
-      ),
-
-    count: ({
-      where = {},
-    }: {
-      where?: { id?: { in: string[] }; examType?: string; type?: { notIn: GroupType[] } };
-    } = {}) =>
-      Promise.resolve(
-        this.groups.filter(
-          (g) =>
-            (!where.id?.in || where.id.in.includes(g.id)) &&
-            (where.examType === undefined || g.examType === where.examType) &&
-            !where.type?.notIn?.includes(g.type),
-        ).length,
-      ),
-
-    create: ({ data }: { data: GroupWriteData }) => {
-      const { branches, ...scalars } = data;
-      const created = makeGroup({
-        ...scalars,
-        id: `grp_new_${this.nextId++}`,
-        branches: this.branchRefs((branches?.connect ?? []).map((branch) => branch.id)),
-      });
-      this.groups.push(created);
-      return Promise.resolve(created);
-    },
-
-    update: ({ where, data }: { where: { id: string }; data: GroupWriteData }) => {
-      const group = this.groups.find((g) => g.id === where.id);
-      if (!group) throw new Error(`no group ${where.id}`);
-
-      const { branches, ...scalars } = data;
-      Object.assign(group, scalars);
-      if (branches?.set) group.branches = this.branchRefs(branches.set.map((b) => b.id));
-      return Promise.resolve(group);
-    },
-
-    delete: ({ where }: { where: { id: string } }) => {
-      const index = this.groups.findIndex((g) => g.id === where.id);
-      const [removed] = this.groups.splice(index, 1);
-      return Promise.resolve(removed);
-    },
-  };
-
-  private branchRefs(ids: string[]): { id: string; name: string; type: BranchType }[] {
-    return ids.map((id) => {
-      const branch = this.branches.find((candidate) => candidate.id === id);
-      return { id, name: branch?.name ?? id, type: branch?.type ?? BRANCH_TYPE.PHYSICAL };
-    });
-  }
-
-  /** Branches, with the group counts the service reads through `_count`. */
-  readonly branch = {
-    // A copy, not the live row — same reason as `student.findUnique` above.
-    findUnique: ({ where }: { where: { id?: string; name?: string } }) => {
-      const row = this.branches.find((b) => (where.id ? b.id === where.id : b.name === where.name));
+    /** `name` is unique only among live rows, so a lookup by it is a filtered read. */
+    findFirst: ({ where }: { where: { name?: string; deletedAt?: null } }) => {
+      const row = this.branches.find((b) => where.name === undefined || b.name === where.name);
       return Promise.resolve(row ? { ...row } : null);
     },
 
@@ -760,7 +602,7 @@ export class FakePrisma {
 
     count: () => Promise.resolve(this.branches.length),
 
-    create: ({ data }: { data: { name: string } }) => {
+    create: ({ data }: { data: { name: string; type?: BranchType } }) => {
       const created = makeBranch({ ...data, id: `br_new_${this.nextId++}` });
       this.branches.push(created);
       return Promise.resolve(created);
@@ -780,49 +622,50 @@ export class FakePrisma {
     },
   };
 
-  /** Exam types, with the list filters and the CRUD `ExamTypesService` runs. */
-  readonly examType = {
+  /** The exam catalog, with the list filters and the CRUD `ExamsService` runs. */
+  readonly exam = {
     // A copy, not the live row — same reason as `student.findUnique` above.
-    findUnique: ({ where }: { where: { id?: string; name?: string; code?: string } }) => {
-      const row = this.examTypes.find((e) => matchesExamTypeKey(e, where));
+    findUnique: ({ where }: { where: { id?: string; code?: string } }) => {
+      const row = this.exams.find((e) =>
+        where.id === undefined ? e.code === where.code : e.id === where.id,
+      );
       return Promise.resolve(row ? { ...row } : null);
     },
+
+    findFirst: ({ where }: { where: { name?: string } }) =>
+      Promise.resolve(this.exams.find((e) => e.name === where.name) ?? null),
 
     findMany: ({
       where = {},
       skip = 0,
       take,
-    }: { where?: ExamTypeWhere; skip?: number; take?: number } = {}) => {
-      const matched = this.examTypes.filter((e) => matchesExamType(e, where));
+    }: { where?: ExamWhere; skip?: number; take?: number } = {}) => {
+      const matched = this.exams.filter((e) => matchesExam(e, where));
       return Promise.resolve(matched.slice(skip, take === undefined ? undefined : skip + take));
     },
 
-    count: ({ where = {} }: { where?: ExamTypeWhere } = {}) =>
-      Promise.resolve(this.examTypes.filter((e) => matchesExamType(e, where)).length),
+    count: ({ where = {} }: { where?: ExamWhere } = {}) =>
+      Promise.resolve(this.exams.filter((e) => matchesExam(e, where)).length),
 
-    create: ({ data }: { data: { name: string; code: string } }) => {
-      const created = makeExamType({ ...data, id: `ext_new_${this.nextId++}` });
-      this.examTypes.push(created);
+    create: ({ data }: { data: Partial<FakeExam> & { name: string; code: string } }) => {
+      const created = makeExam({ ...data, id: `exam_new_${this.nextId++}` });
+      this.exams.push(created);
       return Promise.resolve(created);
     },
 
     update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-      const examType = this.examTypes.find((e) => e.id === where.id);
-      if (!examType) throw new Error(`no exam type ${where.id}`);
-      Object.assign(examType, data);
-      return Promise.resolve(examType);
+      const exam = this.exams.find((e) => e.id === where.id);
+      if (!exam) throw new Error(`no exam ${where.id}`);
+      Object.assign(exam, data);
+      return Promise.resolve(exam);
     },
 
     delete: ({ where }: { where: { id: string } }) => {
-      const index = this.examTypes.findIndex((e) => e.id === where.id);
-      const [removed] = this.examTypes.splice(index, 1);
+      const index = this.exams.findIndex((e) => e.id === where.id);
+      const [removed] = this.exams.splice(index, 1);
       return Promise.resolve(removed);
     },
   };
-
-  /** Nothing in this slice writes them; the deletion blocker only ever reads a count. */
-  readonly baseConfig = { count: () => Promise.resolve(this.baseConfigCount) };
-  readonly test = { count: () => Promise.resolve(this.testCount) };
 
   rowActionLogs: Array<Record<string, unknown>> = [];
 
@@ -944,7 +787,7 @@ export interface FakeBranch {
   type: BranchType;
   isActive: boolean;
   createdAt: Date;
-  _count: { groups: number };
+  _count: { students: number };
 }
 
 export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
@@ -956,50 +799,50 @@ export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
     // After the spread, so a caller passing only some fields still gets a count.
-    _count: { groups: overrides._count?.groups ?? 0 },
+    _count: { students: overrides._count?.students ?? 0 },
   };
 }
 
-export interface FakeExamType {
+export interface FakeExam {
   id: string;
+  family: ExamFamily;
   name: string;
   code: string;
+  description: string | null;
   isActive: boolean;
   createdAt: Date;
+  _count: { stages: number };
 }
 
-export function makeExamType(overrides: Partial<FakeExamType> = {}): FakeExamType {
+export function makeExam(overrides: Partial<FakeExam> = {}): FakeExam {
   return {
-    id: 'ext_1',
+    id: 'exam_1',
+    family: EXAM_FAMILY.SSC,
     name: 'SSC CGL',
     code: 'SSC CGL',
+    description: null,
     isActive: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
+    // After the spread, so a caller passing only some fields still gets a count.
+    _count: { stages: overrides._count?.stages ?? 0 },
   };
 }
 
-interface ExamTypeWhere {
+interface ExamWhere {
   name?: { contains: string; mode?: 'insensitive' };
   code?: { in: string[] };
+  family?: ExamFamily;
   isActive?: boolean;
 }
 
-function matchesExamType(examType: FakeExamType, where: ExamTypeWhere): boolean {
+function matchesExam(exam: FakeExam, where: ExamWhere): boolean {
   return (
-    (where.name ? examType.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
-    (where.code ? where.code.in.includes(examType.code) : true) &&
-    (where.isActive === undefined || examType.isActive === where.isActive)
+    (where.name ? exam.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
+    (where.code ? where.code.in.includes(exam.code) : true) &&
+    (where.family === undefined || exam.family === where.family) &&
+    (where.isActive === undefined || exam.isActive === where.isActive)
   );
-}
-
-function matchesExamTypeKey(
-  examType: FakeExamType,
-  where: { id?: string; name?: string; code?: string },
-): boolean {
-  if (where.id !== undefined) return examType.id === where.id;
-  if (where.name !== undefined) return examType.name === where.name;
-  return examType.code === where.code;
 }
 
 /** The device context every session-creating call needs. */
@@ -1027,20 +870,10 @@ export class FakeAdminsService {
 // --------------------------------------------------------------------------- Admins / features /
 // grants ---------------------------------------------------------------------------
 
-interface FakeFeatureRow {
-  id: string;
-  key: string;
-  name: string;
-  description: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface FakePermissionRow {
-  id: string;
-  featureId: string;
+interface FakeGrantRow {
+  adminId: string;
+  featureKey: FeatureKey;
   level: PermissionLevel;
-  adminIds: string[];
 }
 
 interface FakeAdminRow {
@@ -1056,8 +889,7 @@ interface FakeAdminRow {
 /** Enough Prisma for AdminsService to run unchanged, with no database. */
 export class FakeAdminsPrisma {
   private seq = 0;
-  readonly features: FakeFeatureRow[] = [];
-  readonly permissions: FakePermissionRow[] = [];
+  readonly grants: FakeGrantRow[] = [];
 
   constructor(readonly admins: FakeAdminRow[] = []) {}
 
@@ -1112,108 +944,54 @@ export class FakeAdminsPrisma {
     },
   };
 
-  readonly feature = {
-    findUnique: ({ where }: { where: { key?: string; id?: string } }) =>
-      Promise.resolve(
-        this.features.find((f) => (where.key ? f.key === where.key : f.id === where.id)) ?? null,
-      ),
-
-    findUniqueOrThrow: ({ where }: { where: { id: string } }) => {
-      const row = this.features.find((f) => f.id === where.id);
-      if (!row) throw new Error(`no feature ${where.id}`);
-      return Promise.resolve(this.withPermissions(row));
-    },
-
-    findMany: () =>
-      Promise.resolve(
-        [...this.features]
-          .sort((a, b) => a.key.localeCompare(b.key))
-          .map((f) => this.withPermissions(f)),
-      ),
-
-    create: ({
-      data,
-    }: {
-      data: {
-        key: string;
-        name: string;
-        description: string | null;
-        permissions: { create: { level: PermissionLevel }[] };
-      };
-    }) => {
-      const row: FakeFeatureRow = {
-        id: this.id('ftr'),
-        key: data.key,
-        name: data.name,
-        description: data.description,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      this.features.push(row);
-      for (const p of data.permissions.create) {
-        this.permissions.push({
-          id: this.id('perm'),
-          featureId: row.id,
-          level: p.level,
-          adminIds: [],
-        });
-      }
-      return Promise.resolve(this.withPermissions(row));
-    },
-  };
-
-  readonly featurePermission = {
+  /** One row per (admin, key, level) — the row IS its own key, so there is nothing to update. */
+  readonly adminFeaturePermission = {
     findMany: ({
-      where,
-    }: {
-      where: { adminIds?: { has?: string; hasSome?: string[] } };
-    }): Promise<
-      { id: string; level: PermissionLevel; adminIds: string[]; feature: { key: string } }[]
-    > => {
-      const has = where.adminIds?.has;
-      const hasSome = where.adminIds?.hasSome;
-      return Promise.resolve(
-        this.permissions
-          .filter((p) =>
-            has !== undefined
-              ? p.adminIds.includes(has)
-              : (hasSome ?? []).some((id) => p.adminIds.includes(id)),
+      where = {},
+    }: { where?: { adminId?: string | { in: string[] }; featureKey?: FeatureKey } } = {}) =>
+      Promise.resolve(
+        this.grants
+          .filter(
+            (g) =>
+              matchesKey(g.adminId, where.adminId) &&
+              (where.featureKey === undefined || g.featureKey === where.featureKey),
           )
-          .map((p) => ({
-            id: p.id,
-            level: p.level,
-            adminIds: [...p.adminIds],
-            feature: { key: this.features.find((f) => f.id === p.featureId)?.key ?? '' },
-          })),
-      );
+          .map((g) => ({ ...g })),
+      ),
+
+    findUnique: ({ where }: { where: { adminId_featureKey_level: FakeGrantRow } }) => {
+      const key = where.adminId_featureKey_level;
+      const row = this.grants.find((g) => sameGrant(g, key));
+      return Promise.resolve(row ? { ...row } : null);
     },
 
-    findUnique: ({
-      where,
-    }: {
-      where: { featureId_level: { featureId: string; level: PermissionLevel } };
-    }) => {
-      const { featureId, level } = where.featureId_level;
-      const row = this.permissions.find((p) => p.featureId === featureId && p.level === level);
-      return Promise.resolve(row ? { id: row.id, adminIds: [...row.adminIds] } : null);
-    },
-
-    update: ({ where, data }: { where: { id: string }; data: { adminIds: string[] } }) => {
-      const row = this.permissions.find((p) => p.id === where.id);
-      if (!row) throw new Error(`no permission ${where.id}`);
-      row.adminIds = data.adminIds;
+    create: ({ data }: { data: FakeGrantRow }) => {
+      const row = { ...data };
+      this.grants.push(row);
       return Promise.resolve(row);
     },
-  };
 
-  private withPermissions(row: FakeFeatureRow) {
-    return {
-      ...row,
-      permissions: this.permissions
-        .filter((p) => p.featureId === row.id)
-        .map((p) => ({ level: p.level, adminIds: [...p.adminIds] })),
-    };
-  }
+    delete: ({ where }: { where: { adminId_featureKey_level: FakeGrantRow } }) => {
+      const key = where.adminId_featureKey_level;
+      const index = this.grants.findIndex((g) => sameGrant(g, key));
+      const [removed] = this.grants.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+
+    deleteMany: ({ where }: { where: { adminId: string } }) => {
+      const before = this.grants.length;
+      for (let i = this.grants.length - 1; i >= 0; i -= 1) {
+        if (this.grants[i]?.adminId === where.adminId) this.grants.splice(i, 1);
+      }
+      return Promise.resolve({ count: before - this.grants.length });
+    },
+  };
+}
+
+function sameGrant(row: FakeGrantRow, key: FakeGrantRow): boolean {
+  return (
+    row.adminId === key.adminId && row.featureKey === key.featureKey && row.level === key.level
+  );
 }
 
 export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRow {
@@ -1246,18 +1024,16 @@ export interface FakeTopicRow {
   subjectId: string;
 }
 
-export interface FakeSubTopicRow {
-  id: string;
-  name: string;
-  topicIds: string[];
-}
-
-export interface FakeQuestionOptionRow {
+/** Immutable: an edit inserts one of these and repoints `Question.currentVersionId`. */
+export interface FakeQuestionVersionRow {
   id: string;
   questionId: string;
-  position: number;
-  isCorrect: boolean;
-  text: unknown;
+  version: number;
+  content: unknown;
+  options: unknown;
+  answerKey: unknown;
+  createdById: string | null;
+  createdAt: Date;
 }
 
 export interface FakeQuestionRow {
@@ -1266,17 +1042,11 @@ export interface FakeQuestionRow {
   type: string;
   subjectId: string;
   topicId: string | null;
-  subTopicId: string | null;
   difficulty: string;
   status: string;
-  isActive: boolean;
-  content: unknown;
-  answerKey: unknown;
+  currentVersionId: string | null;
   tags: string[];
-  source: unknown;
   stemHash: string | null;
-  defaultMarks: number | null;
-  defaultNegativeMarks: number | null;
   createdById: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -1292,10 +1062,6 @@ export function makeTopic(overrides: Partial<FakeTopicRow> = {}): FakeTopicRow {
   return { id: 'top_1', name: 'ARITHMETIC', subjectId: 'sub_1', ...overrides };
 }
 
-export function makeSubTopic(overrides: Partial<FakeSubTopicRow> = {}): FakeSubTopicRow {
-  return { id: 'stp_1', name: 'PERCENTAGES', topicIds: ['top_1'], ...overrides };
-}
-
 export function makeQuestion(overrides: Partial<FakeQuestionRow> = {}): FakeQuestionRow {
   return {
     id: 'qst_1',
@@ -1303,20 +1069,31 @@ export function makeQuestion(overrides: Partial<FakeQuestionRow> = {}): FakeQues
     type: 'SINGLE_MCQ',
     subjectId: 'sub_1',
     topicId: 'top_1',
-    subTopicId: null,
     difficulty: 'MEDIUM',
     status: 'ACTIVE',
-    isActive: true,
-    content: { en: { stem: [{ type: 'TEXT', text: 'What is 20% of 150?' }] } },
-    answerKey: null,
+    currentVersionId: null,
     tags: [],
-    source: null,
     stemHash: 'hash_1',
-    defaultMarks: null,
-    defaultNegativeMarks: null,
     createdById: null,
     createdAt: FIXED_NOW,
     updatedAt: FIXED_NOW,
+    ...overrides,
+  };
+}
+
+/** Version 1 of a question, which is what a seeded row normally has. */
+export function makeQuestionVersion(
+  overrides: Partial<FakeQuestionVersionRow> = {},
+): FakeQuestionVersionRow {
+  return {
+    id: 'qv_1',
+    questionId: 'qst_1',
+    version: 1,
+    content: { en: { stem: [{ type: 'TEXT', text: 'What is 20% of 150?' }] } },
+    options: [],
+    answerKey: null,
+    createdById: null,
+    createdAt: FIXED_NOW,
     ...overrides,
   };
 }
@@ -1326,25 +1103,22 @@ interface FakeQuestionWhere {
   id?: string | { in?: string[]; not?: string };
   subjectId?: string;
   topicId?: string;
-  subTopicId?: string;
   type?: string;
   difficulty?: string;
   status?: string;
-  isActive?: boolean;
   stemHash?: string | { not?: null };
   tags?: { has?: string };
-  content?: unknown;
+  currentVersion?: unknown;
 }
 
 export class FakeQuestionBankPrisma {
   private seq = 0;
-  readonly options: FakeQuestionOptionRow[] = [];
 
   constructor(
     readonly questions: FakeQuestionRow[] = [],
     readonly subjects: FakeSubjectRow[] = [],
     readonly topics: FakeTopicRow[] = [],
-    readonly subTopics: FakeSubTopicRow[] = [],
+    readonly versions: FakeQuestionVersionRow[] = [],
   ) {}
 
   private id(prefix: string): string {
@@ -1356,9 +1130,14 @@ export class FakeQuestionBankPrisma {
     return this as unknown as PrismaService;
   }
 
-  /** The array form, which is how every question-bank service calls it. */
-  $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
-    return Promise.all(operations);
+  /**
+   * Both forms. The taxonomy services pass an array; anything that writes a version passes a
+   * callback, because a question and its first version are two statements that share one write.
+   */
+  $transaction<T>(
+    work: Promise<T>[] | ((tx: FakeQuestionBankPrisma) => Promise<T>),
+  ): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
   }
 
   readonly importLogs: Array<Record<string, unknown>> = [];
@@ -1431,33 +1210,35 @@ export class FakeQuestionBankPrisma {
         id: this.id('qst'),
         subjectId: subjectIdOf(data),
         topicId: relationIdOf(data, 'topic'),
-        subTopicId: relationIdOf(data, 'subTopic'),
       });
       this.questions.push(row);
-      this.writeOptions(row.id, data.options);
       return Promise.resolve(this.hydrate(row));
     },
 
     update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const row = this.questions.find((question) => question.id === where.id);
       if (!row) throw new Error(`no question ${where.id}`);
-      const { options, subject, topic, subTopic, ...rest } = data;
+      const { subject, topic, ...rest } = data;
       Object.assign(row, rest);
       if (subject) row.subjectId = subjectIdOf(data);
       if (topic !== undefined) row.topicId = relationIdOf(data, 'topic');
-      if (subTopic !== undefined) row.subTopicId = relationIdOf(data, 'subTopic');
-      if (options) this.writeOptions(row.id, options);
       return Promise.resolve(this.hydrate(row));
     },
   };
 
-  readonly questionOption = {
-    deleteMany: ({ where }: { where: { questionId: string } }) => {
-      const kept = this.options.filter((option) => option.questionId !== where.questionId);
-      this.options.length = 0;
-      this.options.push(...kept);
-      return Promise.resolve({ count: 0 });
+  readonly questionVersion = {
+    create: ({ data }: { data: Partial<FakeQuestionVersionRow> & { questionId: string } }) => {
+      const row = makeQuestionVersion({ ...data, id: this.id('qv') });
+      this.versions.push(row);
+      return Promise.resolve(row);
     },
+
+    findMany: ({ where = {} }: { where?: { questionId?: string } } = {}) =>
+      Promise.resolve(
+        this.versions.filter(
+          (row) => where.questionId === undefined || row.questionId === where.questionId,
+        ),
+      ),
   };
 
   readonly subject = {
@@ -1467,14 +1248,7 @@ export class FakeQuestionBankPrisma {
           .filter((row) => !where?.id?.in || where.id.in.includes(row.id))
           .map((row) => ({
             ...row,
-            topics: this.topics
-              .filter((topic) => topic.subjectId === row.id)
-              .map((topic) => ({
-                ...topic,
-                subTopics: this.subTopics.filter((subTopic) =>
-                  subTopic.topicIds.includes(topic.id),
-                ),
-              })),
+            topics: this.topics.filter((topic) => topic.subjectId === row.id),
           })),
       ),
 
@@ -1545,110 +1319,20 @@ export class FakeQuestionBankPrisma {
       return Promise.resolve({
         ...row,
         subject: subject ? { id: subject.id, name: subject.name } : { id: row.subjectId, name: '' },
-        _count: {
-          subTopics: this.subTopics.filter((subTopic) => subTopic.topicIds.includes(row.id)).length,
-          questions: this.questions.filter((question) => question.topicId === row.id).length,
-        },
+        _count: { questions: this.questions.filter((q) => q.topicId === row.id).length },
       });
     },
   };
-
-  readonly subTopic = {
-    findMany: ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
-      Promise.resolve(
-        this.subTopics
-          .filter((row) => !where?.id?.in || where.id.in.includes(row.id))
-          .map((row) => ({ ...row, topics: row.topicIds.map((id) => ({ id })) })),
-      ),
-
-    // A copy with its own `topics` array — the `include` the service asks for — not the live row:
-    // same reason as `FakePrisma.student.findUnique`.
-    findUnique: ({ where }: { where: { id?: string; name?: string } }) => {
-      const row = this.subTopics.find((r) =>
-        where.id ? r.id === where.id : r.name === where.name,
-      );
-      return Promise.resolve(row ? { ...row, topics: row.topicIds.map((id) => ({ id })) } : null);
-    },
-
-    findFirst: ({ where }: { where: { name?: string; id?: { not: string } } }) =>
-      Promise.resolve(
-        this.subTopics.find(
-          (row) =>
-            (where.name === undefined || row.name === where.name) &&
-            (where.id?.not === undefined || row.id !== where.id.not),
-        ) ?? null,
-      ),
-
-    count: () => Promise.resolve(this.subTopics.length),
-
-    create: ({ data }: { data: { name: string; topics: { connect: { id: string }[] } } }) => {
-      const row = makeSubTopic({
-        id: this.id('stp'),
-        name: data.name,
-        topicIds: data.topics.connect.map((topic) => topic.id),
-      });
-      this.subTopics.push(row);
-      return Promise.resolve(this.hydrateSubTopic(row));
-    },
-
-    update: ({
-      where,
-      data,
-    }: {
-      where: { id: string };
-      data: { name?: string; topics?: { connect?: { id: string }[]; set?: { id: string }[] } };
-    }) => {
-      const row = this.subTopics.find((subTopic) => subTopic.id === where.id);
-      if (!row) throw new Error(`no sub-topic ${where.id}`);
-      if (data.name) row.name = data.name;
-      if (data.topics?.set) row.topicIds = data.topics.set.map((topic) => topic.id);
-      if (data.topics?.connect) {
-        row.topicIds = [...new Set([...row.topicIds, ...data.topics.connect.map((t) => t.id)])];
-      }
-      return Promise.resolve(this.hydrateSubTopic(row));
-    },
-  };
-
-  private writeOptions(questionId: string, options: unknown): void {
-    const create = (
-      options as { create?: { position: number; isCorrect: boolean; text: unknown }[] }
-    )?.create;
-    if (!create) return;
-
-    for (const option of create) {
-      this.options.push({ id: this.id('opt'), questionId, ...option });
-    }
-  }
 
   private hydrate(row: FakeQuestionRow) {
     const subject = this.subjects.find((candidate) => candidate.id === row.subjectId);
     const topic = this.topics.find((candidate) => candidate.id === row.topicId);
-    const subTopic = this.subTopics.find((candidate) => candidate.id === row.subTopicId);
 
     return {
       ...row,
       subject: subject ? { id: subject.id, name: subject.name } : { id: row.subjectId, name: '' },
       topic: topic ? { id: topic.id, name: topic.name } : null,
-      subTopic: subTopic ? { id: subTopic.id, name: subTopic.name } : null,
-      options: this.options
-        .filter((option) => option.questionId === row.id)
-        .sort((a, b) => a.position - b.position),
-    };
-  }
-
-  private hydrateSubTopic(row: FakeSubTopicRow) {
-    return {
-      ...row,
-      topics: row.topicIds.map((id) => {
-        const topic = this.topics.find((candidate) => candidate.id === id);
-        const subject = this.subjects.find((candidate) => candidate.id === topic?.subjectId);
-        return {
-          id,
-          name: topic?.name ?? '',
-          subject: { id: subject?.id ?? '', name: subject?.name ?? '' },
-        };
-      }),
-      _count: { questions: 0 },
+      currentVersion: this.versions.find((version) => version.id === row.currentVersionId) ?? null,
     };
   }
 
@@ -1677,11 +1361,9 @@ type QuestionFieldCheck = (row: FakeQuestionRow, where: FakeQuestionWhere) => bo
 const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
   (row, where) => !where.subjectId || row.subjectId === where.subjectId,
   (row, where) => !where.topicId || row.topicId === where.topicId,
-  (row, where) => !where.subTopicId || row.subTopicId === where.subTopicId,
   (row, where) => !where.type || row.type === where.type,
   (row, where) => !where.difficulty || row.difficulty === where.difficulty,
   (row, where) => !where.status || row.status === where.status,
-  (row, where) => where.isActive === undefined || row.isActive === where.isActive,
   (row, where) => !where.tags?.has || row.tags.includes(where.tags.has),
 ];
 
@@ -1701,7 +1383,7 @@ function subjectIdOf(data: Record<string, unknown>): string {
   return connect?.id ?? (data.subjectId as string) ?? 'sub_1';
 }
 
-function relationIdOf(data: Record<string, unknown>, key: 'topic' | 'subTopic'): string | null {
+function relationIdOf(data: Record<string, unknown>, key: 'topic'): string | null {
   const connect = (data[key] as { connect?: { id: string } } | undefined)?.connect;
   if (connect?.id) return connect.id;
   const direct = data[`${key}Id`];

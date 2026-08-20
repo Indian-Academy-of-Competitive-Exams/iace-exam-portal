@@ -1,3 +1,4 @@
+import { type FeatureKey } from '@iace/contracts';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
@@ -43,7 +44,7 @@ export interface AppShellProps {
   /** The only way home: no nav row does that job. */
   homeTo?: string;
   /** Optional: an app with no permissions passes nothing and every section shows. */
-  can?: (featureKey: string) => boolean;
+  can?: (featureKey: FeatureKey) => boolean;
   width?: ShellWidth;
 }
 

@@ -10,15 +10,16 @@ export function questionWhere(
 
   if (query.subjectId) and.push({ subjectId: query.subjectId });
   if (query.topicId) and.push({ topicId: query.topicId });
-  if (query.subTopicId) and.push({ subTopicId: query.subTopicId });
   if (query.type) and.push({ type: query.type });
   if (query.difficulty) and.push({ difficulty: query.difficulty });
   if (query.status) and.push({ status: query.status });
-  if (query.isActive !== undefined) and.push({ isActive: query.isActive });
   if (query.tag) and.push({ tags: { has: query.tag } });
 
-  // A language is present when it has a stem, which is the key `buildContent` writes.
-  if (query.language) and.push({ content: { path: [query.language], not: Prisma.DbNull } });
+  // A language is present when the CURRENT version has a stem in it, which is the key
+  // `buildContent` writes. The content is on the version, so the filter travels through it.
+  if (query.language) {
+    and.push({ currentVersion: { content: { path: [query.language], not: Prisma.DbNull } } });
+  }
 
   // The search already ran as its own query; an empty result must match nothing
   // rather than being dropped, or a search for nonsense would list everything.

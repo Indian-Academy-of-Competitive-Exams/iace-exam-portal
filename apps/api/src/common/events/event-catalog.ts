@@ -12,7 +12,7 @@ export const DOMAIN_EVENTS = {
   ATTEMPT_SUBMITTED: 'attempt.submitted',
   /** A scoring job finished. TODO(docs/03 §6): emit from the scoring worker. */
   SCORING_COMPLETED: 'scoring.completed',
-  /** A test reached a group. TODO(docs/03 §6): emit from access/admin. */
+  /** A series was enabled for a branch. TODO(docs/03 §6): emit from access/admin. */
   TEST_ASSIGNED: 'test.assigned',
   /** A paper question was excluded from scoring. TODO(docs/03 §6): from admin. */
   PAPER_QUESTION_DROPPED: 'paperQuestion.dropped',
@@ -54,8 +54,8 @@ export interface ScoringCompletedEvent {
 
 export interface TestAssignedEvent {
   testId: string;
-  /** The groups that just gained access, via the series linked to them. */
-  groupIds: string[];
+  /** The branches that just gained access, through their per-series config rows. */
+  branchIds: string[];
 }
 
 export interface PaperQuestionCorrectedEvent {

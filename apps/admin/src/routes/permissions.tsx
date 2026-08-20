@@ -1,7 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
-import { PERMISSION_LEVELS, type Admin, type Feature, type PermissionLevel } from '@iace/contracts';
+import {
+  PERMISSION_LEVELS,
+  type Admin,
+  type Feature,
+  type FeatureKey,
+  type PermissionLevel,
+} from '@iace/contracts';
 import {
   Accordion,
   Alert,
@@ -26,10 +32,10 @@ type Level = PermissionLevel | null;
  * The edits since the last save. A DIFF, not a copy: an untouched feature reads
  * through to the server, so a refetch mid-edit cannot eat unsaved work.
  */
-type Draft = ReadonlyMap<string, Level>;
+type Draft = ReadonlyMap<FeatureKey, Level>;
 
 /** What one feature's row should show: the pending edit, or the stored truth. */
-function levelFor(admin: Admin, draft: Draft, key: string): Level {
+function levelFor(admin: Admin, draft: Draft, key: FeatureKey): Level {
   return draft.has(key) ? (draft.get(key) ?? null) : (admin.permissions[key] ?? null);
 }
 
@@ -87,7 +93,7 @@ export function PermissionsPage() {
       {!isLoading && registered.length === 0 ? (
         <Alert variant="warning" className="mb-5">
           <span>
-            No features are registered, so there is nothing to grant. Register one on the Features
+            No features are defined, so there is nothing to grant. Feature keys live in the code —
             screen first.
           </span>
         </Alert>
@@ -127,7 +133,7 @@ function AdminPanel({
   features,
   onSaved,
 }: Readonly<{ admin: Admin; features: readonly Feature[]; onSaved: () => void }>) {
-  const [draft, setDraft] = useState<Draft>(() => new Map<string, Level>());
+  const [draft, setDraft] = useState<Draft>(() => new Map<FeatureKey, Level>());
   const [confirming, setConfirming] = useState(false);
 
   const changes = useMemo<Change[]>(
@@ -142,7 +148,7 @@ function AdminPanel({
     [features, admin, draft],
   );
 
-  const setLevel = (key: string, next: Level) =>
+  const setLevel = (key: FeatureKey, next: Level) =>
     setDraft((previous) => {
       const updated = new Map(previous);
       // Ticking back to what is already stored is not a change. Dropping it
@@ -178,7 +184,7 @@ function AdminPanel({
      * changed the earlier features, so only the server knows where it got to.
      */
     onSettled: () => {
-      setDraft(new Map<string, Level>());
+      setDraft(new Map<FeatureKey, Level>());
       setConfirming(false);
       onSaved();
     },
@@ -227,7 +233,7 @@ function AdminPanel({
                   size="sm"
                   variant="secondary"
                   disabled={save.isPending}
-                  onClick={() => setDraft(new Map<string, Level>())}
+                  onClick={() => setDraft(new Map<FeatureKey, Level>())}
                 >
                   Discard
                 </Button>
@@ -259,7 +265,7 @@ function AdminPanel({
             <div className="flex flex-col gap-1">
               {changes.map((change) => (
                 <StatRow
-                  key={change.feature.id}
+                  key={change.feature.key}
                   label={<code className="text-xs">{change.feature.key}</code>}
                   value={`${levelWord(change.from)} → ${levelWord(change.to)}`}
                 />
@@ -315,7 +321,7 @@ function FeatureGrid({
   features: readonly Feature[];
   draft: Draft;
   disabled: boolean;
-  onSetLevel: (key: string, next: Level) => void;
+  onSetLevel: (key: FeatureKey, next: Level) => void;
 }>) {
   if (features.length === 0) {
     return <p className="text-sm text-muted-foreground">No features registered yet.</p>;
@@ -330,7 +336,7 @@ function FeatureGrid({
       </div>
       {features.map((feature) => (
         <FeatureRow
-          key={feature.id}
+          key={feature.key}
           admin={admin}
           feature={feature}
           level={levelFor(admin, draft, feature.key)}
@@ -357,7 +363,7 @@ function FeatureRow({
   /** Changed since the last save — marked, so a draft is never invisible. */
   edited: boolean;
   disabled: boolean;
-  onSetLevel: (key: string, next: Level) => void;
+  onSetLevel: (key: FeatureKey, next: Level) => void;
 }>) {
   const hasWrite = level === PERMISSION_LEVELS.WRITE;
   /** Write implies read, so read is locked while write is held. */

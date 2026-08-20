@@ -85,7 +85,7 @@ function HistoryBody({
 }
 
 /**
- * Takes a feature and an entity id rather than a studentId, so a group or branch
+ * Takes a feature and an entity id rather than a studentId, so a branch or exam
  * detail screen can reuse this unchanged.
  */
 export function EntityHistory({

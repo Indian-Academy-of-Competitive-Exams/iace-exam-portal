@@ -221,7 +221,7 @@ export function ImportQuestionsPage() {
 }
 
 function ImportRow({ row }: Readonly<{ row: QuestionImportRow }>) {
-  const filedUnder = [row.subjectName, row.topicName, row.subTopicName].filter(Boolean).join(' / ');
+  const filedUnder = [row.subjectName, row.topicName].filter(Boolean).join(' / ');
 
   return (
     <TableRow>

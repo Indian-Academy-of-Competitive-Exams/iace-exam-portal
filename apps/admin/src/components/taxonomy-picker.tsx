@@ -5,13 +5,11 @@ import { Combobox } from '@iace/ui';
 import { api } from '../lib/api';
 
 /**
- * Subject -> topic -> sub-topic, each searched on the server a page at a time.
- * A bank has more topics than one request returns, and filtering what happened
- * to load is not filtering.
+ * Subject -> topic, each searched on the server a page at a time. A bank has more topics than
+ * one request returns, and filtering what happened to load is not filtering.
  *
- * The three cascade: a topic only means something under its subject, and a
- * sub-topic only under its topic. Nothing is disabled for the sake of it —
- * without a subject there is no list of topics to offer.
+ * The two cascade: a topic only means something under its subject. Nothing is disabled for the
+ * sake of it — without a subject there is no list of topics to offer.
  */
 
 interface PickerProps {
@@ -80,36 +78,6 @@ export function TopicPicker({
       isLoading={pages.isLoading}
       isLoadingMore={pages.isLoadingMore}
       emptyLabel="No topics in that subject"
-    />
-  );
-}
-
-export function SubTopicPicker({ topicId, ...props }: Readonly<PickerProps & { topicId: string }>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: ['admin', 'sub-topics', 'picker', topicId, search],
-    fetchPage: (page) =>
-      api.admin.taxonomy.listSubTopics({ page, pageSize: PAGE_SIZE_MAX, q: search, topicId }),
-    enabled: topicId !== '',
-  });
-
-  return (
-    <Combobox
-      {...props}
-      disabled={topicId === ''}
-      placeholder={
-        topicId === '' ? 'Choose a topic first' : (props.placeholder ?? 'All sub-topics')
-      }
-      items={pages.items.map((subTopic) => ({ value: subTopic.id, label: subTopic.name }))}
-      search={search}
-      onSearchChange={setSearch}
-      searchPlaceholder="Search sub-topics"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
-      emptyLabel="No sub-topics under that topic"
     />
   );
 }

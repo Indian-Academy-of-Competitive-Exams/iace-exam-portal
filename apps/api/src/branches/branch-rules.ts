@@ -3,7 +3,7 @@ import { BRANCH_TYPE, type BranchType } from '@iace/contracts';
 /** The rules that keep the branch list trustworthy. */
 
 export interface BranchUsage {
-  groupCount: number;
+  studentCount: number;
   type: BranchType;
 }
 
@@ -12,8 +12,8 @@ export function branchDeletionBlocker(usage: BranchUsage): string | null {
   if (usage.type === BRANCH_TYPE.VIRTUAL) {
     return 'The online branch is part of the system and cannot be deleted.';
   }
-  if (usage.groupCount > 0) {
-    return `This branch still has ${usage.groupCount} group${usage.groupCount === 1 ? '' : 's'}. Move or delete them first.`;
+  if (usage.studentCount > 0) {
+    return `This branch still has ${usage.studentCount} student${usage.studentCount === 1 ? '' : 's'}. Move them to another branch first.`;
   }
   return null;
 }

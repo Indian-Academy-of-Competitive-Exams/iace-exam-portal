@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch, type UseFormRegisterReturn, type UseFormReturn } from 'react-hook-form';
+import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { ArrowLeft, FileText, Save } from 'lucide-react';
 import {
   AUDIT_FEATURE,
-  PROGRAM_MAX,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
   type Gender,
-  type GroupRef,
   type StudentDetail,
   type StudentType,
 } from '@iace/contracts';
@@ -35,11 +33,10 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { EntityHistory } from '../components/entity-history';
-import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
-import { useExamTypes } from '../lib/use-exam-types';
+import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
 
@@ -47,7 +44,6 @@ interface FormValues {
   fullName: string;
   studentType: StudentType;
   enrolledExams: string[];
-  program: string;
   currentBranchId: string;
   motherName: string;
   fatherName: string;
@@ -55,14 +51,12 @@ interface FormValues {
   email: string;
   address: string;
   gender: '' | Gender;
-  groupIds: string[];
 }
 
 const FORM_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
-  'program',
   'currentBranchId',
   'motherName',
   'fatherName',
@@ -70,7 +64,6 @@ const FORM_FIELDS = [
   'email',
   'address',
   'gender',
-  'groupIds',
 ] as const;
 
 /** An empty input means "no value", which the API expresses as null. */
@@ -81,7 +74,6 @@ function toFormValues(student: StudentDetail): FormValues {
     fullName: student.fullName ?? '',
     studentType: student.studentType,
     enrolledExams: [...student.enrolledExams],
-    program: student.program ?? '',
     currentBranchId: student.currentBranchId ?? '',
     motherName: student.profile?.motherName ?? '',
     fatherName: student.profile?.fatherName ?? '',
@@ -89,7 +81,6 @@ function toFormValues(student: StudentDetail): FormValues {
     email: student.profile?.email ?? '',
     address: student.profile?.address ?? '',
     gender: student.profile?.gender ?? '',
-    groupIds: student.groups.map((group) => group.id),
   };
 }
 
@@ -118,7 +109,7 @@ function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
 
 /** Where a student sits relative to the institute — the four fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
-  const examTypes = useExamTypes({ activeOnly: true });
+  const exams = useExams({ activeOnly: true });
   const branches = useBranches({ activeOnly: true });
   // Unfiltered: a student's current branch can be one that has since been retired, and
   // it must still resolve to a name rather than the raw id `branches` no longer carries.
@@ -132,8 +123,8 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
       <CardHeader>
         <CardTitle>Access</CardTitle>
         <CardDescription>
-          Enrolments are how a student reaches an exam or programme group — no membership is added
-          for them. Scholarship and non-IACE groups are granted below instead.
+          An enrolment is how a student reaches a test series — no membership row is written for
+          them. A series nothing here matches is granted one student at a time.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -156,7 +147,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <Field
           htmlFor="enrolledExams"
           label="Enrolled exams"
-          hint="Every exam or programme group under these is reachable."
+          hint="Every series tagged with one of these is reachable."
           error={form.formState.errors.enrolledExams?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
@@ -166,20 +157,14 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               aria-invalid={invalid}
               value={enrolledExams}
               onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-              items={examTypes.map((examType) => ({
-                value: examType.code,
-                label: examType.code,
-                hint: examType.name,
+              items={exams.map((exam) => ({
+                value: exam.code,
+                label: exam.code,
+                hint: exam.name,
               }))}
               placeholder="No exams yet"
-              emptyLabel="No exam type matches that"
+              emptyLabel="No exam matches that"
             />
-          )}
-        </Field>
-
-        <Field htmlFor="program" label="Programme" error={form.formState.errors.program?.message}>
-          {(control) => (
-            <Input {...control} maxLength={PROGRAM_MAX} {...form.register('program')} />
           )}
         </Field>
 
@@ -203,52 +188,6 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
             />
           )}
         </Field>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** A blocked student may lose a grant but not gain one, so the unticked boxes lock. */
-function GroupsCard({
-  isTestBlocked,
-  known,
-  selectedIds,
-  register,
-  error,
-}: Readonly<{
-  isTestBlocked: boolean;
-  known: GroupRef[];
-  selectedIds: string[];
-  register: UseFormRegisterReturn;
-  error?: string;
-}>) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Group grants</CardTitle>
-        <CardDescription>
-          Scholarship and non-IACE groups, given student by student. Exam and programme groups are
-          not here — they follow the enrolments above.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {isTestBlocked ? (
-          <Alert variant="info">
-            <span>
-              Blocked from tests, so no new group can be granted. Their current grants can still be
-              taken away, or lift the block first.
-            </span>
-          </Alert>
-        ) : null}
-
-        <GroupPicker
-          idPrefix="group"
-          register={register}
-          selectedIds={selectedIds}
-          known={known}
-          error={error}
-          lockedToSelection={isTestBlocked}
-        />
       </CardContent>
     </Card>
   );
@@ -363,7 +302,6 @@ export function StudentDetailPage() {
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
-      program: '',
       currentBranchId: '',
       motherName: '',
       fatherName: '',
@@ -371,12 +309,10 @@ export function StudentDetailPage() {
       email: '',
       address: '',
       gender: '',
-      groupIds: [],
     },
   });
 
   // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
-  const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
 
   // Seeded on load and only when the id changes, or a refetch wipes an in-progress edit.
   useEffect(() => {
@@ -389,13 +325,11 @@ export function StudentDetailPage() {
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
         studentType: values.studentType,
-        program: orNull(values.program),
         currentBranchId: orNull(values.currentBranchId),
         // An omitted key means "leave it alone", which is true of a list nobody touched.
         ...(form.formState.dirtyFields.enrolledExams
           ? { enrolledExams: values.enrolledExams }
           : {}),
-        ...(form.formState.dirtyFields.groupIds ? { groupIds: values.groupIds } : {}),
         profile: {
           motherName: orNull(values.motherName),
           fatherName: orNull(values.fatherName),
@@ -479,15 +413,14 @@ export function StudentDetailPage() {
 
       <Card className="mb-5">
         <CardHeader>
-          <CardTitle>Documents the student has uploaded</CardTitle>
+          <CardTitle>What the student has uploaded</CardTitle>
           <CardDescription>
-            Read-only here — only the student can replace them. Links expire after a few minutes.
+            Read-only here — only the student can replace it, and the link expires after a few
+            minutes. Aadhaar and PAN images are never stored.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
-          <DocumentLink label="Aadhaar" url={detail.profile?.aadhaarUrl} />
-          <DocumentLink label="PAN" url={detail.profile?.panUrl} />
         </CardContent>
       </Card>
 
@@ -567,14 +500,6 @@ export function StudentDetailPage() {
 
         <div className="flex flex-col gap-5">
           <AccessCard form={form} />
-
-          <GroupsCard
-            isTestBlocked={detail.isTestBlocked}
-            known={detail.groups}
-            selectedIds={selectedGroupIds}
-            register={form.register('groupIds')}
-            error={form.formState.errors.groupIds?.message}
-          />
 
           <Card>
             <CardContent className="flex flex-col gap-3 pt-6">

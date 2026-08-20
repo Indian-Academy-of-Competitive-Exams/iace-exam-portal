@@ -4,7 +4,7 @@ import { AUDITED_STUDENT_FIELDS, StudentsService } from '../src/students/student
 import { fieldDiff } from '@iace/contracts';
 import { AuditContext } from '../src/audit';
 import { type BranchesService } from '../src/branches/branches.service';
-import { type ExamTypesService } from '../src/configs';
+import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { FakePrisma, makeProfile, makeStudent } from './support/fakes';
 
@@ -18,9 +18,8 @@ describe('the student audit diff', () => {
       'fullName',
       'studentType',
       'enrolledExams',
-      'program',
+      'programs',
       'currentBranchId',
-      'directGroupIds',
       'isActive',
       'isTestBlocked',
     ]) {
@@ -62,7 +61,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
   const service = new StudentsService(
     prisma.asService(),
     {} as StorageService,
-    {} as ExamTypesService,
+    {} as ExamsService,
     {} as BranchesService,
     auditContext,
   );

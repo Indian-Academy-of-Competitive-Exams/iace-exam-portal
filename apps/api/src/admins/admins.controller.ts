@@ -5,7 +5,6 @@ import {
   AUDIT_FEATURE,
   adminListQuerySchema,
   createAdminSchema,
-  createFeatureSchema,
   setAdminActiveSchema,
   featureKeySchema,
   permissionGrantSchema,
@@ -72,18 +71,10 @@ export class AdminsController {
     return this.admins.setActive(id, body.isActive, user.id);
   }
 
+  /** The code-owned key list. There is no create: a key nothing checks cannot be granted. */
   @Get('features')
   listFeatures(): Promise<Feature[]> {
     return this.admins.listFeatures();
-  }
-
-  /** Deliberately unaudited: FEATURE_PERMISSION rows name an Admin, and registering a key grants
-   *  nobody anything. Filing a Feature id under it made the column mean two tables. */
-  @Post('features')
-  createFeature(
-    @Body(new ZodBody(createFeatureSchema)) body: { key: string; description?: string },
-  ): Promise<Feature> {
-    return this.admins.createFeature(body);
   }
 
   @Audit(AUDIT_FEATURE.FEATURE_PERMISSION, AUDIT_ACTION.CREATE)

@@ -20,16 +20,20 @@ import {
 
 const SUBJECT = 'sub_quant';
 const TOPIC = 'top_arithmetic';
-const OTHER_TOPIC = 'top_algebra';
-const SUB_TOPIC = 'sub_percentages';
+const OTHER_SUBJECT = 'sub_reasoning';
+const OTHER_SUBJECT_TOPIC = 'top_series';
 
-/** Quant -> Arithmetic + Algebra, with PERCENTAGES linked to Arithmetic only. */
+/** Quant -> Arithmetic, and a second subject holding a topic of its own. */
 function taxonomy(): TaxonomyContext {
   const context = emptyTaxonomy();
   context.subjects.set(SUBJECT, { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' });
+  context.subjects.set(OTHER_SUBJECT, { id: OTHER_SUBJECT, name: 'REASONING' });
   context.topics.set(TOPIC, { id: TOPIC, name: 'ARITHMETIC', subjectId: SUBJECT });
-  context.topics.set(OTHER_TOPIC, { id: OTHER_TOPIC, name: 'ALGEBRA', subjectId: SUBJECT });
-  context.subTopics.set(SUB_TOPIC, { id: SUB_TOPIC, name: 'PERCENTAGES', topicIds: [TOPIC] });
+  context.topics.set(OTHER_SUBJECT_TOPIC, {
+    id: OTHER_SUBJECT_TOPIC,
+    name: 'SERIES',
+    subjectId: OTHER_SUBJECT,
+  });
   return context;
 }
 
@@ -38,7 +42,6 @@ function mcq(over: Partial<QuestionDraft> = {}): QuestionDraft {
     type: QUESTION_TYPE.SINGLE_MCQ,
     subjectId: SUBJECT,
     topicId: TOPIC,
-    subTopicId: SUB_TOPIC,
     difficulty: DIFFICULTY_LEVEL.MEDIUM,
     status: QUESTION_STATUS.ACTIVE,
     questionCode: null,
@@ -51,8 +54,6 @@ function mcq(over: Partial<QuestionDraft> = {}): QuestionDraft {
       { position: 4, isCorrect: false, text: { en: '40' } },
     ],
     answerKey: null,
-    defaultMarks: 2,
-    defaultNegativeMarks: 0.5,
     tags: [],
     ...over,
   };
@@ -208,20 +209,19 @@ describe('validateQuestion — taxonomy', () => {
     assert.ok(codes(mcq({ subjectId: 'nope' })).includes(QUESTION_VALIDATION_CODE.SUBJECT_UNKNOWN));
   });
 
-  it('refuses a sub-topic that is not linked to the topic — the check no foreign key can make', () => {
-    // PERCENTAGES is shared, but only with ARITHMETIC. Under ALGEBRA it is wrong,
-    // and the column cannot say so: the link lives in the many-to-many.
-    const draft = mcq({ topicId: OTHER_TOPIC });
-    assert.ok(codes(draft).includes(QUESTION_VALIDATION_CODE.SUB_TOPIC_NOT_IN_TOPIC));
+  it('refuses a topic that is not under the subject — the check no foreign key can make', () => {
+    // Both ids are columns on the question, so nothing stops SERIES being filed under
+    // QUANTITATIVE APTITUDE except this rule.
+    const draft = mcq({ topicId: OTHER_SUBJECT_TOPIC });
+    assert.ok(codes(draft).includes(QUESTION_VALIDATION_CODE.TOPIC_NOT_IN_SUBJECT));
   });
 
-  it('refuses a sub-topic with no topic at all', () => {
-    const draft = mcq({ topicId: null });
-    assert.ok(codes(draft).includes(QUESTION_VALIDATION_CODE.SUB_TOPIC_NEEDS_TOPIC));
+  it('refuses a topic that is not in the bank', () => {
+    assert.ok(codes(mcq({ topicId: 'nope' })).includes(QUESTION_VALIDATION_CODE.TOPIC_UNKNOWN));
   });
 
   it('accepts a question filed at subject level only', () => {
-    assert.deepEqual(codes(mcq({ topicId: null, subTopicId: null })), []);
+    assert.deepEqual(codes(mcq({ topicId: null })), []);
   });
 });
 

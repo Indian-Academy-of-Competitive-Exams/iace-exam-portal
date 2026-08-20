@@ -7,6 +7,7 @@ import {
   FEATURE_KEYS,
   LANGUAGE_LABELS,
   PERMISSION_LEVELS,
+  QUESTION_STATUS,
   QUESTION_STATUSES,
   QUESTION_TYPES,
   type QuestionSummary,
@@ -31,34 +32,25 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
-import { SubTopicPicker, SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
+import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = [
-  'q',
-  'subjectId',
-  'topicId',
-  'subTopicId',
-  'type',
-  'difficulty',
-  'status',
-  'active',
-] as const;
+const ALL_FILTERS = ['q', 'subjectId', 'topicId', 'type', 'difficulty', 'status'] as const;
 type FilterKey = (typeof ALL_FILTERS)[number];
 
-/** Retired questions are hidden by default: they are out of circulation. */
-type ActiveFilter = 'active' | 'inactive' | 'all';
-
-const ACTIVE_QUERY: Record<ActiveFilter, { isActive?: 'true' | 'false' }> = {
-  active: { isActive: 'true' },
-  inactive: { isActive: 'false' },
-  all: {},
-};
+/** ARCHIVED questions are out of circulation, so the list opens on the ones that are not. */
+const DEFAULT_STATUS = QUESTION_STATUS.ACTIVE;
 
 const DIFFICULTY_VARIANT = {
   LOW: 'success',
   MEDIUM: 'info',
   HIGH: 'warning',
+} as const;
+
+const STATUS_VARIANT = {
+  [QUESTION_STATUS.DRAFT]: 'neutral',
+  [QUESTION_STATUS.ACTIVE]: 'success',
+  [QUESTION_STATUS.ARCHIVED]: 'warning',
 } as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
@@ -79,9 +71,7 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
       header: 'Filed under',
       cell: (question) => (
         <span className="text-muted-foreground">
-          {[question.subject.name, question.topic?.name, question.subTopic?.name]
-            .filter(Boolean)
-            .join(' / ')}
+          {[question.subject.name, question.topic?.name].filter(Boolean).join(' / ')}
         </span>
       ),
     },
@@ -106,14 +96,9 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
     {
       key: 'status',
       header: 'Status',
-      cell: (question) =>
-        question.isActive ? (
-          <Badge variant={question.status === 'ACTIVE' ? 'success' : 'neutral'}>
-            {question.status}
-          </Badge>
-        ) : (
-          <Badge variant="warning">Retired</Badge>
-        ),
+      cell: (question) => (
+        <Badge variant={STATUS_VARIANT[question.status]}>{question.status}</Badge>
+      ),
     },
     {
       key: 'actions',
@@ -132,7 +117,7 @@ export function QuestionsPage() {
   const filters = useFilters<FilterKey>();
   const subjectId = filters.get('subjectId');
   const topicId = filters.get('topicId');
-  const active = (filters.get('active') || 'active') as ActiveFilter;
+  const status = (filters.get('status') || DEFAULT_STATUS) as QuestionSummary['status'] | '';
 
   const questions = useListQuery({
     queryKey: ['admin', 'questions'],
@@ -140,12 +125,10 @@ export function QuestionsPage() {
       q: filters.get('q') || undefined,
       subjectId: subjectId || undefined,
       topicId: topicId || undefined,
-      subTopicId: filters.get('subTopicId') || undefined,
       type: (filters.get('type') || undefined) as QuestionSummary['type'] | undefined,
       difficulty: (filters.get('difficulty') || undefined) as
         QuestionSummary['difficulty'] | undefined,
-      status: (filters.get('status') || undefined) as QuestionSummary['status'] | undefined,
-      ...ACTIVE_QUERY[active],
+      status: status || undefined,
     },
     fetchPage: (params) => api.admin.questions.list(params),
   });
@@ -194,7 +177,7 @@ export function QuestionsPage() {
           value={subjectId}
           clearable
           // A topic under the old subject would filter everything away.
-          onChange={(value) => filters.set({ subjectId: value, topicId: '', subTopicId: '' })}
+          onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
         />
       </div>
 
@@ -204,17 +187,7 @@ export function QuestionsPage() {
           subjectId={subjectId}
           value={topicId}
           clearable
-          onChange={(value) => filters.set({ topicId: value, subTopicId: '' })}
-        />
-      </div>
-
-      <div className="w-52">
-        <SubTopicPicker
-          aria-label="Filter by sub-topic"
-          topicId={topicId}
-          value={filters.get('subTopicId')}
-          clearable
-          onChange={(value) => filters.set({ subTopicId: value })}
+          onChange={(value) => filters.set({ topicId: value })}
         />
       </div>
 
@@ -255,23 +228,11 @@ export function QuestionsPage() {
           onChange={(event) => filters.set({ status: event.target.value })}
         >
           <option value="">Any status</option>
-          {QUESTION_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {status}
+          {QUESTION_STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {value}
             </option>
           ))}
-        </Select>
-      </div>
-
-      <div className="w-44">
-        <Select
-          aria-label="Show retired questions"
-          value={active}
-          onChange={(event) => filters.set({ active: event.target.value })}
-        >
-          <option value="active">In circulation</option>
-          <option value="inactive">Retired only</option>
-          <option value="all">All questions</option>
         </Select>
       </div>
     </div>
@@ -303,11 +264,14 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
 
-  const setActive = useMutation({
-    meta: {
-      success: question.isActive ? 'Question retired.' : 'Question back in circulation.',
-    },
-    mutationFn: () => api.admin.questions.setActive(question.id, { isActive: !question.isActive }),
+  const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
+
+  const setStatus = useMutation({
+    meta: { success: isArchived ? 'Question back in circulation.' : 'Question retired.' },
+    mutationFn: () =>
+      api.admin.questions.setStatus(question.id, {
+        status: isArchived ? QUESTION_STATUS.ACTIVE : QUESTION_STATUS.ARCHIVED,
+      }),
     onSuccess: () => {
       setConfirming(false);
       return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
@@ -327,9 +291,9 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
       <Button
         size="sm"
         variant="ghost"
-        aria-label={question.isActive ? 'Retire this question' : 'Return this question'}
+        aria-label={isArchived ? 'Return this question' : 'Retire this question'}
         onClick={() => {
-          setActive.reset();
+          setStatus.reset();
           setConfirming(true);
         }}
       >
@@ -341,15 +305,15 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        loading={setActive.isPending}
-        title={question.isActive ? 'Retire this question?' : 'Put this question back?'}
+        loading={setStatus.isPending}
+        title={isArchived ? 'Put this question back?' : 'Retire this question?'}
         description={
-          question.isActive
-            ? 'It stops being drawn into new papers and disappears from the bank. Papers that already hold it are untouched, and it can be brought back.'
-            : 'It becomes available to new papers again.'
+          isArchived
+            ? 'It becomes available to new papers again.'
+            : 'It stops being drawn into new papers and disappears from the bank. Papers that already pinned a version of it are untouched, and it can be brought back.'
         }
-        confirmLabel={question.isActive ? 'Retire' : 'Put back'}
-        onConfirm={() => setActive.mutate()}
+        confirmLabel={isArchived ? 'Put back' : 'Retire'}
+        onConfirm={() => setStatus.mutate()}
       />
     </span>
   );

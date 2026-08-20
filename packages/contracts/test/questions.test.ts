@@ -10,8 +10,8 @@ import {
   localizedTextSchema,
   questionDraftSchema,
   questionListQuerySchema,
-  subTopicNameSchema,
   tagSchema,
+  topicNameSchema,
   questionCodeSchema,
 } from '../src/index';
 
@@ -49,11 +49,18 @@ describe('supported languages', () => {
 });
 
 describe('questionDraftSchema', () => {
-  it('defaults type, status, options and tags so a bare draft parses', () => {
+  it('defaults type, options and tags so a bare draft parses', () => {
     const parsed = questionDraftSchema.parse(draft());
     assert.equal(parsed.type, QUESTION_TYPE.SINGLE_MCQ);
-    assert.equal(parsed.status, 'ACTIVE');
     assert.deepEqual(parsed.tags, []);
+  });
+
+  /**
+   * NOT defaulted, deliberately: a defaulted status turns every save that omits it into an
+   * un-archive, which puts a retired question back into the next paper.
+   */
+  it('leaves an omitted status absent rather than assuming ACTIVE', () => {
+    assert.equal(questionDraftSchema.parse(draft()).status, undefined);
   });
 
   it('accepts a multilingual draft', () => {
@@ -77,16 +84,11 @@ describe('questionDraftSchema', () => {
     });
     assert.equal(questionDraftSchema.safeParse(tooMany).success, false);
   });
-
-  it('rejects marks with more precision than the column holds', () => {
-    assert.equal(questionDraftSchema.safeParse(draft({ defaultMarks: 2.5 })).success, true);
-    assert.equal(questionDraftSchema.safeParse(draft({ defaultMarks: 2.555 })).success, false);
-  });
 });
 
 describe('names, tags and codes are normalised rather than refused', () => {
-  it('canonicalises a sub-topic name', () => {
-    assert.equal(subTopicNameSchema.parse('  percentages   basics '), 'PERCENTAGES BASICS');
+  it('canonicalises a topic name', () => {
+    assert.equal(topicNameSchema.parse('  arithmetic   basics '), 'ARITHMETIC BASICS');
   });
 
   it('folds a tag to one casing so a filter is one facet', () => {
@@ -141,9 +143,9 @@ describe('the import column contract', () => {
 });
 
 describe('questionListQuerySchema', () => {
-  it('reads present-or-absent booleans from the query string', () => {
-    assert.equal(questionListQuerySchema.parse({}).isActive, undefined);
-    assert.equal(questionListQuerySchema.parse({ isActive: 'false' }).isActive, false);
+  it('reads an absent status as "any", and a named one as itself', () => {
+    assert.equal(questionListQuerySchema.parse({}).status, undefined);
+    assert.equal(questionListQuerySchema.parse({ status: 'ARCHIVED' }).status, 'ARCHIVED');
   });
 
   it('drops a blank search rather than searching for nothing', () => {

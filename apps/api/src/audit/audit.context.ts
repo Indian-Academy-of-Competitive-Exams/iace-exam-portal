@@ -40,8 +40,8 @@ export class AuditContext {
     if (store) store.importLogId = id;
   }
 
-  /** For a route whose action depends on what it found — `createSubTopic` links an existing row
-   *  as often as it makes one, and the decorator cannot know which. */
+  /** For a route whose action depends on what it found: an upsert-shaped write updates as often
+   *  as it creates, and the decorator cannot know which. */
   setAction(action: AuditAction): void {
     const store = this.storage.getStore();
     if (store) store.action = action;

@@ -1,22 +1,20 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
-  QUESTION_SOURCE_KIND,
   fieldDiff,
   plainTextOf,
   type LocalizedContent,
-  type LocalizedRich,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionLanguage,
   type QuestionListQuery,
+  type QuestionOption,
   type QuestionSummary,
-  type QuestionSource,
-  type SetQuestionActiveBody,
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
@@ -29,30 +27,29 @@ import { taxonomyForIds } from './taxonomy-context';
 const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
   topic: { select: { id: true, name: true } },
-  subTopic: { select: { id: true, name: true } },
-  options: { orderBy: { position: 'asc' } },
+  currentVersion: true,
 } as const satisfies Prisma.QuestionInclude;
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
 
-/** Excludes localized content — spelling changes as often as meaning. `correctOptionPositions`
- * is keyed to `position`, not `id`: `update()` deletes and recreates options on every save. */
+/**
+ * Excludes localized content — spelling changes as often as meaning, and an edit to it inserts a
+ * version rather than changing a column. `correctOptionPositions` is keyed to `position`, which is
+ * what survives across versions.
+ */
 export const AUDITED_QUESTION_FIELDS = [
   'type',
   'subjectId',
   'topicId',
-  'subTopicId',
   'difficulty',
   'questionCode',
   'status',
-  'isActive',
-  'defaultMarks',
-  'defaultNegativeMarks',
+  'version',
   'correctOptionPositions',
   'answerKey',
 ] as const;
 
-/** Owns `Question` and `QuestionOption` (docs/03 §5) — the only module that writes them. */
+/** Owns `Question` and `QuestionVersion` (docs/03 §5) — the only module that writes them. */
 @Injectable()
 export class QuestionsService {
   constructor(
@@ -91,61 +88,52 @@ export class QuestionsService {
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, null);
 
-    const row = await this.prisma.question.create({
-      data: {
-        ...this.columnsOf(draft, built),
-        createdById,
-        source: { kind: QUESTION_SOURCE_KIND.MANUAL } satisfies QuestionSource,
-        options: { create: built.options },
-      },
-      include: QUESTION_INCLUDE,
+    const row = await this.prisma.$transaction(async (tx) => {
+      const question = await tx.question.create({
+        data: { ...this.columnsOf(draft, built), createdById },
+      });
+      const version = await tx.questionVersion.create({
+        data: versionDataOf(question.id, FIRST_VERSION, built, [], createdById),
+      });
+      return tx.question.update({
+        where: { id: question.id },
+        data: { currentVersionId: version.id },
+        include: QUESTION_INCLUDE,
+      });
     });
 
     return toDetail(row);
   }
 
   /**
-   * The options are replaced wholesale rather than diffed: an edit that reorders
-   * or rewrites them has no stable identity to match on, and nothing has drawn
-   * this question into a paper yet — a locked test copies its own PaperQuestion.
+   * An edit INSERTS a version and repoints the question at it. Nothing that already pinned the
+   * old one — a paper, an attempt — moves, which is the entire reason versions exist. Option ids
+   * carry over by position, so a re-save does not churn the ids a screen is holding.
    */
-  async update(id: string, draft: QuestionDraft): Promise<QuestionDetail> {
+  async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
-    const [, row] = await this.prisma.$transaction([
-      this.prisma.questionOption.deleteMany({ where: { questionId: id } }),
-      this.prisma.question.update({
+    const current = currentOptionsOf(question);
+    const nextNumber = (question.currentVersion?.version ?? 0) + 1;
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const version = await tx.questionVersion.create({
+        data: versionDataOf(id, nextNumber, built, current, createdById),
+      });
+      return tx.question.update({
         where: { id },
-        data: {
-          ...this.columnsOf(draft, built),
-          options: { create: built.options },
-        },
+        data: { ...this.columnsOf(draft, built), currentVersionId: version.id },
         include: QUESTION_INCLUDE,
-      }),
-    ]);
+      });
+    });
 
     this.auditContext.setChanged(
       fieldDiff(auditFieldsOf(question), auditFieldsOf(row), AUDITED_QUESTION_FIELDS),
     );
 
     return toDetail(row);
-  }
-
-  async setActive(id: string, body: SetQuestionActiveBody): Promise<QuestionDetail> {
-    const question = await this.require(id);
-    const updated = await this.prisma.question.update({
-      where: { id },
-      data: { isActive: body.isActive },
-      include: QUESTION_INCLUDE,
-    });
-
-    this.auditContext.setChanged(
-      fieldDiff(auditFieldsOf(question), auditFieldsOf(updated), AUDITED_QUESTION_FIELDS),
-    );
-
-    return toDetail(updated);
   }
 
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
@@ -163,21 +151,18 @@ export class QuestionsService {
     return toDetail(updated);
   }
 
-  /** The columns a draft decides, shared by create and update. */
+  /** The columns a draft decides — identity and taxonomy only; content lives in the version. */
   private columnsOf(draft: QuestionDraft, built: ReturnType<typeof buildContent>) {
     return {
       type: draft.type,
       subjectId: draft.subjectId,
       topicId: draft.topicId ?? null,
-      subTopicId: draft.subTopicId ?? null,
       difficulty: draft.difficulty,
-      status: draft.status,
+      // Omitted means "leave it": on create the column defaults to ACTIVE, and on edit an
+      // archived question stays archived rather than being silently put back in circulation.
+      ...(draft.status === undefined ? {} : { status: draft.status }),
       questionCode: draft.questionCode ?? null,
-      content: built.content as Prisma.InputJsonValue,
-      answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
       tags: draft.tags,
-      defaultMarks: draft.defaultMarks ?? null,
-      defaultNegativeMarks: draft.defaultNegativeMarks ?? null,
       stemHash: built.stemHash,
     } satisfies Omit<Prisma.QuestionUncheckedCreateInput, 'id'>;
   }
@@ -187,7 +172,6 @@ export class QuestionsService {
     const taxonomy = await taxonomyForIds(this.prisma, {
       subjectIds: [draft.subjectId],
       topicIds: draft.topicId ? [draft.topicId] : [],
-      subTopicIds: draft.subTopicId ? [draft.subTopicId] : [],
     });
 
     const issues = validateQuestion(draft, taxonomy);
@@ -208,7 +192,7 @@ export class QuestionsService {
   private async assertNotDuplicate(stemHash: string, exceptId: string | null): Promise<void> {
     const existing = await this.prisma.question.findFirst({
       where: { stemHash, ...(exceptId ? { id: { not: exceptId } } : {}) },
-      select: { id: true, content: true },
+      select: { id: true },
     });
     if (!existing) return;
 
@@ -225,18 +209,22 @@ export class QuestionsService {
   }
 
   /**
-   * Search runs as its own query because the stem is JSON: a question is nodes
+   * Search runs as its own query because the stem is JSON on the version: a question is nodes
    * per language, so no column holds the text a `contains` filter would read.
    */
   private async searchIds(term: string): Promise<string[]> {
     const like = `%${term}%`;
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT "id" FROM "Question"
-      WHERE "content"::text ILIKE ${like} OR "questionCode" ILIKE ${like}
+      SELECT q."id" FROM "Question" q
+      LEFT JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"
+      WHERE v."content"::text ILIKE ${like} OR q."questionCode" ILIKE ${like}
     `;
     return rows.map((row) => row.id);
   }
 }
+
+/** Every question starts at 1; `update` counts up from the current version. */
+const FIRST_VERSION = 1;
 
 /** One entry per field, so react-hook-form can put every problem on its own input. */
 export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[]> {
@@ -249,36 +237,62 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
   return fieldErrors;
 }
 
+/**
+ * A version row from a built draft. `previous` supplies an option id for each position that
+ * already had one — an attempt stores the id it was shown, so a stable id is worth keeping.
+ */
+function versionDataOf(
+  questionId: string,
+  version: number,
+  built: ReturnType<typeof buildContent>,
+  previous: QuestionOption[],
+  createdById: string,
+): Prisma.QuestionVersionUncheckedCreateInput {
+  const options = built.options.map((option) => ({
+    id: previous.find((old) => old.position === option.position)?.id ?? randomUUID(),
+    position: option.position,
+    isCorrect: option.isCorrect,
+    text: option.text,
+  }));
+
+  return {
+    questionId,
+    version,
+    createdById,
+    content: built.content as Prisma.InputJsonValue,
+    options: options as unknown as Prisma.InputJsonValue,
+    answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+  };
+}
+
+/** The current version's options, parsed out of JSON. Absent or malformed reads as none. */
+function currentOptionsOf(row: QuestionRow): QuestionOption[] {
+  const options = row.currentVersion?.options;
+  return Array.isArray(options) ? (options as unknown as QuestionOption[]) : [];
+}
+
 /** `options`, kept only as the scoring key: the sorted positions of the ones marked correct. */
-function auditFieldsOf(
-  row: QuestionRow,
-): Pick<
-  QuestionRow,
-  | 'type'
-  | 'subjectId'
-  | 'topicId'
-  | 'subTopicId'
-  | 'difficulty'
-  | 'questionCode'
-  | 'status'
-  | 'isActive'
-  | 'defaultMarks'
-  | 'defaultNegativeMarks'
-  | 'answerKey'
-> & { correctOptionPositions: number[] } {
+function auditFieldsOf(row: QuestionRow): {
+  type: QuestionRow['type'];
+  subjectId: string;
+  topicId: string | null;
+  difficulty: QuestionRow['difficulty'];
+  questionCode: string | null;
+  status: QuestionRow['status'];
+  version: number | null;
+  correctOptionPositions: number[];
+  answerKey: unknown;
+} {
   return {
     type: row.type,
     subjectId: row.subjectId,
     topicId: row.topicId,
-    subTopicId: row.subTopicId,
     difficulty: row.difficulty,
     questionCode: row.questionCode,
     status: row.status,
-    isActive: row.isActive,
-    defaultMarks: row.defaultMarks,
-    defaultNegativeMarks: row.defaultNegativeMarks,
-    answerKey: row.answerKey,
-    correctOptionPositions: row.options
+    version: row.currentVersion?.version ?? null,
+    answerKey: row.currentVersion?.answerKey ?? null,
+    correctOptionPositions: currentOptionsOf(row)
       .filter((option) => option.isCorrect)
       .map((option) => option.position)
       .sort((a, b) => a - b),
@@ -286,7 +300,7 @@ function auditFieldsOf(
 }
 
 function toSummary(row: QuestionRow): QuestionSummary {
-  const content = row.content as LocalizedContent;
+  const content = contentOf(row);
 
   return {
     id: row.id,
@@ -294,10 +308,8 @@ function toSummary(row: QuestionRow): QuestionSummary {
     type: row.type,
     difficulty: row.difficulty,
     status: row.status,
-    isActive: row.isActive,
     subject: row.subject,
     topic: row.topic,
-    subTopic: row.subTopic,
     stemPreview: stemPreviewOf(content),
     languages: languagesInContent(content),
     tags: row.tags,
@@ -306,24 +318,19 @@ function toSummary(row: QuestionRow): QuestionSummary {
 }
 
 function toDetail(row: QuestionRow): QuestionDetail {
-  const content = row.content as LocalizedContent;
-
   return {
     ...toSummary(row),
-    content,
-    options: row.options.map((option) => ({
-      id: option.id,
-      position: option.position,
-      isCorrect: option.isCorrect,
-      text: option.text as LocalizedRich,
-    })),
-    answerKey: (row.answerKey as QuestionDetail['answerKey']) ?? null,
-    defaultMarks: row.defaultMarks === null ? null : Number(row.defaultMarks),
-    defaultNegativeMarks:
-      row.defaultNegativeMarks === null ? null : Number(row.defaultNegativeMarks),
-    source: (row.source as QuestionSource | null) ?? null,
+    version: row.currentVersion?.version ?? FIRST_VERSION,
+    content: contentOf(row),
+    options: currentOptionsOf(row),
+    answerKey: (row.currentVersion?.answerKey as QuestionDetail['answerKey']) ?? null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** A question with no current version has nothing to show — an empty content map, not a crash. */
+function contentOf(row: QuestionRow): LocalizedContent {
+  return (row.currentVersion?.content as LocalizedContent | undefined) ?? {};
 }
 
 /** Which languages the stored row really carries — the same rule `buildContent` applied. */

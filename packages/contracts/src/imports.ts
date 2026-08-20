@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { groupRefSchema } from './students';
 
 // ============================================================================
 // Bulk student import. Previewed before anything is written, errors reported by
@@ -38,8 +37,6 @@ export const studentImportRowSchema = z.object({
   line: z.number().int(),
   mobile: z.string().nullable(),
   fullName: z.string().nullable(),
-  groupNames: z.array(z.string()),
-  groupIds: z.array(z.string()),
   /** Set when the number already belongs to a student — this row updates them. */
   existingStudentId: z.string().nullable(),
   /** Whether this row hands out a starting PIN. Never for a student who chose their own. */
@@ -126,71 +123,7 @@ export const STUDENT_IMPORT_COLUMNS = [
     required: false,
     aliases: ['fullname', 'name', 'studentname', 'student'],
   },
-  {
-    key: 'groups',
-    header: 'Groups',
-    width: 52,
-    required: false,
-    aliases: ['groups', 'group', 'batch', 'batches', 'groupnames'],
-  },
 ] as const;
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
-
-// ============================================================================
-// Adding students to ONE group, in bulk: a list of mobile numbers, with the group
-// taken from the screen rather than a column. Add only — removing is a visible act.
-// ============================================================================
-
-/** The one column a membership sheet needs. */
-export const GROUP_MEMBER_IMPORT_COLUMNS = [
-  STUDENT_IMPORT_COLUMNS[0],
-] as const satisfies readonly StudentImportColumn[];
-
-export const GROUP_MEMBER_IMPORT_TEMPLATE_FILENAME = 'iace-group-members-template.xlsx';
-
-/**
- * `add` — exists, not in the group. `already` — in it (not an error, re-uploading is
- * normal). `skip` — unreadable, repeated, or belongs to nobody.
- */
-export const groupMemberImportActionSchema = z.enum(['add', 'already', 'skip']);
-export type GroupMemberImportAction = z.infer<typeof groupMemberImportActionSchema>;
-
-export const groupMemberImportRowSchema = z.object({
-  line: z.number().int(),
-  mobile: z.string().nullable(),
-  /** The student that number resolves to, when it resolves to one. */
-  studentId: z.string().nullable(),
-  studentName: z.string().nullable(),
-  action: groupMemberImportActionSchema,
-  errors: z.array(z.string()),
-});
-export type GroupMemberImportRow = z.infer<typeof groupMemberImportRowSchema>;
-
-export const groupMemberImportSummarySchema = z.object({
-  total: z.number().int(),
-  willAdd: z.number().int(),
-  alreadyMembers: z.number().int(),
-  invalid: z.number().int(),
-});
-export type GroupMemberImportSummary = z.infer<typeof groupMemberImportSummarySchema>;
-
-export const groupMemberImportPlanSchema = z.object({
-  group: groupRefSchema,
-  rows: z.array(groupMemberImportRowSchema),
-  summary: groupMemberImportSummarySchema,
-  fileErrors: z.array(z.string()),
-});
-export type GroupMemberImportPlan = z.infer<typeof groupMemberImportPlanSchema>;
-
-export const groupMemberImportResultSchema = groupMemberImportSummarySchema.extend({
-  added: z.number().int(),
-});
-export type GroupMemberImportResult = z.infer<typeof groupMemberImportResultSchema>;
-
-export const GROUP_IMPORT_ROUTES = {
-  membersPreview: (groupId: string) => `/imports/groups/${groupId}/members/preview`,
-  membersCommit: (groupId: string) => `/imports/groups/${groupId}/members/commit`,
-  membersTemplate: '/imports/groups/members/template',
-} as const;

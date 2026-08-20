@@ -4,7 +4,8 @@ import { paginationQuerySchema } from './envelope';
 // ============================================================================
 // Feature-level access control: an admin holds a LEVEL on a FEATURE key.
 // No roles, no per-route grants, no hierarchy — every feature is a peer, and
-// several screens may share one key. Levels are fixed here; keys grow at runtime.
+// several screens may share one key. The key set is CODE-OWNED: it is this file,
+// never a table and never a form, so a key nothing checks cannot be granted.
 // ============================================================================
 
 /** WRITE is create + update + delete, and always implies READ. There is no DELETE level. */
@@ -15,68 +16,39 @@ export const PERMISSION_LEVELS = {
 export type PermissionLevel = (typeof PERMISSION_LEVELS)[keyof typeof PERMISSION_LEVELS];
 export const permissionLevelSchema = z.enum(PERMISSION_LEVELS);
 
-/**
- * The keys code already references, named so a controller need not retype one.
- * NOT a tier — `featureKeySchema` is open, and nothing is seeded.
- */
+/** Every key a controller can require. Adding one is a code change, by design. */
 export const FEATURE_KEYS = {
   STUDENT_MANAGEMENT: 'STUDENT_MANAGEMENT',
   QUESTION_MANAGEMENT: 'QUESTION_MANAGEMENT',
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
 } as const;
+export const featureKeySchema = z.enum(FEATURE_KEYS);
+export type FeatureKey = z.infer<typeof featureKeySchema>;
+export const FEATURE_KEY_VALUES = featureKeySchema.options;
 
-/**
- * Any canonical key. A string, not a union: the set is open at runtime, and a closed
- * enum would reject rows the API had just created.
- */
+/** What each key is called and covers on the permissions screen. */
+export const FEATURES: Readonly<Record<FeatureKey, { label: string; description: string }>> = {
+  [FEATURE_KEYS.STUDENT_MANAGEMENT]: {
+    label: 'Students',
+    description: 'The student directory, imports, branches and the exam catalog.',
+  },
+  [FEATURE_KEYS.QUESTION_MANAGEMENT]: {
+    label: 'Question bank',
+    description: 'Questions, their versions, subjects and topics.',
+  },
+  [FEATURE_KEYS.TEST_MANAGEMENT]: {
+    label: 'Tests',
+    description: 'Base configs, tests, papers and series.',
+  },
+  [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT]: {
+    label: 'Branch scheduling',
+    description: 'Which series a branch runs, and when.',
+  },
+};
 
-const FEATURE_KEY_PATTERN = /^[A-Z][A-Z0-9_]*$/;
-
-/** Normalised, not rejected: "student management" becomes STUDENT_MANAGEMENT. */
-export function canonicalFeatureKey(value: string): string {
-  return (
-    value
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '_')
-      // No quantifier: the replace above leaves at most one underscore at each end,
-      // and `_+$` would backtrack through every run.
-      .replace(/^_/, '')
-      .replace(/_$/, '')
-  );
-}
-
-/**
- * The same normalisation while the key is being TYPED: a trailing underscore survives,
- * or the separator is eaten on each keystroke. The schema tidies it on submit.
- */
-export function featureKeyDraft(value: string): string {
-  return (
-    value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '_')
-      // Single `_`, for the same reason as canonicalFeatureKey above.
-      .replace(/^_/, '')
-  );
-}
-
-export const featureKeySchema = z
-  .string()
-  .transform(canonicalFeatureKey)
-  .pipe(
-    z
-      .string()
-      .min(2, 'Give the feature a key')
-      .max(60, 'A feature key cannot be longer than 60 characters')
-      .regex(FEATURE_KEY_PATTERN, 'Use capital letters, numbers and underscores'),
-  );
-
-/**
- * What an admin may do, by feature. An absent key means no access, so the map is partial.
- * A plain-string key: the set is open, and an enum key would make this exhaustive in Zod 4.
- */
-export const adminPermissionsSchema = z.record(z.string(), permissionLevelSchema);
+/** What an admin may do, by feature. An absent key means no access, so the map is partial. */
+export const adminPermissionsSchema = z.partialRecord(featureKeySchema, permissionLevelSchema);
 export type AdminPermissions = z.infer<typeof adminPermissionsSchema>;
 
 /** Does `granted` satisfy `required`? Shared, so the guard and the UI cannot disagree. */
@@ -155,24 +127,15 @@ export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;
 // Features + grants
 // ============================================================================
 
+/** A code-owned key, with who holds it. There is no feature row to create or edit. */
 export const featureSchema = z.object({
-  id: z.string(),
-  /** A plain string on the way out: the stored value is already canonical. */
-  key: z.string(),
-  description: z.string().nullable(),
-  createdAt: z.string(),
-  /** Exhaustive on purpose: both rows are created with the feature, so a missing one is a bug. */
+  key: featureKeySchema,
+  label: z.string(),
+  description: z.string(),
+  /** Exhaustive on purpose: a level with nobody on it is an empty list, never a missing key. */
   grants: z.record(permissionLevelSchema, z.array(z.string())),
 });
 export type Feature = z.infer<typeof featureSchema>;
-
-/** The key IS the name — there is no separate label to keep in step. */
-export const createFeatureSchema = z.object({
-  key: featureKeySchema,
-  description: z.string().trim().max(500).optional(),
-});
-export type CreateFeatureInput = z.input<typeof createFeatureSchema>;
-export type CreateFeatureBody = z.infer<typeof createFeatureSchema>;
 
 /** Grant and revoke are the same shape — the verb is the HTTP method. */
 export const permissionGrantSchema = z.object({
@@ -206,11 +169,11 @@ export const ADMIN_ADMIN_ROUTES = {
 } as const;
 
 export const ADMIN_FEATURE_ROUTES = {
+  /** Read-only: the list is FEATURES above, not a table. */
   list: '/admin/features',
-  create: '/admin/features',
   grant: '/admin/features/permissions',
   /** In the path, not a body: proxies drop a DELETE body, and a silent no-op revoke is the worst case. */
-  revoke: (featureKey: string, level: PermissionLevel, adminId: string) =>
+  revoke: (featureKey: FeatureKey, level: PermissionLevel, adminId: string) =>
     `/admin/features/${featureKey}/permissions/${level}/${adminId}`,
 } as const;
 

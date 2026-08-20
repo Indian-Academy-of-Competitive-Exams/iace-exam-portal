@@ -176,7 +176,6 @@ describe('buildStudentTemplate', () => {
 
     assert.equal(header?.getCell(1).value, 'Mobile Number');
     assert.equal(header?.getCell(2).value, 'Full Name');
-    assert.equal(header?.getCell(3).value, 'Groups');
   });
 
   it('is a workbook, not a CSV with a misleading name', async () => {

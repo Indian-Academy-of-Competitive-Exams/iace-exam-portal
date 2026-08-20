@@ -18,9 +18,7 @@ import {
   FakePrisma,
   FakeQuestionBankPrisma,
   FakeStorage,
-  makeGroup,
   makeStudent,
-  makeSubTopic,
   makeSubject,
   makeTopic,
 } from './support/fakes';
@@ -124,22 +122,6 @@ describe('ImportsService — a preview writes nothing at all', () => {
     );
 
     await service.previewStudents(Buffer.from('mobile\n9876543210'));
-
-    assert.equal(prisma.importLogs.length, 0);
-    assert.equal(storage.objects.size, 0);
-  });
-
-  it('previewGroupMembers opens no run and uploads no sheet', async () => {
-    const prisma = new FakePrisma([], [], [], [makeGroup({ id: 'grp_1' })]);
-    const storage = new FakeStorage();
-    const service = new ImportsService(
-      prisma.asService(),
-      fakeAuth(),
-      storage as never,
-      new AuditService(prisma.asService()),
-    );
-
-    await service.previewGroupMembers('grp_1', Buffer.from('mobile\n9000000001'));
 
     assert.equal(prisma.importLogs.length, 0);
     assert.equal(storage.objects.size, 0);
@@ -357,55 +339,6 @@ describe('ImportsService — a failed close preserves what openRun already recor
   });
 });
 
-describe('ImportsService.commitGroupMembers — what an import run actually left behind', () => {
-  it('logs only the rows it actually added, never an already-a-member row', async () => {
-    const prisma = new FakePrisma(
-      [
-        makeStudent({ id: 'stu_a', mobile: '9000000001' }),
-        makeStudent({ id: 'stu_b', mobile: '9000000002', directGroupIds: ['grp_1'] }),
-      ],
-      [],
-      [],
-      [makeGroup({ id: 'grp_1' })],
-    );
-    const service = new ImportsService(
-      prisma.asService(),
-      fakeAuth(),
-      new FakeStorage() as never,
-      new AuditService(prisma.asService()),
-    );
-
-    const result = await service.commitGroupMembers(
-      'grp_1',
-      Buffer.from('mobile\n9000000001\n9000000002\n9000000003'),
-      'adm_1',
-    );
-
-    assert.equal(result.added, 1);
-    assert.equal(prisma.rowActionLogs.length, 1);
-    assert.deepEqual(
-      {
-        entityId: prisma.rowActionLogs[0]?.entityId,
-        action: prisma.rowActionLogs[0]?.action,
-        actorId: prisma.rowActionLogs[0]?.actorId,
-      },
-      { entityId: 'stu_a', action: AUDIT_ACTION.UPDATE, actorId: 'adm_1' },
-    );
-
-    const log = prisma.importLogs[0] as {
-      status: string;
-      updated: number;
-      skipped: number;
-      failed: number;
-    };
-    assert.equal(log.status, IMPORT_LOG_STATUS.COMMITTED);
-    assert.deepEqual(
-      { updated: log.updated, skipped: log.skipped, failed: log.failed },
-      { updated: 1, skipped: 1, failed: 1 },
-    );
-  });
-});
-
 // ============================================================================
 // The third importer. It predates this slice and was the one ImportLog producer
 // already in the tree, so it was in no task's file list — and wrote no audit at
@@ -416,7 +349,6 @@ describe('ImportsService.commitGroupMembers — what an import run actually left
 const QUESTION_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
   subject: 'Quantitative Aptitude',
   topic: 'Arithmetic',
-  subtopic: 'Percentages',
   difficulty: 'medium',
   option1_en: '25',
   option2_en: '30',
@@ -440,7 +372,6 @@ function questionBank() {
     [],
     [makeSubject({ id: 'sub_1' })],
     [makeTopic({ id: 'top_1' })],
-    [makeSubTopic({ id: 'stp_1' })],
   );
   const storage = new FakeStorage();
   return {

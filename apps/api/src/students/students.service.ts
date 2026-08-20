@@ -2,17 +2,12 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import {
   AppException,
   BLOCKED_ENROLMENT_MESSAGE,
-  DIRECT_GRANT_MESSAGE,
   ErrorCodes,
-  GROUP_TYPES_ACCEPTING_GRANTS,
-  IMPORT_SOURCE,
-  deactivatedMemberBlocker,
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
   type Gender,
   type CreateStudentBody,
-  type GroupRef,
   type Paginated,
   type StudentDetail,
   type StudentListQuery,
@@ -20,19 +15,17 @@ import {
   type StudentType,
   type UpdateStudentBody,
 } from '@iace/contracts';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { BranchesService } from '../branches';
-import { ExamTypesService } from '../configs';
+import { ExamsService } from '../configs';
 import { AuditContext } from '../audit';
 
-/** How long a signed link to somebody's identity document stays usable. */
+/** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
-import { studentOrderBy, studentWhere, type GroupAccessRef } from './student-query';
+import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
-
-/** What names a group on a student's row — the group ids themselves are a column. */
-const GROUP_REF_SELECT = { id: true, name: true, examType: true } as const;
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
@@ -43,9 +36,8 @@ export const AUDITED_STUDENT_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
-  'program',
+  'programs',
   'currentBranchId',
-  'directGroupIds',
   'isActive',
   'isTestBlocked',
 ] as const;
@@ -63,8 +55,8 @@ export class StudentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
-    @Inject(forwardRef(() => ExamTypesService))
-    private readonly examTypes: ExamTypesService,
+    @Inject(forwardRef(() => ExamsService))
+    private readonly exams: ExamsService,
     private readonly branches: BranchesService,
     private readonly auditContext: AuditContext,
   ) {}
@@ -74,7 +66,7 @@ export class StudentsService {
   // ==========================================================================
 
   async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
-    const where = studentWhere(query, await this.groupFilter(query.groupId));
+    const where = studentWhere(query);
     const skip = (query.page - 1) * query.pageSize;
 
     // One round trip for the rows and one for the count.
@@ -88,11 +80,8 @@ export class StudentsService {
       this.prisma.student.count({ where }),
     ]);
 
-    // One lookup for the whole page, not one per student.
-    const named = await this.groupRefs(rows.flatMap((row) => row.directGroupIds));
-
     return {
-      items: rows.map((row) => this.toSummary(row, namesOf(row.directGroupIds, named))),
+      items: rows.map((row) => this.toSummary(row)),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -106,37 +95,14 @@ export class StudentsService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    const named = await this.groupRefs(student.directGroupIds);
-
     return {
-      ...this.toSummary(student, namesOf(student.directGroupIds, named)),
+      ...this.toSummary(student),
       preferredLanguage: student.preferredLanguage,
-      program: student.program,
+      programs: student.programs,
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
     };
-  }
-
-  /** The groups a set of ids names, by id. A group deleted out from under a grant is simply absent. */
-  private async groupRefs(groupIds: string[]): Promise<Map<string, GroupRef>> {
-    const wanted = [...new Set(groupIds)];
-    if (wanted.length === 0) return new Map();
-
-    const groups = await this.prisma.group.findMany({
-      where: { id: { in: wanted } },
-      select: GROUP_REF_SELECT,
-    });
-    return new Map(groups.map((group) => [group.id, group]));
-  }
-
-  /** One lookup before the where-clause: the group's type decides who counts as being in it. */
-  private async groupFilter(groupId: string | undefined): Promise<GroupAccessRef | null> {
-    if (!groupId) return null;
-    return this.prisma.group.findUnique({
-      where: { id: groupId },
-      select: { id: true, type: true, examType: true },
-    });
   }
 
   /** A stored profile as the API returns it. */
@@ -148,17 +114,11 @@ export class StudentsService {
     address: string | null;
     gender: Gender | null;
     photoUrl: string | null;
-    aadhaarUrl: string | null;
-    panUrl: string | null;
+    aadhaarVerified: boolean;
+    panVerified: boolean;
     educationDetails: unknown;
     pastExamHistory: unknown;
   }): Promise<StudentDetail['profile']> {
-    const [photoUrl, aadhaarUrl, panUrl] = await Promise.all([
-      this.signed(profile.photoUrl),
-      this.signed(profile.aadhaarUrl),
-      this.signed(profile.panUrl),
-    ]);
-
     return {
       motherName: profile.motherName,
       fatherName: profile.fatherName,
@@ -166,9 +126,9 @@ export class StudentsService {
       email: profile.email,
       address: profile.address,
       gender: profile.gender,
-      photoUrl,
-      aadhaarUrl,
-      panUrl,
+      photoUrl: await this.signed(profile.photoUrl),
+      aadhaarVerified: profile.aadhaarVerified,
+      panVerified: profile.panVerified,
       // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row
       // should read as "nothing recorded" rather than reach a screen that assumes an array.
       educationDetails:
@@ -188,7 +148,7 @@ export class StudentsService {
 
   /** Creates a student before their first login. */
   async create(input: CreateStudentBody): Promise<StudentDetail> {
-    const existing = await this.prisma.student.findUnique({ where: { mobile: input.mobile } });
+    const existing = await this.findLiveByMobile(input.mobile);
     if (existing) {
       throw new AppException(
         ErrorCodes.CONFLICT,
@@ -200,12 +160,8 @@ export class StudentsService {
       );
     }
 
-    await this.assertGroupsExist(input.groupIds);
-    // A new student holds nothing yet, so every requested id is being ADDED — the diff `update`
-    // runs against `directGroupIds` is against an empty list here.
-    await this.assertGroupsAcceptGrants([], input.groupIds ?? []);
     if (input.enrolledExams?.length) {
-      await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+      await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
     }
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
@@ -217,10 +173,8 @@ export class StudentsService {
         fullName: input.fullName ?? null,
         studentType: input.studentType,
         enrolledExams: input.enrolledExams ?? [],
-        program: input.program ?? null,
+        programs: input.programs ?? [],
         currentBranchId: input.currentBranchId ?? null,
-        createdVia: IMPORT_SOURCE.INDIVIDUAL,
-        directGroupIds: input.groupIds ?? [],
       },
     });
     return this.detail(student.id);
@@ -234,15 +188,10 @@ export class StudentsService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    if (input.groupIds) {
-      await this.assertGroupsExist(input.groupIds);
-      await this.assertGroupsAcceptGrants(student.directGroupIds, input.groupIds);
-      this.assertMayJoinGroups(student, input.groupIds);
-    }
     if (input.enrolledExams) {
       this.assertMayEnrol(student, input.enrolledExams);
       if (input.enrolledExams.length) {
-        await this.examTypes.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
+        await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
       }
     }
     if (input.currentBranchId) {
@@ -256,16 +205,15 @@ export class StudentsService {
       ? { ...student.profile, ...stripUndefined(profilePatch) }
       : student.profile;
 
-    const updatedColumns = {
+    const updatedColumns: Prisma.StudentUncheckedUpdateInput = {
       ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
       ...(input.preferredLanguage === undefined
         ? {}
         : { preferredLanguage: input.preferredLanguage }),
       ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
       ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
-      ...(input.program === undefined ? {} : { program: input.program }),
+      ...(input.programs ? { programs: input.programs } : {}),
       ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
-      ...(input.groupIds ? { directGroupIds: input.groupIds } : {}),
       ...(profilePatch
         ? {
             profile: {
@@ -297,7 +245,7 @@ export class StudentsService {
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
   }
 
-  /** For the configs module: enrolment is an array of exam-type CODES, with no relation to follow. */
+  /** For the configs module: enrolment is an array of exam CODES, with no relation to follow. */
   countEnrolledIn(code: string): Promise<number> {
     return this.prisma.student.count({ where: { enrolledExams: { has: code } } });
   }
@@ -357,21 +305,12 @@ export class StudentsService {
   // Internals
   // ==========================================================================
 
-  /** Only the groups this save would ADD, so a blocked student can still lose one. */
-  private assertMayJoinGroups(
-    student: { isTestBlocked: boolean; directGroupIds: string[] },
-    groupIds: string[],
-  ): void {
-    if (!student.isTestBlocked) return;
-
-    const already = new Set(student.directGroupIds);
-    const joining = new Set(groupIds.filter((id) => !already.has(id)));
-    const blocker = deactivatedMemberBlocker(joining.size > 0 ? 1 : 0);
-    if (blocker) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
-        fieldErrors: { groupIds: [blocker] },
-      });
-    }
+  /** `mobile` is unique only among live rows, so this is a filtered read, not a lookup by key. */
+  private findLiveByMobile(mobile: string): Promise<{ id: string } | null> {
+    return this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
+      select: { id: true },
+    });
   }
 
   /** Only the exams this save would ADD, so a blocked student can still be un-enrolled. */
@@ -389,50 +328,20 @@ export class StudentsService {
     });
   }
 
-  /** Only the groups this save would ADD, so a grant made before the rule is still removable. */
-  private async assertGroupsAcceptGrants(current: string[], requested: string[]): Promise<void> {
-    const already = new Set(current);
-    const joining = requested.filter((id) => !already.has(id));
-    if (joining.length === 0) return;
-
-    const refused = await this.prisma.group.count({
-      where: { id: { in: joining }, type: { notIn: [...GROUP_TYPES_ACCEPTING_GRANTS] } },
-    });
-    if (refused > 0) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, DIRECT_GRANT_MESSAGE, {
-        fieldErrors: { groupIds: [DIRECT_GRANT_MESSAGE] },
-      });
-    }
-  }
-
-  private async assertGroupsExist(groupIds: string[] | undefined): Promise<void> {
-    if (!groupIds?.length) return;
-
-    const found = await this.prisma.group.count({ where: { id: { in: groupIds } } });
-    if (found !== new Set(groupIds).size) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'One of those groups no longer exists', {
-        fieldErrors: { groupIds: ['One of those groups no longer exists'] },
-      });
-    }
-  }
-
-  private toSummary(
-    row: {
-      id: string;
-      mobile: string;
-      fullName: string | null;
-      studentType: StudentType;
-      enrolledExams: string[];
-      isActive: boolean;
-      isTestBlocked: boolean;
-      pinHash: string | null;
-      pinIsDefault: boolean;
-      preTestReady: boolean;
-      profileCompleted: boolean;
-      createdAt: Date;
-    },
-    groups: GroupRef[],
-  ): StudentSummary {
+  private toSummary(row: {
+    id: string;
+    mobile: string;
+    fullName: string | null;
+    studentType: StudentType;
+    enrolledExams: string[];
+    isActive: boolean;
+    isTestBlocked: boolean;
+    pinHash: string | null;
+    pinIsDefault: boolean;
+    preTestReady: boolean;
+    profileCompleted: boolean;
+    createdAt: Date;
+  }): StudentSummary {
     return {
       id: row.id,
       mobile: row.mobile,
@@ -447,45 +356,34 @@ export class StudentsService {
       hasDefaultPin: row.pinIsDefault,
       preTestReady: row.preTestReady,
       profileCompleted: row.profileCompleted,
-      groups,
       createdAt: row.createdAt.toISOString(),
     };
   }
 }
 
-/** The named groups behind a student's grants, in name order; unknown ids drop out. */
 /** Every column `AUDITED_STUDENT_FIELDS` names, and nothing else. */
 interface AuditedStudentColumns {
   fullName: string | null;
   studentType: StudentType;
   enrolledExams: string[];
-  program: string | null;
+  programs: string[];
   currentBranchId: string | null;
-  directGroupIds: string[];
   isActive: boolean;
   isTestBlocked: boolean;
 }
 
 /** The audited columns off a real row, so a relation write in the update payload can never be
- *  diffed as if it were one. The shape groups, admins, questions and sub-topics already use. */
+ *  diffed as if it were one. The shape admins and questions already use. */
 function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
   return {
     fullName: row.fullName,
     studentType: row.studentType,
     enrolledExams: row.enrolledExams,
-    program: row.program,
+    programs: row.programs,
     currentBranchId: row.currentBranchId,
-    directGroupIds: row.directGroupIds,
     isActive: row.isActive,
     isTestBlocked: row.isTestBlocked,
   };
-}
-
-function namesOf(groupIds: string[], named: Map<string, GroupRef>): GroupRef[] {
-  return groupIds
-    .map((id) => named.get(id))
-    .filter((group): group is GroupRef => group !== undefined)
-    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** A DATE column round-trips as YYYY-MM-DD; the time part is not ours to invent. */

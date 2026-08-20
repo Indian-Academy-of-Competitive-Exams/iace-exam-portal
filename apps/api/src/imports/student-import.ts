@@ -1,8 +1,6 @@
 import {
-  DEACTIVATED_MEMBER_MESSAGE,
   IMPORT_MAX_ROWS,
   STUDENT_IMPORT_COLUMNS,
-  canonicalName,
   mobileSchema,
   personNameSchema,
   type StudentImportColumn,
@@ -31,60 +29,9 @@ function missingColumns(headers: string[]): StudentImportColumn[] {
   );
 }
 
-/** Several groups in one cell, because a comma is already the column separator. */
-const GROUP_SEPARATOR = /[;|]/;
-
-/** How a cell names the exam a group is for: "SSC CGL / SSC CGL MORNING". */
-const EXAM_QUALIFIER = '/';
-
-export interface ImportGroup {
-  id: string;
-  name: string;
-  examType: string | null;
-}
-
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
-  existingByMobile: Map<
-    string,
-    { id: string; fullName: string | null; hasPin: boolean; isTestBlocked: boolean }
-  >;
-  /** Canonical group name → every group with that name, one per exam type. */
-  groupsByName: Map<string, ImportGroup[]>;
-}
-
-/** Turns one cell entry into a group, or into the reason it could not be one. */
-export function resolveGroup(
-  entry: string,
-  groupsByName: Map<string, ImportGroup[]>,
-): { group: ImportGroup } | { error: string } {
-  const separator = entry.indexOf(EXAM_QUALIFIER);
-  const examType = separator === -1 ? null : canonicalName(entry.slice(0, separator));
-  const name = canonicalName(separator === -1 ? entry : entry.slice(separator + 1));
-
-  const matches = groupsByName.get(name) ?? [];
-
-  if (examType !== null) {
-    const match = matches.find((group) => group.examType === examType);
-    return match ? { group: match } : { error: `No group called "${name}" for "${examType}"` };
-  }
-
-  if (matches.length === 0) return { error: `No group called "${name}"` };
-  if (matches.length === 1) return { group: matches[0]! };
-
-  const exams = matches
-    .map((group) => group.examType)
-    .filter((examCode): examCode is string => examCode !== null);
-
-  if (exams.length === 0) {
-    return {
-      error: `"${name}" matches more than one group — rename one of them, or add these students from the group's own screen`,
-    };
-  }
-
-  return {
-    error: `"${name}" exists under more than one exam (${exams.join(', ')}) — write it as "${exams[0]} ${EXAM_QUALIFIER} ${name}"`,
-  };
+  existingByMobile: Map<string, { id: string; fullName: string | null; hasPin: boolean }>;
 }
 
 /**
@@ -98,17 +45,6 @@ export function mobilesIn(table: CsvTable): string[] {
     if (parsed.success) mobiles.add(parsed.data);
   }
   return [...mobiles];
-}
-
-/** Every group entry the file names, still unresolved. Same reasoning. */
-export function groupEntriesIn(table: CsvTable): string[] {
-  const entries = new Set<string>();
-  for (const row of table.rows) {
-    for (const entry of columnValue(row, 'groups').split(GROUP_SEPARATOR)) {
-      if (entry.trim()) entries.add(entry);
-    }
-  }
-  return [...entries];
 }
 
 export function planStudentImport(table: CsvTable, context: ImportContext): StudentImportPlan {
@@ -213,28 +149,6 @@ function readMobile(
   return { mobile: parsed.data };
 }
 
-/** Every group the cell names, resolved — or the reasons they could not be. */
-function readGroups(
-  row: CsvRow,
-  groupsByName: ImportContext['groupsByName'],
-): { groupNames: string[]; groupIds: string[]; errors: string[] } {
-  const groupNames = columnValue(row, 'groups')
-    .split(GROUP_SEPARATOR)
-    .map((name) => name.trim())
-    .filter(Boolean);
-
-  const groupIds: string[] = [];
-  const errors: string[] = [];
-
-  for (const entry of groupNames) {
-    const resolved = resolveGroup(entry, groupsByName);
-    if ('error' in resolved) errors.push(resolved.error);
-    else groupIds.push(resolved.group.id);
-  }
-
-  return { groupNames, groupIds, errors };
-}
-
 /** One row's plan. */
 function planRow(
   row: CsvRow,
@@ -243,21 +157,13 @@ function planRow(
 ): StudentImportRow {
   const name = readName(row);
   const number = readMobile(row, seenInFile);
-  const groups = readGroups(row, context.groupsByName);
 
   const { fullName } = name;
   const { mobile } = number;
-  const { groupNames, groupIds } = groups;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
 
-  const errors = [
-    name.error,
-    number.error,
-    ...groups.errors,
-    // Only when the row grants a group; editing a blocked student's name is fine.
-    existing?.isTestBlocked && groupIds.length > 0 ? DEACTIVATED_MEMBER_MESSAGE : undefined,
-  ].filter((error): error is string => error !== undefined);
+  const errors = [name.error, number.error].filter((error): error is string => error !== undefined);
 
   const action = actionFor(errors.length, Boolean(existing));
 
@@ -265,8 +171,6 @@ function planRow(
     line: row.line,
     mobile,
     fullName,
-    groupNames,
-    groupIds,
     existingStudentId: existing?.id ?? null,
     // A student who already chose a PIN keeps it. Re-importing last term's
     // roster must not hand every one of those accounts back to the sheet.

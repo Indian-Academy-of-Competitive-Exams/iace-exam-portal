@@ -1,3 +1,4 @@
+import { type FeatureKey } from '@iace/contracts';
 import { type LucideIcon } from 'lucide-react';
 
 /** How a section with children presents itself. AUTO picks by child count. */
@@ -20,7 +21,7 @@ export interface NavItem {
   /** Defaults to AUTO. Override to force INLINE or PANEL. */
   layout?: NavLayout;
   /** Render only when `can(featureKey)` says so. Absent means always shown. */
-  featureKey?: string;
+  featureKey?: FeatureKey;
 }
 
 /** A section is an item with children. A leaf navigates; a section opens. */
@@ -41,7 +42,7 @@ export function resolveNavLayout(item: NavItem): Exclude<NavLayout, 'AUTO'> {
  */
 export function filterNavByPermission(
   items: readonly NavItem[],
-  can?: (featureKey: string) => boolean,
+  can?: (featureKey: FeatureKey) => boolean,
 ): NavItem[] {
   return items.reduce<NavItem[]>((kept, item) => {
     if (item.featureKey && can && !can(item.featureKey)) return kept;

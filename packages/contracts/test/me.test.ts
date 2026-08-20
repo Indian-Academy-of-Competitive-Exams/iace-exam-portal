@@ -10,12 +10,12 @@ describe('updateMeSchema', () => {
   it('keeps the fields a student owns', () => {
     const parsed = updateMeSchema.parse({
       fullName: 'Asha Rao',
-      preferredLanguage: 'hi',
+      preferredLanguage: 'HI',
       profile: { motherName: 'Lakshmi' },
     });
 
     assert.equal(parsed.fullName, 'Asha Rao');
-    assert.equal(parsed.preferredLanguage, 'hi');
+    assert.equal(parsed.preferredLanguage, 'HI');
     assert.equal(parsed.profile?.motherName, 'Lakshmi');
   });
 

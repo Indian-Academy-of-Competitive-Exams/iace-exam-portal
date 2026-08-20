@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   ADMIN_STUDENT_ROUTES,
-  PROGRAM_MAX,
   STUDENT_TYPE,
   createStudentSchema,
   setStudentTestBlockedSchema,
@@ -24,14 +23,13 @@ const summary = {
   hasDefaultPin: false,
   preTestReady: true,
   profileCompleted: false,
-  groups: [],
   createdAt: '2026-01-05T09:30:00.000Z',
 };
 
 const detail = {
   ...summary,
-  preferredLanguage: 'en',
-  program: null,
+  preferredLanguage: 'EN',
+  programs: [],
   currentBranchId: null,
   updatedAt: '2026-01-05T09:30:00.000Z',
   profile: null,
@@ -55,33 +53,22 @@ describe('createStudentSchema — what a student is here for', () => {
       mobile: '9876543210',
       studentType: STUDENT_TYPE.OFFLINE,
       enrolledExams: ['SSC CGL', 'RRB JE'],
-      program: 'One year classroom',
+      programs: ['SSC CGL FOUNDATION'],
       currentBranchId: 'br_1',
     });
 
     assert.deepEqual(parsed.enrolledExams, ['SSC CGL', 'RRB JE']);
-    assert.equal(parsed.program, 'One year classroom');
+    assert.deepEqual(parsed.programs, ['SSC CGL FOUNDATION']);
     assert.equal(parsed.currentBranchId, 'br_1');
   });
 
-  it('reads an untouched programme box as "not known yet", not as an empty programme', () => {
+  it('leaves the programs absent when nobody named one', () => {
     const parsed = createStudentSchema.parse({
       mobile: '9876543210',
       studentType: STUDENT_TYPE.ONLINE,
-      program: '   ',
     });
 
-    assert.equal(parsed.program, undefined);
-  });
-
-  it('caps the programme at the column width', () => {
-    const tooLong = {
-      mobile: '9876543210',
-      studentType: STUDENT_TYPE.ONLINE,
-      program: 'x'.repeat(PROGRAM_MAX + 1),
-    };
-
-    assert.equal(createStudentSchema.safeParse(tooLong).success, false);
+    assert.equal(parsed.programs, undefined);
   });
 });
 
@@ -91,14 +78,14 @@ describe('updateStudentSchema — a patch, where a cleared box clears the field'
 
     assert.equal(parsed.studentType, undefined);
     assert.equal(parsed.enrolledExams, undefined);
-    assert.equal(parsed.program, undefined);
+    assert.equal(parsed.programs, undefined);
     assert.equal(parsed.currentBranchId, undefined);
   });
 
-  it('clears the programme and the branch when the box is emptied', () => {
-    const parsed = updateStudentSchema.parse({ program: '', currentBranchId: '' });
+  it('clears the branch when the box is emptied, and the programs when the list is', () => {
+    const parsed = updateStudentSchema.parse({ programs: [], currentBranchId: '' });
 
-    assert.equal(parsed.program, null);
+    assert.deepEqual(parsed.programs, []);
     assert.equal(parsed.currentBranchId, null);
   });
 
@@ -135,14 +122,14 @@ describe('the roster reads both states', () => {
   });
 });
 
-describe('studentDetailSchema — program and branch are required, but nullable', () => {
-  it('accepts null — an unset programme or branch is a known "none", not a gap', () => {
+describe('studentDetailSchema — programs and branch are required keys', () => {
+  it('accepts an empty list and a null branch — a known "none", not a gap', () => {
     assert.equal(studentDetailSchema.safeParse(detail).success, true);
   });
 
-  it('refuses an absent key — null is a value on this schema, absent is not', () => {
-    const { program: _program, ...withoutProgram } = detail;
-    assert.equal(studentDetailSchema.safeParse(withoutProgram).success, false);
+  it('refuses an absent key — "none" is a value on this schema, absent is not', () => {
+    const { programs: _programs, ...withoutPrograms } = detail;
+    assert.equal(studentDetailSchema.safeParse(withoutPrograms).success, false);
 
     const { currentBranchId: _currentBranchId, ...withoutBranch } = detail;
     assert.equal(studentDetailSchema.safeParse(withoutBranch).success, false);

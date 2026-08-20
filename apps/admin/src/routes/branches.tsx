@@ -47,8 +47,8 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
       header: 'Branch',
       className: 'font-medium',
       cell: (branch) =>
-        branch.groupCount > 0 ? (
-          <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
+        branch.studentCount > 0 ? (
+          <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`} className={linkVariants()}>
             {branch.name}
           </Link>
         ) : (
@@ -56,13 +56,13 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
         ),
     },
     {
-      key: 'groups',
-      header: 'Groups',
+      key: 'students',
+      header: 'Students',
       numeric: true,
       cell: (branch) =>
-        branch.groupCount > 0 ? (
-          <Link to={`${ROUTES.GROUPS}?branchId=${branch.id}`} className={linkVariants()}>
-            {branch.groupCount}
+        branch.studentCount > 0 ? (
+          <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`} className={linkVariants()}>
+            {branch.studentCount}
           </Link>
         ) : (
           <span className="text-muted-foreground">0</span>
@@ -70,8 +70,7 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
     },
     {
       key: 'students',
-      // A branch answers two questions — which groups, and which students
-      // those groups reach. Both are the existing screen filtered.
+      // The students screen, filtered — a branch has no roster of its own.
       cell: (branch) => (
         <Button variant="ghost" size="sm" asChild>
           <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
@@ -92,7 +91,7 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
   ];
 }
 
-/** Anyone managing groups may read the list, because they pick from it. Only a super admin writes. */
+/** Anyone managing students may read the list, because they pick from it. Only a super admin writes. */
 export function BranchesPage() {
   const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
@@ -112,7 +111,7 @@ export function BranchesPage() {
     <>
       <PageHeader
         title="Branches"
-        description="The fixed list every group is created under. GLOBAL is for groups that belong to no centre."
+        description="The centres the institute teaches at. Every student attends one, and scheduling reads it."
         action={
           isSuperAdmin ? (
             <Button size="sm" onClick={() => setCreating((open) => !open)}>
@@ -314,9 +313,9 @@ function BranchRowActions({
       {/* Retiring is reversible, and it still asks. It is not the undo that
           makes it worth a question — it is that the effect is invisible from
           here: nothing about this row changes except a badge, and the
-          consequence lands weeks later on somebody else, as a branch that will
-          not accept the group they are trying to create. A switch whose result
-          you cannot see is exactly the one to state out loud. */}
+          consequence lands weeks later on somebody else, as a branch that is
+          not offered when they assign a student. A switch whose result you
+          cannot see is exactly the one to state out loud. */}
       <ConfirmDialog
         open={asking === BRANCH_CONFIRMS.RETIRE}
         onOpenChange={(open) => !open && close()}
@@ -324,14 +323,14 @@ function BranchRowActions({
         title={branch.isActive ? `Retire ${branch.name}?` : `Reactivate ${branch.name}?`}
         description={
           branch.isActive
-            ? `Nothing it already holds changes — ${plural(branch.groupCount, 'group')} and every student in them keep working exactly as now. What stops is new groups: this branch will no longer be offered when anyone creates one. Reactivating puts it back.`
-            : 'The branch is offered again when anyone creates a group. Nothing else changes.'
+            ? `Nothing it already holds changes — the ${plural(branch.studentCount, 'student')} who attend it keep working exactly as now. What stops is new ones: this branch will no longer be offered when anyone assigns a student. Reactivating puts it back.`
+            : 'The branch is offered again when anyone assigns a student. Nothing else changes.'
         }
         confirmLabel={branch.isActive ? 'Retire branch' : 'Reactivate branch'}
         onConfirm={() => setActive.mutate(!branch.isActive)}
       />
 
-      {/* Deleting is refused server-side while any group still sits here, so the
+      {/* Deleting is refused server-side while any student still sits here, so the
           count decides which of two different questions this is: "confirm an
           empty shell goes" or "you are about to be told no". Saying which
           before the click saves a round trip and an error nobody expected. */}
@@ -342,9 +341,9 @@ function BranchRowActions({
         loading={remove.isPending}
         title={`Delete ${branch.name}?`}
         description={
-          branch.groupCount === 0
-            ? 'The branch holds no groups, so nothing loses access. This cannot be undone.'
-            : `This branch still holds ${plural(branch.groupCount, 'group')}, and deleting it will be refused. Move or delete those groups first, or retire the branch instead — a retired branch keeps everything it has and simply takes no new groups.`
+          branch.studentCount === 0
+            ? 'No student attends this branch, so nothing loses access. This cannot be undone.'
+            : `${plural(branch.studentCount, 'student')} still attend this branch, and deleting it will be refused. Move them to another branch first, or retire this one instead — a retired branch keeps everyone it has and simply takes no new students.`
         }
         confirmLabel="Delete branch"
         onConfirm={() => remove.mutate()}

@@ -31,7 +31,7 @@ import { Audit } from '../audit';
 import { BranchesService } from './branches.service';
 
 /**
- * Branches. Reading is open to anyone who can manage groups — they have to see the list to pick
+ * Branches. Reading is open to anyone who can manage students — they have to see the list to pick
  * from it — while every write is super-admin only, which is the entire reason the table exists.
  */
 @Controller('admin/branches')
@@ -64,7 +64,7 @@ export class BranchesController {
     return this.branches.update(id, body);
   }
 
-  /** Refused while any group still sits under the branch, and always for GLOBAL. */
+  /** Refused while any student still attends the branch, and always for the online one. */
   @Audit(AUDIT_FEATURE.BRANCH, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')

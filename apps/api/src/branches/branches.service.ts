@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  BRANCH_TYPE,
   ErrorCodes,
   fieldDiff,
   type Branch,
@@ -16,7 +17,7 @@ import { AuditContext } from '../audit';
 import { branchDeletionBlocker, branchEditBlocker, INACTIVE_BRANCH_MESSAGE } from './branch-rules';
 
 const BRANCH_INCLUDE = {
-  _count: { select: { groups: true } },
+  _count: { select: { students: true } },
 } as const satisfies Prisma.BranchInclude;
 
 interface BranchRow {
@@ -25,7 +26,7 @@ interface BranchRow {
   type: BranchType;
   isActive: boolean;
   createdAt: Date;
-  _count: { groups: number };
+  _count: { students: number };
 }
 
 export const AUDITED_BRANCH_FIELDS = ['name', 'isActive'] as const;
@@ -81,7 +82,7 @@ export class BranchesService {
   async create(input: CreateBranchBody): Promise<Branch> {
     // The name arrives canonical from the schema, so this catches the real
     // duplicate rather than a differently-typed one.
-    const clash = await this.prisma.branch.findUnique({ where: { name: input.name } });
+    const clash = await this.findLiveByName(input.name);
     if (clash) {
       throw new AppException(ErrorCodes.CONFLICT, 'That branch already exists', {
         fieldErrors: { name: ['That branch already exists'] },
@@ -89,7 +90,7 @@ export class BranchesService {
     }
 
     const branch = await this.prisma.branch.create({
-      data: { name: input.name },
+      data: { name: input.name, type: BRANCH_TYPE.PHYSICAL },
       include: BRANCH_INCLUDE,
     });
     return toBranch(branch);
@@ -102,7 +103,7 @@ export class BranchesService {
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     if (input.name !== undefined && input.name !== branch.name) {
-      const clash = await this.prisma.branch.findUnique({ where: { name: input.name } });
+      const clash = await this.findLiveByName(input.name);
       if (clash) {
         throw new AppException(ErrorCodes.CONFLICT, 'That branch already exists', {
           fieldErrors: { name: ['That branch already exists'] },
@@ -132,12 +133,17 @@ export class BranchesService {
     const branch = await this.requireBranch(id);
 
     const blocker = branchDeletionBlocker({
-      groupCount: branch._count.groups,
+      studentCount: branch._count.students,
       type: branch.type,
     });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.branch.delete({ where: { id } });
+  }
+
+  /** `name` is unique only among live rows, so this is a filtered read, not a lookup by key. */
+  private findLiveByName(name: string): Promise<{ id: string } | null> {
+    return this.prisma.branch.findFirst({ where: { name, deletedAt: null }, select: { id: true } });
   }
 
   private async requireBranch(id: string): Promise<BranchRow> {
@@ -153,7 +159,7 @@ function toBranch(row: BranchRow): Branch {
     name: row.name,
     type: row.type,
     isActive: row.isActive,
-    groupCount: row._count.groups,
+    studentCount: row._count.students,
     createdAt: row.createdAt.toISOString(),
   };
 }

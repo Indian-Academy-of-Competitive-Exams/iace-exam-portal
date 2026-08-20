@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { GROUP_MEMBER_IMPORT_COLUMNS, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
+import { STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
 
 /** The sample file the UI offers. */
 export function buildStudentTemplate(): Promise<Buffer> {
@@ -8,16 +8,6 @@ export function buildStudentTemplate(): Promise<Buffer> {
     columns: STUDENT_IMPORT_COLUMNS,
     examples: STUDENT_IMPORT_EXAMPLES,
     notes: STUDENT_IMPORT_NOTES,
-  });
-}
-
-/** The membership sheet: one column, because the group is not in the file. */
-export function buildGroupMemberTemplate(): Promise<Buffer> {
-  return buildTemplate({
-    sheetName: 'Members',
-    columns: GROUP_MEMBER_IMPORT_COLUMNS,
-    examples: [['9876543210'], ['9876543211'], ['9876543212']],
-    notes: GROUP_MEMBER_IMPORT_NOTES,
   });
 }
 
@@ -60,9 +50,9 @@ async function buildTemplate(options: {
 }
 
 const STUDENT_IMPORT_EXAMPLES = [
-  ['9876543210', 'Asha Kumari', 'SSC CGL MORNING'],
-  ['9876543211', 'Ravi Teja', 'AMEERPET / SSC CGL MORNING;GLOBAL / ALL STUDENTS'],
-  ['9876543212', '', ''],
+  ['9876543210', 'Asha Kumari'],
+  ['9876543211', 'Ravi Teja'],
+  ['9876543212', ''],
 ];
 
 const STUDENT_IMPORT_NOTES = [
@@ -78,29 +68,9 @@ const STUDENT_IMPORT_NOTES = [
   ['Full Name — optional. Letters, spaces and . ’ - only. Leave it blank if you'],
   ['do not know it yet; it can be filled in later.'],
   [''],
-  ['Groups — optional. Separate several with a semicolon (;).'],
-  ['A group name is unique only WITHIN its branch, so if two branches run the same'],
-  ['batch, write the branch too: AMEERPET / SSC CGL MORNING'],
-  ['Groups are never created by an import — a name that matches nothing is reported.'],
+  ['A roster creates students and nothing else. What they can reach is decided by'],
+  ['their enrolment and their branch, on the student’s own screen.'],
   [''],
   ['Nothing is written until you press Import. The preview shows exactly what would'],
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],
-];
-
-const GROUP_MEMBER_IMPORT_NOTES = [
-  ['How to fill this in'],
-  [''],
-  ['One column: the mobile number of each student to add to this group.'],
-  ['The group is the one you are on in the admin — it is not written in the file,'],
-  ['so a sheet cannot put students into a batch nobody checked.'],
-  [''],
-  ['A number that already belongs to this group is left alone rather than reported'],
-  ['as a problem: re-uploading last week’s list with ten new numbers on the end is'],
-  ['the normal way to use this.'],
-  [''],
-  ['A number that belongs to NO student is reported. Nobody is enrolled from this'],
-  ['sheet — import them on the Students screen first, then add them here.'],
-  [''],
-  ['Removing someone is done on the student, one at a time. It takes away their'],
-  ['route to a test, which is not something a spreadsheet should do quietly.'],
 ];

@@ -13,16 +13,16 @@ describe('documentKey', () => {
   /**
    * The failure this exists to prevent: a key built from anything the client controls would let one
    * student's upload land under another's prefix, and every later read of that prefix would serve
-   * the wrong person's Aadhaar.
+   * the wrong person's photo.
    */
   it('puts the student id first, so an upload cannot land under someone else', () => {
-    const key = documentKey('stu_1', DOCUMENT_KINDS.AADHAAR, 'application/pdf', 1_700_000_000_000);
+    const key = documentKey('stu_1', DOCUMENT_KINDS.PHOTO, 'image/jpeg', 1_700_000_000_000);
 
     assert.ok(key.startsWith('students/stu_1/'), key);
   });
 
   it('names the kind, so the object is identifiable in the bucket', () => {
-    assert.match(documentKey('stu_1', DOCUMENT_KINDS.PAN, 'image/png', 1), /\/pan-/);
+    assert.match(documentKey('stu_1', DOCUMENT_KINDS.PHOTO, 'image/png', 1), /\/photo-/);
   });
 
   /**
@@ -31,8 +31,7 @@ describe('documentKey', () => {
    */
   it('takes the extension from the content type', () => {
     assert.match(documentKey('s', DOCUMENT_KINDS.PHOTO, 'image/png', 1), /\.png$/);
-    assert.match(documentKey('s', DOCUMENT_KINDS.AADHAAR, 'application/pdf', 1), /\.pdf$/);
-    assert.match(documentKey('s', DOCUMENT_KINDS.PAN, 'image/webp', 1), /\.webp$/);
+    assert.match(documentKey('s', DOCUMENT_KINDS.PHOTO, 'image/webp', 1), /\.webp$/);
   });
 
   /**
@@ -48,10 +47,9 @@ describe('documentKey', () => {
 });
 
 describe('columnFor', () => {
-  it('maps each kind to its own column', () => {
+  /** Aadhaar and PAN are not here: their images are never stored, only a verified flag. */
+  it('maps the photo to its own column', () => {
     assert.equal(columnFor(DOCUMENT_KINDS.PHOTO), 'photoUrl');
-    assert.equal(columnFor(DOCUMENT_KINDS.AADHAAR), 'aadhaarUrl');
-    assert.equal(columnFor(DOCUMENT_KINDS.PAN), 'panUrl');
   });
 
   it('gives every kind a distinct column', () => {
@@ -62,13 +60,7 @@ describe('columnFor', () => {
 
 describe('checkDocument', () => {
   it('accepts an ordinary phone photo', () => {
-    assert.doesNotThrow(() => checkDocument(DOCUMENT_KINDS.PHOTO, file()));
-  });
-
-  it('accepts a PDF for an identity document', () => {
-    assert.doesNotThrow(() =>
-      checkDocument(DOCUMENT_KINDS.AADHAAR, file({ mimetype: 'application/pdf' })),
-    );
+    assert.doesNotThrow(() => checkDocument(file()));
   });
 
   /**
@@ -77,7 +69,7 @@ describe('checkDocument', () => {
    */
   it('refuses a PDF where a photograph is meant', () => {
     assert.throws(
-      () => checkDocument(DOCUMENT_KINDS.PHOTO, file({ mimetype: 'application/pdf' })),
+      () => checkDocument(file({ mimetype: 'application/pdf' })),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /not accepted/);
@@ -88,16 +80,13 @@ describe('checkDocument', () => {
 
   it('refuses a type nobody asked for', () => {
     for (const mimetype of ['application/zip', 'text/html', 'application/x-msdownload']) {
-      assert.throws(
-        () => checkDocument(DOCUMENT_KINDS.AADHAAR, file({ mimetype })),
-        AppException.is,
-      );
+      assert.throws(() => checkDocument(file({ mimetype })), AppException.is);
     }
   });
 
   it('refuses a file over the limit, and says what to do', () => {
     assert.throws(
-      () => checkDocument(DOCUMENT_KINDS.PHOTO, file({ size: DOCUMENT_MAX_BYTES + 1 })),
+      () => checkDocument(file({ size: DOCUMENT_MAX_BYTES + 1 })),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /5MB/);
@@ -107,18 +96,16 @@ describe('checkDocument', () => {
   });
 
   it('accepts a file exactly at the limit', () => {
-    assert.doesNotThrow(() =>
-      checkDocument(DOCUMENT_KINDS.PHOTO, file({ size: DOCUMENT_MAX_BYTES })),
-    );
+    assert.doesNotThrow(() => checkDocument(file({ size: DOCUMENT_MAX_BYTES })));
   });
 
   it('refuses an empty file rather than storing nothing', () => {
-    assert.throws(() => checkDocument(DOCUMENT_KINDS.PHOTO, file({ size: 0 })), AppException.is);
+    assert.throws(() => checkDocument(file({ size: 0 })), AppException.is);
   });
 
   it('refuses a request that carried no file at all', () => {
     assert.throws(
-      () => checkDocument(DOCUMENT_KINDS.PHOTO, undefined),
+      () => checkDocument(undefined),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.ok(error.fieldErrors?.file);

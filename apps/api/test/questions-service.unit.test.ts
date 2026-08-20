@@ -4,7 +4,6 @@ import {
   AppException,
   DIFFICULTY_LEVEL,
   ErrorCodes,
-  QUESTION_SOURCE_KIND,
   QUESTION_STATUS,
   QUESTION_TYPE,
   plainTextOf,
@@ -16,13 +15,7 @@ import {
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
 import { AuditContext } from '../src/audit';
-import {
-  FakeQuestionBankPrisma,
-  makeQuestion,
-  makeSubTopic,
-  makeSubject,
-  makeTopic,
-} from './support/fakes';
+import { FakeQuestionBankPrisma, makeQuestion, makeSubject, makeTopic } from './support/fakes';
 
 const ADMIN = 'adm_1';
 
@@ -30,8 +23,11 @@ function build(questions = [] as ReturnType<typeof makeQuestion>[]) {
   const prisma = new FakeQuestionBankPrisma(
     questions,
     [makeSubject(), makeSubject({ id: 'sub_2', name: 'GENERAL AWARENESS' })],
-    [makeTopic(), makeTopic({ id: 'top_2', name: 'ALGEBRA' })],
-    [makeSubTopic()],
+    [
+      makeTopic(),
+      makeTopic({ id: 'top_2', name: 'ALGEBRA' }),
+      makeTopic({ id: 'top_3', name: 'HISTORY', subjectId: 'sub_2' }),
+    ],
   );
 
   return {
@@ -49,7 +45,6 @@ function draft(over: Partial<QuestionDraftInput> = {}) {
   return questionDraftSchema.parse({
     subjectId: 'sub_1',
     topicId: 'top_1',
-    subTopicId: 'stp_1',
     difficulty: DIFFICULTY_LEVEL.MEDIUM,
     stem: { en: 'What is 20% of 150?', hi: '150 का 20% कितना है?' },
     options: [
@@ -63,7 +58,7 @@ function draft(over: Partial<QuestionDraftInput> = {}) {
 }
 
 describe('QuestionsService.create', () => {
-  it('writes the content nodes, the options and where it came from', async () => {
+  it('writes the content nodes and the options as version one', async () => {
     const { questions, prisma } = build();
 
     const created = await questions.create(draft(), ADMIN);
@@ -73,20 +68,20 @@ describe('QuestionsService.create', () => {
     assert.equal(plainTextOf(created.content.en?.stem), 'What is 20% of 150?');
     assert.equal(created.options.length, 4);
     assert.equal(created.options[1]?.isCorrect, true);
-    assert.equal(created.source?.kind, QUESTION_SOURCE_KIND.MANUAL);
+    assert.equal(created.version, 1);
     assert.equal(prisma.questions[0]?.createdById, ADMIN);
     assert.ok(prisma.questions[0]?.stemHash);
   });
 
-  it('refuses a question whose sub-topic is not under its topic, naming the field', async () => {
+  it('refuses a question whose topic is not under its subject, naming the field', async () => {
     const { questions } = build();
 
     await assert.rejects(
-      () => questions.create(draft({ topicId: 'top_2' }), ADMIN),
+      () => questions.create(draft({ topicId: 'top_3' }), ADMIN),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-        assert.ok(error.fieldErrors?.subTopicId);
+        assert.ok(error.fieldErrors?.topicId);
         return true;
       },
     );
@@ -144,19 +139,19 @@ describe('QuestionsService — retiring and status', () => {
     const { questions, prisma } = build();
     const created = await questions.create(draft(), ADMIN);
 
-    const retired = await questions.setActive(created.id, { isActive: false });
+    const archived = await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
 
-    assert.equal(retired.isActive, false);
+    assert.equal(archived.status, QUESTION_STATUS.ARCHIVED);
     assert.equal(prisma.questions.length, 1);
   });
 
   it('hides a retired question from the bank while an unfiltered list still counts it', async () => {
     const { questions } = build([
       makeQuestion({ id: 'q_live' }),
-      makeQuestion({ id: 'q_dead', isActive: false, stemHash: 'hash_2' }),
+      makeQuestion({ id: 'q_dead', status: QUESTION_STATUS.ARCHIVED, stemHash: 'hash_2' }),
     ]);
 
-    const active = await questions.list(listQuery({ isActive: 'true' }));
+    const active = await questions.list(listQuery({ status: QUESTION_STATUS.ACTIVE }));
     assert.deepEqual(
       active.items.map((item) => item.id),
       ['q_live'],
@@ -164,25 +159,6 @@ describe('QuestionsService — retiring and status', () => {
 
     const all = await questions.list(listQuery());
     assert.equal(all.total, 2);
-  });
-
-  it('leaves a retired question retired when it is edited', async () => {
-    // Saving an edit must not quietly put a question back into every future draw.
-    const { questions } = build();
-    const created = await questions.create(draft(), ADMIN);
-    await questions.setActive(created.id, { isActive: false });
-
-    const edited = await questions.update(created.id, draft({ difficulty: DIFFICULTY_LEVEL.HIGH }));
-
-    assert.equal(edited.isActive, false);
-  });
-
-  it('moves a question to a status the bank filters on', async () => {
-    const { questions } = build();
-    const created = await questions.create(draft(), ADMIN);
-
-    const archived = await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
-    assert.equal(archived.status, QUESTION_STATUS.ARCHIVED);
   });
 
   it('answers NOT_FOUND for a question that is not there', async () => {
@@ -196,7 +172,7 @@ describe('QuestionsService — retiring and status', () => {
 
 describe('QuestionsService.update', () => {
   it('replaces the options rather than adding to them', async () => {
-    const { questions, prisma } = build();
+    const { questions } = build();
     const created = await questions.create(draft(), ADMIN);
 
     const updated = await questions.update(
@@ -210,10 +186,14 @@ describe('QuestionsService.update', () => {
           { position: 4, isCorrect: false, text: { en: '50' } },
         ],
       }),
+      ADMIN,
     );
 
     assert.equal(updated.options.length, 4);
-    assert.equal(prisma.options.filter((option) => option.questionId === created.id).length, 4);
+    assert.deepEqual(
+      updated.options.map((option) => plainTextOf(option.text.en)),
+      ['20', '30', '45', '50'],
+    );
   });
 
   it('does not call a question a duplicate of itself', async () => {
@@ -223,39 +203,83 @@ describe('QuestionsService.update', () => {
     const updated = await questions.update(
       created.id,
       draft({ difficulty: DIFFICULTY_LEVEL.HIGH }),
+      ADMIN,
     );
     assert.equal(updated.difficulty, DIFFICULTY_LEVEL.HIGH);
   });
 });
 
-describe('TaxonomyService — the shared third level', () => {
-  it('links an existing sub-topic instead of minting a second row with the same name', async () => {
-    // A second PERCENTAGES would split the per-sub-topic analytics the sharing exists to join up.
-    const { taxonomy, prisma } = build();
+describe('QuestionsService.update — what versioning is for', () => {
+  /**
+   * A paper and an attempt pin a version. If an edit rewrote the row they point at, every result
+   * already scored would silently start reading as a question nobody ever sat.
+   */
+  it('inserts a new version and leaves the one a paper already pinned untouched', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft(), ADMIN);
 
-    const linked = await taxonomy.createSubTopic({ name: 'PERCENTAGES', topicIds: ['top_2'] });
+    const pinned = prisma.versions[0]!;
+    const pinnedContent = JSON.stringify(pinned.content);
+    const pinnedOptions = JSON.stringify(pinned.options);
 
-    assert.equal(prisma.subTopics.length, 1);
-    assert.deepEqual(linked.topics.map((topic) => topic.id).sort(), ['top_1', 'top_2']);
+    const edited = await questions.update(
+      created.id,
+      draft({ stem: { en: 'What is 20% of 150, rounded?', hi: '150 का 20% कितना है?' } }),
+      ADMIN,
+    );
+
+    assert.equal(edited.version, 2);
+    assert.equal(prisma.versions.length, 2);
+    assert.equal(JSON.stringify(pinned.content), pinnedContent);
+    assert.equal(JSON.stringify(pinned.options), pinnedOptions);
+    assert.notEqual(prisma.questions[0]?.currentVersionId, pinned.id);
   });
 
-  it('creates a sub-topic nobody has used yet', async () => {
-    const { taxonomy, prisma } = build();
+  /**
+   * An attempt stores the option id it was shown, so an id that churned on a save would orphan
+   * every answer already recorded against that slot.
+   */
+  it('keeps an option id across an edit when its position is unchanged', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft(), ADMIN);
 
-    await taxonomy.createSubTopic({ name: 'RATIOS', topicIds: ['top_1'] });
+    const edited = await questions.update(
+      created.id,
+      draft({
+        stem: { en: 'What is 20% of 150, exactly?' },
+        options: [
+          { position: 1, isCorrect: false, text: { en: 'twenty five' } },
+          { position: 2, isCorrect: true, text: { en: 'thirty' } },
+          { position: 3, isCorrect: false, text: { en: 'thirty five' } },
+          { position: 4, isCorrect: false, text: { en: 'forty' } },
+        ],
+      }),
+      ADMIN,
+    );
 
-    assert.equal(prisma.subTopics.length, 2);
-  });
-
-  it('refuses to link a topic that is not there', async () => {
-    const { taxonomy } = build();
-
-    await assert.rejects(
-      () => taxonomy.createSubTopic({ name: 'RATIOS', topicIds: ['top_missing'] }),
-      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    assert.ok(created.options.every((option) => option.id.length > 0));
+    assert.deepEqual(
+      edited.options.map((option) => option.id),
+      created.options.map((option) => option.id),
     );
   });
 
+  /**
+   * The failure this prevents: `status` used to default to ACTIVE on the draft, so any save that
+   * did not name it put an archived question back into circulation — and back into the next paper.
+   */
+  it('leaves an archived question archived when the save does not name a status', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft(), ADMIN);
+    await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+
+    const edited = await questions.update(created.id, draft({ questionCode: 'QA-002' }), ADMIN);
+
+    assert.equal(edited.status, QUESTION_STATUS.ARCHIVED);
+  });
+});
+
+describe('TaxonomyService', () => {
   it('refuses a second subject with the same name', async () => {
     const { taxonomy } = build();
 

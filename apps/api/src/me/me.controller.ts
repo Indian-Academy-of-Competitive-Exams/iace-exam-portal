@@ -66,7 +66,7 @@ export class MeController {
     return this.me.update(user.id, body);
   }
 
-  /** A photo or an identity document. */
+  /** The student's photo. */
   @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)
   @Post('documents/:kind')
   @HttpCode(HttpStatus.OK)

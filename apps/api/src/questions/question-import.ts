@@ -12,7 +12,6 @@ import {
   TAGS_MAX,
   difficultyLevelSchema,
   questionCodeSchema,
-  questionMarksSchema,
   questionTypeSchema,
   tagSchema,
   type AnswerMode,
@@ -148,11 +147,7 @@ function planRow(
 ): PlannedRow {
   const issues: ValidationIssue[] = [];
 
-  const names = {
-    subject: cellOf(row, 'subject'),
-    topic: cellOf(row, 'topic'),
-    subTopic: cellOf(row, 'subtopic'),
-  };
+  const names = { subject: cellOf(row, 'subject'), topic: cellOf(row, 'topic') };
 
   const type = readType(row, issues);
   const draft = buildDraft(row, type, names, catalog, issues);
@@ -199,7 +194,6 @@ function planRow(
     stemPreview: preview(draft.stem[DEFAULT_LANGUAGE] ?? ''),
     subjectName: names.subject || null,
     topicName: names.topic || null,
-    subTopicName: names.subTopic || null,
     languages,
     issues: reported,
     duplicateOf,
@@ -243,7 +237,7 @@ function readType(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['type']
 function buildDraft(
   row: CsvRow,
   type: QuestionDraft['type'],
-  names: { subject: string; topic: string; subTopic: string },
+  names: { subject: string; topic: string },
   catalog: TaxonomyCatalog,
   issues: ValidationIssue[],
 ): QuestionDraft {
@@ -253,7 +247,6 @@ function buildDraft(
     type,
     subjectId: ids.subjectId ?? '',
     topicId: ids.topicId,
-    subTopicId: ids.subTopicId,
     difficulty: readDifficulty(row, issues),
     status: QUESTION_STATUS.ACTIVE,
     questionCode: readCode(row, issues),
@@ -261,8 +254,6 @@ function buildDraft(
     solution: localized(row, 'solution'),
     options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, issues) : [],
     answerKey: type === QUESTION_TYPE.TEXT_FIELD ? readAnswerKey(row, issues) : null,
-    defaultMarks: readMarks(row, 'marks', issues),
-    defaultNegativeMarks: readMarks(row, 'negative_marks', issues),
     tags: readTags(row, issues),
   };
 
@@ -270,15 +261,14 @@ function buildDraft(
 }
 
 /**
- * Names, not ids: a sheet says AMEERPET and PERCENTAGES. Nothing is created from
- * an import — a name that matches nothing is reported, exactly as the student
- * importer refuses to invent a group.
+ * Names, not ids: a sheet says QUANTITATIVE APTITUDE and PERCENTAGES. Nothing is created
+ * from an import — a name that matches nothing is reported rather than invented.
  */
 function resolveTaxonomy(
-  names: { subject: string; topic: string; subTopic: string },
+  names: { subject: string; topic: string },
   catalog: TaxonomyCatalog,
   issues: ValidationIssue[],
-): { subjectId: string | null; topicId: string | null; subTopicId: string | null } {
+): { subjectId: string | null; topicId: string | null } {
   if (blank(names.subject)) {
     issues.push({
       code: CODE.SUBJECT_REQUIRED,
@@ -286,7 +276,7 @@ function resolveTaxonomy(
       field: 'subjectId',
       column: 'subject',
     });
-    return { subjectId: null, topicId: null, subTopicId: null };
+    return { subjectId: null, topicId: null };
   }
 
   const subjectId = catalog.subjectIdByName.get(lookupName(names.subject)) ?? null;
@@ -297,20 +287,10 @@ function resolveTaxonomy(
       field: 'subjectId',
       column: 'subject',
     });
-    return { subjectId: null, topicId: null, subTopicId: null };
+    return { subjectId: null, topicId: null };
   }
 
-  if (blank(names.topic)) {
-    if (!blank(names.subTopic)) {
-      issues.push({
-        code: CODE.SUB_TOPIC_NEEDS_TOPIC,
-        message: 'A sub-topic only means something under a topic — name the topic too',
-        field: 'subTopicId',
-        column: 'subtopic',
-      });
-    }
-    return { subjectId, topicId: null, subTopicId: null };
-  }
+  if (blank(names.topic)) return { subjectId, topicId: null };
 
   const topicId = catalog.topicIdBySubjectAndName.get(topicKey(subjectId, lookupName(names.topic)));
   if (!topicId) {
@@ -320,23 +300,10 @@ function resolveTaxonomy(
       field: 'topicId',
       column: 'topic',
     });
-    return { subjectId, topicId: null, subTopicId: null };
+    return { subjectId, topicId: null };
   }
 
-  if (blank(names.subTopic)) return { subjectId, topicId, subTopicId: null };
-
-  const subTopicId = catalog.subTopicIdByName.get(lookupName(names.subTopic));
-  if (!subTopicId) {
-    issues.push({
-      code: CODE.SUB_TOPIC_UNKNOWN,
-      message: `There is no sub-topic called "${names.subTopic}"`,
-      field: 'subTopicId',
-      column: 'subtopic',
-    });
-    return { subjectId, topicId, subTopicId: null };
-  }
-
-  return { subjectId, topicId, subTopicId };
+  return { subjectId, topicId };
 }
 
 function readDifficulty(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['difficulty'] {
@@ -451,22 +418,6 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
   return { mode, answers, tolerance };
 }
 
-function readMarks(row: CsvRow, key: string, issues: ValidationIssue[]): number | null {
-  const raw = cellOf(row, key);
-  if (blank(raw)) return null;
-
-  const parsed = questionMarksSchema.safeParse(raw);
-  if (parsed.success) return parsed.data;
-
-  issues.push({
-    code: CODE.MARKS_INVALID,
-    message: `"${raw}" is not a mark`,
-    field: key === 'marks' ? 'defaultMarks' : 'defaultNegativeMarks',
-    column: key,
-  });
-  return null;
-}
-
 function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   const raw = cellOf(row, 'tags');
   if (blank(raw)) return [];
@@ -507,7 +458,7 @@ function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
  * a missing one. For those three fields the FIRST issue wins — the sheet's, which
  * quotes what was actually typed — so one line of the preview says a thing once.
  */
-const TAXONOMY_FIELDS = new Set(['subjectId', 'topicId', 'subTopicId']);
+const TAXONOMY_FIELDS = new Set(['subjectId', 'topicId']);
 
 function dedupeIssues(issues: ValidationIssue[]): ValidationIssue[] {
   const seen = new Set<string>();

@@ -44,7 +44,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
-import { SubTopicPicker, SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
+import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /**
  * One question, by hand. The bulk of the bank arrives by sheet; this is for the
@@ -61,12 +61,9 @@ interface QuestionFormValues {
   type: (typeof QUESTION_TYPES)[number];
   subjectId: string;
   topicId: string;
-  subTopicId: string;
   difficulty: (typeof DIFFICULTY_LEVELS)[number];
   status: (typeof QUESTION_STATUSES)[number];
   questionCode: string;
-  defaultMarks: string;
-  defaultNegativeMarks: string;
   tags: string;
   correctOption: string;
   stem: LanguageMap;
@@ -84,12 +81,9 @@ function emptyValues(): QuestionFormValues {
     type: QUESTION_TYPE.SINGLE_MCQ,
     subjectId: '',
     topicId: '',
-    subTopicId: '',
     difficulty: 'MEDIUM',
     status: 'ACTIVE',
     questionCode: '',
-    defaultMarks: '',
-    defaultNegativeMarks: '',
     tags: '',
     correctOption: '1',
     stem: emptyLanguages(),
@@ -126,13 +120,9 @@ function valuesOf(question: QuestionDetail): QuestionFormValues {
     type: question.type,
     subjectId: question.subject.id,
     topicId: question.topic?.id ?? '',
-    subTopicId: question.subTopic?.id ?? '',
     difficulty: question.difficulty,
     status: question.status,
     questionCode: question.questionCode ?? '',
-    defaultMarks: question.defaultMarks === null ? '' : String(question.defaultMarks),
-    defaultNegativeMarks:
-      question.defaultNegativeMarks === null ? '' : String(question.defaultNegativeMarks),
     tags: question.tags.join(`${TAG_SEPARATOR} `),
     correctOption: String(question.options.find((option) => option.isCorrect)?.position ?? 1),
     stem,
@@ -160,7 +150,6 @@ function toDraft(values: QuestionFormValues): QuestionDraftInput {
     type: values.type,
     subjectId: values.subjectId,
     topicId: values.topicId || null,
-    subTopicId: values.subTopicId || null,
     difficulty: values.difficulty,
     status: values.status,
     questionCode: values.questionCode.trim() || null,
@@ -184,9 +173,6 @@ function toDraft(values: QuestionFormValues): QuestionDraftInput {
             ? { tolerance: values.tolerance }
             : {}),
         },
-    defaultMarks: values.defaultMarks.trim() === '' ? null : values.defaultMarks,
-    defaultNegativeMarks:
-      values.defaultNegativeMarks.trim() === '' ? null : values.defaultNegativeMarks,
     tags: values.tags
       .split(TAG_SEPARATOR)
       .map((tag) => tag.trim())
@@ -198,13 +184,10 @@ function toDraft(values: QuestionFormValues): QuestionDraftInput {
 const SERVER_FIELDS = [
   'subjectId',
   'topicId',
-  'subTopicId',
   'difficulty',
   'type',
   'status',
   'questionCode',
-  'defaultMarks',
-  'defaultNegativeMarks',
   'tags',
   'options',
   ...LANGUAGE_ORDER.map((language) => `stem.${language}` as const),
@@ -248,7 +231,6 @@ export function QuestionFormPage() {
   const type = form.watch('type');
   const subjectId = form.watch('subjectId');
   const topicId = form.watch('topicId');
-  const subTopicId = form.watch('subTopicId');
   const correctOption = form.watch('correctOption');
   const answerMode = form.watch('answerMode');
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
@@ -292,7 +274,6 @@ export function QuestionFormPage() {
                     form.setValue('subjectId', value, { shouldValidate: true });
                     // A topic under the old subject would file this wrongly.
                     form.setValue('topicId', '');
-                    form.setValue('subTopicId', '');
                   }}
                 />
               )}
@@ -306,23 +287,7 @@ export function QuestionFormPage() {
                   value={topicId}
                   clearable
                   placeholder="Choose a topic"
-                  onChange={(value) => {
-                    form.setValue('topicId', value);
-                    form.setValue('subTopicId', '');
-                  }}
-                />
-              )}
-            </FormField>
-
-            <FormField form={form} name="subTopicId" label="Sub-topic" hint="Optional">
-              {(control) => (
-                <SubTopicPicker
-                  id={control.id}
-                  topicId={topicId}
-                  value={subTopicId}
-                  clearable
-                  placeholder="Choose a sub-topic"
-                  onChange={(value) => form.setValue('subTopicId', value)}
+                  onChange={(value) => form.setValue('topicId', value)}
                 />
               )}
             </FormField>
@@ -439,15 +404,9 @@ export function QuestionFormPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Marks and filing</CardTitle>
+            <CardTitle>Filing</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <FormField form={form} name="defaultMarks" label="Marks" hint="The test can override">
-              {(control) => <Input {...control} inputMode="decimal" placeholder="2" />}
-            </FormField>
-            <FormField form={form} name="defaultNegativeMarks" label="Negative marks">
-              {(control) => <Input {...control} inputMode="decimal" placeholder="0.5" />}
-            </FormField>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
             <FormField form={form} name="questionCode" label="Question code" hint="Optional">
               {(control) => <Input {...control} placeholder="QA-001" />}
             </FormField>

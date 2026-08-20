@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { optionalBooleanQuery, searchQuery } from './common';
+import { searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
@@ -135,21 +135,17 @@ export const localizedRichSchema = z.partialRecord(languageSchema, richContentSc
 export type LocalizedRich = z.infer<typeof localizedRichSchema>;
 
 // ============================================================================
-// Taxonomy: Subject -> Topic -> SubTopic. Names are canonical, like branches and
-// groups, so "Percentages" and "PERCENTAGES " cannot both exist — a second row
-// would split the per-sub-topic analytics the sharing exists to join up.
+// Taxonomy: Subject -> Topic. Names are canonical, like branches, so
+// "Percentages" and "PERCENTAGES " cannot both exist — a second row would split
+// the per-topic analytics the taxonomy exists to join up. Anything finer than a
+// topic is a `topic:` tag on the question.
 // ============================================================================
 
 export const SUBJECT_NAME_MAX = 80;
 export const TOPIC_NAME_MAX = 100;
-export const SUB_TOPIC_NAME_MAX = 100;
 
 export const subjectNameSchema = canonicalNameSchema({ max: SUBJECT_NAME_MAX, label: 'subject' });
 export const topicNameSchema = canonicalNameSchema({ max: TOPIC_NAME_MAX, label: 'topic' });
-export const subTopicNameSchema = canonicalNameSchema({
-  max: SUB_TOPIC_NAME_MAX,
-  label: 'sub-topic',
-});
 
 /** A short code an institute already uses for a subject — QA, GA, ENG. */
 export const subjectCodeSchema = z
@@ -186,19 +182,9 @@ export const topicRefSchema = z.object({
 export type TopicRef = z.infer<typeof topicRefSchema>;
 
 export const topicSchema = topicRefSchema.extend({
-  subTopicCount: z.number().int(),
   questionCount: z.number().int(),
 });
 export type Topic = z.infer<typeof topicSchema>;
-
-export const subTopicRefSchema = taxonomyRefSchema;
-
-/** A sub-topic is SHARED: it lists the topics it is linked to, in no one subject. */
-export const subTopicSchema = subTopicRefSchema.extend({
-  topics: z.array(topicRefSchema),
-  questionCount: z.number().int(),
-});
-export type SubTopic = z.infer<typeof subTopicSchema>;
 
 export const createSubjectSchema = z.object({
   name: subjectNameSchema,
@@ -228,25 +214,6 @@ export const updateTopicSchema = z.object({
 export type UpdateTopicInput = z.input<typeof updateTopicSchema>;
 export type UpdateTopicBody = z.infer<typeof updateTopicSchema>;
 
-/**
- * Creating a sub-topic is really "link this name to this topic": the name is
- * unique table-wide, so an existing row is reused rather than duplicated.
- */
-export const createSubTopicSchema = z.object({
-  name: subTopicNameSchema,
-  topicIds: z.array(z.string()).min(1, 'Choose at least one topic'),
-});
-export type CreateSubTopicInput = z.input<typeof createSubTopicSchema>;
-export type CreateSubTopicBody = z.infer<typeof createSubTopicSchema>;
-
-/** `topicIds` REPLACES the links when present — the screen holds the whole set. */
-export const updateSubTopicSchema = z.object({
-  name: subTopicNameSchema.optional(),
-  topicIds: z.array(z.string()).min(1, 'Choose at least one topic').optional(),
-});
-export type UpdateSubTopicInput = z.input<typeof updateSubTopicSchema>;
-export type UpdateSubTopicBody = z.infer<typeof updateSubTopicSchema>;
-
 export const subjectListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
 });
@@ -260,15 +227,6 @@ export const topicListQuerySchema = paginationQuerySchema.extend({
 export type TopicListQuery = z.infer<typeof topicListQuerySchema>;
 export type TopicListQueryInput = z.input<typeof topicListQuerySchema>;
 
-export const subTopicListQuerySchema = paginationQuerySchema.extend({
-  q: searchQuery(),
-  topicId: z.string().optional(),
-  /** Every sub-topic reachable from a subject — through its topics, the only route there is. */
-  subjectId: z.string().optional(),
-});
-export type SubTopicListQuery = z.infer<typeof subTopicListQuerySchema>;
-export type SubTopicListQueryInput = z.input<typeof subTopicListQuerySchema>;
-
 // ============================================================================
 // The ONE question input. The form posts it and the importer builds one per row,
 // so `validateQuestion` has a single shape to judge and there is one definition
@@ -281,7 +239,8 @@ export const MCQ_OPTION_COUNT = 4;
 
 export const MARKS_MAX = 999.99;
 
-/** Marks are Decimal(6,2) in the database; more than two places is not a mark. */
+/** Marks are Decimal(6,2) in the database; more than two places is not a mark. Used by a
+ *  base config's sections, and by an answer tolerance. */
 export const questionMarksSchema = z.coerce
   .number()
   .min(0, 'Marks cannot be negative')
@@ -343,16 +302,15 @@ export const questionDraftSchema = z.object({
   type: questionTypeSchema.default(QUESTION_TYPE.SINGLE_MCQ),
   subjectId: z.string().min(1, 'Choose a subject'),
   topicId: z.string().nullable().optional(),
-  subTopicId: z.string().nullable().optional(),
   difficulty: difficultyLevelSchema,
-  status: questionStatusSchema.default(QUESTION_STATUS.ACTIVE),
+  /** Optional, NOT defaulted: an edit that omits it must leave the status where it is, or
+   *  every save would quietly put an archived question back into circulation. */
+  status: questionStatusSchema.optional(),
   questionCode: questionCodeSchema.nullable().optional(),
   stem: localizedTextSchema,
   solution: localizedTextSchema.optional(),
   options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_COUNT).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
-  defaultMarks: questionMarksSchema.nullable().optional(),
-  defaultNegativeMarks: questionMarksSchema.nullable().optional(),
   tags: z.array(tagSchema).max(TAGS_MAX).default([]),
 });
 export type QuestionDraft = z.infer<typeof questionDraftSchema>;
@@ -383,13 +341,9 @@ export const QUESTION_VALIDATION_CODE = {
   SUBJECT_UNKNOWN: 'SUBJECT_UNKNOWN',
   TOPIC_UNKNOWN: 'TOPIC_UNKNOWN',
   TOPIC_NOT_IN_SUBJECT: 'TOPIC_NOT_IN_SUBJECT',
-  SUB_TOPIC_UNKNOWN: 'SUB_TOPIC_UNKNOWN',
-  SUB_TOPIC_NEEDS_TOPIC: 'SUB_TOPIC_NEEDS_TOPIC',
-  SUB_TOPIC_NOT_IN_TOPIC: 'SUB_TOPIC_NOT_IN_TOPIC',
   DIFFICULTY_INVALID: 'DIFFICULTY_INVALID',
   TYPE_INVALID: 'TYPE_INVALID',
   STATUS_INVALID: 'STATUS_INVALID',
-  MARKS_INVALID: 'MARKS_INVALID',
   TAG_INVALID: 'TAG_INVALID',
   QUESTION_CODE_INVALID: 'QUESTION_CODE_INVALID',
   QUESTION_CODE_TAKEN: 'QUESTION_CODE_TAKEN',
@@ -433,29 +387,14 @@ export const answerKeySchema = z.object({
 });
 export type AnswerKey = z.infer<typeof answerKeySchema>;
 
-/** Where a question came from. Stamped by the server; never sent by a client. */
-export const QUESTION_SOURCE_KIND = {
-  MANUAL: 'MANUAL',
-  IMPORT: 'IMPORT',
-} as const;
-export const questionSourceSchema = z.object({
-  kind: z.enum(QUESTION_SOURCE_KIND),
-  importLogId: z.string().optional(),
-  /** The line in the uploaded sheet — the answer to "where did this come from". */
-  line: z.number().int().optional(),
-});
-export type QuestionSource = z.infer<typeof questionSourceSchema>;
-
 export const questionSummarySchema = z.object({
   id: z.string(),
   questionCode: z.string().nullable(),
   type: questionTypeSchema,
   difficulty: difficultyLevelSchema,
   status: questionStatusSchema,
-  isActive: z.boolean(),
   subject: taxonomyRefSchema,
   topic: taxonomyRefSchema.nullable(),
-  subTopic: taxonomyRefSchema.nullable(),
   /** The English stem, flattened — what a list row shows without loading the content. */
   stemPreview: z.string(),
   /** Which languages this question has been authored in, in `LANGUAGE_ORDER`. */
@@ -465,13 +404,13 @@ export const questionSummarySchema = z.object({
 });
 export type QuestionSummary = z.infer<typeof questionSummarySchema>;
 
+/** Everything below comes from the CURRENT version — a question itself carries no content. */
 export const questionDetailSchema = questionSummarySchema.extend({
+  /** Which version this is: 1, 2, 3… Every edit inserts the next one. */
+  version: z.number().int(),
   content: localizedContentSchema,
   options: z.array(questionOptionSchema),
   answerKey: answerKeySchema.nullable(),
-  defaultMarks: z.number().nullable(),
-  defaultNegativeMarks: z.number().nullable(),
-  source: questionSourceSchema.nullable(),
   createdAt: z.string(),
 });
 export type QuestionDetail = z.infer<typeof questionDetailSchema>;
@@ -491,11 +430,9 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   subjectId: z.string().optional(),
   topicId: z.string().optional(),
-  subTopicId: z.string().optional(),
   type: questionTypeSchema.optional(),
   difficulty: difficultyLevelSchema.optional(),
   status: questionStatusSchema.optional(),
-  isActive: optionalBooleanQuery(),
   language: languageSchema.optional(),
   tag: tagSchema.optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
@@ -504,16 +441,9 @@ export type QuestionListQuery = z.infer<typeof questionListQuerySchema>;
 export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
 
 /**
- * Retiring a question rather than deleting it: an inactive question is hidden
- * from the bank and drawn into no future paper, while every paper that already
- * holds it is untouched.
+ * ARCHIVED retires a question rather than deleting it: it is hidden from the bank and
+ * drawn into no future paper, while every paper that already pinned a version is untouched.
  */
-export const setQuestionActiveSchema = z.object({
-  isActive: z.boolean(),
-});
-export type SetQuestionActiveInput = z.input<typeof setQuestionActiveSchema>;
-export type SetQuestionActiveBody = z.infer<typeof setQuestionActiveSchema>;
-
 export const setQuestionStatusSchema = z.object({
   status: questionStatusSchema,
 });
@@ -538,13 +468,6 @@ export const QUESTION_IMPORT_COLUMNS = [
   { key: 'type', header: 'type', width: 14, required: false, aliases: ['type', 'questiontype'] },
   { key: 'subject', header: 'subject', width: 22, required: true, aliases: ['subject'] },
   { key: 'topic', header: 'topic', width: 22, required: false, aliases: ['topic'] },
-  {
-    key: 'subtopic',
-    header: 'subtopic',
-    width: 22,
-    required: false,
-    aliases: ['subtopic', 'subtopicname'],
-  },
   {
     key: 'difficulty',
     header: 'difficulty',
@@ -594,14 +517,6 @@ export const QUESTION_IMPORT_COLUMNS = [
   languageColumn('solution_en', 'solution_en', 60, SUPPORTED_LANGUAGES.EN),
   languageColumn('solution_hi', 'solution_hi', 60, SUPPORTED_LANGUAGES.HI),
   languageColumn('solution_te', 'solution_te', 60, SUPPORTED_LANGUAGES.TE),
-  { key: 'marks', header: 'marks', width: 10, required: false, aliases: ['marks', 'mark'] },
-  {
-    key: 'negative_marks',
-    header: 'negative_marks',
-    width: 15,
-    required: false,
-    aliases: ['negativemarks', 'negmarks', 'penalty'],
-  },
   { key: 'tags', header: 'tags', width: 30, required: false, aliases: ['tags', 'tag'] },
   {
     key: 'question_code',
@@ -646,7 +561,6 @@ export const questionImportRowSchema = z.object({
   stemPreview: z.string(),
   subjectName: z.string().nullable(),
   topicName: z.string().nullable(),
-  subTopicName: z.string().nullable(),
   languages: z.array(languageSchema),
   issues: z.array(validationIssueSchema),
   /** The question this row repeats: an id from the bank, or a line in this file. */
@@ -693,8 +607,6 @@ export const ADMIN_TAXONOMY_ROUTES = {
   subject: (id: string) => `/admin/subjects/${id}`,
   topics: '/admin/topics',
   topic: (id: string) => `/admin/topics/${id}`,
-  subTopics: '/admin/sub-topics',
-  subTopic: (id: string) => `/admin/sub-topics/${id}`,
 } as const;
 
 export const ADMIN_QUESTION_ROUTES = {
@@ -702,7 +614,6 @@ export const ADMIN_QUESTION_ROUTES = {
   create: '/admin/questions',
   get: (id: string) => `/admin/questions/${id}`,
   update: (id: string) => `/admin/questions/${id}`,
-  setActive: (id: string) => `/admin/questions/${id}/active`,
   setStatus: (id: string) => `/admin/questions/${id}/status`,
 } as const;
 

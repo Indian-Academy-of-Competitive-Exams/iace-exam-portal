@@ -1,5 +1,11 @@
 import { createParamDecorator, SetMetadata, type ExecutionContext } from '@nestjs/common';
-import { AppException, ErrorCodes, type ActorType, type PermissionLevel } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  type ActorType,
+  type FeatureKey,
+  type PermissionLevel,
+} from '@iace/contracts';
 import { type AuthenticatedUser } from './authenticated-user';
 
 /** The route-level access vocabulary, in the shared kernel rather than in the auth module. */
@@ -17,12 +23,12 @@ export const Actors = (...actors: ActorType[]) => SetMetadata(ACTORS_KEY, actors
 
 /** What a route demands: a feature, at a level. */
 export interface RequiredFeature {
-  key: string;
+  key: FeatureKey;
   level: PermissionLevel;
 }
 
 /** Require a feature permission at a level. Super admins bypass the check. */
-export const RequiresFeature = (key: string, level: PermissionLevel) =>
+export const RequiresFeature = (key: FeatureKey, level: PermissionLevel) =>
   SetMetadata(REQUIRED_FEATURE_KEY, { key, level } satisfies RequiredFeature);
 
 /** Restrict a route to super admins, above and beyond any page permission. */

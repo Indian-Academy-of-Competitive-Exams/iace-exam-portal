@@ -24,12 +24,12 @@ const listQuery = (over: Partial<BranchListQuery> = {}): BranchListQuery =>
 const ONLINE = makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL });
 
 describe('BranchesService — listing', () => {
-  it('reports the group count each branch carries', async () => {
-    const { service } = serviceWith([makeBranch({ _count: { groups: 4 } })]);
+  it('reports the student count each branch carries', async () => {
+    const { service } = serviceWith([makeBranch({ _count: { students: 4 } })]);
 
     const page = await service.list(listQuery());
 
-    assert.equal(page.items[0]?.groupCount, 4);
+    assert.equal(page.items[0]?.studentCount, 4);
     assert.equal(page.total, 1);
   });
 
@@ -79,7 +79,7 @@ describe('BranchesService — the online branch is protected', () => {
    * The failure these prevent: the online branch is where every online student sits, and nothing re-creates
    * it. Losing it is not recoverable from the UI.
    */
-  it('refuses to delete the online branch, even with no groups under it', async () => {
+  it('refuses to delete the online branch, even with nobody under it', async () => {
     const { service } = serviceWith([ONLINE]);
 
     await assert.rejects(
@@ -116,17 +116,17 @@ describe('BranchesService — deleting', () => {
   });
 
   /**
-   * Deleting a branch with groups would take its students' route to every test with it — and the
+   * Deleting a branch with students would orphan every one of them — and the
    * click would look like it worked.
    */
-  it('refuses a branch that still has groups, and says how many', async () => {
-    const { service, prisma } = serviceWith([makeBranch({ id: 'br_1', _count: { groups: 3 } })]);
+  it('refuses a branch that still has students, and says how many', async () => {
+    const { service, prisma } = serviceWith([makeBranch({ id: 'br_1', _count: { students: 3 } })]);
 
     await assert.rejects(
       () => service.remove('br_1'),
       (error: unknown) => {
         assert.ok(AppException.is(error));
-        assert.match(error.message, /3 groups/);
+        assert.match(error.message, /3 students/);
         return true;
       },
     );

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { AuditFeature, ImportSource, Prisma } from '@prisma/client';
 import {
@@ -6,7 +7,6 @@ import {
   ErrorCodes,
   IMPORT_LOG_STATUS,
   QUESTION_IMPORT_SHEETS,
-  QUESTION_SOURCE_KIND,
   XLSX_CONTENT_TYPE,
   type QuestionImportPlan,
   type QuestionImportResult,
@@ -15,7 +15,7 @@ import { importFileKey, readUploadedTable } from '../common/importing';
 import { AuditService } from '../audit';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { buildContent } from './question-core';
+import { buildContent, type BuiltQuestion } from './question-core';
 import {
   planQuestionImport,
   withoutDrafts,
@@ -88,11 +88,26 @@ export class QuestionImportService {
         row.action === 'create' && row.draft !== null,
     );
 
-    const created = await this.prisma.$transaction(
-      creatable.map((row) =>
-        this.prisma.question.create({ data: rowData(row, log.id, log.actorId) }),
-      ),
-    );
+    // Interactive, not an array of promises: every question is three statements — the row,
+    // its first version, and the pointer between them — and all of them share one transaction.
+    const created = await this.prisma.$transaction(async (tx) => {
+      const rows: { id: string }[] = [];
+      for (const row of creatable) {
+        const built = buildContent(row.draft);
+        const question = await tx.question.create({
+          data: questionData(row.draft, built, log.actorId),
+        });
+        const version = await tx.questionVersion.create({
+          data: versionData(question.id, built, log.actorId),
+        });
+        await tx.question.update({
+          where: { id: question.id },
+          data: { currentVersionId: version.id },
+        });
+        rows.push(question);
+      }
+      return rows;
+    });
 
     try {
       await this.audit.recordImportRows(
@@ -162,36 +177,44 @@ export class QuestionImportService {
   }
 }
 
-function rowData(
-  row: PlannedRow & { draft: NonNullable<PlannedRow['draft']> },
-  importLogId: string,
+/**
+ * The question row — identity and taxonomy only. Where it came from is the ImportLog and its
+ * row actions, not a column here.
+ */
+function questionData(
+  draft: NonNullable<PlannedRow['draft']>,
+  built: BuiltQuestion,
   actorId: string | null,
-): Prisma.QuestionCreateInput {
-  const draft = row.draft;
-  const built = buildContent(draft);
-
+): Prisma.QuestionUncheckedCreateInput {
   return {
     type: draft.type,
-    subject: { connect: { id: draft.subjectId } },
-    ...(draft.topicId ? { topic: { connect: { id: draft.topicId } } } : {}),
-    ...(draft.subTopicId ? { subTopic: { connect: { id: draft.subTopicId } } } : {}),
+    subjectId: draft.subjectId,
+    topicId: draft.topicId ?? null,
     difficulty: draft.difficulty,
     status: draft.status,
-    isActive: true,
     questionCode: draft.questionCode ?? null,
-    content: built.content as Prisma.InputJsonValue,
-    answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
     tags: draft.tags,
-    defaultMarks: draft.defaultMarks ?? null,
-    defaultNegativeMarks: draft.defaultNegativeMarks ?? null,
     stemHash: built.stemHash,
     createdById: actorId,
-    source: {
-      kind: QUESTION_SOURCE_KIND.IMPORT,
-      importLogId,
-      line: row.line,
-    },
-    options: { create: built.options },
+  };
+}
+
+/** Version 1: everything an imported question actually says. */
+function versionData(
+  questionId: string,
+  built: BuiltQuestion,
+  actorId: string | null,
+): Prisma.QuestionVersionUncheckedCreateInput {
+  return {
+    questionId,
+    version: 1,
+    createdById: actorId,
+    content: built.content as Prisma.InputJsonValue,
+    options: built.options.map((option) => ({
+      id: randomUUID(),
+      ...option,
+    })) as unknown as Prisma.InputJsonValue,
+    answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
   };
 }
 

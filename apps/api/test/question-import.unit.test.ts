@@ -18,14 +18,12 @@ import { topicKey, type TaxonomyCatalog } from '../src/questions/taxonomy-contex
 const SUBJECT = 'sub_quant';
 const TOPIC = 'top_arithmetic';
 const ALGEBRA = 'top_algebra';
-const SUB_TOPIC = 'sub_percentages';
 
 function catalog(): TaxonomyCatalog {
   const context = emptyTaxonomy();
   context.subjects.set(SUBJECT, { id: SUBJECT, name: 'QUANTITATIVE APTITUDE' });
   context.topics.set(TOPIC, { id: TOPIC, name: 'ARITHMETIC', subjectId: SUBJECT });
   context.topics.set(ALGEBRA, { id: ALGEBRA, name: 'ALGEBRA', subjectId: SUBJECT });
-  context.subTopics.set(SUB_TOPIC, { id: SUB_TOPIC, name: 'PERCENTAGES', topicIds: [TOPIC] });
 
   return {
     context,
@@ -34,8 +32,8 @@ function catalog(): TaxonomyCatalog {
         id: SUBJECT,
         name: 'QUANTITATIVE APTITUDE',
         topics: [
-          { id: TOPIC, name: 'ARITHMETIC', subTopics: [{ id: SUB_TOPIC, name: 'PERCENTAGES' }] },
-          { id: ALGEBRA, name: 'ALGEBRA', subTopics: [] },
+          { id: TOPIC, name: 'ARITHMETIC' },
+          { id: ALGEBRA, name: 'ALGEBRA' },
         ],
       },
     ],
@@ -44,7 +42,6 @@ function catalog(): TaxonomyCatalog {
       [topicKey(SUBJECT, 'ARITHMETIC'), TOPIC],
       [topicKey(SUBJECT, 'ALGEBRA'), ALGEBRA],
     ]),
-    subTopicIdByName: new Map([['PERCENTAGES', SUB_TOPIC]]),
   };
 }
 
@@ -57,7 +54,6 @@ const noDedup = (): ImportDedupContext => ({
 const MCQ_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
   subject: 'Quantitative Aptitude',
   topic: 'Arithmetic',
-  subtopic: 'Percentages',
   difficulty: 'medium',
   stem_en: 'What is 20% of 150?',
   option1_en: '25',
@@ -65,8 +61,6 @@ const MCQ_ROW: Partial<Record<QuestionImportColumnKey, string>> = {
   option3_en: '35',
   option4_en: '40',
   correct_option: '2',
-  marks: '2',
-  negative_marks: '0.5',
 };
 
 /** Builds the table the reader would produce, with the headers it normalises to. */
@@ -104,10 +98,8 @@ describe('the question sheet', () => {
     assert.deepEqual(row.issues, []);
     assert.equal(row.draft?.subjectId, SUBJECT);
     assert.equal(row.draft?.topicId, TOPIC);
-    assert.equal(row.draft?.subTopicId, SUB_TOPIC);
     assert.equal(row.draft?.type, QUESTION_TYPE.SINGLE_MCQ);
     assert.equal(row.draft?.difficulty, 'MEDIUM');
-    assert.equal(row.draft?.defaultMarks, 2);
     assert.equal(row.draft?.options[1]?.isCorrect, true);
   });
 
@@ -159,12 +151,9 @@ describe('the question sheet', () => {
     assert.equal(row.issues.length, 1);
   });
 
-  it('refuses a sub-topic that is not linked to that topic', () => {
-    const row = plan([{ ...MCQ_ROW, topic: 'Algebra' }]).rows[0]!;
-    assert.ok(
-      row.issues.some((issue) => issue.code === QUESTION_VALIDATION_CODE.SUB_TOPIC_UNKNOWN) ||
-        row.issues.some((issue) => issue.code === QUESTION_VALIDATION_CODE.SUB_TOPIC_NOT_IN_TOPIC),
-    );
+  it('refuses a topic that is not under that subject rather than inventing one', () => {
+    const row = plan([{ ...MCQ_ROW, topic: 'Geometry' }]).rows[0]!;
+    assert.ok(row.issues.some((issue) => issue.code === QUESTION_VALIDATION_CODE.TOPIC_UNKNOWN));
     assert.equal(row.action, 'skip');
   });
 
@@ -190,15 +179,6 @@ describe('the question sheet', () => {
   it('splits tags on a comma and folds them to one casing', () => {
     const row = plan([{ ...MCQ_ROW, tags: 'SSC CGL, percentages ,SSC CGL' }]).rows[0]!;
     assert.deepEqual(row.draft?.tags, ['ssc cgl', 'percentages']);
-  });
-
-  it('reports an unreadable number against its own column', () => {
-    const row = plan([{ ...MCQ_ROW, marks: 'two' }]).rows[0]!;
-    const issue = row.issues.find(
-      (candidate) => candidate.code === QUESTION_VALIDATION_CODE.MARKS_INVALID,
-    );
-    assert.equal(issue?.column, 'marks');
-    assert.equal(row.action, 'skip');
   });
 
   it('reports a correct_option outside the four options', () => {

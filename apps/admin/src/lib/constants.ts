@@ -5,21 +5,17 @@ import {
   GraduationCap,
   History,
   KeyRound,
-  Layers,
   ShieldCheck,
-  ToggleRight,
   Upload,
   Users,
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import {
   FEATURE_KEYS,
-  GROUP_TYPE,
   STUDENT_TYPE,
   type AuditAction,
   type AuditActorType,
   type AuditFeature,
-  type GroupType,
   type ImportSource,
   type StudentType,
 } from '@iace/contracts';
@@ -33,12 +29,8 @@ export const ROUTES = {
   STUDENTS: '/students',
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
-  GROUPS: '/groups',
   BRANCHES: '/branches',
-  EXAM_TYPES: '/exam-types',
-  /** Adding students to ONE group: the group is in the path, not in the file. */
-  IMPORT_GROUP_MEMBERS: (id: string) => `/groups/${id}/students/import`,
-  IMPORT_GROUP_MEMBERS_PATTERN: '/groups/:id/students/import',
+  EXAMS: '/exams',
   IMPORT_STUDENTS: '/students/import',
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
@@ -47,9 +39,8 @@ export const ROUTES = {
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
   QUESTION_PATTERN: '/questions/:id',
-  /** Super-admin only: who the admins are, what the sectors are, who holds what. */
+  /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
-  FEATURES: '/features',
   PERMISSIONS: '/permissions',
   /** Every admin reaches these — the service, not the route, scopes what they see. */
   AUDIT: '/audit',
@@ -57,15 +48,6 @@ export const ROUTES = {
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
-
-/** What a group type is called on screen. */
-export const GROUP_TYPE_LABELS: Record<GroupType, string> = {
-  [GROUP_TYPE.GLOBAL]: 'All students',
-  [GROUP_TYPE.EXAM]: 'Exam',
-  [GROUP_TYPE.PROGRAM]: 'Program',
-  [GROUP_TYPE.SCHOLARSHIP]: 'Scholarship',
-  [GROUP_TYPE.NON_IACE]: 'Non-IACE',
-};
 
 /** What each student type is called on screen. The enum values are never shown raw. */
 export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
@@ -136,9 +118,8 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     children: [
       { to: ROUTES.STUDENTS, label: 'All students', icon: Users },
       { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
-      { to: ROUTES.GROUPS, label: 'Groups', icon: Layers },
       { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
-      { to: ROUTES.EXAM_TYPES, label: 'Exam types', icon: GraduationCap },
+      { to: ROUTES.EXAMS, label: 'Exams', icon: GraduationCap },
     ],
   },
   {
@@ -157,7 +138,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     superAdminOnly: true,
     children: [
       { to: ROUTES.ADMINS, label: 'Admins', icon: ShieldCheck },
-      { to: ROUTES.FEATURES, label: 'Features', icon: ToggleRight },
       { to: ROUTES.PERMISSIONS, label: 'Permissions', icon: KeyRound },
     ],
   },
@@ -189,8 +169,7 @@ export function filterAdminNav(
 /** The signed-in admin's identity, cached under one key. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
-/** Features and their grant lists — shared by the Features and Permissions
- *  screens, so a grant made on one refreshes the other. */
+/** The code-owned feature keys and their grant lists, read by the Permissions screen. */
 export const FEATURES_QUERY_KEY = ['admin', 'features'] as const;
 
 /** Admins. A grant changes both this and the feature list, so both are invalidated together. */

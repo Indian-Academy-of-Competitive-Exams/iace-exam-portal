@@ -12,43 +12,28 @@ function build(admins = [makeAdminRow()]) {
 
 const ACTOR = 'adm_actor';
 
-async function withFeature(
-  ctx: ReturnType<typeof build>,
-  key: string = FEATURE_KEYS.STUDENT_MANAGEMENT,
-): Promise<void> {
-  await ctx.service.createFeature({ key });
-}
-
 describe('AdminsService — features', () => {
-  it('creates BOTH permission rows with the feature', async () => {
-    // The failure this prevents: a feature with only a READ row is one whose WRITE grants can never be
-    // made — grant() updates an existing row, so it would have nothing to update and would fail at the
-    // moment somebody tried.
+  it('lists every code-owned key, with both levels empty before anything is granted', async () => {
+    // The list is FEATURE_KEYS, not a table: a key nothing in the code checks cannot be granted,
+    // and a key the code does check is always grantable without anybody registering it first.
     const ctx = build();
 
-    const feature = await ctx.service.createFeature({ key: FEATURE_KEYS.TEST_MANAGEMENT });
+    const features = await ctx.service.listFeatures();
 
-    assert.deepEqual(Object.keys(feature.grants).sort(), ['READ', 'WRITE']);
-    assert.deepEqual(feature.grants.READ, []);
-    assert.deepEqual(feature.grants.WRITE, []);
-    assert.equal(ctx.prisma.permissions.length, 2);
-  });
-
-  it('refuses a second feature with the same key', async () => {
-    const ctx = build();
-    await withFeature(ctx);
-
-    await assert.rejects(
-      () => withFeature(ctx),
-      (error: unknown) => AppException.is(error) && error.code === 'CONFLICT',
+    assert.deepEqual(
+      features.map((feature) => feature.key).sort(),
+      Object.values(FEATURE_KEYS).sort(),
     );
+    for (const feature of features) {
+      assert.deepEqual(feature.grants.READ, []);
+      assert.deepEqual(feature.grants.WRITE, []);
+    }
   });
 });
 
 describe('AdminsService — grants', () => {
   it('grants a level and reads it back as the admin permission map', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await withFeature(ctx);
 
     await ctx.service.grant({
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
@@ -63,7 +48,6 @@ describe('AdminsService — grants', () => {
 
   it('is idempotent — granting twice leaves one entry, so one revoke undoes it', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await withFeature(ctx);
     const grant = {
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
       level: PERMISSION_LEVELS.READ,
@@ -81,7 +65,6 @@ describe('AdminsService — grants', () => {
 
   it('resolves a doubled grant to WRITE rather than to whichever row came back first', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await withFeature(ctx);
     for (const level of [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE]) {
       await ctx.service.grant({
         featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
@@ -97,34 +80,30 @@ describe('AdminsService — grants', () => {
     });
   });
 
-  it('refuses a grant on a feature nobody has registered', async () => {
+  /** Every code-owned key is grantable without anybody registering it first. */
+  it('grants a key nothing has been granted on before', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
 
-    await assert.rejects(
-      () =>
-        ctx.service.grant({
-          featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
-          level: PERMISSION_LEVELS.READ,
-          adminId: 'adm_1',
-        }),
-      (error: unknown) => AppException.is(error) && error.code === 'NOT_FOUND',
-    );
-  });
-
-  it('carries a key the code does not know about', async () => {
-    // The key set is OPEN: a super admin registers sectors as the product grows, and one no controller
-    // checks YET must still round-trip.
-    const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await ctx.service.createFeature({ key: 'REPORTING_DASHBOARD' });
-    await ctx.service.grant({
-      featureKey: 'REPORTING_DASHBOARD',
-      level: PERMISSION_LEVELS.WRITE,
+    const feature = await ctx.service.grant({
+      featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
+      level: PERMISSION_LEVELS.READ,
       adminId: 'adm_1',
     });
 
-    assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {
-      REPORTING_DASHBOARD: PERMISSION_LEVELS.WRITE,
+    assert.deepEqual(feature.grants.READ, ['adm_1']);
+  });
+
+  it('drops a stored key the code no longer defines', async () => {
+    // The guard reads this map. A key left behind by an older build must not resolve to access
+    // nothing in the code checks — it is dropped rather than carried.
+    const ctx = build([makeAdminRow({ id: 'adm_1' })]);
+    ctx.prisma.grants.push({
+      adminId: 'adm_1',
+      featureKey: 'REPORTING_DASHBOARD' as never,
+      level: PERMISSION_LEVELS.WRITE,
     });
+
+    assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {});
   });
 
   it('returns the full paginated shape the interceptor unpacks', async () => {
@@ -176,12 +155,9 @@ describe('AdminsService — admins', () => {
 
 describe('AdminsService — setActive', () => {
   it('prunes every grant, so reactivating never silently restores access', async () => {
-    // THE failure this feature exists to prevent. adminIds is a denormalized array with no foreign
-    // key, so nothing else would ever remove the id: the grants would sit there and come back the
-    // moment the account did.
+    // THE failure this feature exists to prevent: nothing else removes a grant row, so it would
+    // sit there and come back the moment the account did.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await withFeature(ctx);
-    await withFeature(ctx, FEATURE_KEYS.TEST_MANAGEMENT);
     for (const featureKey of [FEATURE_KEYS.STUDENT_MANAGEMENT, FEATURE_KEYS.TEST_MANAGEMENT]) {
       await ctx.service.grant({
         featureKey,
@@ -194,9 +170,9 @@ describe('AdminsService — setActive', () => {
 
     assert.deepEqual(await ctx.service.permissionsFor('adm_1'), {});
     assert.deepEqual(
-      ctx.prisma.permissions.flatMap((p) => p.adminIds),
+      ctx.prisma.grants.filter((grant) => grant.adminId === 'adm_1'),
       [],
-      'no permission row may still hold the deactivated id',
+      'no grant row may survive the deactivation',
     );
   });
 
@@ -231,7 +207,6 @@ describe('AdminsService — setActive', () => {
 
   it('leaves other admins’ grants alone', async () => {
     const ctx = build([makeAdminRow({ id: 'adm_1' }), makeAdminRow({ id: 'adm_2' })]);
-    await withFeature(ctx);
     for (const adminId of ['adm_1', 'adm_2']) {
       await ctx.service.grant({
         featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
@@ -277,7 +252,6 @@ describe('AdminsService — setActive', () => {
   it('does NOT hand back the grants deactivation took away', async () => {
     // The rule that keeps deactivation a removal rather than a pause.
     const ctx = build([makeAdminRow({ id: 'adm_1' })]);
-    await ctx.service.createFeature({ key: FEATURE_KEYS.STUDENT_MANAGEMENT });
     await ctx.service.grant({
       featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
       level: PERMISSION_LEVELS.WRITE,
@@ -295,10 +269,11 @@ describe('AdminsService — setActive', () => {
     // The map is read back rather than assumed empty — a super admin may have
     // prepared their access before switching them on again.
     const ctx = build([makeAdminRow({ id: 'adm_1', isActive: false })]);
-    await ctx.service.createFeature({ key: FEATURE_KEYS.TEST_MANAGEMENT });
-    ctx.prisma.permissions
-      .filter((perm) => perm.level === PERMISSION_LEVELS.READ)
-      .forEach((perm) => perm.adminIds.push('adm_1'));
+    ctx.prisma.grants.push({
+      adminId: 'adm_1',
+      featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
+      level: PERMISSION_LEVELS.READ,
+    });
 
     const restored = await ctx.service.setActive('adm_1', true, ACTOR);
 

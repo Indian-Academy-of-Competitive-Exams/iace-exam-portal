@@ -7,19 +7,17 @@ import {
   PERMISSION_LEVELS,
   questionDraftSchema,
   questionListQuerySchema,
-  setQuestionActiveSchema,
   setQuestionStatusSchema,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionListQuery,
   type QuestionSummary,
-  type SetQuestionActiveBody,
   type SetQuestionStatusBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
-import { Audit, TOGGLE_ACTIONS } from '../audit';
+import { Audit } from '../audit';
 import { QuestionsService } from './questions.service';
 
 /** The question bank itself. Every route is gated on QUESTION_MANAGEMENT. */
@@ -60,18 +58,10 @@ export class QuestionsController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(questionDraftSchema)) body: QuestionDraft,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionDetail> {
-    return this.questions.update(id, body);
-  }
-
-  @Audit(AUDIT_FEATURE.QUESTION, TOGGLE_ACTIONS.signIn)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/active')
-  setActive(
-    @Param('id') id: string,
-    @Body(new ZodBody(setQuestionActiveSchema)) body: SetQuestionActiveBody,
-  ): Promise<QuestionDetail> {
-    return this.questions.setActive(id, body);
+    // Same reason as create: the version records who wrote it, from the token.
+    return this.questions.update(id, body, user.id);
   }
 
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)

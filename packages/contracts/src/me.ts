@@ -7,11 +7,13 @@ import { studentDetailSchema, updateStudentSchema } from './students';
 // or body, so a student cannot address another student's record.
 // ============================================================================
 
-/** The kind is in the PATH, so a request cannot overwrite a field it did not name. */
+/**
+ * The kind is in the PATH, so a request cannot overwrite a field it did not name.
+ * A photo is the only one: Aadhaar and PAN images are never stored, only their
+ * verification status, so there is nothing to upload them to.
+ */
 export const DOCUMENT_KINDS = {
   PHOTO: 'photo',
-  AADHAAR: 'aadhaar',
-  PAN: 'pan',
 } as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[keyof typeof DOCUMENT_KINDS];
 export const DOCUMENT_KIND_VALUES = Object.values(DOCUMENT_KINDS) as [
@@ -24,22 +26,10 @@ export const documentKindSchema = z.enum(DOCUMENT_KIND_VALUES);
 /** 5MB — a product rule, not an environment one, so every deployment refuses the same file. */
 export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
 
-/** What a browser may send. Checked server-side; the picker mirrors it. */
-export const DOCUMENT_ACCEPTED_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf',
-] as const;
-
-/** A photo has to BE a photo — a PDF headshot is not one. */
+/** A photo has to BE a photo — a PDF headshot is not one. Checked server-side; the picker mirrors it. */
 export const PHOTO_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
-export function acceptedTypesFor(kind: DocumentKind): readonly string[] {
-  return kind === DOCUMENT_KINDS.PHOTO ? PHOTO_ACCEPTED_TYPES : DOCUMENT_ACCEPTED_TYPES;
-}
-
-/** The student's own record — the same shape the admin sees, documents included. */
+/** The student's own record — the same shape the admin sees. */
 export const meSchema = studentDetailSchema;
 export type Me = z.infer<typeof meSchema>;
 

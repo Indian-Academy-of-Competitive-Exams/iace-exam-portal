@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  GROUP_TYPE,
-  STUDENT_SORTS,
-  studentListQuerySchema,
-  type StudentListQuery,
-} from '@iace/contracts';
+import { STUDENT_SORTS, studentListQuerySchema, type StudentListQuery } from '@iace/contracts';
 import { studentOrderBy, studentWhere } from '../src/students/student-query';
 
 /** Parses like a real request would, so the tests exercise the coercions too. */
@@ -69,31 +64,24 @@ describe('studentWhere — three-state filters', () => {
   });
 
   /**
-   * "Reaches no test" is enrolments AND grants, not grants alone. Reading only `directGroupIds`
-   * fired on every correctly enrolled student, which made the amber badge meaningless.
+   * "Reaches no test" is enrolments AND programs, not one of them. Reading either alone fires on
+   * students who are perfectly well placed, which makes the amber badge meaningless.
    */
-  it('reads ungrouped as "no enrolment AND no grant", both ways round', () => {
+  it('reads noAccess as "no enrolment AND no program", both ways round', () => {
     assertHas(
-      { ungrouped: 'true' },
-      { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } },
+      { noAccess: 'true' },
+      { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } },
     );
     assertHas(
-      { ungrouped: 'false' },
-      { NOT: { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } } },
+      { noAccess: 'false' },
+      { NOT: { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } } },
     );
   });
 });
 
 describe('studentWhere — access-shaped filters', () => {
-  it('finds a group through the grants on the student', () => {
-    assertHas({ groupId: 'g1' }, { directGroupIds: { has: 'g1' } });
-  });
-
-  /**
-   * The branch a student ATTENDS, which is the one access and scheduling read. Going through their
-   * groups would answer a different question: a group is offered at several centres.
-   */
-  it('finds a branch on the student, not through their groups', () => {
+  /** The branch a student ATTENDS, which is the one access and scheduling read. */
+  it('finds a branch as a column on the student, with no join', () => {
     assertHas({ branchId: 'b1' }, { currentBranchId: 'b1' });
   });
 });
@@ -125,21 +113,20 @@ describe('studentWhere — joined between', () => {
 
 /** Every case here once silently LOST a filter. */
 describe('studentWhere — filters COMBINE rather than overwrite each other', () => {
-  it('keeps the group filter when a branch is chosen too', () => {
-    const params = { groupId: 'g1', branchId: 'b1', isTestBlocked: 'true' };
+  it('keeps the branch filter when a status is chosen too', () => {
+    const params = { branchId: 'b1', isTestBlocked: 'true' };
 
-    assertHas(params, { directGroupIds: { has: 'g1' } });
     assertHas(params, { currentBranchId: 'b1' });
     assertHas(params, { isTestBlocked: true });
-    assert.equal(conditionsFor(params).length, 3);
+    assert.equal(conditionsFor(params).length, 2);
   });
 
-  it('keeps the group filter alongside the ungrouped one', () => {
-    const params = { groupId: 'g1', ungrouped: 'false' };
+  it('keeps the branch filter alongside the access one', () => {
+    const params = { branchId: 'b1', noAccess: 'false' };
 
-    assertHas(params, { directGroupIds: { has: 'g1' } });
+    assertHas(params, { currentBranchId: 'b1' });
     assertHas(params, {
-      NOT: { enrolledExams: { isEmpty: true }, directGroupIds: { isEmpty: true } },
+      NOT: { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } },
     });
   });
 
@@ -170,7 +157,6 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   it('applies every filter at once rather than the last one set', () => {
     const conditions = conditionsFor({
       q: '98765',
-      groupId: 'g1',
       branchId: 'b1',
       isActive: 'true',
       isTestBlocked: 'false',
@@ -179,7 +165,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
       joinedFrom: '2026-01-01',
     });
 
-    assert.equal(conditions.length, 8, 'every filter must survive');
+    assert.equal(conditions.length, 7, 'every filter must survive');
   });
 
   it('searches a mobile number and a name together', () => {
@@ -219,43 +205,5 @@ describe('studentOrderBy', () => {
 
   it('refuses a sort the database was never asked to serve', () => {
     assert.equal(studentListQuerySchema.safeParse({ sort: 'pinHash' }).success, false);
-  });
-});
-
-describe('studentWhere — the group filter follows the group’s type', () => {
-  /** The Groups screen links its name to this list, so the two must return the same people. */
-  it('finds an exam group’s members by their enrolment', () => {
-    const where = studentWhere(query({ groupId: 'g1' }), {
-      id: 'g1',
-      type: GROUP_TYPE.EXAM,
-      examType: 'SSC CGL',
-    });
-
-    assert.deepEqual(where.AND, [{ enrolledExams: { has: 'SSC CGL' } }]);
-  });
-
-  it('finds the all-students group as everybody still on the roster', () => {
-    const where = studentWhere(query({ groupId: 'g_all' }), {
-      id: 'g_all',
-      type: GROUP_TYPE.GLOBAL,
-      examType: null,
-    });
-
-    assert.deepEqual(where.AND, [{ deletedAt: null }]);
-  });
-
-  it('finds a scholarship group through the grants on the student', () => {
-    const where = studentWhere(query({ groupId: 'g_merit' }), {
-      id: 'g_merit',
-      type: GROUP_TYPE.SCHOLARSHIP,
-      examType: null,
-    });
-
-    assert.deepEqual(where.AND, [{ directGroupIds: { has: 'g_merit' } }]);
-  });
-
-  /** A group deleted out from under the link: the dangling grant is still the honest answer. */
-  it('falls back to the grant column when the group is gone', () => {
-    assertHas({ groupId: 'g1' }, { directGroupIds: { has: 'g1' } });
   });
 });

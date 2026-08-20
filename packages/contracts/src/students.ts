@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { mobileSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
+import { languageCodeSchema } from './exams';
 
 // ============================================================================
 // Students, as the ADMIN sees them.
@@ -51,7 +52,7 @@ export const personNameSchema = z
 
 /**
  * Where a student sits relative to the institute. Mandatory on every route in —
- * it decides which branch and which groups they may be given.
+ * it decides which branch they may be given.
  */
 export const STUDENT_TYPE = {
   ONLINE: 'ONLINE',
@@ -63,20 +64,12 @@ export type StudentType = z.infer<typeof studentTypeSchema>;
 /** The same values as a list, for building a picker without restating them — as `GENDERS` does. */
 export const STUDENT_TYPES = studentTypeSchema.options;
 
-export const groupRefSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  /** The name is unique within this code, so it is what disambiguates one. */
-  examType: z.string().nullable(),
-});
-export type GroupRef = z.infer<typeof groupRefSchema>;
-
 export const studentSummarySchema = z.object({
   id: z.string(),
   mobile: z.string(),
   fullName: z.string().nullable(),
   studentType: studentTypeSchema,
-  /** ExamType codes. An EXAM or PROGRAM group is reached by matching one, with no membership row. */
+  /** `Exam.code` values. A series is reached by matching one, with no membership row. */
   enrolledExams: z.array(z.string()),
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
@@ -87,7 +80,6 @@ export const studentSummarySchema = z.object({
   hasDefaultPin: z.boolean(),
   preTestReady: z.boolean(),
   profileCompleted: z.boolean(),
-  groups: z.array(groupRefSchema),
   createdAt: z.string(),
 });
 export type StudentSummary = z.infer<typeof studentSummarySchema>;
@@ -122,9 +114,8 @@ export type PastExamEntry = z.infer<typeof pastExamEntrySchema>;
 /** How many rows either list may hold. A profile is not a CV. */
 export const PROFILE_LIST_MAX = 12;
 
-/** The course they are on — free text on the row, never queried, so it is capped and left alone. */
-export const PROGRAM_MAX = 120;
-export const programSchema = z.string().trim().max(PROGRAM_MAX);
+/** `Program.code` values — the coaching programs the student is a candidate for. */
+export const programCodesSchema = z.array(z.string());
 
 /** Everything the admin may see — note what is NOT here (see the file header). */
 export const studentProfileSchema = z.object({
@@ -134,21 +125,22 @@ export const studentProfileSchema = z.object({
   email: z.string().nullable(),
   address: z.string().nullable(),
   gender: genderSchema.nullable(),
+  /** A short-lived SIGNED URL, never a stored path — the bucket is private. */
   photoUrl: z.string().nullable(),
   /**
-   * The identity documents, as short-lived SIGNED URLs and never stored paths —
-   * the bucket is private, and a permanent link to an Aadhaar does not belong in a response.
+   * Aadhaar and PAN are VERIFICATION STATUS only. The images are never stored, so there is
+   * no URL to hand back and no permanent link to an identity document in any response.
    */
-  aadhaarUrl: z.string().nullable(),
-  panUrl: z.string().nullable(),
+  aadhaarVerified: z.boolean(),
+  panVerified: z.boolean(),
   educationDetails: z.array(educationEntrySchema).nullable(),
   pastExamHistory: z.array(pastExamEntrySchema).nullable(),
 });
 export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
 export const studentDetailSchema = studentSummarySchema.extend({
-  preferredLanguage: z.string(),
-  program: z.string().nullable(),
+  preferredLanguage: languageCodeSchema,
+  programs: z.array(z.string()),
   currentBranchId: z.string().nullable(),
   updatedAt: z.string(),
   profile: studentProfileSchema.nullable(),
@@ -168,8 +160,7 @@ export const STUDENT_SORT_VALUES = Object.values(STUDENT_SORTS) as [StudentSort,
 export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Matches a mobile number or a name, case-insensitively. */
   q: searchQuery(),
-  groupId: z.string().optional(),
-  /** Everyone in any group under this branch — "who does this centre teach". */
+  /** Everyone whose current branch this is — "who does this centre teach". */
   branchId: z.string().optional(),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
@@ -180,8 +171,8 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Mother's name, father's name and DOB — what a student needs before a test. */
   preTestReady: optionalBooleanQuery(),
   profileCompleted: optionalBooleanQuery(),
-  /** Students with no group at all: they can reach no test, so they are a to-do list. */
-  ungrouped: optionalBooleanQuery(),
+  /** Students with no enrolment and no program: they can reach no test, so they are a to-do list. */
+  noAccess: optionalBooleanQuery(),
   /** Enrolled on or after / on or before. Inclusive at both ends. */
   joinedFrom: dateOnlySchema.optional(),
   joinedTo: dateOnlySchema.optional(),
@@ -225,9 +216,8 @@ export const createStudentSchema = z.object({
   fullName: blankIsAbsent(personNameSchema),
   studentType: studentTypeSchema,
   enrolledExams: z.array(z.string()).optional(),
-  program: blankIsAbsent(programSchema),
+  programs: programCodesSchema.optional(),
   currentBranchId: blankIsAbsent(z.string().min(1)),
-  groupIds: z.array(z.string()).optional(),
 });
 export type CreateStudentInput = z.input<typeof createStudentSchema>;
 export type CreateStudentBody = z.infer<typeof createStudentSchema>;
@@ -244,21 +234,20 @@ export const updateStudentProfileSchema = z.object({
   pastExamHistory: z.array(pastExamEntrySchema).max(PROFILE_LIST_MAX).optional(),
 });
 
-/** An enrolment reaches every EXAM and PROGRAM group for that code, so it is a route to a test. */
+/** An enrolment reaches every series tagged with that exam, so it is a route to a test. */
 export const BLOCKED_ENROLMENT_MESSAGE =
   'That student is blocked from tests. Lift the block before enrolling them in another exam.';
 
 export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
   fullName: blankClears(personNameSchema),
-  preferredLanguage: z.string().trim().min(2).max(8).optional(),
+  preferredLanguage: languageCodeSchema.optional(),
   studentType: studentTypeSchema.optional(),
   /** Replaces the enrolments wholesale — an empty array is a real answer. */
   enrolledExams: z.array(z.string()).optional(),
-  program: blankClears(programSchema),
+  /** Replaces the programs wholesale — an empty array is a real answer. */
+  programs: programCodesSchema.optional(),
   currentBranchId: blankClears(z.string().min(1)),
-  /** Replaces the student's direct grants wholesale — an empty array is a valid patch. */
-  groupIds: z.array(z.string()).optional(),
   profile: updateStudentProfileSchema.optional(),
 });
 export type UpdateStudentInput = z.input<typeof updateStudentSchema>;

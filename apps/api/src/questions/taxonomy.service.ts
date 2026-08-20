@@ -1,21 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  AUDIT_ACTION,
   AppException,
   ErrorCodes,
   fieldDiff,
-  type CreateSubTopicBody,
   type CreateSubjectBody,
   type CreateTopicBody,
   type Paginated,
-  type SubTopic,
-  type SubTopicListQuery,
   type Subject,
   type SubjectListQuery,
   type Topic,
   type TopicListQuery,
-  type UpdateSubTopicBody,
   type UpdateSubjectBody,
   type UpdateTopicBody,
 } from '@iace/contracts';
@@ -28,28 +23,20 @@ const SUBJECT_INCLUDE = {
 
 const TOPIC_INCLUDE = {
   subject: { select: { id: true, name: true } },
-  _count: { select: { subTopics: true, questions: true } },
-} as const satisfies Prisma.TopicInclude;
-
-const SUB_TOPIC_INCLUDE = {
-  topics: { select: { id: true, name: true, subject: { select: { id: true, name: true } } } },
   _count: { select: { questions: true } },
-} as const satisfies Prisma.SubTopicInclude;
+} as const satisfies Prisma.TopicInclude;
 
 type SubjectRow = Prisma.SubjectGetPayload<{ include: typeof SUBJECT_INCLUDE }>;
 type TopicRow = Prisma.TopicGetPayload<{ include: typeof TOPIC_INCLUDE }>;
-type SubTopicRow = Prisma.SubTopicGetPayload<{ include: typeof SUB_TOPIC_INCLUDE }>;
 
 /** What each taxonomy level's audit diff covers — one `AuditFeature` value per level. */
 export const AUDITED_SUBJECT_FIELDS = ['name', 'code'] as const;
 export const AUDITED_TOPIC_FIELDS = ['name'] as const;
-export const AUDITED_SUB_TOPIC_FIELDS = ['name', 'topicIds'] as const;
 
 /**
- * Owns `Subject`, `Topic` and `SubTopic` (docs/03 §5). Names arrive canonical
- * from the schemas, so a case- or space-different duplicate cannot be created —
- * and a sub-topic is MATCHED before it is created, because its name is unique
- * table-wide and a second row would split the analytics the sharing joins up.
+ * Owns `Subject` and `Topic` (docs/03 §5). Names arrive canonical from the schemas, so a
+ * case- or space-different duplicate cannot be created. Anything finer than a topic is a
+ * `topic:` tag on the question, not a row here.
  */
 @Injectable()
 export class TaxonomyService {
@@ -189,117 +176,6 @@ export class TaxonomyService {
   }
 
   // ==========================================================================
-  // Sub-topics — the shared level
-  // ==========================================================================
-
-  async listSubTopics(query: SubTopicListQuery): Promise<Paginated<SubTopic>> {
-    const where: Prisma.SubTopicWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.topicId ? { topics: { some: { id: query.topicId } } } : {}),
-      // A sub-topic reaches a subject only through a topic in it. That is the
-      // whole shape of the third level, so the filter has to travel the same way.
-      ...(query.subjectId ? { topics: { some: { subjectId: query.subjectId } } } : {}),
-    };
-
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.subTopic.findMany({
-        where,
-        include: SUB_TOPIC_INCLUDE,
-        orderBy: { name: 'asc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.prisma.subTopic.count({ where }),
-    ]);
-
-    return { items: rows.map(toSubTopic), page: query.page, pageSize: query.pageSize, total };
-  }
-
-  /**
-   * Creating one is really "link this name to these topics": the name is unique
-   * across the table, so an existing row is linked rather than duplicated. That
-   * is the difference between PERCENTAGES appearing under Arithmetic and Data
-   * Interpretation, and two PERCENTAGES rows whose analytics never join.
-   */
-  async createSubTopic(body: CreateSubTopicBody): Promise<SubTopic> {
-    await this.requireTopics(body.topicIds);
-
-    const existing = await this.prisma.subTopic.findUnique({
-      where: { name: body.name },
-      include: SUB_TOPIC_INCLUDE,
-    });
-    if (existing) {
-      const updated = await this.prisma.subTopic.update({
-        where: { id: existing.id },
-        data: { topics: { connect: body.topicIds.map((id) => ({ id })) } },
-        include: SUB_TOPIC_INCLUDE,
-      });
-
-      // The row was already there, so this linked topics onto it. A second CREATE against it,
-      // with an empty `changed`, would describe neither what happened nor what changed.
-      this.auditContext.setAction(AUDIT_ACTION.UPDATE);
-      this.auditContext.setChanged(
-        fieldDiff(
-          auditFieldsOfSubTopic(existing),
-          auditFieldsOfSubTopic(updated),
-          AUDITED_SUB_TOPIC_FIELDS,
-        ),
-      );
-
-      return toSubTopic(updated);
-    }
-
-    return toSubTopic(
-      await this.prisma.subTopic.create({
-        data: { name: body.name, topics: { connect: body.topicIds.map((id) => ({ id })) } },
-        include: SUB_TOPIC_INCLUDE,
-      }),
-    );
-  }
-
-  /** `topicIds` REPLACES the links: the screen holds the whole set, not a delta. */
-  async updateSubTopic(id: string, body: UpdateSubTopicBody): Promise<SubTopic> {
-    const subTopic = await this.requireSubTopic(id);
-    if (body.topicIds) await this.requireTopics(body.topicIds);
-
-    if (body.name) {
-      const taken = await this.prisma.subTopic.findFirst({
-        where: { name: body.name, id: { not: id } },
-      });
-      if (taken) {
-        throw new AppException(
-          ErrorCodes.CONFLICT,
-          `${body.name} already exists — link that one to this topic instead`,
-          { fieldErrors: { name: [`${body.name} already exists`] } },
-        );
-      }
-    }
-
-    const changes = {
-      ...(body.name ? { name: body.name } : {}),
-      ...(body.topicIds
-        ? { topics: { set: body.topicIds.map((topicId) => ({ id: topicId })) } }
-        : {}),
-    };
-
-    const updated = await this.prisma.subTopic.update({
-      where: { id },
-      data: changes,
-      include: SUB_TOPIC_INCLUDE,
-    });
-
-    this.auditContext.setChanged(
-      fieldDiff(
-        auditFieldsOfSubTopic(subTopic),
-        auditFieldsOfSubTopic(updated),
-        AUDITED_SUB_TOPIC_FIELDS,
-      ),
-    );
-
-    return toSubTopic(updated);
-  }
-
-  // ==========================================================================
 
   private async requireSubject(id: string) {
     const row = await this.prisma.subject.findUnique({ where: { id } });
@@ -315,24 +191,6 @@ export class TaxonomyService {
     const row = await this.prisma.topic.findUnique({ where: { id } });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such topic');
     return row;
-  }
-
-  private async requireSubTopic(id: string) {
-    const row = await this.prisma.subTopic.findUnique({
-      where: { id },
-      include: { topics: { select: { id: true } } },
-    });
-    if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such sub-topic');
-    return row;
-  }
-
-  private async requireTopics(ids: string[]): Promise<void> {
-    const found = await this.prisma.topic.count({ where: { id: { in: ids } } });
-    if (found === new Set(ids).size) return;
-
-    throw new AppException(ErrorCodes.NOT_FOUND, 'One of those topics no longer exists', {
-      fieldErrors: { topicIds: ['One of those topics no longer exists'] },
-    });
   }
 }
 
@@ -351,34 +209,6 @@ function toTopic(row: TopicRow): Topic {
     id: row.id,
     name: row.name,
     subject: row.subject,
-    subTopicCount: row._count.subTopics,
     questionCount: row._count.questions,
   };
-}
-
-function toSubTopic(row: SubTopicRow): SubTopic {
-  return {
-    id: row.id,
-    name: row.name,
-    topics: row.topics.map((topic) => ({
-      id: topic.id,
-      name: topic.name,
-      subject: topic.subject,
-    })),
-    questionCount: row._count.questions,
-  };
-}
-
-/** `topics`, the M:N relation, flattened to ids — sorted so an unchanged set never reads as a
- * reorder. Not `localeCompare`: two machines must never order the same id set differently. */
-function auditFieldsOfSubTopic(row: { name: string; topics: { id: string }[] }): {
-  name: string;
-  topicIds: string[];
-} {
-  return { name: row.name, topicIds: row.topics.map((topic) => topic.id).sort(byCodeUnit) };
-}
-
-function byCodeUnit(a: string, b: string): number {
-  if (a < b) return -1;
-  return a > b ? 1 : 0;
 }

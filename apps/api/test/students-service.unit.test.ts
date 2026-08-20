@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { AppException, ErrorCodes, STUDENT_TYPE } from '@iace/contracts';
 import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
-import { type ExamTypesService } from '../src/configs';
+import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
 import { FakePrisma, makeBranch, makeStudent } from './support/fakes';
@@ -28,8 +28,8 @@ class FakeExamTypes {
     return Promise.resolve();
   }
 
-  asService(): ExamTypesService {
-    return this as unknown as ExamTypesService;
+  asService(): ExamsService {
+    return this as unknown as ExamsService;
   }
 }
 
@@ -39,14 +39,14 @@ function serviceWith(
   branches = [makeBranch({ id: 'br_1' })],
 ) {
   const prisma = new FakePrisma(students, [], branches);
-  const examTypes = new FakeExamTypes(usableExams);
+  const exams = new FakeExamTypes(usableExams);
   return {
     prisma,
-    examTypes,
+    exams,
     service: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
-      examTypes.asService(),
+      exams.asService(),
       new BranchesService(prisma.asService(), new AuditContext()),
       new AuditContext(),
     ),
@@ -69,12 +69,12 @@ describe('StudentsService.create — the type is the caller’s, never the servi
       mobile: '9000000002',
       studentType: STUDENT_TYPE.OFFLINE,
       enrolledExams: ['SSC CGL'],
-      program: 'One year classroom',
+      programs: ['SSC CGL FOUNDATION'],
       currentBranchId: 'br_1',
     });
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
-    assert.equal(prisma.students[0]?.program, 'One year classroom');
+    assert.deepEqual(prisma.students[0]?.programs, ['SSC CGL FOUNDATION']);
     assert.equal(prisma.students[0]?.currentBranchId, 'br_1');
   });
 
@@ -147,14 +147,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
 describe('StudentsService.update — the access fields', () => {
   it('replaces the enrolments and validates them first', async () => {
-    const { service, prisma, examTypes } = serviceWith([
+    const { service, prisma, exams } = serviceWith([
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
     await service.update('stu_1', { enrolledExams: ['RRB JE'] });
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['RRB JE']);
-    assert.deepEqual(examTypes.calls.at(-1), { codes: ['RRB JE'], fieldKey: 'enrolledExams' });
+    assert.deepEqual(exams.calls.at(-1), { codes: ['RRB JE'], fieldKey: 'enrolledExams' });
   });
 
   it('lets every enrolment be taken away', async () => {
@@ -197,26 +197,26 @@ describe('StudentsService.update — the access fields', () => {
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
   });
 
-  it('clears the programme and the branch when the patch says null', async () => {
+  it('clears the programs and the branch when the patch says so', async () => {
     const { service, prisma } = serviceWith([
-      makeStudent({ id: 'stu_1', program: 'One year classroom', currentBranchId: 'br_1' }),
+      makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'], currentBranchId: 'br_1' }),
     ]);
 
-    await service.update('stu_1', { program: null, currentBranchId: null });
+    await service.update('stu_1', { programs: [], currentBranchId: null });
 
-    assert.equal(prisma.students[0]?.program, null);
+    assert.deepEqual(prisma.students[0]?.programs, []);
     assert.equal(prisma.students[0]?.currentBranchId, null);
   });
 
   it('leaves the access fields alone when the patch omits them', async () => {
     const { service, prisma } = serviceWith([
-      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'], program: 'One year classroom' }),
+      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'], programs: ['SSC CGL FOUNDATION'] }),
     ]);
 
     await service.update('stu_1', { fullName: 'Ravi Kumar' });
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
-    assert.equal(prisma.students[0]?.program, 'One year classroom');
+    assert.deepEqual(prisma.students[0]?.programs, ['SSC CGL FOUNDATION']);
   });
 
   it('refuses an exam code the catalog does not hold, under the form’s own field name', async () => {

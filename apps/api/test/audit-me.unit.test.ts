@@ -4,7 +4,7 @@ import { DOCUMENT_KINDS, fieldDiff } from '@iace/contracts';
 import { AUDITED_PROFILE_FIELDS, MeService } from '../src/me/me.service';
 import { AuditContext } from '../src/audit';
 import { StudentsService } from '../src/students/students.service';
-import { type ExamTypesService } from '../src/configs';
+import { type ExamsService } from '../src/configs';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type StorageService } from '../src/storage/storage.service';
 import { FakePrisma, makeProfile, makeStudent } from './support/fakes';
@@ -69,13 +69,13 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
   const storage = new FakeStorage();
   // Neither exercised: `updateMeSchema` never carries `enrolledExams` or `currentBranchId`,
   // so `StudentsService.update` never reaches either check for these tests.
-  const examTypes = {} as ExamTypesService;
+  const exams = {} as ExamsService;
   const branches = {} as BranchesService;
 
   const students_ = new StudentsService(
     prisma.asService(),
     storage.asService(),
-    examTypes,
+    exams,
     branches,
     auditContext,
   );

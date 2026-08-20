@@ -19,7 +19,7 @@ export const MESSAGE_KINDS = {
   OTP: 'otp',
   /** TODO(docs/03 §10): sent when a scoring job finishes. */
   RESULT_READY: 'result_ready',
-  /** TODO(docs/03 §10): sent when a test reaches a student's group. */
+  /** TODO(docs/03 §10): sent when a test reaches a student. */
   TEST_ASSIGNED: 'test_assigned',
   /** TODO(docs/03 §10): sent before a scheduled test starts. */
   TEST_REMINDER: 'test_reminder',

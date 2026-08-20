@@ -49,13 +49,13 @@ describe('isProfileCompleted', () => {
     dob: new Date('2003-04-11'),
     gender: 'FEMALE',
     photoUrl: 'https://s3/photo.jpg',
-    aadhaarUrl: 'https://s3/aadhaar.pdf',
-    panUrl: 'https://s3/pan.pdf',
+    aadhaarVerified: 'https://s3/aadhaar.pdf',
+    panVerified: 'https://s3/pan.pdf',
   };
 
-  it('needs photo, DOB, gender, Aadhaar and PAN', () => {
+  it('needs photo, DOB and gender', () => {
     assert.equal(isProfileCompleted(complete), true);
-    for (const missing of ['photoUrl', 'dob', 'gender', 'aadhaarUrl', 'panUrl'] as const) {
+    for (const missing of ['photoUrl', 'dob', 'gender'] as const) {
       assert.equal(
         isProfileCompleted({ ...complete, [missing]: null }),
         false,
@@ -64,10 +64,10 @@ describe('isProfileCompleted', () => {
     }
   });
 
-  it('counts documents an admin cannot see', () => {
-    // The flag describes the student's record, not what one role may read. Admins never see Aadhaar or
-    // PAN, and the profile is still incomplete without them.
-    assert.equal(isProfileCompleted({ ...complete, aadhaarUrl: null }), false);
+  it('ignores Aadhaar and PAN, which nothing in this codebase verifies yet', () => {
+    // Their images are never stored and their verified flags are set by a review that does not
+    // run yet — asking for them would leave the nudge on forever.
+    assert.equal(isProfileCompleted(complete), true);
   });
 
   it('does not depend on the pre-test fields alone', () => {
@@ -90,8 +90,8 @@ describe('admin student contracts', () => {
     address: null,
     gender: 'FEMALE',
     photoUrl: null,
-    aadhaarUrl: null,
-    panUrl: null,
+    aadhaarVerified: false,
+    panVerified: false,
     educationDetails: null,
     pastExamHistory: null,
   };
@@ -107,10 +107,9 @@ describe('admin student contracts', () => {
     hasDefaultPin: false,
     preTestReady: true,
     profileCompleted: false,
-    groups: [{ id: 'g1', name: 'SSC MORNING', examType: 'SSC CGL' }],
     createdAt: new Date().toISOString(),
-    preferredLanguage: 'en',
-    program: null,
+    preferredLanguage: 'EN',
+    programs: [],
     currentBranchId: null,
     updatedAt: new Date().toISOString(),
     profile,
@@ -120,17 +119,17 @@ describe('admin student contracts', () => {
     assert.ok(studentDetailSchema.safeParse(detail).success);
   });
 
-  /** Admins DO see the identity documents. */
-  it('carries the identity documents', () => {
+  /** Admins see whether identity was verified, never an image. */
+  it('carries the identity verification flags', () => {
     const withDocs = {
       ...detail,
-      profile: { ...profile, aadhaarUrl: 'https://s3/aadhaar.pdf?sig=x', panUrl: null },
+      profile: { ...profile, aadhaarVerified: true, panVerified: false },
     };
 
     const parsed = studentDetailSchema.parse(withDocs);
 
-    assert.equal(parsed.profile?.aadhaarUrl, 'https://s3/aadhaar.pdf?sig=x');
-    assert.equal(parsed.profile?.panUrl, null);
+    assert.equal(parsed.profile?.aadhaarVerified, true);
+    assert.equal(parsed.profile?.panVerified, false);
   });
 
   /**
@@ -166,11 +165,11 @@ describe('admin student contracts', () => {
     assert.ok(!('pinHash' in parsed));
   });
 
-  it('requires a summary to say which groups a student is in', () => {
-    // Access is Student -> Group -> TestSeries -> Test, so a list that omits
-    // groups cannot answer the question an admin opened it to ask.
-    const { groups: _groups, ...withoutGroups } = detail;
-    assert.equal(studentSummarySchema.safeParse(withoutGroups).success, false);
+  it('requires a summary to say what a student is enrolled on', () => {
+    // An enrolment is the route to a series, so a list that omits it cannot answer
+    // the question an admin opened it to ask.
+    const { enrolledExams: _enrolledExams, ...withoutEnrolments } = detail;
+    assert.equal(studentSummarySchema.safeParse(withoutEnrolments).success, false);
   });
 });
 

@@ -3,6 +3,8 @@ import {
   AppException,
   AUDIT_FEATURE,
   ErrorCodes,
+  FEATURES,
+  FEATURE_KEY_VALUES,
   PERMISSION_LEVELS,
   fieldDiff,
   type Admin as AdminDto,
@@ -11,6 +13,7 @@ import {
   type AuditFeature,
   type CreateAdminBody,
   type Feature as FeatureDto,
+  type FeatureKey,
   type FieldDiff,
   type PermissionGrantBody,
   type Paginated,
@@ -21,7 +24,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 
-/** Both rows a feature always has. Created together, never separately. */
+/** The two levels a key can be held at. A feature always reports both lists. */
 const BOTH_LEVELS = [PERMISSION_LEVELS.READ, PERMISSION_LEVELS.WRITE] as const;
 
 interface AdminRow {
@@ -31,14 +34,6 @@ interface AdminRow {
   isSuperAdmin: boolean;
   isActive: boolean;
   createdAt: Date;
-}
-
-interface FeatureRow {
-  id: string;
-  key: string;
-  description: string | null;
-  createdAt: Date;
-  permissions: { level: PermissionLevel; adminIds: string[] }[];
 }
 
 /** What an admin's audit diff covers — every column the admin screens can change. */
@@ -73,20 +68,19 @@ export class AdminsService {
   // ==========================================================================
 
   /**
-   * The grant map a token carries. One indexed read — the GIN index on `adminIds` is why
-   * the list is denormalized — and WRITE wins if both levels are somehow held.
+   * The grant map a token carries. One indexed read, and WRITE wins if both levels are held.
+   * A stored key that code no longer defines is dropped rather than carried.
    */
   async permissionsFor(adminId: string): Promise<AdminPermissions> {
-    const rows = await this.prisma.featurePermission.findMany({
-      where: { adminIds: { has: adminId } },
-      select: { level: true, feature: { select: { key: true } } },
+    const rows = await this.prisma.adminFeaturePermission.findMany({
+      where: { adminId },
+      select: { featureKey: true, level: true },
     });
 
-    // Every key is carried, including ones no controller checks yet.
     const permissions: AdminPermissions = {};
     for (const row of rows) {
-      const key = row.feature.key;
-      if (permissions[key] === PERMISSION_LEVELS.WRITE) continue;
+      const key = asFeatureKey(row.featureKey);
+      if (key === null || permissions[key] === PERMISSION_LEVELS.WRITE) continue;
       permissions[key] = row.level;
     }
     return permissions;
@@ -174,8 +168,8 @@ export class AdminsService {
   }
 
   /**
-   * Deactivating prunes every grant in the same transaction as the flag: `adminIds` has no
-   * foreign key, so nothing else removes the id. Reactivating does NOT give them back.
+   * Deactivating prunes every grant in the same transaction as the flag.
+   * Reactivating does NOT give them back.
    */
   async setActive(id: string, isActive: boolean, actingAdminId: string): Promise<AdminDto> {
     if (!isActive && id === actingAdminId) {
@@ -199,17 +193,7 @@ export class AdminsService {
     // no chance of reporting a state that something else changed in between.
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.admin.update({ where: { id }, data: { isActive: false } });
-
-      const holding = await tx.featurePermission.findMany({
-        where: { adminIds: { has: id } },
-        select: { id: true, adminIds: true },
-      });
-      for (const perm of holding) {
-        await tx.featurePermission.update({
-          where: { id: perm.id },
-          data: { adminIds: perm.adminIds.filter((adminId) => adminId !== id) },
-        });
-      }
+      await tx.adminFeaturePermission.deleteMany({ where: { adminId: id } });
       return updated;
     });
 
@@ -223,35 +207,12 @@ export class AdminsService {
   // Features
   // ==========================================================================
 
+  /** The code-owned key list, with who holds each one. Read-only — nothing registers a feature. */
   async listFeatures(): Promise<FeatureDto[]> {
-    const rows = await this.prisma.feature.findMany({
-      orderBy: [{ key: 'asc' }],
-      include: { permissions: { select: { level: true, adminIds: true } } },
+    const rows = await this.prisma.adminFeaturePermission.findMany({
+      select: { adminId: true, featureKey: true, level: true },
     });
-    return rows.map((row) => this.toFeatureDto(row));
-  }
-
-  /** Register a feature, with BOTH its permission rows. */
-  async createFeature(input: { key: string; description?: string }): Promise<FeatureDto> {
-    const clash = await this.prisma.feature.findUnique({ where: { key: input.key } });
-    if (clash) {
-      throw new AppException(ErrorCodes.CONFLICT, 'That feature is already registered', {
-        fieldErrors: { key: ['That feature is already registered'] },
-      });
-    }
-
-    const row = await this.prisma.feature.create({
-      data: {
-        key: input.key,
-        // The column stays, always equal to the key: one value, so the two can
-        // never disagree about what a feature is called.
-        name: input.key,
-        description: input.description ?? null,
-        permissions: { create: BOTH_LEVELS.map((level) => ({ level })) },
-      },
-      include: { permissions: { select: { level: true, adminIds: true } } },
-    });
-    return this.toFeatureDto(row);
+    return FEATURE_KEY_VALUES.map((key) => this.toFeatureDto(key, rows));
   }
 
   // ==========================================================================
@@ -266,57 +227,43 @@ export class AdminsService {
     return this.changeGrant(input, 'remove');
   }
 
-  /** Add or remove one admin id in one feature+level row. */
+  /** Add or remove one (admin, key, level) row. */
   private async changeGrant(
     input: PermissionGrantBody,
     action: 'add' | 'remove',
   ): Promise<FeatureDto> {
-    const feature = await this.prisma.feature.findUnique({ where: { key: input.featureKey } });
-    if (!feature) {
-      throw new AppException(
-        ErrorCodes.NOT_FOUND,
-        'That feature is not registered yet — create it first',
-      );
-    }
     await this.requireActive(input.adminId);
 
     // Neither route carries an `:id` param and both return a Feature, so the interceptor's
     // fallback would file the row against the feature rather than the admin it was made about.
     this.auditContext.setEntityId(input.adminId);
 
-    await this.prisma.$transaction(async (tx) => {
-      const row = await tx.featurePermission.findUnique({
-        where: { featureId_level: { featureId: feature.id, level: input.level } },
-        select: { id: true, adminIds: true },
-      });
-      if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'That permission row is missing');
+    const where = {
+      adminId_featureKey_level: {
+        adminId: input.adminId,
+        featureKey: input.featureKey,
+        level: input.level,
+      },
+    };
+    const held = await this.prisma.adminFeaturePermission.findUnique({ where });
 
-      const held = row.adminIds.includes(input.adminId);
-      const moved = action === 'add' ? !held : held;
+    if (action === 'add' && !held) {
+      // Create, not upsert: the row IS its own key, so there is nothing to update.
+      await this.prisma.adminFeaturePermission.create({ data: { ...input } });
+    } else if (action === 'remove' && held) {
+      await this.prisma.adminFeaturePermission.delete({ where });
+    }
 
-      const without = row.adminIds.filter((id) => id !== input.adminId);
-      await tx.featurePermission.update({
-        where: { id: row.id },
-        // Filtering first makes granting idempotent: granting twice leaves one
-        // entry, not two, and a duplicate would survive a single revoke.
-        data: { adminIds: action === 'add' ? [...without, input.adminId] : without },
-      });
+    // A grant that did not move is not a grant that happened.
+    if ((action === 'add') !== Boolean(held)) {
+      const { changed } = permissionAuditEntity(
+        { adminId: input.adminId, key: input.featureKey, level: input.level },
+        action === 'remove',
+      );
+      this.auditContext.setChanged(changed);
+    }
 
-      // Membership that did not move is not a grant that happened.
-      if (moved) {
-        const { changed } = permissionAuditEntity(
-          { adminId: input.adminId, key: input.featureKey, level: input.level },
-          action === 'remove',
-        );
-        this.auditContext.setChanged(changed);
-      }
-    });
-
-    const updated = await this.prisma.feature.findUniqueOrThrow({
-      where: { id: feature.id },
-      include: { permissions: { select: { level: true, adminIds: true } } },
-    });
-    return this.toFeatureDto(updated);
+    return this.featureWithGrants(input.featureKey);
   }
 
   // ==========================================================================
@@ -368,21 +315,28 @@ export class AdminsService {
     const byAdmin = new Map<string, AdminPermissions>();
     if (adminIds.length === 0) return byAdmin;
 
-    const rows = await this.prisma.featurePermission.findMany({
-      where: { adminIds: { hasSome: adminIds } },
-      select: { level: true, adminIds: true, feature: { select: { key: true } } },
+    const rows = await this.prisma.adminFeaturePermission.findMany({
+      where: { adminId: { in: adminIds } },
+      select: { adminId: true, featureKey: true, level: true },
     });
 
     for (const row of rows) {
-      const key = row.feature.key;
-      for (const adminId of row.adminIds) {
-        if (!adminIds.includes(adminId)) continue;
-        const current = byAdmin.get(adminId) ?? {};
-        if (current[key] !== PERMISSION_LEVELS.WRITE) current[key] = row.level;
-        byAdmin.set(adminId, current);
-      }
+      const key = asFeatureKey(row.featureKey);
+      if (key === null) continue;
+      const current = byAdmin.get(row.adminId) ?? {};
+      if (current[key] !== PERMISSION_LEVELS.WRITE) current[key] = row.level;
+      byAdmin.set(row.adminId, current);
     }
     return byAdmin;
+  }
+
+  /** One key's grant lists, read back after a change. */
+  private async featureWithGrants(key: FeatureKey): Promise<FeatureDto> {
+    const rows = await this.prisma.adminFeaturePermission.findMany({
+      where: { featureKey: key },
+      select: { adminId: true, featureKey: true, level: true },
+    });
+    return this.toFeatureDto(key, rows);
   }
 
   private toAdminDto(row: AdminRow, permissions: AdminPermissions): AdminDto {
@@ -397,20 +351,28 @@ export class AdminsService {
     };
   }
 
-  private toFeatureDto(row: FeatureRow): FeatureDto {
+  private toFeatureDto(
+    key: FeatureKey,
+    rows: readonly { adminId: string; featureKey: string; level: PermissionLevel }[],
+  ): FeatureDto {
+    const held = rows.filter((row) => row.featureKey === key);
     return {
-      id: row.id,
-      key: row.key,
-      description: row.description,
-      createdAt: row.createdAt.toISOString(),
+      key,
+      label: FEATURES[key].label,
+      description: FEATURES[key].description,
       grants: Object.fromEntries(
         BOTH_LEVELS.map((level) => [
           level,
-          row.permissions.find((p) => p.level === level)?.adminIds ?? [],
+          held.filter((row) => row.level === level).map((row) => row.adminId),
         ]),
       ) as FeatureDto['grants'],
     };
   }
+}
+
+/** A stored key code no longer defines. Dropped rather than trusted — the guard reads this map. */
+function asFeatureKey(value: string): FeatureKey | null {
+  return (FEATURE_KEY_VALUES as readonly string[]).includes(value) ? (value as FeatureKey) : null;
 }
 
 function auditFieldsOf(

@@ -10,17 +10,16 @@ import { emptyTaxonomy, type TaxonomyContext } from './question-core';
 export interface TaxonomyIds {
   subjectIds: string[];
   topicIds: string[];
-  subTopicIds: string[];
 }
 
-/** Exactly the rows one draft points at — three bounded reads, never a table scan. */
+/** Exactly the rows one draft points at — two bounded reads, never a table scan. */
 export async function taxonomyForIds(
   prisma: PrismaService,
   ids: TaxonomyIds,
 ): Promise<TaxonomyContext> {
   const taxonomy = emptyTaxonomy();
 
-  const [subjects, topics, subTopics] = await Promise.all([
+  const [subjects, topics] = await Promise.all([
     ids.subjectIds.length > 0
       ? prisma.subject.findMany({
           where: { id: { in: ids.subjectIds } },
@@ -33,36 +32,17 @@ export async function taxonomyForIds(
           select: { id: true, name: true, subjectId: true },
         })
       : [],
-    ids.subTopicIds.length > 0
-      ? prisma.subTopic.findMany({
-          where: { id: { in: ids.subTopicIds } },
-          select: { id: true, name: true, topics: { select: { id: true } } },
-        })
-      : [],
   ]);
 
   for (const subject of subjects) taxonomy.subjects.set(subject.id, subject);
   for (const topic of topics) taxonomy.topics.set(topic.id, topic);
-  for (const subTopic of subTopics) {
-    taxonomy.subTopics.set(subTopic.id, {
-      id: subTopic.id,
-      name: subTopic.name,
-      topicIds: subTopic.topics.map((topic) => topic.id),
-    });
-  }
 
   return taxonomy;
-}
-
-export interface CatalogSubTopic {
-  id: string;
-  name: string;
 }
 
 export interface CatalogTopic {
   id: string;
   name: string;
-  subTopics: CatalogSubTopic[];
 }
 
 export interface CatalogSubject {
@@ -82,8 +62,6 @@ export interface TaxonomyCatalog {
   subjectIdByName: Map<string, string>;
   /** Keyed by subject, because a topic name is only unique within one. */
   topicIdBySubjectAndName: Map<string, string>;
-  /** A sub-topic name is unique table-wide, which is what makes it shareable. */
-  subTopicIdByName: Map<string, string>;
 }
 
 export const topicKey = (subjectId: string, name: string) => `${subjectId}/${name}`;
@@ -94,22 +72,13 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
     select: {
       id: true,
       name: true,
-      topics: {
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          subTopics: { orderBy: { name: 'asc' }, select: { id: true, name: true } },
-        },
-      },
+      topics: { orderBy: { name: 'asc' }, select: { id: true, name: true } },
     },
   });
 
   const context = emptyTaxonomy();
   const subjectIdByName = new Map<string, string>();
   const topicIdBySubjectAndName = new Map<string, string>();
-  const subTopicIdByName = new Map<string, string>();
-  const subTopicTopics = new Map<string, string[]>();
 
   for (const subject of subjects) {
     context.subjects.set(subject.id, { id: subject.id, name: subject.name });
@@ -118,18 +87,6 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
     for (const topic of subject.topics) {
       context.topics.set(topic.id, { id: topic.id, name: topic.name, subjectId: subject.id });
       topicIdBySubjectAndName.set(topicKey(subject.id, topic.name), topic.id);
-
-      for (const subTopic of topic.subTopics) {
-        subTopicIdByName.set(subTopic.name, subTopic.id);
-        const topics = subTopicTopics.get(subTopic.id) ?? [];
-        topics.push(topic.id);
-        subTopicTopics.set(subTopic.id, topics);
-        context.subTopics.set(subTopic.id, {
-          id: subTopic.id,
-          name: subTopic.name,
-          topicIds: topics,
-        });
-      }
     }
   }
 
@@ -138,15 +95,10 @@ export async function loadTaxonomyCatalog(prisma: PrismaService): Promise<Taxono
     subjects: subjects.map((subject) => ({
       id: subject.id,
       name: subject.name,
-      topics: subject.topics.map((topic) => ({
-        id: topic.id,
-        name: topic.name,
-        subTopics: topic.subTopics,
-      })),
+      topics: subject.topics,
     })),
     subjectIdByName,
     topicIdBySubjectAndName,
-    subTopicIdByName,
   };
 }
 

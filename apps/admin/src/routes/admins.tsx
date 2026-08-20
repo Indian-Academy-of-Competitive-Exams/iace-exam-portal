@@ -8,6 +8,7 @@ import {
   PAGE_SIZE_OPTIONS,
   type Admin,
   type CreateAdminInput,
+  type FeatureKey,
 } from '@iace/contracts';
 import {
   Badge,
@@ -162,7 +163,7 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
   }
 
   // The admin's own keys, not the code's list. localeCompare, not the UTF-16 default.
-  const held = Object.keys(admin.permissions).sort((a, b) => a.localeCompare(b));
+  const held = (Object.keys(admin.permissions) as FeatureKey[]).sort((a, b) => a.localeCompare(b));
   if (held.length === 0) {
     return <span className="text-sm text-muted-foreground">Nothing yet</span>;
   }

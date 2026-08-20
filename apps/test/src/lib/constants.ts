@@ -25,7 +25,7 @@ export const USER_MENU_ITEMS: readonly NavItem[] = [
 /** The signed-in student's identity, cached under one key. */
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
-/** The student's RECORD — profile, documents, groups. A different key from the identity above. */
+/** The student's RECORD — profile and photo. A different key from the identity above. */
 export const PROFILE_QUERY_KEY = ['me'] as const;
 
 /**

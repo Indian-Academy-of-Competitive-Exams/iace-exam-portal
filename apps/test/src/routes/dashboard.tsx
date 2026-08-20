@@ -7,7 +7,7 @@ import { useAuth } from '../providers/auth';
 
 /**
  * Where a student lands, bare until this becomes the Report dashboard.
- * Its test list will come from Student -> Group -> TestSeries -> Test; there are no direct grants.
+ * Its test list will come from the access resolver: an exam or program match, or an explicit grant.
  */
 export function DashboardPage() {
   const { identity: student } = useAuth();

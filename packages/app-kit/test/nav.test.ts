@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { FEATURE_KEYS } from '@iace/contracts';
 import {
   NAV_INLINE_MAX_ITEMS,
   NAV_LAYOUT,
@@ -59,17 +60,17 @@ describe('resolveNavLayout', () => {
 describe('filterNavByPermission', () => {
   const nav: NavItem[] = [
     leaf('Open', { to: '/open' }),
-    leaf('Gated', { to: '/gated', featureKey: 'TESTS' }),
+    leaf('Gated', { to: '/gated', featureKey: FEATURE_KEYS.TEST_MANAGEMENT }),
     leaf('Section', {
       children: [
-        leaf('Allowed', { to: '/a', featureKey: 'STUDENTS' }),
-        leaf('Denied', { to: '/b', featureKey: 'TESTS' }),
+        leaf('Allowed', { to: '/a', featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT }),
+        leaf('Denied', { to: '/b', featureKey: FEATURE_KEYS.TEST_MANAGEMENT }),
       ],
     }),
   ];
 
   it('filters at every depth, not just the top', () => {
-    const out = filterNavByPermission(nav, (key) => key === 'STUDENTS');
+    const out = filterNavByPermission(nav, (key) => key === FEATURE_KEYS.STUDENT_MANAGEMENT);
 
     assert.deepEqual(
       out.map((i) => i.label),
@@ -92,7 +93,12 @@ describe('filterNavByPermission', () => {
 
   it('keeps an emptied section that is itself a destination', () => {
     const out = filterNavByPermission(
-      [leaf('Hub', { to: '/hub', children: [leaf('x', { to: '/x', featureKey: 'NOPE' })] })],
+      [
+        leaf('Hub', {
+          to: '/hub',
+          children: [leaf('x', { to: '/x', featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT })],
+        }),
+      ],
       () => false,
     );
     assert.deepEqual(

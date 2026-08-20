@@ -5,26 +5,19 @@ import {
   AUDIT_FEATURE,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
-  createSubTopicSchema,
   createSubjectSchema,
   createTopicSchema,
-  subTopicListQuerySchema,
   subjectListQuerySchema,
   topicListQuerySchema,
-  updateSubTopicSchema,
   updateSubjectSchema,
   updateTopicSchema,
-  type CreateSubTopicBody,
   type CreateSubjectBody,
   type CreateTopicBody,
   type Paginated,
-  type SubTopic,
-  type SubTopicListQuery,
   type Subject,
   type SubjectListQuery,
   type Topic,
   type TopicListQuery,
-  type UpdateSubTopicBody,
   type UpdateSubjectBody,
   type UpdateTopicBody,
 } from '@iace/contracts';
@@ -34,7 +27,7 @@ import { Audit } from '../audit';
 import { TaxonomyService } from './taxonomy.service';
 
 /**
- * Subject, topic and sub-topic. Reading is READ on the question bank because
+ * Subject and topic. Reading is READ on the question bank because
  * every picker on a question screen needs it; writing is WRITE, because a name
  * added here is a name every question and every draw is filed under.
  */
@@ -91,32 +84,5 @@ export class TaxonomyController {
     @Body(new ZodBody(updateTopicSchema)) body: UpdateTopicBody,
   ): Promise<Topic> {
     return this.taxonomy.updateTopic(id, body);
-  }
-
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get('sub-topics')
-  listSubTopics(
-    @Query(new ZodQuery(subTopicListQuerySchema)) query: SubTopicListQuery,
-  ): Promise<Paginated<SubTopic>> {
-    return this.taxonomy.listSubTopics(query);
-  }
-
-  @Audit(AUDIT_FEATURE.TAXONOMY_SUB_TOPIC, AUDIT_ACTION.CREATE)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post('sub-topics')
-  createSubTopic(
-    @Body(new ZodBody(createSubTopicSchema)) body: CreateSubTopicBody,
-  ): Promise<SubTopic> {
-    return this.taxonomy.createSubTopic(body);
-  }
-
-  @Audit(AUDIT_FEATURE.TAXONOMY_SUB_TOPIC, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch('sub-topics/:id')
-  updateSubTopic(
-    @Param('id') id: string,
-    @Body(new ZodBody(updateSubTopicSchema)) body: UpdateSubTopicBody,
-  ): Promise<SubTopic> {
-    return this.taxonomy.updateSubTopic(id, body);
   }
 }

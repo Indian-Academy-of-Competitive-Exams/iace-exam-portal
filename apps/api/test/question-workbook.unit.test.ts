@@ -7,7 +7,6 @@ import { emptyTaxonomy } from '../src/questions/question-core';
 import {
   buildQuestionTemplate,
   columnLetter,
-  subTopicRangeName,
   topicRangeName,
 } from '../src/questions/question-workbook';
 import { type TaxonomyCatalog } from '../src/questions/taxonomy-context';
@@ -21,19 +20,18 @@ function catalog(): TaxonomyCatalog {
         id: 's1',
         name: 'QUANTITATIVE APTITUDE',
         topics: [
-          { id: 't1', name: 'ARITHMETIC', subTopics: [{ id: 'u1', name: 'PERCENTAGES' }] },
-          { id: 't2', name: 'DATA INTERPRETATION', subTopics: [{ id: 'u1', name: 'PERCENTAGES' }] },
+          { id: 't1', name: 'ARITHMETIC' },
+          { id: 't2', name: 'DATA INTERPRETATION' },
         ],
       },
       {
         id: 's2',
         name: 'GENERAL AWARENESS',
-        topics: [{ id: 't3', name: 'ARITHMETIC', subTopics: [{ id: 'u2', name: 'ECONOMY' }] }],
+        topics: [{ id: 't3', name: 'ARITHMETIC' }],
       },
     ],
     subjectIdByName: new Map(),
     topicIdBySubjectAndName: new Map(),
-    subTopicIdByName: new Map(),
   };
 }
 
@@ -81,18 +79,16 @@ describe('the question import template', () => {
     assert.match(String(table.rows[0]!.values.stemen), /20% of 150/);
   });
 
-  it('names a range per subject and per subject+topic, so a repeated topic cannot collide', async () => {
+  it('names a topic range per subject, so a repeated topic cannot collide', async () => {
     const workbook = await template();
     const names = workbook.definedNames.model.map((entry) => entry.name);
 
     assert.ok(names.includes('SUBJECTS'));
+
+    // ARITHMETIC sits under both subjects. Keyed by topic alone, one list would win
+    // and the other subject's topics would silently disappear.
     assert.ok(names.includes(topicRangeName('QUANTITATIVE APTITUDE')));
     assert.ok(names.includes(topicRangeName('GENERAL AWARENESS')));
-
-    // ARITHMETIC sits under both subjects. Keyed by topic alone, one would win
-    // and the other's sub-topics would silently disappear.
-    assert.ok(names.includes(subTopicRangeName('QUANTITATIVE APTITUDE', 'ARITHMETIC')));
-    assert.ok(names.includes(subTopicRangeName('GENERAL AWARENESS', 'ARITHMETIC')));
   });
 
   it('wires the cascade: topic follows the subject on its own row', async () => {
@@ -110,22 +106,10 @@ describe('the question import template', () => {
     assert.equal(validation?.type, 'list');
     assert.match(validation!.formulae[0] as string, /INDIRECT/);
     assert.match(validation!.formulae[0] as string, new RegExp(`\\$${subjectColumn}\\$2`));
-
-    const subTopicColumn = columnLetter(
-      QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === 'subtopic') + 1,
-    );
-    const subTopicValidation = sheet.getCell(`${subTopicColumn}2`).dataValidation;
-    // Both cells, because the sub-topic list is keyed by subject AND topic.
-    assert.match(subTopicValidation!.formulae[0] as string, new RegExp(`\\$${subjectColumn}\\$2`));
-    assert.match(subTopicValidation!.formulae[0] as string, new RegExp(`\\$${topicColumn}\\$2`));
   });
 
   it('turns a name with spaces into a usable Excel range name', () => {
     assert.equal(topicRangeName('QUANTITATIVE APTITUDE'), 'T_QUANTITATIVE_APTITUDE');
-    assert.equal(
-      subTopicRangeName('QUANTITATIVE APTITUDE', 'DATA INTERPRETATION'),
-      'U_QUANTITATIVE_APTITUDE_DATA_INTERPRETATION',
-    );
   });
 
   it('numbers columns the way Excel does past Z', () => {
@@ -141,7 +125,6 @@ describe('the question import template', () => {
       subjects: [],
       subjectIdByName: new Map(),
       topicIdBySubjectAndName: new Map(),
-      subTopicIdByName: new Map(),
     };
     const buffer = await buildQuestionTemplate(empty);
     assert.ok(buffer.length > 0);

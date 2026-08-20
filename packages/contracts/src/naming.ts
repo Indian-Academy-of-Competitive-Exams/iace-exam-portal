@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Canonical names for branches and groups: UPPERCASE, letters and digits,
+// Canonical names for branches and exam codes: UPPERCASE, letters and digits,
 // single-spaced. Input is NORMALISED into that form before it is validated, so a
 // case- or space-different duplicate is impossible rather than merely reported.
 // Only characters that cannot be tidied — punctuation, symbols — are refused.
@@ -34,10 +34,6 @@ export function canonicalNameSchema(options: { min?: number; max: number; label:
 }
 
 export const BRANCH_NAME_MAX = 60;
-export const GROUP_NAME_MAX = 80;
 
 /** e.g. AMEERPET, RTC X ROADS, ONLINE. */
 export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, label: 'branch' });
-
-/** e.g. SSC CGL MORNING, RRB JE 2026 B2. */
-export const groupNameSchema = canonicalNameSchema({ max: GROUP_NAME_MAX, label: 'group' });

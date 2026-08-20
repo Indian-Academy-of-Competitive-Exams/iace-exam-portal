@@ -30,14 +30,11 @@ import {
 export interface TaxonomyContext {
   subjects: Map<string, { id: string; name: string }>;
   topics: Map<string, { id: string; name: string; subjectId: string }>;
-  /** `topicIds` is the many-to-many no foreign key can enforce. */
-  subTopics: Map<string, { id: string; name: string; topicIds: string[] }>;
 }
 
 export const emptyTaxonomy = (): TaxonomyContext => ({
   subjects: new Map(),
   topics: new Map(),
-  subTopics: new Map(),
 });
 
 /** What `buildContent` produces: exactly the columns a Question row holds. */
@@ -357,9 +354,8 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
 }
 
 /**
- * The sub-topic check is the one no foreign key can make: a sub-topic is shared
- * across topics through a many-to-many, so "this sub-topic belongs to that
- * topic" is a row in the join table and nothing the column can promise.
+ * The "topic belongs to that subject" check is the one no foreign key can make: the question
+ * carries both ids, and nothing in the schema says they have to agree.
  */
 function checkTaxonomy(
   draft: QuestionDraft,
@@ -401,38 +397,6 @@ function checkTaxonomy(
       message: `"${topic.name}" is not a topic of "${subject.name}"`,
       field: 'topicId',
       column: 'topic',
-    });
-  }
-
-  if (!draft.subTopicId) return;
-
-  if (!draft.topicId) {
-    issues.push({
-      code: CODE.SUB_TOPIC_NEEDS_TOPIC,
-      message: 'A sub-topic only means something under a topic — name the topic too',
-      field: 'subTopicId',
-      column: 'subtopic',
-    });
-    return;
-  }
-
-  const subTopic = taxonomy.subTopics.get(draft.subTopicId);
-  if (!subTopic) {
-    issues.push({
-      code: CODE.SUB_TOPIC_UNKNOWN,
-      message: 'That sub-topic is not in the question bank',
-      field: 'subTopicId',
-      column: 'subtopic',
-    });
-    return;
-  }
-
-  if (topic && !subTopic.topicIds.includes(topic.id)) {
-    issues.push({
-      code: CODE.SUB_TOPIC_NOT_IN_TOPIC,
-      message: `"${subTopic.name}" is not linked to "${topic.name}"`,
-      field: 'subTopicId',
-      column: 'subtopic',
     });
   }
 }

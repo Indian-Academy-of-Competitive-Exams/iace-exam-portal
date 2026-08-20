@@ -15,28 +15,28 @@ import { SUPER_ADMIN_KEY } from '../src/common/security';
 
 describe('branchDeletionBlocker', () => {
   it('allows deleting an empty branch', () => {
-    assert.equal(branchDeletionBlocker({ groupCount: 0, type: BRANCH_TYPE.PHYSICAL }), null);
+    assert.equal(branchDeletionBlocker({ studentCount: 0, type: BRANCH_TYPE.PHYSICAL }), null);
   });
 
   /**
-   * The failure this exists to prevent: a branch is tidied away, its groups go with it, and every
-   * student in them silently loses the route to their tests.
+   * The failure this exists to prevent: a branch is tidied away and every student who attends it
+   * silently loses the centre their scheduling reads.
    */
-  it('refuses a branch that still has groups, and says how many', () => {
-    const blocker = branchDeletionBlocker({ groupCount: 3, type: BRANCH_TYPE.PHYSICAL });
-    assert.match(blocker ?? '', /still has 3 groups/);
+  it('refuses a branch that still has students, and says how many', () => {
+    const blocker = branchDeletionBlocker({ studentCount: 3, type: BRANCH_TYPE.PHYSICAL });
+    assert.match(blocker ?? '', /still has 3 students/);
   });
 
-  it('reads naturally for a single group', () => {
+  it('reads naturally for a single student', () => {
     assert.match(
-      branchDeletionBlocker({ groupCount: 1, type: BRANCH_TYPE.PHYSICAL }) ?? '',
-      /1 group\b/,
+      branchDeletionBlocker({ studentCount: 1, type: BRANCH_TYPE.PHYSICAL }) ?? '',
+      /1 student\b/,
     );
   });
 
   it('refuses the online branch even when empty — nothing would re-create it', () => {
     assert.match(
-      branchDeletionBlocker({ groupCount: 0, type: BRANCH_TYPE.VIRTUAL }) ?? '',
+      branchDeletionBlocker({ studentCount: 0, type: BRANCH_TYPE.VIRTUAL }) ?? '',
       /online branch/,
     );
   });
@@ -81,8 +81,8 @@ describe('createBranchSchema', () => {
 // ============================================================================
 
 /**
- * A page permission must not become a way to invent a branch. `groups.manage` is grantable; the
- * branch list every group is created against is not.
+ * A page permission must not become a way to invent a branch. STUDENT_MANAGEMENT is grantable;
+ * the branch list every student is assigned against is not.
  */
 describe('SuperAdminGuard', () => {
   const guardFor = (required: boolean | undefined, user: unknown) => {

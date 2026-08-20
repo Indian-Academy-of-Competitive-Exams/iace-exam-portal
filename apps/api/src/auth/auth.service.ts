@@ -4,7 +4,6 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
-  IMPORT_SOURCE,
   STUDENT_TYPE,
   type ActorType,
   type AuthIdentity,
@@ -61,8 +60,8 @@ export class AuthService {
   async verifyStudentOtp(mobile: string, code: string): Promise<PinSetupTicket> {
     await this.otp.verify(ActorTypes.STUDENT, mobile, code);
 
-    const student = await this.prisma.student.findUnique({
-      where: { mobile },
+    const student = await this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
       select: { pinHash: true, isActive: true },
     });
     if (student && !student.isActive) {
@@ -88,21 +87,29 @@ export class AuthService {
     await this.pin.consumeSetupToken(mobile, setupToken);
 
     const pinHash = await this.pin.hash(pin);
-    const student = await this.prisma.student.upsert({
-      where: { mobile },
-      // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or
-      // replacing the one an import gave them.
-      create: {
-        mobile,
-        pinHash,
-        pinIsDefault: false,
-        // A student who arrives at the PIN screen without a row signed themselves
-        // up, which only an online student can do.
-        studentType: STUDENT_TYPE.ONLINE,
-        createdVia: IMPORT_SOURCE.SELF_SIGNUP,
-      },
-      update: { pinHash, pinIsDefault: false },
+    // Not an upsert: `mobile` is unique only among live rows, which is a partial index Prisma
+    // cannot address. The same index still refuses a second row if two signups race here.
+    const existing = await this.prisma.student.findFirst({
+      where: { mobile, deletedAt: null },
+      select: { id: true },
     });
+    // pinIsDefault false in both branches: this PIN is the student's own, whether they are new or
+    // replacing the one an import gave them.
+    const student = existing
+      ? await this.prisma.student.update({
+          where: { id: existing.id },
+          data: { pinHash, pinIsDefault: false },
+        })
+      : await this.prisma.student.create({
+          data: {
+            mobile,
+            pinHash,
+            pinIsDefault: false,
+            // A student who arrives at the PIN screen without a row signed themselves
+            // up, which only an online student can do.
+            studentType: STUDENT_TYPE.ONLINE,
+          },
+        });
     if (!student.isActive)
       throw new AppException(ErrorCodes.FORBIDDEN, 'This account has been deactivated');
 
@@ -174,7 +181,7 @@ export class AuthService {
   ): Promise<AuthSessionResponse> {
     await this.pin.assertNotLocked(mobile);
 
-    const student = await this.prisma.student.findUnique({ where: { mobile } });
+    const student = await this.prisma.student.findFirst({ where: { mobile, deletedAt: null } });
     const ok = student?.pinHash
       ? await this.pin.verify(student.pinHash, pin)
       : await this.pin.burnVerifyTime().then(() => false);

@@ -18,10 +18,9 @@ import { type TaxonomyCatalog } from './taxonomy-context';
  * it cannot document a format the parser will not accept, and from the LIVE
  * taxonomy, so its dropdowns offer the subjects the bank actually holds.
  *
- * The three taxonomy columns cascade: topic offers the topics of the subject on
- * that row, sub-topic the sub-topics of that topic. Excel does this with a named
- * range per list and INDIRECT() over the cell beside it — there is no other way
- * to make one dropdown depend on another in a plain .xlsx.
+ * The two taxonomy columns cascade: topic offers the topics of the subject on that row.
+ * Excel does this with a named range per list and INDIRECT() over the cell beside it —
+ * there is no other way to make one dropdown depend on another in a plain .xlsx.
  */
 
 /** Rows the dropdowns are wired for. Beyond this a row still imports, unvalidated. */
@@ -29,7 +28,6 @@ const VALIDATED_ROWS = 300;
 
 /** Excel names may not hold a space or start with a digit, so every one is prefixed. */
 const TOPIC_RANGE_PREFIX = 'T_';
-const SUB_TOPIC_RANGE_PREFIX = 'U_';
 const SUBJECTS_RANGE = 'SUBJECTS';
 const TYPES_RANGE = 'QTYPES';
 const DIFFICULTIES_RANGE = 'DIFFICULTIES';
@@ -80,13 +78,11 @@ function writeHeader(sheet: ExcelJS.Worksheet): void {
 function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
   const first = catalog.subjects[0];
   const topic = first?.topics[0];
-  const subTopic = topic?.subTopics[0];
 
   const mcq: Partial<Record<QuestionImportColumnKey, string | number>> = {
     type: 'SINGLE_MCQ',
     subject: first?.name ?? 'QUANTITATIVE APTITUDE',
     topic: topic?.name ?? 'ARITHMETIC',
-    subtopic: subTopic?.name ?? 'PERCENTAGES',
     difficulty: 'MEDIUM',
     stem_en: 'What is 20% of 150?',
     stem_hi: '150 का 20% कितना है?',
@@ -101,8 +97,6 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
     option4_hi: '40',
     correct_option: 2,
     solution_en: '20% of 150 = 150 × 0.2 = 30.',
-    marks: 2,
-    negative_marks: 0.5,
     tags: `ssc cgl${TAG_SEPARATOR} percentages`,
   };
 
@@ -115,7 +109,6 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
     answer_mode: 'NUMERIC',
     answer_en: '3.14',
     answer_tolerance: 0.01,
-    marks: 1,
   };
 
   for (const example of [mcq, typed]) {
@@ -126,10 +119,8 @@ function writeExamples(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void
 }
 
 /**
- * Every list a dropdown reads, each as a named range. One range per subject
- * holds its topics; one per subject+topic holds that topic's sub-topics — keyed
- * by BOTH names because a topic name repeats across subjects and a name that
- * collides would silently offer the wrong subject's sub-topics.
+ * Every list a dropdown reads, each as a named range. One range per subject holds its
+ * topics, keyed by the subject's name because a topic name repeats across subjects.
  */
 function writeLists(
   workbook: ExcelJS.Workbook,
@@ -177,15 +168,6 @@ function writeLists(
       subject.topics.map((topic) => topic.name),
       topicRangeName(subject.name),
     );
-
-    for (const topic of subject.topics) {
-      if (topic.subTopics.length === 0) continue;
-      addList(
-        `${topic.name} — sub-topics`,
-        topic.subTopics.map((subTopic) => subTopic.name),
-        subTopicRangeName(subject.name, topic.name),
-      );
-    }
   }
 }
 
@@ -193,14 +175,10 @@ const rangeToken = (name: string) => name.replace(/\s+/g, '_');
 
 const topicRangeName = (subject: string) => `${TOPIC_RANGE_PREFIX}${rangeToken(subject)}`;
 
-const subTopicRangeName = (subject: string, topic: string) =>
-  `${SUB_TOPIC_RANGE_PREFIX}${rangeToken(subject)}_${rangeToken(topic)}`;
-
 /**
- * The cascade. INDIRECT builds the range NAME from the cells beside it, so the
- * topic list follows the subject on that row and the sub-topic list follows both.
- * A row whose subject is not in the bank simply offers nothing, which is the
- * right answer — the importer reports it by name either way.
+ * The cascade. INDIRECT builds the range NAME from the cell beside it, so the topic list
+ * follows the subject on that row. A row whose subject is not in the bank simply offers
+ * nothing, which is the right answer — the importer reports it by name either way.
  */
 function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): void {
   const subject = columnLetterOf('subject');
@@ -230,9 +208,6 @@ function writeValidations(sheet: ExcelJS.Worksheet, catalog: TaxonomyCatalog): v
     sheet.getCell(`${topic}${row}`).dataValidation = listOf(
       `=INDIRECT("${TOPIC_RANGE_PREFIX}"&SUBSTITUTE($${subject}$${row}," ","_"))`,
     );
-    sheet.getCell(`${columnLetterOf('subtopic')}${row}`).dataValidation = listOf(
-      `=INDIRECT("${SUB_TOPIC_RANGE_PREFIX}"&SUBSTITUTE($${subject}$${row}," ","_")&"_"&SUBSTITUTE($${topic}$${row}," ","_"))`,
-    );
   }
 }
 
@@ -258,10 +233,9 @@ const INSTRUCTIONS = [
   'options in that language: a half-translated paper cannot be sat in it.',
   'Type or paste the script straight into the cell.',
   '',
-  'subject / topic / subtopic — pick from the dropdowns. They cascade: the topics',
-  'offered are the ones under the subject on that row, and the sub-topics the ones',
-  'under that topic. Nothing is created by an import — a name that matches nothing',
-  'in the bank is reported against its line.',
+  'subject / topic — pick from the dropdowns. They cascade: the topics offered are',
+  'the ones under the subject on that row. Nothing is created by an import — a name',
+  'that matches nothing in the bank is reported against its line.',
   '',
   `SINGLE_MCQ — fill option1..option${MCQ_OPTION_COUNT} and correct_option (1 to ${MCQ_OPTION_COUNT}).`,
   'TEXT_FIELD — leave the options empty and fill answer_mode and answer_en.',
@@ -272,8 +246,8 @@ const INSTRUCTIONS = [
   `tags — separate several with "${TAG_SEPARATOR}". question_code is your own reference and`,
   'must be unique across the bank; leave it blank if you do not use one.',
   '',
-  'marks / negative_marks — numbers, at most two decimal places. Blank means the',
-  'test decides.',
+  'Marks are not on this sheet: what a question is worth is decided by the section',
+  'of the test it is drawn into, not by the bank.',
   '',
   'Nothing is written until you press Import. The preview shows what would happen',
   'to every row: rows with problems are listed with the reason and skipped, and a',
@@ -301,4 +275,4 @@ function columnLetterOf(key: QuestionImportColumnKey): string {
   return columnLetter(index + 1);
 }
 
-export { columnLetter, subTopicRangeName, topicRangeName };
+export { columnLetter, topicRangeName };

@@ -4,17 +4,9 @@ import { AppException, ErrorCodes } from '@iace/contracts';
 import { AuthService } from '../src/auth/auth.service';
 import { PinService } from '../src/auth/pin/pin.service';
 import { BranchesService } from '../src/branches/branches.service';
-import { GroupsService } from '../src/groups';
 import { StudentsService } from '../src/students/students.service';
 import { AuditContext } from '../src/audit';
-import {
-  FakeConfig,
-  FakePrisma,
-  FakeRedis,
-  makeBranch,
-  makeGroup,
-  makeStudent,
-} from './support/fakes';
+import { FakeConfig, FakePrisma, FakeRedis, makeBranch, makeStudent } from './support/fakes';
 
 /**
  * The three seams docs/03 §4 names, exercised through the facade rather than the internals they
@@ -134,8 +126,8 @@ describe('StudentsService.saveDocumentKey — the me seam into students', () => 
           dob: new Date('2000-01-01'),
           gender: 'MALE',
           photoUrl: null,
-          aadhaarUrl: 'students/stu_1/aadhaar-1.pdf',
-          panUrl: 'students/stu_1/pan-1.pdf',
+          aadhaarVerified: true,
+          panVerified: true,
         },
       }),
     );
@@ -160,7 +152,9 @@ describe('StudentsService.saveDocumentKey — the me seam into students', () => 
   it('refuses a student that does not exist', async () => {
     const { service } = studentsWith();
 
-    const error = await service.saveDocumentKey('stu_gone', 'panUrl', 'k').catch((e: unknown) => e);
+    const error = await service
+      .saveDocumentKey('stu_gone', 'photoUrl', 'k')
+      .catch((e: unknown) => e);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
@@ -180,36 +174,14 @@ describe('StudentsService.assertExists', () => {
   });
 });
 
-// --------------------------------------------------------------------------- configs → groups /
-// students ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- configs → students
+// ---------------------------------------------------------------------------
 
 describe('the counts the configs module asks for', () => {
   /**
-   * The failure these prevent: the code lives in `Group.examType` and `Student.enrolledExams` as
-   * free text, so `configs` has nothing to join on and would otherwise read the two tables itself.
+   * The failure this prevents: the code lives in `Student.enrolledExams` as free text, so
+   * `configs` has nothing to join on and would otherwise read the students table itself.
    */
-  it('GroupsService.countByExamType counts groups carrying the code', async () => {
-    const prisma = new FakePrisma(
-      [],
-      [],
-      [],
-      [
-        makeGroup({ id: 'grp_1', examType: 'SSC CGL' }),
-        makeGroup({ id: 'grp_2', examType: 'SSC CGL' }),
-        makeGroup({ id: 'grp_3', examType: 'RRB JE' }),
-      ],
-    );
-    const groups = new GroupsService(
-      prisma.asService(),
-      null as never,
-      null as never,
-      new AuditContext(),
-    );
-
-    assert.equal(await groups.countByExamType('SSC CGL'), 2);
-    assert.equal(await groups.countByExamType('SSC CHSL'), 0);
-  });
-
   it('StudentsService.countEnrolledIn counts students enrolled under the code', async () => {
     const prisma = new FakePrisma([
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),

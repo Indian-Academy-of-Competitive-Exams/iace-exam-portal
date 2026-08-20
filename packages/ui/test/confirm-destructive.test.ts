@@ -47,8 +47,7 @@ describe('destructive actions', () => {
       'apps/admin/src/routes/admins.tsx': 'Reactivate',
       'apps/admin/src/routes/student-detail.tsx': 'Allow tests',
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
-      'apps/admin/src/routes/exam-types.tsx': 'Reactivate exam type',
-      'apps/admin/src/routes/groups.tsx': 'Reactivate group',
+      'apps/admin/src/routes/exams.tsx': 'Reactivate exam',
     };
 
     for (const [relative, label] of Object.entries(toggles)) {
@@ -95,16 +94,10 @@ describe('destructive actions', () => {
     );
   });
 
-  /** Retiring an exam type is reversible AND asks — its effect lands weeks later, on somebody else. */
-  it('includes retiring an exam type', () => {
-    const examTypes = readFileSync(
-      path.join(REPO_ROOT, 'apps/admin/src/routes/exam-types.tsx'),
-      'utf8',
-    );
-    assert.ok(
-      examTypes.includes("'Retire exam type'"),
-      'retiring an exam type must go through a ConfirmDialog',
-    );
+  /** Retiring an exam is reversible AND asks — its effect lands weeks later, on somebody else. */
+  it('includes retiring an exam', () => {
+    const exams = readFileSync(path.join(REPO_ROOT, 'apps/admin/src/routes/exams.tsx'), 'utf8');
+    assert.ok(exams.includes("'Retire exam'"), 'retiring an exam must go through a ConfirmDialog');
   });
 
   it('are not confirmed by a chip in the row', () => {

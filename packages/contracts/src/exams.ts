@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { optionalBooleanQuery, searchQuery } from './common';
+import { paginationQuerySchema } from './envelope';
+import { canonicalNameSchema } from './naming';
 
 // ============================================================================
 // Exam taxonomy — Family → Exam → Stage. The stage is the level that carries a
@@ -58,6 +61,19 @@ export const languageCodeSchema = z.enum(LANGUAGE_CODE);
 export type LanguageCode = z.infer<typeof languageCodeSchema>;
 export const LANGUAGE_CODES = languageCodeSchema.options;
 
+export const EXAM_NAME_MAX = 80;
+export const EXAM_CODE_MAX = 40;
+
+/** Display text — what an admin reads in a list, not what anything stores. */
+export const examNameSchema = z
+  .string()
+  .trim()
+  .min(2, 'Give the exam a name')
+  .max(EXAM_NAME_MAX, `A name cannot be longer than ${EXAM_NAME_MAX} characters`);
+
+/** e.g. SSC CGL, RRB JE. Canonical, because enrolments carry this exact string. */
+export const examCodeSchema = canonicalNameSchema({ max: EXAM_CODE_MAX, label: 'exam code' });
+
 export const examSchema = z.object({
   id: z.string(),
   family: examFamilySchema,
@@ -66,9 +82,47 @@ export const examSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   isActive: z.boolean(),
+  /** Stages under it — an exam with stages cannot be deleted. */
+  stageCount: z.number().int(),
   createdAt: z.string(),
 });
 export type Exam = z.infer<typeof examSchema>;
+
+export const examListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  family: examFamilySchema.optional(),
+  /** Pickers offer active exams only; the admin screen shows all. */
+  activeOnly: optionalBooleanQuery(),
+});
+export type ExamListQuery = z.infer<typeof examListQuerySchema>;
+export type ExamListQueryInput = z.input<typeof examListQuerySchema>;
+
+export const createExamSchema = z.object({
+  family: examFamilySchema,
+  code: examCodeSchema,
+  name: examNameSchema,
+  description: z.string().trim().max(500).optional(),
+});
+export type CreateExamInput = z.input<typeof createExamSchema>;
+export type CreateExamBody = z.infer<typeof createExamSchema>;
+
+/** The code is refused server-side once an enrolment stores it — see `examEditBlocker`. */
+export const updateExamSchema = z.object({
+  family: examFamilySchema.optional(),
+  code: examCodeSchema.optional(),
+  name: examNameSchema.optional(),
+  description: z.string().trim().max(500).nullish(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateExamInput = z.input<typeof updateExamSchema>;
+export type UpdateExamBody = z.infer<typeof updateExamSchema>;
+
+export const ADMIN_EXAM_ROUTES = {
+  list: '/admin/exams',
+  create: '/admin/exams',
+  update: (id: string) => `/admin/exams/${id}`,
+  remove: (id: string) => `/admin/exams/${id}`,
+} as const;
 
 export const examStageSchema = z.object({
   id: z.string(),

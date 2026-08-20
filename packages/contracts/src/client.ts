@@ -48,7 +48,6 @@ import {
   type Admin,
   type AdminListQueryInput,
   type CreateAdminInput,
-  type CreateFeatureInput,
   type Feature,
   type PermissionGrantBody,
   type PermissionGrantInput,
@@ -74,13 +73,13 @@ import {
   type UpdateBranchInput,
 } from './branches';
 import {
-  ADMIN_EXAM_TYPE_ROUTES,
-  examTypeSchema,
-  type CreateExamTypeInput,
-  type ExamType,
-  type ExamTypeListQueryInput,
-  type UpdateExamTypeInput,
-} from './exam-types';
+  ADMIN_EXAM_ROUTES,
+  examSchema,
+  type CreateExamInput,
+  type Exam,
+  type ExamListQueryInput,
+  type UpdateExamInput,
+} from './exams';
 import {
   ADMIN_STUDENT_ROUTES,
   studentDetailSchema,
@@ -93,24 +92,8 @@ import {
   type UpdateStudentInput,
 } from './students';
 import {
-  ADMIN_GROUP_ROUTES,
-  addGroupMembersResultSchema,
-  groupSummarySchema,
-  type AddGroupMembersInput,
-  type AddGroupMembersResult,
-  type CreateGroupInput,
-  type GroupListQueryInput,
-  type GroupSummary,
-  type UpdateGroupInput,
-} from './groups';
-import {
-  GROUP_IMPORT_ROUTES,
   IMPORT_FILE_FIELD,
   IMPORT_ROUTES,
-  groupMemberImportPlanSchema,
-  groupMemberImportResultSchema,
-  type GroupMemberImportPlan,
-  type GroupMemberImportResult,
   studentImportPlanSchema,
   studentImportResultSchema,
   type StudentImportPlan,
@@ -125,10 +108,8 @@ import {
   questionImportPlanSchema,
   questionImportResultSchema,
   questionSummarySchema,
-  subTopicSchema,
   subjectSchema,
   topicSchema,
-  type CreateSubTopicInput,
   type CreateSubjectInput,
   type CreateTopicInput,
   type QuestionDetail,
@@ -137,15 +118,11 @@ import {
   type QuestionImportResult,
   type QuestionListQueryInput,
   type QuestionSummary,
-  type SetQuestionActiveInput,
   type SetQuestionStatusInput,
-  type SubTopic,
-  type SubTopicListQueryInput,
   type Subject,
   type SubjectListQueryInput,
   type Topic,
   type TopicListQueryInput,
-  type UpdateSubTopicInput,
   type UpdateSubjectInput,
   type UpdateTopicInput,
 } from './questions';
@@ -538,13 +515,6 @@ export function createApiClient(options: ApiClientOptions) {
         list: (): Promise<Feature[]> =>
           request(ADMIN_FEATURE_ROUTES.list, { schema: featureSchema.array() }),
 
-        create: (input: CreateFeatureInput): Promise<Feature> =>
-          request(ADMIN_FEATURE_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: featureSchema,
-          }),
-
         grant: (input: PermissionGrantInput): Promise<Feature> =>
           request(ADMIN_FEATURE_ROUTES.grant, {
             method: 'POST',
@@ -592,77 +562,34 @@ export function createApiClient(options: ApiClientOptions) {
           request(ADMIN_BRANCH_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
       },
 
-      examTypes: {
-        list: (query: ExamTypeListQueryInput = {}): Promise<Paginated<ExamType>> =>
-          requestPaginated(`${ADMIN_EXAM_TYPE_ROUTES.list}${queryString({ ...query })}`, {
-            schema: examTypeSchema.array(),
+      exams: {
+        list: (query: ExamListQueryInput = {}): Promise<Paginated<Exam>> =>
+          requestPaginated(`${ADMIN_EXAM_ROUTES.list}${queryString({ ...query })}`, {
+            schema: examSchema.array(),
           }),
 
-        create: (input: CreateExamTypeInput): Promise<ExamType> =>
-          request(ADMIN_EXAM_TYPE_ROUTES.create, {
+        create: (input: CreateExamInput): Promise<Exam> =>
+          request(ADMIN_EXAM_ROUTES.create, {
             method: 'POST',
             body: input,
-            schema: examTypeSchema,
+            schema: examSchema,
           }),
 
-        update: (id: string, input: UpdateExamTypeInput): Promise<ExamType> =>
-          request(ADMIN_EXAM_TYPE_ROUTES.update(id), {
+        update: (id: string, input: UpdateExamInput): Promise<Exam> =>
+          request(ADMIN_EXAM_ROUTES.update(id), {
             method: 'PATCH',
             body: input,
-            schema: examTypeSchema,
+            schema: examSchema,
           }),
 
         remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_EXAM_TYPE_ROUTES.remove(id), {
+          request(ADMIN_EXAM_ROUTES.remove(id), {
             method: 'DELETE',
             schema: noContentSchema,
           }),
       },
 
-      groups: {
-        list: (query: GroupListQueryInput = {}): Promise<Paginated<GroupSummary>> =>
-          requestPaginated(`${ADMIN_GROUP_ROUTES.list}${queryString({ ...query })}`, {
-            schema: groupSummarySchema.array(),
-          }),
-
-        detail: (id: string): Promise<GroupSummary> =>
-          request(ADMIN_GROUP_ROUTES.detail(id), { schema: groupSummarySchema }),
-
-        create: (input: CreateGroupInput): Promise<GroupSummary> =>
-          request(ADMIN_GROUP_ROUTES.create, {
-            method: 'POST',
-            body: input,
-            schema: groupSummarySchema,
-          }),
-
-        update: (id: string, input: UpdateGroupInput): Promise<GroupSummary> =>
-          request(ADMIN_GROUP_ROUTES.update(id), {
-            method: 'PATCH',
-            body: input,
-            schema: groupSummarySchema,
-          }),
-
-        remove: (id: string): Promise<NoContent> =>
-          request(ADMIN_GROUP_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
-
-        addMembers: (id: string, input: AddGroupMembersInput): Promise<AddGroupMembersResult> =>
-          request(ADMIN_GROUP_ROUTES.addMembers(id), {
-            method: 'POST',
-            body: input,
-            schema: addGroupMembersResultSchema,
-          }),
-
-        removeMember: (id: string, studentId: string): Promise<NoContent> =>
-          request(ADMIN_GROUP_ROUTES.removeMember(id, studentId), {
-            method: 'DELETE',
-            schema: noContentSchema,
-          }),
-      },
-
-      /**
-       * Subject -> Topic -> SubTopic. A sub-topic is SHARED: creating one links an
-       * existing row where the name already exists rather than minting a second.
-       */
+      /** Subject -> Topic. Anything finer than a topic is a `topic:` tag on the question. */
       taxonomy: {
         listSubjects: (query: SubjectListQueryInput = {}): Promise<Paginated<Subject>> =>
           requestPaginated(`${ADMIN_TAXONOMY_ROUTES.subjects}${queryString({ ...query })}`, {
@@ -701,25 +628,6 @@ export function createApiClient(options: ApiClientOptions) {
             body: input,
             schema: topicSchema,
           }),
-
-        listSubTopics: (query: SubTopicListQueryInput = {}): Promise<Paginated<SubTopic>> =>
-          requestPaginated(`${ADMIN_TAXONOMY_ROUTES.subTopics}${queryString({ ...query })}`, {
-            schema: subTopicSchema.array(),
-          }),
-
-        createSubTopic: (input: CreateSubTopicInput): Promise<SubTopic> =>
-          request(ADMIN_TAXONOMY_ROUTES.subTopics, {
-            method: 'POST',
-            body: input,
-            schema: subTopicSchema,
-          }),
-
-        updateSubTopic: (id: string, input: UpdateSubTopicInput): Promise<SubTopic> =>
-          request(ADMIN_TAXONOMY_ROUTES.subTopic(id), {
-            method: 'PATCH',
-            body: input,
-            schema: subTopicSchema,
-          }),
       },
 
       questions: {
@@ -745,14 +653,7 @@ export function createApiClient(options: ApiClientOptions) {
             schema: questionDetailSchema,
           }),
 
-        /** Retire or restore. An inactive question is drawn into no future paper. */
-        setActive: (id: string, input: SetQuestionActiveInput): Promise<QuestionDetail> =>
-          request(ADMIN_QUESTION_ROUTES.setActive(id), {
-            method: 'PATCH',
-            body: input,
-            schema: questionDetailSchema,
-          }),
-
+        /** ARCHIVED retires a question: it is drawn into no future paper. */
         setStatus: (id: string, input: SetQuestionStatusInput): Promise<QuestionDetail> =>
           request(ADMIN_QUESTION_ROUTES.setStatus(id), {
             method: 'PATCH',
@@ -778,23 +679,6 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: fileBody(file),
             schema: studentImportResultSchema,
-          }),
-
-        /** Adding existing students to ONE group — the group is in the path. */
-        groupMemberTemplate: (): Promise<Blob> => requestBlob(GROUP_IMPORT_ROUTES.membersTemplate),
-
-        previewGroupMembers: (groupId: string, file: File): Promise<GroupMemberImportPlan> =>
-          request(GROUP_IMPORT_ROUTES.membersPreview(groupId), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: groupMemberImportPlanSchema,
-          }),
-
-        commitGroupMembers: (groupId: string, file: File): Promise<GroupMemberImportResult> =>
-          request(GROUP_IMPORT_ROUTES.membersCommit(groupId), {
-            method: 'POST',
-            body: fileBody(file),
-            schema: groupMemberImportResultSchema,
           }),
         /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */
         questionTemplate: (): Promise<Blob> => requestBlob(QUESTION_IMPORT_ROUTES.template),

@@ -1,17 +1,8 @@
 import assert from 'node:assert/strict';
-import { GROUP_TYPE, IMPORT_MAX_ROWS } from '@iace/contracts';
+import { IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
 import { parseCsv, readCsvTable, normaliseHeader } from '../src/common/importing';
-import {
-  groupEntriesIn,
-  mobilesIn,
-  planStudentImport,
-  type ImportContext,
-} from '../src/imports/student-import';
-import { ImportsService } from '../src/imports/imports.service';
-import { type AuthService } from '../src/auth';
-import { type AuditService } from '../src/audit';
-import { FakePrisma, FakeStorage, makeGroup } from './support/fakes';
+import { mobilesIn, planStudentImport, type ImportContext } from '../src/imports/student-import';
 
 /**
  * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
@@ -117,27 +108,9 @@ describe('readCsvTable', () => {
 const context = (): ImportContext => ({
   existingByMobile: new Map([
     // Chose their own PIN already — an import must never reset it.
-    [
-      '9000000001',
-      { id: 'stu_existing', fullName: 'Already Here', hasPin: true, isTestBlocked: false },
-    ],
+    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
     // Added by an admin and never signed in: this one still needs a starting PIN.
-    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false, isTestBlocked: false }],
-    // Blocked from tests: a roster must not hand this account a group back.
-    ['9000000003', { id: 'stu_off', fullName: 'Gone Away', hasPin: true, isTestBlocked: true }],
-  ]),
-  // Names are canonical in the database, and a name is unique only within an
-  // exam type — "SSC CGL MORNING" is taught for two exams here on purpose.
-  groupsByName: new Map([
-    [
-      'SSC CGL MORNING',
-      [
-        { id: 'g_morning_cgl', name: 'SSC CGL MORNING', examType: 'SSC CGL' },
-        { id: 'g_morning_chsl', name: 'SSC CGL MORNING', examType: 'SSC CHSL' },
-      ],
-    ],
-    ['SSC CGL EVENING', [{ id: 'g_evening', name: 'SSC CGL EVENING', examType: 'SSC CGL' }]],
-    ['ALL STUDENTS', [{ id: 'g_all', name: 'ALL STUDENTS', examType: null }]],
+    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false }],
   ]),
 });
 
@@ -152,93 +125,6 @@ describe('planStudentImport', () => {
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[1]?.action, 'update');
     assert.equal(plan.rows[1]?.existingStudentId, 'stu_existing');
-  });
-
-  /**
-   * The student importer also grants groups, so it is a way back in for an account blocked
-   * from tests. Row-level, so the rest of the roster still imports.
-   */
-  it('refuses to put a student blocked from tests into a group', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9000000003,SSC CGL EVENING'),
-      context(),
-    );
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /blocked from tests/i);
-  });
-
-  /** Their record is still editable — the rule is about gaining a group, not about the row. */
-  it('leaves a student blocked from tests alone when the row names no group', () => {
-    const plan = planStudentImport(readCsvTable('mobile,fullName\n9000000003,New Name'), context());
-
-    assert.equal(plan.rows[0]?.action, 'update');
-    assert.deepEqual(plan.rows[0]?.errors, []);
-  });
-
-  it('resolves group names, several to a cell', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,SSC CGL / SSC CGL MORNING;SSC CGL EVENING'),
-      context(),
-    );
-
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_morning_cgl', 'g_evening']);
-    assert.equal(plan.rows[0]?.action, 'create');
-  });
-
-  it('matches a group name however it was typed', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,ssc cgl  Evening'),
-      context(),
-    );
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
-  });
-
-  it('refuses an unknown group instead of creating one', () => {
-    // A typo would otherwise become a real group that grants nothing, and the
-    // students in it would quietly see no tests.
-    const plan = planStudentImport(readCsvTable('mobile,groups\n9876543210,SSC Mornig'), context());
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC MORNIG"/);
-  });
-
-  /**
-   * The failure this prevents: a name two exams share is resolved by picking the first, and a CHSL
-   * roster quietly enrols into the CGL batch. Nothing about that looks wrong afterwards.
-   */
-  it('refuses a name that exists under more than one exam, and names them', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,SSC CGL MORNING'),
-      context(),
-    );
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.deepEqual(plan.rows[0]?.groupIds, []);
-    const error = plan.rows[0]?.errors[0] ?? '';
-    assert.match(error, /more than one exam/);
-    assert.match(error, /SSC CGL/);
-    assert.match(error, /SSC CHSL/);
-    // and it shows the form that would have worked
-    assert.match(error, /SSC CGL \/ SSC CGL MORNING/);
-  });
-
-  it('accepts the qualified form for a name that is not ambiguous at all', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,SSC CGL / SSC CGL EVENING'),
-      context(),
-    );
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
-  });
-
-  it('reports a qualified name whose exam does not have that group', () => {
-    const plan = planStudentImport(
-      readCsvTable('mobile,groups\n9876543210,SSC CHSL / SSC CGL EVENING'),
-      context(),
-    );
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "SSC CGL EVENING" for "SSC CHSL"/);
   });
 
   it('skips a bad row and keeps the rest of the file', () => {
@@ -280,7 +166,7 @@ describe('planStudentImport', () => {
   });
 
   it('reports a missing required column against the FILE, not every row', () => {
-    const plan = planStudentImport(readCsvTable('name,groups\nAsha,SSC CGL EVENING'), context());
+    const plan = planStudentImport(readCsvTable('name,city\nAsha,Hyderabad'), context());
 
     assert.deepEqual(plan.rows, []);
     assert.equal(plan.fileErrors.length, 1);
@@ -302,7 +188,7 @@ describe('planStudentImport', () => {
   });
 
   it('is deterministic — preview and commit run this same function', () => {
-    const csv = 'mobile,fullName,groups\n9876543210,Asha,SSC CGL EVENING\nbad,X,';
+    const csv = 'mobile,fullName\n9876543210,Asha\nbad,X';
 
     assert.deepEqual(
       planStudentImport(readCsvTable(csv), context()),
@@ -349,14 +235,13 @@ describe('planStudentImport — the starting PIN', () => {
 describe('the columns an admin actually writes', () => {
   it('reads the readable headers the sample file uses', () => {
     const plan = planStudentImport(
-      readCsvTable('Mobile Number,Full Name,Groups\n9876543210,Asha Kumari,SSC CGL EVENING'),
+      readCsvTable('Mobile Number,Full Name\n9876543210,Asha Kumari'),
       context(),
     );
 
     assert.equal(plan.fileErrors.length, 0);
     assert.equal(plan.rows[0]?.mobile, '9876543210');
     assert.equal(plan.rows[0]?.fullName, 'Asha Kumari');
-    assert.deepEqual(plan.rows[0]?.groupIds, ['g_evening']);
   });
 
   /**
@@ -372,7 +257,7 @@ describe('the columns an admin actually writes', () => {
   });
 
   it('names the column the way the sample file does when it is missing', () => {
-    const plan = planStudentImport(readCsvTable('name,groups\nAsha,X'), context());
+    const plan = planStudentImport(readCsvTable('name,city\nAsha,X'), context());
 
     assert.match(plan.fileErrors[0] ?? '', /"Mobile Number"/);
     assert.match(plan.fileErrors[0] ?? '', /sample file/);
@@ -406,12 +291,6 @@ describe('what the import looks up before it plans', () => {
       '9876543210',
     ]);
   });
-
-  it('collects group entries under the readable header, several to a cell', () => {
-    const table = readCsvTable('Mobile Number,Groups\n9876543210,A / B;C');
-
-    assert.deepEqual(groupEntriesIn(table), ['A / B', 'C']);
-  });
 });
 
 /** Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by design. */
@@ -435,66 +314,5 @@ describe('how big a file may be', () => {
     assert.deepEqual(plan.rows, [], 'nothing should be planned');
     assert.match(plan.fileErrors[0] ?? '', new RegExp(`${IMPORT_MAX_ROWS + 1} rows`));
     assert.match(plan.fileErrors[0] ?? '', /split it/);
-  });
-});
-
-describe('resolveGroup — an ambiguous name with no exam to tell them apart', () => {
-  /** The old message interpolated a null and read "write it as null / MERIT 2026". */
-  it('never offers a qualified form it cannot build', () => {
-    const plan = planStudentImport(readCsvTable('mobile,groups\n9876543210,MERIT 2026'), {
-      existingByMobile: new Map(),
-      groupsByName: new Map([
-        [
-          'MERIT 2026',
-          [
-            { id: 'g_a', name: 'MERIT 2026', examType: null },
-            { id: 'g_b', name: 'MERIT 2026', examType: null },
-          ],
-        ],
-      ]),
-    });
-
-    const error = plan.rows[0]?.errors[0] ?? '';
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.doesNotMatch(error, /null/);
-    assert.match(error, /more than one/);
-  });
-});
-
-describe('ImportsService.previewStudents — the roster group load, against real Prisma filters', () => {
-  /**
-   * Proven against `contextFor`'s actual query, not a hand-built `groupsByName` map: if the
-   * `type: { in: GROUP_TYPES_ACCEPTING_GRANTS }` clause were ever dropped, the EXAM group below
-   * would load and this row would silently resolve to a grant instead of erroring.
-   */
-  it('never resolves a same-named group reached by an enrolment, only the one that can be granted', async () => {
-    const prisma = new FakePrisma(
-      [],
-      [],
-      [],
-      [
-        makeGroup({
-          id: 'g_merit',
-          name: 'MERIT 2026',
-          type: GROUP_TYPE.SCHOLARSHIP,
-          examType: null,
-        }),
-        makeGroup({ id: 'g_exam', name: 'MERIT 2026', type: GROUP_TYPE.EXAM, examType: 'SSC CGL' }),
-      ],
-    );
-    const service = new ImportsService(
-      prisma.asService(),
-      undefined as unknown as AuthService,
-      new FakeStorage() as never,
-      undefined as unknown as AuditService,
-    );
-
-    const plan = await service.previewStudents(
-      Buffer.from('mobile,groups\n9876543210,SSC CGL / MERIT 2026'),
-    );
-
-    assert.equal(plan.rows[0]?.action, 'skip');
-    assert.deepEqual(plan.rows[0]?.groupIds, []);
-    assert.match(plan.rows[0]?.errors[0] ?? '', /No group called "MERIT 2026" for "SSC CGL"/);
   });
 });

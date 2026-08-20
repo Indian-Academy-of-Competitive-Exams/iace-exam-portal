@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
@@ -9,14 +9,12 @@ import {
   FEATURE_KEYS,
   MOBILE_DIGITS,
   PERMISSION_LEVELS,
-  PAGE_SIZE_MAX,
   STUDENT_SORTS,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
   createStudentSchema,
   normaliseMobile,
-  qualifiedGroupName,
   type CreateStudentInput,
   type StudentSort,
   type StudentSummary,
@@ -32,7 +30,6 @@ import {
   CardTitle,
   cn,
   ConfirmDialog,
-  Combobox,
   DataTable,
   digitsOnly,
   Field,
@@ -54,12 +51,11 @@ import {
   type DataTableColumn,
   toast,
 } from '@iace/ui';
-import { GroupPicker } from '../components/group-picker';
 import { api } from '../lib/api';
 import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
-import { applyFieldErrors, useInfinitePages, useListQuery } from '@iace/app-kit';
+import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 import { useBranches } from '../lib/use-branches';
-import { useExamTypes } from '../lib/use-exam-types';
+import { useExams } from '../lib/use-exams';
 import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked' | 'invited' | 'defaultpin';
@@ -70,10 +66,9 @@ const ALL_FILTERS = [
   'status',
   'sort',
   'branchId',
-  'groupId',
   'preTestReady',
   'profileCompleted',
-  'ungrouped',
+  'noAccess',
   'joinedFrom',
   'joinedTo',
 ] as const;
@@ -107,9 +102,8 @@ const STATUS_QUERY: Record<
   defaultpin: { hasDefaultPin: 'true' },
 };
 
-/** A GLOBAL-only student has both empty too, which neither field can see — see the copy at its call site. */
-const hasNoOwnAccess = (student: StudentSummary): boolean =>
-  student.enrolledExams.length === 0 && student.groups.length === 0;
+/** Nothing of their own to reach a series by. An explicit grant is a row this list cannot see. */
+const hasNoOwnAccess = (student: StudentSummary): boolean => student.enrolledExams.length === 0;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function studentColumns(): DataTableColumn<StudentSummary>[] {
@@ -157,11 +151,11 @@ function studentColumns(): DataTableColumn<StudentSummary>[] {
 }
 
 /**
- * Everything a student reaches tests through, in one line: enrolments and grants together, the
- * first shown and the rest behind a count. Deduplicated, because a code and a group name can match.
+ * What a student reaches tests through: their exam enrolments, the first shown and the rest
+ * behind a count.
  */
 function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
-  const labels = [...new Set([...student.enrolledExams, ...student.groups.map((g) => g.name)])];
+  const labels = [...new Set(student.enrolledExams)];
 
   return (
     <BadgeList items={labels} label={(entry) => entry} className="max-w-[12rem]">
@@ -179,53 +173,28 @@ export function StudentsPage() {
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [showAll, setShowAll] = useState(false);
 
-  // Every filter lives in the URL, so a link into this screen — from a group,
-  // from a branch — and the controls on it are the same state. See useFilters.
+  // Every filter lives in the URL, so a link into this screen — from a branch —
+  // and the controls on it are the same state. See useFilters.
   const filters = useFilters<FilterKey>();
   const [searchParams, setSearchParams] = useSearchParams();
   // The "Add student" button links here; reading it is what makes it work.
   const creating = searchParams.get('new') === '1';
 
-  const groupId = filters.get('groupId');
   const branchId = filters.get('branchId');
   const status = (filters.get('status') || 'all') as StatusFilter;
 
   const branches = useBranches();
   const branch = branches.find((candidate) => candidate.id === branchId);
 
-  // Declared before the group list, which uses it to decide whether to fetch.
   const extraCount = filters.activeCount(EXTRA_FILTERS);
   const filtersOpen = showAll || extraCount > 0;
 
-  /** Every group, a page at a time, searched server-side — filtering what loaded is not filtering. */
-  const [groupSearch, setGroupSearch] = useState('');
-  const groupPages = useInfinitePages({
-    queryKey: ['admin', 'groups', 'filter', branchId, groupSearch],
-    fetchPage: (page) =>
-      // PAGE_SIZE_MAX per request; reaching the end of a page fetches the next.
-      api.admin.groups.list({
-        page,
-        pageSize: PAGE_SIZE_MAX,
-        q: groupSearch,
-        branchId: branchId || undefined,
-      }),
-    // Only while the dropdown can be opened — the panel is folded away by default.
-    enabled: filtersOpen,
-  });
-
-  const group = useQuery({
-    queryKey: ['admin', 'group', groupId],
-    queryFn: () => api.admin.groups.detail(groupId),
-    enabled: groupId !== '',
-  });
-
   const query = {
     q: filters.get('q') || undefined,
-    groupId: groupId || undefined,
     branchId: branchId || undefined,
     preTestReady: asBooleanParam(filters.get('preTestReady')),
     profileCompleted: asBooleanParam(filters.get('profileCompleted')),
-    ungrouped: asBooleanParam(filters.get('ungrouped')),
+    noAccess: asBooleanParam(filters.get('noAccess')),
     joinedFrom: filters.get('joinedFrom') || undefined,
     joinedTo: filters.get('joinedTo') || undefined,
     sort: (filters.get('sort') || undefined) as StudentSort | undefined,
@@ -287,7 +256,7 @@ export function StudentsPage() {
   const toolbar = (
     <>
       {/* Arrived from somewhere: say where, and offer the way back out. */}
-      {group.data || branch ? (
+      {branch ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Showing</span>
           {branch ? (
@@ -295,12 +264,7 @@ export function StudentsPage() {
               {branch.name}
             </Badge>
           ) : null}
-          {group.data ? <Badge variant="primary">{qualifiedGroupName(group.data)}</Badge> : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => filters.set({ groupId: '', branchId: '' })}
-          >
+          <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: '' })}>
             <X aria-hidden />
             Clear
           </Button>
@@ -369,9 +333,7 @@ export function StudentsPage() {
               <Select
                 {...control}
                 value={branchId}
-                // Clearing the group too: a group belongs to one branch, so
-                // keeping both would usually mean asking for an empty set.
-                onChange={(event) => filters.set({ branchId: event.target.value, groupId: '' })}
+                onChange={(event) => filters.set({ branchId: event.target.value })}
               >
                 <option value="">Any branch</option>
                 {branches.map((option) => (
@@ -380,32 +342,6 @@ export function StudentsPage() {
                   </option>
                 ))}
               </Select>
-            )}
-          </Field>
-
-          <Field htmlFor="filter-group" label="Group">
-            {(control) => (
-              <Combobox
-                {...control}
-                value={groupId}
-                onChange={(next) => filters.set({ groupId: next })}
-                // The chosen group is often outside the loaded page.
-                selectedLabel={group.data ? qualifiedGroupName(group.data) : undefined}
-                items={groupPages.items.map((option) => ({
-                  value: option.id,
-                  label: option.name,
-                  hint: option.examType ?? undefined,
-                }))}
-                placeholder="Any group"
-                search={groupSearch}
-                onSearchChange={setGroupSearch}
-                searchPlaceholder="Search groups"
-                hasMore={groupPages.hasMore}
-                onLoadMore={groupPages.loadMore}
-                isLoading={groupPages.isLoading}
-                isLoadingMore={groupPages.isLoadingMore}
-                emptyLabel="No group matches that"
-              />
             )}
           </Field>
 
@@ -438,19 +374,19 @@ export function StudentsPage() {
           </Field>
 
           <Field
-            htmlFor="filter-ungrouped"
+            htmlFor="filter-no-access"
             label="Access"
-            hint="No enrolment and no grant of their own — not the same as no access."
+            hint="No enrolment and no program of their own — not the same as no access."
           >
             {(control) => (
               <Select
                 {...control}
-                value={filters.get('ungrouped')}
-                onChange={(event) => filters.set({ ungrouped: event.target.value })}
+                value={filters.get('noAccess')}
+                onChange={(event) => filters.set({ noAccess: event.target.value })}
               >
                 <option value="">Any</option>
-                <option value="true">No enrolment or grant</option>
-                <option value="false">Has an enrolment or grant</option>
+                <option value="true">Nothing of their own</option>
+                <option value="false">Has an enrolment or program</option>
               </Select>
             )}
           </Field>
@@ -552,13 +488,7 @@ function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
 
 // ---------------------------------------------------------------------------
 
-const NEW_STUDENT_FIELDS = [
-  'mobile',
-  'fullName',
-  'studentType',
-  'enrolledExams',
-  'groupIds',
-] as const;
+const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'studentType', 'enrolledExams'] as const;
 
 /** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
 function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
@@ -572,13 +502,11 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
-      groupIds: [],
     },
   });
 
-  const selectedGroupIds = useWatch({ control: form.control, name: 'groupIds' }) ?? [];
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
-  const examTypes = useExamTypes({ activeOnly: true });
+  const exams = useExams({ activeOnly: true });
 
   const create = useMutation({
     meta: {
@@ -592,7 +520,6 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
         fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
         studentType: values.studentType,
         enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
-        groupIds: values.groupIds?.length ? values.groupIds : undefined,
       }),
     onSuccess: (student) => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
@@ -666,7 +593,7 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
               form={form}
               name="enrolledExams"
               label="Enrolled exams"
-              hint="How they reach an exam or programme group"
+              hint="How they reach a test series"
               className="min-w-56 flex-1"
             >
               {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
@@ -676,28 +603,17 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
                   aria-invalid={invalid}
                   value={enrolledExams}
                   onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-                  items={examTypes.map((examType) => ({
-                    value: examType.code,
-                    label: examType.code,
-                    hint: examType.name,
+                  items={exams.map((exam) => ({
+                    value: exam.code,
+                    label: exam.code,
+                    hint: exam.name,
                   }))}
                   placeholder="None yet"
-                  emptyLabel="No exam type matches that"
+                  emptyLabel="No exam matches that"
                 />
               )}
             </FormField>
           </div>
-
-          <fieldset>
-            <legend className="mb-1.5 text-sm font-medium text-foreground">Groups</legend>
-            <GroupPicker
-              idPrefix="new-group"
-              register={form.register('groupIds')}
-              selectedIds={selectedGroupIds}
-              known={[]}
-              error={form.formState.errors.groupIds?.message}
-            />
-          </fieldset>
 
           <div className="flex gap-2">
             <Button type="submit" loading={create.isPending}>

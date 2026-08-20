@@ -13,7 +13,7 @@ import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
 
 /** What a student's own profile edit covers — the fields a pre-test prompt asks for, plus contact
- * details. Narrower than `AUDITED_STUDENT_FIELDS`: this route cannot touch enrolment or group. */
+ * details. Narrower than `AUDITED_STUDENT_FIELDS`: this route cannot touch enrolment or branch. */
 export const AUDITED_PROFILE_FIELDS = [
   'motherName',
   'fatherName',
@@ -36,7 +36,7 @@ export class MeService {
     return this.students.detail(studentId);
   }
 
-  /** `groupIds` cannot arrive here — see updateMeSchema for why. */
+  /** An enrolment cannot arrive here — see updateMeSchema for why. */
   async update(studentId: string, input: UpdateMeBody): Promise<Me> {
     const before = await this.students.detail(studentId);
     const updated = await this.students.update(studentId, input);
@@ -54,13 +54,13 @@ export class MeService {
     return updated;
   }
 
-  /** Stores a photo or an identity document and points the profile at it. */
+  /** Stores the student's photo and points the profile at it. */
   async saveDocument(
     studentId: string,
     kind: DocumentKind,
     file: { buffer: Buffer; size: number; mimetype: string } | undefined,
   ): Promise<Me> {
-    checkDocument(kind, file);
+    checkDocument(file);
     if (!file) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload');
 
     // Before the upload, not after: an object pushed to S3 for a student who
