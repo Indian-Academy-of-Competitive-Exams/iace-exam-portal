@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, STUDENT_TYPE } from '@iace/contracts';
+import { AppException, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
 import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
-import { FakeCodeCatalog, FakePrisma, makeBranch, makeStudent } from './support/fakes';
+import {
+  FakeSeriesFanOut,
+  FakeCodeCatalog,
+  FakePrisma,
+  makeBranch,
+  makeStudent,
+} from './support/fakes';
 
 /**
  * `enrolledExams` is free text with no foreign key, so nothing but this service stops a typo
@@ -50,7 +56,11 @@ function serviceWith(
       prisma.asService(),
       undefined as unknown as StorageService,
       exams.asService(),
-      new BranchesService(prisma.asService(), new AuditContext()),
+      new BranchesService(
+        prisma.asService(),
+        new FakeSeriesFanOut().asService(),
+        new AuditContext(),
+      ),
       programs.asService(),
       new AuditContext(),
     ),
@@ -146,6 +156,44 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(error.fieldErrors?.currentBranchId, 'the key must be the one the student form owns');
     assert.equal(prisma.students.length, 0, 'nothing was written');
+  });
+});
+
+describe('StudentsService — a whole exam family', () => {
+  /**
+   * A family is coarser than an enrolment: a student coached across every SSC paper carries the
+   * family rather than a dozen codes. The resolver reads both, so both have to be writable.
+   */
+  it('stores the families a student is coached across', async () => {
+    const { service, prisma } = serviceWith([]);
+
+    await service.create({
+      mobile: '9000000010',
+      studentType: STUDENT_TYPE.ONLINE,
+      enrolledFamilies: [EXAM_FAMILY.SSC],
+    });
+
+    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
+  });
+
+  it('replaces them wholesale, down to none', async () => {
+    const { service, prisma } = serviceWith([
+      makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC, EXAM_FAMILY.RRB] }),
+    ]);
+
+    await service.update('stu_1', { enrolledFamilies: [EXAM_FAMILY.RRB] });
+
+    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.RRB]);
+  });
+
+  it('leaves them alone when the patch omits them', async () => {
+    const { service, prisma } = serviceWith([
+      makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC] }),
+    ]);
+
+    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+
+    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
   });
 });
 

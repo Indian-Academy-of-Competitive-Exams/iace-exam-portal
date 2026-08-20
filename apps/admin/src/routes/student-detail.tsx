@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
-import { ArrowLeft, FileText, Save } from 'lucide-react';
+import { ArrowLeft, FileText, Plus, Save, Trash2 } from 'lucide-react';
 import {
   AUDIT_FEATURE,
   STUDENT_TYPE,
@@ -10,6 +10,7 @@ import {
   todayISO,
   type Gender,
   type StudentDetail,
+  type StudentGrantRow,
   type StudentType,
 } from '@iace/contracts';
 import {
@@ -33,7 +34,9 @@ import {
   SkeletonParagraph,
 } from '@iace/ui';
 import { EntityHistory } from '../components/entity-history';
+import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
+import { WHEN_FORMATTER } from '../lib/audit-format';
 import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
@@ -190,6 +193,182 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         </Field>
       </CardContent>
     </Card>
+  );
+}
+
+const grantsKey = (studentId: string) => ['admin', 'student', studentId, 'grants'] as const;
+
+/**
+ * The escape hatch: one series, one student, because nothing else reaches them. An enrolment or a
+ * program is how access normally arrives — a grant is what is left when neither fits.
+ */
+function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
+  const queryClient = useQueryClient();
+  const [chosen, setChosen] = useState({ id: '', name: '' });
+  const [granting, setGranting] = useState(false);
+  const [revoking, setRevoking] = useState<StudentGrantRow | null>(null);
+  const studentId = detail.id;
+  const name = detail.fullName ?? detail.mobile;
+
+  const grants = useQuery({
+    queryKey: grantsKey(studentId),
+    queryFn: () => api.admin.grants.list(studentId),
+  });
+
+  const grant = useMutation({
+    meta: { success: 'Series granted.' },
+    mutationFn: () => api.admin.grants.create(studentId, { testSeriesId: chosen.id }),
+    onSuccess: (rows) => {
+      setGranting(false);
+      setChosen({ id: '', name: '' });
+      queryClient.setQueryData(grantsKey(studentId), rows);
+    },
+    // Drop out of the confirm on failure, or the card is left asking a question
+    // that has already been answered.
+    onError: () => setGranting(false),
+  });
+
+  const revoke = useMutation({
+    meta: { success: 'Grant revoked.' },
+    mutationFn: (testSeriesId: string) => api.admin.grants.remove(studentId, testSeriesId),
+    onSuccess: () => {
+      setRevoking(null);
+      void queryClient.invalidateQueries({ queryKey: grantsKey(studentId) });
+    },
+    onError: () => setRevoking(null),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Series granted directly</CardTitle>
+        <CardDescription>
+          One student, one series, and only what neither an enrolment nor a program reaches. The
+          series still has to be switched on for their branch and inside its window before they can
+          sit anything in it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <GrantList
+          grants={grants.data ?? []}
+          isLoading={grants.isLoading}
+          busy={revoke.isPending}
+          onRevoke={setRevoking}
+        />
+
+        {/* Not a nested <form>: this card stands inside the profile form. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <Field
+            htmlFor="grantSeries"
+            label="Grant another series"
+            hint={
+              detail.isTestBlocked
+                ? 'Blocked from tests — lift the block before granting a series.'
+                : 'Search the whole catalog. Granting one they already have changes nothing.'
+            }
+            className="min-w-56 flex-1"
+          >
+            {({ id, 'aria-describedby': describedBy }) => (
+              <TestSeriesPicker
+                id={id}
+                aria-describedby={describedBy}
+                value={chosen.id}
+                selectedLabel={chosen.name || undefined}
+                clearable
+                placeholder="Choose a series"
+                onChange={(value, label) => setChosen({ id: value, name: label })}
+              />
+            )}
+          </Field>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={chosen.id === '' || detail.isTestBlocked}
+            loading={grant.isPending}
+            onClick={() => setGranting(true)}
+          >
+            <Plus aria-hidden />
+            Grant
+          </Button>
+        </div>
+      </CardContent>
+
+      {/* A grant is the one direct student-to-offering link in the model, so it is
+          stated in full before it is written. */}
+      <ConfirmDialog
+        open={granting}
+        onOpenChange={(open) => !open && setGranting(false)}
+        loading={grant.isPending}
+        title={`Grant ${chosen.name} to ${name}?`}
+        description={`They reach every test in ${chosen.name} from now on, whatever their enrolments and programs say, for as long as the series is switched on at their branch. It is one row for this one student and changes nothing for anybody else.`}
+        confirmLabel="Grant series"
+        onConfirm={() => grant.mutate()}
+      />
+
+      <ConfirmDialog
+        open={revoking !== null}
+        onOpenChange={(open) => !open && setRevoking(null)}
+        destructive
+        loading={revoke.isPending}
+        title={`Revoke ${revoking?.testSeries.name} from ${name}?`}
+        description={`They lose this route to its tests straight away. If an enrolment or a program also reaches ${revoking?.testSeries.name}, they keep it through that. Attempts already made and their results are kept.`}
+        confirmLabel="Revoke grant"
+        onConfirm={() => revoking && revoke.mutate(revoking.testSeriesId)}
+      />
+    </Card>
+  );
+}
+
+/** The three states of the grant list, so the card above stays one shape. */
+function GrantList({
+  grants,
+  isLoading,
+  busy,
+  onRevoke,
+}: Readonly<{
+  grants: readonly StudentGrantRow[];
+  isLoading: boolean;
+  busy: boolean;
+  onRevoke: (grant: StudentGrantRow) => void;
+}>) {
+  if (isLoading) return <SkeletonParagraph lines={2} />;
+
+  if (grants.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No series has been granted to this student. Everything they reach comes from their
+        enrolments and programs.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-2">
+      {grants.map((grant) => (
+        <li
+          key={grant.testSeriesId}
+          className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+        >
+          <span className="flex flex-col">
+            <span className="text-sm font-medium text-foreground">{grant.testSeries.name}</span>
+            <span className="text-xs text-muted-foreground">
+              Granted {WHEN_FORMATTER.format(new Date(grant.createdAt))}
+            </span>
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onRevoke(grant)}
+          >
+            <Trash2 aria-hidden />
+            Revoke
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -500,6 +679,8 @@ export function StudentDetailPage() {
 
         <div className="flex flex-col gap-5">
           <AccessCard form={form} />
+
+          <GrantsCard detail={detail} />
 
           <Card>
             <CardContent className="flex flex-col gap-3 pt-6">

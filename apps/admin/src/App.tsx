@@ -9,12 +9,15 @@ import { StudentDetailPage } from './routes/student-detail';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ExamsPage } from './routes/exams';
+import { ProgramsPage } from './routes/programs';
 import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
 import { ImportQuestionsPage } from './routes/import-questions';
 import { TaxonomyPage } from './routes/taxonomy';
 import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
+import { TestSeriesPage } from './routes/test-series';
+import { TestSeriesFormPage } from './routes/test-series-form';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
@@ -44,6 +47,7 @@ export function App() {
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
           <Route path={ROUTES.EXAMS} element={<ExamsPage />} />
+          <Route path={ROUTES.PROGRAMS} element={<ProgramsPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />
           {/* Before the :id route, or "new", "import" and "taxonomy" would each
               be read as a question id. */}
@@ -55,6 +59,10 @@ export function App() {
           {/* Before the :id route, or "new" would be read as a config id. */}
           <Route path={ROUTES.BASE_CONFIG_NEW} element={<BaseConfigFormPage />} />
           <Route path={ROUTES.BASE_CONFIG_PATTERN} element={<BaseConfigFormPage />} />
+          <Route path={ROUTES.TEST_SERIES} element={<TestSeriesPage />} />
+          {/* Before the :id route, or "new" would be read as a series id. */}
+          <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
+          <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
           {/* Super-admin screens. The route exists for everyone — the page
               itself refuses, so a pasted URL gets a sentence rather than a
               redirect that looks like a broken link. */}

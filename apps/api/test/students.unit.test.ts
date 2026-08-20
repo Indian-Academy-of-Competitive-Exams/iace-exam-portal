@@ -101,6 +101,7 @@ describe('admin student contracts', () => {
     fullName: 'Asha',
     studentType: STUDENT_TYPE.OFFLINE,
     enrolledExams: [],
+    enrolledFamilies: [],
     isActive: true,
     isTestBlocked: false,
     hasSignedIn: true,

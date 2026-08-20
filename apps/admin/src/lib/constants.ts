@@ -6,6 +6,8 @@ import {
   GraduationCap,
   History,
   KeyRound,
+  Layers,
+  Route,
   ShieldCheck,
   SlidersHorizontal,
   Upload,
@@ -26,6 +28,7 @@ import {
   type StudentType,
   type TestUi,
   type TimerTemplate,
+  type UnlockMode,
 } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -39,6 +42,8 @@ export const ROUTES = {
   STUDENT_PATTERN: '/students/:id',
   BRANCHES: '/branches',
   EXAMS: '/exams',
+  /** The coaching variants. A student and a series both carry the code as free text. */
+  PROGRAMS: '/programs',
   IMPORT_STUDENTS: '/students/import',
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
@@ -52,6 +57,11 @@ export const ROUTES = {
   BASE_CONFIG_NEW: '/tests/configs/new',
   BASE_CONFIG: (id: string) => `/tests/configs/${id}`,
   BASE_CONFIG_PATTERN: '/tests/configs/:id',
+  /** The unit of offering: a test reaches a student only through a series. */
+  TEST_SERIES: '/tests/series',
+  TEST_SERIES_NEW: '/tests/series/new',
+  TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
+  TEST_SERIES_PATTERN: '/tests/series/:id',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
@@ -150,6 +160,13 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
   TE: 'Telugu',
 };
 
+/** How a series opens for a student who can reach it. */
+export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
+  AUTO: 'Opens on its own',
+  REQUEST: 'The student asks',
+  ADMIN: 'An admin opens it',
+};
+
 /**
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
  * the screens it gates are the ones that decide who decides.
@@ -170,6 +187,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
       { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
       { to: ROUTES.EXAMS, label: 'Exams', icon: GraduationCap },
+      { to: ROUTES.PROGRAMS, label: 'Programs', icon: Route },
     ],
   },
   {
@@ -186,7 +204,10 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     label: 'Tests',
     icon: ClipboardList,
     featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
-    children: [{ to: ROUTES.BASE_CONFIGS, label: 'Base configs', icon: SlidersHorizontal }],
+    children: [
+      { to: ROUTES.BASE_CONFIGS, label: 'Base configs', icon: SlidersHorizontal },
+      { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
+    ],
   },
   {
     label: 'Administration',

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { mobileSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { languageCodeSchema } from './exams';
+import { examFamilySchema, languageCodeSchema } from './exams';
 
 // ============================================================================
 // Students, as the ADMIN sees them.
@@ -71,6 +71,8 @@ export const studentSummarySchema = z.object({
   studentType: studentTypeSchema,
   /** `Exam.code` values. A series is reached by matching one, with no membership row. */
   enrolledExams: z.array(z.string()),
+  /** A whole family, for a student coached across every exam in it rather than one. */
+  enrolledFamilies: z.array(examFamilySchema),
   isActive: z.boolean(),
   /** Signs in and sees their history, but cannot start a test. Not a sign-in state. */
   isTestBlocked: z.boolean(),
@@ -216,6 +218,7 @@ export const createStudentSchema = z.object({
   fullName: blankIsAbsent(personNameSchema),
   studentType: studentTypeSchema,
   enrolledExams: z.array(z.string()).optional(),
+  enrolledFamilies: z.array(examFamilySchema).optional(),
   programs: programCodesSchema.optional(),
   currentBranchId: blankIsAbsent(z.string().min(1)),
 });
@@ -245,6 +248,8 @@ export const updateStudentSchema = z.object({
   studentType: studentTypeSchema.optional(),
   /** Replaces the enrolments wholesale — an empty array is a real answer. */
   enrolledExams: z.array(z.string()).optional(),
+  /** Replaces the families wholesale — an empty array is a real answer. */
+  enrolledFamilies: z.array(examFamilySchema).optional(),
   /** Replaces the programs wholesale — an empty array is a real answer. */
   programs: programCodesSchema.optional(),
   currentBranchId: blankClears(z.string().min(1)),

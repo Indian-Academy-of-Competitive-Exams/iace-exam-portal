@@ -18,6 +18,8 @@ const NEEDS_CONFIRMING = [
   /api\.admin\.sync\./,
   /api\.admin\.features\.revoke\(/,
   /api\.admin\.features\.grant\(/,
+  /api\.admin\.grants\.create\(/,
+  /api\.admin\.testSeries\.updateBranch\(/,
 ] as const;
 
 /**
@@ -50,6 +52,7 @@ describe('destructive actions', () => {
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
       'apps/admin/src/routes/exams.tsx': 'Reactivate exam',
       'apps/admin/src/routes/base-configs.tsx': 'Reactivate config',
+      'apps/admin/src/routes/programs.tsx': 'Reactivate program',
     };
 
     for (const [relative, label] of Object.entries(toggles)) {
@@ -100,6 +103,20 @@ describe('destructive actions', () => {
   it('includes retiring an exam', () => {
     const exams = readFileSync(path.join(REPO_ROOT, 'apps/admin/src/routes/exams.tsx'), 'utf8');
     assert.ok(exams.includes("'Retire exam'"), 'retiring an exam must go through a ConfirmDialog');
+  });
+
+  /** Switching a series on or off at a branch decides who can sit it, so both ways ask. */
+  it('includes offering a series at a branch, and stopping', () => {
+    const form = readFileSync(
+      path.join(REPO_ROOT, 'apps/admin/src/routes/test-series-form.tsx'),
+      'utf8',
+    );
+
+    assert.ok(form.includes("'Offer it here'"), 'switching a series on at a branch must ask');
+    assert.ok(
+      form.includes("'Stop offering it here'"),
+      'switching a series off at a branch must ask too',
+    );
   });
 
   it('are not confirmed by a chip in the row', () => {
