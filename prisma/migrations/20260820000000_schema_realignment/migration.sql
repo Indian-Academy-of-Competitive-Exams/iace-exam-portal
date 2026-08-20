@@ -14,7 +14,7 @@ CREATE TYPE "SupportedLanguage" AS ENUM ('EN', 'HI', 'TE');
 CREATE TYPE "QuestionType" AS ENUM ('SINGLE_MCQ', 'TEXT_FIELD');
 
 -- CreateEnum
-CREATE TYPE "AnswerMode" AS ENUM ('NUMERIC', 'TEXT');
+CREATE TYPE "AnswerMode" AS ENUM ('EXACT', 'NUMERIC');
 
 -- CreateEnum
 CREATE TYPE "QuestionStatus" AS ENUM ('DRAFT', 'ACTIVE', 'ARCHIVED');

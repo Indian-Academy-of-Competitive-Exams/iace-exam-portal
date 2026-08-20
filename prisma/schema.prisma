@@ -43,10 +43,11 @@ enum QuestionType {
 }
 
 // How a TEXT_FIELD answerKey is matched. Lives inside QuestionVersion.answerKey
-// JSON, never as a column.
+// JSON, never as a column. Aligned with ANSWER_MODE in @iace/contracts, which
+// the importer already writes; both sides move to the target NUMERIC/TEXT in T10.
 enum AnswerMode {
+  EXACT
   NUMERIC
-  TEXT
 }
 
 enum QuestionStatus {
