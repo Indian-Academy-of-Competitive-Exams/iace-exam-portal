@@ -117,7 +117,7 @@ The API is stateless, so we can run 1→N identical containers behind a load bal
 
 ## 5. Core data model
 
-**The data model lives in one place: `prisma/schema.prisma` (source of truth), with an ER diagram at `docs/schema-erd.mmd` and full feature detail in `docs/02-mocktest-feature-spec.md`.** This section only summarizes the shape so this document stands alone — the schema wins on any conflict.
+**The data model lives in one place: `prisma/schema.prisma` (source of truth), with full feature detail in `docs/02-mocktest-feature-spec.md`.** This section only summarizes the shape so this document stands alone — the schema wins on any conflict.
 
 ### The shape (schema is authoritative)
 

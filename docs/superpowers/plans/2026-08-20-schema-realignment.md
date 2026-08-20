@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript everywhere. NestJS + Prisma/Postgres (`apps/api`), Vite + React SPAs (`apps/admin`, `apps/test`), zod contracts + typed client (`packages/contracts`), Tailwind + shadcn (`packages/ui`, `packages/app-kit`), react-hook-form, TanStack Query, `node:test` for tests. Redis + BullMQ for hot-path/jobs. S3/MinIO for storage.
 
-**Spec:** `docs/superpowers/specs/2026-08-20-schema-realignment-design.md` — binding. Data model of record: `docs/schema-target.dbml`.
+**Spec:** `docs/superpowers/specs/2026-08-20-schema-realignment-design.md` — binding. Data model of record: `prisma/schema.prisma`.
 
 ---
 
@@ -16,7 +16,7 @@
 
 Every task's requirements implicitly include this section.
 
-- **Read first, binding:** `docs/superpowers/task-constraints.md`, `docs/superpowers/WORKFLOW.md` (lean loop — batch tasks, review-by-risk, terse reports, tests as intent), `CLAUDE.md`, `docs/03-shared-architecture.md`, `docs/schema-target.dbml`, the spec above, and (once generated) `prisma/schema.prisma` — which wins on any data-model conflict.
+- **Read first, binding:** `docs/superpowers/task-constraints.md`, `docs/superpowers/WORKFLOW.md` (lean loop — batch tasks, review-by-risk, terse reports, tests as intent), `CLAUDE.md`, `docs/03-shared-architecture.md`, the spec above, and `prisma/schema.prisma` — which wins on any data-model conflict.
 - **Prerequisite, once, before Task 2:** reset the throwaway dev DB — `pnpm exec prisma migrate reset --force --skip-seed --schema prisma/schema.prisma`. There are no real users; the old rows are exactly the shapes the new model refuses.
 - **One commit per task**, made in that task's final step, never before. Intermediate steps stage nothing.
 - **Gates, green per commit:** `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus the migration path (`pnpm db:migrate:deploy` from scratch and `pnpm db:check`).
@@ -66,7 +66,7 @@ WAVE 0  (single owner, sequential)         WAVE 1  (4 parallel tracks)          
 
 ### Task 1: Generate `prisma/schema.prisma` from the target DBML
 
-**Files:** Modify `prisma/schema.prisma` (full replace). Reference `docs/schema-target.dbml`.
+**Files:** Modify `prisma/schema.prisma` (full replace). Reference `docs/archive/schema-target.dbml`.
 **Interfaces:** Produces the 36-model Prisma schema + all enums, matching the DBML. Consumes the DBML.
 
 - [ ] Translate every DBML `Table` → Prisma `model`, every `Enum` → Prisma `enum`. PKs are `String @id @default(cuid())`. `text[]` columns → `String[]`; enum-array columns (`languages`, `enrolledExams`, `enrolledFamilies`, `Attempt.languages`) → real enum arrays.
@@ -79,7 +79,7 @@ WAVE 0  (single owner, sequential)         WAVE 1  (4 parallel tracks)          
 **Files:** Create `prisma/migrations/<ts>_schema_realignment/migration.sql`. `prisma/migrations/migration_lock.toml`.
 **Interfaces:** Produces a from-scratch migration that builds the full target DB incl. everything Prisma can't express.
 
-- [ ] Run the reset prerequisite (Global Constraints). Generate the base migration from Task 1's schema, then **hand-append** the raw SQL from `docs/schema-target.dbml` header rules:
+- [ ] Run the reset prerequisite (Global Constraints). Generate the base migration from Task 1's schema, then **hand-append** the raw SQL from `docs/archive/schema-target.dbml` header rules:
   - Composite FKs: `Test.(baseConfigId,examStageId)→BaseConfig`; `BaseConfigSection.(baseConfigId,moduleId)→BaseConfigModule`; `PaperQuestion.(testId,baseConfigId)→Test`, `.(baseConfigId,baseConfigSectionId)→BaseConfigSection`, `.(questionId,questionVersionId)→QuestionVersion`; `Question.(id,currentVersionId)→QuestionVersion`; `AttemptQuestion.(paperQuestionId,questionId,questionVersionId)→PaperQuestion`, `.(paperQuestionId,baseConfigSectionId)→PaperQuestion`, `.(questionId,questionVersionId)→QuestionVersion`. Add the matching **target UNIQUE indexes** first.
   - Partial-unique indexes: `Student.mobile/externalRef WHERE deleted_at IS NULL`; `Branch.name WHERE deleted_at IS NULL`; `UNIQUE(test_id,student_id) WHERE is_graded`; `UNIQUE(student_id,test_series_id) WHERE status='PENDING'`; `UNIQUE(exam_stage_id) WHERE is_default`; flat-config `UNIQUE(base_config_id,order) WHERE module_id IS NULL`; outbox poll `(created_at) WHERE processed_at IS NULL`.
   - CHECK constraints: `BaseConfigSection` module/timing rules; RANKED⇒FIXED on `Test`.

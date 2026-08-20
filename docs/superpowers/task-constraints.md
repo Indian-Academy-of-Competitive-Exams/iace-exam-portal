@@ -18,7 +18,7 @@ Node 22 in the committing shell (`source ~/.nvm/nvm.sh && nvm use 22`).
 
 ## Data model
 
-`prisma/schema.prisma` wins on any conflict. Target of record: `docs/schema-target.dbml`.
+`prisma/schema.prisma` is the target of record and wins on any conflict.
 Raw-SQL for what Prisma can't express (composite FKs, partial-uniques, CHECKs, triggers, GIN) goes in the migration by hand.
 
 ## Invariants (never break)

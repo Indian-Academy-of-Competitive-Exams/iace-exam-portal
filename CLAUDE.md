@@ -25,15 +25,6 @@ A learning platform for **IACE**, a government-exam coaching institute (SSC, Ban
 - **Storage:** S3 SDK in every environment; MinIO locally. **Mobile (post-V1):** React Native + Expo.
 - **No WebSockets.** **Payments:** separate portal, not V1. **Infra:** chosen last, AWS-leaning, cloud-agnostic Docker + env.
 
-## Monorepo layout
-
-```
-apps/       test/ (V1 SPA)  admin/ (SPA)  api/ (NestJS)  (student/ later)
-packages/   ui/ (design system)  app-kit/ (SPA plumbing)  contracts/ (types + client)  config/
-prisma/schema.prisma
-docker-compose.yml   # postgres + redis + minio
-```
-
 ## Scaling rules (do not break)
 
 - Timer is client-side; the server owns `startedAt`/`endsAt`.
@@ -72,7 +63,7 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 - `packages/ui/src/index.ts` — **the component inventory. Read it before building any UI.**
 - `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
 - `docs/02-mocktest-feature-spec.md` — the mock-test feature in full.
-- `docs/schema-erd.mmd` — ER diagram. `docs/design/design-system.html` — living style guide.
+- `docs/design/design-system.html` — living style guide.
 - `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).
 - `prisma/schema.prisma` — the data model.
 
@@ -161,12 +152,4 @@ Finish the work, get the gates green, then commit. Do not ask first.
 
 ## SonarQube (before any commit)
 
-1. Reload the files you touched.
-2. Analyze via the SonarQube MCP tools. Project key: `iace-platform` (matches `sonar-project.properties`). A wrong key 404s silently.
-3. Only `apps`, `packages` and `prisma` are scanned. A docs-only change has nothing to submit — say so rather than reporting a scan that never ran.
-4. Fix the cause of every BLOCKER/CRITICAL/MAJOR finding. No `// NOSONAR` without asking.
-5. Re-analyze until clean, then report findings and fixes by rule ID.
-6. Never mark an issue false-positive or won't-fix without asking.
-7. The scanner reads the working tree, not the index, so an unrelated untracked file with a finding fails the gate. Move it aside for the commit and put it back after — never reach for `SKIP_SONAR=1`, and ask first, because the file is not yours.
-
-`pre-commit` runs `scripts/sonar-precommit.sh`: coverage first (`scripts/coverage.mjs`), then `sonar-scanner`, then the gate. It skips itself when there is nothing to scan, when `SONAR_HOST_URL`/`SONAR_TOKEN` are unset, or when the server is unreachable. It will not skip a reachable server failing the gate. Roughly 20s. Keep it local — do not add a Sonar job to CI. `analyze_code_snippet` is useful while writing but applies a narrower rule set than the full scan.
+The procedure is the `sonar-gate` skill — invoke it before every commit. Two rules hold whether or not it is loaded: no `// NOSONAR` without asking, and never mark an issue false-positive or won't-fix without asking.

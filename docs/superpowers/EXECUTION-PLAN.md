@@ -4,7 +4,7 @@ How to run the schema-realignment plan under the lean workflow, with time estima
 paste-ready prompts per session and per task.
 
 - **Plan:** `docs/superpowers/plans/2026-08-20-schema-realignment.md` (Tasks T1–T16)
-- **Binding every run:** `CLAUDE.md`, `docs/superpowers/task-constraints.md`, `docs/superpowers/WORKFLOW.md`, `docs/schema-target.dbml`, the spec.
+- **Binding every run:** `CLAUDE.md`, `docs/superpowers/task-constraints.md`, `docs/superpowers/WORKFLOW.md`, `prisma/schema.prisma`, the spec.
 - **Model:** strong (opus) throughout — set `CLAUDE_CODE_SUBAGENT_MODEL=opus` in `~/.claude/settings.json` so every subagent uses it.
 - **Loop per task:** intent check → implement+tests in one pass → gates green → review _by risk_ → terse report (≤12 lines) → one commit.
 
@@ -40,7 +40,7 @@ Paste at the start of a session, filling the placeholders:
 ```
 Run Session <S#> — <name>. Execute <tasks> from docs/superpowers/plans/2026-08-20-schema-realignment.md, in order.
 
-Binding (read first): CLAUDE.md, docs/superpowers/task-constraints.md, docs/superpowers/WORKFLOW.md, docs/schema-target.dbml, and the spec. Follow the lean loop in WORKFLOW.md. Model: opus throughout.
+Binding (read first): CLAUDE.md, docs/superpowers/task-constraints.md, docs/superpowers/WORKFLOW.md, prisma/schema.prisma, and the spec. Follow the lean loop in WORKFLOW.md. Model: opus throughout.
 
 For each task, in order:
 1. Intent check — restate in ≤5 lines the behaviors you will build; wait for my "go".
@@ -70,9 +70,9 @@ Do: intent check → implement + tests from acceptance → gates green → revie
 
 ```
 Run Session S1 — Foundation. Execute T1, T2, T3, T4 from the realignment plan, in order.
-Binding: CLAUDE.md, task-constraints.md, WORKFLOW.md, docs/schema-target.dbml, the spec. Model: opus. Lean loop.
+Binding: CLAUDE.md, task-constraints.md, WORKFLOW.md, prisma/schema.prisma, the spec. Model: opus. Lean loop.
 Prereq before T2: pnpm exec prisma migrate reset --force --skip-seed (dev data is throwaway).
-- T1 (high, 2 reviews): generate prisma/schema.prisma from docs/schema-target.dbml — all 36 models + enums, FK @@index, GIN on arrays, Timestamptz. NO composite FKs/partial-uniques/CHECKs here (that's T2). Gate: prisma validate + format.
+- T1 (high, 2 reviews): generate prisma/schema.prisma from docs/archive/schema-target.dbml — all 36 models + enums, FK @@index, GIN on arrays, Timestamptz. NO composite FKs/partial-uniques/CHECKs here (that's T2). Gate: prisma validate + format.
 - T2 (high, 2 reviews): hand-write the first migration incl. the raw SQL from the DBML header — composite FKs (+ their target UNIQUE indexes), partial-uniques, CHECKs, locked-config trigger, outbox partial index. Gate: db:migrate:deploy from scratch + db:check green.
 - T3 (normal, 1 review): seeds by pure SQL — first super admin (delete any code seeding), Exam/ExamStage catalog, SSC CGL T1 isDefault BaseConfig + sections. Idempotent.
 - T4 (normal, 1 review): regenerate packages/contracts — new enums, DTOs; drop Group/QuestionOption/SubTopic/TestSection/Feature DTOs. Mirror existing packages/contracts/src modules.

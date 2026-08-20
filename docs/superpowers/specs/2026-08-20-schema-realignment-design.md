@@ -1,9 +1,8 @@
 # Schema realignment + no-groups migration — design spec
 
-> **Binding.** This spec plus `docs/schema-target.dbml` are the source of every
+> **Binding.** This spec plus `prisma/schema.prisma` are the source of every
 > decision in the paired plan (`docs/superpowers/plans/2026-08-20-schema-realignment.md`).
-> On any data-model conflict, `docs/schema-target.dbml` wins until it becomes
-> `prisma/schema.prisma`, after which the generated schema wins.
+> On any data-model conflict, the generated `prisma/schema.prisma` wins.
 
 ## Why
 
@@ -18,7 +17,7 @@ correctly, on the right schema.
 Pre-production: there are no real users. The dev database is throwaway and is **reset**,
 not data-migrated.
 
-## The target model (`docs/schema-target.dbml`, 36 tables)
+## The target model (`prisma/schema.prisma`, 36 tables)
 
 Read the DBML for the authoritative shape. The decisions that changed relative to the
 repo, and are binding here:
