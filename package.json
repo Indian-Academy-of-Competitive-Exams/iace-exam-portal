@@ -24,7 +24,7 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url \"$SHADOW_DATABASE_URL\" --exit-code",
+    "db:check": "node scripts/db-check.mjs",
     "db:studio": "prisma studio --schema prisma/schema.prisma",
     "test:coverage": "node scripts/coverage.mjs",
     "prepare": "husky"

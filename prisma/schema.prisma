@@ -314,7 +314,7 @@ model BaseConfig {
   defaultTestUi        TestUi              @default(CBT)
   languageMode         LanguageMode        @default(SINGLE)
   // Ordered; DUAL renders all of them.
-  languages            SupportedLanguage[]
+  languages            SupportedLanguage[] @default([])
   shuffleQuestions     Boolean             @default(true)
   shuffleOptions       Boolean             @default(true)
   calculatorEnabled    Boolean             @default(false)
@@ -421,7 +421,7 @@ model Question {
   status           QuestionStatus  @default(ACTIVE)
   currentVersionId String?
   // Namespaced `key:value` convention — paper:, set:, pyq:, src:, topic:.
-  tags             String[]
+  tags             String[]        @default([])
   stemHash         String?
   // Times used in a FIXED paper; incremented atomically at finalize.
   fixedUseCount    Int             @default(0)
@@ -556,7 +556,7 @@ model Attempt {
   submittedAt      DateTime?           @db.Timestamptz(3)
   evaluatedAt      DateTime?           @db.Timestamptz(3)
   shuffleSeed      Int
-  languages        SupportedLanguage[]
+  languages        SupportedLanguage[] @default([])
   sectionState     Json?
   score            Decimal?            @db.Decimal(8, 2)
   correctCount     Int?
@@ -627,11 +627,11 @@ model Student {
   mobile            String
   externalRef       String?
   studentType       StudentType
-  enrolledFamilies  ExamFamily[]
+  enrolledFamilies  ExamFamily[]      @default([])
   // Program.code values — the student is a candidate for these.
-  programs          String[]
+  programs          String[]          @default([])
   // Exam.code values, app-validated against Exam.
-  enrolledExams     String[]
+  enrolledExams     String[]          @default([])
   currentBranchId   String?
   pinHash           String?
   pinIsDefault      Boolean           @default(true)
