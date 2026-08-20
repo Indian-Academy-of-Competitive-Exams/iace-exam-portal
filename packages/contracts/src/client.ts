@@ -73,6 +73,17 @@ import {
   type UpdateBranchInput,
 } from './branches';
 import {
+  ADMIN_BASE_CONFIG_ROUTES,
+  baseConfigDetailSchema,
+  baseConfigSchema,
+  type BaseConfig,
+  type BaseConfigDetail,
+  type BaseConfigListQueryInput,
+  type CloneBaseConfigInput,
+  type CreateBaseConfigInput,
+  type UpdateBaseConfigInput,
+} from './configs';
+import {
   ADMIN_EXAM_ROUTES,
   ADMIN_EXAM_STAGE_ROUTES,
   examSchema,
@@ -618,6 +629,44 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_EXAM_STAGE_ROUTES.remove(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+      },
+
+      /** A stage's blueprints. The shape freezes at the first finalize — clone to evolve. */
+      baseConfigs: {
+        list: (query: BaseConfigListQueryInput = {}): Promise<Paginated<BaseConfig>> =>
+          requestPaginated(`${ADMIN_BASE_CONFIG_ROUTES.list}${queryString({ ...query })}`, {
+            schema: baseConfigSchema.array(),
+          }),
+
+        detail: (id: string): Promise<BaseConfigDetail> =>
+          request(ADMIN_BASE_CONFIG_ROUTES.detail(id), { schema: baseConfigDetailSchema }),
+
+        create: (input: CreateBaseConfigInput): Promise<BaseConfigDetail> =>
+          request(ADMIN_BASE_CONFIG_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: baseConfigDetailSchema,
+          }),
+
+        update: (id: string, input: UpdateBaseConfigInput): Promise<BaseConfigDetail> =>
+          request(ADMIN_BASE_CONFIG_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: baseConfigDetailSchema,
+          }),
+
+        clone: (id: string, input: CloneBaseConfigInput = {}): Promise<BaseConfigDetail> =>
+          request(ADMIN_BASE_CONFIG_ROUTES.clone(id), {
+            method: 'POST',
+            body: input,
+            schema: baseConfigDetailSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_BASE_CONFIG_ROUTES.remove(id), {
             method: 'DELETE',
             schema: noContentSchema,
           }),

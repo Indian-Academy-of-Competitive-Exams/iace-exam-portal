@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { languageCodeSchema } from './exams';
+import { optionalBooleanQuery, searchQuery } from './common';
+import { paginationQuerySchema } from './envelope';
+import { examRefSchema, languageCodeSchema } from './exams';
+import { questionMarksSchema } from './questions';
 
 // ============================================================================
 // Base configs — a stage's blueprint. A test inherits its shape from one rather
@@ -88,9 +91,19 @@ export const baseConfigSectionSchema = z.object({
 });
 export type BaseConfigSection = z.infer<typeof baseConfigSectionSchema>;
 
+/** Enough of a stage to name a config's parent on screen, without a second request. */
+export const stageRefSchema = z.object({
+  id: z.string(),
+  stageKey: z.string(),
+  name: z.string(),
+  exam: examRefSchema,
+});
+export type StageRef = z.infer<typeof stageRefSchema>;
+
 export const baseConfigSchema = z.object({
   id: z.string(),
   examStageId: z.string(),
+  examStage: stageRefSchema,
   name: z.string(),
   /** The stage's official seeded pattern. There is exactly one. */
   isDefault: z.boolean(),
@@ -115,6 +128,145 @@ export const baseConfigSchema = z.object({
   calculatorEnabled: z.boolean(),
   /** Which algorithm produced a result, so history can be reproduced exactly. */
   scoringVersion: z.number().int(),
+  /** Tests built from it. A locked config with tests is history and cannot be deleted. */
+  testCount: z.number().int(),
   createdAt: z.string(),
 });
 export type BaseConfig = z.infer<typeof baseConfigSchema>;
+
+/** The whole blueprint: the config, its session modules and its sections in order. */
+export const baseConfigDetailSchema = baseConfigSchema.extend({
+  modules: z.array(baseConfigModuleSchema),
+  sections: z.array(baseConfigSectionSchema),
+});
+export type BaseConfigDetail = z.infer<typeof baseConfigDetailSchema>;
+
+// ============================================================================
+// Writing. A config's SHAPE freezes at the first finalize of a test built from
+// it — the way to change a locked one is to clone it.
+// ============================================================================
+
+export const CONFIG_NAME_MAX = 120;
+
+export const configNameSchema = z
+  .string()
+  .trim()
+  .min(2, 'Give the config a name')
+  .max(CONFIG_NAME_MAX, `A name cannot be longer than ${CONFIG_NAME_MAX} characters`);
+
+export const SECTION_NAME_MAX = 80;
+export const sectionNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give the section a name')
+  .max(SECTION_NAME_MAX, `A name cannot be longer than ${SECTION_NAME_MAX} characters`);
+
+/** One section of the paper. `durationSec` is required when the config is SECTIONAL_LOCKED. */
+export const baseConfigSectionDraftSchema = z.object({
+  name: sectionNameSchema,
+  order: z.coerce.number().int().min(0).max(99),
+  /** Which module this sits in, BY ORDER — a session paper's only. The modules are new rows on
+   *  every save, so there is no id for a draft to point at. */
+  moduleOrder: z.coerce.number().int().min(0).max(99).nullish(),
+  subjectId: z.string().nullish(),
+  questionCount: z.coerce.number().int().min(1).max(500),
+  marksPerQuestion: questionMarksSchema,
+  /** Per section: one paper may mix them, which is why this is not on the config. */
+  negativeMarks: questionMarksSchema,
+  durationSec: z.coerce.number().int().min(0).nullish(),
+  perQuestionSec: z.coerce.number().int().min(0).nullish(),
+  mandatory: z.boolean().optional(),
+  meritOrQualifying: meritTypeSchema.optional(),
+  qualifyingCutoff: questionMarksSchema.nullish(),
+});
+export type BaseConfigSectionDraft = z.infer<typeof baseConfigSectionDraftSchema>;
+export type BaseConfigSectionDraftInput = z.input<typeof baseConfigSectionDraftSchema>;
+
+/** A session block above the sections. Only SESSION_MODULE_LOCKED configs carry them. */
+export const baseConfigModuleDraftSchema = z.object({
+  name: z.string().trim().min(1, 'Give the module a name').max(SECTION_NAME_MAX),
+  order: z.coerce.number().int().min(0).max(99),
+  durationSec: z.coerce.number().int().min(0).nullish(),
+});
+export type BaseConfigModuleDraft = z.infer<typeof baseConfigModuleDraftSchema>;
+
+/** The shape fields, shared by create and update — everything the lock freezes. */
+const configShapeSchema = z.object({
+  durationSec: z.coerce.number().int().min(1),
+  timerTemplate: timerTemplateSchema.optional(),
+  navigation: navigationPolicySchema.optional(),
+  optionalSectionCount: z.coerce.number().int().min(0).max(20).nullish(),
+  defaultTestUi: testUiSchema.optional(),
+  languageMode: languageModeSchema.optional(),
+  languages: z.array(languageCodeSchema).optional(),
+  shuffleQuestions: z.boolean().optional(),
+  shuffleOptions: z.boolean().optional(),
+  calculatorEnabled: z.boolean().optional(),
+});
+
+export const createBaseConfigSchema = configShapeSchema.extend({
+  examStageId: z.string().min(1, 'Choose a stage'),
+  name: configNameSchema,
+  /** A stage holds one default. Promoting this clears the previous one in the same write. */
+  isDefault: z.boolean().optional(),
+  sections: z.array(baseConfigSectionDraftSchema).min(1, 'A paper needs at least one section'),
+  modules: z.array(baseConfigModuleDraftSchema).optional(),
+});
+export type CreateBaseConfigInput = z.input<typeof createBaseConfigSchema>;
+export type CreateBaseConfigBody = z.infer<typeof createBaseConfigSchema>;
+
+/**
+ * `sections` and `modules` REPLACE what is there — the editor holds the whole paper, not a delta.
+ * Every field here is refused once the config is locked, `name`/`isDefault`/`isActive` excepted:
+ * those three are what makes promoting a clone over a locked original possible.
+ */
+export const updateBaseConfigSchema = configShapeSchema.partial().extend({
+  name: configNameSchema.optional(),
+  isDefault: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  sections: z.array(baseConfigSectionDraftSchema).min(1).optional(),
+  modules: z.array(baseConfigModuleDraftSchema).optional(),
+});
+export type UpdateBaseConfigInput = z.input<typeof updateBaseConfigSchema>;
+export type UpdateBaseConfigBody = z.infer<typeof updateBaseConfigSchema>;
+
+/** Cloning is how a locked config evolves. The copy starts unlocked and is never the default. */
+export const cloneBaseConfigSchema = z.object({
+  name: configNameSchema.optional(),
+});
+export type CloneBaseConfigInput = z.input<typeof cloneBaseConfigSchema>;
+export type CloneBaseConfigBody = z.infer<typeof cloneBaseConfigSchema>;
+
+export const baseConfigListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  examStageId: z.string().optional(),
+  examId: z.string().optional(),
+  /** The stage's official pattern, as opposed to a custom one somebody built. */
+  defaultOnly: optionalBooleanQuery(),
+  activeOnly: optionalBooleanQuery(),
+});
+export type BaseConfigListQuery = z.infer<typeof baseConfigListQuerySchema>;
+export type BaseConfigListQueryInput = z.input<typeof baseConfigListQuerySchema>;
+
+/** The sums a paper has to add up to. Kept on the config as a cache, computed from the sections. */
+export function configTotalsOf(sections: readonly BaseConfigSectionDraft[]): {
+  totalQuestions: number;
+  totalMarks: number;
+} {
+  return {
+    totalQuestions: sections.reduce((sum, section) => sum + section.questionCount, 0),
+    totalMarks: sections.reduce(
+      (sum, section) => sum + section.questionCount * section.marksPerQuestion,
+      0,
+    ),
+  };
+}
+
+export const ADMIN_BASE_CONFIG_ROUTES = {
+  list: '/admin/base-configs',
+  create: '/admin/base-configs',
+  detail: (id: string) => `/admin/base-configs/${id}`,
+  update: (id: string) => `/admin/base-configs/${id}`,
+  clone: (id: string) => `/admin/base-configs/${id}/clone`,
+  remove: (id: string) => `/admin/base-configs/${id}`,
+} as const;

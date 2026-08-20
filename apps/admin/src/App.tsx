@@ -13,6 +13,8 @@ import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
 import { ImportQuestionsPage } from './routes/import-questions';
 import { TaxonomyPage } from './routes/taxonomy';
+import { BaseConfigsPage } from './routes/base-configs';
+import { BaseConfigFormPage } from './routes/base-config-form';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
@@ -49,6 +51,10 @@ export function App() {
           <Route path={ROUTES.IMPORT_QUESTIONS} element={<ImportQuestionsPage />} />
           <Route path={ROUTES.TAXONOMY} element={<TaxonomyPage />} />
           <Route path={ROUTES.QUESTION_PATTERN} element={<QuestionFormPage />} />
+          <Route path={ROUTES.BASE_CONFIGS} element={<BaseConfigsPage />} />
+          {/* Before the :id route, or "new" would be read as a config id. */}
+          <Route path={ROUTES.BASE_CONFIG_NEW} element={<BaseConfigFormPage />} />
+          <Route path={ROUTES.BASE_CONFIG_PATTERN} element={<BaseConfigFormPage />} />
           {/* Super-admin screens. The route exists for everyone — the page
               itself refuses, so a pasted URL gets a sentence rather than a
               redirect that looks like a broken link. */}

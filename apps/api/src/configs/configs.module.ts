@@ -5,9 +5,11 @@ import { ExamsController } from './exams.controller';
 import { ExamsService } from './exams.service';
 import { ExamStagesController } from './exam-stages.controller';
 import { ExamStagesService } from './exam-stages.service';
+import { BaseConfigsController } from './base-configs.controller';
+import { BaseConfigsService } from './base-configs.service';
 
-/** Owns `Exam` and `ExamStage`. forwardRef: students validate enrolments against the catalog,
- *  and the catalog counts enrolments back. */
+/** Owns the catalog — `Exam`, `ExamStage` — and the blueprints built on it. forwardRef: students
+ *  validate enrolments against the catalog, and the catalog counts enrolments back. */
 @Module({
   imports: [
     PrismaModule,
@@ -18,8 +20,8 @@ import { ExamStagesService } from './exam-stages.service';
         (module.require('../students') as { StudentsModule: typeof StudentsModule }).StudentsModule,
     ),
   ],
-  controllers: [ExamsController, ExamStagesController],
-  providers: [ExamsService, ExamStagesService],
-  exports: [ExamsService, ExamStagesService],
+  controllers: [ExamsController, ExamStagesController, BaseConfigsController],
+  providers: [ExamsService, ExamStagesService, BaseConfigsService],
+  exports: [ExamsService, ExamStagesService, BaseConfigsService],
 })
 export class ConfigsModule {}

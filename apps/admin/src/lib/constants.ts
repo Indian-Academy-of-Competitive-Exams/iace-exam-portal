@@ -1,11 +1,13 @@
 import {
   BookOpen,
   Building2,
+  ClipboardList,
   FolderTree,
   GraduationCap,
   History,
   KeyRound,
   ShieldCheck,
+  SlidersHorizontal,
   Upload,
   Users,
 } from 'lucide-react';
@@ -17,7 +19,13 @@ import {
   type AuditActorType,
   type AuditFeature,
   type ImportSource,
+  type LanguageCode,
+  type LanguageMode,
+  type MeritType,
+  type NavigationPolicy,
   type StudentType,
+  type TestUi,
+  type TimerTemplate,
 } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -39,6 +47,11 @@ export const ROUTES = {
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
   QUESTION_PATTERN: '/questions/:id',
+  /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
+  BASE_CONFIGS: '/tests/configs',
+  BASE_CONFIG_NEW: '/tests/configs/new',
+  BASE_CONFIG: (id: string) => `/tests/configs/${id}`,
+  BASE_CONFIG_PATTERN: '/tests/configs/:id',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
@@ -100,6 +113,43 @@ export const IMPORT_SOURCE_LABELS: Readonly<Record<ImportSource, string>> = {
   SELF_SIGNUP: 'Self sign-up',
 };
 
+/** What a base config's timer template is called on screen — it names what the clock does. */
+export const TIMER_TEMPLATE_LABELS: Readonly<Record<TimerTemplate, string>> = {
+  COMPOSITE_FREE: 'One clock, move anywhere',
+  SECTIONAL_LOCKED: 'A clock per section',
+  SESSION_MODULE_LOCKED: 'Sessions of sections',
+  PER_ITEM_TIMED: 'A clock per question',
+};
+
+export const NAVIGATION_POLICY_LABELS: Readonly<Record<NavigationPolicy, string>> = {
+  FREE: 'Move anywhere',
+  FORWARD_ONLY: 'Forward only',
+};
+
+export const TEST_UI_LABELS: Readonly<Record<TestUi, string>> = {
+  CBT: 'CBT',
+  OMR: 'OMR sheet',
+  GENERIC: 'Generic',
+  TYPING: 'Typing',
+};
+
+export const LANGUAGE_MODE_LABELS: Readonly<Record<LanguageMode, string>> = {
+  SINGLE: 'The student picks one',
+  DUAL: 'Both shown together',
+};
+
+export const MERIT_TYPE_LABELS: Readonly<Record<MeritType, string>> = {
+  MERIT: 'Counts toward merit',
+  QUALIFYING: 'Only has to be passed',
+};
+
+/** The stored codes (EN/HI/TE), not the lowercase keys inside question content JSON. */
+export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
+  EN: 'English',
+  HI: 'Hindi',
+  TE: 'Telugu',
+};
+
 /**
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
  * the screens it gates are the ones that decide who decides.
@@ -131,6 +181,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.IMPORT_QUESTIONS, label: 'Import questions', icon: Upload },
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
+  },
+  {
+    label: 'Tests',
+    icon: ClipboardList,
+    featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
+    children: [{ to: ROUTES.BASE_CONFIGS, label: 'Base configs', icon: SlidersHorizontal }],
   },
   {
     label: 'Administration',
