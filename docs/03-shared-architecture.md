@@ -74,15 +74,21 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 
 **Known seams to clean (existing coupling):**
 
-- `imports` → `../auth/pin/pin.service` — reaching past auth's public surface; route through an auth facade method.
-- `me` → `students.service` + `auth.service` — inherent aggregator; keep in the core service, but consume via public facades.
-- `groups` → `../branches/branch-rules` — real domain dependency; route through a branches facade or a shared domain lib.
+- `me` → `StudentsService` + `AuthService` — inherent aggregator, and the one to copy: both arrive
+  through the module barrels (`../students`, `../auth`), never a reach into a file inside them.
+  `imports` was the counter-example (`../auth/pin/pin.service`) and now goes the same way.
+- `branches` ↔ `access` — a new branch needs a `BranchTestConfig` row for every series, and a new
+  series one for every branch, so each module needs the other. Held open today with `forwardRef`
+  plus a deferred `module.require`; the cycle only closes properly once one side reacts to an
+  event rather than calling.
 - `auth` → `Admin` rows directly (`prisma.admin.findUnique`) for the login and `me` reads. The grant lookup already routes through `AdminsService.permissionsFor`, which is the pattern; the two identity reads predate the split and are the remaining seam.
 - `../auth/decorators` (`@Public`) is imported widely — acceptable as shared kernel; consider relocating the decorator to `common` so no module depends on the _auth module_ for a guard.
-- `configs` → `prisma.test.count` for the exam-type deletion blocker. `Test` belongs to the
-  tests/builder module, which does not exist yet, so there is no facade to ask. Becomes
-  `TestsService.countByExamType` when that module lands. The Group and Student halves of the same
-  blocker already route through their owners' facades.
+- `configs` → `Test` through `_count: { select: { tests: true } }` for the base-config deletion
+  blocker. `Test` belongs to the tests/builder module, which does not exist yet, so there is no
+  facade to ask. Becomes `TestsService.countByBaseConfig` when that module lands.
+- `access` → `prisma.student.count` for the program deletion blocker. `Student.programs` holds the
+  code as free text with no foreign key, so that count is the only thing between a rename and a
+  silent detach across every student. Route it through a `StudentsService` facade method.
 
 ---
 
@@ -90,20 +96,24 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 
 Only the owning module writes these tables. `existing` = module built; `planned` = module to be created (tables currently live under a broader module until then).
 
-| Module          | Owns (Prisma models)                                            | State    |
-| --------------- | --------------------------------------------------------------- | -------- |
-| admins          | `Admin`, `Feature`, `FeaturePermission`                         | existing |
-| students        | `Student`, `StudentProfile`                                     | existing |
-| groups          | `Group`                                                         | existing |
-| branches        | `Branch`                                                        | existing |
-| question-bank   | `Subject`, `Topic`, `SubTopic`, `Question`, `QuestionOption`    | planned  |
-| configs         | `ExamType` (built), `BaseConfig`, `BaseConfigSection` (planned) | partial  |
-| tests / builder | `Test`, `TestSection`, `PaperQuestion`, `TestSeries`            | planned  |
-| exam (engine)   | `Attempt`, `AttemptAnswer`                                      | planned  |
-| notifications   | `Notification`                                                  | planned  |
+| Module          | Owns (Prisma models)                                                       | State    |
+| --------------- | -------------------------------------------------------------------------- | -------- |
+| admins          | `Admin`, `AdminBranch`, `AdminFeaturePermission`                           | existing |
+| students        | `Student`, `StudentProfile`                                                | existing |
+| branches        | `Branch`                                                                   | existing |
+| access          | `Program`, `TestSeries`, `StudentGrant`, `BranchTestConfig`                | existing |
+| question-bank   | `Subject`, `Topic`, `Question`, `QuestionVersion`                          | existing |
+| configs         | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection` | existing |
+| audit           | `RowActionLog`, `ImportLog`                                                | existing |
+| tests / builder | `Test`, `TestSeriesTest`, `PaperQuestion`                                  | planned  |
+| exam (engine)   | `Attempt`, `AttemptQuestion`                                               | planned  |
+| unlocks         | `StudentSeriesUnlock`, `SeriesUnlockRequest`                               | planned  |
+| notifications   | `Notification`                                                             | planned  |
 
-Access link (`Group` ↔ `TestSeries`) is owned by the tests/access side. Auth
-sessions, OTP, and device binding live in **Redis**, never Postgres.
+**There is no group table, and access is not a link row.** A student reaches a `TestSeries` by an
+exam match, a program match, or an explicit `StudentGrant`, and every one of those is then gated by
+the `BranchTestConfig` row for their branch — which `access` owns. Auth sessions, OTP, and device
+binding live in **Redis**, never Postgres.
 
 ---
 
@@ -119,6 +129,7 @@ events) and register cross-module reactions here. Seed set:
 | `test.assigned`                                 | access/admin   | notifications                             |
 | `paperQuestion.dropped` / `paperQuestion.bonus` | admin          | scoring-worker (recompute)                |
 | `student.pin_reset`                             | auth           | (sessions revoked — already handled)      |
+| `branch.created`                                | branches       | access (fan out `BranchTestConfig`)       |
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 
@@ -126,12 +137,12 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 
 ## 7. Service scale tiers — deploy few, design many
 
-| Tier                                  | Modules                                                                                            | Scales on              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------- |
-| **Core / admin** (one deployable)     | auth, admin, students, groups, branches, imports, question-bank, configs, tests, me, notifications | modest, admin traffic  |
-| **Exam service** (autoscale)          | exam (attempt engine only)                                                                         | concurrent test-takers |
-| **Worker service(s)** (autoscale)     | scoring, import processing, leaderboard, drop/bonus recompute                                      | BullMQ queue depth     |
-| **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                           | —                      |
+| Tier                                  | Modules                                                                                                    | Scales on              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Core / admin** (one deployable)     | auth, admins, students, branches, access, imports, question-bank, configs, tests, audit, me, notifications | modest, admin traffic  |
+| **Exam service** (autoscale)          | exam (attempt engine only)                                                                                 | concurrent test-takers |
+| **Worker service(s)** (autoscale)     | scoring, import processing, leaderboard, drop/bonus recompute                                              | BullMQ queue depth     |
+| **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                   | —                      |
 
 Today everything ships as the **core** deployable plus the **worker**. Exam is
 the first extraction candidate; its request path is Redis-first (client timer,
@@ -160,7 +171,7 @@ Every autoscale-candidate service must satisfy all of these:
 ## 9. Data-model conventions
 
 - **Timestamps on every model:** `createdAt @default(now())` and `updatedAt @updatedAt` on all tables.
-- **Soft-delete policy:** `deletedAt DateTime?` where records must be recoverable/auditable (Student, Question, Test, Group, and other user-facing/domain records); hard delete is acceptable only for pure join/ephemeral rows. Decide per model and record the choice.
+- **Soft-delete policy:** `deletedAt DateTime?` where records must be recoverable/auditable (Student, Question, Test, Branch, and other user-facing/domain records); hard delete is acceptable only for pure join/ephemeral rows. Decide per model and record the choice.
   - **`Admin` is the recorded exception — it has no `deletedAt`.** The row is never removed (`createdById` on everything they made points at it) and `isActive` already carries the only state there is. Carrying both gave three auth paths a second flag to read as "this row is gone", which silently denied sign-in to real accounts; in one database the column had also drifted to `DEFAULT CURRENT_TIMESTAMP`, so every new admin was born unreachable. Deactivate, do not delete.
 - **IDs:** one strategy across all models (the existing default — do not mix).
 - **Money/marks:** `Decimal(6,2)`; one shared decimal/format util so FE and BE render marks identically.
