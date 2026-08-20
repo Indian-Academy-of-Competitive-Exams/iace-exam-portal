@@ -155,7 +155,7 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 - Category/test series is **decoupled from creation** — optional, many-to-many, assigned as a separate flow; a test can be attempted individually.
 - Test **status (active/inactive)** and **access (groups/individuals)** are post-creation management actions, not part of the creation flow.
 - Two test-taking UIs, chosen per test: the standard government CBT interface (**primary V1 build**; full mocks; all formats share it) and a generic test UI (**secondary — only if time permits**, for lighter types). The portal/admin app shell is a separate, single modern design system.
-- **Language display is per test** (`languageMode`, defaulted from base config): **SINGLE** (pick one, optional per-question toggle) or **DUAL** (both languages shown together — stem + options — no toggle). All content is already in the JSON; it's purely a render mode.
+- **Language display is per test** (`languageMode`, defaulted from base config): **SINGLE** (pick one, optional per-question toggle) or **DUAL** (both languages shown together — stem + options — no toggle). All content is already in the JSON; it's purely a render mode. `Test.languages` is the **ordered** list that drives render order.
 
 ---
 
