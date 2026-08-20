@@ -2,6 +2,8 @@
 
 Operating context for anyone (human or agent) in this repo. Read `docs/` and `prisma/schema.prisma` before writing code. **`prisma/schema.prisma` wins over this file on any data-model conflict.**
 
+**Before any task, read `docs/superpowers/task-constraints.md` (binding, stable prefix) and follow `docs/superpowers/WORKFLOW.md` (the lean task loop — batching, review-by-risk, terse reports, tests as intent not code).**
+
 ## What this is
 
 A learning platform for **IACE**, a government-exam coaching institute (SSC, Banking, RRB JE, SI/Constable), replacing ThinkExam.

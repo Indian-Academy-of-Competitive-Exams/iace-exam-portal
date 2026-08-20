@@ -1,5 +1,7 @@
 {
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": false
-  }
+  },
+  "model": "opus",
+  "env": { "CLAUDE_CODE_SUBAGENT_MODEL": "opus" }
 }
