@@ -87,6 +87,12 @@ Score Card (rank, percentile, correct/wrong/unattempted) + Solution Report (per-
 
 Every bullet is a rule to follow, not background.
 
+### Tooling
+
+- **Fetch the docs with the `context7` MCP before writing third-party library code.** Prisma, NestJS, TanStack Query, react-hook-form and shadcn/ui have all moved since training — never write an API surface from memory, and never carry over a deprecated signature.
+- **Read the SonarQube MCP metrics for a file before you change it, not only before the commit.** Leave it with fewer smells than you found. The pre-commit gate is the floor, not the target.
+- **Run a rewrite through the `code-simplifier` skill when the replacement branches more than what it replaced.** Cognitive complexity is the thing being reduced, not line count.
+
 ### Code style
 
 - **Default to no comment.** Write one only where a reader who already knows this codebase would be misled without it. Explaining what the code does is never a reason — rename the thing instead. If you are composing a justification for a comment, that is the signal to delete it.
