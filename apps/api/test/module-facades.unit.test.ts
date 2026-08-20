@@ -109,6 +109,7 @@ function studentsWith(student = makeStudent()) {
       null as never,
       null as never,
       null as never,
+      null as never,
     ),
     student,
   };
@@ -190,6 +191,7 @@ describe('the counts the configs module asks for', () => {
     ]);
     const students = new StudentsService(
       prisma.asService(),
+      null as never,
       null as never,
       null as never,
       null as never,

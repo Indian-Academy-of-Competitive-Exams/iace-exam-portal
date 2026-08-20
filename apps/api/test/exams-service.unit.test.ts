@@ -33,6 +33,7 @@ function serviceWith(exams: FakeExam[] = [makeExam()], students: FakeStudent[] =
       null as never,
       null as never,
       null as never,
+      null as never,
     ),
     new AuditContext(),
   );

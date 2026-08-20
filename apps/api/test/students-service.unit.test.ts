@@ -6,7 +6,7 @@ import { BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
-import { FakePrisma, makeBranch, makeStudent } from './support/fakes';
+import { FakeCodeCatalog, FakePrisma, makeBranch, makeStudent } from './support/fakes';
 
 /**
  * `enrolledExams` is free text with no foreign key, so nothing but this service stops a typo
@@ -37,17 +37,21 @@ function serviceWith(
   students = [makeStudent()],
   usableExams = ['SSC CGL', 'RRB JE'],
   branches = [makeBranch({ id: 'br_1' })],
+  usablePrograms = ['SSC CGL FOUNDATION'],
 ) {
   const prisma = new FakePrisma(students, [], branches);
   const exams = new FakeExamTypes(usableExams);
+  const programs = new FakeCodeCatalog(usablePrograms);
   return {
     prisma,
     exams,
+    programs,
     service: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
       exams.asService(),
       new BranchesService(prisma.asService(), new AuditContext()),
+      programs.asService(),
       new AuditContext(),
     ),
   };
@@ -142,6 +146,47 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(error.fieldErrors?.currentBranchId, 'the key must be the one the student form owns');
     assert.equal(prisma.students.length, 0, 'nothing was written');
+  });
+});
+
+describe('StudentsService — the program tag', () => {
+  /**
+   * `Student.programs` holds a code with no foreign key behind it, so a typo becomes a program
+   * nothing matches — and a student who quietly reaches no series at all.
+   */
+  it('refuses a program the catalog does not hold, under the form’s own field name', async () => {
+    const { service } = serviceWith([]);
+
+    const error = await service
+      .create({
+        mobile: '9000000009',
+        studentType: STUDENT_TYPE.ONLINE,
+        programs: ['NOT A PROGRAM'],
+      })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.programs);
+  });
+
+  it('validates the programs a patch names, not the ones already stored', async () => {
+    const { service, programs } = serviceWith([
+      makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'] }),
+    ]);
+
+    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+
+    assert.deepEqual(programs.calls, [], 'an untouched list is not re-checked');
+  });
+
+  it('lets every program be taken away', async () => {
+    const { service, prisma } = serviceWith([
+      makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'] }),
+    ]);
+
+    await service.update('stu_1', { programs: [] });
+
+    assert.deepEqual(prisma.students[0]?.programs, []);
   });
 });
 

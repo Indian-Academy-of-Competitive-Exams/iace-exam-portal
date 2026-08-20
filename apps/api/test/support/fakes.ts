@@ -1,4 +1,6 @@
 import {
+  AppException,
+  ErrorCodes,
   BRANCH_TYPE,
   EXAM_FAMILY,
   EXAM_MODE,
@@ -8,6 +10,7 @@ import {
   NAVIGATION_POLICY,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
+  UNLOCK_MODE,
   TEST_UI,
   TIMER_TEMPLATE,
   type AdminPermissions,
@@ -22,6 +25,7 @@ import {
   type PermissionLevel,
   type StageDisposition,
   type StudentType,
+  type UnlockMode,
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
@@ -1822,4 +1826,339 @@ function relationIdOf(data: Record<string, unknown>, key: 'topic'): string | nul
   if (connect?.id) return connect.id;
   const direct = data[`${key}Id`];
   return typeof direct === 'string' ? direct : null;
+}
+
+export interface FakeProgramRow {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+export interface FakeSeriesRow {
+  id: string;
+  name: string;
+  description: string | null;
+  examStageId: string | null;
+  programCode: string | null;
+  sequentialTests: boolean;
+  prerequisiteSeriesId: string | null;
+  unlockMode: UnlockMode;
+  isFree: boolean;
+  createdAt: Date;
+  _count: { tests: number };
+}
+
+export interface FakeBranchConfigRow {
+  id: string;
+  branchId: string;
+  testSeriesId: string;
+  enabled: boolean;
+  startAt: Date | null;
+  endAt: Date | null;
+  createdAt: Date;
+}
+
+export interface FakeGrantRowAccess {
+  studentId: string;
+  testSeriesId: string;
+  createdById: string | null;
+  createdAt: Date;
+}
+
+export function makeProgram(overrides: Partial<FakeProgramRow> = {}): FakeProgramRow {
+  return {
+    id: 'prog_1',
+    code: 'SSC CGL FOUNDATION',
+    name: 'SSC CGL Foundation',
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRow {
+  return {
+    id: 'srs_1',
+    name: 'SSC CGL Tier 1 mocks',
+    description: null,
+    examStageId: 'stage_1',
+    programCode: null,
+    sequentialTests: false,
+    prerequisiteSeriesId: null,
+    unlockMode: UNLOCK_MODE.AUTO,
+    isFree: false,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+    _count: { tests: overrides._count?.tests ?? 0 },
+  };
+}
+
+/** Enough Prisma for the access services: the catalog, the series and the per-branch fan-out. */
+export class FakeAccessPrisma {
+  private seq = 0;
+
+  constructor(
+    readonly programs: FakeProgramRow[] = [],
+    readonly series: FakeSeriesRow[] = [],
+    readonly branches: FakeBranch[] = [],
+    readonly branchConfigs: FakeBranchConfigRow[] = [],
+    readonly students: FakeStudent[] = [],
+    readonly grants: FakeGrantRowAccess[] = [],
+    readonly examStages: FakeExamStage[] = [makeExamStage()],
+  ) {}
+
+  private id(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}_new_${this.seq}`;
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(work: Promise<T>[] | ((tx: FakeAccessPrisma) => Promise<T>)): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
+  }
+
+  readonly examStage = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const stage = this.examStages.find((candidate) => candidate.id === where.id);
+      return Promise.resolve(stage ? { ...stage } : null);
+    },
+  };
+
+  readonly branch = {
+    // Every LIVE branch: the fan-out asks for `deletedAt: null`, and a fake with no soft-deleted
+    // rows answers the same question either way.
+    findMany: () =>
+      Promise.resolve(this.branches.map((branch) => ({ id: branch.id, name: branch.name }))),
+  };
+
+  readonly program = {
+    findUnique: ({ where }: { where: { id?: string; code?: string } }) => {
+      const row = this.programs.find((program) =>
+        where.id === undefined ? program.code === where.code : program.id === where.id,
+      );
+      return Promise.resolve(row ? { ...row } : null);
+    },
+
+    findMany: ({ where = {} }: { where?: { code?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.programs.filter((program) => !where.code?.in || where.code.in.includes(program.code)),
+      ),
+
+    count: () => Promise.resolve(this.programs.length),
+
+    create: ({ data }: { data: { code: string; name: string } }) => {
+      const created = makeProgram({ ...data, id: this.id('prog') });
+      this.programs.push(created);
+      return Promise.resolve(created);
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const program = this.programs.find((row) => row.id === where.id);
+      if (!program) throw new Error(`no program ${where.id}`);
+      Object.assign(program, data);
+      return Promise.resolve(program);
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.programs.findIndex((row) => row.id === where.id);
+      const [removed] = this.programs.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  readonly testSeries = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.series.find((candidate) => candidate.id === where.id);
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
+    findMany: ({ skip = 0, take }: { skip?: number; take?: number } = {}) =>
+      Promise.resolve(
+        this.series
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((row) => this.hydrate(row)),
+      ),
+
+    count: ({
+      where = {},
+    }: { where?: { programCode?: string; prerequisiteSeriesId?: string } } = {}) =>
+      Promise.resolve(
+        this.series.filter(
+          (row) =>
+            (where.programCode === undefined || row.programCode === where.programCode) &&
+            (where.prerequisiteSeriesId === undefined ||
+              row.prerequisiteSeriesId === where.prerequisiteSeriesId),
+        ).length,
+      ),
+
+    create: ({ data }: { data: Partial<FakeSeriesRow> & { name: string } }) => {
+      const created = makeSeries({ ...data, id: this.id('srs') });
+      this.series.push(created);
+      return Promise.resolve(this.hydrate(created));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.series.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no series ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(this.hydrate(row));
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.series.findIndex((row) => row.id === where.id);
+      const [removed] = this.series.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  readonly branchTestConfig = {
+    findUnique: ({
+      where,
+    }: {
+      where: { branchId_testSeriesId: { branchId: string; testSeriesId: string } };
+    }) => {
+      const key = where.branchId_testSeriesId;
+      const row = this.branchConfigs.find(
+        (config) => config.branchId === key.branchId && config.testSeriesId === key.testSeriesId,
+      );
+      return Promise.resolve(row ? { ...row } : null);
+    },
+
+    findMany: ({ where = {} }: { where?: { testSeriesId?: string | { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.branchConfigs
+          .filter((config) => matchesKey(config.testSeriesId, where.testSeriesId))
+          .map((config) => ({
+            ...config,
+            branch: this.branchRef(config.branchId),
+          })),
+      ),
+
+    createMany: ({
+      data,
+    }: {
+      data: { branchId: string; testSeriesId: string; enabled: boolean }[];
+    }) => {
+      for (const row of data) {
+        this.branchConfigs.push({
+          id: this.id('btc'),
+          startAt: null,
+          endAt: null,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          ...row,
+        });
+      }
+      return Promise.resolve({ count: data.length });
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.branchConfigs.find((config) => config.id === where.id);
+      if (!row) throw new Error(`no branch config ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve({ ...row, branch: this.branchRef(row.branchId) });
+    },
+  };
+
+  readonly student = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.students.find((student) => student.id === where.id);
+      return Promise.resolve(row ? { ...row } : null);
+    },
+
+    count: ({ where = {} }: { where?: { programs?: { has: string } } } = {}) =>
+      Promise.resolve(
+        this.students.filter(
+          (student) => !where.programs || student.programs.includes(where.programs.has),
+        ).length,
+      ),
+  };
+
+  readonly studentGrant = {
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(
+        this.grants
+          .filter((grant) => grant.studentId === where.studentId)
+          .map((grant) => ({
+            ...grant,
+            testSeries: this.seriesRef(grant.testSeriesId),
+          })),
+      ),
+
+    upsert: ({
+      where,
+      create,
+    }: {
+      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
+      create: FakeGrantRowAccess;
+    }) => {
+      const key = where.studentId_testSeriesId;
+      const held = this.grants.find(
+        (grant) => grant.studentId === key.studentId && grant.testSeriesId === key.testSeriesId,
+      );
+      if (held) return Promise.resolve(held);
+
+      const row = { ...create, createdAt: new Date('2026-01-01T00:00:00.000Z') };
+      this.grants.push(row);
+      return Promise.resolve(row);
+    },
+
+    deleteMany: ({ where }: { where: { studentId: string; testSeriesId: string } }) => {
+      const kept = this.grants.filter(
+        (grant) => grant.studentId !== where.studentId || grant.testSeriesId !== where.testSeriesId,
+      );
+      const removed = this.grants.length - kept.length;
+      this.grants.length = 0;
+      this.grants.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+  };
+
+  private branchRef(branchId: string): { id: string; name: string } {
+    const branch = this.branches.find((candidate) => candidate.id === branchId);
+    return { id: branchId, name: branch?.name ?? '' };
+  }
+
+  private seriesRef(testSeriesId: string): { id: string; name: string } {
+    const series = this.series.find((candidate) => candidate.id === testSeriesId);
+    return { id: testSeriesId, name: series?.name ?? '' };
+  }
+
+  private hydrate(row: FakeSeriesRow) {
+    const stage = this.examStages.find((candidate) => candidate.id === row.examStageId);
+    return {
+      ...row,
+      examStage: stage ? { id: stage.id, name: stage.name, exam: { code: 'SSC CGL' } } : null,
+    };
+  }
+}
+
+/**
+ * Whatever validates a list of codes before a student may carry them — the exam catalog, the
+ * program catalog. One shape, because the seam is `assertUsable(codes, fieldKey)` on both.
+ */
+export class FakeCodeCatalog {
+  readonly calls: { codes: string[]; fieldKey: string }[] = [];
+
+  constructor(private readonly usable: string[] = []) {}
+
+  assertUsable(codes: string[], fieldKey: string): Promise<void> {
+    this.calls.push({ codes, fieldKey });
+    const unknown = codes.filter((code) => !this.usable.includes(code));
+    if (unknown.length > 0) {
+      const message = `No such code: ${unknown.join(', ')}`;
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+        fieldErrors: { [fieldKey]: [message] },
+      });
+    }
+    return Promise.resolve();
+  }
+
+  asService<T>(): T {
+    return this as unknown as T;
+  }
 }

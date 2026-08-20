@@ -73,6 +73,27 @@ import {
   type UpdateBranchInput,
 } from './branches';
 import {
+  ADMIN_GRANT_ROUTES,
+  ADMIN_PROGRAM_ROUTES,
+  ADMIN_SERIES_ROUTES,
+  branchTestConfigRowSchema,
+  programCatalogSchema,
+  studentGrantRowSchema,
+  testSeriesSummarySchema,
+  type BranchTestConfigRow,
+  type CreateProgramInput,
+  type CreateTestSeriesInput,
+  type GrantSeriesInput,
+  type Program,
+  type ProgramListQueryInput,
+  type StudentGrantRow,
+  type TestSeriesListQueryInput,
+  type TestSeriesSummary,
+  type UpdateBranchTestConfigInput,
+  type UpdateProgramInput,
+  type UpdateTestSeriesInput,
+} from './access';
+import {
   ADMIN_BASE_CONFIG_ROUTES,
   baseConfigDetailSchema,
   baseConfigSchema,
@@ -629,6 +650,93 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_EXAM_STAGE_ROUTES.remove(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+      },
+
+      /** The coaching variants a student can be a candidate for. */
+      programs: {
+        list: (query: ProgramListQueryInput = {}): Promise<Paginated<Program>> =>
+          requestPaginated(`${ADMIN_PROGRAM_ROUTES.list}${queryString({ ...query })}`, {
+            schema: programCatalogSchema.array(),
+          }),
+
+        create: (input: CreateProgramInput): Promise<Program> =>
+          request(ADMIN_PROGRAM_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: programCatalogSchema,
+          }),
+
+        update: (id: string, input: UpdateProgramInput): Promise<Program> =>
+          request(ADMIN_PROGRAM_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: programCatalogSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_PROGRAM_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+      },
+
+      /** The unit of offering. A test reaches a student only through one of these. */
+      testSeries: {
+        list: (query: TestSeriesListQueryInput = {}): Promise<Paginated<TestSeriesSummary>> =>
+          requestPaginated(`${ADMIN_SERIES_ROUTES.list}${queryString({ ...query })}`, {
+            schema: testSeriesSummarySchema.array(),
+          }),
+
+        detail: (id: string): Promise<TestSeriesSummary> =>
+          request(ADMIN_SERIES_ROUTES.detail(id), { schema: testSeriesSummarySchema }),
+
+        create: (input: CreateTestSeriesInput): Promise<TestSeriesSummary> =>
+          request(ADMIN_SERIES_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: testSeriesSummarySchema,
+          }),
+
+        update: (id: string, input: UpdateTestSeriesInput): Promise<TestSeriesSummary> =>
+          request(ADMIN_SERIES_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: testSeriesSummarySchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_SERIES_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        /** Every branch has a row from the moment the series exists — see the fan-out. */
+        branches: (id: string): Promise<BranchTestConfigRow[]> =>
+          request(ADMIN_SERIES_ROUTES.branches(id), { schema: branchTestConfigRowSchema.array() }),
+
+        updateBranch: (
+          id: string,
+          branchId: string,
+          input: UpdateBranchTestConfigInput,
+        ): Promise<BranchTestConfigRow> =>
+          request(ADMIN_SERIES_ROUTES.branch(id, branchId), {
+            method: 'PATCH',
+            body: input,
+            schema: branchTestConfigRowSchema,
+          }),
+      },
+
+      /** The escape hatch, filed against the student it was made about. */
+      grants: {
+        list: (studentId: string): Promise<StudentGrantRow[]> =>
+          request(ADMIN_GRANT_ROUTES.list(studentId), { schema: studentGrantRowSchema.array() }),
+
+        create: (studentId: string, input: GrantSeriesInput): Promise<StudentGrantRow[]> =>
+          request(ADMIN_GRANT_ROUTES.create(studentId), {
+            method: 'POST',
+            body: input,
+            schema: studentGrantRowSchema.array(),
+          }),
+
+        remove: (studentId: string, testSeriesId: string): Promise<NoContent> =>
+          request(ADMIN_GRANT_ROUTES.remove(studentId, testSeriesId), {
             method: 'DELETE',
             schema: noContentSchema,
           }),

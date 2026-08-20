@@ -6,7 +6,7 @@ import { AuditContext } from '../src/audit';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
-import { FakePrisma, makeProfile, makeStudent } from './support/fakes';
+import { FakeCodeCatalog, FakePrisma, makeProfile, makeStudent } from './support/fakes';
 
 /**
  * The diff is computed in the service because only it holds both the row it read and the values
@@ -63,6 +63,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     {} as StorageService,
     {} as ExamsService,
     {} as BranchesService,
+    new FakeCodeCatalog().asService(),
     auditContext,
   );
   return { prisma, auditContext, service };

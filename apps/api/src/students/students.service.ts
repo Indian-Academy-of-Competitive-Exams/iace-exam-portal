@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { BranchesService } from '../branches';
 import { ExamsService } from '../configs';
+import { type ProgramsService } from '../access';
 import { AuditContext } from '../audit';
 
 /** How long a signed link to somebody's photo stays usable. */
@@ -29,6 +30,7 @@ import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from '
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
+const PROGRAMS_FIELD = 'programs';
 const CURRENT_BRANCH_ID_FIELD = 'currentBranchId';
 
 /** What a student's audit diff covers — every column the admin screens can change. */
@@ -58,6 +60,15 @@ export class StudentsService {
     @Inject(forwardRef(() => ExamsService))
     private readonly exams: ExamsService,
     private readonly branches: BranchesService,
+    // `require`, not a static import: `access` imports `configs`, which imports this barrel back.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../access') as { ProgramsService: typeof ProgramsService })
+            .ProgramsService,
+      ),
+    )
+    private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
   ) {}
 
@@ -163,6 +174,9 @@ export class StudentsService {
     if (input.enrolledExams?.length) {
       await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
     }
+    if (input.programs?.length) {
+      await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
+    }
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
     }
@@ -193,6 +207,9 @@ export class StudentsService {
       if (input.enrolledExams.length) {
         await this.exams.assertUsable(input.enrolledExams, ENROLLED_EXAMS_FIELD);
       }
+    }
+    if (input.programs?.length) {
+      await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
     }
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);

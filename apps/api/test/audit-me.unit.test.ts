@@ -7,7 +7,7 @@ import { StudentsService } from '../src/students/students.service';
 import { type ExamsService } from '../src/configs';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type StorageService } from '../src/storage/storage.service';
-import { FakePrisma, makeProfile, makeStudent } from './support/fakes';
+import { FakeCodeCatalog, FakePrisma, makeProfile, makeStudent } from './support/fakes';
 
 describe('the student profile audit diff', () => {
   it('covers the profile fields a student can set about themselves', () => {
@@ -77,6 +77,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     storage.asService(),
     exams,
     branches,
+    new FakeCodeCatalog().asService(),
     auditContext,
   );
   const me = new MeService(students_, storage.asService(), auditContext);

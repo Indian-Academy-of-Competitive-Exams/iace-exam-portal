@@ -1,0 +1,328 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { AppException, ErrorCodes, updateBranchTestConfigSchema } from '@iace/contracts';
+import { ProgramsService } from '../src/access/programs.service';
+import { TestSeriesService } from '../src/access/test-series.service';
+import { StudentGrantsService } from '../src/access/student-grants.service';
+import { ExamStagesService } from '../src/configs';
+import { AuditContext } from '../src/audit';
+import {
+  type FakeBranch,
+  type FakeProgramRow,
+  type FakeSeriesRow,
+  type FakeStudent,
+  FakeAccessPrisma,
+  makeBranch,
+  makeExamStage,
+  makeProgram,
+  makeSeries,
+  makeStudent,
+} from './support/fakes';
+
+const ADMIN = 'adm_1';
+
+function build(
+  options: {
+    programs?: FakeProgramRow[];
+    series?: FakeSeriesRow[];
+    branches?: FakeBranch[];
+    students?: FakeStudent[];
+  } = {},
+) {
+  const prisma = new FakeAccessPrisma(
+    options.programs ?? [],
+    options.series ?? [],
+    options.branches ?? [],
+    [],
+    options.students ?? [],
+    [],
+    [makeExamStage({ id: 'stage_1' })],
+  );
+  const auditContext = new AuditContext();
+  const programs = new ProgramsService(prisma.asService(), auditContext);
+  const stages = new ExamStagesService(prisma.asService(), auditContext);
+
+  return {
+    prisma,
+    programs,
+    series: new TestSeriesService(prisma.asService(), stages, programs, auditContext),
+    grants: new StudentGrantsService(prisma.asService(), auditContext),
+  };
+}
+
+const draft = (over: Record<string, unknown> = {}) =>
+  ({ name: 'SSC CGL Tier 1 mocks', examStageId: 'stage_1', ...over }) as never;
+
+describe('TestSeriesService — the branch fan-out', () => {
+  /**
+   * THE rule this exists for: "not offered at this centre" is `enabled: false` on a row that
+   * exists. An ABSENT row would have to be read as a default, and a default is exactly what
+   * nobody can see on a screen or find in an audit trail.
+   */
+  it('gives every branch a row the moment the series is created', async () => {
+    const { series, prisma } = build({
+      branches: [
+        makeBranch({ id: 'br_1', name: 'AMEERPET' }),
+        makeBranch({ id: 'br_2', name: 'DILSUKHNAGAR' }),
+        makeBranch({ id: 'br_3', name: 'ONLINE' }),
+      ],
+    });
+
+    const created = await series.create(draft());
+
+    assert.equal(prisma.branchConfigs.length, 3);
+    assert.deepEqual(
+      prisma.branchConfigs.map((config) => config.testSeriesId),
+      [created.id, created.id, created.id],
+    );
+  });
+
+  /** A new series must not appear at every centre in the country the moment it is saved. */
+  it('starts every one of them switched off', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+
+    const created = await series.create(draft());
+
+    assert.equal(prisma.branchConfigs[0]?.enabled, false);
+    assert.equal(created.enabledBranchCount, 0);
+    assert.equal(created.branchCount, 1);
+  });
+
+  it('reports how many branches run it, out of how many could', async () => {
+    const { series } = build({
+      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
+    });
+    const created = await series.create(draft());
+
+    await series.updateBranchConfig(created.id, 'br_1', { enabled: true });
+    const after = await series.detail(created.id);
+
+    assert.equal(after.enabledBranchCount, 1);
+    assert.equal(after.branchCount, 2);
+  });
+
+  /** A window that ends before it starts is a series nobody can ever sit. */
+  it('refuses a window that ends before it starts', () => {
+    const parsed = updateBranchTestConfigSchema.safeParse({
+      startAt: '2026-09-01T00:00:00.000Z',
+      endAt: '2026-08-01T00:00:00.000Z',
+    });
+
+    assert.equal(parsed.success, false);
+  });
+
+  it('refuses to schedule a branch that has no row for the series', async () => {
+    const { series } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+
+    await assert.rejects(
+      () => series.updateBranchConfig(created.id, 'br_gone', { enabled: true }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.NOT_FOUND);
+        return true;
+      },
+    );
+  });
+});
+
+describe('TestSeriesService — what a series may point at', () => {
+  it('refuses a stage that is retired', async () => {
+    const prisma = new FakeAccessPrisma(
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [makeExamStage({ id: 'stage_1', isActive: false })],
+    );
+    const auditContext = new AuditContext();
+    const series = new TestSeriesService(
+      prisma.asService(),
+      new ExamStagesService(prisma.asService(), auditContext),
+      new ProgramsService(prisma.asService(), auditContext),
+      auditContext,
+    );
+
+    await assert.rejects(() => series.create(draft()), AppException.is);
+  });
+
+  it('refuses a program code the catalog does not hold', async () => {
+    const { series } = build();
+
+    await assert.rejects(
+      () => series.create(draft({ programCode: 'NOPE' })),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.ok(error.fieldErrors?.programCode);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a series that waits on itself', async () => {
+    const { series } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+
+    await assert.rejects(
+      () => series.update(created.id, { prerequisiteSeriesId: created.id }),
+      AppException.is,
+    );
+  });
+
+  it('refuses to delete one that another series waits on', async () => {
+    const { series } = build({
+      series: [
+        makeSeries({ id: 'srs_1' }),
+        makeSeries({ id: 'srs_2', name: 'Tier 2', prerequisiteSeriesId: 'srs_1' }),
+      ],
+    });
+
+    await assert.rejects(() => series.remove('srs_1'), AppException.is);
+  });
+});
+
+describe('ProgramsService', () => {
+  it('creates a program and normalises its code', async () => {
+    const { programs } = build();
+
+    const created = await programs.create({ code: 'SSC CGL FOUNDATION', name: 'Foundation' });
+
+    assert.equal(created.code, 'SSC CGL FOUNDATION');
+  });
+
+  it('refuses a code the catalog already holds', async () => {
+    const { programs } = build({ programs: [makeProgram({ code: 'SSC CGL FOUNDATION' })] });
+
+    await assert.rejects(
+      () => programs.create({ code: 'SSC CGL FOUNDATION', name: 'Again' }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.CONFLICT);
+        return true;
+      },
+    );
+  });
+
+  /**
+   * `Student.programs` and `TestSeries.programCode` both hold the code as free text with no
+   * foreign key, so a rename detaches every one of them with no error and no rows changed.
+   */
+  it('refuses a code change once a student carries it', async () => {
+    const { programs, prisma } = build({
+      programs: [makeProgram({ id: 'prog_1', code: 'SSC CGL FOUNDATION' })],
+      students: [makeStudent({ programs: ['SSC CGL FOUNDATION'] })],
+    });
+
+    await assert.rejects(
+      () => programs.update('prog_1', { code: 'SSC CGL FOUNDATION 2026' }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.ok(error.fieldErrors?.code);
+        return true;
+      },
+    );
+    assert.equal(prisma.programs[0]?.code, 'SSC CGL FOUNDATION');
+  });
+
+  it('refuses a code change once a series carries it, and offers retiring instead', async () => {
+    const { programs } = build({
+      programs: [makeProgram({ id: 'prog_1', code: 'SSC CGL FOUNDATION' })],
+      series: [makeSeries({ programCode: 'SSC CGL FOUNDATION' })],
+    });
+
+    const error = await programs.update('prog_1', { code: 'RENAMED' }).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.message, /[Rr]etire/);
+  });
+
+  it('renames and retires without touching the code', async () => {
+    const { programs } = build({
+      programs: [makeProgram({ id: 'prog_1' })],
+      students: [makeStudent({ programs: ['SSC CGL FOUNDATION'] })],
+    });
+
+    const updated = await programs.update('prog_1', { name: 'Foundation 2026', isActive: false });
+
+    assert.equal(updated.name, 'Foundation 2026');
+    assert.equal(updated.isActive, false);
+  });
+
+  it('refuses an inactive program where a student is being enrolled', async () => {
+    const { programs } = build({ programs: [makeProgram({ isActive: false })] });
+
+    const error = await programs
+      .assertUsable(['SSC CGL FOUNDATION'], 'programs')
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.programs);
+  });
+});
+
+describe('StudentGrantsService — the escape hatch', () => {
+  it('grants a series to one student and reads it back named', async () => {
+    const { grants } = build({
+      series: [makeSeries({ id: 'srs_1', name: 'Scholarship mocks' })],
+      students: [makeStudent({ id: 'stu_1' })],
+    });
+
+    const after = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+
+    assert.equal(after.length, 1);
+    assert.equal(after[0]?.testSeries.name, 'Scholarship mocks');
+  });
+
+  /** Re-reading the roster it came from is the normal way to use this. */
+  it('is idempotent — granting twice leaves one grant', async () => {
+    const { grants, prisma } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      students: [makeStudent({ id: 'stu_1' })],
+    });
+
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+
+    assert.equal(prisma.grants.length, 1);
+  });
+
+  it('refuses a grant to a student who is blocked from tests', async () => {
+    const { grants } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      students: [makeStudent({ id: 'stu_1', isTestBlocked: true })],
+    });
+
+    await assert.rejects(
+      () => grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.ok(error.fieldErrors?.testSeriesId);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a series that is not there', async () => {
+    const { grants } = build({ students: [makeStudent({ id: 'stu_1' })] });
+
+    await assert.rejects(
+      () => grants.grant('stu_1', { testSeriesId: 'nope' }, ADMIN),
+      AppException.is,
+    );
+  });
+
+  it('takes one back', async () => {
+    const { grants, prisma } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      students: [makeStudent({ id: 'stu_1' })],
+    });
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+
+    await grants.revoke('stu_1', 'srs_1');
+
+    assert.equal(prisma.grants.length, 0);
+  });
+});
