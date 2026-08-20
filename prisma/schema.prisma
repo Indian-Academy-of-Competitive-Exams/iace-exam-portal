@@ -213,20 +213,20 @@ enum PermissionLevel {
   WRITE
 }
 
-// Aligned with AUDIT_FEATURE in @iace/contracts; both sides move to the target
-// values (TEST_SERIES / BASE_CONFIG / EXAM_TAXONOMY) together in T9.
+// Aligned with AUDIT_FEATURE in @iace/contracts. A value here names a kind of
+// record somebody can change; when the model loses one, this loses it too.
 enum AuditFeature {
   STUDENT
   STUDENT_PROFILE
-  GROUP
   BRANCH
   ADMIN
   QUESTION
   TEST
-  EXAM_TYPE
+  TEST_SERIES
+  BASE_CONFIG
+  EXAM_TAXONOMY
   TAXONOMY_SUBJECT
   TAXONOMY_TOPIC
-  TAXONOMY_SUB_TOPIC
   FEATURE_PERMISSION
 }
 

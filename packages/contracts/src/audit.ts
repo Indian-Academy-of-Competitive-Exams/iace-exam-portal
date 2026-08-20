@@ -13,15 +13,17 @@ import { dateOnlySchema } from './students';
 export const AUDIT_FEATURE = {
   STUDENT: 'STUDENT',
   STUDENT_PROFILE: 'STUDENT_PROFILE',
-  GROUP: 'GROUP',
   BRANCH: 'BRANCH',
   ADMIN: 'ADMIN',
   QUESTION: 'QUESTION',
   TEST: 'TEST',
-  EXAM_TYPE: 'EXAM_TYPE',
+  TEST_SERIES: 'TEST_SERIES',
+  /** The blueprint, not the test built from it — the two change for different reasons. */
+  BASE_CONFIG: 'BASE_CONFIG',
+  /** The whole catalog: an exam and its stages. One vocabulary, because they move together. */
+  EXAM_TAXONOMY: 'EXAM_TAXONOMY',
   TAXONOMY_SUBJECT: 'TAXONOMY_SUBJECT',
   TAXONOMY_TOPIC: 'TAXONOMY_TOPIC',
-  TAXONOMY_SUB_TOPIC: 'TAXONOMY_SUB_TOPIC',
   FEATURE_PERMISSION: 'FEATURE_PERMISSION',
 } as const;
 export const auditFeatureSchema = z.enum(AUDIT_FEATURE);
@@ -41,8 +43,9 @@ export const auditActionSchema = z.enum(AUDIT_ACTION);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 
 /**
- * Who did it. Wider than `ActorTypes`, which decides a token's identity table
- * and must never admit SCRIPT or SYSTEM — nothing signs in as either.
+ * Who did it. The Prisma enum of the same shape is called `ActorType`; the name is taken in
+ * contracts by the NARROWER `ActorTypes`, which decides a token's identity table and must never
+ * admit SCRIPT or SYSTEM — nothing signs in as either. Two vocabularies, two names, on purpose.
  */
 export const AUDIT_ACTOR_TYPE = {
   ADMIN: 'ADMIN',

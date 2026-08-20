@@ -53,7 +53,7 @@ export class BaseConfigsController {
     return this.configs.detail(id);
   }
 
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.CREATE)
+  @Audit(AUDIT_FEATURE.BASE_CONFIG, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(
@@ -64,7 +64,7 @@ export class BaseConfigsController {
   }
 
   /** Refused once the config is locked, name/default/active excepted — see `locksOutEdit`. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @Audit(AUDIT_FEATURE.BASE_CONFIG, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
@@ -75,7 +75,7 @@ export class BaseConfigsController {
   }
 
   /** How a locked config evolves: the whole paper, copied, unlocked, pointing back at its origin. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.CREATE)
+  @Audit(AUDIT_FEATURE.BASE_CONFIG, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/clone')
   @HttpCode(HttpStatus.OK)
@@ -87,7 +87,7 @@ export class BaseConfigsController {
     return this.configs.clone(id, body, user.id);
   }
 
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.DELETE)
+  @Audit(AUDIT_FEATURE.BASE_CONFIG, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

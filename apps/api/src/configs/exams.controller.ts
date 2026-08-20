@@ -45,7 +45,7 @@ export class ExamsController {
     return this.exams.list(query);
   }
 
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.CREATE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.CREATE)
   @Post()
   @RequiresSuperAdmin()
   create(@Body(new ZodBody(createExamSchema)) body: CreateExamBody): Promise<Exam> {
@@ -53,7 +53,7 @@ export class ExamsController {
   }
 
   /** The code is refused once any enrolment stores it — see `examEditBlocker`. */
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.UPDATE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.UPDATE)
   @Patch(':id')
   @RequiresSuperAdmin()
   update(
@@ -63,7 +63,7 @@ export class ExamsController {
     return this.exams.update(id, body);
   }
 
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.DELETE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.DELETE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

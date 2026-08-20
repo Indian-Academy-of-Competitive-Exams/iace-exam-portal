@@ -47,7 +47,7 @@ export class ExamStagesController {
     return this.stages.list(query);
   }
 
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.CREATE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.CREATE)
   @Post()
   @RequiresSuperAdmin()
   create(@Body(new ZodBody(createExamStageSchema)) body: CreateExamStageBody): Promise<ExamStage> {
@@ -55,7 +55,7 @@ export class ExamStagesController {
   }
 
   /** The key is refused once a base config hangs off it — see `stageEditBlocker`. */
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.UPDATE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.UPDATE)
   @Patch(':id')
   @RequiresSuperAdmin()
   update(
@@ -65,7 +65,7 @@ export class ExamStagesController {
     return this.stages.update(id, body);
   }
 
-  @Audit(AUDIT_FEATURE.EXAM_TYPE, AUDIT_ACTION.DELETE)
+  @Audit(AUDIT_FEATURE.EXAM_TAXONOMY, AUDIT_ACTION.DELETE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @RequiresSuperAdmin()

@@ -73,15 +73,15 @@ export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
 export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   STUDENT: 'Student',
   STUDENT_PROFILE: 'Student profile',
-  GROUP: 'Group',
   BRANCH: 'Branch',
   ADMIN: 'Admin',
   QUESTION: 'Question',
   TEST: 'Test',
-  EXAM_TYPE: 'Exam type',
+  TEST_SERIES: 'Test series',
+  BASE_CONFIG: 'Base config',
+  EXAM_TAXONOMY: 'Exam catalog',
   TAXONOMY_SUBJECT: 'Subject',
   TAXONOMY_TOPIC: 'Topic',
-  TAXONOMY_SUB_TOPIC: 'Sub-topic',
   FEATURE_PERMISSION: 'Feature permission',
 };
 
