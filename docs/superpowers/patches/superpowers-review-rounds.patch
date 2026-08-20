@@ -1,0 +1,166 @@
+--- a/skills/subagent-driven-development/SKILL.md
++++ b/skills/subagent-driven-development/SKILL.md
+@@ -5,11 +5,11 @@
+ 
+ # Subagent-Driven Development
+ 
+-Execute plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) after each, and a broad whole-branch review at the end.
++Execute plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) budgeted by the task's risk, and a broad whole-branch review at the end.
+ 
+ **Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they stay focused and succeed at their task. They should never inherit your session's context or history — you construct exactly what they need. This also preserves your own context for coordination work.
+ 
+-**Core principle:** Fresh subagent per task + task review (spec + quality) + broad final review = high quality, fast iteration
++**Core principle:** Fresh subagent per task + task review (spec + quality) budgeted by risk + broad final review = high quality, fast iteration
+ 
+ **Narration:** between tool calls, narrate at most one short line — the
+ ledger and the tool results carry the record.
+@@ -53,7 +53,7 @@
+ **vs. Executing Plans (parallel session):**
+ - Same session (no context switch)
+ - Fresh subagent per task (no context pollution)
+-- Review after each task (spec compliance + code quality), broad review at the end
++- Review after each task by risk (spec compliance + code quality), broad review at the end
+ - Faster iteration (no human-in-loop between tasks)
+ 
+ ## The Process
+@@ -68,14 +68,15 @@
+         "Implementer asks questions?" [shape=diamond];
+         "Answer questions, provide context" [shape=box];
+         "Implementer implements, tests, commits, self-reviews" [shape=box];
++        "Mechanical task (0 review rounds)?" [shape=diamond];
+         "Generate review package, dispatch task reviewer (./task-reviewer-prompt.md)" [shape=box];
+         "Spec ✅ and quality approved?" [shape=diamond];
+         "Finding conflicts with plan text?" [shape=diamond];
+         "Rule on the conflict, ledger the ruling" [shape=box];
+-        "Fix round R of 5: R≤3 resume implementer; R≥4 fresh implementer, more capable model" [shape=box];
++        "Fix round (only if review budget remains): resume implementer, or fresh implementer on a more capable model" [shape=box];
+         "Dispatch scoped re-review (./re-review-prompt.md)" [shape=box];
+         "All findings addressed?" [shape=diamond];
+-        "R = 5?" [shape=diamond];
++        "Review budget spent?" [shape=diamond];
+         "Adjudicate each open finding" [shape=box];
+         "Any load-bearing finding?" [shape=diamond];
+         "Rule and continue; stop only if every path forward is a guess" [shape=box];
+@@ -95,19 +96,21 @@
+     "Implementer asks questions?" -> "Answer questions, provide context" [label="yes"];
+     "Answer questions, provide context" -> "Implementer implements, tests, commits, self-reviews";
+     "Implementer asks questions?" -> "Implementer implements, tests, commits, self-reviews" [label="no"];
+-    "Implementer implements, tests, commits, self-reviews" -> "Generate review package, dispatch task reviewer (./task-reviewer-prompt.md)";
++    "Implementer implements, tests, commits, self-reviews" -> "Mechanical task (0 review rounds)?";
++    "Mechanical task (0 review rounds)?" -> "Append completion to ledger, mark todo complete" [label="yes - gates only"];
++    "Mechanical task (0 review rounds)?" -> "Generate review package, dispatch task reviewer (./task-reviewer-prompt.md)" [label="no"];
+     "Generate review package, dispatch task reviewer (./task-reviewer-prompt.md)" -> "Spec ✅ and quality approved?";
+     "Spec ✅ and quality approved?" -> "Append completion to ledger, mark todo complete" [label="yes"];
+     "Spec ✅ and quality approved?" -> "Finding conflicts with plan text?" [label="no"];
+     "Finding conflicts with plan text?" -> "Rule on the conflict, ledger the ruling" [label="yes"];
+-    "Rule on the conflict, ledger the ruling" -> "Fix round R of 5: R≤3 resume implementer; R≥4 fresh implementer, more capable model";
+-    "Finding conflicts with plan text?" -> "Fix round R of 5: R≤3 resume implementer; R≥4 fresh implementer, more capable model" [label="no"];
+-    "Fix round R of 5: R≤3 resume implementer; R≥4 fresh implementer, more capable model" -> "Dispatch scoped re-review (./re-review-prompt.md)";
++    "Rule on the conflict, ledger the ruling" -> "Fix round (only if review budget remains): resume implementer, or fresh implementer on a more capable model";
++    "Finding conflicts with plan text?" -> "Fix round (only if review budget remains): resume implementer, or fresh implementer on a more capable model" [label="no"];
++    "Fix round (only if review budget remains): resume implementer, or fresh implementer on a more capable model" -> "Dispatch scoped re-review (./re-review-prompt.md)";
+     "Dispatch scoped re-review (./re-review-prompt.md)" -> "All findings addressed?";
+     "All findings addressed?" -> "Append completion to ledger, mark todo complete" [label="yes"];
+-    "All findings addressed?" -> "R = 5?" [label="no"];
+-    "R = 5?" -> "Fix round R of 5: R≤3 resume implementer; R≥4 fresh implementer, more capable model" [label="no - next round"];
+-    "R = 5?" -> "Adjudicate each open finding" [label="yes - breaker trips"];
++    "All findings addressed?" -> "Review budget spent?" [label="no"];
++    "Review budget spent?" -> "Fix round (only if review budget remains): resume implementer, or fresh implementer on a more capable model" [label="no - next round"];
++    "Review budget spent?" -> "Adjudicate each open finding" [label="yes - breaker trips"];
+     "Adjudicate each open finding" -> "Any load-bearing finding?";
+     "Any load-bearing finding?" -> "Rule and continue; stop only if every path forward is a guess" [label="yes"];
+     "Any load-bearing finding?" -> "Park findings in ledger with rulings" [label="no"];
+@@ -308,11 +311,28 @@
+ ### 3. Review the task
+ 
+ Per-task reviews are task-scoped gates. The broad review happens once, at the
+-final whole-branch review. Never skip the task review, and never accept a
+-report missing either verdict — spec compliance AND task quality are both
+-required. Implementer self-review never replaces the task review; both are
+-needed.
++final whole-branch review.
++
++**Review by risk, not by default.** Before dispatching a reviewer, read the
++task's risk off the plan — a `Risk:` or `Reviews:` line in the task text if it
++carries one, otherwise the nature of the work — and budget reviewer passes:
++
++| Task type                                                                              | Review rounds  |
++| -------------------------------------------------------------------------------------- | -------------- |
++| Mechanical (renames, enum moves, CRUD mirroring an exemplar, contract regen)           | 0 (gates only) |
++| Normal feature (a service + endpoint + UI + tests)                                     | 1              |
++| High-stakes (Prisma schema, migrations/raw SQL, access resolver, auth, scoring, money) | 2              |
++
++**When the plan carries no risk signal, budget 1.** A round is one reviewer
++pass: the task review is the first, each scoped re-review in the fix loop is
++another. A mechanical task rests on the gates and the implementer's
++self-review — ledger that you skipped the task review and why, so the final
++whole-branch review knows the task was never reviewed.
+ 
++When you do run the task review, never accept a report missing either
++verdict — spec compliance AND task quality are both required. Implementer
++self-review never replaces the task review; both are needed.
++
+ - Hand the reviewer its diff as a file: run this skill's
+   `scripts/review-package PLAN_FILE BASE HEAD` and pass the reviewer the file path
+   it prints (or, without bash: `git log --oneline`, `git diff --stat`,
+@@ -370,20 +390,28 @@
+   the plan mandates it, and do not dispatch a fix that contradicts the plan
+   without a recorded ruling.
+ Everything else enters the loop. A fix round is one fix dispatch plus one
+-scoped re-review. Five rounds maximum per task:
++scoped re-review, and that re-review spends one of the task's review rounds
++(§3). The budget is the cap, not a target: a normal task's task review was
++its one round, so its fixes are verified by the gates and by the final
++whole-branch review; a high-stakes task has one round left, so it gets one
++fix round. One escalation, and it only ever raises a task to the high-stakes
++budget of 2: a Critical finding, or a finding you confirm is load-bearing,
++makes the task high-stakes in fact whatever the plan called it. Never let a
++Critical fix ship without a re-review.
+ 
+-**Rounds 1-3 — resume the original implementer.** Send it the open findings
++**The fix round — resume the original implementer.** Send it the open findings
+ verbatim. Its context is intact: it knows the task, the code, and its own
+ choices. If your harness cannot send another message to a live subagent,
+ dispatch a fresh implementer carrying the brief path, the report-file path,
+ and the findings — the report file is the persistent memory either way.
+ 
+-**Rounds 4-5 — dispatch a fresh implementer on a more capable model** (per
+-Model Selection), with the brief path, the report-file path, the open
+-findings, and this framing: "A prior implementer attempted this task
+-[N] times; you own it now. Read the report file for what was tried." A loop
+-that survives three resumes usually means the implementer cannot see its
+-own problem — fresh eyes and a capability bump in one move.
++**When that implementer has already failed this task once — dispatch a fresh
++implementer on a more capable model** (per Model Selection), with the brief
++path, the report-file path, the open findings, and this framing: "A prior
++implementer attempted this task [N] times; you own it now. Read the report
++file for what was tried." A task that survives a resume usually means the
++implementer cannot see its own problem — fresh eyes and a capability bump in
++one move.
+ 
+ **Every round, either way:** the implementer fixes, re-runs the tests
+ covering the amended code, appends its fix report to the same report file,
+@@ -403,12 +431,12 @@
+ minors — they never extend the loop.
+ 
+ **After each round,** append to the ledger:
+-`Task <N>: fix round <R>/5 (<X> addressed, <Y> open — <finding one-liners>; commits <a7>..<b7>)`
++`Task <N>: fix round <R> of <budget> (<X> addressed, <Y> open — <finding one-liners>; commits <a7>..<b7>)`
+ 
+ Never fix findings yourself in the controller session — your context stays
+ clean for coordination, and controller fixes skip review.
+ 
+-**The breaker.** When round 5's re-review still leaves findings open, stop
++**The breaker.** When the review budget is spent and findings are still open, stop
+ dispatching. Adjudicate each open finding yourself — you hold the plan and
+ the cross-task context the reviewer lacks:
+ 
+@@ -553,7 +581,7 @@
+   Magic number — ADDRESSED (src/recovery.js:7). New breakage: none.
+   Verdict: all findings addressed.
+ 
+-[Ledger: Task 2: fix round 1/5 (2 addressed, 0 open; commits d4e5f6a..b7c8d9e)]
++[Ledger: Task 2: fix round 1 of 2 (2 addressed, 0 open; commits d4e5f6a..b7c8d9e)]
+ [Ledger: Task 2: complete (commits d4e5f6a..b7c8d9e, review clean)]
+ 
+ ...
