@@ -160,6 +160,13 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
   const banner = bannerMessage(save.error, SERVER_FIELDS);
 
+  // The series it waits on can sit outside the picker's first page, and an id is not a name.
+  const prerequisite = useQuery({
+    queryKey: seriesKey(prerequisiteSeriesId),
+    queryFn: () => api.admin.testSeries.detail(prerequisiteSeriesId),
+    enabled: prerequisiteSeriesId !== '',
+  });
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -261,6 +268,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
                   value={prerequisiteSeriesId}
                   clearable
                   excludeId={detail?.id}
+                  selectedLabel={prerequisite.data?.name}
                   placeholder="Nothing"
                   onChange={(value) =>
                     form.setValue('prerequisiteSeriesId', value, { shouldDirty: true })
