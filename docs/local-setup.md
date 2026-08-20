@@ -100,18 +100,26 @@ pnpm db:migrate       # apply all migrations to your local DB
 
 Optional GUI: `pnpm db:studio` (Prisma Studio, opens in the browser).
 
-> There is **no seed step**. By design, no super admin is auto‑created — you make the first one yourself in §6. (`db:check` is a CI‑only drift check and needs `SHADOW_DATABASE_URL`; you don't need it locally — `db:migrate` manages its own shadow DB.)
+> `pnpm db:seed` (§6) puts the first super admin, the SSC CGL catalog and its Tier 1 pattern in. It is a separate command on purpose, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
 
-## 6. Create the first super admin (manual, by design)
+## 6. Seed the first super admin and the exam catalog
 
-Admins can't self‑register, so create one super admin once:
+```bash
+pnpm db:seed
+```
 
-- **Easiest — Prisma Studio:** `pnpm db:studio` → open the `Admin` table → **Add record** → set `email` to your email, `isSuperAdmin` = true, `isActive` = true (fullName optional) → Save.
-- **Or SQL** (via `psql` / TablePlus on `localhost:5432`):
-  ```sql
-  INSERT INTO "Admin" (id, email, "isSuperAdmin", "isActive", "createdAt", "updatedAt")
-  VALUES (gen_random_uuid()::text, 'you@iace.co.in', true, true, now(), now());
-  ```
+That inserts the super admin (`developer@iace.co.in`), the SSC CGL exam and its four
+tiers, and the SSC CGL Tier 1 default base config with its four sections. It is
+idempotent — every insert is guarded, so running it twice changes nothing.
+
+Admins can't self‑register and nothing in the application creates one, so without this
+row there is no way into the admin app at all. To use a different address, edit
+`prisma/seed.sql` before running it, or add yourself afterwards:
+
+```sql
+INSERT INTO "Admin" (id, email, "isSuperAdmin", "isActive", "allBranches")
+VALUES (gen_random_uuid()::text, 'you@iace.co.in', true, true, true);
+```
 
 Then sign in at the **admin app** (http://localhost:5174) with that email. The **login OTP prints to the API log** (because `OTP_SENDER=console`).
 
@@ -159,7 +167,7 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 - **Port already in use** (3000 / 5173 / 5174 / 5432 / 6379 / 9000 / 9001) → free the process or change the port in `.env`.
 - **Pre‑commit hook fails** → run `pnpm format && pnpm lint && pnpm typecheck` and fix what it reports; leave `SONAR_*` unset to skip the Sonar scan.
 - **Admin OTP never arrives** → it doesn't; read it from the **API log** (dev uses the console OTP sender).
-- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:migrate`, and re‑create the super admin (§6).
+- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:migrate`, and re‑run `pnpm db:seed` (§6).
 
 ## 10. Where to read next
 
