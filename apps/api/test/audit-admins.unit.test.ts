@@ -14,16 +14,40 @@ import { FakeAdminsPrisma, makeAdminRow } from './support/fakes';
 
 describe('the admin audit diff', () => {
   it('covers what an admin edit can change', () => {
-    assert.deepEqual([...AUDITED_ADMIN_FIELDS], ['fullName', 'isSuperAdmin']);
+    assert.deepEqual(
+      [...AUDITED_ADMIN_FIELDS],
+      ['fullName', 'isSuperAdmin', 'allBranches', 'branchIds'],
+    );
   });
 
   /** Promotion to super admin bypasses every feature check, so it is the row to find. */
   it('reports a promotion to super admin', () => {
-    const before = { fullName: 'R Kumar', isSuperAdmin: false };
+    const before = { fullName: 'R Kumar', isSuperAdmin: false, allBranches: false, branchIds: [] };
 
     assert.deepEqual(fieldDiff(before, { ...before, isSuperAdmin: true }, AUDITED_ADMIN_FIELDS), {
       isSuperAdmin: { from: false, to: true },
     });
+  });
+
+  /**
+   * "All branches" is a column, never an inference from an empty list. An admin moved from one
+   * branch to every branch has to be findable, and the two states differ only by this flag.
+   */
+  it('reports a widening from one branch to all of them', () => {
+    const before = {
+      fullName: 'R Kumar',
+      isSuperAdmin: false,
+      allBranches: false,
+      branchIds: ['br_1'],
+    };
+
+    assert.deepEqual(
+      fieldDiff(before, { ...before, allBranches: true, branchIds: [] }, AUDITED_ADMIN_FIELDS),
+      {
+        allBranches: { from: false, to: true },
+        branchIds: { from: ['br_1'], to: [] },
+      },
+    );
   });
 });
 

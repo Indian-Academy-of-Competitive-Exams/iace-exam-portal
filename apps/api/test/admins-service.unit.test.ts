@@ -3,10 +3,10 @@ import { describe, it } from 'node:test';
 import { AppException, FEATURE_KEYS, PERMISSION_LEVELS } from '@iace/contracts';
 import { AdminsService } from '../src/admins';
 import { AuditContext } from '../src/audit';
-import { FakeAdminsPrisma, makeAdminRow } from './support/fakes';
+import { type FakeBranch, FakeAdminsPrisma, makeAdminRow, makeBranch } from './support/fakes';
 
-function build(admins = [makeAdminRow()]) {
-  const prisma = new FakeAdminsPrisma(admins);
+function build(admins = [makeAdminRow()], branches: FakeBranch[] = []) {
+  const prisma = new FakeAdminsPrisma(admins, branches);
   return { prisma, service: new AdminsService(prisma.asService(), new AuditContext()) };
 }
 
@@ -129,7 +129,11 @@ describe('AdminsService — admins', () => {
     const ctx = build([makeAdminRow({ email: 'taken@iace.co.in' })]);
 
     await assert.rejects(
-      () => ctx.service.create({ email: 'taken@iace.co.in', isSuperAdmin: false }, ACTOR),
+      () =>
+        ctx.service.create(
+          { email: 'taken@iace.co.in', isSuperAdmin: false, allBranches: false },
+          ACTOR,
+        ),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, 'CONFLICT');
@@ -143,13 +147,79 @@ describe('AdminsService — admins', () => {
     const ctx = build([]);
 
     const created = await ctx.service.create(
-      { email: 'new@iace.co.in', isSuperAdmin: true },
+      { email: 'new@iace.co.in', isSuperAdmin: true, allBranches: false },
       ACTOR,
     );
 
     assert.equal(created.isSuperAdmin, true);
     assert.deepEqual(created.permissions, {});
     assert.equal(ctx.prisma.admins.find((a) => a.id === created.id)?.createdById, ACTOR);
+  });
+});
+
+describe('AdminsService — which branches an admin reaches', () => {
+  /**
+   * THE rule: "every branch" is a column, never an inference from an empty list. An admin who has
+   * been given no branch yet reaches NONE, and reading that as "all of them" would hand a new
+   * account the whole institute on the day it was created.
+   */
+  it('creates an admin with no branch and no reach, not with every branch', async () => {
+    const ctx = build();
+
+    const created = await ctx.service.create(
+      { email: 'new@iace.co.in', isSuperAdmin: false, allBranches: false },
+      ACTOR,
+    );
+
+    assert.equal(created.allBranches, false);
+    assert.deepEqual(created.branchIds, []);
+  });
+
+  it('says all branches out loud when that is what was asked for', async () => {
+    const ctx = build();
+
+    const created = await ctx.service.create(
+      { email: 'wide@iace.co.in', isSuperAdmin: false, allBranches: true },
+      ACTOR,
+    );
+
+    assert.equal(created.allBranches, true);
+  });
+
+  it('replaces the branch set wholesale rather than adding to it', async () => {
+    const ctx = build(
+      [makeAdminRow({ id: 'adm_1', branches: [{ branchId: 'br_1' }] })],
+      [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'RTC X ROADS' })],
+    );
+
+    const updated = await ctx.service.update('adm_1', { branchIds: ['br_2'] });
+
+    assert.deepEqual(updated.branchIds, ['br_2']);
+  });
+
+  it('takes every branch away when the list is emptied', async () => {
+    const ctx = build(
+      [makeAdminRow({ id: 'adm_1', branches: [{ branchId: 'br_1' }] })],
+      [makeBranch({ id: 'br_1' })],
+    );
+
+    const updated = await ctx.service.update('adm_1', { branchIds: [] });
+
+    assert.deepEqual(updated.branchIds, []);
+    assert.equal(updated.allBranches, false, 'an empty list is not a way to say "all of them"');
+  });
+
+  it('refuses a branch that no longer exists, against the field the form owns', async () => {
+    const ctx = build([makeAdminRow({ id: 'adm_1' })]);
+
+    await assert.rejects(
+      () => ctx.service.update('adm_1', { branchIds: ['br_gone'] }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.ok(error.fieldErrors?.branchIds);
+        return true;
+      },
+    );
   });
 });
 

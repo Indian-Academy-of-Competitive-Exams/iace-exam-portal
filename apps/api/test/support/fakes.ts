@@ -2,16 +2,28 @@ import {
   BRANCH_TYPE,
   EXAM_FAMILY,
   EXAM_MODE,
+  LANGUAGE_CODE,
+  LANGUAGE_MODE,
+  MERIT_TYPE,
+  NAVIGATION_POLICY,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
+  TEST_UI,
+  TIMER_TEMPLATE,
   type AdminPermissions,
   type BranchType,
   type ExamFamily,
   type ExamMode,
   type FeatureKey,
+  type LanguageCode,
+  type LanguageMode,
+  type MeritType,
+  type NavigationPolicy,
   type PermissionLevel,
   type StageDisposition,
   type StudentType,
+  type TestUi,
+  type TimerTemplate,
 } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
@@ -842,6 +854,281 @@ export class FakePrisma {
   }
 }
 
+export interface FakeBaseConfigRow {
+  id: string;
+  examStageId: string;
+  name: string;
+  isDefault: boolean;
+  clonedFromId: string | null;
+  version: number;
+  isActive: boolean;
+  locked: boolean;
+  totalQuestions: number;
+  totalMarks: number;
+  durationSec: number;
+  timerTemplate: TimerTemplate;
+  navigation: NavigationPolicy;
+  optionalSectionCount: number | null;
+  defaultTestUi: TestUi;
+  languageMode: LanguageMode;
+  languages: LanguageCode[];
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  calculatorEnabled: boolean;
+  scoringVersion: number;
+  createdById: string | null;
+  createdAt: Date;
+  _count: { tests: number };
+}
+
+export interface FakeSectionRow {
+  id: string;
+  baseConfigId: string;
+  moduleId: string | null;
+  name: string;
+  order: number;
+  subjectId: string | null;
+  questionCount: number;
+  marksPerQuestion: number;
+  negativeMarks: number;
+  durationSec: number | null;
+  perQuestionSec: number | null;
+  mandatory: boolean;
+  meritOrQualifying: MeritType;
+  qualifyingCutoff: number | null;
+}
+
+export interface FakeModuleRow {
+  id: string;
+  baseConfigId: string;
+  name: string;
+  order: number;
+  durationSec: number | null;
+}
+
+export function makeBaseConfig(overrides: Partial<FakeBaseConfigRow> = {}): FakeBaseConfigRow {
+  return {
+    id: 'cfg_1',
+    examStageId: 'stage_1',
+    name: 'SSC CGL Tier 1 — official pattern',
+    isDefault: true,
+    clonedFromId: null,
+    version: 1,
+    isActive: true,
+    locked: false,
+    totalQuestions: 100,
+    totalMarks: 200,
+    durationSec: 3600,
+    timerTemplate: TIMER_TEMPLATE.COMPOSITE_FREE,
+    navigation: NAVIGATION_POLICY.FREE,
+    optionalSectionCount: null,
+    defaultTestUi: TEST_UI.CBT,
+    languageMode: LANGUAGE_MODE.SINGLE,
+    languages: [LANGUAGE_CODE.EN],
+    shuffleQuestions: true,
+    shuffleOptions: true,
+    calculatorEnabled: false,
+    scoringVersion: 1,
+    createdById: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+    _count: { tests: overrides._count?.tests ?? 0 },
+  };
+}
+
+export function makeSection(overrides: Partial<FakeSectionRow> = {}): FakeSectionRow {
+  return {
+    id: 'sec_1',
+    baseConfigId: 'cfg_1',
+    moduleId: null,
+    name: 'General Intelligence',
+    order: 1,
+    subjectId: null,
+    questionCount: 25,
+    marksPerQuestion: 2,
+    negativeMarks: 0.5,
+    durationSec: null,
+    perQuestionSec: null,
+    mandatory: true,
+    meritOrQualifying: MERIT_TYPE.MERIT,
+    qualifyingCutoff: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Enough Prisma for `BaseConfigsService`. The lock is the database's own trigger in production;
+ * here the service refuses first, which is exactly what these tests are about.
+ */
+export class FakeConfigPrisma {
+  private seq = 0;
+
+  constructor(
+    readonly configs: FakeBaseConfigRow[] = [],
+    readonly sections: FakeSectionRow[] = [],
+    readonly modules: FakeModuleRow[] = [],
+    readonly stages: FakeExamStage[] = [makeExamStage()],
+    readonly exams: FakeExam[] = [makeExam()],
+  ) {}
+
+  /** `_new_`, so a written row can never collide with a seeded `cfg_1` and read as it. */
+  private id(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}_new_${this.seq}`;
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  /** Both forms: the list reads through an array, every write through a callback. */
+  $transaction<T>(work: Promise<T>[] | ((tx: FakeConfigPrisma) => Promise<T>)): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
+  }
+
+  readonly examStage = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const stage = this.stages.find((candidate) => candidate.id === where.id);
+      return Promise.resolve(stage ? { ...stage } : null);
+    },
+  };
+
+  readonly baseConfig = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.configs.find((config) => config.id === where.id);
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: {
+      where?: { examStageId?: string; isDefault?: boolean };
+      skip?: number;
+      take?: number;
+    } = {}) => {
+      const matched = this.configs.filter(
+        (config) =>
+          (where.examStageId === undefined || config.examStageId === where.examStageId) &&
+          (where.isDefault === undefined || config.isDefault === where.isDefault),
+      );
+      return Promise.resolve(
+        matched
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((config) => this.hydrate(config)),
+      );
+    },
+
+    count: () => Promise.resolve(this.configs.length),
+
+    create: ({ data }: { data: Partial<FakeBaseConfigRow> & { examStageId: string } }) => {
+      const created = makeBaseConfig({
+        ...data,
+        id: this.id('cfg'),
+        isDefault: data.isDefault ?? false,
+      });
+      this.configs.push(created);
+      return Promise.resolve(this.hydrate(created));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const config = this.configs.find((candidate) => candidate.id === where.id);
+      if (!config) throw new Error(`no config ${where.id}`);
+      Object.assign(config, data);
+      return Promise.resolve(this.hydrate(config));
+    },
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { examStageId: string; isDefault: boolean; id?: { not: string } };
+      data: { isDefault: boolean };
+    }) => {
+      const matched = this.configs.filter(
+        (config) =>
+          config.examStageId === where.examStageId &&
+          config.isDefault === where.isDefault &&
+          (where.id?.not === undefined || config.id !== where.id.not),
+      );
+      for (const config of matched) config.isDefault = data.isDefault;
+      return Promise.resolve({ count: matched.length });
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.configs.findIndex((config) => config.id === where.id);
+      const [removed] = this.configs.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  readonly baseConfigSection = {
+    create: ({ data }: { data: Partial<FakeSectionRow> & { baseConfigId: string } }) => {
+      const created = makeSection({ ...data, id: this.id('sec') });
+      this.sections.push(created);
+      return Promise.resolve(created);
+    },
+
+    deleteMany: ({ where }: { where: { baseConfigId: string } }) => {
+      const kept = this.sections.filter((row) => row.baseConfigId !== where.baseConfigId);
+      const removed = this.sections.length - kept.length;
+      this.sections.length = 0;
+      this.sections.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+  };
+
+  readonly baseConfigModule = {
+    create: ({
+      data,
+    }: {
+      data: Partial<FakeModuleRow> & { baseConfigId: string; name: string };
+    }) => {
+      const created: FakeModuleRow = {
+        id: this.id('mod'),
+        baseConfigId: data.baseConfigId,
+        name: data.name,
+        order: data.order ?? 0,
+        durationSec: data.durationSec ?? null,
+      };
+      this.modules.push(created);
+      return Promise.resolve(created);
+    },
+
+    deleteMany: ({ where }: { where: { baseConfigId: string } }) => {
+      const kept = this.modules.filter((row) => row.baseConfigId !== where.baseConfigId);
+      const removed = this.modules.length - kept.length;
+      this.modules.length = 0;
+      this.modules.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+  };
+
+  /** A copy, with the stage and children the service's `include` asks for. */
+  private hydrate(row: FakeBaseConfigRow) {
+    const stage = this.stages.find((candidate) => candidate.id === row.examStageId);
+    const exam = this.exams.find((candidate) => candidate.id === stage?.examId);
+    return {
+      ...row,
+      examStage: {
+        id: stage?.id ?? row.examStageId,
+        stageKey: stage?.stageKey ?? '',
+        name: stage?.name ?? '',
+        exam: exam
+          ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
+          : { id: '', code: '', name: '', family: EXAM_FAMILY.SSC },
+      },
+      sections: this.sections
+        .filter((section) => section.baseConfigId === row.id)
+        .sort((a, b) => a.order - b.order),
+      modules: this.modules
+        .filter((module) => module.baseConfigId === row.id)
+        .sort((a, b) => a.order - b.order),
+    };
+  }
+}
+
 export interface FakeBranch {
   id: string;
   name: string;
@@ -996,8 +1283,16 @@ interface FakeAdminRow {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
+  allBranches: boolean;
   createdById: string | null;
   createdAt: Date;
+  branches: { branchId: string }[];
+}
+
+/** The nested write the service uses to replace an admin's branch set wholesale. */
+interface BranchWrite {
+  deleteMany?: Record<string, never>;
+  create?: { branchId: string }[];
 }
 
 /** Enough Prisma for AdminsService to run unchanged, with no database. */
@@ -1005,7 +1300,15 @@ export class FakeAdminsPrisma {
   private seq = 0;
   readonly grants: FakeGrantRow[] = [];
 
-  constructor(readonly admins: FakeAdminRow[] = []) {}
+  constructor(
+    readonly admins: FakeAdminRow[] = [],
+    readonly branches: FakeBranch[] = [],
+  ) {}
+
+  readonly branch = {
+    count: ({ where }: { where: { id: { in: string[] } } }) =>
+      Promise.resolve(this.branches.filter((row) => where.id.in.includes(row.id)).length),
+  };
 
   private id(prefix: string): string {
     this.seq += 1;
@@ -1036,24 +1339,39 @@ export class FakeAdminsPrisma {
 
     count: () => Promise.resolve(this.admins.length),
 
-    create: ({ data }: { data: Partial<FakeAdminRow> & { email: string } }) => {
+    create: ({
+      data,
+    }: {
+      data: Partial<FakeAdminRow> & { email: string; branches?: BranchWrite };
+    }) => {
       const row: FakeAdminRow = {
         id: this.id('adm'),
         email: data.email,
         fullName: data.fullName ?? null,
         isSuperAdmin: data.isSuperAdmin ?? false,
         isActive: true,
+        allBranches: data.allBranches ?? false,
         createdById: data.createdById ?? null,
         createdAt: new Date(),
+        branches: data.branches?.create ?? [],
       };
       this.admins.push(row);
       return Promise.resolve(row);
     },
 
-    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAdminRow> }) => {
+    update: ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Partial<FakeAdminRow> & { branches?: BranchWrite };
+    }) => {
       const row = this.admins.find((a) => a.id === where.id);
       if (!row) throw new Error(`no admin ${where.id}`);
-      Object.assign(row, data);
+      const { branches, ...scalars } = data;
+      Object.assign(row, scalars);
+      // `deleteMany` then `create` is a replacement, which is what the service means by it.
+      if (branches) row.branches = branches.create ?? [];
       return Promise.resolve(row);
     },
   };
@@ -1115,8 +1433,10 @@ export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRo
     fullName: 'An Admin',
     isSuperAdmin: false,
     isActive: true,
+    allBranches: false,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    branches: [],
     ...overrides,
   };
 }
