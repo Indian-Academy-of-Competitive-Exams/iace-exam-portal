@@ -11,18 +11,12 @@ import { BRANCH_TYPE, GROUP_TYPE } from '@iace/contracts';
  * the UI, on purpose, so a migration is the only path left.
  */
 const PRISMA_DIR = join(__dirname, '../../../prisma');
-const SCHEMA = readFileSync(join(PRISMA_DIR, 'schema.prisma'), 'utf8');
 const MIGRATION = readFileSync(
   join(PRISMA_DIR, 'migrations/20260818120000_group_state_and_singletons/migration.sql'),
   'utf8',
 );
 
 describe('Group.isActive', () => {
-  it('is declared on the model with a default, so every existing group stays active', () => {
-    const model = /model Group \{([\s\S]*?)\n\}/.exec(SCHEMA)?.[1] ?? '';
-    assert.match(model, /isActive\s+Boolean\s+@default\(true\)/);
-  });
-
   it('is added by the migration, so the schema and the database agree', () => {
     assert.match(
       MIGRATION,

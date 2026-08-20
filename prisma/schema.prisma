@@ -1,60 +1,9 @@
 // ============================================================================
-// IACE Platform — V1 Mock-Test Feature — Prisma schema (PostgreSQL) — v2
+// IACE Platform — V1 data model (PostgreSQL).
 //
-// Rework notes (what changed and why):
-// - Student and Admin are now SEPARATE tables (different identity, login, rules).
-// - NO OTP or Device table — OTP, sessions, and device binding all live in Redis.
-// - StudentProfile (1:1) holds extended personal data; Student.profileCompleted
-//   is gated on photo + DOB + gender + Aadhaar + PAN.
-// - Permissions = Feature (one row per product sector, keyed by FEATURE_KEYS)
-//   + FeaturePermission (one row per feature+level, holding a denormalized
-//   adminIds array). Replaced the old Page table and the Admin ⇄ Page M:N.
-//   Super admins bypass feature checks in app logic.
-// - Many-to-many junctions (Branch⇄Group, Test⇄TestSeries, Group⇄TestSeries) are
-//   IMPLICIT — Prisma manages the hidden join tables, so they are not models
-//   here. Student⇄Group is NOT one of them: a student reaches a group through
-//   `enrolledExams` or `directGroupIds`, and there is no membership row.
-// - Question text/options are stored as localized JSON (row-per-language tables
-//   removed); option identity stays relational (stable id + isCorrect) so the
-//   answer key survives shuffling and AttemptAnswer can FK the chosen option.
-// - No media table: images live as S3 URLs inline in the localized JSON
-//   (Question.content / QuestionOption.text), next to $LaTeX$ equations.
-// - Result merged into Attempt (scored fields fill in on evaluation).
-//   totalCandidates removed — "rank out of N" is derived live from Redis.
-// - TestShareLink removed — the share link is a slug on Test, generated in UI.
-// - Marks use Decimal(6,2) for exact 0.25 / 0.33 / 0.50.
-// - "createdById" audit fields are plain Admin ids (no FK) to avoid clutter.
-//
-// ---------------------------------------------------------------------------
-// Conventions every model follows (docs/03 §9)
-//
-// TIMESTAMPS — every table has `createdAt @default(now())` and
-// `updatedAt @default(now()) @updatedAt`. The DB-level default on `updatedAt`
-// is not decoration: without it, adding the column to a table that already has
-// rows is an ALTER Postgres refuses, and Prisma writes the value on every
-// update anyway, so the default only ever covers a row inserted by something
-// that is not Prisma.
-//
-// SOFT DELETE — `deletedAt DateTime?` on records that must be recoverable or
-// auditable: Student, Admin, Question, Test, Group, Branch, Subject, Topic,
-// SubTopic, Notification. Deliberately NOT on the rest:
-//   - StudentProfile, QuestionOption, TestSection, BaseConfigSection,
-//     PaperQuestion — parts of a parent, and they die with it (cascade). A
-//     soft-deleted option would still be in the answer key.
-//   - Attempt, AttemptAnswer — never deleted at all. An attempt is the record
-//     of a test somebody sat; the highest-volume table in the system does not
-//     need a column that is always null.
-//   - ExamType, BaseConfig, TestSeries — retired by a flag or by cloning
-//     (`isActive`, `locked`), which is the existing, more informative answer.
-//
-// `Admin` deliberately has none — see the note on that model.
-// NOTHING READS `deletedAt` YET on the models that have it. The column is here so the decision is made
-// once, per model, before there is data to migrate — every query still sees
-// every row. When soft delete IS implemented, note that a deleted row still
-// occupies its unique slot: Student.mobile, Branch.name, SubTopic.name and
-// Group[examType, name] would all refuse a replacement with the same name
-// until the deleted one is purged.
-// ---------------------------------------------------------------------------
+// Target of record: docs/schema-target.dbml. What Prisma cannot express —
+// partial-unique indexes, CHECK constraints, the locked-config immutability
+// trigger and the outbox poll index — is hand-written in the migration.
 // ============================================================================
 
 datasource db {
@@ -82,9 +31,22 @@ enum DifficultyLevel {
   HIGH
 }
 
+enum SupportedLanguage {
+  EN
+  HI
+  TE
+}
+
 enum QuestionType {
-  SINGLE_MCQ // V1. Extensible later.
-  TEXT_FIELD // a typed answer, compared against answerKey rather than chosen
+  SINGLE_MCQ
+  TEXT_FIELD
+}
+
+// How a TEXT_FIELD answerKey is matched. Lives inside QuestionVersion.answerKey
+// JSON, never as a column.
+enum AnswerMode {
+  NUMERIC
+  TEXT
 }
 
 enum QuestionStatus {
@@ -94,13 +56,57 @@ enum QuestionStatus {
 }
 
 enum TestUi {
-  CBT // standard government CBT interface (primary V1 build)
-  GENERIC // lighter test screen (only if time permits)
+  CBT
+  OMR
+  GENERIC
+  TYPING
+}
+
+enum NavigationPolicy {
+  FREE
+  FORWARD_ONLY
 }
 
 enum LanguageMode {
-  SINGLE // student picks one language (optional per-question toggle)
-  DUAL // show two languages together (e.g. English + Hindi), stem + options
+  SINGLE
+  DUAL
+}
+
+// Section-return behaviour derives from this: COMPOSITE_FREE may return,
+// SECTIONAL_LOCKED / SESSION_MODULE_LOCKED may not, PER_ITEM_TIMED is forward-only.
+enum TimerTemplate {
+  COMPOSITE_FREE
+  SECTIONAL_LOCKED
+  SESSION_MODULE_LOCKED
+  PER_ITEM_TIMED
+}
+
+enum ExamFamily {
+  SSC
+  RRB
+  BANKING
+  AP_TS_POLICE
+}
+
+enum ExamMode {
+  CBT
+  OMR
+  PSYCHOMETRIC
+  SKILL
+  PHYSICAL
+  INTERVIEW
+  DESCRIPTIVE
+}
+
+enum MeritType {
+  MERIT
+  QUALIFYING
+}
+
+enum StageDisposition {
+  CONDUCTED
+  PARTIAL
+  CATALOG_ONLY
 }
 
 enum TestStatus {
@@ -109,10 +115,34 @@ enum TestStatus {
   INACTIVE
 }
 
+enum TestScope {
+  FULL
+  MODULE
+  SECTIONAL
+  TOPIC
+}
+
+enum EvaluationMode {
+  RANKED
+  PRACTICE
+}
+
+enum PaperBinding {
+  FIXED
+  GENERATED
+}
+
+enum DrawStrategy {
+  RANDOM
+  NEWEST_FIRST
+  LEAST_SERVED
+  UNSEEN_FIRST
+}
+
 enum PaperQuestionStatus {
   ACTIVE
-  DROPPED // excluded from scoring
-  BONUS // awarded to everyone
+  DROPPED
+  BONUS
 }
 
 enum AttemptStatus {
@@ -133,24 +163,15 @@ enum AnswerState {
 enum NotificationType {
   TEST_ASSIGNED
   RESULT_READY
+  ENROLLMENT_ADDED
+  GRANT_ADDED
+  SERIES_UNLOCKED
   GENERIC
 }
-
-// The enums below mirror the const objects in @iace/contracts EXACTLY — the
-// guard, the importer and the UI compare the same strings, so a divergence here
-// is a silent refusal. prisma-enums.unit.test.ts holds the two sides together.
 
 enum StudentType {
   ONLINE
   OFFLINE
-  NON_IACE
-}
-
-enum GroupType {
-  GLOBAL
-  EXAM
-  PROGRAM
-  SCHOLARSHIP
   NON_IACE
 }
 
@@ -166,6 +187,33 @@ enum ImportSource {
   SELF_SIGNUP
 }
 
+enum UnlockMode {
+  AUTO
+  REQUEST
+  ADMIN
+}
+
+// Derived from StudentSeriesUnlock presence; mirrored in @iace/contracts for the
+// student-facing catalog.
+enum UnlockState {
+  LOCKED
+  UNLOCKED
+}
+
+enum UnlockRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// WRITE covers create + update + delete, and implies READ.
+enum PermissionLevel {
+  READ
+  WRITE
+}
+
+// Aligned with AUDIT_FEATURE in @iace/contracts; both sides move to the target
+// values (TEST_SERIES / BASE_CONFIG / EXAM_TAXONOMY) together in T9.
 enum AuditFeature {
   STUDENT
   STUDENT_PROFILE
@@ -192,9 +240,7 @@ enum AuditAction {
   IMPORT
 }
 
-// Wider than ActorTypes in @iace/contracts, which decides which table a token's
-// identity lives in: nothing signs in as SCRIPT or SYSTEM.
-enum AuditActorType {
+enum ActorType {
   ADMIN
   STUDENT
   SCRIPT
@@ -202,587 +248,623 @@ enum AuditActorType {
 }
 
 // ============================================================================
-// People — Student and Admin are separate
+// Exam taxonomy — ExamFamily (enum) → Exam → ExamStage
 // ============================================================================
 
-// Signup: MOBILE + OTP (verifies the number). Every later login: a 4-digit PIN
-// (pinHash). OTP also resets a forgotten PIN. OTP + sessions + device binding all
-// live in Redis. Rate-limit / lock PIN attempts in Redis.
+model Exam {
+  id          String     @id @default(cuid())
+  family      ExamFamily
+  // Student.enrolledExams holds these codes, so a code is never re-used.
+  code        String     @unique
+  name        String
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+
+  stages ExamStage[]
+
+  @@index([family])
+}
+
+// The Stage/Paper level — what carries a base config, a series and a test.
+model ExamStage {
+  id          String           @id @default(cuid())
+  examId      String
+  stageKey    String           @unique
+  name        String
+  order       Int              @default(0)
+  mode        ExamMode         @default(CBT)
+  disposition StageDisposition @default(CONDUCTED)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+
+  exam        Exam         @relation(fields: [examId], references: [id])
+  baseConfigs BaseConfig[]
+  tests       Test[]
+  series      TestSeries[]
+
+  @@index([examId])
+  @@index([examId, order])
+  @@index([disposition])
+}
+
+// ============================================================================
+// Base configs — a stage's reusable blueprint. One isDefault per stage (the
+// seeded official pattern) plus any number of custom ones. A Test inherits from
+// a config rather than copying it; the config locks at first finalize.
+// ============================================================================
+
+model BaseConfig {
+  id                   String              @id @default(cuid())
+  examStageId          String
+  name                 String
+  isDefault            Boolean             @default(false)
+  clonedFromId         String?
+  version              Int                 @default(1)
+  isActive             Boolean             @default(true)
+  locked               Boolean             @default(false)
+  totalQuestions       Int
+  totalMarks           Decimal             @db.Decimal(8, 2)
+  durationSec          Int
+  timerTemplate        TimerTemplate       @default(COMPOSITE_FREE)
+  navigation           NavigationPolicy    @default(FREE)
+  optionalSectionCount Int?
+  defaultTestUi        TestUi              @default(CBT)
+  languageMode         LanguageMode        @default(SINGLE)
+  // Ordered; DUAL renders all of them.
+  languages            SupportedLanguage[]
+  shuffleQuestions     Boolean             @default(true)
+  shuffleOptions       Boolean             @default(true)
+  calculatorEnabled    Boolean             @default(false)
+  featureFlags         Json?
+  // Which scoring algorithm produced a result — bump to reproduce history exactly.
+  scoringVersion       Int                 @default(1)
+  createdById          String?
+  createdAt            DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+
+  examStage  ExamStage           @relation(fields: [examStageId], references: [id])
+  clonedFrom BaseConfig?         @relation("BaseConfigLineage", fields: [clonedFromId], references: [id], onDelete: Restrict)
+  clones     BaseConfig[]        @relation("BaseConfigLineage")
+  modules    BaseConfigModule[]
+  sections   BaseConfigSection[]
+  tests      Test[]
+
+  @@unique([id, examStageId])
+  @@index([examStageId])
+  @@index([clonedFromId])
+  @@index([isDefault])
+}
+
+// Session/module layer above sections. The table and the config seam ship in V1;
+// the SESSION_MODULE_LOCKED runtime engine is the deferred part.
+model BaseConfigModule {
+  id           String @id @default(cuid())
+  baseConfigId String
+  name         String
+  order        Int
+  durationSec  Int?
+
+  baseConfig BaseConfig          @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
+  sections   BaseConfigSection[]
+
+  @@unique([baseConfigId, order])
+  @@unique([baseConfigId, id])
+}
+
+model BaseConfigSection {
+  id                String    @id @default(cuid())
+  baseConfigId      String
+  moduleId          String?
+  name              String
+  order             Int
+  subjectId         String?
+  questionCount     Int
+  marksPerQuestion  Decimal   @db.Decimal(6, 2)
+  negativeMarks     Decimal   @db.Decimal(6, 2)
+  durationSec       Int?
+  perQuestionSec    Int?
+  mandatory         Boolean   @default(true)
+  meritOrQualifying MeritType @default(MERIT)
+  qualifyingCutoff  Decimal?  @db.Decimal(6, 2)
+  difficultyMix     Json?
+
+  baseConfig     BaseConfig        @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
+  module         BaseConfigModule? @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
+  subject        Subject?          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  paperQuestions PaperQuestion[]
+  attemptItems   AttemptQuestion[]
+  sectionStats   TestSectionStat[]
+
+  @@unique([baseConfigId, moduleId, order])
+  @@unique([baseConfigId, id])
+  @@index([subjectId])
+  @@index([moduleId])
+}
+
+// ============================================================================
+// Question bank — Subject → Topic → Question → QuestionVersion.
+// Question is stable identity; every edit inserts a new immutable version.
+// ============================================================================
+
+model Subject {
+  id   String  @id @default(cuid())
+  name String  @unique
+  code String? @unique
+
+  topics       Topic[]
+  questions    Question[]
+  sections     BaseConfigSection[]
+  subjectStats StudentSubjectStat[]
+}
+
+model Topic {
+  id        String @id @default(cuid())
+  subjectId String
+  name      String
+
+  subject   Subject    @relation(fields: [subjectId], references: [id])
+  questions Question[]
+
+  @@unique([subjectId, name])
+}
+
+model Question {
+  id               String          @id @default(cuid())
+  questionCode     String?         @unique
+  type             QuestionType    @default(SINGLE_MCQ)
+  subjectId        String
+  topicId          String?
+  difficulty       DifficultyLevel
+  status           QuestionStatus  @default(ACTIVE)
+  currentVersionId String?
+  // Namespaced `key:value` convention — paper:, set:, pyq:, src:, topic:.
+  tags             String[]
+  stemHash         String?
+  // Times used in a FIXED paper; incremented atomically at finalize.
+  fixedUseCount    Int             @default(0)
+  createdById      String?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  subject        Subject            @relation(fields: [subjectId], references: [id])
+  topic          Topic?             @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  currentVersion QuestionVersion?   @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
+  versions       QuestionVersion[]  @relation("QuestionVersions")
+  paperQuestions PaperQuestion[]
+  attemptItems   AttemptQuestion[]
+  questionStats  TestQuestionStat[]
+
+  @@index([subjectId, difficulty, status])
+  @@index([topicId])
+  @@index([stemHash])
+  @@index([fixedUseCount])
+  @@index([tags], type: Gin)
+}
+
+// Immutable: an edit inserts a new row and repoints Question.currentVersionId.
+// Options live in `options` so one read is the whole question on the exam path.
+model QuestionVersion {
+  id          String   @id @default(cuid())
+  questionId  String
+  version     Int
+  content     Json
+  options     Json?
+  answerKey   Json?
+  createdById String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  question       Question          @relation("QuestionVersions", fields: [questionId], references: [id])
+  currentOf      Question[]        @relation("QuestionCurrentVersion")
+  paperQuestions PaperQuestion[]
+  attemptItems   AttemptQuestion[]
+
+  @@unique([questionId, version])
+  @@unique([questionId, id])
+}
+
+// ============================================================================
+// Tests & papers — a Test inherits shape from its BaseConfig and adds only
+// scope, evaluation mode and how the paper is drawn.
+// ============================================================================
+
+model Test {
+  id                 String         @id @default(cuid())
+  title              String?
+  baseConfigId       String
+  // Denormalised from BaseConfig so the composite FK below is always enforced.
+  examStageId        String
+  scope              TestScope      @default(FULL)
+  scopeRef           Json?
+  evaluationMode     EvaluationMode @default(RANKED)
+  paperBinding       PaperBinding   @default(FIXED)
+  maxRetakes         Int?
+  questionPoolFilter Json?
+  drawStrategy       DrawStrategy   @default(RANDOM)
+  status             TestStatus     @default(DRAFT)
+  isLocked           Boolean        @default(false)
+  // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
+  version            Int            @default(0)
+  finalizedAt        DateTime?      @db.Timestamptz(3)
+  createdById        String?
+  createdAt          DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  baseConfig     BaseConfig         @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage      ExamStage          @relation(fields: [examStageId], references: [id])
+  paperQuestions PaperQuestion[]
+  attempts       Attempt[]
+  series         TestSeriesTest[]
+  notifications  Notification[]
+  stat           TestStat?
+  sectionStats   TestSectionStat[]
+  questionStats  TestQuestionStat[]
+
+  @@unique([id, baseConfigId])
+  @@index([baseConfigId])
+  @@index([examStageId])
+  @@index([status])
+}
+
+// FIXED papers only: drawn once at finalize, frozen, shared by every student.
+model PaperQuestion {
+  id                  String              @id @default(cuid())
+  testId              String
+  baseConfigId        String
+  baseConfigSectionId String
+  questionId          String
+  questionVersionId   String
+  order               Int
+  marks               Decimal             @db.Decimal(6, 2)
+  negativeMarks       Decimal             @db.Decimal(6, 2)
+  status              PaperQuestionStatus @default(ACTIVE)
+
+  test              Test               @relation(fields: [testId, baseConfigId], references: [id, baseConfigId], onDelete: Cascade, onUpdate: NoAction)
+  baseConfigSection BaseConfigSection  @relation(fields: [baseConfigId, baseConfigSectionId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
+  question          Question           @relation(fields: [questionId], references: [id])
+  questionVersion   QuestionVersion    @relation(fields: [questionId, questionVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
+  attemptItems      AttemptQuestion[]  @relation("AttemptItemPaper")
+  attemptSections   AttemptQuestion[]  @relation("AttemptItemPaperSection")
+  questionStats     TestQuestionStat[]
+
+  @@unique([testId, questionId])
+  @@unique([testId, order])
+  @@unique([id, questionId, questionVersionId])
+  @@unique([id, baseConfigSectionId])
+  @@index([questionId])
+  @@index([questionVersionId])
+  @@index([baseConfigId, baseConfigSectionId])
+}
+
+// ============================================================================
+// Attempts — live state and scored result in one table.
+// ============================================================================
+
+model Attempt {
+  id               String              @id @default(cuid())
+  testId           String
+  studentId        String
+  attemptNo        Int                 @default(1)
+  // True only for the single ranked attempt; the cohort rollup fires on it alone.
+  isGraded         Boolean             @default(true)
+  status           AttemptStatus       @default(IN_PROGRESS)
+  startedAt        DateTime            @default(now()) @db.Timestamptz(3)
+  // Server-authoritative deadline; the client clock only counts down to it.
+  endsAt           DateTime            @db.Timestamptz(3)
+  submittedAt      DateTime?           @db.Timestamptz(3)
+  evaluatedAt      DateTime?           @db.Timestamptz(3)
+  shuffleSeed      Int
+  languages        SupportedLanguage[]
+  sectionState     Json?
+  score            Decimal?            @db.Decimal(8, 2)
+  correctCount     Int?
+  wrongCount       Int?
+  unattemptedCount Int?
+  sectionScores    Json?
+  // Snapshots. The live rank and percentile are always read from Redis.
+  lastRank         Int?
+  lastPercentile   Decimal?            @db.Decimal(5, 2)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+
+  test             Test              @relation(fields: [testId], references: [id])
+  student          Student           @relation(fields: [studentId], references: [id])
+  questions        AttemptQuestion[]
+  processedRollups ProcessedRollup[]
+  topperOf         TestStat[]
+
+  @@unique([testId, studentId, attemptNo])
+  @@index([studentId, createdAt])
+  @@index([testId, status])
+  @@index([testId, score])
+}
+
+// One row per question served in an attempt, plus the student's response.
+// paperQuestionId null ⇔ GENERATED, not null ⇔ FIXED. The durable row is an
+// idempotent UPSERT flushed by a single writer; Redis holds the live state.
+model AttemptQuestion {
+  attemptId           String
+  questionId          String
+  paperQuestionId     String?
+  questionVersionId   String
+  baseConfigSectionId String
+  order               Int
+  // An option id inside QuestionVersion.options — app-validated, not a DB FK.
+  selectedOptionId    String?
+  typedAnswer         String?
+  state               AnswerState @default(NOT_VISITED)
+  timeSpentSec        Int         @default(0)
+  isCorrect           Boolean?
+  marksAwarded        Decimal?    @db.Decimal(6, 2)
+  answeredAt          DateTime?   @db.Timestamptz(3)
+
+  attempt           Attempt           @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question          Question          @relation(fields: [questionId], references: [id])
+  questionVersion   QuestionVersion   @relation(fields: [questionId, questionVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
+  paperItem         PaperQuestion?    @relation("AttemptItemPaper", fields: [paperQuestionId, questionId, questionVersionId], references: [id, questionId, questionVersionId], onDelete: Restrict, onUpdate: NoAction)
+  paperSection      PaperQuestion?    @relation("AttemptItemPaperSection", fields: [paperQuestionId, baseConfigSectionId], references: [id, baseConfigSectionId], onDelete: Restrict, onUpdate: NoAction)
+  baseConfigSection BaseConfigSection @relation(fields: [baseConfigSectionId], references: [id])
+
+  @@id([attemptId, questionId])
+  @@index([questionId])
+  @@index([paperQuestionId])
+  @@index([baseConfigSectionId])
+  @@index([attemptId, order])
+}
+
+// ============================================================================
+// People — Student and Admin are separate identities with separate logins.
+// ============================================================================
+
+// Login is allowed while isActive and deletedAt is null; isTestBlocked gates
+// starting an attempt only. mobile / externalRef carry a partial unique index
+// (WHERE deletedAt IS NULL) written in the migration, so a soft-deleted row
+// releases its number.
 model Student {
-  id                String       @id @default(cuid())
-  mobile            String       @unique // only mandatory field
-  // The id this student carries in the main portal. Unique, so a re-sync of the
-  // same roster reconciles onto the row it made last time instead of doubling it.
-  externalRef       String?      @unique
+  id                String            @id @default(cuid())
+  mobile            String
+  externalRef       String?
   studentType       StudentType
-  // ExamType codes, not ids: the WHAT a student is here for. An EXAM/PROGRAM
-  // group is reached by matching this, so no membership row exists for it.
-  enrolledExams     String[]     @default([])
-  program           String?
-  // 4-digit login PIN, argon2id-hashed with a server-side pepper. NOT unique:
-  // it is only ever checked against the one student a mobile number resolves to,
-  // so two students sharing a PIN is unremarkable and invisible to both.
-  pinHash           String?
-  // True while the PIN is one the INSTITUTE set, not one the student chose —
-  // bulk imports seed the first four digits of the mobile number so a roster
-  // can sign in on day one. It is guessable by anyone who knows the number, so
-  // it is tracked rather than forgotten: "has signed in" means a PIN of their
-  // own, and the student is prompted to replace this one.
-  pinIsDefault      Boolean      @default(false)
-  fullName          String?
-  preferredLanguage String       @default("en")
-  // preTestReady: minimal details present (mother's name + father's name + DOB) —
-  // the light gate asked before starting a test. profileCompleted: the FULL
-  // profile (photo, gender, Aadhaar, PAN, address, education…) — optional, only
-  // drives a gentle "complete your profile" prompt, never blocks.
-  preTestReady      Boolean      @default(false)
-  profileCompleted  Boolean      @default(false)
-  // The groups granted to this student ALONE — scholarship and non-IACE. Not
-  // FK-enforced, so deleting a group prunes the id from every student holding it.
-  directGroupIds    String[]     @default([])
-  // The branch they started at, and the one they attend now: access and
-  // scheduling read `currentBranchId`, `baseBranchId` is history.
-  baseBranchId      String?
+  enrolledFamilies  ExamFamily[]
+  // Program.code values — the student is a candidate for these.
+  programs          String[]
+  // Exam.code values, app-validated against Exam.
+  enrolledExams     String[]
   currentBranchId   String?
-  // Three separate states, deliberately. `isActive` false cannot sign in;
-  // `isTestBlocked` signs in and sees history but cannot start a test; `deletedAt` is gone.
-  isActive          Boolean      @default(true)
-  isTestBlocked     Boolean      @default(false)
-  createdVia        ImportSource @default(INDIVIDUAL)
-  createdById       String? // audit (Admin id); null for a self-signup or a script
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @default(now()) @updatedAt
-  deletedAt         DateTime? // soft delete — see the conventions note above
+  pinHash           String?
+  pinIsDefault      Boolean           @default(true)
+  fullName          String?
+  preferredLanguage SupportedLanguage @default(EN)
+  preTestReady      Boolean           @default(false)
+  profileCompleted  Boolean           @default(false)
+  isActive          Boolean           @default(true)
+  isTestBlocked     Boolean           @default(false)
+  deletedAt         DateTime?         @db.Timestamptz(3)
+  createdById       String?
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
 
-  profile       StudentProfile?
-  baseBranch    Branch?         @relation("StudentBaseBranch", fields: [baseBranchId], references: [id])
-  currentBranch Branch?         @relation("StudentCurrentBranch", fields: [currentBranchId], references: [id])
-  attempts      Attempt[]
-  notifications Notification[]
+  profile        StudentProfile?
+  currentBranch  Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  attempts       Attempt[]
+  grants         StudentGrant[]
+  unlocks        StudentSeriesUnlock[]
+  unlockRequests SeriesUnlockRequest[]
+  notifications  Notification[]
+  stat           StudentStat?
+  subjectStats   StudentSubjectStat[]
 
-  // GIN on both arrays: every access question is a contains ("students enrolled
-  // in this exam", "students granted this group"), which a btree cannot answer.
+  @@index([mobile])
+  @@index([externalRef])
+  @@index([enrolledFamilies], type: Gin)
   @@index([enrolledExams], type: Gin)
-  @@index([directGroupIds], type: Gin)
+  @@index([programs], type: Gin)
   @@index([currentBranchId])
 }
 
-// Admins log in with EMAIL + OTP (OTP handled in Redis). The FIRST super admin
-// is inserted by hand (see the README) — nothing in the codebase creates one.
-// After that, super admins create admins/super admins and grant feature access.
-// Super admins bypass feature checks in app logic.
-//
-// NO `deletedAt`, deliberately, and against the general policy in docs/03 §9.
-// An Admin row is never removed: `createdById` on everything they made points
-// at it, so the row has to survive regardless. `isActive` already carries the
-// only state that exists. Having both meant a second flag nothing wrote and
-// three auth paths read as "this row is gone" — set by hand it silently denied
-// sign-in to a real account, twice.
+// Aadhaar/PAN images are never stored here — only the verification status.
+// Writes to motherName/fatherName/dob must recompute Student.preTestReady.
+model StudentProfile {
+  id                String    @id @default(cuid())
+  studentId         String    @unique
+  motherName        String?
+  fatherName        String?
+  dob               DateTime? @db.Date
+  email             String?
+  address           String?
+  gender            Gender?
+  photoUrl          String?
+  aadhaarVerified   Boolean   @default(false)
+  panVerified       Boolean   @default(false)
+  tenthMarksheetUrl String?
+  educationDetails  Json?
+  pastExamHistory   Json?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// The first super admin is inserted by SQL — nothing in the codebase creates one.
+// No soft delete: createdById on everything they made points here.
 model Admin {
   id           String   @id @default(cuid())
   email        String   @unique
   fullName     String?
   isSuperAdmin Boolean  @default(false)
   isActive     Boolean  @default(true)
-  // The branches a branch-scoped admin may manage. EMPTY MEANS ALL, which is
-  // every admin today — nothing filters on it until the branch panel ships.
-  branchIds    String[] @default([])
-  createdById  String? // audit: Admin who created this admin
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
+  // Explicit, never inferred from having no AdminBranch rows.
+  allBranches  Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  branches    AdminBranch[]
+  permissions AdminFeaturePermission[]
 }
 
-// WRITE covers create + update + delete, and implies READ. Mirrors
-// PERMISSION_LEVELS in @iace/contracts EXACTLY — the guard, the UI and this
-// enum all compare the same strings, so a divergence here is a silent denial.
-enum PermissionLevel {
-  READ
-  WRITE
+model AdminBranch {
+  adminId  String
+  branchId String
+
+  admin  Admin  @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([adminId, branchId])
+  @@index([branchId])
 }
 
-// One row per sector of the product an admin can be granted. `key` is a value
-// from FEATURE_KEYS in @iace/contracts (SCREAMING_SNAKE_CASE).
-//
-// NOT seeded. A super admin registers each row from the Features screen, and a
-// key with no row grants nobody anything — the safe direction to fail.
-model Feature {
-  id          String   @id @default(cuid())
-  key         String   @unique
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+// One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is
+// app-validated — there is no Feature table and the UI never registers a key.
+model AdminFeaturePermission {
+  adminId    String
+  featureKey String
+  level      PermissionLevel
 
-  permissions FeaturePermission[]
-}
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
-// Who holds a given level on a given feature.
-//
-// `adminIds` is a DENORMALIZED grant list, deliberately: the question asked on
-// every single request is "which features does THIS admin hold", and a string[]
-// answers it in one indexed read instead of a join table lookup per request.
-// The cost is that it is not FK-enforced, which is why deactivating an admin
-// prunes their id from every row in the same transaction as the soft-delete —
-// otherwise a deactivated admin's grants linger and reappear if the id is ever
-// reused.
-//
-// Exactly two rows exist per feature (READ and WRITE), both created with the
-// feature itself, so a grant is always an array update and never an upsert.
-model FeaturePermission {
-  id        String          @id @default(cuid())
-  featureId String
-  level     PermissionLevel
-  adminIds  String[]        @default([])
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @default(now()) @updatedAt
-
-  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
-
-  @@unique([featureId, level])
-  // GIN, because every lookup is a contains: "rows whose adminIds holds X".
-  // A btree cannot answer that on an array.
-  @@index([adminIds], type: Gin)
-}
-
-// Extended personal data (1:1 with Student). The only PRE-TEST required fields
-// are motherName + fatherName + dob (drive Student.preTestReady). Everything
-// else — photo, gender, Aadhaar, PAN, address, education, past-exam history — is
-// optional, filled whenever the student wants (a gentle prompt, not a gate).
-// All uploaded documents are S3 URLs.
-model StudentProfile {
-  id               String    @id @default(cuid())
-  studentId        String    @unique
-  motherName       String? // pre-test minimal
-  fatherName       String? // pre-test minimal
-  dob              DateTime? @db.Date // pre-test minimal
-  email            String?
-  address          String?
-  gender           Gender?
-  photoUrl         String?
-  aadhaarUrl       String? // verification record
-  panUrl           String? // verification record
-  educationDetails Json? // [{ level, board, institution, year, percentage }]
-  pastExamHistory  Json? // self-reported external govt-exam attempts (not platform Attempts)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @default(now()) @updatedAt
-
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@id([adminId, featureKey, level])
+  @@index([featureKey])
 }
 
 // ============================================================================
-// Question bank
+// Access — branches, programs, series. A student reaches a series by exam
+// match, program match or an explicit grant, gated by BranchTestConfig.
 // ============================================================================
 
-model Subject {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  code      String?   @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  deletedAt DateTime? // soft delete — see the conventions note above
-
-  topics             Topic[]
-  questions          Question[]
-  baseConfigSections BaseConfigSection[]
-  testSections       TestSection[]
-}
-
-model Topic {
-  id        String    @id @default(cuid())
-  subjectId String
-  name      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  deletedAt DateTime? // soft delete — see the conventions note above
-
-  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  subTopics SubTopic[] // implicit M:N — a sub-topic is shared, not owned
-  questions Question[]
-
-  @@unique([subjectId, name])
-}
-
-// The third level of the taxonomy, and the only one that is SHARED.
-//
-// A sub-topic hangs off topics, never off a Subject: "PERCENTAGES" means
-// something under Arithmetic and nothing at all under Quantitative Aptitude as
-// a whole. But the same sub-topic recurs under several topics — percentages are
-// drilled under Arithmetic and again under Data Interpretation, in Quant and in
-// Banking alike — so it is its own row joined many-to-many, not a child owned
-// by one parent. It reaches a second SUBJECT only through a topic in that
-// subject; there is deliberately no Subject relation here to reach it any
-// other way.
-//
-// name is unique across the whole table, which is the point: a second
-// "PERCENTAGES" row would split the very per-sub-topic analytics the sharing
-// exists to join up. So the admin screen and the importer must MATCH an
-// existing sub-topic before creating one — the way the group importer resolves
-// a name rather than minting a duplicate.
-model SubTopic {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  deletedAt DateTime? // soft delete — see the conventions note above
-
-  topics    Topic[]
-  questions Question[]
-}
-
-// Localized content lives in JSON: content = { "en": { "stem": "...",
-// "solution": "..." }, "hi": { ... } }. English required (validated in app).
-// Each field is rich content and may hold text, inline $LaTeX$ equations,
-// and inline S3 image URLs (a question can be image-only).
-model Question {
-  id                   String          @id @default(cuid())
-  questionCode         String?         @unique
-  type                 QuestionType    @default(SINGLE_MCQ)
-  subjectId            String
-  topicId              String?
-  // Only meaningful together with topicId, and only when that sub-topic is
-  // linked to that topic. No FK can state that — the link lives in the
-  // many-to-many — so the service checks it on write. See SubTopic above.
-  subTopicId           String?
-  difficulty           DifficultyLevel
-  defaultMarks         Decimal?        @db.Decimal(6, 2)
-  defaultNegativeMarks Decimal?        @db.Decimal(6, 2)
-  status               QuestionStatus  @default(ACTIVE)
-  // Retired rather than removed: excluded from every future draw and hidden
-  // from the bank, while the papers that already hold it are untouched.
-  isActive             Boolean         @default(true)
-  content              Json // { "<lang>": { "stem": <rich>, "solution": <rich> } }
-  // TEXT_FIELD only: { mode, answers: { "<lang>": "..." }, tolerance }
-  answerKey            Json?
-  tags                 String[]        @default([])
-  // Where it came from: { kind: MANUAL | IMPORT, importLogId, line }
-  source               Json?
-  stemHash             String? // dedup detection
-  createdById          String? // audit (Admin id)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @default(now()) @updatedAt
-  deletedAt            DateTime? // soft delete — see the conventions note above
-
-  subject        Subject          @relation(fields: [subjectId], references: [id])
-  topic          Topic?           @relation(fields: [topicId], references: [id])
-  subTopic       SubTopic?        @relation(fields: [subTopicId], references: [id])
-  options        QuestionOption[]
-  paperQuestions PaperQuestion[]
-
-  @@index([subjectId, difficulty, status]) // auto-draw filter
-  @@index([isActive])
-  @@index([topicId])
-  @@index([subTopicId])
-  @@index([stemHash])
-}
-
-// Stable option identity; correctness keyed here (survives shuffle/edit).
-// text = { "en": <rich>, "hi": <rich> } — an option may be plain text, an
-// $LaTeX$ equation, an inline S3 image URL, or a mix (image-only options OK).
-model QuestionOption {
-  id         String   @id @default(cuid())
-  questionId String
-  position   Int // authored slot 1..n: import index + canonical order for deterministic shuffle
-  isCorrect  Boolean  @default(false)
-  text       Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
-
-  question Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  answers  AttemptAnswer[]
-
-  @@unique([questionId, position])
-}
-
-// ============================================================================
-// Exam types & reusable base configs
-// ============================================================================
-
-model ExamType {
-  id          String   @id @default(cuid())
-  /// UPPERCASE letters/digits, single-spaced — `Group.examType` and
-  /// `Student.enrolledExams` store this string, with no relation to follow.
-  code        String   @unique
-  name        String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-
-  baseConfigs BaseConfig[]
-  tests       Test[]
-}
-
-model BaseConfig {
-  id         String  @id @default(cuid())
-  examTypeId String
-  name       String
-  isActive   Boolean @default(true)
-  // Set true once ANY test created from this config has its first attempt.
-  // While locked, the config and its sections are read-only — to change it, the
-  // admin CLONES it into a new config. (Existing tests are snapshots, unaffected.)
-  locked     Boolean @default(false)
-
-  totalQuestions         Int
-  totalMarks             Decimal      @db.Decimal(8, 2)
-  durationSec            Int
-  sectionalTiming        Boolean      @default(false)
-  lockedSectionSwitching Boolean      @default(false)
-  optionalSectionCount   Int?
-  calculatorEnabled      Boolean      @default(false)
-  defaultTestUi          TestUi       @default(CBT)
-  languageMode           LanguageMode @default(SINGLE)
-  languages              String[]     @default(["en"]) // ordered; DUAL shows all of them
-  shuffleQuestions       Boolean      @default(true)
-  shuffleOptions         Boolean      @default(true)
-  marksPerQuestion       Decimal?     @db.Decimal(6, 2)
-  negativeMarks          Decimal?     @db.Decimal(6, 2)
-  defaultDifficultyMix   Json? // { "LOW": 30, "MEDIUM": 50, "HIGH": 20 }
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @default(now()) @updatedAt
-
-  examType ExamType            @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
-  sections BaseConfigSection[]
-  tests    Test[]
-
-  @@index([examTypeId])
-}
-
-model BaseConfigSection {
-  id               String   @id @default(cuid())
-  baseConfigId     String
-  name             String
-  order            Int
-  subjectId        String?
-  questionCount    Int
-  marksPerQuestion Decimal  @db.Decimal(6, 2)
-  negativeMarks    Decimal  @db.Decimal(6, 2)
-  durationSec      Int?
-  mandatory        Boolean  @default(true)
-  difficultyMix    Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now()) @updatedAt
-
-  baseConfig BaseConfig @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
-  subject    Subject?   @relation(fields: [subjectId], references: [id])
-
-  @@unique([baseConfigId, order])
-  @@index([subjectId])
-}
-
-// ============================================================================
-// Tests
-// ============================================================================
-
-model Test {
-  id           String  @id @default(cuid())
-  title        String
-  examTypeId   String?
-  baseConfigId String?
-
-  status TestStatus @default(DRAFT)
-  testUi TestUi     @default(CBT)
-
-  totalQuestions         Int
-  totalMarks             Decimal      @db.Decimal(8, 2)
-  durationSec            Int
-  sectionalTiming        Boolean      @default(false)
-  lockedSectionSwitching Boolean      @default(false)
-  optionalSectionCount   Int?
-  calculatorEnabled      Boolean      @default(false)
-  shuffleQuestions       Boolean      @default(true)
-  shuffleOptions         Boolean      @default(true)
-  languageMode           LanguageMode @default(SINGLE)
-  languages              String[]     @default(["en"]) // ordered; DUAL shows all of them
-
-  publishStartAt DateTime?
-  publishEndAt   DateTime?
-  entryCutoffSec Int?
-  extraTimeSec   Int?
-
-  isLocked    Boolean   @default(false) // true once first student starts
-  finalizedAt DateTime?
-  shareSlug   String?   @unique // shareable link token (optional)
-  createdById String? // audit (Admin id)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now()) @updatedAt
-  deletedAt   DateTime? // soft delete — see the conventions note above
-
-  examType       ExamType?       @relation(fields: [examTypeId], references: [id])
-  baseConfig     BaseConfig?     @relation(fields: [baseConfigId], references: [id])
-  sections       TestSection[]
-  paperQuestions PaperQuestion[]
-  attempts       Attempt[]
-  notifications  Notification[]
-
-  series TestSeries[] // implicit M:N — access reaches students via series↔group
-
-  @@index([status])
-  @@index([publishStartAt, publishEndAt])
-  @@index([examTypeId])
-}
-
-model TestSection {
-  id               String   @id @default(cuid())
-  testId           String
-  name             String
-  order            Int
-  subjectId        String?
-  questionCount    Int
-  marksPerQuestion Decimal  @db.Decimal(6, 2)
-  negativeMarks    Decimal  @db.Decimal(6, 2)
-  durationSec      Int?
-  mandatory        Boolean  @default(true)
-  difficultyMix    Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now()) @updatedAt
-
-  test           Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
-  subject        Subject?        @relation(fields: [subjectId], references: [id])
-  paperQuestions PaperQuestion[]
-
-  @@unique([testId, order])
-  @@index([subjectId])
-}
-
-// The frozen paper: fixed set of questions for a test (same for everyone).
-// Drawn once at finalize; per-student order/option shuffle from Attempt.shuffleSeed.
-model PaperQuestion {
-  id            String              @id @default(cuid())
-  testId        String
-  testSectionId String?
-  questionId    String
-  order         Int
-  marks         Decimal             @db.Decimal(6, 2)
-  negativeMarks Decimal             @db.Decimal(6, 2)
-  status        PaperQuestionStatus @default(ACTIVE) // drop/bonus corrections
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @default(now()) @updatedAt
-
-  test     Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
-  section  TestSection?    @relation(fields: [testSectionId], references: [id])
-  question Question        @relation(fields: [questionId], references: [id])
-  answers  AttemptAnswer[]
-
-  @@unique([testId, questionId])
-  @@unique([testId, order])
-  @@index([questionId]) // "which papers use this question" + analytics
-  @@index([testSectionId])
-}
-
-// ============================================================================
-// Attempts (holds live state AND the scored result — no separate Result table)
-// ============================================================================
-
-model Attempt {
-  id        String        @id @default(cuid())
-  testId    String
-  studentId String
-  status    AttemptStatus @default(IN_PROGRESS)
-
-  // lifecycle
-  startedAt    DateTime  @default(now())
-  endsAt       DateTime // server-authoritative deadline
-  submittedAt  DateTime?
-  evaluatedAt  DateTime?
-  shuffleSeed  Int
-  resumeCount  Int       @default(0)
-  locale       String    @default("en")
-  sectionState Json? // per-section start/end/time-spent
-
-  // scored (filled on evaluation)
-  score            Decimal? @db.Decimal(8, 2)
-  correctCount     Int?
-  wrongCount       Int?
-  unattemptedCount Int?
-  sectionScores    Json?
-  rank             Int? // last-computed snapshot; live value from Redis
-  percentile       Decimal? @db.Decimal(5, 2)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  test    Test            @relation(fields: [testId], references: [id])
-  student Student         @relation(fields: [studentId], references: [id])
-  answers AttemptAnswer[]
-
-  @@unique([testId, studentId]) // one attempt per student (no retake)
-  @@index([studentId]) // student's report dashboard: "my attempts"
-  @@index([testId, status])
-  @@index([testId, score])
-}
-
-// One row per question the student actually INTERACTED with (answered / marked /
-// visited) — not one per paper question. Untouched questions have no row;
-// "unattempted" is derived (paper size − rows) and its count is stored on Attempt.
-// Composite PK (no surrogate id) keeps the highest-volume table lean.
-model AttemptAnswer {
-  attemptId        String
-  paperQuestionId  String
-  selectedOptionId String?
-  state            AnswerState @default(NOT_VISITED)
-
-  // analytics data points — captured from day one
-  timeSpentSec   Int     @default(0)
-  languageViewed String?
-
-  // filled at scoring
-  isCorrect    Boolean?
-  marksAwarded Decimal?  @db.Decimal(6, 2)
-  answeredAt   DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  attempt        Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  paperQuestion  PaperQuestion   @relation(fields: [paperQuestionId], references: [id])
-  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id])
-
-  @@id([attemptId, paperQuestionId])
-  @@index([paperQuestionId]) // question-level analytics
-}
-
-// ============================================================================
-// Branches — a fixed, slow-moving list only a super admin may add to.
-//
-// It exists because `Group.branch` was free text, and free text is how you end
-// up with "Ameerpet", "ameerpet" and "Ameerpet " as three branches. An admin
-// creating a group now PICKS a branch instead of assuming one.
-//
-// A branch is where a student attends and the catalog of exams offered there.
-// Every online student sits in the one VIRTUAL branch, which has no address and
-// is protected from rename, retirement and deletion.
-// ============================================================================
-
+// name carries a partial unique index (WHERE deletedAt IS NULL) from the migration.
 model Branch {
   id        String     @id @default(cuid())
-  /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
-  name      String     @unique
-  type      BranchType @default(PHYSICAL)
-  // Inactive is a write freeze: no new groups, students or series. Everything it
-  // already holds keeps working.
+  name      String
+  type      BranchType
   isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @default(now()) @updatedAt
-  deletedAt DateTime? // soft delete — see the conventions note above
+  deletedAt DateTime?  @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
 
-  groups          Group[] // implicit M:N — the exams this branch offers
-  baseStudents    Student[]          @relation("StudentBaseBranch")
-  currentStudents Student[]          @relation("StudentCurrentBranch")
-  testConfigs     BranchTestConfig[]
+  students    Student[]
+  admins      AdminBranch[]
+  testConfigs BranchTestConfig[]
+
+  @@index([name])
 }
 
-// What a branch offers its students, and when. Access is granted at SERIES
-// level; the window here is the whole series' default. A per-test override is a
-// future table, so adding one changes scheduling without touching access.
+// A new coaching variant is one INSERT, never a migration.
+model Program {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  series TestSeries[]
+}
+
+// The unit of offering — a test reaches students only through a series.
+// programCode null = exam/family access; set = program-only.
+model TestSeries {
+  id                   String     @id @default(cuid())
+  name                 String
+  description          String?
+  examStageId          String?
+  programCode          String?
+  sequentialTests      Boolean    @default(false)
+  prerequisiteSeriesId String?
+  unlockMode           UnlockMode @default(AUTO)
+  // Pricing only — free is not open access.
+  isFree               Boolean    @default(false)
+  createdAt            DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+
+  examStage          ExamStage?            @relation(fields: [examStageId], references: [id], onDelete: Restrict)
+  program            Program?              @relation(fields: [programCode], references: [code], onDelete: Restrict)
+  prerequisiteSeries TestSeries?           @relation("SeriesPrerequisite", fields: [prerequisiteSeriesId], references: [id], onDelete: Restrict)
+  dependentSeries    TestSeries[]          @relation("SeriesPrerequisite")
+  tests              TestSeriesTest[]
+  grants             StudentGrant[]
+  unlocks            StudentSeriesUnlock[]
+  unlockRequests     SeriesUnlockRequest[]
+  branchConfigs      BranchTestConfig[]
+  notifications      Notification[]
+
+  @@index([examStageId])
+  @@index([programCode])
+  @@index([prerequisiteSeriesId])
+}
+
+model TestSeriesTest {
+  testSeriesId String
+  testId       String
+  order        Int?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  createdById  String?
+
+  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+  test       Test       @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@id([testSeriesId, testId])
+  @@index([testId])
+}
+
+// The escape hatch for access that is not exam-, program- or branch-derivable.
+model StudentGrant {
+  studentId    String
+  testSeriesId String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  createdById  String?
+
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, testSeriesId])
+  @@index([testSeriesId])
+}
+
+model StudentSeriesUnlock {
+  id           String    @id @default(cuid())
+  studentId    String
+  testSeriesId String
+  unlockedAt   DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, testSeriesId])
+  @@index([testSeriesId])
+}
+
+// One open request per (student, series) — partial unique WHERE status='PENDING'
+// lives in the migration.
+model SeriesUnlockRequest {
+  id           String              @id @default(cuid())
+  studentId    String
+  testSeriesId String
+  status       UnlockRequestStatus @default(PENDING)
+  requestedAt  DateTime            @default(now()) @db.Timestamptz(3)
+  decidedAt    DateTime?           @db.Timestamptz(3)
+  decidedById  String?
+
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, testSeriesId, status])
+  @@index([testSeriesId, status])
+}
+
+// Access enable plus the default availability window, per (branch, series).
 model BranchTestConfig {
   id           String    @id @default(cuid())
   branchId     String
   testSeriesId String
-  enabled      Boolean   @default(false)
-  startAt      DateTime?
-  endAt        DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @default(now()) @updatedAt
+  enabled      Boolean   @default(true)
+  startAt      DateTime? @db.Timestamptz(3)
+  endAt        DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
   branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
@@ -792,69 +874,14 @@ model BranchTestConfig {
 }
 
 // ============================================================================
-// Groups (batches) — the access unit. A group is linked to test series, and a
-// student reaches those series' tests through it. Student -> Group ->
-// TestSeries -> Test.
-//
-// HOW a group reaches a student depends on its `type`: GLOBAL is everybody with
-// no rows stored at all, EXAM and PROGRAM match an entry in
-// `Student.enrolledExams`, and SCHOLARSHIP and NON_IACE are handed out one
-// student at a time through `Student.directGroupIds`.
-//
-// The name is unique per `examType`, not per branch: the same batch is taught at
-// several centres, so branches are a catalog tag (M:N) rather than ownership.
+// Central audit — data CRUD and imports only, never exam interactions.
 // ============================================================================
 
-model Group {
-  id          String    @id @default(cuid())
-  /// UPPERCASE letters/digits, single-spaced — see the name rules in contracts.
-  name        String
-  type        GroupType
-  /// ExamType code — set for EXAM and PROGRAM, null for the rest.
-  examType    String?
-  /// Retired: keeps its history and its members, takes no new ones.
-  isActive    Boolean   @default(true)
-  description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @default(now()) @updatedAt
-  deletedAt   DateTime? // soft delete — see the conventions note above
-
-  branches   Branch[] // implicit M:N — the centres offering this group
-  testSeries TestSeries[] // implicit M:N — grants access to these series' tests
-
-  @@unique([examType, name])
-  @@index([type])
-}
-
-// ============================================================================
-// Test series (many-to-many, optional, flat) — Test⇄Series is implicit
-// ============================================================================
-
-model TestSeries {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-
-  tests         Test[] // implicit M:N (a test can be in several series)
-  groups        Group[] // implicit M:N — groups linked to this series get access
-  branchConfigs BranchTestConfig[]
-}
-
-// ============================================================================
-// Audit — data CRUD and imports only. An exam interaction is not an audit event;
-// it is the attempt. Always-on and self-scoped: a super admin reads every row, a
-// normal admin only their own.
-// ============================================================================
-
-// One row per import RUN — a sheet, a script sync, or a single-record add.
 model ImportLog {
   id         String       @id @default(cuid())
   feature    AuditFeature
   source     ImportSource
   actorId    String?
-  /// The uploaded sheet, or a snapshot of the payload a script sent.
   fileS3Key  String?
   total      Int          @default(0)
   created    Int          @default(0)
@@ -862,56 +889,193 @@ model ImportLog {
   skipped    Int          @default(0)
   failed     Int          @default(0)
   status     String
-  startedAt  DateTime     @default(now())
-  finishedAt DateTime?
   errors     Json?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @default(now()) @updatedAt
+  startedAt  DateTime     @default(now()) @db.Timestamptz(3)
+  finishedAt DateTime?    @db.Timestamptz(3)
 
-  rowActions RowActionLog[]
+  rows RowActionLog[]
 
-  @@index([feature, createdAt])
+  @@index([feature, startedAt])
 }
 
-// One row per record changed. `changed` is { field: { from, to } } — the answer
-// to "what actually changed", which a diff of two snapshots is not.
 model RowActionLog {
-  id          String         @id @default(cuid())
+  id          String       @id @default(cuid())
   feature     AuditFeature
   entityId    String
+  // The label as it was, so the log survives a rename or a delete.
+  entityLabel String?
   action      AuditAction
-  actorType   AuditActorType
+  actorType   ActorType
   actorId     String?
   changed     Json?
   importLogId String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @default(now()) @updatedAt
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
 
-  importLog ImportLog? @relation(fields: [importLogId], references: [id], onDelete: SetNull)
+  importLog ImportLog? @relation(fields: [importLogId], references: [id], onDelete: Restrict)
 
-  @@index([feature, entityId, actorId, createdAt])
-  @@index([importLogId])
+  @@index([feature, entityId, createdAt])
+  @@index([actorId, createdAt])
   @@index([createdAt])
+  @@index([importLogId])
 }
 
 // ============================================================================
-// Notifications (in-app; e.g. "a test was assigned to your batch")
+// Durability — transactional outbox and rollup idempotency.
+// ============================================================================
+
+// Written in the same transaction as the state change. A relay claims rows with
+// FOR UPDATE SKIP LOCKED; the poll is served by a partial index on pending rows.
+model OutboxEvent {
+  id            String    @id @default(cuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime? @db.Timestamptz(3)
+
+  @@index([processedAt, createdAt])
+  @@index([aggregateType, aggregateId, createdAt])
+}
+
+// Makes each attempt count exactly once per rollup, across worker retries.
+model ProcessedRollup {
+  attemptId   String
+  rollupType  String
+  processedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@id([attemptId, rollupType])
+}
+
+// ============================================================================
+// Notifications — in-app now, push behind the same sender seam later.
 // ============================================================================
 
 model Notification {
-  id        String           @id @default(cuid())
-  studentId String
-  type      NotificationType
-  title     String
-  body      String?
-  testId    String?
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @default(now()) @updatedAt
-  deletedAt DateTime? // soft delete — see the conventions note above
+  id           String           @id @default(cuid())
+  studentId    String
+  type         NotificationType
+  title        String
+  body         String?
+  testId       String?
+  testSeriesId String?
+  isRead       Boolean          @default(false)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  test       Test?       @relation(fields: [testId], references: [id])
+  testSeries TestSeries? @relation(fields: [testSeriesId], references: [id])
+
+  @@index([studentId, createdAt])
+  @@index([studentId, isRead])
+  @@index([testId])
+  @@index([testSeriesId])
+}
+
+// ============================================================================
+// Analytics rollups — sums and counts only, updated by idempotent deltas.
+// Cohort rows accumulate in Redis and flush by batch; per-student rows may be
+// applied inline. Averages are derived on read.
+// ============================================================================
+
+model StudentStat {
+  studentId        String    @id
+  testsAttempted   Int       @default(0)
+  testsEvaluated   Int       @default(0)
+  sumScore         Decimal   @default(0) @db.Decimal(16, 2)
+  sumPercentile    Decimal   @default(0) @db.Decimal(16, 2)
+  bestPercentile   Decimal?  @db.Decimal(5, 2)
+  totalAnswered    Int       @default(0)
+  totalCorrect     Int       @default(0)
+  totalWrong       Int       @default(0)
+  totalUnattempted Int       @default(0)
+  sumTimeSec       BigInt    @default(0)
+  practiceAttempts Int       @default(0)
+  lastAttemptAt    DateTime? @db.Timestamptz(3)
+  // Watermark for drift detection and targeted rebuilds.
+  computedThrough  DateTime? @db.Timestamptz(3)
+  computedAt       DateTime  @db.Timestamptz(3)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  test    Test?   @relation(fields: [testId], references: [id], onDelete: SetNull)
+}
 
-  @@index([studentId, isRead])
+// Bucketed by test type so the strength map filters by kind; "overall" sums the
+// buckets on read. Practice attempts feed this but never the cohort rollups.
+model StudentSubjectStat {
+  studentId      String
+  subjectId      String
+  scope          TestScope
+  evaluationMode EvaluationMode
+  attempted      Int            @default(0)
+  correct        Int            @default(0)
+  wrong          Int            @default(0)
+  sumTimeSec     BigInt         @default(0)
+  computedAt     DateTime       @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@id([studentId, subjectId, scope, evaluationMode])
+  @@index([subjectId])
+}
+
+model TestStat {
+  testId           String   @id
+  attemptCount     Int      @default(0)
+  evaluatedCount   Int      @default(0)
+  sumScore         Decimal  @default(0) @db.Decimal(18, 2)
+  maxScore         Decimal? @db.Decimal(8, 2)
+  minScore         Decimal? @db.Decimal(8, 2)
+  sumTimeSec       BigInt   @default(0)
+  scoreHistogram   Json?
+  topperAttemptId  String?
+  // Watermark: rows already folded in, so a rebuild cannot double-count.
+  attemptsIncluded Int      @default(0)
+  computedAt       DateTime @db.Timestamptz(3)
+
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  topperAttempt Attempt? @relation(fields: [topperAttemptId], references: [id])
+
+  @@index([topperAttemptId])
+}
+
+model TestSectionStat {
+  testId              String
+  baseConfigSectionId String
+  attempted           Int      @default(0)
+  sumScore            Decimal  @default(0) @db.Decimal(18, 2)
+  sumTimeSec          BigInt   @default(0)
+  computedAt          DateTime @db.Timestamptz(3)
+
+  test              Test              @relation(fields: [testId], references: [id], onDelete: Cascade)
+  baseConfigSection BaseConfigSection @relation(fields: [baseConfigSectionId], references: [id])
+
+  @@id([testId, baseConfigSectionId])
+  @@index([baseConfigSectionId])
+}
+
+// Item analysis and distractor counts for FIXED papers.
+model TestQuestionStat {
+  testId          String
+  paperQuestionId String
+  questionId      String
+  attemptedCount  Int      @default(0)
+  correctCount    Int      @default(0)
+  wrongCount      Int      @default(0)
+  skippedCount    Int      @default(0)
+  sumTimeSec      BigInt   @default(0)
+  optionCounts    Json?
+  pValue          Decimal? @db.Decimal(5, 4)
+  discrimination  Decimal? @db.Decimal(6, 4)
+  computedAt      DateTime @db.Timestamptz(3)
+
+  test          Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  paperQuestion PaperQuestion @relation(fields: [paperQuestionId], references: [id], onDelete: Cascade)
+  question      Question      @relation(fields: [questionId], references: [id])
+
+  @@id([testId, paperQuestionId])
+  @@index([paperQuestionId])
+  @@index([questionId])
 }

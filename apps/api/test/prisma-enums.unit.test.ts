@@ -9,7 +9,6 @@ import {
   AUDIT_FEATURE,
   BRANCH_TYPE,
   DIFFICULTY_LEVEL,
-  GROUP_TYPE,
   IMPORT_SOURCE,
   QUESTION_STATUS,
   QUESTION_TYPE,
@@ -26,12 +25,11 @@ const SCHEMA = readFileSync(join(__dirname, '../../../prisma/schema.prisma'), 'u
 
 const MIRRORED = {
   StudentType: STUDENT_TYPE,
-  GroupType: GROUP_TYPE,
   BranchType: BRANCH_TYPE,
   ImportSource: IMPORT_SOURCE,
   AuditFeature: AUDIT_FEATURE,
   AuditAction: AUDIT_ACTION,
-  AuditActorType: AUDIT_ACTOR_TYPE,
+  ActorType: AUDIT_ACTOR_TYPE,
   QuestionType: QUESTION_TYPE,
   DifficultyLevel: DIFFICULTY_LEVEL,
   QuestionStatus: QUESTION_STATUS,
