@@ -18,7 +18,7 @@ import {
  * `enrolledExams` is free text with no foreign key, so nothing but this service stops a typo
  * becoming an enrolment that resolves to no group at all. Its refusal is asserted here.
  */
-class FakeExamTypes {
+class FakeExams {
   readonly calls: { codes: string[]; fieldKey: string }[] = [];
 
   constructor(private readonly usable: string[] = []) {}
@@ -27,8 +27,8 @@ class FakeExamTypes {
     this.calls.push({ codes, fieldKey });
     const unknown = codes.filter((code) => !this.usable.includes(code));
     if (unknown.length > 0) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such exam type', {
-        fieldErrors: { [fieldKey]: ['No such exam type'] },
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such exam', {
+        fieldErrors: { [fieldKey]: ['No such exam'] },
       });
     }
     return Promise.resolve();
@@ -46,7 +46,7 @@ function serviceWith(
   usablePrograms = ['SSC CGL FOUNDATION'],
 ) {
   const prisma = new FakePrisma(students, [], branches);
-  const exams = new FakeExamTypes(usableExams);
+  const exams = new FakeExams(usableExams);
   const programs = new FakeCodeCatalog(usablePrograms);
   return {
     prisma,

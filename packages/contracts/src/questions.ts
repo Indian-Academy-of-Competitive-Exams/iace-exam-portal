@@ -11,9 +11,9 @@ import { canonicalNameSchema } from './naming';
 // ============================================================================
 
 /**
- * The languages a question may be authored in. These are the KEYS inside
- * `Question.content` and `QuestionOption.text`, so a value here is a column in
- * the import sheet and a tab in the form — adding one is not a rename.
+ * The languages a question may be authored in. These are the KEYS inside a version's
+ * `content` and each of its options' `text`, so a value here is a column in the import
+ * sheet and a tab in the form — adding one is not a rename.
  */
 export const SUPPORTED_LANGUAGES = {
   EN: 'en',
@@ -130,7 +130,7 @@ export type QuestionContent = z.infer<typeof questionContentSchema>;
 export const localizedContentSchema = z.partialRecord(languageSchema, questionContentSchema);
 export type LocalizedContent = z.infer<typeof localizedContentSchema>;
 
-/** `QuestionOption.text` on the wire. */
+/** An option's `text`, as it sits inside a question version. */
 export const localizedRichSchema = z.partialRecord(languageSchema, richContentSchema);
 export type LocalizedRich = z.infer<typeof localizedRichSchema>;
 
