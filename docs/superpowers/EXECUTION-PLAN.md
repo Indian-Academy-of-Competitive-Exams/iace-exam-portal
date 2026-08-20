@@ -8,6 +8,30 @@ paste-ready prompts per session and per task.
 - **Model:** strong (opus) throughout — set `CLAUDE_CODE_SUBAGENT_MODEL=opus` in `~/.claude/settings.json` so every subagent uses it.
 - **Loop per task:** intent check → implement+tests in one pass → gates green → review _by risk_ → terse report (≤12 lines) → one commit.
 
+## What actually happened — read this before picking up a session
+
+S2 opened on a workspace that only typechecked because the generated Prisma client in
+`node_modules` predated S1's schema. `pnpm db:generate` is in no gate, so nothing had noticed.
+Regenerating it surfaced 157 errors across eight modules, and because ONE generated client is
+shared by the whole workspace, no track could have gone green on its own — the "four parallel
+tracks, each green per task" assumption in the wave plan does not survive that.
+
+So S2 began with a **bridge commit** (`refactor: compile the workspace against the target schema`)
+that carried the code onto the real model in one pass. It absorbed most of three other tasks:
+
+| Task                          | State after the bridge                                                                                                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T7 admin permissions          | The `AdminFeaturePermission` join, code-owned `FEATURE_KEYS` and the read-only `GET /features` all landed. **`AdminBranch` + explicit `allBranches` did NOT** — still to do.                 |
+| T8 feature-registration purge | Done. The Features screen is gone; Permissions reads the code-owned list.                                                                                                                    |
+| T10 question versioning       | Done: `Question` is identity, `QuestionVersion` is immutable, `SubTopic`/`QuestionOption` are gone, option ids carry over by position. `selectedOptionId` app-validation waits for attempts. |
+| T11 importer alignment        | Done: the sheet writes a v1 version, and lost its sub-topic and marks columns.                                                                                                               |
+
+What that leaves: **T6** (base configs), **T9** (audit enum values), **T12–T15** (access), **T16**.
+T9's "rename `AuditActorType` → `ActorType`" is the one bullet that cannot be taken literally —
+`ActorType` already exists in contracts as the NARROW token-identity type (ADMIN | STUDENT), while
+the Prisma enum of that name is the wide one (+ SCRIPT, SYSTEM). Collapsing them would touch ~60
+call sites to lose a distinction the code draws on purpose. Align the VALUES; leave the names.
+
 ## Session & time table (lean loop, strong model)
 
 | Session                             | Tasks                                                   | Risk         | Reviews       | Est. wall-clock |
