@@ -1,12 +1,16 @@
 import {
   BRANCH_TYPE,
   EXAM_FAMILY,
+  EXAM_MODE,
+  STAGE_DISPOSITION,
   STUDENT_TYPE,
   type AdminPermissions,
   type BranchType,
   type ExamFamily,
+  type ExamMode,
   type FeatureKey,
   type PermissionLevel,
+  type StageDisposition,
   type StudentType,
 } from '@iace/contracts';
 import { type Env } from '../../src/config/env.schema';
@@ -493,6 +497,7 @@ export class FakePrisma {
     readonly admins: FakeAdmin[] = [],
     readonly branches: FakeBranch[] = [],
     readonly exams: FakeExam[] = [],
+    readonly examStages: FakeExamStage[] = [],
   ) {}
 
   /** How many student writes to allow before the rest throw — a commit that dies mid-loop. */
@@ -667,6 +672,62 @@ export class FakePrisma {
     },
   };
 
+  /** Stages, hydrated with the exam and the counts `ExamStagesService` reads through `_count`. */
+  readonly examStage = {
+    findUnique: ({ where }: { where: { id?: string; stageKey?: string } }) => {
+      const row = this.examStages.find((stage) =>
+        where.id === undefined ? stage.stageKey === where.stageKey : stage.id === where.id,
+      );
+      return Promise.resolve(row ? this.hydrateStage(row) : null);
+    },
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: { where?: StageWhere; skip?: number; take?: number } = {}) => {
+      const matched = this.examStages.filter((stage) => matchesStage(stage, where, this.exams));
+      return Promise.resolve(
+        matched
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((stage) => this.hydrateStage(stage)),
+      );
+    },
+
+    count: ({ where = {} }: { where?: StageWhere } = {}) =>
+      Promise.resolve(this.examStages.filter((s) => matchesStage(s, where, this.exams)).length),
+
+    create: ({ data }: { data: Partial<FakeExamStage> & { examId: string; stageKey: string } }) => {
+      const created = makeExamStage({ ...data, id: `stage_new_${this.nextId++}` });
+      this.examStages.push(created);
+      return Promise.resolve(this.hydrateStage(created));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const stage = this.examStages.find((s) => s.id === where.id);
+      if (!stage) throw new Error(`no stage ${where.id}`);
+      Object.assign(stage, data);
+      return Promise.resolve(this.hydrateStage(stage));
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.examStages.findIndex((s) => s.id === where.id);
+      const [removed] = this.examStages.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  /** A copy, with the exam and counts the service's `include` asks for. */
+  private hydrateStage(row: FakeExamStage) {
+    const exam = this.exams.find((candidate) => candidate.id === row.examId);
+    return {
+      ...row,
+      exam: exam
+        ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
+        : { id: row.examId, code: '', name: '', family: EXAM_FAMILY.SSC },
+    };
+  }
+
   rowActionLogs: Array<Record<string, unknown>> = [];
 
   rowActionLog = {
@@ -827,6 +888,59 @@ export function makeExam(overrides: Partial<FakeExam> = {}): FakeExam {
     // After the spread, so a caller passing only some fields still gets a count.
     _count: { stages: overrides._count?.stages ?? 0 },
   };
+}
+
+export interface FakeExamStage {
+  id: string;
+  examId: string;
+  stageKey: string;
+  name: string;
+  order: number;
+  mode: ExamMode;
+  disposition: StageDisposition;
+  isActive: boolean;
+  createdAt: Date;
+  _count: { baseConfigs: number; tests: number; series: number };
+}
+
+export function makeExamStage(overrides: Partial<FakeExamStage> = {}): FakeExamStage {
+  return {
+    id: 'stage_1',
+    examId: 'exam_1',
+    stageKey: 'SSC_CGL_T1',
+    name: 'Tier 1',
+    order: 1,
+    mode: EXAM_MODE.CBT,
+    disposition: STAGE_DISPOSITION.CONDUCTED,
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+    // After the spread, so a caller passing only some fields still gets every count.
+    _count: {
+      baseConfigs: overrides._count?.baseConfigs ?? 0,
+      tests: overrides._count?.tests ?? 0,
+      series: overrides._count?.series ?? 0,
+    },
+  };
+}
+
+interface StageWhere {
+  name?: { contains: string; mode?: 'insensitive' };
+  examId?: string;
+  exam?: { family: ExamFamily };
+  disposition?: StageDisposition;
+  isActive?: boolean;
+}
+
+function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]): boolean {
+  const exam = exams.find((candidate) => candidate.id === stage.examId);
+  return (
+    (where.name ? stage.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
+    (where.examId === undefined || stage.examId === where.examId) &&
+    (where.exam === undefined || exam?.family === where.exam.family) &&
+    (where.disposition === undefined || stage.disposition === where.disposition) &&
+    (where.isActive === undefined || stage.isActive === where.isActive)
+  );
 }
 
 interface ExamWhere {

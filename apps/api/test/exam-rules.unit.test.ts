@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { examDeletionBlocker, examEditBlocker, type ExamUsage } from '../src/configs/exam-rules';
+import {
+  examDeletionBlocker,
+  examEditBlocker,
+  stageDeletionBlocker,
+  stageEditBlocker,
+  type ExamUsage,
+} from '../src/configs/exam-rules';
 
 const unused: ExamUsage = { stageCount: 0, studentCount: 0 };
 
@@ -56,5 +62,47 @@ describe('examEditBlocker', () => {
   it('uses the singular verb for a single enrolled student', () => {
     const blocker = examEditBlocker({ studentCount: 1 }, { code: 'SSC CHSL' });
     assert.match(blocker ?? '', /1 enrolled student already holds this code/);
+  });
+});
+
+describe('stageDeletionBlocker', () => {
+  const empty = { configCount: 0, testCount: 0, seriesCount: 0 };
+
+  it('allows deleting a stage nothing hangs off', () => {
+    assert.equal(stageDeletionBlocker(empty), null);
+  });
+
+  it('names every holder at once, so the admin is not told one at a time', () => {
+    const blocker = stageDeletionBlocker({ configCount: 1, testCount: 3, seriesCount: 2 }) ?? '';
+    assert.match(blocker, /1 base config\b/);
+    assert.match(blocker, /3 tests/);
+    assert.match(blocker, /2 series/);
+  });
+
+  /** "Serieses" is not a word, and a message that invents one reads as a bug. */
+  it('leaves an already-plural noun alone', () => {
+    assert.match(stageDeletionBlocker({ ...empty, seriesCount: 1 }) ?? '', /1 series\b/);
+    assert.doesNotMatch(stageDeletionBlocker({ ...empty, seriesCount: 4 }) ?? '', /seriess/);
+  });
+
+  it('offers retiring as the way out', () => {
+    assert.match(stageDeletionBlocker({ ...empty, testCount: 1 }) ?? '', /[Rr]etire/);
+  });
+});
+
+describe('stageEditBlocker', () => {
+  it('leaves everything but a key change alone', () => {
+    assert.equal(stageEditBlocker({ configCount: 9 }, {}), null);
+  });
+
+  it('allows a key change while no base config hangs off it', () => {
+    assert.equal(stageEditBlocker({ configCount: 0 }, { stageKey: 'SSC_CGL_P1' }), null);
+  });
+
+  /** The key is what a seed script addresses a stage by, with no foreign key behind it. */
+  it('refuses a key change once a base config hangs off it', () => {
+    const blocker = stageEditBlocker({ configCount: 2 }, { stageKey: 'SSC_CGL_P1' });
+    assert.match(blocker ?? '', /2 base configs/);
+    assert.match(blocker ?? '', /detach/);
   });
 });

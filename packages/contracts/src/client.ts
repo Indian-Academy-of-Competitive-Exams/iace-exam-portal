@@ -74,11 +74,17 @@ import {
 } from './branches';
 import {
   ADMIN_EXAM_ROUTES,
+  ADMIN_EXAM_STAGE_ROUTES,
   examSchema,
+  examStageSchema,
   type CreateExamInput,
+  type CreateExamStageInput,
   type Exam,
   type ExamListQueryInput,
+  type ExamStage,
+  type ExamStageListQueryInput,
   type UpdateExamInput,
+  type UpdateExamStageInput,
 } from './exams';
 import {
   ADMIN_STUDENT_ROUTES,
@@ -584,6 +590,34 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_EXAM_ROUTES.remove(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+      },
+
+      /** The stage layer: what a base config, a series and a test all hang off. */
+      examStages: {
+        list: (query: ExamStageListQueryInput = {}): Promise<Paginated<ExamStage>> =>
+          requestPaginated(`${ADMIN_EXAM_STAGE_ROUTES.list}${queryString({ ...query })}`, {
+            schema: examStageSchema.array(),
+          }),
+
+        create: (input: CreateExamStageInput): Promise<ExamStage> =>
+          request(ADMIN_EXAM_STAGE_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: examStageSchema,
+          }),
+
+        update: (id: string, input: UpdateExamStageInput): Promise<ExamStage> =>
+          request(ADMIN_EXAM_STAGE_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: examStageSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_EXAM_STAGE_ROUTES.remove(id), {
             method: 'DELETE',
             schema: noContentSchema,
           }),

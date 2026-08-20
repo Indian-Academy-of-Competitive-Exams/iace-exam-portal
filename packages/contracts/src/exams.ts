@@ -124,9 +124,55 @@ export const ADMIN_EXAM_ROUTES = {
   remove: (id: string) => `/admin/exams/${id}`,
 } as const;
 
+export const ADMIN_EXAM_STAGE_ROUTES = {
+  list: '/admin/exam-stages',
+  create: '/admin/exam-stages',
+  update: (id: string) => `/admin/exam-stages/${id}`,
+  remove: (id: string) => `/admin/exam-stages/${id}`,
+} as const;
+
+export const STAGE_NAME_MAX = 80;
+export const STAGE_KEY_MAX = 60;
+
+export const stageNameSchema = z
+  .string()
+  .trim()
+  .min(2, 'Give the stage a name')
+  .max(STAGE_NAME_MAX, `A name cannot be longer than ${STAGE_NAME_MAX} characters`);
+
+/**
+ * Human-stable and unique across every exam — "SSC_CGL_T1". Underscores, not spaces: this is
+ * what the exam-pattern workbook and every seed script address a stage by.
+ */
+export const stageKeySchema = z
+  .string()
+  .transform((value) =>
+    value
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_'),
+  )
+  .pipe(
+    z
+      .string()
+      .min(2, 'Give the stage a key')
+      .max(STAGE_KEY_MAX, `A key cannot be longer than ${STAGE_KEY_MAX} characters`)
+      .regex(/^[A-Z][A-Z0-9_]*$/, 'Use capital letters, numbers and underscores'),
+  );
+
+/** Enough of an exam to name the stage's parent on screen, without a second request. */
+export const examRefSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  family: examFamilySchema,
+});
+export type ExamRef = z.infer<typeof examRefSchema>;
+
 export const examStageSchema = z.object({
   id: z.string(),
   examId: z.string(),
+  exam: examRefSchema,
   /** Human-stable, from the exam-pattern workbook — "SSC_CGL_T1". */
   stageKey: z.string(),
   name: z.string(),
@@ -134,6 +180,49 @@ export const examStageSchema = z.object({
   mode: examModeSchema,
   disposition: stageDispositionSchema,
   isActive: z.boolean(),
+  /** What hangs off the stage. Any of them refuses a delete — retire it instead. */
+  configCount: z.number().int(),
+  testCount: z.number().int(),
+  seriesCount: z.number().int(),
   createdAt: z.string(),
 });
 export type ExamStage = z.infer<typeof examStageSchema>;
+
+export const examStageListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  examId: z.string().optional(),
+  family: examFamilySchema.optional(),
+  disposition: stageDispositionSchema.optional(),
+  activeOnly: optionalBooleanQuery(),
+});
+export type ExamStageListQuery = z.infer<typeof examStageListQuerySchema>;
+export type ExamStageListQueryInput = z.input<typeof examStageListQuerySchema>;
+
+export const createExamStageSchema = z.object({
+  examId: z.string().min(1, 'Choose an exam'),
+  stageKey: stageKeySchema,
+  name: stageNameSchema,
+  /** Where it sits in the journey. Ties are broken by name, so a shared order is not an error. */
+  order: z.coerce.number().int().min(0).max(99).optional(),
+  mode: examModeSchema.optional(),
+  disposition: stageDispositionSchema.optional(),
+});
+export type CreateExamStageInput = z.input<typeof createExamStageSchema>;
+export type CreateExamStageBody = z.infer<typeof createExamStageSchema>;
+
+/** A stage never moves exam — every config, series and test under it would change meaning. */
+export const updateExamStageSchema = z.object({
+  stageKey: stageKeySchema.optional(),
+  name: stageNameSchema.optional(),
+  order: z.coerce.number().int().min(0).max(99).optional(),
+  mode: examModeSchema.optional(),
+  disposition: stageDispositionSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateExamStageInput = z.input<typeof updateExamStageSchema>;
+export type UpdateExamStageBody = z.infer<typeof updateExamStageSchema>;
+
+/** Only these two carry a mock. CATALOG_ONLY is listed so the journey reads whole. */
+export function stageTakesConfigs(disposition: StageDisposition): boolean {
+  return disposition !== STAGE_DISPOSITION.CATALOG_ONLY;
+}

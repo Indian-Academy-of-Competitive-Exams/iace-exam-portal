@@ -3,9 +3,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { type StudentsModule } from '../students';
 import { ExamsController } from './exams.controller';
 import { ExamsService } from './exams.service';
+import { ExamStagesController } from './exam-stages.controller';
+import { ExamStagesService } from './exam-stages.service';
 
-/** Owns `Exam`. forwardRef: students validate enrolments against the catalog, and the
- *  catalog counts enrolments back. */
+/** Owns `Exam` and `ExamStage`. forwardRef: students validate enrolments against the catalog,
+ *  and the catalog counts enrolments back. */
 @Module({
   imports: [
     PrismaModule,
@@ -16,8 +18,8 @@ import { ExamsService } from './exams.service';
         (module.require('../students') as { StudentsModule: typeof StudentsModule }).StudentsModule,
     ),
   ],
-  controllers: [ExamsController],
-  providers: [ExamsService],
-  exports: [ExamsService],
+  controllers: [ExamsController, ExamStagesController],
+  providers: [ExamsService, ExamStagesService],
+  exports: [ExamsService, ExamStagesService],
 })
 export class ConfigsModule {}

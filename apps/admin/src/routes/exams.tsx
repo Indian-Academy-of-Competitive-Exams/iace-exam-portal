@@ -1,15 +1,22 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import {
   EXAM_FAMILIES,
+  EXAM_MODES,
+  STAGE_DISPOSITIONS,
   createExamSchema,
+  createExamStageSchema,
   updateExamSchema,
+  updateExamStageSchema,
   type CreateExamInput,
+  type CreateExamStageInput,
   type Exam,
+  type ExamStage,
   type UpdateExamInput,
+  type UpdateExamStageInput,
 } from '@iace/contracts';
 import {
   Alert,
@@ -26,21 +33,29 @@ import {
   FormField,
   FormRow,
   Input,
+  NumericInput,
   PageHeader,
+  Pagination,
   plural,
+  SearchInput,
   Select,
-  TableFrame,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { useExams } from '../lib/use-exams';
-import { applyFieldErrors } from '@iace/app-kit';
+import { useFilters } from '../lib/use-filters';
+import { ExamPicker } from '../components/exam-picker';
+import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 
 const NEW_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 const EDIT_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 
-const EXAMS_QUERY_KEY = ['admin', 'exams'] as const;
+/** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
+const familyLabel = (family: string) => family.replaceAll('_', '/');
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function examColumns(
@@ -49,7 +64,7 @@ function examColumns(
   onEdit: (exam: Exam) => void,
 ): DataTableColumn<Exam>[] {
   return [
-    { key: 'family', header: 'Family', cell: (exam) => exam.family.replaceAll('_', '/') },
+    { key: 'family', header: 'Family', cell: (exam) => familyLabel(exam.family) },
     { key: 'name', header: 'Exam', className: 'font-medium', cell: (exam) => exam.name },
     {
       key: 'code',
@@ -74,20 +89,71 @@ function examColumns(
   ];
 }
 
+/** The two levels of the catalog. A family is a fixed enum, so it is a filter here, not a tab. */
+const LEVELS = {
+  EXAMS: 'exams',
+  STAGES: 'stages',
+} as const;
+
+const EXAMS_KEY = ['admin', 'exams'] as const;
+const STAGES_KEY = ['admin', 'exam-stages'] as const;
+
 /** Anyone managing students may read the catalog, because they pick from it. Only a super admin writes. */
 export function ExamsPage() {
   const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
+  const filters = useFilters<'level' | 'q' | 'family' | 'examId'>();
+  const level = filters.get('level') || LEVELS.EXAMS;
 
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Exams"
+        description="Family, exam and stage — the journey a student is coached through. An enrolment stores the exam code; every base config, series and test hangs off a stage."
+      />
+
+      {!isSuperAdmin ? (
+        <Alert variant="info">
+          <span>
+            Only a super admin can add or change the catalog. You can see it to pick from.
+          </span>
+        </Alert>
+      ) : null}
+
+      <Tabs
+        value={level}
+        onValueChange={(value) => filters.set({ level: value, q: '', examId: '' })}
+      >
+        <TabsList>
+          <TabsTrigger value={LEVELS.EXAMS}>Exams</TabsTrigger>
+          <TabsTrigger value={LEVELS.STAGES}>Stages</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={LEVELS.EXAMS}>
+          <ExamsTab canWrite={isSuperAdmin} />
+        </TabsContent>
+        <TabsContent value={LEVELS.STAGES}>
+          <StagesTab canWrite={isSuperAdmin} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ============================================================================
+// Exams
+// ============================================================================
+
+function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
-  const exams = useExams();
   const queryClient = useQueryClient();
+  const filters = useFilters<'q' | 'family'>();
+  const family = filters.get('family');
 
-  const refresh = useCallback(
-    () => void queryClient.invalidateQueries({ queryKey: EXAMS_QUERY_KEY }),
-    [queryClient],
-  );
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: EXAMS_KEY });
+  }, [queryClient]);
 
   const startEdit = useCallback((exam: Exam) => {
     setCreating(false);
@@ -95,40 +161,57 @@ export function ExamsPage() {
   }, []);
 
   const columns = useMemo(
-    () => examColumns(isSuperAdmin, refresh, startEdit),
-    [isSuperAdmin, refresh, startEdit],
+    () => examColumns(canWrite, refresh, startEdit),
+    [canWrite, refresh, startEdit],
   );
 
-  const formOpen = creating || editing !== null;
+  const exams = useListQuery({
+    queryKey: EXAMS_KEY,
+    filters: {
+      q: filters.get('q') || undefined,
+      family: (family || undefined) as Exam['family'] | undefined,
+    },
+    fetchPage: (params) => api.admin.exams.list(params),
+  });
 
-  const header = (
-    <>
-      <PageHeader
-        title="Exams"
-        description="The exams the institute coaches for. A student's enrolment is recorded against the code, and every stage, config and test hangs off one of these."
-        action={
-          isSuperAdmin ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setCreating((open) => !open);
-              }}
-            >
-              <Plus aria-hidden />
-              New exam
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {!isSuperAdmin ? (
-        <Alert variant="info" className="mb-5">
-          <span>
-            Only a super admin can add or change an exam. You can see the list to pick from.
-          </span>
-        </Alert>
-      ) : null}
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search exams"
+            placeholder="Search exams"
+            value={filters.get('q')}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
+        <div className="w-44">
+          <Select
+            aria-label="Filter by family"
+            value={family}
+            onChange={(event) => filters.set({ family: event.target.value })}
+          >
+            <option value="">Any family</option>
+            {EXAM_FAMILIES.map((value) => (
+              <option key={value} value={value}>
+                {familyLabel(value)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {canWrite ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setCreating((open) => !open);
+            }}
+          >
+            <Plus aria-hidden />
+            New exam
+          </Button>
+        ) : null}
+      </div>
 
       {creating ? (
         <NewExamCard
@@ -150,20 +233,16 @@ export function ExamsPage() {
           onCancel={() => setEditing(null)}
         />
       ) : null}
-    </>
-  );
 
-  return (
-    <TableFrame framed={!formOpen} header={header}>
-      {/* No pagination: `useExams` already loads the whole short list. */}
       <DataTable
         columns={columns}
-        rows={exams}
+        rows={exams.items}
         rowKey={(exam) => exam.id}
-        isLoading={false}
-        empty="No exams yet."
+        isLoading={exams.isLoading}
+        empty="No exams yet. Add the first one — every stage hangs off it."
+        footer={exams.hasLoaded ? <Pagination {...exams.pagination} /> : null}
       />
-    </TableFrame>
+    </div>
   );
 }
 
@@ -198,7 +277,7 @@ function NewExamCard({ onDone, onCancel }: Readonly<{ onDone: () => void; onCanc
               <Select {...control}>
                 {EXAM_FAMILIES.map((family) => (
                   <option key={family} value={family}>
-                    {family.replaceAll('_', '/')}
+                    {familyLabel(family)}
                   </option>
                 ))}
               </Select>
@@ -272,7 +351,7 @@ function EditExamCard({
               <Select {...control}>
                 {EXAM_FAMILIES.map((family) => (
                   <option key={family} value={family}>
-                    {family.replaceAll('_', '/')}
+                    {familyLabel(family)}
                   </option>
                 ))}
               </Select>
@@ -440,6 +519,469 @@ function ExamRowActions({
             : `${plural(exam.stageCount, 'stage')} still hang off ${exam.code}, and deleting it will be refused. Retire the exam instead — it keeps everything it has and is simply no longer offered.`
         }
         confirmLabel="Delete exam"
+        onConfirm={() => remove.mutate()}
+      />
+    </>
+  );
+}
+
+// ============================================================================
+// Stages
+// ============================================================================
+
+const NEW_STAGE_FIELDS = ['examId', 'stageKey', 'name', 'order'] as const;
+const EDIT_STAGE_FIELDS = ['stageKey', 'name', 'order'] as const;
+
+/** What each disposition means for a stage — the difference between a mock and a listing. */
+const DISPOSITION_LABELS: Readonly<Record<(typeof STAGE_DISPOSITIONS)[number], string>> = {
+  CONDUCTED: 'Conducted',
+  PARTIAL: 'Partly conducted',
+  CATALOG_ONLY: 'Listed only',
+};
+
+const DISPOSITION_VARIANT = {
+  CONDUCTED: 'success',
+  PARTIAL: 'info',
+  CATALOG_ONLY: 'neutral',
+} as const;
+
+function stageColumns(
+  canWrite: boolean,
+  refresh: () => void,
+  onEdit: (stage: ExamStage) => void,
+): DataTableColumn<ExamStage>[] {
+  return [
+    { key: 'family', header: 'Family', cell: (stage) => familyLabel(stage.exam.family) },
+    {
+      key: 'exam',
+      header: 'Exam',
+      cell: (stage) => <span className="font-mono text-sm">{stage.exam.code}</span>,
+    },
+    { key: 'order', header: '#', numeric: true, cell: (stage) => stage.order },
+    { key: 'name', header: 'Stage', className: 'font-medium', cell: (stage) => stage.name },
+    {
+      key: 'stageKey',
+      header: 'Key',
+      cell: (stage) => <span className="font-mono text-sm">{stage.stageKey}</span>,
+    },
+    { key: 'mode', header: 'Mode', cell: (stage) => <Badge variant="neutral">{stage.mode}</Badge> },
+    {
+      key: 'disposition',
+      header: 'Runs as',
+      cell: (stage) => (
+        <Badge variant={DISPOSITION_VARIANT[stage.disposition]}>
+          {DISPOSITION_LABELS[stage.disposition]}
+        </Badge>
+      ),
+    },
+    { key: 'configs', header: 'Configs', numeric: true, cell: (stage) => stage.configCount },
+    { key: 'status', header: 'Status', cell: (stage) => <StageStatus stage={stage} /> },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (stage) => (
+        <StageRowActions stage={stage} canEdit={canWrite} onChanged={refresh} onEdit={onEdit} />
+      ),
+    },
+  ];
+}
+
+function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<ExamStage | null>(null);
+  const queryClient = useQueryClient();
+  const filters = useFilters<'q' | 'examId'>();
+  const examId = filters.get('examId');
+
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: STAGES_KEY });
+  }, [queryClient]);
+
+  const startEdit = useCallback((stage: ExamStage) => {
+    setCreating(false);
+    setEditing(stage);
+  }, []);
+
+  const columns = useMemo(
+    () => stageColumns(canWrite, refresh, startEdit),
+    [canWrite, refresh, startEdit],
+  );
+
+  const stages = useListQuery({
+    queryKey: STAGES_KEY,
+    filters: { q: filters.get('q') || undefined, examId: examId || undefined },
+    fetchPage: (params) => api.admin.examStages.list(params),
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search stages"
+            placeholder="Search stages"
+            value={filters.get('q')}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
+        <div className="w-56">
+          <ExamPicker
+            aria-label="Filter by exam"
+            value={examId}
+            clearable
+            onChange={(value) => filters.set({ examId: value })}
+          />
+        </div>
+        {canWrite ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setCreating((open) => !open);
+            }}
+          >
+            <Plus aria-hidden />
+            New stage
+          </Button>
+        ) : null}
+      </div>
+
+      {creating ? (
+        <NewStageCard
+          examId={examId}
+          onDone={() => {
+            setCreating(false);
+            refresh();
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      ) : null}
+
+      {editing ? (
+        <EditStageCard
+          stage={editing}
+          onDone={() => {
+            setEditing(null);
+            refresh();
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : null}
+
+      <DataTable
+        columns={columns}
+        rows={stages.items}
+        rowKey={(stage) => stage.id}
+        isLoading={stages.isLoading}
+        empty="No stages here yet. A base config, a series and a test all hang off one."
+        footer={stages.hasLoaded ? <Pagination {...stages.pagination} /> : null}
+      />
+    </div>
+  );
+}
+
+function StageStatus({ stage }: Readonly<{ stage: ExamStage }>) {
+  if (stage.isActive) return <Badge variant="success">Active</Badge>;
+  return <Badge variant="neutral">Retired</Badge>;
+}
+
+function NewStageCard({
+  examId,
+  onDone,
+  onCancel,
+}: Readonly<{ examId: string; onDone: () => void; onCancel: () => void }>) {
+  const form = useForm<CreateExamStageInput>({
+    resolver: zodResolver(createExamStageSchema),
+    // Seeded from the filter: adding stages to the exam you are looking at is the normal case.
+    defaultValues: { examId, stageKey: '', name: '', order: 0 },
+  });
+  const chosenExam = useWatch({ control: form.control, name: 'examId' }) ?? '';
+
+  const create = useMutation({
+    meta: { success: 'Stage added.', fields: NEW_STAGE_FIELDS },
+    mutationFn: (values: CreateExamStageInput) => api.admin.examStages.create(values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, NEW_STAGE_FIELDS),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>New stage</CardTitle>
+        <CardDescription>
+          The key is what a seed script and the exam-pattern workbook address this stage by, so it
+          is unique across every exam and cannot change once a base config hangs off it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
+          <FormField form={form} name="examId" label="Exam" className="min-w-56">
+            {(control) => (
+              <ExamPicker
+                id={control.id}
+                value={chosenExam}
+                placeholder="Choose an exam"
+                onChange={(value) => form.setValue('examId', value, { shouldValidate: true })}
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
+            {(control) => <Input {...control} placeholder="Tier 1" autoFocus />}
+          </FormField>
+
+          <FormField form={form} name="stageKey" label="Key" className="min-w-40 flex-1">
+            {(control) => (
+              <Input
+                {...control}
+                className="uppercase placeholder:normal-case"
+                placeholder="SSC_CGL_T1"
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="order" label="Order" hint="Lowest first" className="w-24">
+            {(control) => <NumericInput {...control} {...form.register('order')} />}
+          </FormField>
+
+          <FormField form={form} name="mode" label="Mode" className="w-40">
+            {(control) => (
+              <Select {...control} {...form.register('mode')}>
+                {EXAM_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
+
+          <FormField form={form} name="disposition" label="Runs as" className="w-48">
+            {(control) => (
+              <Select {...control} {...form.register('disposition')}>
+                {STAGE_DISPOSITIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {DISPOSITION_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
+
+          <FormActions>
+            <Button type="submit" loading={create.isPending}>
+              Add stage
+            </Button>
+            {/* Cancel is neutral grey, never red — it destroys nothing. */}
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          </FormActions>
+        </FormRow>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** A stage never moves exam, so the exam is stated here rather than offered. */
+function EditStageCard({
+  stage,
+  onDone,
+  onCancel,
+}: Readonly<{ stage: ExamStage; onDone: () => void; onCancel: () => void }>) {
+  const form = useForm<UpdateExamStageInput>({
+    resolver: zodResolver(updateExamStageSchema),
+    defaultValues: {
+      stageKey: stage.stageKey,
+      name: stage.name,
+      order: stage.order,
+      mode: stage.mode,
+      disposition: stage.disposition,
+    },
+  });
+
+  const save = useMutation({
+    meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
+    mutationFn: (values: UpdateExamStageInput) => api.admin.examStages.update(stage.id, values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, EDIT_STAGE_FIELDS),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          Edit {stage.exam.code} / {stage.name}
+        </CardTitle>
+        <CardDescription>
+          A stage stays with its exam — every base config, series and test under it would change
+          meaning otherwise.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <FormRow onSubmit={form.handleSubmit((values) => save.mutate(values))}>
+          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
+            {(control) => <Input {...control} autoFocus />}
+          </FormField>
+
+          <FormField
+            form={form}
+            name="stageKey"
+            label="Key"
+            className="min-w-40 flex-1"
+            hint={
+              stage.configCount > 0
+                ? `${plural(stage.configCount, 'base config')} hangs off this key — it can no longer change.`
+                : 'Free to change only while no base config hangs off it.'
+            }
+          >
+            {(control) => (
+              <Input
+                {...control}
+                disabled={stage.configCount > 0}
+                className="uppercase placeholder:normal-case"
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="order" label="Order" hint="Lowest first" className="w-24">
+            {(control) => <NumericInput {...control} {...form.register('order')} />}
+          </FormField>
+
+          <FormField form={form} name="mode" label="Mode" className="w-40">
+            {(control) => (
+              <Select {...control} {...form.register('mode')}>
+                {EXAM_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
+
+          <FormField form={form} name="disposition" label="Runs as" className="w-48">
+            {(control) => (
+              <Select {...control} {...form.register('disposition')}>
+                {STAGE_DISPOSITIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {DISPOSITION_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
+
+          <FormActions>
+            <Button type="submit" loading={save.isPending}>
+              Save
+            </Button>
+            {/* Cancel is neutral grey, never red — it destroys nothing. */}
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          </FormActions>
+        </FormRow>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StageRowActions({
+  stage,
+  canEdit,
+  onChanged,
+  onEdit,
+}: Readonly<{
+  stage: ExamStage;
+  canEdit: boolean;
+  onChanged: () => void;
+  onEdit: (stage: ExamStage) => void;
+}>) {
+  const [asking, setAsking] = useState<ExamConfirm | null>(null);
+  const close = () => setAsking(null);
+
+  const remove = useMutation({
+    meta: { success: `${stage.name} deleted.` },
+    mutationFn: () => api.admin.examStages.remove(stage.id),
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    // Drop out of the confirm on failure, or the row is left asking a question
+    // that has already been answered.
+    onError: close,
+  });
+
+  const setActive = useMutation({
+    meta: { success: (): string => `${stage.name} updated.` },
+    mutationFn: (isActive: boolean) => api.admin.examStages.update(stage.id, { isActive }),
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    onError: close,
+  });
+
+  const busy = remove.isPending || setActive.isPending;
+
+  if (!canEdit) return null;
+
+  return (
+    <>
+      <span className="inline-flex items-center gap-2">
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => onEdit(stage)}>
+          <Pencil aria-hidden />
+          Edit
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => setAsking(EXAM_CONFIRMS.RETIRE)}
+        >
+          <Power aria-hidden />
+          {stage.isActive ? 'Retire' : 'Reactivate'}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => setAsking(EXAM_CONFIRMS.DELETE)}
+        >
+          <Trash2 aria-hidden />
+          Delete
+        </Button>
+      </span>
+
+      <ConfirmDialog
+        open={asking === EXAM_CONFIRMS.RETIRE}
+        onOpenChange={(open) => !open && close()}
+        loading={setActive.isPending}
+        title={stage.isActive ? `Retire ${stage.name}?` : `Reactivate ${stage.name}?`}
+        description={
+          stage.isActive
+            ? `Nothing it already holds changes — ${plural(stage.configCount, 'base config')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a config, a series or a test. Reactivating puts it back.`
+            : 'The stage is offered again when anyone builds a config, a series or a test. Nothing else changes.'
+        }
+        confirmLabel={stage.isActive ? 'Retire stage' : 'Reactivate stage'}
+        onConfirm={() => setActive.mutate(!stage.isActive)}
+      />
+
+      {/* Deleting is refused server-side while anything still hangs off the stage, so the
+          counts decide which of two different questions this is. */}
+      <ConfirmDialog
+        open={asking === EXAM_CONFIRMS.DELETE}
+        onOpenChange={(open) => !open && close()}
+        destructive
+        loading={remove.isPending}
+        title={`Delete ${stage.exam.code} / ${stage.name}?`}
+        description={
+          stage.configCount + stage.testCount + stage.seriesCount === 0
+            ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
+            : `${plural(stage.configCount, 'base config')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
+        }
+        confirmLabel="Delete stage"
         onConfirm={() => remove.mutate()}
       />
     </>
