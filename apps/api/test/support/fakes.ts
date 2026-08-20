@@ -330,6 +330,7 @@ export interface FakeStudent {
   fullName: string | null;
   studentType: StudentType;
   enrolledExams: string[];
+  enrolledFamilies: ExamFamily[];
   programs: string[];
   currentBranchId: string | null;
   preferredLanguage: string;
@@ -374,6 +375,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     fullName: null,
     studentType: STUDENT_TYPE.ONLINE,
     enrolledExams: [],
+    enrolledFamilies: [],
     programs: [],
     currentBranchId: null,
     preferredLanguage: 'en',
@@ -2155,6 +2157,20 @@ export class FakeCodeCatalog {
         fieldErrors: { [fieldKey]: [message] },
       });
     }
+    return Promise.resolve();
+  }
+
+  asService<T>(): T {
+    return this as unknown as T;
+  }
+}
+
+/** The series seam a branch write goes through: a new centre appears on every series, off. */
+export class FakeSeriesFanOut {
+  readonly branchIds: string[] = [];
+
+  fanOutToBranch(branchId: string): Promise<void> {
+    this.branchIds.push(branchId);
     return Promise.resolve();
   }
 

@@ -168,6 +168,21 @@ export class TestSeriesService {
     await this.prisma.testSeries.delete({ where: { id } });
   }
 
+  /**
+   * The other half of the fan-out: a branch opened after a series exists still has to appear on
+   * that series' scheduling screen, switched off. Without this, "every branch has a row" would
+   * hold only for the branches that existed on the day the series was created.
+   */
+  async fanOutToBranch(branchId: string): Promise<void> {
+    const series = await this.prisma.testSeries.findMany({ select: { id: true } });
+    if (series.length === 0) return;
+
+    await this.prisma.branchTestConfig.createMany({
+      data: series.map((row) => ({ branchId, testSeriesId: row.id, enabled: false })),
+      skipDuplicates: true,
+    });
+  }
+
   /** Every branch's row for this series, in branch order. There is always one per branch. */
   async branchConfigs(id: string): Promise<BranchTestConfigRow[]> {
     await this.requireSeries(id);

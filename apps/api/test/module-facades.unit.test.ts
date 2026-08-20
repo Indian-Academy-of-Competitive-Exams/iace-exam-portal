@@ -6,7 +6,14 @@ import { PinService } from '../src/auth/pin/pin.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { StudentsService } from '../src/students/students.service';
 import { AuditContext } from '../src/audit';
-import { FakeConfig, FakePrisma, FakeRedis, makeBranch, makeStudent } from './support/fakes';
+import {
+  FakeSeriesFanOut,
+  FakeConfig,
+  FakePrisma,
+  FakeRedis,
+  makeBranch,
+  makeStudent,
+} from './support/fakes';
 
 /**
  * The three seams docs/03 §4 names, exercised through the facade rather than the internals they
@@ -61,10 +68,11 @@ describe('AuthService.hashPin — the importer’s seam into auth', () => {
 // --------------------------------------------------------------------------- groups → branches
 // ---------------------------------------------------------------------------
 
-describe('BranchesService.assertUsable — the groups seam into branches', () => {
+describe('BranchesService.assertUsable — the seam every branch write comes through', () => {
   const usable = () =>
     new BranchesService(
       new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService(),
+      new FakeSeriesFanOut().asService(),
       new AuditContext(),
     );
 
@@ -78,6 +86,7 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
   it('refuses a retired branch, keyed to the field the form shows', async () => {
     const service = new BranchesService(
       new FakePrisma([], [], [makeBranch({ id: 'br_1', isActive: false })]).asService(),
+      new FakeSeriesFanOut().asService(),
       new AuditContext(),
     );
 
@@ -89,7 +98,11 @@ describe('BranchesService.assertUsable — the groups seam into branches', () =>
   });
 
   it('refuses a branch that does not exist', async () => {
-    const service = new BranchesService(new FakePrisma([], [], []).asService(), new AuditContext());
+    const service = new BranchesService(
+      new FakePrisma([], [], []).asService(),
+      new FakeSeriesFanOut().asService(),
+      new AuditContext(),
+    );
 
     const error = await service.assertUsable('br_missing').catch((e: unknown) => e);
     assert.ok(AppException.is(error));

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
@@ -13,6 +13,7 @@ import {
   type UpdateBranchBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { type TestSeriesService } from '../access';
 import { AuditContext } from '../audit';
 import { branchDeletionBlocker, branchEditBlocker, INACTIVE_BRANCH_MESSAGE } from './branch-rules';
 
@@ -36,6 +37,16 @@ export const AUDITED_BRANCH_FIELDS = ['name', 'isActive'] as const;
 export class BranchesService {
   constructor(
     private readonly prisma: PrismaService,
+    // `require`, not a static import: `access` reaches back here through students, and a
+    // top-level import re-enters a still-loading barrel.
+    @Inject(
+      forwardRef(
+        () =>
+          (module.require('../access') as { TestSeriesService: typeof TestSeriesService })
+            .TestSeriesService,
+      ),
+    )
+    private readonly series: TestSeriesService,
     private readonly auditContext: AuditContext,
   ) {}
 
@@ -93,6 +104,11 @@ export class BranchesService {
       data: { name: input.name, type: BRANCH_TYPE.PHYSICAL },
       include: BRANCH_INCLUDE,
     });
+
+    // A new centre appears on every series' scheduling screen, switched off — the same rule
+    // series creation follows from the other side.
+    await this.series.fanOutToBranch(branch.id);
+
     return toBranch(branch);
   }
 
