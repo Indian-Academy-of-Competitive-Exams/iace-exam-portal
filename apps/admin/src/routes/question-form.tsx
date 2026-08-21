@@ -24,15 +24,11 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   Combobox,
-  FormActions,
   FormField,
+  FormPanel,
+  FormSection,
   Input,
-  PageFrame,
   PageHeader,
   RadioGroup,
   RadioGroupItem,
@@ -251,7 +247,18 @@ export function QuestionFormPage() {
   }
 
   return (
-    <PageFrame
+    <FormPanel
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => navigate(ROUTES.QUESTIONS)}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={save.isPending}>
+            {editing ? 'Save question' : 'Add question'}
+          </Button>
+        </>
+      }
       header={
         <>
           <PageHeader
@@ -268,206 +275,180 @@ export function QuestionFormPage() {
         </>
       }
     >
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={form.handleSubmit((values) => save.mutate(values))}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>Where it is filed</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FormField form={form} name="subjectId" label="Subject">
-              {(control) => (
-                <SubjectPicker
-                  id={control.id}
-                  value={subjectId}
-                  placeholder="Choose a subject"
-                  onChange={(value) => {
-                    form.setValue('subjectId', value, { shouldValidate: true });
-                    // A topic under the old subject would file this wrongly.
-                    form.setValue('topicId', '');
-                  }}
-                />
-              )}
-            </FormField>
+      <FormSection title="Where it is filed">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField form={form} name="subjectId" label="Subject">
+            {(control) => (
+              <SubjectPicker
+                id={control.id}
+                value={subjectId}
+                placeholder="Choose a subject"
+                onChange={(value) => {
+                  form.setValue('subjectId', value, { shouldValidate: true });
+                  // A topic under the old subject would file this wrongly.
+                  form.setValue('topicId', '');
+                }}
+              />
+            )}
+          </FormField>
 
-            <FormField form={form} name="topicId" label="Topic" hint="Optional">
-              {(control) => (
-                <TopicPicker
-                  id={control.id}
-                  subjectId={subjectId}
-                  value={topicId}
-                  clearable
-                  placeholder="Choose a topic"
-                  onChange={(value) => form.setValue('topicId', value)}
-                />
-              )}
-            </FormField>
+          <FormField form={form} name="topicId" label="Topic" hint="Optional">
+            {(control) => (
+              <TopicPicker
+                id={control.id}
+                subjectId={subjectId}
+                value={topicId}
+                clearable
+                placeholder="Choose a topic"
+                onChange={(value) => form.setValue('topicId', value)}
+              />
+            )}
+          </FormField>
 
-            <FormField form={form} name="type" label="Type">
+          <FormField form={form} name="type" label="Type">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={type}
+                onChange={(next) =>
+                  form.setValue('type', next as QuestionFormValues['type'], { shouldDirty: true })
+                }
+                items={QUESTION_TYPES.map((value) => ({
+                  value,
+                  label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
+                }))}
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="difficulty" label="Difficulty">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={difficulty}
+                onChange={(next) =>
+                  form.setValue('difficulty', next as QuestionFormValues['difficulty'], {
+                    shouldDirty: true,
+                  })
+                }
+                items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="status" label="Status">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={status}
+                onChange={(next) =>
+                  form.setValue('status', next as QuestionFormValues['status'], {
+                    shouldDirty: true,
+                  })
+                }
+                items={QUESTION_STATUSES.map((value) => ({ value, label: value }))}
+              />
+            )}
+          </FormField>
+        </div>
+      </FormSection>
+
+      <FormSection title="The question">
+        <Tabs defaultValue={DEFAULT_LANGUAGE}>
+          <TabsList>
+            {LANGUAGE_ORDER.map((language) => (
+              <TabsTrigger key={language} value={language}>
+                {LANGUAGE_LABELS[language]}
+                {language === DEFAULT_LANGUAGE ? ' *' : ''}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {LANGUAGE_ORDER.map((language) => (
+            <TabsContent key={language} value={language} className="flex flex-col gap-4">
+              <LanguagePanel form={form} language={language} type={type} />
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        {type === QUESTION_TYPE.SINGLE_MCQ ? (
+          <FormField form={form} name="correctOption" label="Correct option">
+            {() => (
+              <RadioGroup
+                name="correctOption"
+                legend="Which option is correct"
+                hideLegend
+                value={correctOption}
+                onValueChange={(value) => form.setValue('correctOption', value)}
+                className="flex flex-wrap gap-4"
+              >
+                {Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => (
+                  <RadioGroupItem
+                    key={index + 1}
+                    value={String(index + 1)}
+                    label={`Option ${index + 1}`}
+                  />
+                ))}
+              </RadioGroup>
+            )}
+          </FormField>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField form={form} name="answerMode" label="How the answer is compared">
               {(control) => (
                 <Combobox
                   id={control.id}
                   aria-describedby={control['aria-describedby']}
                   aria-invalid={control['aria-invalid']}
                   clearable={false}
-                  value={type}
+                  value={answerMode ?? ANSWER_MODE.EXACT}
                   onChange={(next) =>
-                    form.setValue('type', next as QuestionFormValues['type'], { shouldDirty: true })
+                    form.setValue('answerMode', next as QuestionFormValues['answerMode'], {
+                      shouldDirty: true,
+                    })
                   }
-                  items={QUESTION_TYPES.map((value) => ({
-                    value,
-                    label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
+                  items={ANSWER_MODES.map((mode) => ({
+                    value: mode,
+                    label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
                   }))}
                 />
               )}
             </FormField>
 
-            <FormField form={form} name="difficulty" label="Difficulty">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={difficulty}
-                  onChange={(next) =>
-                    form.setValue('difficulty', next as QuestionFormValues['difficulty'], {
-                      shouldDirty: true,
-                    })
-                  }
-                  items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
-                />
-              )}
-            </FormField>
-
-            <FormField form={form} name="status" label="Status">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={status}
-                  onChange={(next) =>
-                    form.setValue('status', next as QuestionFormValues['status'], {
-                      shouldDirty: true,
-                    })
-                  }
-                  items={QUESTION_STATUSES.map((value) => ({ value, label: value }))}
-                />
-              )}
-            </FormField>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>The question</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <Tabs defaultValue={DEFAULT_LANGUAGE}>
-              <TabsList>
-                {LANGUAGE_ORDER.map((language) => (
-                  <TabsTrigger key={language} value={language}>
-                    {LANGUAGE_LABELS[language]}
-                    {language === DEFAULT_LANGUAGE ? ' *' : ''}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {LANGUAGE_ORDER.map((language) => (
-                <TabsContent key={language} value={language} className="flex flex-col gap-4">
-                  <LanguagePanel form={form} language={language} type={type} />
-                </TabsContent>
-              ))}
-            </Tabs>
-
-            {type === QUESTION_TYPE.SINGLE_MCQ ? (
-              <FormField form={form} name="correctOption" label="Correct option">
-                {() => (
-                  <RadioGroup
-                    name="correctOption"
-                    legend="Which option is correct"
-                    hideLegend
-                    value={correctOption}
-                    onValueChange={(value) => form.setValue('correctOption', value)}
-                    className="flex flex-wrap gap-4"
-                  >
-                    {Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => (
-                      <RadioGroupItem
-                        key={index + 1}
-                        value={String(index + 1)}
-                        label={`Option ${index + 1}`}
-                      />
-                    ))}
-                  </RadioGroup>
-                )}
+            {answerMode === ANSWER_MODE.NUMERIC ? (
+              <FormField
+                form={form}
+                name="tolerance"
+                label="Tolerance"
+                hint="How far either side still counts"
+              >
+                {(control) => <Input {...control} inputMode="decimal" placeholder="0.01" />}
               </FormField>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField form={form} name="answerMode" label="How the answer is compared">
-                  {(control) => (
-                    <Combobox
-                      id={control.id}
-                      aria-describedby={control['aria-describedby']}
-                      aria-invalid={control['aria-invalid']}
-                      clearable={false}
-                      value={answerMode ?? ANSWER_MODE.EXACT}
-                      onChange={(next) =>
-                        form.setValue('answerMode', next as QuestionFormValues['answerMode'], {
-                          shouldDirty: true,
-                        })
-                      }
-                      items={ANSWER_MODES.map((mode) => ({
-                        value: mode,
-                        label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
-                      }))}
-                    />
-                  )}
-                </FormField>
+            ) : null}
+          </div>
+        )}
+      </FormSection>
 
-                {answerMode === ANSWER_MODE.NUMERIC ? (
-                  <FormField
-                    form={form}
-                    name="tolerance"
-                    label="Tolerance"
-                    hint="How far either side still counts"
-                  >
-                    {(control) => <Input {...control} inputMode="decimal" placeholder="0.01" />}
-                  </FormField>
-                ) : null}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Filing</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <FormField form={form} name="questionCode" label="Question code" hint="Optional">
-              {(control) => <Input {...control} placeholder="QA-001" />}
-            </FormField>
-            <FormField form={form} name="tags" label="Tags" hint="Separate with a comma">
-              {(control) => <Input {...control} placeholder="ssc cgl, percentages" />}
-            </FormField>
-          </CardContent>
-        </Card>
-
-        <FormActions>
-          <Button type="button" variant="outline" onClick={() => navigate(ROUTES.QUESTIONS)}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save question' : 'Add question'}
-          </Button>
-        </FormActions>
-      </form>
-    </PageFrame>
+      <FormSection title="Filing">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField form={form} name="questionCode" label="Question code" hint="Optional">
+            {(control) => <Input {...control} placeholder="QA-001" />}
+          </FormField>
+          <FormField form={form} name="tags" label="Tags" hint="Separate with a comma">
+            {(control) => <Input {...control} placeholder="ssc cgl, percentages" />}
+          </FormField>
+        </div>
+      </FormSection>
+    </FormPanel>
   );
 }
 

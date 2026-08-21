@@ -122,6 +122,12 @@ export {
   DropdownMenuSeparator,
   type DropdownMenuItemProps,
 } from './components/ui/dropdown-menu';
+export {
+  FormPanel,
+  FormSection,
+  type FormPanelProps,
+  type FormSectionProps,
+} from './components/ui/form-panel';
 export { RowActions, type RowActionsProps } from './components/ui/row-actions';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination } from './components/ui/pagination';
