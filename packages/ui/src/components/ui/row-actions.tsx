@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './dropdown-menu';
 
@@ -20,7 +21,13 @@ export function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="iconSm" aria-label={label} className={className}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={label}
+          // A ring repeats down the last column, so this one control fills instead.
+          className={cn('focus-visible:bg-muted focus-visible:shadow-none', className)}
+        >
           <MoreHorizontal aria-hidden />
         </Button>
       </DropdownMenuTrigger>
