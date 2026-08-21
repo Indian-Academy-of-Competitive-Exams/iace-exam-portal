@@ -67,6 +67,6 @@ stop copying, not licence to add another.
 
 ## Design system
 
-Tailwind + shadcn/ui, tokens in `packages/ui`. Brand primary `#B83939`; Cancel = neutral grey;
+Tailwind + shadcn/ui, tokens in `packages/ui`. Brand primary `#A8221B`; Cancel = neutral grey;
 destructive = crimson `#BE123C`; charts use the colorblind-safe set, never brand red. Light + dark
 via CSS variables. `docs/design/design-system.html` is the living style guide.

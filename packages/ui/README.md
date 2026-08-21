@@ -39,7 +39,7 @@ module.exports = {
 
 - **Cancel = `secondary` (neutral).** It's a dismissal, never red.
 - **Destructive = `destructive` (crimson).** Delete / reject / un-approve — always with an icon + confirm.
-- **Brand red (`primary`, `#B83939`) is for primary/brand only** — it must never out-shout destructive.
+- **Brand red (`primary`, `#A8221B`) is for primary/brand only** — it must never out-shout destructive.
 - **Charts use `series-1…8` in fixed order, never cycled.** Data leads with blue (`series-1`), never brand red.
 - **Dark mode** = `data-theme="dark"` on `<html>`. Never hand-flip colors; the tokens handle it.
 - Adding a value? Add a **token** here — don't hardcode it in a component.

@@ -1,6 +1,12 @@
 /* ============================================================================
-   IACE DESIGN TOKENS — v0.3
+   IACE DESIGN TOKENS — v0.4
    packages/ui/tokens.css
+
+   v0.4 moves the brand red from #B83939 to #A8221B. The old red sat ΔE 6.4
+   from destructive crimson and ΔE 2.9 from the CBT "not answered" chip, so
+   Save/Delete and Submit/not-answered were the same colour to a glance. The
+   new one is brick rather than dusty rose: ΔE 10.2 and 6.1, and white on it
+   goes 5.70:1 → 7.22:1. The whole ramp moved with it, same lightness rhythm.
 
    v0.2 added the layers that were documented but never tokenised:
      spacing · typography · motion · state · focus
@@ -18,16 +24,16 @@
   /* ==========================================================================
      1. PRIMITIVES — COLOUR RAMPS
      ========================================================================== */
-  --red-50: #fcf3f3;
-  --red-100: #f7e4e4;
-  --red-200: #efc8c8;
-  --red-300: #e2a3a3;
-  --red-400: #d07777;
-  --red-500: #c25454;
-  --red-600: #b83939;
-  --red-700: #9e3030;
-  --red-800: #842a2a;
-  --red-900: #6e2727;
+  --red-50: #fdf3f1;
+  --red-100: #f8e4e1;
+  --red-200: #f0c8c2;
+  --red-300: #e4a399;
+  --red-400: #d3776a;
+  --red-500: #bf5448;
+  --red-600: #a8221b;
+  --red-700: #922119;
+  --red-800: #7e2018;
+  --red-900: #681f18;
 
   --crimson-50: #fff1f3;
   --crimson-100: #ffe4e9;
@@ -182,12 +188,12 @@
   --input: #e2e8f0;
   --ring: #2563eb;
 
-  --primary: #b83939;
-  --primary-hover: #9e3030;
-  --primary-active: #842a2a;
+  --primary: #a8221b;
+  --primary-hover: #922119;
+  --primary-active: #7e2018;
   --primary-foreground: #ffffff;
-  --primary-subtle: #f7e4e4;
-  --primary-ink: #9e3030;
+  --primary-subtle: #f8e4e1;
+  --primary-ink: #922119;
 
   --secondary: #f1f5f9;
   --secondary-hover: #e2e8f0;
@@ -433,14 +439,13 @@
   --input: #262c35;
   --ring: #60a5fa;
 
-  /* Brand lifted one ramp step: #B83939 on #13161C is dark-on-dark and reads
-     muddy as a filled shape, even though its label contrast is fine. */
-  --primary: #c25454;
-  --primary-hover: #d07777;
-  --primary-active: #e2a3a3;
+  /* Lifted one ramp step: #A8221B on #13161C reads muddy as a filled shape. */
+  --primary: #bf5448;
+  --primary-hover: #d3776a;
+  --primary-active: #e4a399;
   --primary-foreground: #ffffff;
-  --primary-subtle: #2a1616;
-  --primary-ink: #e2a3a3;
+  --primary-subtle: #2a1512;
+  --primary-ink: #e4a399;
 
   --secondary: #1e242c;
   --secondary-hover: #262c35;
