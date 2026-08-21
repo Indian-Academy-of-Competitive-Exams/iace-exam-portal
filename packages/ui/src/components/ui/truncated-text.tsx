@@ -25,12 +25,24 @@ export function useTruncation<T extends HTMLElement>(content: unknown) {
 
 export interface TruncatedTextProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** Shown inline, cut to the available width; revealed in full on hover. */
-  children: string;
+  children: string | null | undefined;
+  /** Stands in for a value that is not there. Muted, because it is not content. */
+  empty?: string;
 }
 
 /** One line, cut to fit, with a tooltip only when there is something to reveal. */
-export function TruncatedText({ children, className, ...props }: Readonly<TruncatedTextProps>) {
+export function TruncatedText({
+  children,
+  className,
+  empty = '—',
+  ...props
+}: Readonly<TruncatedTextProps>) {
   const { ref, truncated } = useTruncation<HTMLSpanElement>(children);
+
+  // Nothing to cut and nothing to reveal, so no tooltip and no measuring cost.
+  if (children === null || children === undefined || children === '') {
+    return <span className="text-muted-foreground">{empty}</span>;
+  }
 
   return (
     <Tooltip>

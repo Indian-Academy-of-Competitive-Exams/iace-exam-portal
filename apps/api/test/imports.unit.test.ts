@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { IMPORT_MAX_ROWS } from '@iace/contracts';
+import { BRANCH_TYPE, IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
 import { parseCsv, readCsvTable, normaliseHeader } from '../src/common/importing';
 import { mobilesIn, planStudentImport, type ImportContext } from '../src/imports/student-import';
+import { roster } from './support/fakes';
 
 /**
  * A CSV reader that gets a quote or a BOM wrong does not throw — it shifts every column right, and
@@ -105,19 +106,26 @@ describe('readCsvTable', () => {
 
 // ---------------------------------------------------------------------------
 
-const context = (): ImportContext => ({
+const context = (over: Partial<ImportContext> = {}): ImportContext => ({
   existingByMobile: new Map([
     // Chose their own PIN already — an import must never reset it.
     ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
     // Added by an admin and never signed in: this one still needs a starting PIN.
     ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false }],
   ]),
+  branchByName: new Map([
+    ['AMEERPET', { id: 'br_ameerpet', type: BRANCH_TYPE.PHYSICAL }],
+    ['ONLINE', { id: 'br_online', type: BRANCH_TYPE.VIRTUAL }],
+  ]),
+  examCodes: new Set(['SSC CGL', 'RRB JE']),
+  programCodes: new Set(['SSC FOUNDATION']),
+  ...over,
 });
 
 describe('planStudentImport', () => {
   it('plans a create for a new number and an update for a known one', () => {
     const plan = planStudentImport(
-      readCsvTable('mobile,fullName\n9876543210,Asha\n9000000001,Renamed'),
+      readCsvTable(roster('mobile,fullName\n9876543210,Asha\n9000000001,Renamed')),
       context(),
     );
 
@@ -131,7 +139,9 @@ describe('planStudentImport', () => {
     // The whole point of "forgiving": one bad number must not cost the other
     // two rows.
     const plan = planStudentImport(
-      readCsvTable('mobile,fullName\n9876543210,Good\nnot-a-number,Bad\n9876543211,Also good'),
+      readCsvTable(
+        roster('mobile,fullName\n9876543210,Good\nnot-a-number,Bad\n9876543211,Also good'),
+      ),
       context(),
     );
 
@@ -141,7 +151,10 @@ describe('planStudentImport', () => {
   });
 
   it('reports an empty mobile cell differently from an invalid one', () => {
-    const plan = planStudentImport(readCsvTable('mobile,fullName\n,Asha\nabcdef,Ravi'), context());
+    const plan = planStudentImport(
+      readCsvTable(roster('mobile,fullName\n,Asha\nabcdef,Ravi')),
+      context(),
+    );
 
     assert.match(plan.rows[0]?.errors[0] ?? '', /No mobile number/);
     assert.match(plan.rows[1]?.errors[0] ?? '', /valid 10-digit/);
@@ -150,7 +163,10 @@ describe('planStudentImport', () => {
   it('catches the same number twice in one file, naming the earlier line', () => {
     // Two "creates" for one number would pass preview and then collide on the
     // unique index halfway through the commit.
-    const plan = planStudentImport(readCsvTable('mobile\n9876543210\n9876543210'), context());
+    const plan = planStudentImport(
+      readCsvTable(roster('mobile\n9876543210\n9876543210')),
+      context(),
+    );
 
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[1]?.action, 'skip');
@@ -159,7 +175,7 @@ describe('planStudentImport', () => {
   });
 
   it('treats +91 and spacing as the same number as the bare digits', () => {
-    const plan = planStudentImport(readCsvTable('mobile\n+91 90000 00001'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile\n+91 90000 00001')), context());
 
     assert.equal(plan.rows[0]?.action, 'update');
     assert.equal(plan.rows[0]?.mobile, '9000000001');
@@ -181,7 +197,7 @@ describe('planStudentImport', () => {
   });
 
   it('accepts a header-only file as nothing to do, not an error', () => {
-    const plan = planStudentImport(readCsvTable('mobile,fullName'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile,fullName')), context());
 
     assert.equal(plan.summary.total, 0);
     assert.deepEqual(plan.fileErrors, []);
@@ -199,7 +215,7 @@ describe('planStudentImport', () => {
 
 describe('planStudentImport — the starting PIN', () => {
   it('gives a new student one', () => {
-    const plan = planStudentImport(readCsvTable('mobile\n9876543210'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile\n9876543210')), context());
 
     assert.equal(plan.rows[0]?.action, 'create');
     assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
@@ -211,21 +227,21 @@ describe('planStudentImport — the starting PIN', () => {
    * nothing about the import looks wrong.
    */
   it('never resets a PIN the student chose', () => {
-    const plan = planStudentImport(readCsvTable('mobile\n9000000001'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile\n9000000001')), context());
 
     assert.equal(plan.rows[0]?.action, 'update');
     assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
   });
 
   it('gives one to a student who was added by hand and never set a PIN', () => {
-    const plan = planStudentImport(readCsvTable('mobile\n9000000002'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile\n9000000002')), context());
 
     assert.equal(plan.rows[0]?.action, 'update');
     assert.equal(plan.rows[0]?.willReceiveDefaultPin, true);
   });
 
   it('gives none to a row that will not be written at all', () => {
-    const plan = planStudentImport(readCsvTable('mobile\nnot-a-number'), context());
+    const plan = planStudentImport(readCsvTable(roster('mobile\nnot-a-number')), context());
 
     assert.equal(plan.rows[0]?.action, 'skip');
     assert.equal(plan.rows[0]?.willReceiveDefaultPin, false);
@@ -235,7 +251,7 @@ describe('planStudentImport — the starting PIN', () => {
 describe('the columns an admin actually writes', () => {
   it('reads the readable headers the sample file uses', () => {
     const plan = planStudentImport(
-      readCsvTable('Mobile Number,Full Name\n9876543210,Asha Kumari'),
+      readCsvTable(roster('Mobile Number,Full Name\n9876543210,Asha Kumari')),
       context(),
     );
 
@@ -250,10 +266,122 @@ describe('the columns an admin actually writes', () => {
    */
   it('accepts the other names the same column goes by', () => {
     for (const header of ['mobile', 'Phone', 'Contact Number', 'MOBILE_NO']) {
-      const plan = planStudentImport(readCsvTable(`${header}\n9876543210`), context());
+      const plan = planStudentImport(readCsvTable(roster(`${header}\n9876543210`)), context());
       assert.equal(plan.fileErrors.length, 0, `"${header}" should be understood`);
       assert.equal(plan.rows[0]?.mobile, '9876543210');
     }
+  });
+
+  /** A required column must be PRESENT; whether its cell may be blank is a separate rule. */
+  const ALL_HEADERS =
+    "Mobile Number,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs,Mother's Name,Date of Birth,Gender";
+
+  const sheet = (...cells: string[]) => `${ALL_HEADERS}\n${cells.join(',')}`;
+
+  /** The whole point of the wider template: a roster now decides what a student can reach. */
+  it('carries the access columns onto the row it plans', () => {
+    const plan = planStudentImport(
+      readCsvTable(
+        sheet('9876543210', 'OFFLINE', 'Ameerpet', 'SSC', '"SSC CGL, RRB JE"', 'SSC FOUNDATION'),
+      ),
+      context(),
+    );
+
+    const row = plan.rows[0];
+    assert.deepEqual(row?.errors, []);
+    assert.equal(row?.studentType, 'OFFLINE');
+    assert.equal(row?.currentBranchId, 'br_ameerpet');
+    assert.deepEqual(row?.enrolledFamilies, ['SSC']);
+    assert.deepEqual(row?.enrolledExams, ['SSC CGL', 'RRB JE']);
+    assert.deepEqual(row?.programs, ['SSC FOUNDATION']);
+  });
+
+  /** The sheet carries the branch NAME; nobody filling one in has a cuid to hand. */
+  it('resolves the branch by name, however it was cased or spaced', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'OFFLINE', '  ameerpet  ', '', 'SSC CGL', '')),
+      context(),
+    );
+
+    assert.deepEqual(plan.rows[0]?.errors, []);
+    assert.equal(plan.rows[0]?.currentBranchId, 'br_ameerpet');
+  });
+
+  it('refuses a branch that is not on the list, naming what it read', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'OFFLINE', 'Nowhere', '', 'SSC CGL', '')),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(plan.rows[0]?.errors.join(' ') ?? '', /no active branch called "NOWHERE"/);
+  });
+
+  /** Demanding all three would refuse a student on one exam and in no program. */
+  it('takes a row carrying only one of the three access routes', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGL', '')),
+      context(),
+    );
+
+    assert.deepEqual(plan.rows[0]?.errors, []);
+    assert.equal(plan.rows[0]?.action, 'create');
+  });
+
+  it('refuses a row that names none of them, because it reaches nothing', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', '', '')),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(plan.rows[0]?.errors.join(' ') ?? '', /reaches no test series/);
+  });
+
+  it('refuses an exam code and a program code the catalog does not hold', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'OFFLINE', 'AMEERPET', '', 'SSC CGI', 'MADE UP')),
+      context(),
+    );
+
+    const errors = plan.rows[0]?.errors.join(' ') ?? '';
+    assert.match(errors, /No such exam code: SSC CGI/);
+    assert.match(errors, /No such program code: MADE UP/);
+  });
+
+  /** The same pairing the admin screens refuse — the importer writes rows no screen could save. */
+  it('refuses an online student put at a physical centre', () => {
+    const plan = planStudentImport(
+      readCsvTable(sheet('9876543210', 'ONLINE', 'AMEERPET', '', 'SSC CGL', '')),
+      context(),
+    );
+
+    assert.equal(plan.rows[0]?.action, 'skip');
+    assert.match(plan.rows[0]?.errors.join(' ') ?? '', /online student sits in the online branch/);
+  });
+
+  it('reads the profile columns, taking a date written either way round', () => {
+    const plan = planStudentImport(
+      readCsvTable(
+        sheet(
+          '9876543210',
+          'OFFLINE',
+          'AMEERPET',
+          '',
+          'SSC CGL',
+          '',
+          'Lakshmi Kumari',
+          '11/04/2003',
+          'female',
+        ),
+      ),
+      context(),
+    );
+
+    assert.deepEqual(plan.rows[0]?.errors, []);
+    assert.equal(plan.rows[0]?.profile.motherName, 'Lakshmi Kumari');
+    assert.equal(plan.rows[0]?.profile.dob, '2003-04-11');
+    assert.equal(plan.rows[0]?.profile.gender, 'FEMALE');
   });
 
   it('names the column the way the sample file does when it is missing', () => {
@@ -296,10 +424,12 @@ describe('what the import looks up before it plans', () => {
 /** Every NEW student is given a starting PIN, and argon2 costs ~13ms a hash by design. */
 describe('how big a file may be', () => {
   const fileOf = (rows: number) =>
-    [
-      'Mobile Number',
-      ...Array.from({ length: rows }, (_, i) => `98765${String(i).padStart(5, '0')}`),
-    ].join('\n');
+    roster(
+      [
+        'Mobile Number',
+        ...Array.from({ length: rows }, (_, i) => `98765${String(i).padStart(5, '0')}`),
+      ].join('\n'),
+    );
 
   it('accepts a file at the limit', () => {
     const plan = planStudentImport(readCsvTable(fileOf(IMPORT_MAX_ROWS)), context());

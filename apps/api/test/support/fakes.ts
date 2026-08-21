@@ -658,6 +658,18 @@ export class FakePrisma {
   };
 
   /** The exam catalog, with the list filters and the CRUD `ExamsService` runs. */
+  /** The program catalog the importer checks a roster's codes against. Set directly on the fake. */
+  programCatalog: { code: string; isActive: boolean }[] = [];
+
+  readonly program = {
+    findMany: ({ where = {} }: { where?: { isActive?: boolean } } = {}) =>
+      Promise.resolve(
+        this.programCatalog.filter(
+          (row) => where.isActive === undefined || row.isActive === where.isActive,
+        ),
+      ),
+  };
+
   readonly exam = {
     // A copy, not the live row — same reason as `student.findUnique` above.
     findUnique: ({ where }: { where: { id?: string; code?: string } }) => {
@@ -1161,6 +1173,16 @@ export function fakeAuth(): AuthService {
   return {
     hashPin: (pin: string) => Promise.resolve(`hash:${pin}`),
   } as unknown as AuthService;
+}
+
+/** A roster CSV with the demanded columns filled, so a test varies only what it is about. */
+export function roster(csv: string): string {
+  const REQUIRED_HEADERS = 'Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs';
+  const REQUIRED_CELLS = 'ONLINE,ONLINE,SSC,,';
+  const [header, ...rows] = csv.split('\n');
+  return [`${header},${REQUIRED_HEADERS}`, ...rows.map((row) => `${row},${REQUIRED_CELLS}`)].join(
+    '\n',
+  );
 }
 
 export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {

@@ -4,18 +4,19 @@ import {
   AUDIT_FEATURE,
   IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
-  STUDENT_TYPE,
   type AuditAction,
   type AuditFeature,
   type ImportLogStatus,
   type StudentImportPlan,
   type StudentImportResult,
+  type StudentImportRow,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, defaultPinFor } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
+import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 
 /**
@@ -86,30 +87,10 @@ export class ImportsService {
           ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
           : {};
 
-        if (row.existingStudentId) {
-          await this.prisma.student.update({
-            where: { id: row.existingStudentId },
-            data: {
-              // An empty name column means "no opinion", not "clear the name". An existing student also keeps
-              // whatever PIN they have — see the planner: `willReceiveDefaultPin` is false once they chose one.
-              ...(row.fullName === null ? {} : { fullName: row.fullName }),
-              ...startingPin,
-            },
-          });
-          updated += 1;
-          rowActions.push({ entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE });
-        } else {
-          const student = await this.prisma.student.create({
-            data: {
-              mobile: row.mobile,
-              fullName: row.fullName,
-              studentType: STUDENT_TYPE.ONLINE,
-              ...startingPin,
-            },
-          });
-          created += 1;
-          rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
-        }
+        const done = await this.writeRow(row, startingPin);
+        if (done.action === AUDIT_ACTION.CREATE) created += 1;
+        else updated += 1;
+        rowActions.push(done);
       }
     } catch (error) {
       await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
@@ -122,6 +103,44 @@ export class ImportsService {
     await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
+  }
+
+  /** One row's write, and what the audit trail should call it. */
+  private async writeRow(
+    row: StudentImportRow,
+    startingPin: { pinHash?: string; pinIsDefault?: boolean },
+  ): Promise<{ entityId: string; action: AuditAction }> {
+    const profile = profileData(row);
+    // Never downgraded: a row not carrying all three leaves whatever was already true.
+    const readiness = isPreTestReady(row.profile) ? { preTestReady: true } : {};
+    const access = accessOf(row);
+
+    if (row.existingStudentId) {
+      await this.prisma.student.update({
+        where: { id: row.existingStudentId },
+        data: {
+          // An empty name column means "no opinion", not "clear the name".
+          ...(row.fullName === null ? {} : { fullName: row.fullName }),
+          ...access,
+          ...(profile ? { profile: { upsert: { create: profile, update: profile } } } : {}),
+          ...readiness,
+          ...startingPin,
+        },
+      });
+      return { entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE };
+    }
+
+    const student = await this.prisma.student.create({
+      data: {
+        mobile: row.mobile!,
+        fullName: row.fullName,
+        ...access,
+        ...(profile ? { profile: { create: profile } } : {}),
+        ...readiness,
+        ...startingPin,
+      },
+    });
+    return { entityId: student.id, action: AUDIT_ACTION.CREATE };
   }
 
   private async planStudents(file: Buffer): Promise<StudentImportPlan> {
@@ -151,12 +170,22 @@ export class ImportsService {
    */
   private async contextFor(table: CsvTable): Promise<ImportContext> {
     const mobiles = mobilesIn(table);
-    if (mobiles.length === 0) return { existingByMobile: new Map() };
 
-    const students = await this.prisma.student.findMany({
-      where: { mobile: { in: mobiles }, deletedAt: null },
-      select: { id: true, mobile: true, fullName: true, pinHash: true },
-    });
+    // Whole small catalogs: cheaper than a lookup per row, and a roster repeats a branch.
+    const [branches, exams, programs, students] = await Promise.all([
+      this.prisma.branch.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: { id: true, name: true, type: true },
+      }),
+      this.prisma.exam.findMany({ where: { isActive: true }, select: { code: true } }),
+      this.prisma.program.findMany({ where: { isActive: true }, select: { code: true } }),
+      mobiles.length === 0
+        ? []
+        : this.prisma.student.findMany({
+            where: { mobile: { in: mobiles }, deletedAt: null },
+            select: { id: true, mobile: true, fullName: true, pinHash: true },
+          }),
+    ]);
 
     return {
       existingByMobile: new Map(
@@ -165,6 +194,11 @@ export class ImportsService {
           { id: student.id, fullName: student.fullName, hasPin: student.pinHash !== null },
         ]),
       ),
+      branchByName: new Map(
+        branches.map((branch) => [branch.name, { id: branch.id, type: branch.type }]),
+      ),
+      examCodes: new Set(exams.map((exam) => exam.code)),
+      programCodes: new Set(programs.map((program) => program.code)),
     };
   }
 
@@ -237,4 +271,30 @@ export class ImportsService {
       },
     });
   }
+}
+
+/** By relation, not the raw FK: Prisma refuses an unchecked id beside the nested profile write. */
+function accessOf(row: StudentImportRow) {
+  return {
+    studentType: row.studentType!,
+    ...(row.currentBranchId ? { currentBranch: { connect: { id: row.currentBranchId } } } : {}),
+    enrolledFamilies: row.enrolledFamilies,
+    enrolledExams: row.enrolledExams,
+    programs: row.programs,
+  };
+}
+
+/** The profile columns this row filled in, or null when it filled in none. */
+function profileData(row: StudentImportRow) {
+  const p = row.profile;
+  const data = {
+    ...(p.motherName === null ? {} : { motherName: p.motherName }),
+    ...(p.fatherName === null ? {} : { fatherName: p.fatherName }),
+    // Prisma wants a Date for a DATE column; the sheet carries a plain day.
+    ...(p.dob === null ? {} : { dob: new Date(`${p.dob}T00:00:00Z`) }),
+    ...(p.email === null ? {} : { email: p.email }),
+    ...(p.gender === null ? {} : { gender: p.gender }),
+    ...(p.address === null ? {} : { address: p.address }),
+  };
+  return Object.keys(data).length === 0 ? null : data;
 }

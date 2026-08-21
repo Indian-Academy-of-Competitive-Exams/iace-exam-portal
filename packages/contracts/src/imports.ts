@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { examFamilySchema } from './exams';
+import { genderSchema, studentTypeSchema } from './students';
 
 // ============================================================================
 // Bulk student import. Previewed before anything is written, errors reported by
@@ -32,11 +34,31 @@ export type ImportLogStatus = z.infer<typeof importLogStatusSchema>;
 export const studentImportActionSchema = z.enum(['create', 'update', 'skip']);
 export type StudentImportAction = z.infer<typeof studentImportActionSchema>;
 
+/** The profile columns, as one object — none of them is ever queried, so none of them is a column. */
+export const studentImportProfileSchema = z.object({
+  motherName: z.string().nullable(),
+  fatherName: z.string().nullable(),
+  dob: z.string().nullable(),
+  email: z.string().nullable(),
+  gender: genderSchema.nullable(),
+  address: z.string().nullable(),
+});
+export type StudentImportProfile = z.infer<typeof studentImportProfileSchema>;
+
 export const studentImportRowSchema = z.object({
   /** 1-based line in the uploaded file, header included, as an editor shows it. */
   line: z.number().int(),
   mobile: z.string().nullable(),
   fullName: z.string().nullable(),
+  studentType: studentTypeSchema.nullable(),
+  /** What the sheet said, kept for the preview so an unmatched name can be shown back. */
+  branchName: z.string().nullable(),
+  /** Resolved from the name against the live branch list. Null while the name did not match. */
+  currentBranchId: z.string().nullable(),
+  enrolledFamilies: z.array(examFamilySchema),
+  enrolledExams: z.array(z.string()),
+  programs: z.array(z.string()),
+  profile: studentImportProfileSchema,
   /** Set when the number already belongs to a student — this row updates them. */
   existingStudentId: z.string().nullable(),
   /** Whether this row hands out a starting PIN. Never for a student who chose their own. */
@@ -123,7 +145,92 @@ export const STUDENT_IMPORT_COLUMNS = [
     required: false,
     aliases: ['fullname', 'name', 'studentname', 'student'],
   },
+  {
+    key: 'studentType',
+    header: 'Student Type',
+    width: 16,
+    required: true,
+    aliases: ['studenttype', 'type', 'mode', 'studentmode'],
+  },
+  {
+    key: 'branchName',
+    header: 'Branch Name',
+    width: 22,
+    // The NAME, never the id: nobody filling a spreadsheet has a cuid to hand.
+    required: true,
+    aliases: ['branchname', 'branch', 'centre', 'center', 'branchcentre'],
+  },
+  {
+    key: 'enrolledFamilies',
+    header: 'Enrolled Families',
+    width: 24,
+    required: true,
+    aliases: ['enrolledfamilies', 'enrolledfamily', 'families', 'family', 'examfamily'],
+  },
+  {
+    key: 'enrolledExams',
+    header: 'Enrolled Exams',
+    width: 26,
+    required: true,
+    aliases: ['enrolledexams', 'enrolledexam', 'exams', 'exam', 'examcodes', 'examcode'],
+  },
+  {
+    key: 'programs',
+    header: 'Programs',
+    width: 26,
+    required: true,
+    aliases: ['programs', 'program', 'programcodes', 'programcode', 'course', 'courses'],
+  },
+  {
+    key: 'motherName',
+    header: "Mother's Name",
+    width: 24,
+    required: false,
+    aliases: ["mother'sname", 'mothersname', 'mothername', 'mother'],
+  },
+  {
+    key: 'fatherName',
+    header: "Father's Name",
+    width: 24,
+    required: false,
+    aliases: ["father'sname", 'fathersname', 'fathername', 'father', 'guardianname'],
+  },
+  {
+    key: 'dob',
+    header: 'Date of Birth',
+    width: 16,
+    required: false,
+    aliases: ['dateofbirth', 'dob', 'birthdate', 'birthday'],
+  },
+  {
+    key: 'email',
+    header: 'Email',
+    width: 28,
+    required: false,
+    aliases: ['email', 'emailaddress', 'mail', 'emailid'],
+  },
+  {
+    key: 'gender',
+    header: 'Gender',
+    width: 12,
+    required: false,
+    aliases: ['gender', 'sex'],
+  },
+  {
+    key: 'address',
+    header: 'Address',
+    width: 36,
+    required: false,
+    aliases: ['address', 'residentialaddress', 'postaladdress', 'fulladdress'],
+  },
 ] as const;
+
+/** How a cell holding several codes is written — any of these, so either style imports. */
+export const IMPORT_LIST_SEPARATORS = /[,;|/\n]+/;
+
+/** A row naming none of family, exam or program creates a student who reaches nothing. */
+export const NO_ACCESS_ROUTE_MESSAGE =
+  'This row reaches no test series — give it an enrolled family, an enrolled exam or a program.';
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];

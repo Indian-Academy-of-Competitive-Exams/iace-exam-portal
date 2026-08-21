@@ -1,14 +1,28 @@
 import {
+  EXAM_FAMILIES,
+  GENDERS,
+  IMPORT_LIST_SEPARATORS,
   IMPORT_MAX_ROWS,
+  NO_ACCESS_ROUTE_MESSAGE,
   STUDENT_IMPORT_COLUMNS,
+  STUDENT_TYPES,
+  canonicalName,
+  dobSchema,
+  emailSchema,
   mobileSchema,
   personNameSchema,
+  type BranchType,
+  type ExamFamily,
+  type Gender,
   type StudentImportColumn,
   type StudentImportColumnKey,
+  type StudentImportProfile,
   type StudentImportRow,
   type StudentImportPlan,
+  type StudentType,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable } from '../common/importing';
+import { studentBranchBlocker } from '../branches';
 
 /** Decides what a roster file WOULD do, without doing any of it. */
 
@@ -32,6 +46,12 @@ function missingColumns(headers: string[]): StudentImportColumn[] {
 export interface ImportContext {
   /** Mobile → existing student id, for the whole file's worth of numbers. */
   existingByMobile: Map<string, { id: string; fullName: string | null; hasPin: boolean }>;
+  /** Canonical branch name → the branch. Active only: a retired one takes no new students. */
+  branchByName: Map<string, { id: string; type: BranchType }>;
+  /** The exam codes an enrolment may name, canonical. */
+  examCodes: Set<string>;
+  /** The program codes a student may be a candidate for, canonical. */
+  programCodes: Set<string>;
 }
 
 /**
@@ -149,6 +169,137 @@ function readMobile(
   return { mobile: parsed.data };
 }
 
+/** A cell holding several codes, split however it was written and canonicalised. */
+function readList(row: CsvRow, key: StudentImportColumnKey): string[] {
+  const raw = columnValue(row, key).trim();
+  if (raw === '') return [];
+  const seen = new Set<string>();
+  for (const part of raw.split(IMPORT_LIST_SEPARATORS)) {
+    const value = canonicalName(part);
+    if (value !== '') seen.add(value);
+  }
+  return [...seen];
+}
+
+/** Every value in the cell that the catalog does not hold. */
+function unknownOf(values: string[], known: Set<string>): string[] {
+  return values.filter((value) => !known.has(value));
+}
+
+/** ONLINE / OFFLINE / NON-IACE, however it was cased or hyphenated. */
+function readStudentType(row: CsvRow): { studentType: StudentType | null; error?: string } {
+  const raw = columnValue(row, 'studentType').trim();
+  if (raw === '') return { studentType: null, error: 'No student type in this row' };
+
+  const wanted = canonicalName(raw).replaceAll(/[\s-]+/g, '_');
+  const match = STUDENT_TYPES.find((type) => type === wanted);
+  if (match) return { studentType: match };
+
+  return {
+    studentType: null,
+    error: `"${raw}" is not a student type. Use ${STUDENT_TYPES.join(', ')}.`,
+  };
+}
+
+/** The branch NAME, resolved against the live list. The sheet never carries an id. */
+function readBranch(
+  row: CsvRow,
+  context: ImportContext,
+  studentType: StudentType | null,
+): { branchName: string | null; currentBranchId: string | null; error?: string } {
+  const raw = columnValue(row, 'branchName').trim();
+  if (raw === '')
+    return { branchName: null, currentBranchId: null, error: 'No branch in this row' };
+
+  const name = canonicalName(raw);
+  const branch = context.branchByName.get(name);
+  if (!branch) {
+    return {
+      branchName: name,
+      currentBranchId: null,
+      error: `There is no active branch called "${name}".`,
+    };
+  }
+
+  // The pairing the admin screens refuse; the importer writes rows they never pass through.
+  const blocker = studentType ? studentBranchBlocker(studentType, branch.type) : null;
+  if (blocker) return { branchName: name, currentBranchId: null, error: blocker };
+
+  return { branchName: name, currentBranchId: branch.id };
+}
+
+/** The families this row names, and the ones that are not families at all. */
+function readFamilies(row: CsvRow): { families: ExamFamily[]; error?: string } {
+  const values = readList(row, 'enrolledFamilies').map((value) => value.replaceAll(' ', '_'));
+  const known = new Set<string>(EXAM_FAMILIES);
+  const unknown = unknownOf(values, known);
+  if (unknown.length > 0) {
+    return { families: [], error: `Not an exam family: ${unknown.join(', ')}.` };
+  }
+  return { families: values as ExamFamily[] };
+}
+
+/** The optional profile columns. A bad value is an error; a blank one is simply absent. */
+function readProfile(row: CsvRow): { profile: StudentImportProfile; errors: string[] } {
+  const errors: string[] = [];
+
+  const named = (key: StudentImportColumnKey, label: string): string | null => {
+    const raw = columnValue(row, key).trim();
+    if (raw === '') return null;
+    const parsed = personNameSchema.safeParse(raw);
+    if (parsed.success) return parsed.data;
+    errors.push(`${label}: ${parsed.error.issues[0]?.message ?? 'not a valid name'}`);
+    return null;
+  };
+
+  const rawDob = columnValue(row, 'dob').trim();
+  let dob: string | null = null;
+  if (rawDob !== '') {
+    const parsed = dobSchema.safeParse(toIsoDate(rawDob));
+    if (parsed.success) dob = parsed.data;
+    else errors.push(`Date of birth: ${parsed.error.issues[0]?.message ?? 'not a valid date'}`);
+  }
+
+  const rawEmail = columnValue(row, 'email').trim();
+  let email: string | null = null;
+  if (rawEmail !== '') {
+    const parsed = emailSchema.safeParse(rawEmail);
+    if (parsed.success) email = parsed.data;
+    else errors.push('Email: that is not a valid email address');
+  }
+
+  const rawGender = columnValue(row, 'gender').trim();
+  let gender: Gender | null = null;
+  if (rawGender !== '') {
+    const wanted = canonicalName(rawGender);
+    const match = GENDERS.find((value) => value === wanted || value.startsWith(wanted));
+    if (match) gender = match;
+    else errors.push(`Gender: use ${GENDERS.join(', ')}`);
+  }
+
+  const address = columnValue(row, 'address').trim();
+
+  return {
+    profile: {
+      motherName: named('motherName', "Mother's name"),
+      fatherName: named('fatherName', "Father's name"),
+      dob,
+      email,
+      gender,
+      address: address === '' ? null : address,
+    },
+    errors,
+  };
+}
+
+/** Both orders a spreadsheet actually produces, normalised to the one the schema wants. */
+function toIsoDate(raw: string): string {
+  const dmy = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
+  if (!dmy) return raw;
+  const [, day, month, year] = dmy;
+  return `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}`;
+}
+
 /** One row's plan. */
 function planRow(
   row: CsvRow,
@@ -157,13 +308,32 @@ function planRow(
 ): StudentImportRow {
   const name = readName(row);
   const number = readMobile(row, seenInFile);
+  const type = readStudentType(row);
+  const branch = readBranch(row, context, type.studentType);
+  const families = readFamilies(row);
+  const { profile, errors: profileErrors } = readProfile(row);
+
+  const enrolledExams = readList(row, 'enrolledExams');
+  const programs = readList(row, 'programs');
+  const unknownExams = unknownOf(enrolledExams, context.examCodes);
+  const unknownPrograms = unknownOf(programs, context.programCodes);
 
   const { fullName } = name;
   const { mobile } = number;
 
   const existing = mobile ? context.existingByMobile.get(mobile) : undefined;
 
-  const errors = [name.error, number.error].filter((error): error is string => error !== undefined);
+  const errors = [
+    name.error,
+    number.error,
+    type.error,
+    branch.error,
+    families.error,
+    unknownExams.length > 0 ? `No such exam code: ${unknownExams.join(', ')}.` : undefined,
+    unknownPrograms.length > 0 ? `No such program code: ${unknownPrograms.join(', ')}.` : undefined,
+    reachesNothing(families.families, enrolledExams, programs),
+    ...profileErrors,
+  ].filter((error): error is string => error !== undefined);
 
   const action = actionFor(errors.length, Boolean(existing));
 
@@ -171,6 +341,13 @@ function planRow(
     line: row.line,
     mobile,
     fullName,
+    studentType: type.studentType,
+    branchName: branch.branchName,
+    currentBranchId: branch.currentBranchId,
+    enrolledFamilies: families.families,
+    enrolledExams,
+    programs,
+    profile,
     existingStudentId: existing?.id ?? null,
     // A student who already chose a PIN keeps it. Re-importing last term's
     // roster must not hand every one of those accounts back to the sheet.
@@ -178,4 +355,14 @@ function planRow(
     action,
     errors,
   };
+}
+
+/** Family, exam OR program — any one grants access, so none of the three opens nothing. */
+function reachesNothing(
+  families: ExamFamily[],
+  enrolledExams: string[],
+  programs: string[],
+): string | undefined {
+  const routes = [families, enrolledExams, programs];
+  return routes.some((route) => route.length > 0) ? undefined : NO_ACCESS_ROUTE_MESSAGE;
 }

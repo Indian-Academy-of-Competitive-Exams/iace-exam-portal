@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
+  BRANCH_TYPE,
   IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
   QUESTION_IMPORT_COLUMNS,
@@ -18,9 +19,12 @@ import {
   FakePrisma,
   FakeQuestionBankPrisma,
   FakeStorage,
+  makeBranch,
   makeStudent,
   makeSubject,
   makeTopic,
+  roster,
+  type FakeStudent,
 } from './support/fakes';
 
 /** Reaches the private closer directly — see the describe block that uses it for why. */
@@ -121,12 +125,20 @@ describe('ImportsService — a preview writes nothing at all', () => {
       new AuditService(prisma.asService()),
     );
 
-    await service.previewStudents(Buffer.from('mobile\n9876543210'));
+    await service.previewStudents(Buffer.from(roster('mobile\n9876543210')));
 
     assert.equal(prisma.importLogs.length, 0);
     assert.equal(storage.objects.size, 0);
   });
 });
+
+/** The roster names the ONLINE branch, so the fake has to hold one for the rows to resolve. */
+const importPrisma = (students: FakeStudent[] = []) =>
+  new FakePrisma(
+    students,
+    [],
+    [makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL })],
+  );
 
 describe('ImportsService.commitStudents — what an import run actually left behind', () => {
   /**
@@ -134,7 +146,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
    * one file — because what matters is that the audit trail matches what happened, not the sheet.
    */
   it('opens exactly one run at commit, and logs only the rows it wrote', async () => {
-    const prisma = new FakePrisma([
+    const prisma = importPrisma([
       makeStudent({ id: 'stu_existing', mobile: '9000000001', fullName: 'Already Here' }),
     ]);
     const storage = new FakeStorage();
@@ -146,7 +158,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     );
 
     const result = await service.commitStudents(
-      Buffer.from('mobile,fullName\n9876543210,Asha\n9000000001,Renamed\nnot-a-number,Bad'),
+      Buffer.from(roster('mobile,fullName\n9876543210,Asha\n9000000001,Renamed\nnot-a-number,Bad')),
       'adm_1',
     );
 
@@ -198,7 +210,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
    * rows it half-wrote must not be audited as if the whole file went through.
    */
   it('marks the run FAILED and writes no row actions when it throws before writing anything', async () => {
-    const prisma = new FakePrisma();
+    const prisma = importPrisma();
     const service = new ImportsService(
       prisma.asService(),
       fakeAuth(() => Promise.reject(new Error('argon2 unavailable'))),
@@ -207,7 +219,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     );
 
     await assert.rejects(
-      () => service.commitStudents(Buffer.from('mobile\n9876543210'), 'adm_1'),
+      () => service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1'),
       /argon2 unavailable/,
     );
 
@@ -225,7 +237,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
    * no audit entry at all, plus a durable record contradicting what happened.
    */
   it('records the rows it did write when the commit throws partway through the loop', async () => {
-    const prisma = new FakePrisma();
+    const prisma = importPrisma();
     prisma.studentWriteLimit = 2;
     const service = new ImportsService(
       prisma.asService(),
@@ -236,7 +248,10 @@ describe('ImportsService.commitStudents — what an import run actually left beh
 
     await assert.rejects(
       () =>
-        service.commitStudents(Buffer.from('mobile\n9000000001\n9000000002\n9000000003'), 'adm_1'),
+        service.commitStudents(
+          Buffer.from(roster('mobile\n9000000001\n9000000002\n9000000003')),
+          'adm_1',
+        ),
       /student write failed/,
     );
 
@@ -264,7 +279,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
    * that already happened as a failure — that is exactly the lie `failRun` exists to prevent.
    */
   it('ends COMMITTED with the student write intact even when recordImportRows throws', async () => {
-    const prisma = new FakePrisma();
+    const prisma = importPrisma();
     const throwingAudit = {
       recordImportRows: () => Promise.reject(new Error('audit db unreachable')),
     } as unknown as AuditService;
@@ -275,7 +290,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       throwingAudit,
     );
 
-    const result = await service.commitStudents(Buffer.from('mobile\n9876543210'), 'adm_1');
+    const result = await service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1');
 
     assert.equal(result.created, 1);
     assert.equal(

@@ -12,6 +12,7 @@ import {
 import {
   Alert,
   Badge,
+  BadgeList,
   Button,
   Card,
   CardContent,
@@ -19,8 +20,8 @@ import {
   CardHeader,
   CardTitle,
   FileDropzone,
-  LoadingState,
   linkVariants,
+  LoadingState,
   PageFrame,
   PageHeader,
   StatRow,
@@ -31,6 +32,7 @@ import {
   TableHeader,
   TableRow,
   TableState,
+  TruncatedText,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
@@ -118,6 +120,8 @@ export function ImportStudentsPage() {
                 <TableHead numeric>Line</TableHead>
                 <TableHead>Mobile</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Branch</TableHead>
+                <TableHead>Reaches</TableHead>
                 <TableHead>What happens</TableHead>
               </TableRow>
             </TableHeader>
@@ -226,7 +230,21 @@ function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
         {row.line}
       </TableCell>
       <TableCell className="tabular-nums">{row.mobile ?? '—'}</TableCell>
-      <TableCell>{row.fullName ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell>
+        <TruncatedText className="max-w-[12rem]">{row.fullName}</TruncatedText>
+      </TableCell>
+      <TableCell>
+        <TruncatedText className="max-w-[10rem]">{row.branchName}</TruncatedText>
+      </TableCell>
+      <TableCell>
+        {/* What actually opens a series for them, so it is checked before the commit. */}
+        <BadgeList
+          items={[...row.enrolledFamilies, ...row.enrolledExams, ...row.programs]}
+          label={(code) => code}
+          max={2}
+          empty={<span className="text-muted-foreground">Nothing</span>}
+        />
+      </TableCell>
       <TableCell>
         {row.action !== 'skip' ? (
           <span className="flex flex-wrap items-center gap-1.5">
