@@ -39,7 +39,6 @@ export {
   formatFileSize,
   type FileDropzoneProps,
 } from './components/ui/file-dropzone';
-export { Select, type SelectProps } from './components/ui/select';
 export {
   SearchInput,
   useDebouncedSearch,

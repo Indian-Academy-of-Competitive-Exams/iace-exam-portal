@@ -33,6 +33,32 @@ export default defineConfig([
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
+      // Design-system rules a type cannot state, because these are intrinsic elements.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXOpeningElement[name.name="select"]',
+          message: 'Use Combobox. The OS draws a native <select> list, so it matches nothing else.',
+        },
+        {
+          selector:
+            'JSXOpeningElement[name.name=/^[a-z]/]:has(JSXAttribute[name.name="type"][value.value=/^(date|datetime-local|time|month|week)$/])',
+          message:
+            'Use DatePicker. Every browser draws its own calendar, and a phone draws a fourth.',
+        },
+        {
+          selector: 'JSXOpeningElement[name.name=/^[a-z]/]:has(JSXAttribute[name.name="title"])',
+          message: 'Use Tooltip. Keyboard focus never fires the native title, and it is undrawn.',
+        },
+        {
+          selector: String.raw`JSXAttribute[name.name="className"][value.value=/\bring-2\b/]`,
+          message: 'Use focus-visible:shadow-focus, which reads the --focus-ring token.',
+        },
+        {
+          selector: String.raw`JSXAttribute[name.name="className"][value.value=/#[0-9a-fA-F]{3,8}\b/]`,
+          message: 'Take the colour from a packages/ui token, never a raw hex.',
+        },
+      ],
     },
   },
   prettier,

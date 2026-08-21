@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './button';
-import { Select } from './select';
+import { Combobox } from './combobox';
 
 /**
  * Shows the range ("1–20 of 337"), not just the page number.
@@ -34,21 +34,17 @@ export function Pagination({
         </p>
 
         {onPageSizeChange && pageSizeOptions?.length ? (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="hidden sm:inline">Rows</span>
-            <Select
+            <Combobox
               aria-label="Rows per page"
-              className="h-8 w-[4.5rem] py-0 text-sm"
+              className="h-8 w-[5rem] text-sm"
+              clearable={false}
               value={String(pageSize)}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            >
-              {pageSizeOptions.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </Select>
-          </label>
+              onChange={(next) => onPageSizeChange(Number(next))}
+              items={pageSizeOptions.map((size) => ({ value: String(size), label: String(size) }))}
+            />
+          </div>
         ) : null}
       </div>
 

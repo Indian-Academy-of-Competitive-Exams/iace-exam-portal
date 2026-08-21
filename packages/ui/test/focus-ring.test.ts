@@ -21,7 +21,7 @@ describe('focus ring', () => {
     );
   });
 
-  for (const component of ['input', 'select'] as const) {
+  for (const component of ['input'] as const) {
     it(`${component}.tsx claims the ring on its wrapper`, () => {
       const source = read(`src/components/ui/${component}.tsx`);
       assert.ok(

@@ -34,7 +34,7 @@ export function UserMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          title={label}
+          aria-label={label}
           className={cn(
             'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
             // Capped rather than fluid: an email long enough to matter would
