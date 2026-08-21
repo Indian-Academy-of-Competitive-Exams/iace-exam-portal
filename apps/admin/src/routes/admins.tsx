@@ -14,17 +14,11 @@ import {
   Badge,
   BadgeList,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Checkbox,
   ConfirmDialog,
   DataTable,
-  FormActions,
+  FormDialog,
   FormField,
-  FormRow,
   Input,
   PageHeader,
   Pagination,
@@ -103,33 +97,30 @@ export function AdminsPage() {
   const columns = useMemo(() => adminColumns(refresh), [refresh]);
 
   const header = (
-    <>
-      <PageHeader
-        title="Admins"
-        description="Who can sign in to this app. Every admin here was created by a super admin — nobody can self-register."
-        action={
-          <Button size="sm" onClick={() => setCreating((open) => !open)}>
-            <Plus aria-hidden />
-            New admin
-          </Button>
-        }
-      />
-
-      {creating ? (
-        <NewAdminCard
-          onDone={() => {
-            setCreating(false);
-            refresh();
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
-    </>
+    <PageHeader
+      title="Admins"
+      description="Who can sign in to this app. Every admin here was created by a super admin — nobody can self-register."
+      action={
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Plus aria-hidden />
+          New admin
+        </Button>
+      }
+    />
   );
 
   return (
     <SuperAdminOnly title="Admins">
-      <TableFrame framed={!creating} header={header}>
+      <TableFrame header={header}>
+        {/* Portalled, so where it sits in the tree costs the pinned header nothing. */}
+        <NewAdminDialog
+          open={creating}
+          onOpenChange={setCreating}
+          onDone={() => {
+            setCreating(false);
+            refresh();
+          }}
+        />
         <DataTable
           columns={columns}
           rows={admins.data?.items ?? []}
@@ -250,10 +241,11 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
   );
 }
 
-function NewAdminCard({
+function NewAdminDialog({
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
-}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateAdminInput>({
     resolver: zodResolver(createAdminSchema),
     defaultValues: { email: '', fullName: '', isSuperAdmin: false },
@@ -281,74 +273,64 @@ function NewAdminCard({
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>New admin</CardTitle>
-        <CardDescription>
-          They sign in with this email and a one-time code. A new admin holds nothing until you
-          grant them something on the Permissions screen.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit(setPending)}>
-          <FormField form={form} name="email" label="Email" className="min-w-64 flex-1">
-            {(control) => (
-              <Input {...control} type="email" placeholder="name@iace.co.in" autoFocus />
-            )}
-          </FormField>
+    <>
+      <FormDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        form={form}
+        onSubmit={setPending}
+        title="New admin"
+        description="They sign in with this email and a one-time code. A new admin holds nothing until you grant them something on the Permissions screen."
+        submitLabel="Create"
+        loading={create.isPending}
+      >
+        <FormField form={form} name="email" label="Email">
+          {(control) => <Input {...control} type="email" placeholder="name@iace.co.in" autoFocus />}
+        </FormField>
 
-          <FormField form={form} name="fullName" label="Name" className="min-w-48 flex-1">
-            {(control) => <Input {...control} placeholder="Full name" />}
-          </FormField>
+        <FormField form={form} name="fullName" label="Name">
+          {(control) => <Input {...control} placeholder="Full name" />}
+        </FormField>
 
-          <FormField form={form} name="isSuperAdmin" label="">
-            {(control) => (
-              <Checkbox
-                {...control}
-                checked={isSuperAdmin}
-                onChange={(event) => form.setValue('isSuperAdmin', event.target.checked)}
-                label="Super admin"
-                hint="Bypasses every feature check, and can manage admins."
-              />
-            )}
-          </FormField>
+        <FormField form={form} name="isSuperAdmin" label="">
+          {(control) => (
+            <Checkbox
+              {...control}
+              checked={isSuperAdmin}
+              onChange={(event) => form.setValue('isSuperAdmin', event.target.checked)}
+              label="Super admin"
+              hint="Bypasses every feature check, and can manage admins."
+            />
+          )}
+        </FormField>
+      </FormDialog>
 
-          <FormActions>
-            <Button type="submit" loading={create.isPending}>
-              Create
-            </Button>
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-
-        {/* Creating an admin is creating a way into this app, and a super admin
-            bypasses every permission check there is — including the one on this
-            screen, so the new account can create more of itself. That is worth
-            one deliberate step, and the wording changes with the box, because
-            the two outcomes are not the same size. */}
-        <ConfirmDialog
-          open={pending !== null}
-          onOpenChange={(open) => {
-            if (!open) setPending(null);
-          }}
-          destructive={pending?.isSuperAdmin ?? false}
-          loading={create.isPending}
-          title={
-            pending?.isSuperAdmin
-              ? 'Create a SUPER admin?'
-              : `Create an admin for ${pending?.email ?? ''}?`
-          }
-          description={
-            pending?.isSuperAdmin
-              ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins — including you. Grant it only to someone who already runs the institute.`
-              : 'They will be able to sign in with this email and a one-time code. They hold no permissions until you grant them some on the Permissions screen.'
-          }
-          confirmLabel={pending?.isSuperAdmin ? 'Create super admin' : 'Create admin'}
-          onConfirm={() => pending && create.mutate(pending)}
-        />
-      </CardContent>
-    </Card>
+      {/* Creating an admin is creating a way into this app, and a super admin
+          bypasses every permission check there is — including the one on this
+          screen, so the new account can create more of itself. That is worth
+          one deliberate step, and the wording changes with the box, because
+          the two outcomes are not the same size. Stacked OVER the form, and
+          closing it drops back to the fields with their errors showing. */}
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+        destructive={pending?.isSuperAdmin ?? false}
+        loading={create.isPending}
+        title={
+          pending?.isSuperAdmin
+            ? 'Create a SUPER admin?'
+            : `Create an admin for ${pending?.email ?? ''}?`
+        }
+        description={
+          pending?.isSuperAdmin
+            ? `${pending.email} will bypass every feature check, can manage branches, and can create and deactivate other admins — including you. Grant it only to someone who already runs the institute.`
+            : 'They will be able to sign in with this email and a one-time code. They hold no permissions until you grant them some on the Permissions screen.'
+        }
+        confirmLabel={pending?.isSuperAdmin ? 'Create super admin' : 'Create admin'}
+        onConfirm={() => pending && create.mutate(pending)}
+      />
+    </>
   );
 }

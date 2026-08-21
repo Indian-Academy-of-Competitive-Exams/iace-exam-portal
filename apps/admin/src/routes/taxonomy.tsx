@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
 import {
@@ -16,15 +16,9 @@ import {
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 import {
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   DataTable,
-  FormActions,
+  FormDialog,
   FormField,
-  FormRow,
   Input,
   PageHeader,
   Pagination,
@@ -122,22 +116,21 @@ function SubjectsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
           />
         </div>
         {canWrite ? (
-          <Button size="sm" onClick={() => setCreating((open) => !open)}>
+          <Button size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden />
             New subject
           </Button>
         ) : null}
       </div>
 
-      {creating ? (
-        <NewSubjectCard
-          onDone={() => {
-            setCreating(false);
-            void queryClient.invalidateQueries({ queryKey: ['admin', 'subjects'] });
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
+      <NewSubjectDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'subjects'] });
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -151,10 +144,11 @@ function SubjectsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
   );
 }
 
-function NewSubjectCard({
+function NewSubjectDialog({
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
-}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateSubjectInput>({
     resolver: zodResolver(createSubjectSchema),
     defaultValues: { name: '', code: '' },
@@ -169,32 +163,23 @@ function NewSubjectCard({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New subject</CardTitle>
-        <CardDescription>
-          Capital letters, numbers and single spaces — what you type is tidied to that.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="name" label="Name">
-            {(field) => <Input {...field} placeholder="QUANTITATIVE APTITUDE" autoFocus />}
-          </FormField>
-          <FormField form={form} name="code" label="Code" hint="Optional">
-            {(field) => <Input {...field} placeholder="QA" />}
-          </FormField>
-          <FormActions>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={create.isPending}>
-              Add subject
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New subject"
+      description="Capital letters, numbers and single spaces — what you type is tidied to that."
+      submitLabel="Add subject"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(field) => <Input {...field} placeholder="QUANTITATIVE APTITUDE" autoFocus />}
+      </FormField>
+      <FormField form={form} name="code" label="Code" hint="Optional">
+        {(field) => <Input {...field} placeholder="QA" />}
+      </FormField>
+    </FormDialog>
   );
 }
 
@@ -243,23 +228,22 @@ function TopicsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
           />
         </div>
         {canWrite ? (
-          <Button size="sm" onClick={() => setCreating((open) => !open)}>
+          <Button size="sm" onClick={() => setCreating(true)}>
             <Plus aria-hidden />
             New topic
           </Button>
         ) : null}
       </div>
 
-      {creating ? (
-        <NewTopicCard
-          subjectId={subjectId}
-          onDone={() => {
-            setCreating(false);
-            void queryClient.invalidateQueries({ queryKey: ['admin', 'topics'] });
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
+      <NewTopicDialog
+        subjectId={subjectId}
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          void queryClient.invalidateQueries({ queryKey: ['admin', 'topics'] });
+        }}
+      />
 
       <DataTable
         columns={columns}
@@ -273,16 +257,23 @@ function TopicsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
   );
 }
 
-function NewTopicCard({
+function NewTopicDialog({
   subjectId,
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
-}: Readonly<{ subjectId: string; onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{
+  subjectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}>) {
   const form = useForm<CreateTopicInput>({
     resolver: zodResolver(createTopicSchema),
     defaultValues: { name: '', subjectId },
   });
-  const chosenSubject = form.watch('subjectId');
+  // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
+  const chosenSubject = useWatch({ control: form.control, name: 'subjectId' }) ?? '';
 
   const create = useMutation({
     meta: { success: 'Topic added.' },
@@ -292,39 +283,29 @@ function NewTopicCard({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New topic</CardTitle>
-        <CardDescription>
-          A topic belongs to one subject and never moves — every question under it would change
-          meaning.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="subjectId" label="Subject">
-            {(control) => (
-              <SubjectPicker
-                id={control.id}
-                value={chosenSubject}
-                onChange={(value) => form.setValue('subjectId', value, { shouldValidate: true })}
-                placeholder="Choose a subject"
-              />
-            )}
-          </FormField>
-          <FormField form={form} name="name" label="Name">
-            {(field) => <Input {...field} placeholder="ARITHMETIC" />}
-          </FormField>
-          <FormActions>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={create.isPending}>
-              Add topic
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New topic"
+      description="A topic belongs to one subject and never moves — every question under it would change meaning."
+      submitLabel="Add topic"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="subjectId" label="Subject">
+        {(control) => (
+          <SubjectPicker
+            id={control.id}
+            value={chosenSubject}
+            onChange={(value) => form.setValue('subjectId', value, { shouldValidate: true })}
+            placeholder="Choose a subject"
+          />
+        )}
+      </FormField>
+      <FormField form={form} name="name" label="Name">
+        {(field) => <Input {...field} placeholder="ARITHMETIC" />}
+      </FormField>
+    </FormDialog>
   );
 }
