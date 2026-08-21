@@ -13,7 +13,8 @@ export interface FormPanelProps {
   className?: string;
 }
 
-const BODY = 'flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-6';
+// `relative` is load-bearing: a static scroller lets an sr-only legend escape and grow the doc.
+const BODY = 'relative flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-6';
 
 /** A page that is ONE thing. Replaces `PageFrame`; nesting the two would be two scrollports. */
 export function FormPanel({

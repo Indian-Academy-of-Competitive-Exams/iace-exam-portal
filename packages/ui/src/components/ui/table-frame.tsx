@@ -27,7 +27,7 @@ export function PageFrame({ header, children, className }: Readonly<PageFramePro
   return (
     <div data-page-frame className="flex min-h-0 flex-1 flex-col">
       {header ? <div className="shrink-0">{header}</div> : null}
-      <div className={cn('min-h-0 flex-1 overflow-y-auto', className)}>{children}</div>
+      <div className={cn('relative min-h-0 flex-1 overflow-y-auto', className)}>{children}</div>
     </div>
   );
 }

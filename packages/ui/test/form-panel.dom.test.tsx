@@ -19,6 +19,17 @@ describe('FormPanel', () => {
     assert.equal(scrollports(container).length, 1);
   });
 
+  /** Measured: an sr-only legend escaped a static scroller and made the document 42px taller. */
+  it('makes its scrollport a containing block', () => {
+    const { container } = render(
+      <FormPanel>
+        <FormSection title="A">fields</FormSection>
+      </FormPanel>,
+    );
+
+    assert.match(scrollports(container)[0]?.className ?? '', /\brelative\b/);
+  });
+
   /** Save must not sit at the end of a scroll nobody reached, so it lives outside the scroller. */
   it('keeps the footer out of the scrolling body', () => {
     const { container } = render(

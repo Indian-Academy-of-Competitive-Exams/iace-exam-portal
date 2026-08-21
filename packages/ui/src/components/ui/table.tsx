@@ -11,7 +11,12 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
   ({ className, ...props }, ref) => {
     const fills = useInTableFrame();
     return (
-      <div className={cn('w-full', fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto')}>
+      <div
+        className={cn(
+          'relative w-full',
+          fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto',
+        )}
+      >
         <table
           ref={ref}
           className={cn('w-full border-separate border-spacing-0 text-sm', className)}
