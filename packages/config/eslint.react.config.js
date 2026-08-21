@@ -58,6 +58,15 @@ export default defineConfig([
           selector: String.raw`JSXAttribute[name.name="className"][value.value=/#[0-9a-fA-F]{3,8}\b/]`,
           message: 'Take the colour from a packages/ui token, never a raw hex.',
         },
+        {
+          // Unmapped, so tracking-wider draws 0.05em — narrower than our 0.06em wide.
+          selector: String.raw`JSXAttribute[name.name="className"][value.value=/\btracking-(tighter|wider|widest)\b/]`,
+          message: 'The tracking scale is tight, snug, normal, wide. Anything else is off-system.',
+        },
+        {
+          selector: String.raw`JSXAttribute[name.name="className"][value.value=/\btext-(4xl|5xl|6xl|7xl|8xl|9xl)\b/]`,
+          message: 'The type scale ends at text-3xl. A bigger step needs a token first.',
+        },
       ],
     },
   },

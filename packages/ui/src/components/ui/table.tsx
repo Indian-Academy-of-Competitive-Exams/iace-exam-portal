@@ -82,7 +82,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
       ref={ref}
       className={cn(
         'sticky top-0 z-[1] bg-card',
-        'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wider text-muted-foreground',
+        'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-muted-foreground',
         RULE,
         numeric && 'text-right tabular-nums',
         className,
