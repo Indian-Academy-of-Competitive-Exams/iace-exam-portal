@@ -1,15 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { AUDIT_WINDOW_DAYS, type AuditFeature, type RowAction } from '@iace/contracts';
-import {
-  Alert,
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-} from '@iace/ui';
+import { Alert, Badge, FormSection, Skeleton } from '@iace/ui';
 import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
 import { api } from '../lib/api';
 import { AUDIT_ACTION_LABELS, AUDIT_ACTOR_TYPE_LABELS } from '../lib/constants';
@@ -106,15 +97,12 @@ export function EntityHistory({
   const mine = !(identity?.isSuperAdmin ?? false);
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>History</CardTitle>
-        <CardDescription>
-          {mine ? 'Your activity on this record over' : 'Activity on this record over'} the last{' '}
-          {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is not shown here.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <FormSection
+      className={className}
+      title="History"
+      description={`${mine ? 'Your activity on this record over' : 'Activity on this record over'} the last ${AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is not shown here.`}
+    >
+      <div>
         <HistoryBody
           isPending={history.isPending}
           isError={history.isError}
@@ -125,7 +113,7 @@ export function EntityHistory({
           }
           rows={rows}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }

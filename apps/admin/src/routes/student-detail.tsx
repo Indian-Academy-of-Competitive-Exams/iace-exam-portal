@@ -22,17 +22,14 @@ import {
   Badge,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Combobox,
   ConfirmDialog,
   DatePicker,
   Field,
+  FormPanel,
+  FormSection,
   Input,
   MultiCombobox,
-  PageFrame,
   PageHeader,
   Skeleton,
   SkeletonParagraph,
@@ -157,15 +154,11 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Access</CardTitle>
-        <CardDescription>
-          An enrolment is how a student reaches a test series — no membership row is written for
-          them. A series nothing here matches is granted one student at a time.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <FormSection
+      title="Access"
+      description="An enrolment is how a student reaches a test series — no membership row is written for them. A series nothing here matches is granted one student at a time."
+    >
+      <div className="flex flex-col gap-4">
         <Field
           htmlFor="studentType"
           label="Student type"
@@ -258,8 +251,8 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
             />
           )}
         </Field>
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }
 
@@ -306,16 +299,11 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Series granted directly</CardTitle>
-        <CardDescription>
-          One student, one series, and only what neither an enrolment nor a program reaches. The
-          series still has to be switched on for their branch and inside its window before they can
-          sit anything in it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <FormSection
+      title="Series granted directly"
+      description="One student, one series, and only what neither an enrolment nor a program reaches. The series still has to be switched on for their branch and inside its window before they can sit anything in it."
+    >
+      <div className="flex flex-col gap-4">
         <GrantList
           grants={grants.data ?? []}
           isLoading={grants.isLoading}
@@ -359,7 +347,7 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
             Grant
           </Button>
         </div>
-      </CardContent>
+      </div>
 
       {/* A grant is the one direct student-to-offering link in the model, so it is
           stated in full before it is written. */}
@@ -383,7 +371,7 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         confirmLabel="Revoke grant"
         onConfirm={() => revoking && revoke.mutate(revoking.testSeriesId)}
       />
-    </Card>
+    </FormSection>
   );
 }
 
@@ -632,7 +620,25 @@ export function StudentDetailPage() {
   const detail = student.data;
 
   return (
-    <PageFrame
+    <FormPanel
+      onSubmit={form.handleSubmit((values) => {
+        setSaved(false);
+        save.mutate(values);
+      })}
+      footer={
+        <>
+          {save.error ? <Alert variant="danger">Check the highlighted fields above.</Alert> : null}
+          {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
+          <Button
+            type="submit"
+            icon={<Save aria-hidden />}
+            loading={save.isPending}
+            disabled={!form.formState.isDirty}
+          >
+            Save changes
+          </Button>
+        </>
+      }
       header={
         <PageHeader
           breadcrumbs={
@@ -662,38 +668,23 @@ export function StudentDetailPage() {
         </Badge>
       </div>
 
-      <Card className="mb-5">
-        <CardHeader>
-          <CardTitle>What the student has uploaded</CardTitle>
-          <CardDescription>
-            Read-only here — only the student can replace it, and the link expires after a few
-            minutes. Aadhaar and PAN images are never stored.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
-        </CardContent>
-      </Card>
-
-      <EntityHistory feature={AUDIT_FEATURE.STUDENT} entityId={detail.id} className="mb-5" />
-
-      <form
-        className="grid gap-5 lg:grid-cols-2"
-        onSubmit={form.handleSubmit((values) => {
-          setSaved(false);
-          save.mutate(values);
-        })}
-        noValidate
+      <FormSection
+        title="What the student has uploaded"
+        description="Read-only here — only the student can replace it, and the link expires after a few minutes. Aadhaar and PAN images are never stored."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-            <CardDescription>
-              Mother&apos;s name, father&apos;s name and date of birth are the three the student is
-              asked for before a test.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-2">
+          <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
+        </div>
+      </FormSection>
+
+      <EntityHistory feature={AUDIT_FEATURE.STUDENT} entityId={detail.id} />
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <FormSection
+          title="Details"
+          description="Mother's name, father's name and date of birth are the three the student is asked for before a test."
+        >
+          <div className="flex flex-col gap-4">
             <Field
               htmlFor="fullName"
               label="Full name"
@@ -760,34 +751,14 @@ export function StudentDetailPage() {
             <Field htmlFor="address" label="Address" error={form.formState.errors.address?.message}>
               {(control) => <Input {...control} {...form.register('address')} />}
             </Field>
-          </CardContent>
-        </Card>
+          </div>
+        </FormSection>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-8">
           <AccessCard form={form} />
-
           <GrantsCard detail={detail} />
-
-          <Card>
-            <CardContent className="flex flex-col gap-3 pt-6">
-              {save.error ? (
-                // Says something beside the button: the offending field may be a card away.
-                <Alert variant="danger">Check the highlighted fields above.</Alert>
-              ) : null}
-              {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
-
-              <Button
-                type="submit"
-                icon={<Save aria-hidden />}
-                loading={save.isPending}
-                disabled={!form.formState.isDirty}
-              >
-                Save changes
-              </Button>
-            </CardContent>
-          </Card>
         </div>
-      </form>
-    </PageFrame>
+      </div>
+    </FormPanel>
   );
 }

@@ -18,18 +18,14 @@ import {
   Alert,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Checkbox,
   Combobox,
   ConfirmDialog,
   Field,
-  FormActions,
   FormField,
+  FormPanel,
+  FormSection,
   Input,
-  PageFrame,
   PageHeader,
   plural,
   Skeleton,
@@ -117,10 +113,7 @@ export function TestSeriesFormPage() {
       <div className="flex flex-col gap-4">
         <Skeleton variant="title" />
         <Card className="p-6">
-          <SkeletonParagraph lines={5} />
-        </Card>
-        <Card className="p-6">
-          <SkeletonParagraph lines={4} />
+          <SkeletonParagraph lines={9} />
         </Card>
       </div>
     );
@@ -171,7 +164,18 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   });
 
   return (
-    <PageFrame
+    <FormPanel
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      footer={
+        <>
+          <Button type="button" variant="outline" asChild>
+            <Link to={ROUTES.TEST_SERIES}>Cancel</Link>
+          </Button>
+          <Button type="submit" loading={save.isPending}>
+            {editing ? 'Save series' : 'Create series'}
+          </Button>
+        </>
+      }
       header={
         <>
           <PageHeader
@@ -188,143 +192,119 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </>
       }
     >
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      <FormSection
+        title="Who it is for"
+        description="A student reaches this series by an enrolment on its stage's exam, by carrying its program, or by a grant made for them one at a time. A stage left blank spans the family rather than one paper; a program left blank asks nothing extra of the student."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Who it is for</CardTitle>
-            <CardDescription>
-              A student reaches this series by an enrolment on its stage&apos;s exam, by carrying
-              its program, or by a grant made for them one at a time. A stage left blank spans the
-              family rather than one paper; a program left blank asks nothing extra of the student.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <FormField form={form} name="name" label="Name">
-              {(control) => <Input {...control} placeholder="SSC CGL 2026 — Tier 1 mocks" />}
-            </FormField>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField form={form} name="name" label="Name">
+            {(control) => <Input {...control} placeholder="SSC CGL 2026 — Tier 1 mocks" />}
+          </FormField>
 
-            <FormField form={form} name="examStageId" label="Stage" hint="Optional">
-              {(control) => (
-                <ExamStagePicker
-                  id={control.id}
-                  value={examStageId}
-                  clearable
-                  selectedLabel={
-                    detail?.examStage
-                      ? `${detail.examStage.examCode} / ${detail.examStage.name}`
-                      : undefined
-                  }
-                  placeholder="Any stage"
-                  onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
-                />
-              )}
-            </FormField>
-
-            <FormField
-              form={form}
-              name="programCode"
-              label="Program"
-              hint="Set it and only students carrying that program reach the series."
-            >
-              {(control) => (
-                <ProgramPicker
-                  id={control.id}
-                  value={programCode}
-                  clearable
-                  selectedLabel={detail?.programCode ?? undefined}
-                  onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
-                />
-              )}
-            </FormField>
-
-            <FormField form={form} name="description" label="Description" hint="Optional">
-              {(control) => <Textarea {...control} />}
-            </FormField>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>How it opens</CardTitle>
-            <CardDescription>
-              Reaching a series and having it open are two different things. Free is pricing only —
-              it is not open access.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <FormField form={form} name="unlockMode" label="Unlocks">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={unlockMode}
-                  onChange={(next) =>
-                    form.setValue('unlockMode', next as UnlockMode, { shouldDirty: true })
-                  }
-                  items={UNLOCK_MODES.map((mode) => ({
-                    value: mode,
-                    label: UNLOCK_MODE_LABELS[mode],
-                  }))}
-                />
-              )}
-            </FormField>
-
-            <FormField
-              form={form}
-              name="prerequisiteSeriesId"
-              label="Waits on"
-              hint="The series a student finishes first. Optional."
-            >
-              {(control) => (
-                <TestSeriesPicker
-                  id={control.id}
-                  value={prerequisiteSeriesId}
-                  clearable
-                  excludeId={detail?.id}
-                  selectedLabel={prerequisite.data?.name}
-                  placeholder="Nothing"
-                  onChange={(value) =>
-                    form.setValue('prerequisiteSeriesId', value, { shouldDirty: true })
-                  }
-                />
-              )}
-            </FormField>
-
-            <div className="flex flex-col gap-1 sm:col-span-2">
-              <SeriesToggle
-                form={form}
-                name="sequentialTests"
-                label="Unlock the tests in order"
-                hint="Off opens every test in the series together."
+          <FormField form={form} name="examStageId" label="Stage" hint="Optional">
+            {(control) => (
+              <ExamStagePicker
+                id={control.id}
+                value={examStageId}
+                clearable
+                selectedLabel={
+                  detail?.examStage
+                    ? `${detail.examStage.examCode} / ${detail.examStage.name}`
+                    : undefined
+                }
+                placeholder="Any stage"
+                onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
               />
-              <SeriesToggle
-                form={form}
-                name="isFree"
-                label="Free"
-                hint="Pricing only — who can reach it is decided above."
+            )}
+          </FormField>
+
+          <FormField
+            form={form}
+            name="programCode"
+            label="Program"
+            hint="Set it and only students carrying that program reach the series."
+          >
+            {(control) => (
+              <ProgramPicker
+                id={control.id}
+                value={programCode}
+                clearable
+                selectedLabel={detail?.programCode ?? undefined}
+                onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
               />
-            </div>
-          </CardContent>
-        </Card>
+            )}
+          </FormField>
 
-        <FormActions>
-          <Button type="button" variant="outline" asChild>
-            <Link to={ROUTES.TEST_SERIES}>Cancel</Link>
-          </Button>
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save series' : 'Create series'}
-          </Button>
-        </FormActions>
-      </form>
+          <FormField form={form} name="description" label="Description" hint="Optional">
+            {(control) => <Textarea {...control} />}
+          </FormField>
+        </div>
+      </FormSection>
 
-      {editing ? <BranchScheduleCard series={detail} /> : null}
-    </PageFrame>
+      <FormSection
+        title="How it opens"
+        description="Reaching a series and having it open are two different things. Free is pricing only — it is not open access."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField form={form} name="unlockMode" label="Unlocks">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={unlockMode}
+                onChange={(next) =>
+                  form.setValue('unlockMode', next as UnlockMode, { shouldDirty: true })
+                }
+                items={UNLOCK_MODES.map((mode) => ({
+                  value: mode,
+                  label: UNLOCK_MODE_LABELS[mode],
+                }))}
+              />
+            )}
+          </FormField>
+
+          <FormField
+            form={form}
+            name="prerequisiteSeriesId"
+            label="Waits on"
+            hint="The series a student finishes first. Optional."
+          >
+            {(control) => (
+              <TestSeriesPicker
+                id={control.id}
+                value={prerequisiteSeriesId}
+                clearable
+                excludeId={detail?.id}
+                selectedLabel={prerequisite.data?.name}
+                placeholder="Nothing"
+                onChange={(value) =>
+                  form.setValue('prerequisiteSeriesId', value, { shouldDirty: true })
+                }
+              />
+            )}
+          </FormField>
+
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <SeriesToggle
+              form={form}
+              name="sequentialTests"
+              label="Unlock the tests in order"
+              hint="Off opens every test in the series together."
+            />
+            <SeriesToggle
+              form={form}
+              name="isFree"
+              label="Free"
+              hint="Pricing only — who can reach it is decided above."
+            />
+          </div>
+        </div>
+      </FormSection>
+
+      {editing ? <BranchSchedule series={detail} /> : null}
+    </FormPanel>
   );
 }
 
@@ -362,7 +342,7 @@ const SKELETON_ROWS = ['branch-1', 'branch-2', 'branch-3'] as const;
 const SCHEDULE_DESCRIPTION =
   'Every branch already has a row here — it was written the moment the series was created, switched off. Off is what "not offered at this centre" looks like, never a missing row, so nothing is added or removed here. A window is optional: leave both blank and the series runs at that branch for as long as it is on.';
 
-function BranchScheduleCard({ series }: Readonly<{ series: TestSeriesSummary }>) {
+function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const canRead = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT);
@@ -380,27 +360,21 @@ function BranchScheduleCard({ series }: Readonly<{ series: TestSeriesSummary }>)
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Where it runs</CardTitle>
-        <CardDescription>{SCHEDULE_DESCRIPTION}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <StatRow
-          label="Switched on at"
-          value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}
-        />
+    <FormSection title="Where it runs" description={SCHEDULE_DESCRIPTION}>
+      <StatRow
+        label="Switched on at"
+        value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}
+      />
 
-        <BranchScheduleList
-          series={series}
-          rows={branches.data ?? []}
-          isLoading={canRead && branches.isLoading}
-          canRead={canRead}
-          canWrite={canWrite}
-          onSaved={refresh}
-        />
-      </CardContent>
-    </Card>
+      <BranchScheduleList
+        series={series}
+        rows={branches.data ?? []}
+        isLoading={canRead && branches.isLoading}
+        canRead={canRead}
+        canWrite={canWrite}
+        onSaved={refresh}
+      />
+    </FormSection>
   );
 }
 

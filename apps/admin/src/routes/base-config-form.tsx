@@ -35,18 +35,15 @@ import {
   Badge,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Checkbox,
   Combobox,
   ConfirmDialog,
   DataTable,
   FormActions,
   FormField,
+  FormPanel,
+  FormSection,
   Input,
-  PageFrame,
   PageHeader,
   plural,
   Skeleton,
@@ -412,7 +409,12 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
   });
 
   return (
-    <PageFrame
+    <FormPanel
+      footer={
+        <Button variant="outline" asChild>
+          <Link to={ROUTES.BASE_CONFIGS}>Back to configs</Link>
+        </Button>
+      }
       header={
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
@@ -438,11 +440,8 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
         </span>
       </Alert>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>How the paper runs</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+      <FormSection title="How the paper runs">
+        <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
           <StatRow label="Runs as" value={TIMER_TEMPLATE_LABELS[config.timerTemplate]} />
           <StatRow label="Navigation" value={NAVIGATION_POLICY_LABELS[config.navigation]} />
           <StatRow label="Duration" value={durationLabel(config.durationSec)} />
@@ -460,15 +459,12 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
             value={config.optionalSectionCount ?? 'None — every section counts'}
           />
           <StatRow label="Tests built from it" value={config.testCount} />
-        </CardContent>
-      </Card>
+        </div>
+      </FormSection>
 
       {config.modules.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Sessions</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+        <FormSection title="Sessions">
+          <div className="flex flex-col gap-2">
             {config.modules.map((module) => (
               <StatRow
                 key={module.id}
@@ -476,34 +472,22 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
                 value={durationLabel(module.durationSec)}
               />
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </FormSection>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sections</CardTitle>
-          <CardDescription>
-            {plural(config.sections.length, 'section')}, adding up to{' '}
-            {plural(config.totalQuestions, 'question')} and {config.totalMarks} marks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={lockedSectionColumns()}
-            rows={config.sections}
-            rowKey={(section) => section.id}
-            isLoading={false}
-            empty="This config has no sections."
-          />
-        </CardContent>
-      </Card>
-
-      <FormActions>
-        <Button variant="outline" asChild>
-          <Link to={ROUTES.BASE_CONFIGS}>Back to configs</Link>
-        </Button>
-      </FormActions>
+      <FormSection
+        title="Sections"
+        description={`${plural(config.sections.length, 'section')}, adding up to ${plural(config.totalQuestions, 'question')} and ${config.totalMarks} marks.`}
+      >
+        <DataTable
+          columns={lockedSectionColumns()}
+          rows={config.sections}
+          rowKey={(section) => section.id}
+          isLoading={false}
+          empty="This config has no sections."
+        />
+      </FormSection>
 
       <ConfirmDialog
         open={asking}
@@ -514,7 +498,7 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
         confirmLabel="Clone config"
         onConfirm={() => clone.mutate()}
       />
-    </PageFrame>
+    </FormPanel>
   );
 }
 
@@ -570,7 +554,18 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   ]);
 
   return (
-    <PageFrame
+    <FormPanel
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      footer={
+        <>
+          <Button type="button" variant="outline" asChild>
+            <Link to={ROUTES.BASE_CONFIGS}>Cancel</Link>
+          </Button>
+          <Button type="submit" loading={save.isPending}>
+            {editing ? 'Save config' : 'Create config'}
+          </Button>
+        </>
+      }
       header={
         <>
           <PageHeader
@@ -587,249 +582,187 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </>
       }
     >
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      <FormSection
+        title="Which stage this is for"
+        description="A config never moves stage — every test built from it would change meaning. A stage holds exactly one default; promoting this one clears whichever held it before."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Which stage this is for</CardTitle>
-            <CardDescription>
-              A config never moves stage — every test built from it would change meaning. A stage
-              holds exactly one default; promoting this one clears whichever held it before.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {editing ? (
-              <StatRow
-                label="Stage"
-                value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
-              />
-            ) : (
-              <FormField form={form} name="examStageId" label="Stage">
-                {(control) => (
-                  <ExamStagePicker
-                    id={control.id}
-                    value={examStageId}
-                    placeholder="Choose a stage"
-                    onChange={(value) =>
-                      form.setValue('examStageId', value, { shouldValidate: true })
-                    }
-                  />
-                )}
-              </FormField>
-            )}
-
-            <FormField form={form} name="name" label="Name">
-              {(control) => <Input {...control} placeholder="SSC CGL Tier 1 — 2024 pattern" />}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {editing ? (
+            <StatRow
+              label="Stage"
+              value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
+            />
+          ) : (
+            <FormField form={form} name="examStageId" label="Stage">
+              {(control) => (
+                <ExamStagePicker
+                  id={control.id}
+                  value={examStageId}
+                  placeholder="Choose a stage"
+                  onChange={(value) =>
+                    form.setValue('examStageId', value, { shouldValidate: true })
+                  }
+                />
+              )}
             </FormField>
+          )}
 
+          <FormField form={form} name="name" label="Name">
+            {(control) => <Input {...control} placeholder="SSC CGL Tier 1 — 2024 pattern" />}
+          </FormField>
+
+          <ToggleField
+            form={form}
+            name="isDefault"
+            label="The stage's default pattern"
+            hint="Offered first when anyone builds a test on this stage."
+          />
+
+          {editing ? (
             <ToggleField
               form={form}
-              name="isDefault"
-              label="The stage's default pattern"
-              hint="Offered first when anyone builds a test on this stage."
+              name="isActive"
+              label="Offered when building a test"
+              hint="Retiring it changes nothing already built from it."
             />
+          ) : null}
+        </div>
+      </FormSection>
 
-            {editing ? (
-              <ToggleField
-                form={form}
-                name="isActive"
-                label="Offered when building a test"
-                hint="Retiring it changes nothing already built from it."
+      <FormSection title="How the paper runs">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField form={form} name="durationMin" label="Duration" hint="In minutes">
+            {(control) => <Input {...control} inputMode="numeric" placeholder="60" />}
+          </FormField>
+
+          <FormField form={form} name="timerTemplate" label="Timer">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={timerTemplate}
+                onChange={(next) =>
+                  form.setValue('timerTemplate', next as TimerTemplate, { shouldDirty: true })
+                }
+                items={TIMER_TEMPLATES.map((value) => ({
+                  value,
+                  label: TIMER_TEMPLATE_LABELS[value],
+                }))}
               />
-            ) : null}
-          </CardContent>
-        </Card>
+            )}
+          </FormField>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>How the paper runs</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FormField form={form} name="durationMin" label="Duration" hint="In minutes">
-              {(control) => <Input {...control} inputMode="numeric" placeholder="60" />}
-            </FormField>
+          <FormField form={form} name="navigation" label="Navigation">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={navigation}
+                onChange={(next) =>
+                  form.setValue('navigation', next as NavigationPolicy, { shouldDirty: true })
+                }
+                items={NAVIGATION_POLICIES.map((value) => ({
+                  value,
+                  label: NAVIGATION_POLICY_LABELS[value],
+                }))}
+              />
+            )}
+          </FormField>
 
-            <FormField form={form} name="timerTemplate" label="Timer">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={timerTemplate}
-                  onChange={(next) =>
-                    form.setValue('timerTemplate', next as TimerTemplate, { shouldDirty: true })
-                  }
-                  items={TIMER_TEMPLATES.map((value) => ({
-                    value,
-                    label: TIMER_TEMPLATE_LABELS[value],
-                  }))}
-                />
-              )}
-            </FormField>
+          <FormField form={form} name="defaultTestUi" label="Interface">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={defaultTestUi}
+                onChange={(next) =>
+                  form.setValue('defaultTestUi', next as TestUi, { shouldDirty: true })
+                }
+                items={TEST_UIS.map((value) => ({ value, label: TEST_UI_LABELS[value] }))}
+              />
+            )}
+          </FormField>
 
-            <FormField form={form} name="navigation" label="Navigation">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={navigation}
-                  onChange={(next) =>
-                    form.setValue('navigation', next as NavigationPolicy, { shouldDirty: true })
-                  }
-                  items={NAVIGATION_POLICIES.map((value) => ({
-                    value,
-                    label: NAVIGATION_POLICY_LABELS[value],
-                  }))}
-                />
-              )}
-            </FormField>
+          <FormField form={form} name="languageMode" label="Language mode">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={languageMode}
+                onChange={(next) =>
+                  form.setValue('languageMode', next as LanguageMode, { shouldDirty: true })
+                }
+                items={LANGUAGE_MODES.map((value) => ({
+                  value,
+                  label: LANGUAGE_MODE_LABELS[value],
+                }))}
+              />
+            )}
+          </FormField>
 
-            <FormField form={form} name="defaultTestUi" label="Interface">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={defaultTestUi}
-                  onChange={(next) =>
-                    form.setValue('defaultTestUi', next as TestUi, { shouldDirty: true })
-                  }
-                  items={TEST_UIS.map((value) => ({ value, label: TEST_UI_LABELS[value] }))}
-                />
-              )}
-            </FormField>
+          <FormField
+            form={form}
+            name="optionalSectionCount"
+            label="Optional sections"
+            hint="How many a student may skip. Blank means none."
+          >
+            {(control) => <Input {...control} inputMode="numeric" placeholder="0" />}
+          </FormField>
 
-            <FormField form={form} name="languageMode" label="Language mode">
-              {(control) => (
-                <Combobox
-                  id={control.id}
-                  aria-describedby={control['aria-describedby']}
-                  aria-invalid={control['aria-invalid']}
-                  clearable={false}
-                  value={languageMode}
-                  onChange={(next) =>
-                    form.setValue('languageMode', next as LanguageMode, { shouldDirty: true })
-                  }
-                  items={LANGUAGE_MODES.map((value) => ({
-                    value,
-                    label: LANGUAGE_MODE_LABELS[value],
-                  }))}
-                />
-              )}
-            </FormField>
+          <LanguageChoice form={form} />
 
-            <FormField
-              form={form}
-              name="optionalSectionCount"
-              label="Optional sections"
-              hint="How many a student may skip. Blank means none."
-            >
-              {(control) => <Input {...control} inputMode="numeric" placeholder="0" />}
-            </FormField>
+          <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
+            <ToggleField form={form} name="shuffleQuestions" label="Shuffle the questions" />
+            <ToggleField form={form} name="shuffleOptions" label="Shuffle the options" />
+            <ToggleField form={form} name="calculatorEnabled" label="Offer a calculator" />
+          </div>
+        </div>
+      </FormSection>
 
-            <LanguageChoice form={form} />
-
-            <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
-              <ToggleField form={form} name="shuffleQuestions" label="Shuffle the questions" />
-              <ToggleField form={form} name="shuffleOptions" label="Shuffle the options" />
-              <ToggleField form={form} name="calculatorEnabled" label="Offer a calculator" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {sessionPaper ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sessions</CardTitle>
-              <CardDescription>
-                A session paper is made of blocks, each a locked stretch of the exam. Every section
-                below names the session it sits in. Only this timer has them.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {modules.fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
+      {sessionPaper ? (
+        <FormSection
+          title="Sessions"
+          description="A session paper is made of blocks, each a locked stretch of the exam. Every section below names the session it sits in. Only this timer has them."
+        >
+          <div className="flex flex-col gap-3">
+            {modules.fields.map((field, index) => (
+              <div
+                key={field.id}
+                className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
+              >
+                <FormField
+                  form={form}
+                  name={`modules.${index}.name`}
+                  label="Session"
+                  className="min-w-48 flex-1"
                 >
-                  <FormField
-                    form={form}
-                    name={`modules.${index}.name`}
-                    label="Session"
-                    className="min-w-48 flex-1"
-                  >
-                    {(control) => <Input {...control} placeholder="Session 1" />}
-                  </FormField>
-                  <FormField
-                    form={form}
-                    name={`modules.${index}.durationMin`}
-                    label="Minutes"
-                    className="w-28"
-                  >
-                    {(control) => <Input {...control} inputMode="numeric" />}
-                  </FormField>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label={`Remove session ${index + 1}`}
-                    onClick={() => modules.remove(index)}
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
-                </div>
-              ))}
-
-              <FormActions className="pt-0">
+                  {(control) => <Input {...control} placeholder="Session 1" />}
+                </FormField>
+                <FormField
+                  form={form}
+                  name={`modules.${index}.durationMin`}
+                  label="Minutes"
+                  className="w-28"
+                >
+                  {(control) => <Input {...control} inputMode="numeric" />}
+                </FormField>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => modules.append({ name: '', durationMin: '' })}
+                  variant="ghost"
+                  aria-label={`Remove session ${index + 1}`}
+                  onClick={() => modules.remove(index)}
                 >
-                  <Plus aria-hidden />
-                  Add a session
+                  <Trash2 aria-hidden />
                 </Button>
-              </FormActions>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sections</CardTitle>
-            <CardDescription>
-              Marks, negative marks and the clock are per section, because one paper mixes them. The
-              order here is the order of the paper.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {issues.length > 0 ? (
-              <Alert variant="danger">
-                <ul className="flex list-disc flex-col gap-1 pl-4">
-                  {issues.map((issue) => (
-                    <li key={issue}>{issue}</li>
-                  ))}
-                </ul>
-              </Alert>
-            ) : null}
-
-            {sections.fields.map((field, index) => (
-              <SectionCard
-                key={field.id}
-                form={form}
-                index={index}
-                sectionalClocks={timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED}
-                moduleNames={sessionPaper ? watchedModules.map((module) => module.name) : []}
-                canRemove={sections.fields.length > 1}
-                onRemove={() => sections.remove(index)}
-              />
+              </div>
             ))}
 
             <FormActions className="pt-0">
@@ -837,27 +770,59 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => sections.append(emptySection())}
+                onClick={() => modules.append({ name: '', durationMin: '' })}
               >
                 <Plus aria-hidden />
-                Add a section
+                Add a session
               </Button>
             </FormActions>
-          </CardContent>
-        </Card>
+          </div>
+        </FormSection>
+      ) : null}
 
-        <Totals sections={watchedSections} />
+      <FormSection
+        title="Sections"
+        description="Marks, negative marks and the clock are per section, because one paper mixes them. The order here is the order of the paper."
+      >
+        <div className="flex flex-col gap-4">
+          {issues.length > 0 ? (
+            <Alert variant="danger">
+              <ul className="flex list-disc flex-col gap-1 pl-4">
+                {issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </Alert>
+          ) : null}
 
-        <FormActions>
-          <Button type="button" variant="outline" asChild>
-            <Link to={ROUTES.BASE_CONFIGS}>Cancel</Link>
-          </Button>
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save config' : 'Create config'}
-          </Button>
-        </FormActions>
-      </form>
-    </PageFrame>
+          {sections.fields.map((field, index) => (
+            <SectionCard
+              key={field.id}
+              form={form}
+              index={index}
+              sectionalClocks={timerTemplate === TIMER_TEMPLATE.SECTIONAL_LOCKED}
+              moduleNames={sessionPaper ? watchedModules.map((module) => module.name) : []}
+              canRemove={sections.fields.length > 1}
+              onRemove={() => sections.remove(index)}
+            />
+          ))}
+
+          <FormActions className="pt-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => sections.append(emptySection())}
+            >
+              <Plus aria-hidden />
+              Add a section
+            </Button>
+          </FormActions>
+        </div>
+      </FormSection>
+
+      <Totals sections={watchedSections} />
+    </FormPanel>
   );
 }
 
@@ -1081,19 +1046,15 @@ function Totals({ sections }: Readonly<{ sections: readonly SectionValues[] }>) 
   const totals = configTotalsOf(sections.map((section, index) => toSectionDraft(section, index)));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>What this adds up to</CardTitle>
-        <CardDescription>
-          Summed from the sections. The server keeps the same two numbers on the config, so nothing
-          here is typed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
+    <FormSection
+      title="What this adds up to"
+      description="Summed from the sections. The server keeps the same two numbers on the config, so nothing here is typed."
+    >
+      <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
         <StatRow label="Sections" value={sections.length} />
         <StatRow label="Questions" value={totals.totalQuestions} />
         <StatRow label="Marks" value={totals.totalMarks} />
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }

@@ -14,16 +14,12 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Combobox,
   DatePicker,
   Field,
+  FormPanel,
+  FormSection,
   Input,
-  PageFrame,
   PageHeader,
   SkeletonParagraph,
   Textarea,
@@ -92,7 +88,26 @@ export function ProfilePage() {
   });
 
   return (
-    <PageFrame
+    <FormPanel
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      footer={
+        !me.isPending && !me.error ? (
+          <>
+            {/* Cancel is neutral grey, never red — it destroys nothing. */}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!form.formState.isDirty}
+              onClick={() => form.reset()}
+            >
+              Discard
+            </Button>
+            <Button type="submit" loading={save.isPending} disabled={!form.formState.isDirty}>
+              Save changes
+            </Button>
+          </>
+        ) : undefined
+      }
       header={
         <PageHeader
           breadcrumbs={
@@ -108,33 +123,15 @@ export function ProfilePage() {
     >
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
 
-      {me.isPending && (
-        // Two cards, because that is what the form is: the three pre-test
-        // fields, then everything optional.
-        <div className="flex flex-col gap-5">
-          <Card className="p-6">
-            <SkeletonParagraph lines={3} />
-          </Card>
-          <Card className="p-6">
-            <SkeletonParagraph lines={4} />
-          </Card>
-        </div>
-      )}
+      {me.isPending && <SkeletonParagraph lines={8} />}
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {!me.isPending && !me.error && (
-        <form
-          className="flex flex-col gap-5"
-          onSubmit={form.handleSubmit((values) => save.mutate(values))}
-          noValidate
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Needed before a test</CardTitle>
-              <CardDescription>
-                These three go on your hall ticket and answer sheet.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+        <>
+          <FormSection
+            title="Needed before a test"
+            description="These three go on your hall ticket and answer sheet."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 htmlFor="motherName"
                 label="Mother's name"
@@ -168,15 +165,11 @@ export function ProfilePage() {
                   />
                 )}
               </Field>
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>About you</CardTitle>
-              <CardDescription>All optional — nothing here blocks a test.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+          <FormSection title="About you" description="All optional — nothing here blocks a test.">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 htmlFor="fullName"
                 label="Full name"
@@ -234,8 +227,8 @@ export function ProfilePage() {
                   )}
                 </Field>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
           <HistoryEditor
             control={form.control}
@@ -266,23 +259,8 @@ export function ProfilePage() {
             ]}
             emptyRow={{ exam: '', year: '', result: '' }}
           />
-
-          <div className="flex gap-2">
-            <Button type="submit" loading={save.isPending} disabled={!form.formState.isDirty}>
-              Save changes
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!form.formState.isDirty}
-              onClick={() => form.reset()}
-            >
-              Discard
-            </Button>
-          </div>
-        </form>
+        </>
       )}
-    </PageFrame>
+    </FormPanel>
   );
 }

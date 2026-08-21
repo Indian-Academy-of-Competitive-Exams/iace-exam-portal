@@ -7,11 +7,8 @@ import {
   Badge,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  PageFrame,
+  FormPanel,
+  FormSection,
   PageHeader,
   SkeletonParagraph,
 } from '@iace/ui';
@@ -40,7 +37,7 @@ export function ProfileViewPage() {
   const profile = me.data.profile;
 
   return (
-    <PageFrame
+    <FormPanel
       header={
         <PageHeader
           title="Your profile"
@@ -58,63 +55,54 @@ export function ProfileViewPage() {
     >
       <PreTestPrompt preTestReady={me.data.preTestReady} />
 
-      <div className="flex flex-col gap-5">
-        <Completion me={me.data} />
+      <Completion me={me.data} />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-            <Detail label="Name" value={me.data.fullName} />
-            <Detail label="Mobile" value={`+91 ${me.data.mobile}`} />
-            <Detail label="Mother's name" value={profile?.motherName} />
-            <Detail label="Father's name" value={profile?.fatherName} />
-            <Detail label="Date of birth" value={profile?.dob} />
-            <Detail label="Gender" value={titleCase(profile?.gender)} />
-            <Detail label="Email" value={profile?.email} />
-            <Detail label="Address" value={profile?.address} />
-          </CardContent>
-        </Card>
+      <FormSection title="Details">
+        <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+          <Detail label="Name" value={me.data.fullName} />
+          <Detail label="Mobile" value={`+91 ${me.data.mobile}`} />
+          <Detail label="Mother's name" value={profile?.motherName} />
+          <Detail label="Father's name" value={profile?.fatherName} />
+          <Detail label="Date of birth" value={profile?.dob} />
+          <Detail label="Gender" value={titleCase(profile?.gender)} />
+          <Detail label="Email" value={profile?.email} />
+          <Detail label="Address" value={profile?.address} />
+        </div>
+      </FormSection>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Your photo</CardTitle>
-            <CardDescription>
-              Only you and the institute can see it, and a new one replaces the last. Aadhaar and
-              PAN are checked at the centre — their images are never uploaded or stored here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
-            <DocumentCard kind="photo" label="Passport photo" url={profile?.photoUrl ?? null} />
-          </CardContent>
-        </Card>
+      <FormSection
+        title="Your photo"
+        description="Only you and the institute can see it, and a new one replaces the last. Aadhaar and PAN are checked at the centre — their images are never uploaded or stored here."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <DocumentCard kind="photo" label="Passport photo" url={profile?.photoUrl ?? null} />
+        </div>
+      </FormSection>
 
-        <HistoryList
-          title="Education"
-          empty="No qualifications added yet."
-          rows={(profile?.educationDetails ?? []).map((entry) => ({
-            key: `${entry.level}-${entry.year ?? ''}`,
-            main: entry.level,
-            detail: [entry.board, entry.institution].filter(Boolean).join(' · '),
-            trailing: [entry.year, entry.percentage ? `${entry.percentage}%` : null]
-              .filter(Boolean)
-              .join(' · '),
-          }))}
-        />
+      <HistoryList
+        title="Education"
+        empty="No qualifications added yet."
+        rows={(profile?.educationDetails ?? []).map((entry) => ({
+          key: `${entry.level}-${entry.year ?? ''}`,
+          main: entry.level,
+          detail: [entry.board, entry.institution].filter(Boolean).join(' · '),
+          trailing: [entry.year, entry.percentage ? `${entry.percentage}%` : null]
+            .filter(Boolean)
+            .join(' · '),
+        }))}
+      />
 
-        <HistoryList
-          title="Exams sat elsewhere"
-          empty="No previous exams added yet."
-          rows={(profile?.pastExamHistory ?? []).map((entry) => ({
-            key: `${entry.exam}-${entry.year ?? ''}`,
-            main: entry.exam,
-            detail: entry.result ?? '',
-            trailing: entry.year ? String(entry.year) : '',
-          }))}
-        />
-      </div>
-    </PageFrame>
+      <HistoryList
+        title="Exams sat elsewhere"
+        empty="No previous exams added yet."
+        rows={(profile?.pastExamHistory ?? []).map((entry) => ({
+          key: `${entry.exam}-${entry.year ?? ''}`,
+          main: entry.exam,
+          detail: entry.result ?? '',
+          trailing: entry.year ? String(entry.year) : '',
+        }))}
+      />
+    </FormPanel>
   );
 }
 
@@ -142,16 +130,12 @@ function Completion({ me }: Readonly<{ me: Me }>) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Still to add</CardTitle>
-        <CardDescription>
-          {/* The three pre-test fields are the only ones that hold anything up. */}
-          Only the ones marked <strong>needed before a test</strong> hold anything up. The rest are
-          optional.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
+    <FormSection
+      title="Still to add"
+      // The three pre-test fields are the only ones that hold anything up.
+      description="Only the ones marked 'needed before a test' hold anything up. The rest are optional."
+    >
+      <div className="flex flex-col gap-2">
         {outstanding.map((item) => (
           <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
             <span className="text-foreground">{item.label}</span>
@@ -162,8 +146,8 @@ function Completion({ me }: Readonly<{ me: Me }>) {
             )}
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }
 
@@ -178,11 +162,8 @@ function HistoryList({
   rows: readonly { key: string; main: string; detail: string; trailing: string }[];
 }>) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+    <FormSection title={title}>
+      <div className="flex flex-col gap-3">
         {rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
         {rows.map((row) => (
           <div key={row.key} className="flex items-baseline justify-between gap-4 text-sm">
@@ -195,8 +176,8 @@ function HistoryList({
             <span className="shrink-0 tabular-nums text-muted-foreground">{row.trailing}</span>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }
 
