@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
+import { AppException, BRANCH_TYPE, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
 import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
@@ -72,6 +72,9 @@ function serviceWith(
   };
 }
 
+const PHYSICAL = makeBranch({ id: 'br_1', name: 'AMEERPET' });
+const ONLINE_BRANCH = makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL });
+
 describe('StudentsService.create — the type is the caller’s, never the service’s', () => {
   it('stores the type the request asked for', async () => {
     const { service, prisma } = serviceWith([]);
@@ -95,6 +98,69 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
     assert.deepEqual(prisma.students[0]?.programs, ['SSC CGL FOUNDATION']);
     assert.equal(prisma.students[0]?.currentBranchId, 'br_1');
+  });
+
+  /**
+   * The failure this prevents: `AccessResolver.resolve` reads the branch ALONE to decide what a
+   * student can reach, so an online student parked at a centre silently inherits that centre's
+   * schedule and window. The admin screen locks the picker; this is what makes the lock real.
+   */
+  it('refuses an online student put at a physical centre, under the form’s own field name', async () => {
+    const { service } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    await assert.rejects(
+      () =>
+        service.create({
+          mobile: '9000000010',
+          studentType: STUDENT_TYPE.ONLINE,
+          currentBranchId: PHYSICAL.id,
+        }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+        assert.ok(error.fieldErrors?.currentBranchId);
+        return true;
+      },
+    );
+  });
+
+  it('takes an online student in the online branch', async () => {
+    const { service, prisma } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    await service.create({
+      mobile: '9000000011',
+      studentType: STUDENT_TYPE.ONLINE,
+      currentBranchId: ONLINE_BRANCH.id,
+    });
+
+    assert.equal(prisma.students[0]?.currentBranchId, ONLINE_BRANCH.id);
+  });
+
+  it('refuses an offline student put in the online branch', async () => {
+    const { service } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    await assert.rejects(
+      () =>
+        service.create({
+          mobile: '9000000012',
+          studentType: STUDENT_TYPE.OFFLINE,
+          currentBranchId: ONLINE_BRANCH.id,
+        }),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
+    );
+  });
+
+  /** They sit outside the institute, so neither branch is the wrong answer for them. */
+  it('lets a non-IACE student sit in either kind of branch', async () => {
+    const { service, prisma } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    await service.create({
+      mobile: '9000000013',
+      studentType: STUDENT_TYPE.NON_IACE,
+      currentBranchId: ONLINE_BRANCH.id,
+    });
+
+    assert.equal(prisma.students[0]?.currentBranchId, ONLINE_BRANCH.id);
   });
 
   /**
@@ -361,6 +427,74 @@ describe('StudentsService.update — the access fields', () => {
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(error.fieldErrors?.currentBranchId, 'the key must be the one the student form owns');
     assert.equal(prisma.students[0]?.currentBranchId, null, 'nothing changed');
+  });
+});
+
+describe('StudentsService.update — the branch has to suit the type', () => {
+  /**
+   * The failure this prevents: the branch was checked only when the request NAMED one, so flipping
+   * an offline student to online left them sitting at their old centre — the exact state the create
+   * form refuses, reached by a different door.
+   */
+  it('refuses a type flip that leaves the stored branch disagreeing', async () => {
+    const student = makeStudent({
+      studentType: STUDENT_TYPE.OFFLINE,
+      currentBranchId: PHYSICAL.id,
+    });
+    const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    await assert.rejects(
+      () => service.update(student.id, { studentType: STUDENT_TYPE.ONLINE }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+        assert.ok(error.fieldErrors?.currentBranchId);
+        return true;
+      },
+    );
+  });
+
+  it('takes the type and the branch moving together', async () => {
+    const student = makeStudent({
+      studentType: STUDENT_TYPE.OFFLINE,
+      currentBranchId: PHYSICAL.id,
+    });
+    const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    const updated = await service.update(student.id, {
+      studentType: STUDENT_TYPE.ONLINE,
+      currentBranchId: ONLINE_BRANCH.id,
+    });
+
+    assert.equal(updated.currentBranchId, ONLINE_BRANCH.id);
+  });
+
+  /**
+   * A row stored before the rule existed must stay editable — otherwise every unrelated save on it
+   * fails and nobody can even correct the branch.
+   */
+  it('leaves a student already stored out of agreement editable', async () => {
+    const student = makeStudent({
+      studentType: STUDENT_TYPE.ONLINE,
+      currentBranchId: PHYSICAL.id,
+    });
+    const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    const updated = await service.update(student.id, { fullName: 'Asha Kumari' });
+
+    assert.equal(updated.fullName, 'Asha Kumari');
+  });
+
+  it('still lets the branch be cleared outright', async () => {
+    const student = makeStudent({
+      studentType: STUDENT_TYPE.ONLINE,
+      currentBranchId: PHYSICAL.id,
+    });
+    const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
+
+    const updated = await service.update(student.id, { currentBranchId: null });
+
+    assert.equal(updated.currentBranchId, null);
   });
 });
 

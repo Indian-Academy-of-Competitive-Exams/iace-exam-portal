@@ -1,4 +1,4 @@
-import { BRANCH_TYPE, type BranchType } from '@iace/contracts';
+import { BRANCH_TYPE, STUDENT_TYPE, type BranchType, type StudentType } from '@iace/contracts';
 
 /** The rules that keep the branch list trustworthy. */
 
@@ -35,6 +35,24 @@ export function branchEditBlocker(
  */
 export const ONLINE_BRANCH_EXISTS_MESSAGE =
   'The online branch already exists. There can only be one.';
+
+/**
+ * Where a student sits has to agree with what kind of student they are: `AccessResolver` reads the
+ * branch alone, so an online student parked at a centre inherits that centre's schedule. NON_IACE
+ * is deliberately unconstrained — they sit outside the institute, so neither answer is wrong.
+ */
+export function studentBranchBlocker(
+  studentType: StudentType,
+  branchType: BranchType,
+): string | null {
+  if (studentType === STUDENT_TYPE.ONLINE && branchType !== BRANCH_TYPE.VIRTUAL) {
+    return 'An online student sits in the online branch, not at a centre.';
+  }
+  if (studentType === STUDENT_TYPE.OFFLINE && branchType === BRANCH_TYPE.VIRTUAL) {
+    return 'An offline student attends a centre, not the online branch.';
+  }
+  return null;
+}
 
 export const INACTIVE_BRANCH_MESSAGE =
   'That branch is no longer active. Pick another, or reactivate it first.';

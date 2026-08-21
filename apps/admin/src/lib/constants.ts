@@ -74,11 +74,11 @@ export const ROUTES = {
   NOT_FOUND: '*',
 } as const;
 
-/** What each student type is called on screen. The enum values are never shown raw. */
+/** What each student type is called on screen — the enum's own words, cased for reading. */
 export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
   [STUDENT_TYPE.ONLINE]: 'Online',
-  [STUDENT_TYPE.OFFLINE]: 'At a branch',
-  [STUDENT_TYPE.NON_IACE]: 'Not an IACE student',
+  [STUDENT_TYPE.OFFLINE]: 'Offline',
+  [STUDENT_TYPE.NON_IACE]: 'Non-IACE',
 };
 
 /** What each branch type is called on screen. */

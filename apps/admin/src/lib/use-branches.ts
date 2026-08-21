@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { PAGE_SIZE_MAX, type Branch } from '@iace/contracts';
+import {
+  BRANCH_TYPE,
+  PAGE_SIZE_MAX,
+  STUDENT_TYPE,
+  type Branch,
+  type StudentType,
+} from '@iace/contracts';
 import { api } from './api';
 
 /** The branch list, unpaged and long-cached: a small list that changes a few times a year. */
@@ -17,4 +23,39 @@ export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
   });
 
   return query.data?.items ?? [];
+}
+
+/**
+ * The branches a student of this type may sit in — mirrors `studentBranchBlocker` on the server so
+ * the picker never offers a branch the save would refuse. NON_IACE sits outside the institute, so
+ * every branch is a real answer for them.
+ */
+export function branchesForStudentType(branches: Branch[], studentType: StudentType): Branch[] {
+  if (studentType === STUDENT_TYPE.ONLINE) {
+    return branches.filter((branch) => branch.type === BRANCH_TYPE.VIRTUAL);
+  }
+  if (studentType === STUDENT_TYPE.OFFLINE) {
+    return branches.filter((branch) => branch.type !== BRANCH_TYPE.VIRTUAL);
+  }
+  return branches;
+}
+
+/** What the branch picker shows for a student type, and whether it is the student's to choose. */
+export function useBranchChoice(studentType: StudentType) {
+  const branches = branchesForStudentType(useBranches({ activeOnly: true }), studentType);
+  const locked = studentType === STUDENT_TYPE.ONLINE;
+
+  return {
+    branches,
+    locked,
+    /** The one branch a locked picker stands on — absent until a super admin creates it. */
+    forcedId: locked ? branches[0]?.id : undefined,
+    hint: locked ? onlineBranchHint(branches.length > 0) : undefined,
+  };
+}
+
+function onlineBranchHint(exists: boolean): string {
+  return exists
+    ? 'Online students sit in the online branch.'
+    : 'No online branch yet — a super admin creates it on the Branches screen.';
 }

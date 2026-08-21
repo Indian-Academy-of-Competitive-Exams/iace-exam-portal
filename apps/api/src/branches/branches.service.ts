@@ -10,6 +10,7 @@ import {
   type BranchType,
   type CreateBranchBody,
   type Paginated,
+  type StudentType,
   type UpdateBranchBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,6 +19,7 @@ import { AuditContext } from '../audit';
 import {
   branchDeletionBlocker,
   branchEditBlocker,
+  studentBranchBlocker,
   INACTIVE_BRANCH_MESSAGE,
   ONLINE_BRANCH_EXISTS_MESSAGE,
 } from './branch-rules';
@@ -69,6 +71,27 @@ export class BranchesService {
     if (!branch.isActive) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_BRANCH_MESSAGE, {
         fieldErrors: { [fieldKey]: [INACTIVE_BRANCH_MESSAGE] },
+      });
+    }
+  }
+
+  /**
+   * Whether a branch suits the KIND of student being put in it. Separate from `assertUsable`: a
+   * patch that only changes the type leaves the stored branch alone, and a branch retired since
+   * they were put in it is not this save's fault to refuse.
+   */
+  async assertSuitsStudentType(
+    branchId: string,
+    studentType: StudentType,
+    fieldKey = 'branchId',
+  ): Promise<void> {
+    const branchType = await this.branchTypeOf(branchId);
+    if (!branchType) return;
+
+    const blocker = studentBranchBlocker(studentType, branchType);
+    if (blocker) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, blocker, {
+        fieldErrors: { [fieldKey]: [blocker] },
       });
     }
   }
@@ -168,7 +191,14 @@ export class BranchesService {
     await this.prisma.branch.delete({ where: { id } });
   }
 
-  /** `name` is unique only among live rows, so this is a filtered read, not a lookup by key. */
+  private async branchTypeOf(branchId: string): Promise<BranchType | null> {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { type: true },
+    });
+    return branch?.type ?? null;
+  }
+
   private findLiveVirtual(): Promise<{ id: string } | null> {
     return this.prisma.branch.findFirst({
       where: { type: BRANCH_TYPE.VIRTUAL, deletedAt: null },
@@ -176,6 +206,7 @@ export class BranchesService {
     });
   }
 
+  /** `name` is unique only among live rows, so this is a filtered read, not a lookup by key. */
   private findLiveByName(name: string): Promise<{ id: string } | null> {
     return this.prisma.branch.findFirst({ where: { name, deletedAt: null }, select: { id: true } });
   }

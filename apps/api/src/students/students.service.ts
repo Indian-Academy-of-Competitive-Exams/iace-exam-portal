@@ -191,6 +191,11 @@ export class StudentsService {
     }
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
+      await this.branches.assertSuitsStudentType(
+        input.currentBranchId,
+        input.studentType,
+        CURRENT_BRANCH_ID_FIELD,
+      );
     }
 
     const student = await this.prisma.student.create({
@@ -209,7 +214,12 @@ export class StudentsService {
 
   /** Every target a patch names has to still be usable before any of it is written. */
   private async assertPatchUsable(
-    student: { isTestBlocked: boolean; enrolledExams: string[] },
+    student: {
+      isTestBlocked: boolean;
+      enrolledExams: string[];
+      studentType: StudentType;
+      currentBranchId: string | null;
+    },
     input: UpdateStudentBody,
   ): Promise<void> {
     if (input.enrolledExams) {
@@ -221,9 +231,31 @@ export class StudentsService {
     if (input.programs?.length) {
       await this.programs.assertUsable(input.programs, PROGRAMS_FIELD);
     }
-    if (input.currentBranchId) {
-      await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
-    }
+    await this.assertBranchSuitsPatch(student, input);
+  }
+
+  /**
+   * The pair as this save would LEAVE it, not the half the request named — flipping only the type
+   * moves an existing branch out of agreement just as surely as picking a new branch does. Skipped
+   * when the patch touches neither, so a student already stored incoherently can still be renamed.
+   */
+  private async assertBranchSuitsPatch(
+    student: { studentType: StudentType; currentBranchId: string | null },
+    input: UpdateStudentBody,
+  ): Promise<void> {
+    const named = input.currentBranchId;
+    if (named) await this.branches.assertUsable(named, CURRENT_BRANCH_ID_FIELD);
+
+    if (input.studentType === undefined && named === undefined) return;
+
+    const branchId = named === undefined ? student.currentBranchId : named;
+    if (!branchId) return;
+
+    await this.branches.assertSuitsStudentType(
+      branchId,
+      input.studentType ?? student.studentType,
+      CURRENT_BRANCH_ID_FIELD,
+    );
   }
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */

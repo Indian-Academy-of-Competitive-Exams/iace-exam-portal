@@ -10,6 +10,7 @@ import {
   todayISO,
   type Gender,
   type StudentDetail,
+  type UpdateStudentBody,
   type StudentGrantRow,
   type StudentType,
 } from '@iace/contracts';
@@ -38,7 +39,7 @@ import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
-import { useBranches } from '../lib/use-branches';
+import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -71,6 +72,29 @@ const FORM_FIELDS = [
 
 /** An empty input means "no value", which the API expresses as null. */
 const orNull = (value: string) => (value.trim() === '' ? null : value.trim());
+
+/**
+ * The two access fields, sent only when this save actually moves one — the server checks the pair
+ * as the save would LEAVE it, so a student stored out of agreement before the rule existed stays
+ * renameable. `forcedBranchId` is the branch a locked picker stands on: the admin never touched it,
+ * but it is what they are looking at, so it is what the save carries.
+ */
+function accessPatch(
+  values: FormValues,
+  dirty: { studentType?: boolean; currentBranchId?: boolean },
+  forcedBranchId: string | undefined,
+): Pick<UpdateStudentBody, 'studentType' | 'currentBranchId'> {
+  const branchPatch = () => {
+    if (forcedBranchId !== undefined) return { currentBranchId: forcedBranchId };
+    if (dirty.currentBranchId) return { currentBranchId: orNull(values.currentBranchId) };
+    return {};
+  };
+
+  return {
+    ...(dirty.studentType ? { studentType: values.studentType } : {}),
+    ...branchPatch(),
+  };
+}
 
 function toFormValues(student: StudentDetail): FormValues {
   return {
@@ -113,13 +137,16 @@ function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
 /** Where a student sits relative to the institute — the four fields access resolves through. */
 function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const exams = useExams({ activeOnly: true });
-  const branches = useBranches({ activeOnly: true });
   // Unfiltered: a student's current branch can be one that has since been retired, and
-  // it must still resolve to a name rather than the raw id `branches` no longer carries.
+  // it must still resolve to a name rather than the raw id the active list no longer carries.
   const allBranches = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const studentType = useWatch({ control: form.control, name: 'studentType' });
+  const branch = useBranchChoice(studentType);
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
-  const currentBranchName = allBranches.find((branch) => branch.id === currentBranchId)?.name;
+  // Displayed AND submitted, so a locked picker can never show one branch and save another.
+  const chosenBranchId = branch.locked ? (branch.forcedId ?? '') : currentBranchId;
+  const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
 
   return (
     <Card>
@@ -150,7 +177,6 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <Field
           htmlFor="enrolledExams"
           label="Enrolled exams"
-          hint="Every series tagged with one of these is reachable."
           error={form.formState.errors.enrolledExams?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
@@ -174,7 +200,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <Field
           htmlFor="currentBranchId"
           label="Current branch"
-          hint="The centre they attend now — what scheduling reads."
+          hint={branch.hint}
           error={form.formState.errors.currentBranchId?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
@@ -182,10 +208,11 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               id={id}
               aria-describedby={describedBy}
               aria-invalid={invalid}
-              value={currentBranchId}
+              disabled={branch.locked}
+              value={chosenBranchId}
               selectedLabel={currentBranchName}
               onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
-              items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+              items={branch.branches.map((option) => ({ value: option.id, label: option.name }))}
               placeholder="Not recorded"
               emptyLabel="No branch matches that"
             />
@@ -492,6 +519,8 @@ export function StudentDetailPage() {
   });
 
   // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
+  // The same choice the Access card renders, so the save cannot send what the picker never showed.
+  const branch = useBranchChoice(useWatch({ control: form.control, name: 'studentType' }));
 
   // Seeded on load and only when the id changes, or a refetch wipes an in-progress edit.
   useEffect(() => {
@@ -503,8 +532,7 @@ export function StudentDetailPage() {
     mutationFn: (values: FormValues) =>
       api.admin.students.update(id, {
         fullName: orNull(values.fullName),
-        studentType: values.studentType,
-        currentBranchId: orNull(values.currentBranchId),
+        ...accessPatch(values, form.formState.dirtyFields, branch.forcedId),
         // An omitted key means "leave it alone", which is true of a list nobody touched.
         ...(form.formState.dirtyFields.enrolledExams
           ? { enrolledExams: values.enrolledExams }

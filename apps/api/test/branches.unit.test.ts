@@ -5,11 +5,16 @@ import {
   AppException,
   BRANCH_TYPE,
   ErrorCodes,
+  STUDENT_TYPE,
   createBranchSchema,
 } from '@iace/contracts';
 import type { ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
-import { branchDeletionBlocker, branchEditBlocker } from '../src/branches/branch-rules';
+import {
+  branchDeletionBlocker,
+  branchEditBlocker,
+  studentBranchBlocker,
+} from '../src/branches/branch-rules';
 import { SuperAdminGuard } from '../src/auth/guards/super-admin.guard';
 import { SUPER_ADMIN_KEY } from '../src/common/security';
 
@@ -65,6 +70,27 @@ describe('branchEditBlocker', () => {
   it('still permits a no-op patch on the online branch', () => {
     assert.equal(branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, {}), null);
     assert.equal(branchEditBlocker({ type: BRANCH_TYPE.VIRTUAL }, { isActive: true }), null);
+  });
+});
+
+describe('studentBranchBlocker', () => {
+  it('keeps an online student out of a physical centre', () => {
+    assert.ok(studentBranchBlocker(STUDENT_TYPE.ONLINE, BRANCH_TYPE.PHYSICAL));
+  });
+
+  it('keeps an offline student out of the online branch', () => {
+    assert.ok(studentBranchBlocker(STUDENT_TYPE.OFFLINE, BRANCH_TYPE.VIRTUAL));
+  });
+
+  it('allows each type where it belongs', () => {
+    assert.equal(studentBranchBlocker(STUDENT_TYPE.ONLINE, BRANCH_TYPE.VIRTUAL), null);
+    assert.equal(studentBranchBlocker(STUDENT_TYPE.OFFLINE, BRANCH_TYPE.PHYSICAL), null);
+  });
+
+  /** They sit outside the institute, so the question does not arise for them. */
+  it('constrains a non-IACE student to neither', () => {
+    assert.equal(studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.VIRTUAL), null);
+    assert.equal(studentBranchBlocker(STUDENT_TYPE.NON_IACE, BRANCH_TYPE.PHYSICAL), null);
   });
 });
 
