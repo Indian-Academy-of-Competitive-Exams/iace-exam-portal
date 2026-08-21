@@ -41,7 +41,6 @@ export function ProfileViewPage() {
       header={
         <PageHeader
           title="Your profile"
-          description="What we hold about you, and what is still missing."
           action={
             <Button variant="outline" size="sm" asChild>
               <Link to={ROUTES.PROFILE_EDIT}>
@@ -70,10 +69,7 @@ export function ProfileViewPage() {
         </div>
       </FormSection>
 
-      <FormSection
-        title="Your photo"
-        description="Only you and the institute can see it, and a new one replaces the last. Aadhaar and PAN are checked at the centre — their images are never uploaded or stored here."
-      >
+      <FormSection title="Your photo">
         <div className="grid gap-4 sm:grid-cols-3">
           <DocumentCard kind="photo" label="Passport photo" url={profile?.photoUrl ?? null} />
         </div>
@@ -133,7 +129,6 @@ function Completion({ me }: Readonly<{ me: Me }>) {
     <FormSection
       title="Still to add"
       // The three pre-test fields are the only ones that hold anything up.
-      description="Only the ones marked 'needed before a test' hold anything up. The rest are optional."
     >
       <div className="flex flex-col gap-2">
         {outstanding.map((item) => (

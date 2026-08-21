@@ -79,13 +79,7 @@ export function ImportStudentsPage() {
 
   return (
     <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title="Import students"
-          description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
-        />
-      }
+      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import students" />}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="order-2 p-4 lg:order-1">

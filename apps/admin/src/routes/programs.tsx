@@ -116,7 +116,6 @@ export function ProgramsPage() {
       <PageHeader
         breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
         title="Programs"
-        description="The coaching variants a student can be a candidate for. A student row and a test series both carry the code as plain text, which is how a series meant for one program reaches only those students."
         action={
           isSuperAdmin ? (
             <Button
@@ -236,7 +235,6 @@ function NewProgramDialog({
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New program"
-      description="The name is what admins read; the code is what a student row and a series both store. Choose the code carefully — once anything carries it, it can no longer be changed."
       submitLabel="Create"
       loading={create.isPending}
     >

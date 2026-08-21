@@ -101,7 +101,6 @@ export function BranchesPage() {
       <PageHeader
         breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
         title="Branches"
-        description="The centres the institute teaches at. Every student attends one, and scheduling reads it."
         action={
           isSuperAdmin ? (
             <Button size="sm" onClick={() => setCreating(true)}>
@@ -180,7 +179,6 @@ function NewBranchDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="New branch"
-      description="A centre, not a batch. Stored in capitals, so it can only ever be spelled one way. The online branch is created once and cannot be renamed, retired or deleted afterwards."
       submitLabel="Create"
       loading={create.isPending}
       form={form}

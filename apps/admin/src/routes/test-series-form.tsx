@@ -181,7 +181,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={editing ? `Edit ${detail.name}` : 'New test series'}
-            description="A test reaches a student only through a series. Who can see it is decided here; where it runs is decided per branch."
           />
 
           {banner ? (
@@ -192,10 +191,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </>
       }
     >
-      <FormSection
-        title="Who it is for"
-        description="A student reaches this series by an enrolment on its stage's exam, by carrying its program, or by a grant made for them one at a time. A stage left blank spans the family rather than one paper; a program left blank asks nothing extra of the student."
-      >
+      <FormSection title="Who it is for">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField form={form} name="name" label="Name">
             {(control) => <Input {...control} placeholder="SSC CGL 2026 — Tier 1 mocks" />}
@@ -241,10 +237,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </div>
       </FormSection>
 
-      <FormSection
-        title="How it opens"
-        description="Reaching a series and having it open are two different things. Free is pricing only — it is not open access."
-      >
+      <FormSection title="How it opens">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField form={form} name="unlockMode" label="Unlocks">
             {(control) => (
@@ -339,9 +332,6 @@ function SeriesToggle({
 /** Stable keys for placeholder rows, which have no identity of their own. */
 const SKELETON_ROWS = ['branch-1', 'branch-2', 'branch-3'] as const;
 
-const SCHEDULE_DESCRIPTION =
-  'Every branch already has a row here — it was written the moment the series was created, switched off. Off is what "not offered at this centre" looks like, never a missing row, so nothing is added or removed here. A window is optional: leave both blank and the series runs at that branch for as long as it is on.';
-
 function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const { can } = useAuth();
   const queryClient = useQueryClient();
@@ -360,7 +350,7 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   };
 
   return (
-    <FormSection title="Where it runs" description={SCHEDULE_DESCRIPTION}>
+    <FormSection title="Where it runs">
       <StatRow
         label="Switched on at"
         value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}

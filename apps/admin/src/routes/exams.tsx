@@ -129,11 +129,7 @@ export function ExamsPage() {
     <PageFrame
       header={
         <>
-          <PageHeader
-            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-            title="Exams"
-            description="Family, exam and stage — the journey a student is coached through. An enrolment stores the exam code; every base config, series and test hangs off a stage."
-          />
+          <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Exams" />
 
           {!isSuperAdmin ? (
             <Alert variant="info" className="mb-4">
@@ -298,7 +294,6 @@ function NewExamDialog({
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New exam"
-      description="The name is what admins read; the code is what an enrolment stores. Choose the code carefully — once any student is enrolled on it, it can no longer be changed."
       submitLabel="Create"
       loading={create.isPending}
     >
@@ -746,7 +741,6 @@ function NewStageDialog({
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New stage"
-      description="The key is what a seed script and the exam-pattern workbook address this stage by, so it is unique across every exam and cannot change once a base config hangs off it."
       submitLabel="Add stage"
       loading={create.isPending}
     >
@@ -852,7 +846,6 @@ function EditStageDialog({
       form={form}
       onSubmit={(values) => save.mutate(values)}
       title={`Edit ${stage.exam.code} / ${stage.name}`}
-      description="A stage stays with its exam — every base config, series and test under it would change meaning otherwise."
       submitLabel="Save"
       loading={save.isPending}
     >

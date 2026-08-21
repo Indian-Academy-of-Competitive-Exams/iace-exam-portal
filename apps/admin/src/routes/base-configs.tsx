@@ -121,7 +121,6 @@ export function BaseConfigsPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Base configs"
-      description="A stage's blueprint: how long the paper runs, how it is navigated, and the sections it is made of. A test inherits that shape rather than restating it."
       action={
         canWrite ? (
           <Button size="sm" asChild>

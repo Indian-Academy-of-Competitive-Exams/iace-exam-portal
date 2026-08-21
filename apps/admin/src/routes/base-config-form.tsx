@@ -571,7 +571,6 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={editing ? `Edit ${detail.name}` : 'New base config'}
-            description="The shape every test under this stage inherits. It freezes the moment a test built from it is first finalized — after that only a clone can change it."
           />
 
           {banner ? (
@@ -582,10 +581,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </>
       }
     >
-      <FormSection
-        title="Which stage this is for"
-        description="A config never moves stage — every test built from it would change meaning. A stage holds exactly one default; promoting this one clears whichever held it before."
-      >
+      <FormSection title="Which stage this is for">
         <div className="grid gap-4 sm:grid-cols-2">
           {editing ? (
             <StatRow
@@ -728,10 +724,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       </FormSection>
 
       {sessionPaper ? (
-        <FormSection
-          title="Sessions"
-          description="A session paper is made of blocks, each a locked stretch of the exam. Every section below names the session it sits in. Only this timer has them."
-        >
+        <FormSection title="Sessions">
           <div className="flex flex-col gap-3">
             {modules.fields.map((field, index) => (
               <div
@@ -780,10 +773,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </FormSection>
       ) : null}
 
-      <FormSection
-        title="Sections"
-        description="Marks, negative marks and the clock are per section, because one paper mixes them. The order here is the order of the paper."
-      >
+      <FormSection title="Sections">
         <div className="flex flex-col gap-4">
           {issues.length > 0 ? (
             <Alert variant="danger">
@@ -1046,10 +1036,7 @@ function Totals({ sections }: Readonly<{ sections: readonly SectionValues[] }>) 
   const totals = configTotalsOf(sections.map((section, index) => toSectionDraft(section, index)));
 
   return (
-    <FormSection
-      title="What this adds up to"
-      description="Summed from the sections. The server keeps the same two numbers on the config, so nothing here is typed."
-    >
+    <FormSection title="What this adds up to">
       <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
         <StatRow label="Sections" value={sections.length} />
         <StatRow label="Questions" value={totals.totalQuestions} />

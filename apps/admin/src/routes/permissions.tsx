@@ -95,11 +95,7 @@ export function PermissionsPage() {
       <PageFrame
         header={
           <>
-            <PageHeader
-              breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-              title="Permissions"
-              description="What each admin may do. Write covers create, update and delete, and always includes read. Tick what they should have, then save the lot."
-            />
+            <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Permissions" />
 
             {!isLoading && registered.length === 0 ? (
               <Alert variant="warning" className="mb-5">

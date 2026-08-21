@@ -62,11 +62,7 @@ export function TaxonomyPage() {
   return (
     <PageFrame
       header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title="Subjects and topics"
-          description="Where a question is filed, and what the import template offers. Anything finer than a topic is a tag on the question."
-        />
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Subjects and topics" />
       }
     >
       <Tabs value={level} onValueChange={(value) => filters.set({ level: value, q: '' })}>
@@ -217,7 +213,6 @@ function NewSubjectDialog({
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New subject"
-      description="Capital letters, numbers and single spaces — what you type is tidied to that."
       submitLabel="Add subject"
       loading={create.isPending}
     >
@@ -347,7 +342,6 @@ function NewTopicDialog({
       form={form}
       onSubmit={(values) => create.mutate(values)}
       title="New topic"
-      description="A topic belongs to one subject and never moves — every question under it would change meaning."
       submitLabel="Add topic"
       loading={create.isPending}
     >

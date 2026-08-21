@@ -45,10 +45,7 @@ export function AppShell() {
 function DeactivatedNotice() {
   return (
     <>
-      <PageHeader
-        title="Your access has been removed"
-        description="Your account is still here, but it has been deactivated."
-      />
+      <PageHeader title="Your access has been removed" />
       <Alert variant="warning">
         <span>
           Every section and action across the platform is closed to you, including anything you were

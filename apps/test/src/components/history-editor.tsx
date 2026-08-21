@@ -28,7 +28,7 @@ export function HistoryEditor<T extends FieldValues>({
   control: Control<T>;
   name: Path<T>;
   title: string;
-  description: string;
+  description?: string;
   addLabel: string;
   /** `span` is a fraction of the row; they need not add up to anything. */
   columns: readonly { key: string; label: string; type?: 'text' | 'number'; span?: number }[];
@@ -45,7 +45,7 @@ export function HistoryEditor<T extends FieldValues>({
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">

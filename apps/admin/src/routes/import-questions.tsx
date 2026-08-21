@@ -97,13 +97,7 @@ export function ImportQuestionsPage() {
 
   return (
     <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title="Import questions"
-          description="One row is one question, in as many of the three languages as you have. Nothing is written until you press Import."
-        />
-      }
+      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />}
     >
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <Card className="order-2 p-4 lg:order-1">

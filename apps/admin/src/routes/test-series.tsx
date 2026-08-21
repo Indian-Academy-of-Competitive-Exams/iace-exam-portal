@@ -116,7 +116,6 @@ export function TestSeriesPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Test series"
-      description="What a test is offered through. A student reaches one by an exam enrolment, by a program, or by a grant made for them — and only where their branch runs it."
       action={
         canWrite ? (
           <Button size="sm" asChild>

@@ -26,14 +26,7 @@ export function AccountPage() {
   const onDefaultPin = student?.hasDefaultPin ?? false;
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          title="Change PIN"
-          description="You sign in with your mobile number and a four-digit PIN."
-        />
-      }
-    >
+    <PageFrame header={<PageHeader title="Change PIN" />}>
       <ChangePinCard onDefaultPin={onDefaultPin} />
     </PageFrame>
   );

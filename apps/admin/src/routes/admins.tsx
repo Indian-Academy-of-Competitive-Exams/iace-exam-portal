@@ -113,7 +113,6 @@ export function AdminsPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Admins"
-      description="Who can sign in to this app. Every admin here was created by a super admin — nobody can self-register."
       action={
         <Button size="sm" onClick={() => setCreating(true)}>
           <Plus aria-hidden />
@@ -283,7 +282,6 @@ function NewAdminDialog({
         form={form}
         onSubmit={setPending}
         title="New admin"
-        description="They sign in with this email and a one-time code. A new admin holds nothing until you grant them something on the Permissions screen."
         submitLabel="Create"
         loading={create.isPending}
       >

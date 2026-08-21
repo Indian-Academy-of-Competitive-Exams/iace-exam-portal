@@ -140,7 +140,6 @@ export function QuestionsPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Questions"
-      description="The bank every paper is drawn from. English always; Hindi and Telugu where the institute has them."
       action={
         canWrite ? (
           <span className="flex flex-wrap gap-2">

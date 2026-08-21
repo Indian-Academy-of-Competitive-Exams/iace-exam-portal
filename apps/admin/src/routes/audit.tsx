@@ -254,13 +254,7 @@ export function AuditActivityPage() {
 
   return (
     <TableFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title="Audit log"
-          description="Every create, update and status change across the platform."
-        />
-      }
+      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Audit log" />}
       toolbar={toolbar}
     >
       <DataTable
@@ -294,13 +288,7 @@ export function AuditImportsPage() {
 
   return (
     <TableFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title="Import runs"
-          description="Every import run — previewed, committed or failed — and what each one touched."
-        />
-      }
+      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import runs" />}
     >
       <DataTable
         columns={columns}

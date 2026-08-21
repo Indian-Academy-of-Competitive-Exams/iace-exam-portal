@@ -97,11 +97,7 @@ export function EntityHistory({
   const mine = !(identity?.isSuperAdmin ?? false);
 
   return (
-    <FormSection
-      className={className}
-      title="History"
-      description={`${mine ? 'Your activity on this record over' : 'Activity on this record over'} the last ${AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is not shown here.`}
-    >
+    <FormSection className={className} title="History">
       <div>
         <HistoryBody
           isPending={history.isPending}

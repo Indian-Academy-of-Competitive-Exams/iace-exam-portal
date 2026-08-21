@@ -5,10 +5,5 @@ import { useAuth } from '../providers/auth';
 export function DashboardPage() {
   const { identity: admin } = useAuth();
 
-  return (
-    <PageHeader
-      title={admin?.fullName ? `Welcome, ${admin.fullName}` : 'Welcome'}
-      description="User management is live. Question bank and tests come next."
-    />
-  );
+  return <PageHeader title={admin?.fullName ? `Welcome, ${admin.fullName}` : 'Welcome'} />;
 }

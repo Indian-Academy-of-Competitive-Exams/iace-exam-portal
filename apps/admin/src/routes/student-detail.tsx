@@ -155,10 +155,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   const currentBranchName = allBranches.find((option) => option.id === chosenBranchId)?.name;
 
   return (
-    <FormSection
-      title="Access"
-      description="An enrolment is how a student reaches a test series — no membership row is written for them. A series nothing here matches is granted one student at a time."
-    >
+    <FormSection title="Access">
       <div className="flex flex-col gap-4">
         <Field
           htmlFor="studentType"
@@ -300,10 +297,7 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   });
 
   return (
-    <FormSection
-      title="Series granted directly"
-      description="One student, one series, and only what neither an enrolment nor a program reaches. The series still has to be switched on for their branch and inside its window before they can sit anything in it."
-    >
+    <FormSection title="Series granted directly">
       <div className="flex flex-col gap-4">
         <GrantList
           grants={grants.data ?? []}
@@ -669,10 +663,7 @@ export function StudentDetailPage() {
         </Badge>
       </div>
 
-      <FormSection
-        title="What the student has uploaded"
-        description="Read-only here — only the student can replace it, and the link expires after a few minutes. Aadhaar and PAN images are never stored."
-      >
+      <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">
           <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
         </div>
@@ -681,10 +672,7 @@ export function StudentDetailPage() {
       <EntityHistory feature={AUDIT_FEATURE.STUDENT} entityId={detail.id} />
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <FormSection
-          title="Details"
-          description="Mother's name, father's name and date of birth are the three the student is asked for before a test."
-        >
+        <FormSection title="Details">
           <div className="flex flex-col gap-4">
             <Field
               htmlFor="fullName"

@@ -118,7 +118,6 @@ export function ProfilePage() {
             />
           }
           title="Your details"
-          description="Only three of these are needed before a test. The rest you can fill in whenever you like."
         />
       }
     >
@@ -128,10 +127,7 @@ export function ProfilePage() {
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {!me.isPending && !me.error && (
         <>
-          <FormSection
-            title="Needed before a test"
-            description="These three go on your hall ticket and answer sheet."
-          >
+          <FormSection title="Needed before a test">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 htmlFor="motherName"
@@ -170,7 +166,7 @@ export function ProfilePage() {
             </div>
           </FormSection>
 
-          <FormSection title="About you" description="All optional — nothing here blocks a test.">
+          <FormSection title="About you">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 htmlFor="fullName"
@@ -236,7 +232,6 @@ export function ProfilePage() {
             control={form.control}
             name="profile.educationDetails"
             title="Education"
-            description="Schooling and degrees so far. All optional."
             addLabel="Add a qualification"
             columns={[
               { key: 'level', label: 'Qualification', span: 3 },
@@ -252,7 +247,6 @@ export function ProfilePage() {
             control={form.control}
             name="profile.pastExamHistory"
             title="Exams sat elsewhere"
-            description="Government exams you have attempted before. Nothing here affects your tests on IACE."
             addLabel="Add an exam"
             columns={[
               { key: 'exam', label: 'Exam', span: 3 },

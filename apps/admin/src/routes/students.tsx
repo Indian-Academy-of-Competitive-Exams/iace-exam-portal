@@ -216,7 +216,6 @@ export function StudentsPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Students"
-      description="Everyone enrolled, however they got here — self-signup, added by hand, or imported."
       action={
         <div className="flex flex-wrap gap-2">
           <SyncStudentsButton />
@@ -559,7 +558,6 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         if (!next) onClose();
       }}
       title="Add a student"
-      description="The mobile number and the student type are required. They will set their own PIN the first time they sign in, and land on this same record."
       submitLabel="Add student"
       loading={create.isPending}
       form={form}
