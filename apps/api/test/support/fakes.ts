@@ -42,6 +42,7 @@ import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type StorageService } from '../../src/storage/storage.service';
 import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
 import { type DeviceContext } from '../../src/auth/auth.types';
+import { type AuthService } from '../../src/auth/auth.service';
 import {
   type DomainEventBus,
   type DomainEventName,
@@ -1153,6 +1154,13 @@ export interface FakeBranch {
   isActive: boolean;
   createdAt: Date;
   _count: { students: number };
+}
+
+/** Auth as students and imports use it: one call, to hash a starting PIN. */
+export function fakeAuth(): AuthService {
+  return {
+    hashPin: (pin: string) => Promise.resolve(`hash:${pin}`),
+  } as unknown as AuthService;
 }
 
 export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {

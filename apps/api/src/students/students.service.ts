@@ -19,6 +19,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { AuthService, defaultPinFor } from '../auth';
 import { BranchesService } from '../branches';
 import { ExamsService } from '../configs';
 import { type ProgramsService } from '../access';
@@ -71,6 +72,7 @@ export class StudentsService {
     @Inject(forwardRef(() => ExamsService))
     private readonly exams: ExamsService,
     private readonly branches: BranchesService,
+    private readonly auth: AuthService,
     // `require`, not a static import: `access` imports `configs`, which imports this barrel back.
     @Inject(
       forwardRef(
@@ -206,6 +208,9 @@ export class StudentsService {
         enrolledFamilies: input.enrolledFamilies ?? [],
         programs: input.programs ?? [],
         currentBranchId: input.currentBranchId ?? null,
+        // The same starting PIN the importer gives, so a student added by hand can sign in today.
+        pinHash: await this.auth.hashPin(defaultPinFor(input.mobile)),
+        pinIsDefault: true,
       },
     });
     return this.detail(student.id);

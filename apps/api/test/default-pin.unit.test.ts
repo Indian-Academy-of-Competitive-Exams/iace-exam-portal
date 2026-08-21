@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { PIN_LENGTH, mobileSchema, pinSchema } from '@iace/contracts';
-import { defaultPinFor } from '../src/imports/default-pin';
+import { defaultPinFor } from '../src/auth/pin/default-pin';
 
 /** The PIN a bulk-imported student starts with. */
 describe('defaultPinFor', () => {

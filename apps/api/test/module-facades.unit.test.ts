@@ -7,11 +7,12 @@ import { BranchesService } from '../src/branches/branches.service';
 import { StudentsService } from '../src/students/students.service';
 import { AuditContext } from '../src/audit';
 import {
-  FakeSeriesFanOut,
+  fakeAuth,
   FakeConfig,
   FakeEventBus,
   FakePrisma,
   FakeRedis,
+  FakeSeriesFanOut,
   makeBranch,
   makeStudent,
 } from './support/fakes';
@@ -122,6 +123,7 @@ function studentsWith(student = makeStudent()) {
       null as never,
       null as never,
       null as never,
+      fakeAuth(),
       null as never,
       null as never,
       new FakeEventBus().asService(),
@@ -209,6 +211,7 @@ describe('the counts the configs module asks for', () => {
       null as never,
       null as never,
       null as never,
+      fakeAuth(),
       null as never,
       null as never,
       new FakeEventBus().asService(),

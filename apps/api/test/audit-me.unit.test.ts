@@ -8,6 +8,7 @@ import { type ExamsService } from '../src/configs';
 import { type BranchesService } from '../src/branches/branches.service';
 import { type StorageService } from '../src/storage/storage.service';
 import {
+  fakeAuth,
   FakeCodeCatalog,
   FakeEventBus,
   FakePrisma,
@@ -83,6 +84,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     storage.asService(),
     exams,
     branches,
+    fakeAuth(),
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),

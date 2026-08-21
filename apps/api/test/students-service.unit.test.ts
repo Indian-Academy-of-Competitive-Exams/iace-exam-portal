@@ -8,10 +8,11 @@ import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import {
-  FakeSeriesFanOut,
+  fakeAuth,
   FakeCodeCatalog,
   FakeEventBus,
   FakePrisma,
+  FakeSeriesFanOut,
   makeBranch,
   makeStudent,
 } from './support/fakes';
@@ -65,6 +66,7 @@ function serviceWith(
         new FakeSeriesFanOut().asService(),
         new AuditContext(),
       ),
+      fakeAuth(),
       programs.asService(),
       new AuditContext(),
       events.asService(),
@@ -82,6 +84,29 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     await service.create({ mobile: '9000000001', studentType: STUDENT_TYPE.OFFLINE });
 
     assert.equal(prisma.students[0]?.studentType, STUDENT_TYPE.OFFLINE);
+  });
+
+  /** No pinHash meant loginStudent read the null as a wrong PIN, forever. */
+  it('gives the student a starting PIN, so they can sign in the day they are added', async () => {
+    const { service, prisma } = serviceWith([]);
+
+    await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE });
+
+    assert.equal(prisma.students[0]?.pinHash, 'hash:9000');
+    assert.equal(prisma.students[0]?.pinIsDefault, true);
+  });
+
+  /** The PIN is the institute's, not theirs, so the roster must still chase them to change it. */
+  it('reports them as never signed in, and as still on the default PIN', async () => {
+    const { service } = serviceWith([]);
+
+    const created = await service.create({
+      mobile: '9000000021',
+      studentType: STUDENT_TYPE.ONLINE,
+    });
+
+    assert.equal(created.hasSignedIn, false);
+    assert.equal(created.hasDefaultPin, true);
   });
 
   it('stores the enrolments, the programme and the branch', async () => {

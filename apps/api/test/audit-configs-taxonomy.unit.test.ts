@@ -13,6 +13,7 @@ import {
 import { AuditContext } from '../src/audit';
 import { StudentsService } from '../src/students';
 import {
+  fakeAuth,
   FakeEventBus,
   FakePrisma,
   FakeQuestionBankPrisma,
@@ -116,6 +117,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
         null as never,
         null as never,
         null as never,
+        fakeAuth(),
         null as never,
         new AuditContext(),
         new FakeEventBus().asService(),

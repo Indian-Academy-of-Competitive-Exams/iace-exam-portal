@@ -15,12 +15,13 @@ import { SUPER_ADMIN_KEY } from '../src/common/security';
 import { StudentsService } from '../src/students';
 import { AuditContext } from '../src/audit';
 import {
-  type FakeExam,
-  type FakeStudent,
+  fakeAuth,
   FakeEventBus,
   FakePrisma,
   makeExam,
   makeStudent,
+  type FakeExam,
+  type FakeStudent,
 } from './support/fakes';
 
 /** The catalog, exercised through the service rather than its rule helpers. */
@@ -33,6 +34,7 @@ function serviceWith(exams: FakeExam[] = [makeExam()], students: FakeStudent[] =
       null as never,
       null as never,
       null as never,
+      fakeAuth(),
       null as never,
       null as never,
       new FakeEventBus().asService(),

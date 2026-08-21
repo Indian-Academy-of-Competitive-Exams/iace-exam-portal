@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
+import { AuthModule } from '../auth';
 import { BranchesModule } from '../branches';
 import { ConfigsModule } from '../configs';
 import { type AccessModule } from '../access';
@@ -13,6 +14,8 @@ import { StudentsService } from './students.service';
   imports: [
     PrismaModule,
     StorageModule,
+    // For `hashPin`: a student added by hand is given a starting PIN, hashed the one way.
+    AuthModule,
     BranchesModule,
     forwardRef(() => ConfigsModule),
     // `require`, not a static import: `access` imports `configs`, which imports this barrel back,

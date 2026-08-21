@@ -12,10 +12,9 @@ import {
   type StudentImportResult,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthService } from '../auth';
+import { AuthService, defaultPinFor } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
-import { defaultPinFor } from './default-pin';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 
@@ -82,8 +81,7 @@ export class ImportsService {
       for (const row of plan.rows) {
         if (row.action === 'skip' || !row.mobile) continue;
 
-        // A starting PIN, so an uploaded roster can sign in the same day — marked
-        // as ours, not theirs. See default-pin.ts for the trade.
+        // A starting PIN, marked as ours not theirs. See auth/pin/default-pin.ts.
         const startingPin = row.willReceiveDefaultPin
           ? { pinHash: pinHashes.get(row.mobile), pinIsDefault: true }
           : {};
