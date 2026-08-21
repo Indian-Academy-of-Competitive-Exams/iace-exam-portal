@@ -11,6 +11,7 @@ import {
 import { AuditService } from '../src/audit/audit.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import { FakePrisma, FakeRedis, FakeStorage, makeAdmin } from './support/fakes';
+import { startOfInstituteDay } from '../src/common/time/institute-day';
 
 const NOW = new Date('2026-04-10T02:00:00Z');
 const OLD_DAY = new Date('2026-03-11T09:00:00Z');
@@ -120,12 +121,12 @@ describe('AuditArchiveProcessor', () => {
    */
   it('deletes only the exact [gte, lt) window, not a row just outside either edge', async () => {
     const { prisma, job } = withRows(0);
-    const gte = new Date('2026-03-11T00:00:00Z');
-    const lt = new Date('2026-03-12T00:00:00Z');
+    const gte = startOfInstituteDay('2026-03-11');
+    const lt = startOfInstituteDay('2026-03-12');
     prisma.rowActionLogs.push(
-      { id: 'ral_before', createdAt: new Date('2026-03-10T23:59:59Z') },
-      { id: 'ral_in', createdAt: new Date('2026-03-11T00:00:00Z') },
-      { id: 'ral_after', createdAt: new Date('2026-03-12T00:00:00Z') },
+      { id: 'ral_before', createdAt: new Date(gte.getTime() - 1) },
+      { id: 'ral_in', createdAt: gte },
+      { id: 'ral_after', createdAt: lt },
     );
 
     const result = await job.archiveWindow(gte, lt, lt);

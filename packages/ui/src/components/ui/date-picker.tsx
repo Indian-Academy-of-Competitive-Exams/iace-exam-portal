@@ -140,11 +140,27 @@ export function nextFocusedDate(iso: string, key: string, shiftKey = false): str
   return null;
 }
 
-const MONTH_LABEL = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
-const MONTH_NAME = new Intl.DateTimeFormat(undefined, { month: 'short' });
-const WEEKDAY_LABEL = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
-const FULL_LABEL = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' });
-const TRIGGER_LABEL = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+/** Every date here is a UTC-built civil date, so it is read back and rendered in UTC. */
+const LOCAL_CIVIL_DATE = new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** The device's own date. An app that must pin a clock passes `max`/`min` instead. */
+function todayWhereTheUserIs(): string {
+  return LOCAL_CIVIL_DATE.format(new Date());
+}
+
+const MONTH_LABEL = new Intl.DateTimeFormat(undefined, {
+  timeZone: 'UTC',
+  month: 'long',
+  year: 'numeric',
+});
+const MONTH_NAME = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', month: 'short' });
+const WEEKDAY_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', weekday: 'short' });
+const FULL_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'full' });
+const TRIGGER_LABEL = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', dateStyle: 'medium' });
 
 /** Sunday-first headings, named by the runtime locale rather than hardcoded English. */
 const WEEKDAYS = Array.from({ length: DAYS_IN_WEEK }, (_, index) =>
@@ -204,7 +220,7 @@ export function DatePicker({
 }: Readonly<DatePickerProps>) {
   const [open, setOpen] = React.useState(false);
   const selected = parseISODate(value);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayWhereTheUserIs();
 
   const opening = selected ?? parseISODate(today)!;
   const [view, setView] = React.useState({ year: opening.year, month: opening.month });

@@ -11,17 +11,18 @@ import {
 
 describe('archiveKeyFor', () => {
   /** Derived from the date alone, so finding a day needs no index and no tool. */
-  it('keys an object by its UTC day, zero-padded', () => {
+  it('keys an object by its institute day, zero-padded', () => {
     assert.equal(
       archiveKeyFor(new Date('2026-03-07T00:00:00Z')),
       'audit/row-actions/2026/03/07.ndjson.gz',
     );
   });
 
-  it('uses UTC, not local time, so the key does not shift with the server', () => {
+  it('keys by the institute day, so an evening-UTC row files under the next day', () => {
+    // 23:30 UTC on the 7th is already 05:00 on the 8th in India, and belongs to the 8th.
     assert.equal(
       archiveKeyFor(new Date('2026-03-07T23:30:00Z')),
-      'audit/row-actions/2026/03/07.ndjson.gz',
+      'audit/row-actions/2026/03/08.ndjson.gz',
     );
   });
 });
@@ -54,10 +55,10 @@ describe('toNdjson', () => {
 });
 
 describe('dayToArchive', () => {
-  it('is the retention boundary, at midnight UTC', () => {
+  it('is the retention boundary, at institute midnight', () => {
     const day = dayToArchive(new Date('2026-04-10T13:45:00Z'), AUDIT_RETENTION_DAYS);
 
-    assert.equal(day.toISOString(), '2026-03-11T00:00:00.000Z');
+    assert.equal(day.toISOString(), '2026-03-10T18:30:00.000Z');
   });
 
   /**

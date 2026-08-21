@@ -9,6 +9,11 @@ import { StorageService } from '../storage/storage.service';
 import { QUEUE_NAMES } from '../queue/queues';
 import { AuditService } from './audit.service';
 import { AUDIT_RETENTION_DAYS, archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
+import {
+  instituteDayOf,
+  shiftInstituteDay,
+  startOfInstituteDay,
+} from '../common/time/institute-day';
 
 /** Caps one run's catch-up so a long outage logs a warning instead of running forever. */
 export const AUDIT_ARCHIVE_MAX_DAYS_PER_RUN = 14;
@@ -26,10 +31,9 @@ interface PendingDay {
   eligibleBefore: Date;
 }
 
-function addUtcDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
+/** The day after an institute midnight, which is the exclusive end of that day's window. */
+function nextInstituteMidnight(from: Date): Date {
+  return startOfInstituteDay(shiftInstituteDay(instituteDayOf(from), 1));
 }
 
 @Injectable()
@@ -94,7 +98,7 @@ export class AuditArchiveProcessor extends WorkerHost {
   }
 
   private async oldestPendingDay(now: Date): Promise<PendingDay | null> {
-    const eligibleBefore = addUtcDays(dayToArchive(now, AUDIT_RETENTION_DAYS), 1);
+    const eligibleBefore = nextInstituteMidnight(dayToArchive(now, AUDIT_RETENTION_DAYS));
     const [oldest] = await this.prisma.rowActionLog.findMany({
       where: { createdAt: { lt: eligibleBefore } },
       orderBy: { createdAt: 'asc' },
@@ -102,9 +106,8 @@ export class AuditArchiveProcessor extends WorkerHost {
     });
     if (!oldest) return null;
 
-    const gte = new Date(oldest.createdAt as Date);
-    gte.setUTCHours(0, 0, 0, 0);
-    return { gte, lt: addUtcDays(gte, 1), eligibleBefore };
+    const gte = startOfInstituteDay(instituteDayOf(oldest.createdAt as Date));
+    return { gte, lt: nextInstituteMidnight(gte), eligibleBefore };
   }
 
   /**
@@ -120,7 +123,7 @@ export class AuditArchiveProcessor extends WorkerHost {
 
     // Without this, a second worker's page read can land after the first one's delete: it uploads
     // its short body over the complete object, verifies against itself, and the rest is gone.
-    const lock = redisKeys.auditArchiveDay(gte.toISOString().slice(0, 10));
+    const lock = redisKeys.auditArchiveDay(instituteDayOf(gte));
     if (!(await this.redis.acquireLock(lock, AUDIT_ARCHIVE_LOCK_TTL_SEC))) {
       this.logger.warn(`Another worker holds ${lock}; leaving that day for the next run`);
       return null;
@@ -184,21 +187,16 @@ export class AuditArchiveProcessor extends WorkerHost {
 
   /** The three things that make deleting by `[gte, lt)` safe, checked independent of the caller. */
   private assertWindow(gte: Date, lt: Date, eligibleBefore: Date): void {
-    const isUtcMidnight =
-      gte.getUTCHours() === 0 &&
-      gte.getUTCMinutes() === 0 &&
-      gte.getUTCSeconds() === 0 &&
-      gte.getUTCMilliseconds() === 0;
-    if (!isUtcMidnight) {
+    if (gte.getTime() !== startOfInstituteDay(instituteDayOf(gte)).getTime()) {
       throw new AppException(
         ErrorCodes.VALIDATION_ERROR,
-        `Archive window must start at UTC midnight, got ${gte.toISOString()}`,
+        `Archive window must start at institute midnight, got ${gte.toISOString()}`,
       );
     }
-    if (lt.getTime() !== addUtcDays(gte, 1).getTime()) {
+    if (lt.getTime() !== nextInstituteMidnight(gte).getTime()) {
       throw new AppException(
         ErrorCodes.VALIDATION_ERROR,
-        `Archive window must span exactly one UTC day: ${gte.toISOString()} to ${lt.toISOString()}`,
+        `Archive window must span exactly one institute day: ${gte.toISOString()} to ${lt.toISOString()}`,
       );
     }
     if (lt.getTime() > eligibleBefore.getTime()) {

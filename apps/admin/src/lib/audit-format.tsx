@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import type { AuditAction, RowAction } from '@iace/contracts';
+import { INSTITUTE_TIME_ZONE, type AuditAction, type RowAction } from '@iace/contracts';
 import { Badge, BadgeList, linkVariants, TruncatedText } from '@iace/ui';
 import { ROUTES } from './constants';
 
 /** One rendering of a `RowAction`, shared by every screen that shows one. */
 
 export const WHEN_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  timeZone: INSTITUTE_TIME_ZONE,
   day: 'numeric',
   month: 'short',
   year: 'numeric',

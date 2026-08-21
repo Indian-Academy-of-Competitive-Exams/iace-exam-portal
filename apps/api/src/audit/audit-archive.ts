@@ -1,5 +1,10 @@
 import { gzipSync } from 'node:zlib';
 import { AppException, ErrorCodes } from '@iace/contracts';
+import {
+  instituteDayOf,
+  shiftInstituteDay,
+  startOfInstituteDay,
+} from '../common/time/institute-day';
 
 /** 30 days hot in Postgres; everything older lives in S3. */
 export const AUDIT_RETENTION_DAYS = 30;
@@ -7,9 +12,7 @@ export const AUDIT_RETENTION_DAYS = 30;
 export const AUDIT_ARCHIVE_PREFIX = 'audit/row-actions';
 
 export function archiveKeyFor(day: Date): string {
-  const year = day.getUTCFullYear();
-  const month = String(day.getUTCMonth() + 1).padStart(2, '0');
-  const date = String(day.getUTCDate()).padStart(2, '0');
+  const [year, month, date] = instituteDayOf(day).split('-');
   return `${AUDIT_ARCHIVE_PREFIX}/${year}/${month}/${date}.ndjson.gz`;
 }
 
@@ -22,13 +25,10 @@ export function toNdjson(rows: readonly object[]): Buffer {
   return gzipSync(rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
 }
 
-/** Midnight UTC of the day that has just fallen outside the window. Never today. */
+/** Institute midnight of the day that has just fallen outside the window. Never today. */
 export function dayToArchive(now: Date, retentionDays: number): Date {
   if (retentionDays < 1) {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, 'retentionDays must be at least 1');
   }
-  const boundary = new Date(now);
-  boundary.setUTCDate(boundary.getUTCDate() - retentionDays);
-  boundary.setUTCHours(0, 0, 0, 0);
-  return boundary;
+  return startOfInstituteDay(shiftInstituteDay(instituteDayOf(now), -retentionDays));
 }
