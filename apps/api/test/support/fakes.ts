@@ -342,7 +342,6 @@ export interface FakeStudent {
   enrolledFamilies: ExamFamily[];
   programs: string[];
   currentBranchId: string | null;
-  preferredLanguage: string;
   preTestReady: boolean;
   profileCompleted: boolean;
   isActive: boolean;
@@ -387,7 +386,6 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     enrolledFamilies: [],
     programs: [],
     currentBranchId: null,
-    preferredLanguage: 'en',
     preTestReady: false,
     profileCompleted: false,
     isActive: true,

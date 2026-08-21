@@ -1,0 +1,17 @@
+-- Drops Student."preferredLanguage".
+--
+-- The column was written and never read. It was set by the admin patch and by a student's own
+-- profile save, echoed back on the student identity at sign-in and on the admin detail response,
+-- and nothing anywhere made a decision with it: no screen in either SPA referenced it, and no
+-- service branched on it. A language a student says they prefer and which never changes what they
+-- are shown is a promise the product does not keep.
+--
+-- The language a paper is actually rendered in does not come from here and never did. It comes
+-- from the config the test inherits — BaseConfig."languages" with its languageMode — and from
+-- Attempt."languages" for the sitting itself. Both are untouched, as is the SupportedLanguage
+-- enum they share; only this one column goes.
+--
+-- No data move. There is nothing to carry across, because nothing consumed the values: the column
+-- has a DEFAULT 'EN' and the overwhelming majority of rows still hold exactly that. Dropping it is
+-- irreversible for any row that had been set to HI or TE, which is the reason to say so here.
+ALTER TABLE "Student" DROP COLUMN "preferredLanguage";

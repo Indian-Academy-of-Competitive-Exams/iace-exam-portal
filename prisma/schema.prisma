@@ -624,28 +624,27 @@ model AttemptQuestion {
 // (WHERE deletedAt IS NULL) written in the migration, so a soft-deleted row
 // releases its number.
 model Student {
-  id                String            @id @default(cuid())
-  mobile            String
-  externalRef       String?
-  studentType       StudentType
-  enrolledFamilies  ExamFamily[]      @default([])
+  id               String       @id @default(cuid())
+  mobile           String
+  externalRef      String?
+  studentType      StudentType
+  enrolledFamilies ExamFamily[] @default([])
   // Program.code values — the student is a candidate for these.
-  programs          String[]          @default([])
+  programs         String[]     @default([])
   // Exam.code values, app-validated against Exam.
-  enrolledExams     String[]          @default([])
-  currentBranchId   String?
-  pinHash           String?
-  pinIsDefault      Boolean           @default(true)
-  fullName          String?
-  preferredLanguage SupportedLanguage @default(EN)
-  preTestReady      Boolean           @default(false)
-  profileCompleted  Boolean           @default(false)
-  isActive          Boolean           @default(true)
-  isTestBlocked     Boolean           @default(false)
-  deletedAt         DateTime?         @db.Timestamptz(3)
-  createdById       String?
-  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  enrolledExams    String[]     @default([])
+  currentBranchId  String?
+  pinHash          String?
+  pinIsDefault     Boolean      @default(true)
+  fullName         String?
+  preTestReady     Boolean      @default(false)
+  profileCompleted Boolean      @default(false)
+  isActive         Boolean      @default(true)
+  isTestBlocked    Boolean      @default(false)
+  deletedAt        DateTime?    @db.Timestamptz(3)
+  createdById      String?
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   profile        StudentProfile?
   currentBranch  Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)

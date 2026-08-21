@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { languageCodeSchema } from './exams';
 import { adminPermissionsSchema } from './admins';
 import {
   ActorTypes,
@@ -127,7 +126,6 @@ export const studentIdentitySchema = z.object({
   id: z.string(),
   mobile: z.string(),
   fullName: z.string().nullable(),
-  preferredLanguage: languageCodeSchema,
   /**
    * The minimal pre-test details are on file: mother's name, father's name, DOB.
    * When false the test player prompts for them — never a hard block.

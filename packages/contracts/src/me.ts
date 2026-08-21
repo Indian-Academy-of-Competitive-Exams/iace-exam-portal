@@ -39,7 +39,6 @@ export type Me = z.infer<typeof meSchema>;
  */
 export const updateMeSchema = updateStudentSchema.pick({
   fullName: true,
-  preferredLanguage: true,
   profile: true,
 });
 export type UpdateMeInput = z.input<typeof updateMeSchema>;

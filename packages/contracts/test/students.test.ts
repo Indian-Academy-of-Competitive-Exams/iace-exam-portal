@@ -29,7 +29,6 @@ const summary = {
 
 const detail = {
   ...summary,
-  preferredLanguage: 'EN',
   programs: [],
   currentBranchId: null,
   updatedAt: '2026-01-05T09:30:00.000Z',

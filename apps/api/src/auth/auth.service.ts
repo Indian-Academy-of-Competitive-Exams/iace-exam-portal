@@ -357,7 +357,6 @@ export class AuthService {
       id: student.id,
       mobile: student.mobile,
       fullName: student.fullName,
-      preferredLanguage: student.preferredLanguage,
       preTestReady: student.preTestReady,
       profileCompleted: student.profileCompleted,
       hasDefaultPin: student.pinIsDefault,

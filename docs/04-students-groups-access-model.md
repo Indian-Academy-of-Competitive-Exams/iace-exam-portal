@@ -43,7 +43,7 @@ Student
                                              //   [CONFIRM name — this is your "deactivation"]
   deletedAt         DateTime?          // full soft-delete (cannot log in) — distinct from isTestBlocked
   // --- existing ---
-  pinHash?  pinIsDefault  fullName?  preferredLanguage  preTestReady  profileCompleted
+  pinHash?  pinIsDefault  fullName?  preTestReady  profileCompleted
   // --- provenance (lightweight audit cols) ---
   createdVia        IMPORT_SOURCE
   createdById       String?            // admin id, or null for SELF_SIGNUP / SCRIPT

@@ -120,7 +120,6 @@ export class StudentsService {
 
     return {
       ...this.toSummary(student),
-      preferredLanguage: student.preferredLanguage,
       programs: student.programs,
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
@@ -277,9 +276,6 @@ export class StudentsService {
 
     const updatedColumns: Prisma.StudentUncheckedUpdateInput = {
       ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
-      ...(input.preferredLanguage === undefined
-        ? {}
-        : { preferredLanguage: input.preferredLanguage }),
       ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
       ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
       ...(input.enrolledFamilies ? { enrolledFamilies: input.enrolledFamilies } : {}),

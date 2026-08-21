@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { mobileSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { examFamilySchema, languageCodeSchema } from './exams';
+import { examFamilySchema } from './exams';
 
 // ============================================================================
 // Students, as the ADMIN sees them.
@@ -141,7 +141,6 @@ export const studentProfileSchema = z.object({
 export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
 export const studentDetailSchema = studentSummarySchema.extend({
-  preferredLanguage: languageCodeSchema,
   programs: z.array(z.string()),
   currentBranchId: z.string().nullable(),
   updatedAt: z.string(),
@@ -244,7 +243,6 @@ export const BLOCKED_ENROLMENT_MESSAGE =
 export const updateStudentSchema = z.object({
   // null clears the name; '' is the same intent typed differently.
   fullName: blankClears(personNameSchema),
-  preferredLanguage: languageCodeSchema.optional(),
   studentType: studentTypeSchema.optional(),
   /** Replaces the enrolments wholesale — an empty array is a real answer. */
   enrolledExams: z.array(z.string()).optional(),

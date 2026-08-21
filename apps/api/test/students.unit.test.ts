@@ -109,7 +109,6 @@ describe('admin student contracts', () => {
     preTestReady: true,
     profileCompleted: false,
     createdAt: new Date().toISOString(),
-    preferredLanguage: 'EN',
     programs: [],
     currentBranchId: null,
     updatedAt: new Date().toISOString(),
