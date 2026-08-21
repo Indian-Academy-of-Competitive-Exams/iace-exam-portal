@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   AppException,
   LANGUAGE_CODE,
@@ -54,12 +54,16 @@ import {
 import { api } from '../lib/api';
 import {
   LANGUAGE_CODE_LABELS,
+  LANGUAGE_MODE_HINTS,
   LANGUAGE_MODE_LABELS,
+  MERIT_TYPE_HINTS,
   MERIT_TYPE_LABELS,
   NAV_ITEMS,
+  NAVIGATION_POLICY_HINTS,
   NAVIGATION_POLICY_LABELS,
   ROUTES,
   TEST_UI_LABELS,
+  TIMER_TEMPLATE_HINTS,
   TIMER_TEMPLATE_LABELS,
 } from '../lib/constants';
 import { durationLabel, minutesFieldOf, secondsFromMinutes } from '../lib/duration';
@@ -301,6 +305,7 @@ const BANNER_HANDLED_ELSEWHERE = ['sections', 'durationSec'] as const;
 export function BaseConfigFormPage() {
   const { id } = useParams();
   const editing = id !== undefined;
+  const [openForEditing, setOpenForEditing] = useState(false);
 
   const config = useQuery({
     queryKey: ['admin', 'base-config', id],
@@ -327,10 +332,13 @@ export function BaseConfigFormPage() {
     return <Alert variant="danger">Could not load this config.</Alert>;
   }
 
-  if (config.data?.locked) return <LockedConfig config={config.data} />;
+  // A saved config is READ first. Editing is a thing you choose, not the state you land in.
+  if (config.data && !openForEditing) {
+    return <ConfigView config={config.data} onEdit={() => setOpenForEditing(true)} />;
+  }
 
   // Mounted only once the saved config is here, so a refetch cannot throw away a half-typed edit.
-  return <ConfigEditor detail={config.data ?? null} />;
+  return <ConfigEditor detail={config.data ?? null} onClose={() => setOpenForEditing(false)} />;
 }
 
 // ============================================================================
@@ -360,7 +368,7 @@ function lockedSectionColumns(): DataTableColumn<BaseConfigSection>[] {
     },
     {
       key: 'marks',
-      header: 'Marks each',
+      header: 'Marks per question',
       numeric: true,
       cell: (section) => section.marksPerQuestion,
     },
@@ -378,7 +386,7 @@ function lockedSectionColumns(): DataTableColumn<BaseConfigSection>[] {
     },
     {
       key: 'merit',
-      header: 'Counts as',
+      header: 'Merit or qualifying',
       cell: (section) => (
         <span className="text-muted-foreground">
           {MERIT_TYPE_LABELS[section.meritOrQualifying]}
@@ -394,7 +402,10 @@ function lockedSectionColumns(): DataTableColumn<BaseConfigSection>[] {
  * told no at the end is worse than being told first. Cloning is the way forward and is the
  * primary action here.
  */
-function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
+function ConfigView({
+  config,
+  onEdit,
+}: Readonly<{ config: BaseConfigDetail; onEdit: () => void }>) {
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
 
@@ -421,31 +432,40 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
           title={config.name}
           description={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
           action={
-            <Button size="sm" onClick={() => setAsking(true)}>
-              <Copy aria-hidden />
-              Clone to change it
-            </Button>
+            config.locked ? (
+              <Button size="sm" onClick={() => setAsking(true)}>
+                <Copy aria-hidden />
+                Clone to change it
+              </Button>
+            ) : (
+              <Button size="sm" onClick={onEdit}>
+                <Pencil aria-hidden />
+                Edit
+              </Button>
+            )
           }
         />
       }
     >
-      <Alert variant="warning">
-        <span>
-          This config is locked — a test built from it has already been finalized, and a paper
-          somebody has sat cannot change shape underneath them. The duration, the timer, the
-          navigation, the languages and every section below are fixed for good, which is why there
-          is no form here to fill in. Clone it to carry all of this into a copy you can edit: the
-          copy starts unlocked and is not the stage&apos;s default until you promote it. The name,
-          and whether this one is still offered, can be changed from the configs list.
-        </span>
-      </Alert>
+      {config.locked ? (
+        <Alert variant="warning">
+          <span>
+            This config is locked — a test built from it has already been finalized, and a paper
+            somebody has sat cannot change shape underneath them. The duration, the timer, the
+            navigation, the languages and every section below are fixed for good, which is why there
+            is no form here to fill in. Clone it to carry all of this into a copy you can edit: the
+            copy starts unlocked and is not the stage&apos;s default until you promote it. The name,
+            and whether this one is still offered, can be changed from the configs list.
+          </span>
+        </Alert>
+      ) : null}
 
       <FormSection title="How the paper runs">
         <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-          <StatRow label="Runs as" value={TIMER_TEMPLATE_LABELS[config.timerTemplate]} />
+          <StatRow label="Timing pattern" value={TIMER_TEMPLATE_LABELS[config.timerTemplate]} />
           <StatRow label="Navigation" value={NAVIGATION_POLICY_LABELS[config.navigation]} />
           <StatRow label="Duration" value={durationLabel(config.durationSec)} />
-          <StatRow label="Interface" value={TEST_UI_LABELS[config.defaultTestUi]} />
+          <StatRow label="Test interface" value={TEST_UI_LABELS[config.defaultTestUi]} />
           <StatRow
             label="Languages"
             value={config.languages.map((code) => LANGUAGE_CODE_LABELS[code]).join(', ') || '—'}
@@ -506,7 +526,10 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
 // The editor
 // ============================================================================
 
-function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>) {
+function ConfigEditor({
+  detail,
+  onClose,
+}: Readonly<{ detail: BaseConfigDetail | null; onClose: () => void }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const editing = detail !== null;
@@ -558,9 +581,15 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
         <>
-          <Button type="button" variant="outline" asChild>
-            <Link to={ROUTES.BASE_CONFIGS}>Cancel</Link>
-          </Button>
+          {editing ? (
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" asChild>
+              <Link to={ROUTES.BASE_CONFIGS}>Cancel</Link>
+            </Button>
+          )}
           <Button type="submit" loading={save.isPending}>
             {editing ? 'Save config' : 'Create config'}
           </Button>
@@ -584,7 +613,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       <FormSection title="Which stage this is for">
         <div className="grid gap-4 sm:grid-cols-2">
           {editing ? (
-            <StatRow
+            <ReadOnlyField
               label="Stage"
               value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
             />
@@ -627,11 +656,11 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
       <FormSection title="How the paper runs">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FormField form={form} name="durationMin" label="Duration" hint="In minutes">
+          <FormField form={form} name="durationMin" label="Duration (minutes)">
             {(control) => <Input {...control} inputMode="numeric" placeholder="60" />}
           </FormField>
 
-          <FormField form={form} name="timerTemplate" label="Timer">
+          <FormField form={form} name="timerTemplate" label="Timing pattern">
             {(control) => (
               <Combobox
                 id={control.id}
@@ -645,6 +674,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                 items={TIMER_TEMPLATES.map((value) => ({
                   value,
                   label: TIMER_TEMPLATE_LABELS[value],
+                  hint: TIMER_TEMPLATE_HINTS[value],
                 }))}
               />
             )}
@@ -664,12 +694,13 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                 items={NAVIGATION_POLICIES.map((value) => ({
                   value,
                   label: NAVIGATION_POLICY_LABELS[value],
+                  hint: NAVIGATION_POLICY_HINTS[value],
                 }))}
               />
             )}
           </FormField>
 
-          <FormField form={form} name="defaultTestUi" label="Interface">
+          <FormField form={form} name="defaultTestUi" label="Test interface">
             {(control) => (
               <Combobox
                 id={control.id}
@@ -699,6 +730,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                 items={LANGUAGE_MODES.map((value) => ({
                   value,
                   label: LANGUAGE_MODE_LABELS[value],
+                  hint: LANGUAGE_MODE_HINTS[value],
                 }))}
               />
             )}
@@ -708,14 +740,16 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             form={form}
             name="optionalSectionCount"
             label="Optional sections"
-            hint="How many a student may skip. Blank means none."
+            hint="Blank means none"
           >
             {(control) => <Input {...control} inputMode="numeric" placeholder="0" />}
           </FormField>
 
-          <LanguageChoice form={form} />
+          <div className="sm:col-span-2 lg:col-span-3">
+            <LanguageChoice form={form} />
+          </div>
 
-          <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
+          <div className="flex flex-wrap gap-x-8 gap-y-2 sm:col-span-2 lg:col-span-3">
             <ToggleField form={form} name="shuffleQuestions" label="Shuffle the questions" />
             <ToggleField form={form} name="shuffleOptions" label="Shuffle the options" />
             <ToggleField form={form} name="calculatorEnabled" label="Offer a calculator" />
@@ -817,6 +851,16 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 }
 
 /** A boolean the form owns. Controlled, because `register` alone cannot hold a checkbox's state. */
+/** A value the form cannot change, drawn like the fields beside it rather than as a table row. */
+function ReadOnlyField({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="flex h-9 items-center text-sm text-muted-foreground">{value}</span>
+    </div>
+  );
+}
+
 function ToggleField({
   form,
   name,
@@ -925,7 +969,11 @@ function SectionCard({
           {(control) => <Input {...control} inputMode="numeric" placeholder="25" />}
         </FormField>
 
-        <FormField form={form} name={`sections.${index}.marksPerQuestion`} label="Marks each">
+        <FormField
+          form={form}
+          name={`sections.${index}.marksPerQuestion`}
+          label="Marks per question"
+        >
           {(control) => <Input {...control} inputMode="decimal" placeholder="2" />}
         </FormField>
 
@@ -956,7 +1004,11 @@ function SectionCard({
           {(control) => <Input {...control} inputMode="numeric" />}
         </FormField>
 
-        <FormField form={form} name={`sections.${index}.meritOrQualifying`} label="Counts as">
+        <FormField
+          form={form}
+          name={`sections.${index}.meritOrQualifying`}
+          label="Merit or qualifying"
+        >
           {(control) => (
             <Combobox
               id={control.id}
@@ -969,7 +1021,11 @@ function SectionCard({
                   shouldDirty: true,
                 })
               }
-              items={MERIT_TYPES.map((value) => ({ value, label: MERIT_TYPE_LABELS[value] }))}
+              items={MERIT_TYPES.map((value) => ({
+                value,
+                label: MERIT_TYPE_LABELS[value],
+                hint: MERIT_TYPE_HINTS[value],
+              }))}
             />
           )}
         </FormField>
@@ -978,7 +1034,7 @@ function SectionCard({
           <FormField
             form={form}
             name={`sections.${index}.qualifyingCutoff`}
-            label="Cutoff"
+            label="Qualifying cutoff"
             hint="Marks needed to pass it"
           >
             {(control) => <Input {...control} inputMode="decimal" />}

@@ -134,17 +134,29 @@ export const IMPORT_SOURCE_LABELS: Readonly<Record<ImportSource, string>> = {
   SELF_SIGNUP: 'Self sign-up',
 };
 
-/** What a base config's timer template is called on screen — it names what the clock does. */
+/** The term an exam notification uses. The sentence explaining it belongs in the hint below. */
 export const TIMER_TEMPLATE_LABELS: Readonly<Record<TimerTemplate, string>> = {
-  COMPOSITE_FREE: 'One clock, move anywhere',
-  SECTIONAL_LOCKED: 'A clock per section',
-  SESSION_MODULE_LOCKED: 'Sessions of sections',
-  PER_ITEM_TIMED: 'A clock per question',
+  COMPOSITE_FREE: 'Composite',
+  SECTIONAL_LOCKED: 'Sectional',
+  SESSION_MODULE_LOCKED: 'Session-locked',
+  PER_ITEM_TIMED: 'Per question',
+};
+
+export const TIMER_TEMPLATE_HINTS: Readonly<Record<TimerTemplate, string>> = {
+  COMPOSITE_FREE: 'One clock for the whole paper',
+  SECTIONAL_LOCKED: 'A clock per section; it locks when its time ends',
+  SESSION_MODULE_LOCKED: 'Sessions of sections, each a locked block',
+  PER_ITEM_TIMED: 'A countdown per question, moving on at zero',
 };
 
 export const NAVIGATION_POLICY_LABELS: Readonly<Record<NavigationPolicy, string>> = {
-  FREE: 'Move anywhere',
+  FREE: 'Free',
   FORWARD_ONLY: 'Forward only',
+};
+
+export const NAVIGATION_POLICY_HINTS: Readonly<Record<NavigationPolicy, string>> = {
+  FREE: 'Move between questions in any order',
+  FORWARD_ONLY: 'No returning to a question once left',
 };
 
 export const TEST_UI_LABELS: Readonly<Record<TestUi, string>> = {
@@ -155,13 +167,23 @@ export const TEST_UI_LABELS: Readonly<Record<TestUi, string>> = {
 };
 
 export const LANGUAGE_MODE_LABELS: Readonly<Record<LanguageMode, string>> = {
-  SINGLE: 'The student picks one',
-  DUAL: 'Both shown together',
+  SINGLE: 'Single language',
+  DUAL: 'Bilingual',
+};
+
+export const LANGUAGE_MODE_HINTS: Readonly<Record<LanguageMode, string>> = {
+  SINGLE: 'The student picks one at the start',
+  DUAL: 'Both languages on screen together',
 };
 
 export const MERIT_TYPE_LABELS: Readonly<Record<MeritType, string>> = {
-  MERIT: 'Counts toward merit',
-  QUALIFYING: 'Only has to be passed',
+  MERIT: 'Merit',
+  QUALIFYING: 'Qualifying',
+};
+
+export const MERIT_TYPE_HINTS: Readonly<Record<MeritType, string>> = {
+  MERIT: 'Counts toward the total score',
+  QUALIFYING: 'Must be passed; adds nothing to merit',
 };
 
 /** The stored codes (EN/HI/TE), not the lowercase keys inside question content JSON. */
@@ -173,9 +195,15 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
 
 /** How a series opens for a student who can reach it. */
 export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
-  AUTO: 'Opens on its own',
-  REQUEST: 'The student asks',
-  ADMIN: 'An admin opens it',
+  AUTO: 'Automatic',
+  REQUEST: 'On request',
+  ADMIN: 'Admin released',
+};
+
+export const UNLOCK_MODE_HINTS: Readonly<Record<UnlockMode, string>> = {
+  AUTO: 'Opens as soon as the student can reach it',
+  REQUEST: 'The student asks and an admin approves',
+  ADMIN: 'An admin opens it, one student at a time',
 };
 
 /**

@@ -64,7 +64,7 @@ function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<
     },
     {
       key: 'timer',
-      header: 'Runs as',
+      header: 'Timing pattern',
       cell: (config) => (
         <span className="text-muted-foreground">{TIMER_TEMPLATE_LABELS[config.timerTemplate]}</span>
       ),
