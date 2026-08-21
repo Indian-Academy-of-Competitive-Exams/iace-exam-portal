@@ -595,25 +595,6 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         )}
       </FormField>
 
-      <FormField form={form} name="enrolledExams" label="Enrolled exams">
-        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
-          <MultiCombobox
-            id={id}
-            aria-describedby={describedBy}
-            aria-invalid={invalid}
-            value={enrolledExams}
-            onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-            items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
-              value: exam.code,
-              label: exam.code,
-              hint: exam.name,
-            }))}
-            placeholder="None yet"
-            emptyLabel="No exam matches that"
-          />
-        )}
-      </FormField>
-
       <FormField form={form} name="enrolledFamilies" label="Enrolled families">
         {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
           <MultiCombobox
@@ -630,6 +611,25 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             }))}
             placeholder="None yet"
             emptyLabel="No family matches that"
+          />
+        )}
+      </FormField>
+
+      <FormField form={form} name="enrolledExams" label="Enrolled exams">
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <MultiCombobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            value={enrolledExams}
+            onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+            items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
+              value: exam.code,
+              label: exam.code,
+              hint: exam.name,
+            }))}
+            placeholder="None yet"
+            emptyLabel="No exam matches that"
           />
         )}
       </FormField>

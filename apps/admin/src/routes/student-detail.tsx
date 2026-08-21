@@ -180,29 +180,6 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         </Field>
 
         <Field
-          htmlFor="enrolledExams"
-          label="Enrolled exams"
-          error={form.formState.errors.enrolledExams?.message}
-        >
-          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
-            <MultiCombobox
-              id={id}
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-              value={enrolledExams}
-              onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-              items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
-                value: exam.code,
-                label: exam.code,
-                hint: exam.name,
-              }))}
-              placeholder="No exams yet"
-              emptyLabel="No exam matches that"
-            />
-          )}
-        </Field>
-
-        <Field
           htmlFor="enrolledFamilies"
           label="Enrolled families"
           error={form.formState.errors.enrolledFamilies?.message}
@@ -222,6 +199,29 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               }))}
               placeholder="No families yet"
               emptyLabel="No family matches that"
+            />
+          )}
+        </Field>
+
+        <Field
+          htmlFor="enrolledExams"
+          label="Enrolled exams"
+          error={form.formState.errors.enrolledExams?.message}
+        >
+          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+            <MultiCombobox
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              value={enrolledExams}
+              onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+              items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
+                value: exam.code,
+                label: exam.code,
+                hint: exam.name,
+              }))}
+              placeholder="No exams yet"
+              emptyLabel="No exam matches that"
             />
           )}
         </Field>
