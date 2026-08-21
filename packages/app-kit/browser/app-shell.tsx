@@ -19,10 +19,10 @@ import { NavPanel } from './app-shell/nav-panel';
 import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
 
-/** How wide the content runs beside the sidebar. */
+/** How wide the content runs beside the sidebar. `wide` caps sprawl, it does not create a margin. */
 const WIDTHS = {
   narrow: 'max-w-5xl',
-  wide: 'max-w-6xl',
+  wide: 'max-w-[100rem]',
 } as const;
 
 export type ShellWidth = keyof typeof WIDTHS;

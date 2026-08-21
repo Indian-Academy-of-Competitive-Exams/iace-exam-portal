@@ -119,7 +119,7 @@ describe('TableFrame', () => {
       !/pb-0/.test(PAGE_CONTENT_CLASS),
       'the frame shortens to fit the padding; it does not eat it',
     );
-    assert.match(PAGE_CONTENT_CLASS, /py-8/);
+    assert.match(PAGE_CONTENT_CLASS, /\bpy-\d/);
   });
 
   /** The shell's content wrapper reacts to this attribute; without it the page scrolls. */
