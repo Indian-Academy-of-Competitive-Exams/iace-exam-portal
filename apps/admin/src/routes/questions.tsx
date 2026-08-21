@@ -13,6 +13,7 @@ import {
   type QuestionSummary,
 } from '@iace/contracts';
 import { useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Badge,
   BadgeList,
@@ -29,7 +30,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
@@ -137,6 +138,7 @@ export function QuestionsPage() {
 
   const header = (
     <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Questions"
       description="The bank every paper is drawn from. English always; Hindi and Telugu where the institute has them."
       action={

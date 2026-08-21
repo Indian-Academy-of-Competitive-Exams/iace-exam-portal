@@ -52,8 +52,9 @@ import {
   toast,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { familyLabel, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useFilters } from '../lib/use-filters';
@@ -213,6 +214,7 @@ export function StudentsPage() {
 
   const header = (
     <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Students"
       description="Everyone enrolled, however they got here — self-signup, added by hand, or imported."
       action={

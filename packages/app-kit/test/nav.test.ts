@@ -8,6 +8,7 @@ import {
   activeNavPath,
   isNavItemActive,
   isNavSection,
+  navTrail,
   resolveNavLayout,
   type NavItem,
 } from '../src/nav';
@@ -193,5 +194,55 @@ describe('isNavItemActive', () => {
 
   it('is false when nothing under it matches', () => {
     assert.equal(isNavItemActive(section, '/groups'), false);
+  });
+});
+
+describe('navTrail', () => {
+  const NAV: NavItem[] = [
+    {
+      label: 'Students',
+      children: [
+        { to: '/students', label: 'All students' },
+        { to: '/students/import', label: 'Import students' },
+      ],
+    },
+    { to: '/audit', label: 'Audit log' },
+  ];
+
+  it('names the section above the screen', () => {
+    assert.deepEqual(navTrail(NAV, '/students'), [
+      { label: 'Students' },
+      { label: 'All students', to: '/students' },
+    ]);
+  });
+
+  /** A section groups screens without being one, so it carries no link to follow. */
+  it('gives a section no link', () => {
+    assert.equal(navTrail(NAV, '/students/import')[0]?.to, undefined);
+  });
+
+  /** A trail built by prefix would name `/students` an ancestor of `/students/import`. */
+  it('follows the deepest match, not a sibling whose route is a prefix', () => {
+    assert.deepEqual(navTrail(NAV, '/students/import').at(-1), {
+      label: 'Import students',
+      to: '/students/import',
+    });
+  });
+
+  /** One crumb is the page you are on, which the title already says. */
+  it('says nothing for a top-level screen', () => {
+    assert.deepEqual(navTrail(NAV, '/audit'), []);
+  });
+
+  it('says nothing for a route the nav does not own', () => {
+    assert.deepEqual(navTrail(NAV, '/nowhere'), []);
+  });
+
+  /** A record route hangs off its list, so the trail is the list's. */
+  it('resolves a detail route to the row it extends', () => {
+    assert.deepEqual(navTrail(NAV, '/students/stu_1').at(-1), {
+      label: 'All students',
+      to: '/students',
+    });
   });
 });

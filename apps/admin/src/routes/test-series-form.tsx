@@ -13,6 +13,7 @@ import {
   type UnlockMode,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
@@ -37,7 +38,7 @@ import {
   Textarea,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker } from '../components/exam-picker';
@@ -174,6 +175,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       header={
         <>
           <PageHeader
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={editing ? `Edit ${detail.name}` : 'New test series'}
             description="A test reaches a student only through a series. Who can see it is decided here; where it runs is decided per branch."
           />

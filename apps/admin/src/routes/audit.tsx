@@ -22,6 +22,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { useInfinitePages, useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
 import { api } from '../lib/api';
 import {
@@ -29,6 +30,7 @@ import {
   AUDIT_ACTOR_TYPE_LABELS,
   AUDIT_FEATURE_LABELS,
   IMPORT_SOURCE_LABELS,
+  NAV_ITEMS,
 } from '../lib/constants';
 import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
@@ -249,6 +251,7 @@ export function AuditActivityPage() {
     <TableFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Audit log"
           description="Every create, update and status change across the platform."
         />
@@ -288,6 +291,7 @@ export function AuditImportsPage() {
     <TableFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Import runs"
           description="Every import run — previewed, committed or failed — and what each one touched."
         />

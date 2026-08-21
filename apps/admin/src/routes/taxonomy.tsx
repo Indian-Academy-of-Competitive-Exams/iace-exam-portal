@@ -15,6 +15,7 @@ import {
   type Topic,
 } from '@iace/contracts';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Button,
   DataTable,
@@ -33,7 +34,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
 import { SubjectPicker } from '../components/taxonomy-picker';
@@ -59,6 +60,7 @@ export function TaxonomyPage() {
     <PageFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Subjects and topics"
           description="Where a question is filed, and what the import template offers. Anything finer than a topic is a tag on the question."
         />

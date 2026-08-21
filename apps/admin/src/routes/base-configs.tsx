@@ -9,6 +9,7 @@ import {
   type BaseConfigDetail,
 } from '@iace/contracts';
 import { useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
@@ -23,7 +24,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
@@ -115,6 +116,7 @@ export function BaseConfigsPage() {
 
   const header = (
     <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Base configs"
       description="A stage's blueprint: how long the paper runs, how it is navigated, and the sections it is made of. A test inherits that shape rather than restating it."
       action={

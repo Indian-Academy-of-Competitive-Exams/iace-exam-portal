@@ -47,10 +47,11 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { familyLabel, ROUTES } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useFilters } from '../lib/use-filters';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 
 const NEW_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 const EDIT_EXAM_FIELDS = ['family', 'name', 'code'] as const;
@@ -132,6 +133,7 @@ export function ExamsPage() {
       header={
         <>
           <PageHeader
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title="Exams"
             description="Family, exam and stage — the journey a student is coached through. An enrolment stores the exam code; every base config, series and test hangs off a stage."
           />

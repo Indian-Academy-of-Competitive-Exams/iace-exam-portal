@@ -19,7 +19,9 @@ export {
   activeNavPath,
   isNavItemActive,
   isNavSection,
+  navTrail,
   resolveNavLayout,
+  type Crumb,
   type NavItem,
   type NavLayout,
 } from './nav';

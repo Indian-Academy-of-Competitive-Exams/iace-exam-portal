@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Download, Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
@@ -34,8 +34,9 @@ import {
   TableState,
   TruncatedText,
 } from '@iace/ui';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
 /** Preview, then commit. Three bad rows still import the other 397. */
@@ -79,19 +80,11 @@ export function ImportStudentsPage() {
   return (
     <PageFrame
       header={
-        <>
-          <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
-            <Link to={ROUTES.STUDENTS}>
-              <ArrowLeft aria-hidden />
-              All students
-            </Link>
-          </Button>
-
-          <PageHeader
-            title="Import students"
-            description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
-          />
-        </>
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+          title="Import students"
+          description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
+        />
       }
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">

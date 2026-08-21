@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
 import {
   GENDERS,
   todayISO,
@@ -12,6 +10,7 @@ import {
   type Gender,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
@@ -32,7 +31,7 @@ import {
 import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
 
 /** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
@@ -95,19 +94,16 @@ export function ProfilePage() {
   return (
     <PageFrame
       header={
-        <>
-          <Button variant="ghost" size="sm" className="-ml-2 mb-3" asChild>
-            <Link to={ROUTES.PROFILE}>
-              <ArrowLeft aria-hidden />
-              Back to profile
-            </Link>
-          </Button>
-
-          <PageHeader
-            title="Your details"
-            description="Only three of these are needed before a test. The rest you can fill in whenever you like."
-          />
-        </>
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[{ label: 'Profile', to: ROUTES.PROFILE }, { label: 'Your details' }]}
+            />
+          }
+          title="Your details"
+          description="Only three of these are needed before a test. The rest you can fill in whenever you like."
+        />
       }
     >
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}

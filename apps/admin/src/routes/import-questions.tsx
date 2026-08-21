@@ -34,8 +34,9 @@ import {
   TableState,
   TruncatedText,
 } from '@iace/ui';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
 /**
@@ -98,6 +99,7 @@ export function ImportQuestionsPage() {
     <PageFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Import questions"
           description="One row is one question, in as many of the three languages as you have. Nothing is written until you press Import."
         />

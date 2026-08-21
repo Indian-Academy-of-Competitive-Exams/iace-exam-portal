@@ -20,6 +20,7 @@ import {
   type QuestionLanguage,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
@@ -44,7 +45,7 @@ import {
   Textarea,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /**
@@ -254,6 +255,7 @@ export function QuestionFormPage() {
       header={
         <>
           <PageHeader
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={editing ? 'Edit question' : 'New question'}
             description="English is required. Fill in Hindi or Telugu only where the whole question is translated — a half-translated paper cannot be sat in that language."
           />

@@ -11,6 +11,8 @@ import {
   type UpdateProgramInput,
 } from '@iace/contracts';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
+import { NAV_ITEMS } from '../lib/constants';
 import {
   Alert,
   Badge,
@@ -104,6 +106,7 @@ export function ProgramsPage() {
   const header = (
     <>
       <PageHeader
+        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
         title="Programs"
         description="The coaching variants a student can be a candidate for. A student row and a test series both carry the code as plain text, which is how a series meant for one program reaches only those students."
         action={

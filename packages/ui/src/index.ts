@@ -22,6 +22,11 @@ export { Brandmark, type BrandmarkProps } from './components/ui/brandmark';
 export { Avatar, initialsOf, type AvatarProps } from './components/ui/avatar';
 export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge';
 export { BadgeList, type BadgeListProps } from './components/ui/badge-list';
+export {
+  Breadcrumbs,
+  type BreadcrumbItem,
+  type BreadcrumbsProps,
+} from './components/ui/breadcrumbs';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
 export {
   RadioGroup,

@@ -39,4 +39,5 @@ export function createBrowserTokenStore(storageKey: string): TokenStore {
 export { AppProviders } from './app-providers';
 export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
 export { mountApp } from './mount-app';
+export { PageCrumbs } from './page-crumbs';
 export { ProtectedRoute } from './protected-route';

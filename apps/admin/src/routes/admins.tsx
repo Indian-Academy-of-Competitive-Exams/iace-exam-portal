@@ -27,8 +27,9 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { applyFieldErrors, usePageSize } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ADMINS_QUERY_KEY } from '../lib/constants';
+import { ADMINS_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
@@ -98,6 +99,7 @@ export function AdminsPage() {
 
   const header = (
     <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Admins"
       description="Who can sign in to this app. Every admin here was created by a super admin — nobody can self-register."
       action={

@@ -76,6 +76,33 @@ export function activeNavPath(items: readonly NavItem[], pathname: string): stri
     .sort((a, b) => b.length - a.length)[0];
 }
 
+/** One step on the way to the current page. Only the last one is where you already are. */
+export interface Crumb {
+  label: string;
+  /** Absent for a section, which groups screens without being one. */
+  to?: string;
+}
+
+/** The trail to `pathname`. A section has no link, and a one-item trail is no trail. */
+export function navTrail(items: readonly NavItem[], pathname: string): Crumb[] {
+  const active = activeNavPath(items, pathname);
+  if (active === undefined) return [];
+
+  const walk = (list: readonly NavItem[], above: Crumb[]): Crumb[] | undefined => {
+    for (const item of list) {
+      const here = [...above, { label: item.label, ...(item.to ? { to: item.to } : {}) }];
+      if (item.to === active) return here;
+
+      const deeper = walk(item.children ?? [], here);
+      if (deeper) return deeper;
+    }
+    return undefined;
+  };
+
+  const trail = walk(items, []) ?? [];
+  return trail.length > 1 ? trail : [];
+}
+
 /** Does this item, or anything under it, own `activePath`? Marks a collapsed section current. */
 export function isNavItemActive(item: NavItem, activePath: string | undefined): boolean {
   if (activePath !== undefined && item.to === activePath) return true;

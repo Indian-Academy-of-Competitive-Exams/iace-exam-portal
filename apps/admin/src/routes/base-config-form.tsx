@@ -29,6 +29,7 @@ import {
   type TimerTemplate,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
@@ -58,6 +59,7 @@ import {
   LANGUAGE_CODE_LABELS,
   LANGUAGE_MODE_LABELS,
   MERIT_TYPE_LABELS,
+  NAV_ITEMS,
   NAVIGATION_POLICY_LABELS,
   ROUTES,
   TEST_UI_LABELS,
@@ -413,6 +415,7 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
     <PageFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title={config.name}
           description={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
           action={
@@ -571,6 +574,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       header={
         <>
           <PageHeader
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={editing ? `Edit ${detail.name}` : 'New base config'}
             description="The shape every test under this stage inherits. It freezes the moment a test built from it is first finalized — after that only a clone can change it."
           />

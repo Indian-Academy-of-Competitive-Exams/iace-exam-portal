@@ -22,8 +22,14 @@ import {
   Skeleton,
   StatRow,
 } from '@iace/ui';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ADMINS_QUERY_KEY, FEATURES_QUERY_KEY, PAGE_SIZE_FOR_PICKERS } from '../lib/constants';
+import {
+  ADMINS_QUERY_KEY,
+  FEATURES_QUERY_KEY,
+  NAV_ITEMS,
+  PAGE_SIZE_FOR_PICKERS,
+} from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 /** What an admin holds for one feature, with "nothing" said out loud. */
@@ -90,6 +96,7 @@ export function PermissionsPage() {
         header={
           <>
             <PageHeader
+              breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
               title="Permissions"
               description="What each admin may do. Write covers create, update and delete, and always includes read. Tick what they should have, then save the lot."
             />

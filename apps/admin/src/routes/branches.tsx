@@ -30,9 +30,10 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { BRANCH_TYPE_LABELS, ROUTES } from '../lib/constants';
+import { BRANCH_TYPE_LABELS, NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 
 const NEW_BRANCH_FIELDS = ['name', 'type'] as const;
 
@@ -107,6 +108,7 @@ export function BranchesPage() {
   const header = (
     <>
       <PageHeader
+        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
         title="Branches"
         description="The centres the institute teaches at. Every student attends one, and scheduling reads it."
         action={

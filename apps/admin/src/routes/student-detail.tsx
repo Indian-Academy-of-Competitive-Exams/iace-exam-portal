@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
-import { ArrowLeft, FileText, Plus, Save, Trash2 } from 'lucide-react';
+import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import {
   AUDIT_FEATURE,
   EXAM_FAMILIES,
@@ -41,11 +41,12 @@ import { EntityHistory } from '../components/entity-history';
 import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
-import { familyLabel, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
 import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 
 interface FormValues {
   fullName: string;
@@ -633,20 +634,14 @@ export function StudentDetailPage() {
   return (
     <PageFrame
       header={
-        <>
-          <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
-            <Link to={ROUTES.STUDENTS}>
-              <ArrowLeft aria-hidden />
-              All students
-            </Link>
-          </Button>
-
-          <PageHeader
-            title={detail.fullName ?? detail.mobile}
-            description={`+91 ${detail.mobile}`}
-            action={<StudentStateSwitches detail={detail} />}
-          />
-        </>
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: detail.fullName ?? detail.mobile }]} />
+          }
+          title={detail.fullName ?? detail.mobile}
+          description={`+91 ${detail.mobile}`}
+          action={<StudentStateSwitches detail={detail} />}
+        />
       }
     >
       <div className="mb-5 flex flex-wrap items-center gap-2">

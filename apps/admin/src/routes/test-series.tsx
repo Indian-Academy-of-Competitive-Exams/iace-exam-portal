@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { FEATURE_KEYS, PERMISSION_LEVELS, type TestSeriesSummary } from '@iace/contracts';
 import { useListQuery } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
@@ -18,7 +19,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
@@ -110,6 +111,7 @@ export function TestSeriesPage() {
 
   const header = (
     <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Test series"
       description="What a test is offered through. A student reaches one by an exam enrolment, by a program, or by a grant made for them — and only where their branch runs it."
       action={
