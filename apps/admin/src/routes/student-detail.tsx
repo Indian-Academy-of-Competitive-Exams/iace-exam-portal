@@ -5,9 +5,11 @@ import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { ArrowLeft, FileText, Plus, Save, Trash2 } from 'lucide-react';
 import {
   AUDIT_FEATURE,
+  EXAM_FAMILIES,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
+  type ExamFamily,
   type Gender,
   type StudentDetail,
   type UpdateStudentBody,
@@ -39,7 +41,7 @@ import { EntityHistory } from '../components/entity-history';
 import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
-import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
@@ -49,6 +51,7 @@ interface FormValues {
   fullName: string;
   studentType: StudentType;
   enrolledExams: string[];
+  enrolledFamilies: ExamFamily[];
   currentBranchId: string;
   motherName: string;
   fatherName: string;
@@ -62,6 +65,7 @@ const FORM_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
+  'enrolledFamilies',
   'currentBranchId',
   'motherName',
   'fatherName',
@@ -102,6 +106,7 @@ function toFormValues(student: StudentDetail): FormValues {
     fullName: student.fullName ?? '',
     studentType: student.studentType,
     enrolledExams: [...student.enrolledExams],
+    enrolledFamilies: [...student.enrolledFamilies],
     currentBranchId: student.currentBranchId ?? '',
     motherName: student.profile?.motherName ?? '',
     fatherName: student.profile?.fatherName ?? '',
@@ -142,6 +147,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   // it must still resolve to a name rather than the raw id the active list no longer carries.
   const allBranches = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const enrolledFamilies = useWatch({ control: form.control, name: 'enrolledFamilies' }) ?? [];
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const branch = useBranchChoice(studentType);
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
@@ -194,6 +200,31 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               }))}
               placeholder="No exams yet"
               emptyLabel="No exam matches that"
+            />
+          )}
+        </Field>
+
+        <Field
+          htmlFor="enrolledFamilies"
+          label="Enrolled families"
+          hint="Every exam in the family is reachable, not just one."
+          error={form.formState.errors.enrolledFamilies?.message}
+        >
+          {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+            <MultiCombobox
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              value={enrolledFamilies}
+              onChange={(next) =>
+                form.setValue('enrolledFamilies', next as ExamFamily[], { shouldDirty: true })
+              }
+              items={EXAM_FAMILIES.map((family) => ({
+                value: family,
+                label: familyLabel(family),
+              }))}
+              placeholder="No families yet"
+              emptyLabel="No family matches that"
             />
           )}
         </Field>
@@ -509,6 +540,7 @@ export function StudentDetailPage() {
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
+      enrolledFamilies: [],
       currentBranchId: '',
       motherName: '',
       fatherName: '',
@@ -537,6 +569,9 @@ export function StudentDetailPage() {
         // An omitted key means "leave it alone", which is true of a list nobody touched.
         ...(form.formState.dirtyFields.enrolledExams
           ? { enrolledExams: values.enrolledExams }
+          : {}),
+        ...(form.formState.dirtyFields.enrolledFamilies
+          ? { enrolledFamilies: values.enrolledFamilies }
           : {}),
         profile: {
           motherName: orNull(values.motherName),

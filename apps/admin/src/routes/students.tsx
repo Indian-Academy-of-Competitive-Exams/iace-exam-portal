@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
 import {
   BRANCH_TYPE,
+  EXAM_FAMILIES,
   FEATURE_KEYS,
   MOBILE_DIGITS,
   PERMISSION_LEVELS,
@@ -16,6 +17,7 @@ import {
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
+  type ExamFamily,
   type StudentSort,
   type StudentSummary,
 } from '@iace/contracts';
@@ -49,7 +51,7 @@ import {
   toast,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
@@ -488,6 +490,7 @@ const NEW_STUDENT_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
+  'enrolledFamilies',
   'currentBranchId',
 ] as const;
 
@@ -503,11 +506,13 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
+      enrolledFamilies: [],
       currentBranchId: '',
     },
   });
 
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const enrolledFamilies = useWatch({ control: form.control, name: 'enrolledFamilies' }) ?? [];
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const exams = useExams({ activeOnly: true });
@@ -527,6 +532,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
         studentType: values.studentType,
         enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
+        enrolledFamilies: values.enrolledFamilies?.length ? values.enrolledFamilies : undefined,
         // An untouched picker is "not recorded"; '' is not a branch id the server could resolve.
         currentBranchId: chosenBranchId || undefined,
       }),
@@ -596,6 +602,31 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             }))}
             placeholder="None yet"
             emptyLabel="No exam matches that"
+          />
+        )}
+      </FormField>
+
+      <FormField
+        form={form}
+        name="enrolledFamilies"
+        label="Enrolled families"
+        hint="A whole family, for a student coached across every exam in it"
+      >
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <MultiCombobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            value={enrolledFamilies}
+            onChange={(next) =>
+              form.setValue('enrolledFamilies', next as ExamFamily[], { shouldDirty: true })
+            }
+            items={EXAM_FAMILIES.map((family) => ({
+              value: family,
+              label: familyLabel(family),
+            }))}
+            placeholder="None yet"
+            emptyLabel="No family matches that"
           />
         )}
       </FormField>

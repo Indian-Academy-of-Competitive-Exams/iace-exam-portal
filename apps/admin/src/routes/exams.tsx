@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import {
   EXAM_FAMILIES,
   EXAM_MODES,
@@ -27,6 +28,7 @@ import {
   FormDialog,
   FormField,
   Input,
+  linkVariants,
   NumericInput,
   PageFrame,
   PageHeader,
@@ -42,6 +44,7 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
+import { familyLabel, ROUTES } from '../lib/constants';
 import { useFilters } from '../lib/use-filters';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
@@ -50,8 +53,6 @@ const NEW_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 const EDIT_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 
 /** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
-const familyLabel = (family: string) => family.replaceAll('_', '/');
-
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function examColumns(
   isSuperAdmin: boolean,
@@ -71,7 +72,25 @@ function examColumns(
       header: 'Stages',
       numeric: true,
       cell: (exam) =>
-        exam.stageCount > 0 ? exam.stageCount : <span className="text-muted-foreground">0</span>,
+        exam.stageCount > 0 ? (
+          <Link to={stagesOf(exam.id)} className={linkVariants()}>
+            {exam.stageCount}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">0</span>
+        ),
+    },
+    {
+      key: 'openStages',
+      // The stages list, filtered — an exam has no stage list of its own.
+      cell: (exam) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link to={stagesOf(exam.id)}>
+            <Layers aria-hidden />
+            Stages
+          </Link>
+        </Button>
+      ),
     },
     { key: 'status', header: 'Status', cell: (exam) => <ExamStatus exam={exam} /> },
     {
@@ -89,6 +108,11 @@ const LEVELS = {
   EXAMS: 'exams',
   STAGES: 'stages',
 } as const;
+
+/** The stages tab, already filtered to one exam — the child list reached from its parent. */
+function stagesOf(examId: string): string {
+  return `${ROUTES.EXAMS}?level=${LEVELS.STAGES}&examId=${examId}`;
+}
 
 const EXAMS_KEY = ['admin', 'exams'] as const;
 const STAGES_KEY = ['admin', 'exam-stages'] as const;

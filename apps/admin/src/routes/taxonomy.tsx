@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus } from 'lucide-react';
+import { ListTree, Plus } from 'lucide-react';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -20,6 +21,7 @@ import {
   FormDialog,
   FormField,
   Input,
+  linkVariants,
   PageFrame,
   PageHeader,
   Pagination,
@@ -31,6 +33,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { useFilters } from '../lib/use-filters';
 import { SubjectPicker } from '../components/taxonomy-picker';
@@ -82,6 +85,11 @@ export function TaxonomyPage() {
 // Subjects
 // ============================================================================
 
+/** The topics tab, already filtered to one subject — the child list reached from its parent. */
+function topicsOf(subjectId: string): string {
+  return `${ROUTES.TAXONOMY}?level=${LEVELS.TOPICS}&subjectId=${subjectId}`;
+}
+
 function subjectColumns(): DataTableColumn<Subject>[] {
   return [
     { key: 'name', header: 'Subject', className: 'font-medium', cell: (row) => row.name },
@@ -90,8 +98,32 @@ function subjectColumns(): DataTableColumn<Subject>[] {
       header: 'Code',
       cell: (row) => row.code ?? <span className="text-muted-foreground">—</span>,
     },
-    { key: 'topics', header: 'Topics', numeric: true, cell: (row) => row.topicCount },
+    {
+      key: 'topics',
+      header: 'Topics',
+      numeric: true,
+      cell: (row) =>
+        row.topicCount > 0 ? (
+          <Link to={topicsOf(row.id)} className={linkVariants()}>
+            {row.topicCount}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">0</span>
+        ),
+    },
     { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
+    {
+      key: 'openTopics',
+      // The topics list, filtered — a subject has no topic list of its own.
+      cell: (row) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link to={topicsOf(row.id)}>
+            <ListTree aria-hidden />
+            Topics
+          </Link>
+        </Button>
+      ),
+    },
   ];
 }
 

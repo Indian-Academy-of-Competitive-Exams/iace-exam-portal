@@ -81,6 +81,9 @@ export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
   [STUDENT_TYPE.NON_IACE]: 'Non-IACE',
 };
 
+/** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
+export const familyLabel = (family: string) => family.replaceAll('_', '/');
+
 /** What each branch type is called on screen. */
 export const BRANCH_TYPE_LABELS: Readonly<Record<BranchType, string>> = {
   [BRANCH_TYPE.PHYSICAL]: 'Physical',
