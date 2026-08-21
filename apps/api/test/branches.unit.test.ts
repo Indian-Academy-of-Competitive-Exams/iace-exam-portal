@@ -70,11 +70,29 @@ describe('branchEditBlocker', () => {
 
 describe('createBranchSchema', () => {
   it('normalises the name on the way in', () => {
-    assert.deepEqual(createBranchSchema.parse({ name: ' rtc  x roads ' }), { name: 'RTC X ROADS' });
+    assert.deepEqual(createBranchSchema.parse({ name: ' rtc  x roads ' }), {
+      name: 'RTC X ROADS',
+      type: BRANCH_TYPE.PHYSICAL,
+    });
   });
 
   it('refuses a name that cannot be tidied into the canonical form', () => {
     assert.equal(createBranchSchema.safeParse({ name: 'RTC-X-ROADS' }).success, false);
+  });
+
+  it('takes the type the picker chose', () => {
+    assert.equal(
+      createBranchSchema.parse({ name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL }).type,
+      BRANCH_TYPE.VIRTUAL,
+    );
+  });
+
+  /**
+   * The failure this prevents: `type` arrived after the importer and the sync path were written,
+   * and a body without one must still create an ordinary centre rather than fail validation.
+   */
+  it('defaults to a physical centre when nobody names a type', () => {
+    assert.equal(createBranchSchema.parse({ name: 'AMEERPET' }).type, BRANCH_TYPE.PHYSICAL);
   });
 });
 

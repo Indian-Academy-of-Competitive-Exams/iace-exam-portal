@@ -615,8 +615,12 @@ export class FakePrisma {
     },
 
     /** `name` is unique only among live rows, so a lookup by it is a filtered read. */
-    findFirst: ({ where }: { where: { name?: string; deletedAt?: null } }) => {
-      const row = this.branches.find((b) => where.name === undefined || b.name === where.name);
+    findFirst: ({ where }: { where: { name?: string; type?: BranchType; deletedAt?: null } }) => {
+      const row = this.branches.find(
+        (b) =>
+          (where.name === undefined || b.name === where.name) &&
+          (where.type === undefined || b.type === where.type),
+      );
       return Promise.resolve(row ? { ...row } : null);
     },
 

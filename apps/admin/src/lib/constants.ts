@@ -15,11 +15,13 @@ import {
 } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import {
+  BRANCH_TYPE,
   FEATURE_KEYS,
   STUDENT_TYPE,
   type AuditAction,
   type AuditActorType,
   type AuditFeature,
+  type BranchType,
   type ImportSource,
   type LanguageCode,
   type LanguageMode,
@@ -77,6 +79,12 @@ export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
   [STUDENT_TYPE.ONLINE]: 'Online',
   [STUDENT_TYPE.OFFLINE]: 'At a branch',
   [STUDENT_TYPE.NON_IACE]: 'Not an IACE student',
+};
+
+/** What each branch type is called on screen. */
+export const BRANCH_TYPE_LABELS: Readonly<Record<BranchType, string>> = {
+  [BRANCH_TYPE.PHYSICAL]: 'Physical',
+  [BRANCH_TYPE.VIRTUAL]: 'Online',
 };
 
 /** What an audit row's `feature` is called on screen. */

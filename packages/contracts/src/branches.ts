@@ -48,6 +48,8 @@ export type BranchListQueryInput = z.input<typeof branchListQuerySchema>;
 
 export const createBranchSchema = z.object({
   name: branchNameSchema,
+  /** Defaulted, so a caller that predates the picker still creates a centre. */
+  type: branchTypeSchema.default(BRANCH_TYPE.PHYSICAL),
 });
 export type CreateBranchInput = z.input<typeof createBranchSchema>;
 export type CreateBranchBody = z.infer<typeof createBranchSchema>;

@@ -55,10 +55,46 @@ describe('BranchesService — creating', () => {
   it('creates a branch that does not exist yet', async () => {
     const { service, prisma } = serviceWith([]);
 
-    const created = await service.create({ name: 'KUKATPALLY' });
+    const created = await service.create({ name: 'KUKATPALLY', type: BRANCH_TYPE.PHYSICAL });
 
     assert.equal(created.name, 'KUKATPALLY');
+    assert.equal(created.type, BRANCH_TYPE.PHYSICAL);
     assert.equal(prisma.branches.length, 1);
+  });
+
+  it('creates the online branch when the admin picks that type', async () => {
+    const { service } = serviceWith([]);
+
+    const created = await service.create({ name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL });
+
+    assert.equal(created.type, BRANCH_TYPE.VIRTUAL);
+  });
+
+  /**
+   * The failure this prevents: the type became the caller's to choose, and VIRTUAL is a singleton —
+   * `branchEditBlocker` refuses to rename or retire one and `branchDeletionBlocker` refuses to
+   * delete it. A second one would be an unremovable row no screen could ever clear.
+   */
+  it('refuses a second online branch, against the type field', async () => {
+    const { service } = serviceWith([ONLINE]);
+
+    await assert.rejects(
+      () => service.create({ name: 'ONLINE TWO', type: BRANCH_TYPE.VIRTUAL }),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.equal(error.code, ErrorCodes.CONFLICT);
+        assert.ok(error.fieldErrors?.type);
+        return true;
+      },
+    );
+  });
+
+  it('still takes another physical branch once the online one exists', async () => {
+    const { service } = serviceWith([ONLINE]);
+
+    const created = await service.create({ name: 'AMEERPET', type: BRANCH_TYPE.PHYSICAL });
+
+    assert.equal(created.type, BRANCH_TYPE.PHYSICAL);
   });
 
   /**
@@ -70,7 +106,7 @@ describe('BranchesService — creating', () => {
     const { service } = serviceWith([makeBranch({ name: 'AMEERPET' })]);
 
     await assert.rejects(
-      () => service.create({ name: 'AMEERPET' }),
+      () => service.create({ name: 'AMEERPET', type: BRANCH_TYPE.PHYSICAL }),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.CONFLICT);
@@ -124,7 +160,7 @@ describe('BranchesService — a new branch joins every series', () => {
     const fanOut = new FakeSeriesFanOut();
     const service = new BranchesService(prisma.asService(), fanOut.asService(), new AuditContext());
 
-    const created = await service.create({ name: 'KUKATPALLY' });
+    const created = await service.create({ name: 'KUKATPALLY', type: BRANCH_TYPE.PHYSICAL });
 
     assert.deepEqual(fanOut.branchIds, [created.id]);
   });

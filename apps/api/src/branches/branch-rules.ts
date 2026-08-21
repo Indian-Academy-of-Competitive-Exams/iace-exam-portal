@@ -29,5 +29,12 @@ export function branchEditBlocker(
   return null;
 }
 
+/**
+ * Virtual is a singleton, not a category. Every rule above says "the online branch", and a
+ * second one would be equally unrenameable and undeletable — a typo nobody could ever clear.
+ */
+export const ONLINE_BRANCH_EXISTS_MESSAGE =
+  'The online branch already exists. There can only be one.';
+
 export const INACTIVE_BRANCH_MESSAGE =
   'That branch is no longer active. Pick another, or reactivate it first.';

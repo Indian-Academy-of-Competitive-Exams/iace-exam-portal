@@ -28,16 +28,17 @@ import {
   linkVariants,
   PageHeader,
   plural,
+  Select,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { ROUTES } from '../lib/constants';
+import { BRANCH_TYPE_LABELS, ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { applyFieldErrors } from '@iace/app-kit';
 
-const NEW_BRANCH_FIELDS = ['name'] as const;
+const NEW_BRANCH_FIELDS = ['name', 'type'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableColumn<Branch>[] {
@@ -136,6 +137,7 @@ export function BranchesPage() {
             setCreating(false);
             refresh();
           }}
+          hasOnlineBranch={branches.some((branch) => branch.type === BRANCH_TYPE.VIRTUAL)}
           onCancel={() => setCreating(false)}
         />
       ) : null}
@@ -162,10 +164,11 @@ export function BranchesPage() {
 function NewBranchCard({
   onDone,
   onCancel,
-}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
+  hasOnlineBranch,
+}: Readonly<{ onDone: () => void; onCancel: () => void; hasOnlineBranch: boolean }>) {
   const form = useForm<CreateBranchInput>({
     resolver: zodResolver(createBranchSchema),
-    defaultValues: { name: '' },
+    defaultValues: { name: '', type: BRANCH_TYPE.PHYSICAL },
   });
 
   const create = useMutation({
@@ -180,7 +183,8 @@ function NewBranchCard({
       <CardHeader>
         <CardTitle>New branch</CardTitle>
         <CardDescription>
-          A centre, not a batch. Stored in capitals, so it can only ever be spelled one way.
+          A centre, not a batch. Stored in capitals, so it can only ever be spelled one way. The
+          online branch is created once and cannot be renamed, retired or deleted afterwards.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -193,6 +197,23 @@ function NewBranchCard({
                 placeholder="AMEERPET"
                 autoFocus
               />
+            )}
+          </FormField>
+
+          <FormField form={form} name="type" label="Type" className="min-w-56 flex-1">
+            {(control) => (
+              <Select {...control}>
+                <option value={BRANCH_TYPE.PHYSICAL}>
+                  {BRANCH_TYPE_LABELS[BRANCH_TYPE.PHYSICAL]}
+                </option>
+                {/* Dropped once one exists: a second is refused server-side, and an option
+                    that can only fail is not a choice. */}
+                {hasOnlineBranch ? null : (
+                  <option value={BRANCH_TYPE.VIRTUAL}>
+                    {BRANCH_TYPE_LABELS[BRANCH_TYPE.VIRTUAL]}
+                  </option>
+                )}
+              </Select>
             )}
           </FormField>
 

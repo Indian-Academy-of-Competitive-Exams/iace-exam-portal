@@ -15,7 +15,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { type TestSeriesService } from '../access';
 import { AuditContext } from '../audit';
-import { branchDeletionBlocker, branchEditBlocker, INACTIVE_BRANCH_MESSAGE } from './branch-rules';
+import {
+  branchDeletionBlocker,
+  branchEditBlocker,
+  INACTIVE_BRANCH_MESSAGE,
+  ONLINE_BRANCH_EXISTS_MESSAGE,
+} from './branch-rules';
 
 const BRANCH_INCLUDE = {
   _count: { select: { students: true } },
@@ -100,8 +105,14 @@ export class BranchesService {
       });
     }
 
+    if (input.type === BRANCH_TYPE.VIRTUAL && (await this.findLiveVirtual())) {
+      throw new AppException(ErrorCodes.CONFLICT, ONLINE_BRANCH_EXISTS_MESSAGE, {
+        fieldErrors: { type: [ONLINE_BRANCH_EXISTS_MESSAGE] },
+      });
+    }
+
     const branch = await this.prisma.branch.create({
-      data: { name: input.name, type: BRANCH_TYPE.PHYSICAL },
+      data: { name: input.name, type: input.type },
       include: BRANCH_INCLUDE,
     });
 
@@ -158,6 +169,13 @@ export class BranchesService {
   }
 
   /** `name` is unique only among live rows, so this is a filtered read, not a lookup by key. */
+  private findLiveVirtual(): Promise<{ id: string } | null> {
+    return this.prisma.branch.findFirst({
+      where: { type: BRANCH_TYPE.VIRTUAL, deletedAt: null },
+      select: { id: true },
+    });
+  }
+
   private findLiveByName(name: string): Promise<{ id: string } | null> {
     return this.prisma.branch.findFirst({ where: { name, deletedAt: null }, select: { id: true } });
   }
