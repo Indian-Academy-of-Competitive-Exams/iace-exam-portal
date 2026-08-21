@@ -10,7 +10,10 @@ export {
   type PaperQuestionCorrectedEvent,
   type PinResetReason,
   type ScoringCompletedEvent,
+  type SeriesGrantedEvent,
+  type SeriesUnlockedEvent,
   type StudentAccessChangedEvent,
+  type StudentEnrolmentAddedEvent,
   type StudentPinResetEvent,
   type TestAssignedEvent,
 } from './event-catalog';

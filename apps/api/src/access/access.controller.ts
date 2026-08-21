@@ -16,24 +16,29 @@ import {
   AUDIT_FEATURE,
   createProgramSchema,
   createTestSeriesSchema,
+  decideUnlockRequestSchema,
   FEATURE_KEYS,
   grantSeriesSchema,
   PERMISSION_LEVELS,
   programListQuerySchema,
   testSeriesListQuerySchema,
+  unlockRequestListQuerySchema,
   updateBranchTestConfigSchema,
   updateProgramSchema,
   updateTestSeriesSchema,
   type BranchTestConfigRow,
   type CreateProgramBody,
   type CreateTestSeriesBody,
+  type DecideUnlockRequestBody,
   type GrantSeriesBody,
   type Paginated,
   type Program,
   type ProgramListQuery,
+  type SeriesUnlockRequestRow,
   type StudentGrantRow,
   type TestSeriesListQuery,
   type TestSeriesSummary,
+  type UnlockRequestListQuery,
   type UpdateBranchTestConfigBody,
   type UpdateProgramBody,
   type UpdateTestSeriesBody,
@@ -45,6 +50,7 @@ import { Audit } from '../audit';
 import { ProgramsService } from './programs.service';
 import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
+import { UnlocksService } from './unlocks.service';
 
 /** The coaching variants a student can be a candidate for. Super admin writes, everyone reads. */
 @Controller('admin/programs')
@@ -150,6 +156,33 @@ export class TestSeriesController {
     @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
   ): Promise<BranchTestConfigRow> {
     return this.series.updateBranchConfig(id, branchId, body);
+  }
+}
+
+/** The unlock queue is about series, so it is gated on TEST_MANAGEMENT — there is no key of its own. */
+@Controller('admin/unlock-requests')
+@Actors(ActorTypes.ADMIN)
+export class UnlockRequestsController {
+  constructor(private readonly unlocks: UnlocksService) {}
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get()
+  list(
+    @Query(new ZodQuery(unlockRequestListQuerySchema)) query: UnlockRequestListQuery,
+  ): Promise<Paginated<SeriesUnlockRequestRow>> {
+    return this.unlocks.listRequests(query);
+  }
+
+  /** Approving opens the series for that one student. It mints no grant — see the service. */
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id')
+  decide(
+    @Param('id') id: string,
+    @Body(new ZodBody(decideUnlockRequestSchema)) body: DecideUnlockRequestBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SeriesUnlockRequestRow> {
+    return this.unlocks.decide(id, user.id, body.status);
   }
 }
 

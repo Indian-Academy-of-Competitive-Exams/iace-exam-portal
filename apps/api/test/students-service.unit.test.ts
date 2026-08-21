@@ -438,3 +438,37 @@ describe('the student writes that bust the catalog cache', () => {
     assert.deepEqual(changed(events), []);
   });
 });
+
+/** What the student is TOLD about an enrolment, which is a different fact from the cache bust. */
+describe('the enrolment a student is told about', () => {
+  const added = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED);
+
+  /**
+   * THE failure this prevents: announcing the whole array turns one added exam into "you were
+   * enrolled in everything you already had", every time anybody edits the record.
+   */
+  it('names only the codes this save added', async () => {
+    const { service, events } = serviceWith([
+      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
+    ]);
+
+    await service.update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] });
+
+    assert.deepEqual(added(events), [{ studentId: 'stu_1', examCodes: ['RRB JE'] }]);
+  });
+
+  it('says nothing when an exam is taken away', async () => {
+    const { service, events } = serviceWith([
+      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL', 'RRB JE'] }),
+    ]);
+
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+
+    assert.deepEqual(added(events), []);
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED),
+      [{ studentId: 'stu_1' }],
+      'the cache still has to forget',
+    );
+  });
+});

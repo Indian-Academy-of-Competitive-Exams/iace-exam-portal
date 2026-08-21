@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -20,19 +21,25 @@ import {
   DOCUMENT_FILE_FIELD,
   changePinSchema,
   documentKindSchema,
+  notificationListQuerySchema,
   updateMeSchema,
   type DocumentKind,
   type ChangePinBody,
   type AuthSessionResponse,
   type Me,
+  type Notification,
+  type NotificationListQuery,
+  type Paginated,
+  type SeriesUnlockRequest,
   type StudentCatalog,
   type UpdateMeBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
-import { ZodBody, ZodParam } from '../common/zod-validation.pipe';
+import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
-import { AccessResolverService } from '../access';
+import { AccessResolverService, UnlocksService } from '../access';
+import { NotificationsService } from '../notifications';
 import { MeService } from './me.service';
 
 /**
@@ -53,6 +60,8 @@ export class MeController {
     private readonly me: MeService,
     private readonly auth: AuthService,
     private readonly access: AccessResolverService,
+    private readonly unlocks: UnlocksService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @Get()
@@ -64,6 +73,31 @@ export class MeController {
   @Get('catalog')
   catalog(@CurrentUser() user: AuthenticatedUser): Promise<StudentCatalog> {
     return this.access.catalog(user.id);
+  }
+
+  /** Asking for a locked series. Refused unless the student already reaches it — see the service. */
+  @Post('series/:testSeriesId/unlock-request')
+  requestUnlock(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('testSeriesId') testSeriesId: string,
+  ): Promise<SeriesUnlockRequest> {
+    return this.unlocks.request(user.id, testSeriesId);
+  }
+
+  @Get('notifications')
+  notificationList(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodQuery(notificationListQuerySchema)) query: NotificationListQuery,
+  ): Promise<Paginated<Notification>> {
+    return this.notifications.list(user.id, query);
+  }
+
+  @Patch('notifications/:id/read')
+  markNotificationRead(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<Notification> {
+    return this.notifications.markRead(user.id, id);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)

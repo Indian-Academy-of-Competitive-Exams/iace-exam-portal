@@ -19,15 +19,7 @@ import {
   type ApiFailure,
 } from '@iace/contracts';
 import { ensureRequestId, type RequestWithId } from './request-id';
-
-/**
- * The Prisma failures that mean something to a user rather than to us. Every other P-code is our
- * bug and is reported as INTERNAL. https://www.prisma.io/docs/orm/reference/error-reference
- */
-const PRISMA_ERROR_CODES = {
-  UNIQUE_CONSTRAINT_VIOLATION: 'P2002',
-  RECORD_NOT_FOUND: 'P2025',
-} as const;
+import { PRISMA_ERROR_CODES } from './prisma-errors';
 
 /**
  * The single exit for everything thrown anywhere in the API — controllers, guards, pipes, Prisma,

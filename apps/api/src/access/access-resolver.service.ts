@@ -16,6 +16,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
+import { DomainEventBus } from '../common/events';
+import { applyAutoUnlocks, needsUnlock } from './auto-unlock';
 
 /** A safety net under the event-driven busts, never the mechanism that keeps the catalog right. */
 const CATALOG_TTL_SEC = 15 * 60;
@@ -70,6 +72,11 @@ interface ResolvedCatalog {
   series: ResolvedSeries[];
 }
 
+interface FreshCatalog {
+  catalog: ResolvedCatalog;
+  opened: boolean;
+}
+
 /**
  * The one place "can this student reach this?" is answered. A student reaches a series by an
  * explicit grant, a program match or an exam match, and every one of those is then gated by the
@@ -80,6 +87,7 @@ export class AccessResolverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly events: DomainEventBus,
   ) {}
 
   /** The catalog as of `now` — availability and `canStart` are derived here on every read. */
@@ -131,26 +139,32 @@ export class AccessResolverService {
   }
 
   private async resolved(studentId: string): Promise<ResolvedCatalog> {
+    const key = await this.catalogKey(studentId);
+
+    const cached = await this.redis.getJson<ResolvedCatalog>(key);
+    if (cached) return cached;
+
+    const { catalog, opened } = await this.resolve(studentId);
+    // An unlock this read performed busts the epoch `key` was built from, so the entry would be
+    // dead the moment it was written — and the read that follows recomputes anyway.
+    if (!opened) await this.redis.setJson(key, catalog, CATALOG_TTL_SEC);
+    return catalog;
+  }
+
+  private async catalogKey(studentId: string): Promise<string> {
     const [epoch, studentEpoch] = await this.redis.client.mget(
       redisKeys.catalogEpoch,
       redisKeys.catalogStudentEpoch(studentId),
     );
-    const key = redisKeys.studentCatalog(
+    return redisKeys.studentCatalog(
       studentId,
       CATALOG_SHAPE,
       counterOf(epoch),
       counterOf(studentEpoch),
     );
-
-    const cached = await this.redis.getJson<ResolvedCatalog>(key);
-    if (cached) return cached;
-
-    const resolved = await this.resolve(studentId);
-    await this.redis.setJson(key, resolved, CATALOG_TTL_SEC);
-    return resolved;
   }
 
-  private async resolve(studentId: string): Promise<ResolvedCatalog> {
+  private async resolve(studentId: string): Promise<FreshCatalog> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null, isActive: true },
       select: { isTestBlocked: true, currentBranchId: true, programs: true, enrolledExams: true },
@@ -159,7 +173,9 @@ export class AccessResolverService {
 
     const branchId = student.currentBranchId;
     // No branch, no access: the enable flag and the window both live on the branch's row.
-    if (branchId === null) return { testBlocked: student.isTestBlocked, series: [] };
+    if (branchId === null) {
+      return { catalog: { testBlocked: student.isTestBlocked, series: [] }, opened: false };
+    }
 
     const rows = await this.prisma.testSeries.findMany({
       where: {
@@ -170,11 +186,17 @@ export class AccessResolverService {
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
 
+    // Before the unlock state is read, so a series this call opens is UNLOCKED in this call.
+    const opened = await applyAutoUnlocks(this.prisma, this.events, studentId, rows, new Date());
     const unlocked = await this.unlockedIds(studentId, rows);
+    for (const id of opened) unlocked.add(id);
 
     return {
-      testBlocked: student.isTestBlocked,
-      series: rows.map((row) => toResolved(row, unlocked)),
+      catalog: {
+        testBlocked: student.isTestBlocked,
+        series: rows.map((row) => toResolved(row, unlocked)),
+      },
+      opened: opened.length > 0,
     };
   }
 
@@ -194,17 +216,6 @@ export class AccessResolverService {
 function counterOf(raw: string | null | undefined): number {
   const value = Number(raw);
   return Number.isInteger(value) && value >= 0 ? value : 0;
-}
-
-/**
- * AUTO opens on its own unless something has to come first; REQUEST and ADMIN never open on
- * their own, so without this both modes would be decoration on an already-open series.
- */
-function needsUnlock(row: {
-  unlockMode: UnlockMode;
-  prerequisiteSeriesId: string | null;
-}): boolean {
-  return row.unlockMode !== UNLOCK_MODE.AUTO || row.prerequisiteSeriesId !== null;
 }
 
 function reachedBy(

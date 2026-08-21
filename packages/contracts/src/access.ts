@@ -260,6 +260,30 @@ export const seriesUnlockRequestSchema = z.object({
 });
 export type SeriesUnlockRequest = z.infer<typeof seriesUnlockRequestSchema>;
 
+/** A request as the admin queue reads it — a triage screen cannot act on two bare ids. */
+export const seriesUnlockRequestRowSchema = seriesUnlockRequestSchema.extend({
+  testSeries: z.object({ id: z.string(), name: z.string() }),
+  student: z.object({ id: z.string(), fullName: z.string().nullable(), mobile: z.string() }),
+});
+export type SeriesUnlockRequestRow = z.infer<typeof seriesUnlockRequestRowSchema>;
+
+export const unlockRequestListQuerySchema = paginationQuerySchema.extend({
+  status: unlockRequestStatusSchema.optional(),
+  testSeriesId: z.string().optional(),
+});
+export type UnlockRequestListQuery = z.infer<typeof unlockRequestListQuerySchema>;
+export type UnlockRequestListQueryInput = z.input<typeof unlockRequestListQuerySchema>;
+
+/** PENDING is where a request starts, so it is not something an admin can decide it back to. */
+export const unlockDecisionSchema = unlockRequestStatusSchema.exclude([
+  UNLOCK_REQUEST_STATUS.PENDING,
+]);
+export type UnlockDecision = z.infer<typeof unlockDecisionSchema>;
+
+export const decideUnlockRequestSchema = z.object({ status: unlockDecisionSchema });
+export type DecideUnlockRequestInput = z.input<typeof decideUnlockRequestSchema>;
+export type DecideUnlockRequestBody = z.infer<typeof decideUnlockRequestSchema>;
+
 export const notificationSchema = z.object({
   id: z.string(),
   studentId: z.string(),
@@ -273,6 +297,12 @@ export const notificationSchema = z.object({
   createdAt: z.string(),
 });
 export type Notification = z.infer<typeof notificationSchema>;
+
+export const notificationListQuerySchema = paginationQuerySchema.extend({
+  unreadOnly: optionalBooleanQuery(),
+});
+export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
+export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;
 
 // ============================================================================
 // The student's catalog — every series they reach, resolved from exam, program,
@@ -333,6 +363,15 @@ export const ADMIN_SERIES_ROUTES = {
   /** Every branch has a row from the moment the series exists — see the fan-out. */
   branches: (id: string) => `/admin/test-series/${id}/branches`,
   branch: (id: string, branchId: string) => `/admin/test-series/${id}/branches/${branchId}`,
+} as const;
+
+/**
+ * The queue is addressed on its own, not under a student: an admin triages what came in, and
+ * which student each row is about is the ANSWER rather than the way in.
+ */
+export const ADMIN_UNLOCK_REQUEST_ROUTES = {
+  list: '/admin/unlock-requests',
+  decide: (id: string) => `/admin/unlock-requests/${id}`,
 } as const;
 
 /** A grant is filed against the STUDENT, which is who you are looking at when you make one. */

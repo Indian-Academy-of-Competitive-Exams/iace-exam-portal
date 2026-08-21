@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  decideUnlockRequestSchema,
   SERIES_AVAILABILITIES,
   SERIES_AVAILABILITY,
   studentCatalogSeriesSchema,
+  UNLOCK_REQUEST_STATUS,
 } from '../src/access';
 import { ME_ROUTES } from '../src/me';
 
@@ -60,5 +62,28 @@ describe('ME_ROUTES.catalog', () => {
   /** No id in the path: the subject is always the token's student — see the controller. */
   it('carries no student id', () => {
     assert.equal(ME_ROUTES.catalog, '/me/catalog');
+    assert.equal(ME_ROUTES.requestUnlock('srs_1'), '/me/series/srs_1/unlock-request');
+    assert.equal(ME_ROUTES.readNotification('ntf_1'), '/me/notifications/ntf_1/read');
+  });
+});
+
+describe('decideUnlockRequestSchema', () => {
+  it('takes the two answers an admin can give', () => {
+    assert.equal(
+      decideUnlockRequestSchema.parse({ status: UNLOCK_REQUEST_STATUS.APPROVED }).status,
+      UNLOCK_REQUEST_STATUS.APPROVED,
+    );
+    assert.equal(
+      decideUnlockRequestSchema.parse({ status: UNLOCK_REQUEST_STATUS.REJECTED }).status,
+      UNLOCK_REQUEST_STATUS.REJECTED,
+    );
+  });
+
+  /** PENDING is where a request starts. Deciding it back to "undecided" is not an answer. */
+  it('refuses PENDING as a decision', () => {
+    assert.equal(
+      decideUnlockRequestSchema.safeParse({ status: UNLOCK_REQUEST_STATUS.PENDING }).success,
+      false,
+    );
   });
 });

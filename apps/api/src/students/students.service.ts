@@ -278,6 +278,12 @@ export class StudentsService {
       this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     }
 
+    // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
+    const examCodes = addedTo(before.enrolledExams, after.enrolledExams);
+    if (examCodes.length > 0) {
+      this.events.emit(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED, { studentId: id, examCodes });
+    }
+
     return this.detail(id);
   }
 
@@ -432,6 +438,11 @@ function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
     isActive: row.isActive,
     isTestBlocked: row.isTestBlocked,
   };
+}
+
+function addedTo(before: string[], after: string[]): string[] {
+  const held = new Set(before);
+  return after.filter((code) => !held.has(code));
 }
 
 /** A DATE column round-trips as YYYY-MM-DD; the time part is not ours to invent. */

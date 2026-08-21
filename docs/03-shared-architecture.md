@@ -107,13 +107,18 @@ Only the owning module writes these tables. `existing` = module built; `planned`
 | students        | `Student`, `StudentProfile`                                                | existing |
 | branches        | `Branch`                                                                   | existing |
 | access          | `Program`, `TestSeries`, `StudentGrant`, `BranchTestConfig`                | existing |
+| unlocks         | `StudentSeriesUnlock`, `SeriesUnlockRequest`                               | existing |
 | question-bank   | `Subject`, `Topic`, `Question`, `QuestionVersion`                          | existing |
 | configs         | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection` | existing |
 | audit           | `RowActionLog`, `ImportLog`                                                | existing |
 | tests / builder | `Test`, `TestSeriesTest`, `PaperQuestion`                                  | planned  |
 | exam (engine)   | `Attempt`, `AttemptQuestion`                                               | planned  |
-| unlocks         | `StudentSeriesUnlock`, `SeriesUnlockRequest`                               | planned  |
-| notifications   | `Notification`                                                             | planned  |
+| notifications   | `Notification`                                                             | existing |
+
+`unlocks` is a service inside `access` rather than a folder of its own: an unlock is not a way to
+REACH a series, so every one of its writes has to be checked against the reach predicate that lives
+there. It keeps its own row in this table because the tables are still separately owned, and moving
+it out later is a folder move rather than a rewrite.
 
 **There is no group table, and access is not a link row.** A student reaches a `TestSeries` by an
 exam match, a program match, or an explicit `StudentGrant`, and every one of those is then gated by
@@ -137,6 +142,9 @@ events) and register cross-module reactions here. Seed set:
 | `branch.created`                                | branches                                                                              | access (fan out `BranchTestConfig`)         |
 | `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke) | access (bust that student's cached catalog) |
 | `access.catalog_changed`                        | access (series edit, delete, branch-config change)                                    | access (bust every cached catalog)          |
+| `series.unlocked`                               | access (auto-unlock on resolve, approved request)                                     | notifications                               |
+| `series.granted`                                | access (a grant that did not already exist)                                           | notifications                               |
+| `student.enrolment_added`                       | students (the exam codes one save ADDED)                                              | notifications                               |
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 

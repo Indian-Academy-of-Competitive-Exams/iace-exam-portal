@@ -358,6 +358,21 @@ describe('the access writes that bust the catalog cache', () => {
     ]);
   });
 
+  /** What the student is TOLD, as opposed to what the cache has to forget — two different facts. */
+  it('announces the grant itself once, however often the roster is re-read', async () => {
+    const { grants, events } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      students: [makeStudent({ id: 'stu_1' })],
+    });
+
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_GRANTED), [
+      { studentId: 'stu_1', testSeriesId: 'srs_1' },
+    ]);
+  });
+
   it('announces the series when a branch’s row for it moves', async () => {
     const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());

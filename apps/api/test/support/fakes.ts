@@ -11,6 +11,7 @@ import {
   STAGE_DISPOSITION,
   STUDENT_TYPE,
   UNLOCK_MODE,
+  UNLOCK_REQUEST_STATUS,
   TEST_STATUS,
   TEST_UI,
   TIMER_TEMPLATE,
@@ -27,10 +28,13 @@ import {
   type StageDisposition,
   type StudentType,
   type UnlockMode,
+  type UnlockRequestStatus,
+  type NotificationType,
   type TestStatus,
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
+import { Prisma } from '@prisma/client';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -2086,6 +2090,18 @@ export class FakeAccessPrisma {
   };
 
   readonly studentGrant = {
+    findUnique: ({
+      where,
+    }: {
+      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
+    }) => {
+      const key = where.studentId_testSeriesId;
+      const row = this.grants.find(
+        (grant) => grant.studentId === key.studentId && grant.testSeriesId === key.testSeriesId,
+      );
+      return Promise.resolve(row ? { testSeriesId: row.testSeriesId } : null);
+    },
+
     findMany: ({ where }: { where: { studentId: string } }) =>
       Promise.resolve(
         this.grants
@@ -2182,12 +2198,23 @@ export interface FakeUnlockRow {
   unlockedAt: Date | null;
 }
 
+export interface FakeUnlockRequestRow {
+  id: string;
+  studentId: string;
+  testSeriesId: string;
+  status: UnlockRequestStatus;
+  requestedAt: Date;
+  decidedAt: Date | null;
+  decidedById: string | null;
+}
+
 export interface FakeCatalogData {
   students?: FakeStudent[];
   series?: FakeSeriesRow[];
   branchConfigs?: FakeBranchConfigRow[];
   grants?: FakeGrantRowAccess[];
   unlocks?: FakeUnlockRow[];
+  unlockRequests?: FakeUnlockRequestRow[];
   seriesTests?: FakeSeriesTestRow[];
   tests?: FakeTestRow[];
   stages?: FakeExamStage[];
@@ -2238,6 +2265,7 @@ export class FakeCatalogPrisma {
       series: data.series ?? [],
       branchConfigs: data.branchConfigs ?? [],
       grants: data.grants ?? [],
+      unlockRequests: data.unlockRequests ?? [],
       unlocks: data.unlocks ?? [],
       seriesTests: data.seriesTests ?? [],
       tests: data.tests ?? [],
@@ -2310,7 +2338,153 @@ export class FakeCatalogPrisma {
       );
       return rows.map((unlock) => ({ testSeriesId: unlock.testSeriesId }));
     },
+
+    findUnique: async ({
+      where,
+    }: {
+      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
+    }) => {
+      await this.record('studentSeriesUnlock.findUnique');
+      return this.heldUnlock(where.studentId_testSeriesId) ?? null;
+    },
+
+    /** `update: {}` is the point: a row that is already open keeps the time it was opened at. */
+    upsert: async ({
+      where,
+      create,
+    }: {
+      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
+      create: { studentId: string; testSeriesId: string; unlockedAt: Date };
+    }) => {
+      await this.record('studentSeriesUnlock.upsert');
+      const held = this.heldUnlock(where.studentId_testSeriesId);
+      if (held) return held;
+
+      const row: FakeUnlockRow = { ...create };
+      this.data.unlocks.push(row);
+      return row;
+    },
+
+    /** The half the empty `update` cannot do: a row carrying no time is still a locked row. */
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: { studentId: string; testSeriesId: string; unlockedAt: null };
+      data: { unlockedAt: Date };
+    }) => {
+      await this.record('studentSeriesUnlock.updateMany');
+      const rows = this.data.unlocks.filter(
+        (unlock) =>
+          unlock.studentId === where.studentId &&
+          unlock.testSeriesId === where.testSeriesId &&
+          unlock.unlockedAt === null,
+      );
+      for (const row of rows) Object.assign(row, data);
+      return { count: rows.length };
+    },
   };
+
+  readonly seriesUnlockRequest = {
+    findFirst: async ({ where }: { where: UnlockRequestWhere }) => {
+      await this.record('seriesUnlockRequest.findFirst');
+      return this.data.unlockRequests.find((row) => matchesRequest(row, where)) ?? null;
+    },
+
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      await this.record('seriesUnlockRequest.findUnique');
+      const row = this.data.unlockRequests.find((candidate) => candidate.id === where.id);
+      return row ? this.hydrateRequest(row) : null;
+    },
+
+    findMany: async ({
+      where = {},
+      skip = 0,
+      take,
+    }: {
+      where?: UnlockRequestWhere;
+      skip?: number;
+      take?: number;
+    } = {}) => {
+      await this.record('seriesUnlockRequest.findMany');
+      return this.data.unlockRequests
+        .filter((row) => matchesRequest(row, where))
+        .sort((left, right) => right.requestedAt.getTime() - left.requestedAt.getTime())
+        .slice(skip, take === undefined ? undefined : skip + take)
+        .map((row) => this.hydrateRequest(row));
+    },
+
+    count: async ({ where = {} }: { where?: UnlockRequestWhere } = {}) => {
+      await this.record('seriesUnlockRequest.count');
+      return this.data.unlockRequests.filter((row) => matchesRequest(row, where)).length;
+    },
+
+    /** Enforces the partial unique the migration declares — Prisma cannot see it, so it throws. */
+    create: async ({ data }: { data: { studentId: string; testSeriesId: string } }) => {
+      await this.record('seriesUnlockRequest.create');
+      const open = this.data.unlockRequests.some(
+        (row) =>
+          row.studentId === data.studentId &&
+          row.testSeriesId === data.testSeriesId &&
+          row.status === UNLOCK_REQUEST_STATUS.PENDING,
+      );
+      if (open) throw uniqueViolation('SeriesUnlockRequest_open_key');
+
+      this.requestSeq += 1;
+      const row: FakeUnlockRequestRow = {
+        id: `sur_${this.requestSeq}`,
+        studentId: data.studentId,
+        testSeriesId: data.testSeriesId,
+        status: UNLOCK_REQUEST_STATUS.PENDING,
+        requestedAt: new Date('2026-06-01T00:00:00.000Z'),
+        decidedAt: null,
+        decidedById: null,
+      };
+      this.data.unlockRequests.push(row);
+      return row;
+    },
+
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: UnlockRequestWhere & { id?: string };
+      data: Partial<FakeUnlockRequestRow>;
+    }) => {
+      await this.record('seriesUnlockRequest.updateMany');
+      const rows = this.data.unlockRequests.filter(
+        (row) => (where.id === undefined || row.id === where.id) && matchesRequest(row, where),
+      );
+      for (const row of rows) Object.assign(row, data);
+      return { count: rows.length };
+    },
+  };
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  private requestSeq = 0;
+
+  private heldUnlock(key: { studentId: string; testSeriesId: string }): FakeUnlockRow | undefined {
+    return this.data.unlocks.find(
+      (unlock) => unlock.studentId === key.studentId && unlock.testSeriesId === key.testSeriesId,
+    );
+  }
+
+  private hydrateRequest(row: FakeUnlockRequestRow) {
+    const series = this.data.series.find((candidate) => candidate.id === row.testSeriesId);
+    const student = this.data.students.find((candidate) => candidate.id === row.studentId);
+    return {
+      ...row,
+      testSeries: { id: row.testSeriesId, name: series?.name ?? '' },
+      student: {
+        id: row.studentId,
+        fullName: student?.fullName ?? null,
+        mobile: student?.mobile ?? '',
+      },
+    };
+  }
 
   private async record(name: string): Promise<void> {
     this.queries.push(name);
@@ -2390,6 +2564,29 @@ export class FakeCatalogPrisma {
   }
 }
 
+interface UnlockRequestWhere {
+  studentId?: string;
+  testSeriesId?: string;
+  status?: UnlockRequestStatus;
+}
+
+function matchesRequest(row: FakeUnlockRequestRow, where: UnlockRequestWhere): boolean {
+  return (
+    (where.studentId === undefined || row.studentId === where.studentId) &&
+    (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId) &&
+    (where.status === undefined || row.status === where.status)
+  );
+}
+
+/** The real error class, so a service that tests for P2002 is tested against what Prisma throws. */
+function uniqueViolation(target: string): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: 'test',
+    meta: { target },
+  });
+}
+
 /** `IS NULL` and `IN (…)` read off the ROW's value, so a clause that drops one is really felt. */
 function matchesProgramCode(
   value: string | null,
@@ -2452,4 +2649,83 @@ export class FakeSeriesFanOut {
   asService<T>(): T {
     return this as unknown as T;
   }
+}
+
+export interface FakeNotificationRow {
+  id: string;
+  studentId: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  testId: string | null;
+  testSeriesId: string | null;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+interface NotificationWhere {
+  id?: string;
+  studentId?: string;
+  isRead?: boolean;
+}
+
+function matchesNotification(row: FakeNotificationRow, where: NotificationWhere): boolean {
+  return (
+    (where.id === undefined || row.id === where.id) &&
+    (where.studentId === undefined || row.studentId === where.studentId) &&
+    (where.isRead === undefined || row.isRead === where.isRead)
+  );
+}
+
+/** Enough Prisma for the notifications module: one table, written once and read by its owner. */
+export class FakeNotificationsPrisma {
+  private seq = 0;
+
+  constructor(readonly rows: FakeNotificationRow[] = []) {}
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  readonly notification = {
+    create: ({ data }: { data: Omit<FakeNotificationRow, 'id' | 'isRead' | 'createdAt'> }) => {
+      this.seq += 1;
+      const row: FakeNotificationRow = {
+        ...data,
+        id: `ntf_${this.seq}`,
+        isRead: false,
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+      };
+      this.rows.push(row);
+      return Promise.resolve(row);
+    },
+
+    findFirst: ({ where }: { where: NotificationWhere }) =>
+      Promise.resolve(this.rows.find((row) => matchesNotification(row, where)) ?? null),
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: { where?: NotificationWhere; skip?: number; take?: number } = {}) =>
+      Promise.resolve(
+        this.rows
+          .filter((row) => matchesNotification(row, where))
+          .slice(skip, take === undefined ? undefined : skip + take),
+      ),
+
+    count: ({ where = {} }: { where?: NotificationWhere } = {}) =>
+      Promise.resolve(this.rows.filter((row) => matchesNotification(row, where)).length),
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeNotificationRow> }) => {
+      const row = this.rows.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no notification ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
 }

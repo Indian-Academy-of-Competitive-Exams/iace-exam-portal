@@ -14,6 +14,7 @@ import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AccessCacheListener } from '../src/access/access-cache.listener';
 import {
   FakeCatalogPrisma,
+  FakeEventBus,
   FakeRedis,
   makeBranchConfig,
   makeSeries,
@@ -35,10 +36,12 @@ const NOW = new Date('2026-06-01T00:00:00.000Z');
 function build(data: FakeCatalogData) {
   const prisma = new FakeCatalogPrisma(data);
   const redis = new FakeRedis();
+  const events = new FakeEventBus();
   return {
     prisma,
     redis,
-    resolver: new AccessResolverService(prisma.asService(), redis.asService()),
+    events,
+    resolver: new AccessResolverService(prisma.asService(), redis.asService(), events.asService()),
   };
 }
 

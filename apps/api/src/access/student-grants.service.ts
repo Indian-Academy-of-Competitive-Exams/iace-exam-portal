@@ -65,16 +65,24 @@ export class StudentGrantsService {
       });
     }
 
+    const key = { studentId, testSeriesId: input.testSeriesId };
+    const held = await this.prisma.studentGrant.findUnique({
+      where: { studentId_testSeriesId: key },
+      select: { testSeriesId: true },
+    });
+
     // Granting twice is not an error: the roster it came from is often re-read.
     await this.prisma.studentGrant.upsert({
-      where: { studentId_testSeriesId: { studentId, testSeriesId: input.testSeriesId } },
-      create: { studentId, testSeriesId: input.testSeriesId, createdById },
+      where: { studentId_testSeriesId: key },
+      create: { ...key, createdById },
       update: {},
     });
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
+    // Only what the grant CHANGED is announced: re-reading a roster must not ring the bell again.
+    if (!held) this.events.emit(DOMAIN_EVENTS.SERIES_GRANTED, key);
 
     return this.list(studentId);
   }

@@ -16,6 +16,7 @@ import { BranchesModule } from './branches/branches.module';
 import { MeModule } from './me/me.module';
 import { ConfigsModule } from './configs';
 import { AccessModule } from './access';
+import { NotificationsModule } from './notifications';
 import { ImportsModule } from './imports/imports.module';
 import { QuestionsModule } from './questions';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -47,6 +48,7 @@ import { RequestIdMiddleware } from './common/request-id';
     BranchesModule,
     ConfigsModule,
     AccessModule,
+    NotificationsModule,
     ImportsModule,
     QuestionsModule,
     HealthModule,

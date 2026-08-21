@@ -30,6 +30,12 @@ export const DOMAIN_EVENTS = {
    * that cached payload and have no producer today; each must emit this when its module lands.
    */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
+  /** A series opened for one student — an auto-unlock or an approved request. WIRED — see access. */
+  SERIES_UNLOCKED: 'series.unlocked',
+  /** Exam codes were ADDED to a student, never removed. WIRED — see students. */
+  STUDENT_ENROLMENT_ADDED: 'student.enrolment_added',
+  /** An admin filed a grant against a student. WIRED — see access. */
+  SERIES_GRANTED: 'series.granted',
 } as const;
 
 export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
@@ -100,6 +106,22 @@ export interface AccessCatalogChangedEvent {
   testSeriesId: string | null;
 }
 
+export interface SeriesUnlockedEvent {
+  studentId: string;
+  testSeriesId: string;
+}
+
+export interface StudentEnrolmentAddedEvent {
+  studentId: string;
+  /** Only the codes this save ADDED — `Exam.code`, the string `Student.enrolledExams` holds. */
+  examCodes: string[];
+}
+
+export interface SeriesGrantedEvent {
+  studentId: string;
+  testSeriesId: string;
+}
+
 /**
  * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
  * and a handler cannot claim a shape the producer never sends.
@@ -114,4 +136,7 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
+  [DOMAIN_EVENTS.SERIES_UNLOCKED]: SeriesUnlockedEvent;
+  [DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED]: StudentEnrolmentAddedEvent;
+  [DOMAIN_EVENTS.SERIES_GRANTED]: SeriesGrantedEvent;
 }
