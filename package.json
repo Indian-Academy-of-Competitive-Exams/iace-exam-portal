@@ -26,6 +26,7 @@
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:check": "node scripts/db-check.mjs",
     "db:seed": "prisma db execute --file prisma/seed.sql --schema prisma/schema.prisma",
+    "db:setup": "pnpm db:generate && pnpm db:migrate:deploy && pnpm db:seed",
     "db:studio": "prisma studio --schema prisma/schema.prisma",
     "test:coverage": "node scripts/coverage.mjs",
     "prepare": "husky"

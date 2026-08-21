@@ -37,6 +37,50 @@ VALUES ('admin_root', 'developer@iace.co.in', 'Super Admin', true, true, true)
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------
+-- Branches.
+--
+-- ONLINE is the VIRTUAL branch, and the application cannot do without it.
+-- AccessResolver reads a student's branch ALONE to decide what they can reach:
+-- the enable flag and the open/close window both live on that branch's
+-- BranchTestConfig row, so a student with no branch resolves to an empty
+-- catalog no matter what they are enrolled on. Every ONLINE student sits here,
+-- and the admin screens now lock their branch picker to this row.
+--
+-- It is a singleton and the code treats it as one — branchEditBlocker refuses
+-- to rename or retire it, branchDeletionBlocker refuses to delete it, and
+-- BranchesService.create refuses a second VIRTUAL row. Seeding it is therefore
+-- the only comfortable way to bring it into existence, and the id is fixed so
+-- support conversations and later seed passes can name it.
+--
+-- The rest are the coaching centres. Names are canonical
+-- (packages/contracts/src/naming.ts): UPPERCASE, letters and digits,
+-- single-spaced. The application normalises what an admin types; nothing
+-- normalises a seed, so these are written correct.
+--
+-- The guard is Branch_name_live_key — UNIQUE (name) WHERE "deletedAt" IS NULL —
+-- so a database that already has these rows under generated ids keeps them and
+-- this file adds nothing. New devices get the readable ids below.
+--
+-- A branch a student still attends cannot be deleted, and a retired one takes
+-- no new students, so removing a centre from this list does not remove it from
+-- a database that already ran it. Retire it on the admin Branches screen.
+-- ---------------------------------------------------------------------------
+INSERT INTO "Branch" ("id", "name", "type", "isActive")
+VALUES
+  ('branch_online',        'ONLINE',        'VIRTUAL',  true),
+  ('branch_ameerpet',      'AMEERPET',      'PHYSICAL', true),
+  ('branch_ananthapur',    'ANANTHAPUR',    'PHYSICAL', true),
+  ('branch_dilsukhnagar',  'DILSUKHNAGAR',  'PHYSICAL', true),
+  ('branch_kukatpally',    'KUKATPALLY',    'PHYSICAL', true),
+  ('branch_nellore',       'NELLORE',       'PHYSICAL', true),
+  ('branch_rajahmundry',   'RAJAHMUNDRY',   'PHYSICAL', true),
+  ('branch_tirupati',      'TIRUPATI',      'PHYSICAL', true),
+  ('branch_vijayawada',    'VIJAYAWADA',    'PHYSICAL', true),
+  ('branch_visakhapatnam', 'VISAKHAPATNAM', 'PHYSICAL', true),
+  ('branch_vizianagaram',  'VIZIANAGARAM',  'PHYSICAL', true)
+ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------------
 -- Exam taxonomy — SSC CGL.
 --
 -- Exam.code is what Student.enrolledExams holds, so it must never be reused for

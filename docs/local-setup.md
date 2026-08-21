@@ -93,24 +93,44 @@ Check: `docker ps` shows `iace-postgres`, `iace-redis`, `iace-minio` healthy. Th
 
 ## 5. Set up the database
 
+On a new device, one command does all of it — generate the client, apply every migration, then
+insert the static rows the application cannot start without:
+
+```bash
+pnpm db:setup
+```
+
+That is `db:generate && db:migrate:deploy && db:seed`. It is safe to re-run: migrations already
+applied are skipped and every seed insert is guarded, so a second run changes nothing.
+
+The three steps separately, when you want one of them on its own:
+
 ```bash
 pnpm db:generate      # generate the Prisma client (needed before typecheck/build)
-pnpm db:migrate       # apply all migrations to your local DB
+pnpm db:migrate       # apply all migrations to your local DB (dev flow — prompts, creates)
+pnpm db:seed          # the static rows (§6)
 ```
 
 Optional GUI: `pnpm db:studio` (Prisma Studio, opens in the browser).
 
-> `pnpm db:seed` (§6) puts the first super admin, the SSC CGL catalog and its Tier 1 pattern in. It is a separate command on purpose, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
+> `db:seed` stays a separate command, not prisma's seed hook, so a `migrate reset` never quietly recreates rows you meant to be rid of. (`db:check` compares the migrations against the schema and needs `SHADOW_DATABASE_URL` — see `.env.example`.)
 
-## 6. Seed the first super admin and the exam catalog
+## 6. Seed the first super admin, the branches and the exam catalog
 
 ```bash
 pnpm db:seed
 ```
 
-That inserts the super admin (`developer@iace.co.in`), the SSC CGL exam and its four
-tiers, and the SSC CGL Tier 1 default base config with its four sections. It is
-idempotent — every insert is guarded, so running it twice changes nothing.
+That inserts the super admin (`developer@iace.co.in`), the eleven branches, the SSC CGL
+exam and its two tiers, and the SSC CGL Tier 1 default base config with its four
+sections. It is idempotent — every insert is guarded, so running it twice changes nothing.
+
+The ONLINE branch is not optional. A student's branch is what `AccessResolver` reads to
+decide what they can reach, so a student without one resolves to an empty catalog however
+many exams they are enrolled on — and the admin screens lock every ONLINE student's branch
+to that row. It is a singleton the API refuses to duplicate, rename, retire or delete, so
+seeding it is the only comfortable way to bring it into being. Physical centres are added
+on the admin **Branches** screen.
 
 Admins can't self‑register and nothing in the application creates one, so without this
 row there is no way into the admin app at all. To use a different address, edit
@@ -151,6 +171,7 @@ To run just one: `pnpm --filter @iace/api dev` (or `@iace/test`, `@iace/admin`).
 | `pnpm test:coverage`                              | tests with coverage                         |
 | `pnpm format` / `pnpm format:check`               | Prettier write / check                      |
 | `pnpm deps:check` / `pnpm deps:fix`               | syncpack — keep shared dep versions aligned |
+| `pnpm db:setup`                                   | new device: generate + migrate + seed       |
 | `pnpm db:migrate` / `db:generate` / `db:studio`   | Prisma workflows                            |
 | `pnpm docker:up` / `docker:down` / `docker:reset` | infra up / stop / stop+wipe volumes         |
 
@@ -167,7 +188,7 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 - **Port already in use** (3000 / 5173 / 5174 / 5432 / 6379 / 9000 / 9001) → free the process or change the port in `.env`.
 - **Pre‑commit hook fails** → run `pnpm format && pnpm lint && pnpm typecheck` and fix what it reports; leave `SONAR_*` unset to skip the Sonar scan.
 - **Admin OTP never arrives** → it doesn't; read it from the **API log** (dev uses the console OTP sender).
-- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:migrate`, and re‑run `pnpm db:seed` (§6).
+- **Start completely fresh** → `pnpm docker:reset` (wipes DB/Redis/MinIO volumes), then `pnpm docker:up && pnpm db:setup` (§5).
 
 ## 10. Where to read next
 
