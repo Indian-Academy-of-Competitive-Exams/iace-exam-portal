@@ -83,7 +83,7 @@ export function DocumentCard({
 
       {/* mt-auto so this sits on the floor of every card, however tall the rest
           of that card turned out. */}
-      <p className="mt-auto text-[11px] leading-tight text-muted-foreground">{rules}</p>
+      <p className="mt-auto text-2xs leading-tight text-muted-foreground">{rules}</p>
     </div>
   );
 }

@@ -263,13 +263,33 @@ module.exports = {
         mono: ['var(--font-mono)'],
         brand: ['var(--font-brand)'],
       },
+      // The WHOLE scale: an unmapped step silently renders Tailwind's size, not the token's.
       fontSize: {
+        '2xs': ['var(--text-2xs)', { lineHeight: 'var(--leading-snug)' }],
+        xs: ['var(--text-xs)', { lineHeight: 'var(--leading-snug)' }],
+        sm: ['var(--text-sm)', { lineHeight: 'var(--leading-normal)' }],
+        base: ['var(--text-base)', { lineHeight: 'var(--leading-normal)' }],
+        md: ['var(--text-md)', { lineHeight: 'var(--leading-normal)' }],
+        lg: ['var(--text-lg)', { lineHeight: 'var(--leading-snug)' }],
+        xl: ['var(--text-xl)', { lineHeight: 'var(--leading-tight)' }],
+        '2xl': ['var(--text-2xl)', { lineHeight: 'var(--leading-tight)' }],
+        '3xl': ['var(--text-3xl)', { lineHeight: 'var(--leading-tight)' }],
         // lineHeight 1 sets it solid: the plate's height is then padding alone.
         brand: ['var(--text-brand)', { lineHeight: '1' }],
       },
       letterSpacing: {
-        // Only the brand step; every other tracking-* still takes Tailwind's own scale.
+        tight: 'var(--tracking-tight)',
+        snug: 'var(--tracking-snug)',
+        normal: 'var(--tracking-normal)',
+        wide: 'var(--tracking-wide)',
         brand: 'var(--tracking-brand)',
+      },
+      lineHeight: {
+        tight: 'var(--leading-tight)',
+        snug: 'var(--leading-snug)',
+        normal: 'var(--leading-normal)',
+        relaxed: 'var(--leading-relaxed)',
+        indic: 'var(--leading-indic)',
       },
       fontVariantNumeric: {
         tabular: 'tabular-nums',

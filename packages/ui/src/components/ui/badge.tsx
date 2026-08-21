@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 
 /** Status pills. `danger` is crimson, `primary` is brand red — not interchangeable. */
 const badgeVariants = cva(
-  'inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-semibold [&_svg]:size-3',
+  'inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full px-2.5 text-2xs font-semibold [&_svg]:size-3',
   {
     variants: {
       variant: {
