@@ -11,6 +11,7 @@ import {
   STAGE_DISPOSITION,
   STUDENT_TYPE,
   UNLOCK_MODE,
+  TEST_STATUS,
   TEST_UI,
   TIMER_TEMPLATE,
   type AdminPermissions,
@@ -26,6 +27,7 @@ import {
   type StageDisposition,
   type StudentType,
   type UnlockMode,
+  type TestStatus,
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
@@ -91,6 +93,9 @@ export class FakeRedis {
 
   readonly client = {
     get: (key: string): Promise<string | null> => Promise.resolve(this.text(key) ?? null),
+
+    mget: (...keys: string[]): Promise<(string | null)[]> =>
+      Promise.resolve(keys.map((key) => this.text(key) ?? null)),
 
     set: (
       key: string,
@@ -2137,6 +2142,276 @@ export class FakeAccessPrisma {
       examStage: stage ? { id: stage.id, name: stage.name, exam: { code: 'SSC CGL' } } : null,
     };
   }
+}
+
+export function makeBranchConfig(
+  overrides: Partial<FakeBranchConfigRow> = {},
+): FakeBranchConfigRow {
+  return {
+    id: 'btc_1',
+    branchId: 'br_1',
+    testSeriesId: 'srs_1',
+    enabled: true,
+    startAt: null,
+    endAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+/** The `Test` columns the catalog reads. The tests module owns the real table. */
+export interface FakeTestRow {
+  id: string;
+  title: string | null;
+  status: TestStatus;
+}
+
+export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
+  return { id: 'tst_1', title: 'Mock 1', status: TEST_STATUS.ACTIVE, ...overrides };
+}
+
+export interface FakeSeriesTestRow {
+  testSeriesId: string;
+  testId: string;
+  order: number | null;
+}
+
+export interface FakeUnlockRow {
+  studentId: string;
+  testSeriesId: string;
+  unlockedAt: Date | null;
+}
+
+export interface FakeCatalogData {
+  students?: FakeStudent[];
+  series?: FakeSeriesRow[];
+  branchConfigs?: FakeBranchConfigRow[];
+  grants?: FakeGrantRowAccess[];
+  unlocks?: FakeUnlockRow[];
+  seriesTests?: FakeSeriesTestRow[];
+  tests?: FakeTestRow[];
+  stages?: FakeExamStage[];
+  exams?: FakeExam[];
+}
+
+/**
+ * One reach clause, by the COLUMNS it constrains rather than by which of the three paths it is:
+ * an omitted column constrains nothing, exactly as SQL reads it.
+ */
+interface CatalogReachWhere {
+  grants?: { some: { studentId: string } };
+  programCode?: null | { in: string[] };
+  examStage?: { exam: { code: { in: string[] } } };
+}
+
+interface CatalogSeriesWhere {
+  branchConfigs?: { some: { branchId: string; enabled: boolean } };
+  OR?: CatalogReachWhere[];
+  id?: { in: string[] };
+}
+
+interface CatalogInclude {
+  branchConfigs: { where: { branchId: string } };
+  tests: { where: { test: { status: TestStatus } } };
+}
+
+type CatalogSortField = 'name' | 'id';
+type CatalogOrderBy = Partial<Record<CatalogSortField, 'asc' | 'desc'>>;
+
+/**
+ * Enough Prisma for the access resolver, and no more. It evaluates the `where` it is HANDED
+ * rather than knowing anything about reach, so a truth-table test really exercises the
+ * predicates the resolver builds.
+ */
+export class FakeCatalogPrisma {
+  /** Every read that reached "Postgres" — what the cache tests count. */
+  readonly queries: string[] = [];
+
+  /** Runs as each read reaches "Postgres", so a test can interleave a bust with a resolve. */
+  onQuery: ((name: string) => Promise<void>) | null = null;
+
+  private readonly data: Required<FakeCatalogData>;
+
+  constructor(data: FakeCatalogData = {}) {
+    this.data = {
+      students: data.students ?? [],
+      series: data.series ?? [],
+      branchConfigs: data.branchConfigs ?? [],
+      grants: data.grants ?? [],
+      unlocks: data.unlocks ?? [],
+      seriesTests: data.seriesTests ?? [],
+      tests: data.tests ?? [],
+      stages: data.stages ?? [makeExamStage()],
+      exams: data.exams ?? [makeExam()],
+    };
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  readonly student = {
+    findFirst: async ({
+      where,
+    }: {
+      where: { id: string; deletedAt?: null; isActive?: boolean };
+    }) => {
+      await this.record('student.findFirst');
+      const row = this.data.students.find(
+        (student) =>
+          student.id === where.id &&
+          (where.deletedAt === undefined || student.deletedAt === null) &&
+          (where.isActive === undefined || student.isActive === where.isActive),
+      );
+      return row ? { ...row } : null;
+    },
+
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      await this.record('student.findUnique');
+      const row = this.data.students.find((student) => student.id === where.id);
+      return row ? { ...row } : null;
+    },
+  };
+
+  readonly testSeries = {
+    findMany: async ({
+      where = {},
+      include,
+      orderBy = [],
+    }: {
+      where?: CatalogSeriesWhere;
+      include?: CatalogInclude;
+      orderBy?: CatalogOrderBy[];
+    } = {}) => {
+      await this.record('testSeries.findMany');
+      const rows = this.data.series
+        .filter((row) => this.matchesSeries(row, where))
+        .sort(comparing(orderBy));
+      return include ? rows.map((row) => this.hydrate(row, include)) : rows;
+    },
+  };
+
+  readonly studentSeriesUnlock = {
+    findMany: async ({
+      where,
+    }: {
+      where: {
+        studentId: string;
+        testSeriesId: { in: string[] };
+        unlockedAt?: { not: null };
+      };
+    }) => {
+      await this.record('studentSeriesUnlock.findMany');
+      const rows = this.data.unlocks.filter(
+        (unlock) =>
+          unlock.studentId === where.studentId &&
+          where.testSeriesId.in.includes(unlock.testSeriesId) &&
+          (where.unlockedAt === undefined || unlock.unlockedAt !== null),
+      );
+      return rows.map((unlock) => ({ testSeriesId: unlock.testSeriesId }));
+    },
+  };
+
+  private async record(name: string): Promise<void> {
+    this.queries.push(name);
+    await this.onQuery?.(name);
+  }
+
+  private matchesSeries(row: FakeSeriesRow, where: CatalogSeriesWhere): boolean {
+    const gate = where.branchConfigs?.some;
+    const enabledHere =
+      gate === undefined ||
+      this.data.branchConfigs.some(
+        (config) =>
+          config.testSeriesId === row.id &&
+          config.branchId === gate.branchId &&
+          config.enabled === gate.enabled,
+      );
+
+    return (
+      enabledHere &&
+      (where.id === undefined || where.id.in.includes(row.id)) &&
+      (where.OR === undefined || where.OR.some((clause) => this.matchesReach(row, clause)))
+    );
+  }
+
+  private matchesReach(row: FakeSeriesRow, clause: CatalogReachWhere): boolean {
+    return (
+      this.matchesGrant(row, clause.grants) &&
+      matchesProgramCode(row.programCode, clause.programCode) &&
+      this.matchesExam(row, clause.examStage)
+    );
+  }
+
+  private matchesGrant(row: FakeSeriesRow, filter: CatalogReachWhere['grants']): boolean {
+    if (filter === undefined) return true;
+    return this.data.grants.some(
+      (grant) => grant.testSeriesId === row.id && grant.studentId === filter.some.studentId,
+    );
+  }
+
+  private matchesExam(row: FakeSeriesRow, filter: CatalogReachWhere['examStage']): boolean {
+    if (filter === undefined) return true;
+    const code = this.examCodeOf(row.examStageId);
+    return code !== null && filter.exam.code.in.includes(code);
+  }
+
+  private examCodeOf(examStageId: string | null): string | null {
+    const stage = this.data.stages.find((candidate) => candidate.id === examStageId);
+    const exam = this.data.exams.find((candidate) => candidate.id === stage?.examId);
+    return exam?.code ?? null;
+  }
+
+  private hydrate(row: FakeSeriesRow, include: CatalogInclude) {
+    const stage = this.data.stages.find((candidate) => candidate.id === row.examStageId);
+    const code = this.examCodeOf(row.examStageId);
+    const prerequisite = this.data.series.find(
+      (candidate) => candidate.id === row.prerequisiteSeriesId,
+    );
+
+    return {
+      ...row,
+      examStage: stage && code !== null ? { id: stage.id, name: stage.name, exam: { code } } : null,
+      prerequisiteSeries: prerequisite ? { name: prerequisite.name } : null,
+      branchConfigs: this.data.branchConfigs.filter(
+        (config) =>
+          config.testSeriesId === row.id &&
+          config.branchId === include.branchConfigs.where.branchId,
+      ),
+      tests: this.data.seriesTests
+        .filter((link) => link.testSeriesId === row.id)
+        .flatMap((link) => {
+          const test = this.data.tests.find((candidate) => candidate.id === link.testId);
+          return test?.status === include.tests.where.test.status
+            ? [{ order: link.order, test: { id: test.id, title: test.title } }]
+            : [];
+        }),
+    };
+  }
+}
+
+/** `IS NULL` and `IN (…)` read off the ROW's value, so a clause that drops one is really felt. */
+function matchesProgramCode(
+  value: string | null,
+  filter: CatalogReachWhere['programCode'],
+): boolean {
+  if (filter === undefined) return true;
+  if (filter === null) return value === null;
+  return value !== null && filter.in.includes(value);
+}
+
+function comparing(orderBy: CatalogOrderBy[]) {
+  const terms = orderBy.flatMap(
+    (term) => Object.entries(term) as [CatalogSortField, 'asc' | 'desc'][],
+  );
+
+  return (left: FakeSeriesRow, right: FakeSeriesRow): number => {
+    for (const [field, direction] of terms) {
+      const order = left[field].localeCompare(right[field]);
+      if (order !== 0) return direction === 'desc' ? -order : order;
+    }
+    return 0;
+  };
 }
 
 /**

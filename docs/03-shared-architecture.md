@@ -89,6 +89,11 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `access` → `prisma.student.count` for the program deletion blocker. `Student.programs` holds the
   code as free text with no foreign key, so that count is the only thing between a rename and a
   silent detach across every student. Route it through a `StudentsService` facade method.
+- `access` → `Test` / `TestSeriesTest` through `AccessResolverService`, which lists a series' live
+  tests by joining the link rows and filtering on `Test.status`. Same shape as the `configs` → `Test`
+  entry above: the tests/builder module does not exist yet, so there is no facade to ask. Becomes
+  `TestsService.activeTestsInSeries` when that module lands — and that module must then emit
+  `access.catalog_changed`, which nothing does for those two tables today.
 
 ---
 
@@ -122,14 +127,16 @@ binding live in **Redis**, never Postgres.
 No event bus exists yet. Introduce Nest `EventEmitter` (or BullMQ for durable
 events) and register cross-module reactions here. Seed set:
 
-| Event                                           | Producer       | Consumers                                 |
-| ----------------------------------------------- | -------------- | ----------------------------------------- |
-| `attempt.submitted`                             | exam           | scoring-worker (enqueue), notifications   |
-| `scoring.completed`                             | scoring-worker | notifications (result ready), leaderboard |
-| `test.assigned`                                 | access/admin   | notifications                             |
-| `paperQuestion.dropped` / `paperQuestion.bonus` | admin          | scoring-worker (recompute)                |
-| `student.pin_reset`                             | auth           | (sessions revoked — already handled)      |
-| `branch.created`                                | branches       | access (fan out `BranchTestConfig`)       |
+| Event                                           | Producer                                                                              | Consumers                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `attempt.submitted`                             | exam                                                                                  | scoring-worker (enqueue), notifications     |
+| `scoring.completed`                             | scoring-worker                                                                        | notifications (result ready), leaderboard   |
+| `test.assigned`                                 | access/admin                                                                          | notifications                               |
+| `paperQuestion.dropped` / `paperQuestion.bonus` | admin                                                                                 | scoring-worker (recompute)                  |
+| `student.pin_reset`                             | auth                                                                                  | (sessions revoked — already handled)        |
+| `branch.created`                                | branches                                                                              | access (fan out `BranchTestConfig`)         |
+| `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke) | access (bust that student's cached catalog) |
+| `access.catalog_changed`                        | access (series edit, delete, branch-config change)                                    | access (bust every cached catalog)          |
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 

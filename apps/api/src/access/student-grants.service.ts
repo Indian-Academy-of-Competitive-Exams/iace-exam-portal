@@ -7,6 +7,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
@@ -21,6 +22,7 @@ export class StudentGrantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(studentId: string): Promise<StudentGrantRow[]> {
@@ -72,6 +74,7 @@ export class StudentGrantsService {
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
+    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
 
     return this.list(studentId);
   }
@@ -81,6 +84,7 @@ export class StudentGrantsService {
 
     await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
     this.auditContext.setEntityId(studentId);
+    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
   private async requireStudent(id: string): Promise<{ isTestBlocked: boolean }> {

@@ -23,6 +23,7 @@ import { BranchesService } from '../branches';
 import { ExamsService } from '../configs';
 import { type ProgramsService } from '../access';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
@@ -50,6 +51,14 @@ export const AUDITED_STUDENT_FIELDS = [
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
 const AUDITED_TEST_BLOCKED_FIELDS = ['isTestBlocked'] as const;
 
+/** The columns a student's catalog is resolved from — moving one makes their cached answer wrong. */
+const ACCESS_STUDENT_FIELDS = [
+  'enrolledExams',
+  'programs',
+  'currentBranchId',
+  'isTestBlocked',
+] as const;
+
 /**
  * Owns `Student` and `StudentProfile` (docs/03 §5) — the only module that writes them, `imports`
  * excepted (see its own note; a bulk roster is one statement per file rather than per row).
@@ -72,6 +81,7 @@ export class StudentsService {
     )
     private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   // ==========================================================================
@@ -197,14 +207,11 @@ export class StudentsService {
     return this.detail(student.id);
   }
 
-  /** A patch: an omitted key is left alone, an explicit null clears the field. */
-  async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
-    const student = await this.prisma.student.findUnique({
-      where: { id },
-      include: { profile: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
-
+  /** Every target a patch names has to still be usable before any of it is written. */
+  private async assertPatchUsable(
+    student: { isTestBlocked: boolean; enrolledExams: string[] },
+    input: UpdateStudentBody,
+  ): Promise<void> {
     if (input.enrolledExams) {
       this.assertMayEnrol(student, input.enrolledExams);
       if (input.enrolledExams.length) {
@@ -217,6 +224,17 @@ export class StudentsService {
     if (input.currentBranchId) {
       await this.branches.assertUsable(input.currentBranchId, CURRENT_BRANCH_ID_FIELD);
     }
+  }
+
+  /** A patch: an omitted key is left alone, an explicit null clears the field. */
+  async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      include: { profile: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    await this.assertPatchUsable(student, input);
 
     const profilePatch = input.profile;
     // Spread of the EXISTING profile then the patch: readiness is decided on
@@ -253,9 +271,12 @@ export class StudentsService {
 
     const updated = await this.prisma.student.update({ where: { id }, data: updatedColumns });
 
-    this.auditContext.setChanged(
-      fieldDiff(auditFieldsOf(student), auditFieldsOf(updated), AUDITED_STUDENT_FIELDS),
-    );
+    const before = auditFieldsOf(student);
+    const after = auditFieldsOf(updated);
+    this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
+    if (fieldDiff(before, after, ACCESS_STUDENT_FIELDS)) {
+      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
+    }
 
     return this.detail(id);
   }
@@ -304,6 +325,7 @@ export class StudentsService {
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
     );
+    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     return this.detail(id);
   }
 
@@ -319,6 +341,7 @@ export class StudentsService {
     this.auditContext.setChanged(
       fieldDiff(student, { ...student, isTestBlocked }, AUDITED_TEST_BLOCKED_FIELDS),
     );
+    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     return this.detail(id);
   }
 

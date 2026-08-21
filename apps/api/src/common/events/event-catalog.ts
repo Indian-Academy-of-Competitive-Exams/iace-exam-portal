@@ -22,6 +22,14 @@ export const DOMAIN_EVENTS = {
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** An audited write succeeded. WIRED — see the audit module. */
   AUDIT_ROW_ACTION: 'audit.row_action',
+  /** One student's access moved. WIRED — see the access module's cache listener. */
+  STUDENT_ACCESS_CHANGED: 'student.access_changed',
+  /**
+   * A series-wide change: every student's cached catalog is stale. WIRED — see access.
+   * `Test.status` flips, `TestSeriesTest` links and `StudentSeriesUnlock` writes are baked into
+   * that cached payload and have no producer today; each must emit this when its module lands.
+   */
+  ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
 } as const;
 
 export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
@@ -83,6 +91,15 @@ export interface AuditRowActionEvent {
   requestId: string;
 }
 
+export interface StudentAccessChangedEvent {
+  studentId: string;
+}
+
+export interface AccessCatalogChangedEvent {
+  /** Null when the change was not about one series — a branch fan-out, an import. */
+  testSeriesId: string | null;
+}
+
 /**
  * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
  * and a handler cannot claim a shape the producer never sends.
@@ -95,4 +112,6 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.PAPER_QUESTION_BONUS]: PaperQuestionCorrectedEvent;
   [DOMAIN_EVENTS.STUDENT_PIN_RESET]: StudentPinResetEvent;
   [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
+  [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
+  [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
 }

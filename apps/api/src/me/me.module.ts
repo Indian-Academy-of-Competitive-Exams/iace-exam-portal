@@ -4,6 +4,7 @@ import { DOCUMENT_MAX_BYTES } from '@iace/contracts';
 import { AuthModule } from '../auth';
 import { StorageModule } from '../storage/storage.module';
 import { StudentsModule } from '../students';
+import { AccessModule } from '../access';
 import { MeController } from './me.controller';
 import { MeService } from './me.service';
 
@@ -13,6 +14,7 @@ import { MeService } from './me.service';
   imports: [
     AuthModule,
     StudentsModule,
+    AccessModule,
     StorageModule,
     // The ceiling is applied while the body arrives, not after multer has
     // buffered the whole thing — see imports.module.ts for why that matters.

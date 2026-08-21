@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { RedisModule } from '../redis/redis.module';
 import { ConfigsModule } from '../configs';
 import {
   ProgramsController,
@@ -9,12 +10,20 @@ import {
 import { ProgramsService } from './programs.service';
 import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
+import { AccessResolverService } from './access-resolver.service';
+import { AccessCacheListener } from './access-cache.listener';
 
 /** Owns `Program`, `TestSeries`, `BranchTestConfig` and `StudentGrant` — how a test is reached. */
 @Module({
-  imports: [PrismaModule, ConfigsModule],
+  imports: [PrismaModule, RedisModule, ConfigsModule],
   controllers: [ProgramsController, TestSeriesController, StudentGrantsController],
-  providers: [ProgramsService, TestSeriesService, StudentGrantsService],
-  exports: [ProgramsService, TestSeriesService, StudentGrantsService],
+  providers: [
+    ProgramsService,
+    TestSeriesService,
+    StudentGrantsService,
+    AccessResolverService,
+    AccessCacheListener,
+  ],
+  exports: [ProgramsService, TestSeriesService, StudentGrantsService, AccessResolverService],
 })
 export class AccessModule {}

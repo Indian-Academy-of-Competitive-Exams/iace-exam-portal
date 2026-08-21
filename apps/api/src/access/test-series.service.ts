@@ -13,6 +13,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
 
@@ -46,6 +47,7 @@ export class TestSeriesService {
     private readonly stages: ExamStagesService,
     private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(query: {
@@ -141,6 +143,7 @@ export class TestSeriesService {
     });
 
     this.auditContext.setChanged(fieldDiff(series, updated, AUDITED_SERIES_FIELDS));
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
 
     const counts = await this.branchCountsFor([id]);
     return toSummary(updated, counts.get(id));
@@ -166,6 +169,7 @@ export class TestSeriesService {
     }
 
     await this.prisma.testSeries.delete({ where: { id } });
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
   }
 
   /**
@@ -221,6 +225,7 @@ export class TestSeriesService {
     });
 
     this.auditContext.setEntityId(id);
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return toBranchConfig(row);
   }
 

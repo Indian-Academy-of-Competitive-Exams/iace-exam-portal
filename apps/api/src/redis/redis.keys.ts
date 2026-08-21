@@ -37,4 +37,20 @@ export const redisKeys = {
 
   /** Held while one worker archives one UTC day of audit rows, keyed `YYYY-MM-DD`. */
   auditArchiveDay: (day: string) => `audit:archive:${day}`,
+
+  /**
+   * The platform-wide catalog bust counter. A series-wide change is one INCR here, and every
+   * student's key at the old epoch falls out by its TTL — a SCAN would not survive 100k students.
+   */
+  catalogEpoch: 'access:catalog:epoch',
+
+  /**
+   * One student's own bust counter. INCR, never DEL: a delete landing between a cache miss and
+   * the write behind it re-pins the pre-change answer for the whole TTL.
+   */
+  catalogStudentEpoch: (studentId: string) => `access:catalog:${studentId}:epoch`,
+
+  /** One student's resolved catalog, at one payload shape and both epochs. */
+  studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
+    `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,
 } as const;

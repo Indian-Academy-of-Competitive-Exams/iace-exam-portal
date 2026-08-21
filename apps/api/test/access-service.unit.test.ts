@@ -7,7 +7,9 @@ import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
 import { ExamStagesService } from '../src/configs';
 import { AuditContext } from '../src/audit';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import {
+  FakeEventBus,
   type FakeBranch,
   type FakeProgramRow,
   type FakeSeriesRow,
@@ -40,14 +42,22 @@ function build(
     [makeExamStage({ id: 'stage_1' })],
   );
   const auditContext = new AuditContext();
+  const events = new FakeEventBus();
   const programs = new ProgramsService(prisma.asService(), auditContext);
   const stages = new ExamStagesService(prisma.asService(), auditContext);
 
   return {
     prisma,
     programs,
-    series: new TestSeriesService(prisma.asService(), stages, programs, auditContext),
-    grants: new StudentGrantsService(prisma.asService(), auditContext),
+    events,
+    series: new TestSeriesService(
+      prisma.asService(),
+      stages,
+      programs,
+      auditContext,
+      events.asService(),
+    ),
+    grants: new StudentGrantsService(prisma.asService(), auditContext, events.asService()),
   };
 }
 
@@ -144,6 +154,7 @@ describe('TestSeriesService — what a series may point at', () => {
       new ExamStagesService(prisma.asService(), auditContext),
       new ProgramsService(prisma.asService(), auditContext),
       auditContext,
+      new FakeEventBus().asService(),
     );
 
     await assert.rejects(() => series.create(draft()), AppException.is);
@@ -324,5 +335,37 @@ describe('StudentGrantsService — the escape hatch', () => {
     await grants.revoke('stu_1', 'srs_1');
 
     assert.equal(prisma.grants.length, 0);
+  });
+});
+
+/**
+ * The cached catalog is only ever right because these fire. A write that moves access and stays
+ * silent leaves the student on the old answer until the entry expires.
+ */
+describe('the access writes that bust the catalog cache', () => {
+  it('announces the student on a grant and again on a revoke', async () => {
+    const { grants, events } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      students: [makeStudent({ id: 'stu_1' })],
+    });
+
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.revoke('stu_1', 'srs_1');
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED), [
+      { studentId: 'stu_1' },
+      { studentId: 'stu_1' },
+    ]);
+  });
+
+  it('announces the series when a branch’s row for it moves', async () => {
+    const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+
+    await series.updateBranchConfig(created.id, 'br_1', { enabled: true });
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
+      { testSeriesId: created.id },
+    ]);
   });
 });

@@ -30,6 +30,16 @@ export const unlockStateSchema = z.enum(UNLOCK_STATE);
 export type UnlockState = z.infer<typeof unlockStateSchema>;
 export const UNLOCK_STATES = unlockStateSchema.options;
 
+/** Where the branch's window puts a series right now. Derived from the clock on every read. */
+export const SERIES_AVAILABILITY = {
+  UPCOMING: 'UPCOMING',
+  ACTIVE: 'ACTIVE',
+  ENDED: 'ENDED',
+} as const;
+export const seriesAvailabilitySchema = z.enum(SERIES_AVAILABILITY);
+export type SeriesAvailability = z.infer<typeof seriesAvailabilitySchema>;
+export const SERIES_AVAILABILITIES = seriesAvailabilitySchema.options;
+
 export const UNLOCK_REQUEST_STATUS = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
@@ -263,6 +273,49 @@ export const notificationSchema = z.object({
   createdAt: z.string(),
 });
 export type Notification = z.infer<typeof notificationSchema>;
+
+// ============================================================================
+// The student's catalog — every series they reach, resolved from exam, program,
+// grant and branch, with the window applied at read time.
+// ============================================================================
+
+export const studentCatalogTestSchema = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  /** Position in the series. Ordering only — sequential gating is the series' own flag. */
+  order: z.number().int().nullable(),
+  canStart: z.boolean(),
+});
+export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
+
+/** A locked, upcoming or ended series is still LISTED — it is the journey the student is on. */
+export const studentCatalogSeriesSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
+  programCode: z.string().nullable(),
+  isFree: z.boolean(),
+  sequentialTests: z.boolean(),
+  unlockMode: unlockModeSchema,
+  unlockState: unlockStateSchema,
+  availability: seriesAvailabilitySchema,
+  /** The window the student's own branch runs this series in. Null is open-ended. */
+  startAt: z.string().nullable(),
+  endAt: z.string().nullable(),
+  prerequisiteSeriesId: z.string().nullable(),
+  prerequisiteSeriesName: z.string().nullable(),
+  canRequestUnlock: z.boolean(),
+  tests: z.array(studentCatalogTestSchema),
+});
+export type StudentCatalogSeries = z.infer<typeof studentCatalogSeriesSchema>;
+
+/** `testBlocked` leaves everything listed and view-only — nothing is startable. */
+export const studentCatalogSchema = z.object({
+  testBlocked: z.boolean(),
+  series: z.array(studentCatalogSeriesSchema),
+});
+export type StudentCatalog = z.infer<typeof studentCatalogSchema>;
 
 export const ADMIN_PROGRAM_ROUTES = {
   list: '/admin/programs',

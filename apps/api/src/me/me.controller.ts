@@ -25,12 +25,14 @@ import {
   type ChangePinBody,
   type AuthSessionResponse,
   type Me,
+  type StudentCatalog,
   type UpdateMeBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
+import { AccessResolverService } from '../access';
 import { MeService } from './me.service';
 
 /**
@@ -50,11 +52,18 @@ export class MeController {
   constructor(
     private readonly me: MeService,
     private readonly auth: AuthService,
+    private readonly access: AccessResolverService,
   ) {}
 
   @Get()
   profile(@CurrentUser() user: AuthenticatedUser): Promise<Me> {
     return this.me.profile(user.id);
+  }
+
+  /** Every series this student reaches, with today's window applied. */
+  @Get('catalog')
+  catalog(@CurrentUser() user: AuthenticatedUser): Promise<StudentCatalog> {
+    return this.access.catalog(user.id);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT_PROFILE, AUDIT_ACTION.UPDATE)

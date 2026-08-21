@@ -6,9 +6,11 @@ import { BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
 import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import {
   FakeSeriesFanOut,
   FakeCodeCatalog,
+  FakeEventBus,
   FakePrisma,
   makeBranch,
   makeStudent,
@@ -48,10 +50,12 @@ function serviceWith(
   const prisma = new FakePrisma(students, [], branches);
   const exams = new FakeExams(usableExams);
   const programs = new FakeCodeCatalog(usablePrograms);
+  const events = new FakeEventBus();
   return {
     prisma,
     exams,
     programs,
+    events,
     service: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
@@ -63,6 +67,7 @@ function serviceWith(
       ),
       programs.asService(),
       new AuditContext(),
+      events.asService(),
     ),
   };
 }
@@ -388,5 +393,48 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
 
     assert.ok(error instanceof AppException);
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+});
+
+/**
+ * A student's catalog is cached against these four columns plus the two switches. A write that
+ * moves one and stays silent leaves them on the old answer until the entry expires.
+ */
+describe('the student writes that bust the catalog cache', () => {
+  const changed = (events: FakeEventBus) => events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED);
+
+  it('announces a test block', async () => {
+    const { service, events } = serviceWith([makeStudent({ id: 'stu_1' })]);
+
+    await service.setTestBlocked('stu_1', true);
+
+    assert.deepEqual(changed(events), [{ studentId: 'stu_1' }]);
+  });
+
+  it('announces a deactivation', async () => {
+    const { service, events } = serviceWith([makeStudent({ id: 'stu_1' })]);
+
+    await service.setActive('stu_1', false);
+
+    assert.deepEqual(changed(events), [{ studentId: 'stu_1' }]);
+  });
+
+  it('announces an enrolment change', async () => {
+    const { service, events } = serviceWith([makeStudent({ id: 'stu_1', enrolledExams: [] })]);
+
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+
+    assert.deepEqual(changed(events), [{ studentId: 'stu_1' }]);
+  });
+
+  /** Every profile edit busting every catalog is a stampede for a change access cannot see. */
+  it('stays quiet for a patch that moves no access column', async () => {
+    const { service, events } = serviceWith([
+      makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
+    ]);
+
+    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+
+    assert.deepEqual(changed(events), []);
   });
 });

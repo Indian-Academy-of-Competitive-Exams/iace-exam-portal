@@ -17,6 +17,7 @@ import { AuditContext } from '../src/audit';
 import {
   type FakeExam,
   type FakeStudent,
+  FakeEventBus,
   FakePrisma,
   makeExam,
   makeStudent,
@@ -34,6 +35,7 @@ function serviceWith(exams: FakeExam[] = [makeExam()], students: FakeStudent[] =
       null as never,
       null as never,
       null as never,
+      new FakeEventBus().asService(),
     ),
     new AuditContext(),
   );

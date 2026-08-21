@@ -65,6 +65,7 @@ export const ME_ROUTES = {
   profile: '/me',
   update: '/me',
   changePin: '/me/pin',
+  catalog: '/me/catalog',
   /** The kind is in the path — see DOCUMENT_KINDS. */
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
 } as const;

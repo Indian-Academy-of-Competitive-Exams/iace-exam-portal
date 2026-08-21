@@ -9,6 +9,7 @@ import { AuditContext } from '../src/audit';
 import {
   FakeSeriesFanOut,
   FakeConfig,
+  FakeEventBus,
   FakePrisma,
   FakeRedis,
   makeBranch,
@@ -123,6 +124,7 @@ function studentsWith(student = makeStudent()) {
       null as never,
       null as never,
       null as never,
+      new FakeEventBus().asService(),
     ),
     student,
   };
@@ -209,6 +211,7 @@ describe('the counts the configs module asks for', () => {
       null as never,
       null as never,
       null as never,
+      new FakeEventBus().asService(),
     );
 
     assert.equal(await students.countEnrolledIn('SSC CGL'), 2);
