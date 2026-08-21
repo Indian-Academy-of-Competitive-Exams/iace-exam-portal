@@ -15,16 +15,10 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   ConfirmDialog,
   DataTable,
-  FormActions,
+  FormDialog,
   FormField,
-  FormRow,
   Input,
   PageHeader,
   Pagination,
@@ -118,7 +112,7 @@ export function ProgramsPage() {
               size="sm"
               onClick={() => {
                 setEditing(null);
-                setCreating((open) => !open);
+                setCreating(true);
               }}
             >
               <Plus aria-hidden />
@@ -134,27 +128,6 @@ export function ProgramsPage() {
             Only a super admin can add or change a program. You can see the list to pick from.
           </span>
         </Alert>
-      ) : null}
-
-      {creating ? (
-        <NewProgramCard
-          onDone={() => {
-            setCreating(false);
-            refresh();
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
-
-      {editing ? (
-        <EditProgramCard
-          program={editing}
-          onDone={() => {
-            setEditing(null);
-            refresh();
-          }}
-          onCancel={() => setEditing(null)}
-        />
       ) : null}
     </>
   );
@@ -183,7 +156,29 @@ export function ProgramsPage() {
   );
 
   return (
-    <TableFrame framed={!creating && !editing} header={header} toolbar={toolbar}>
+    <TableFrame header={header} toolbar={toolbar}>
+      {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
+      <NewProgramDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          refresh();
+        }}
+      />
+
+      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
+      {editing ? (
+        <EditProgramDialog
+          key={editing.id}
+          program={editing}
+          onDone={() => {
+            setEditing(null);
+            refresh();
+          }}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
       {/* "None match" and "there are none" are different facts, and telling an
           admin the wrong one sends them looking in the wrong place. */}
       <DataTable
@@ -204,10 +199,11 @@ export function ProgramsPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewProgramCard({
+function NewProgramDialog({
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
-}: Readonly<{ onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateProgramInput>({
     resolver: zodResolver(createProgramSchema),
     defaultValues: { code: '', name: '' },
@@ -221,42 +217,30 @@ function NewProgramCard({
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>New program</CardTitle>
-        <CardDescription>
-          The name is what admins read; the code is what a student row and a series both store.
-          Choose the code carefully — once anything carries it, it can no longer be changed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => <Input {...control} placeholder="SSC Foundation 2026" autoFocus />}
-          </FormField>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New program"
+      description="The name is what admins read; the code is what a student row and a series both store. Choose the code carefully — once anything carries it, it can no longer be changed."
+      submitLabel="Create"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} placeholder="SSC Foundation 2026" autoFocus />}
+      </FormField>
 
-          <FormField form={form} name="code" label="Code" className="min-w-40 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                className="uppercase placeholder:normal-case"
-                placeholder="SSC FOUNDATION"
-              />
-            )}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={create.isPending}>
-              Create
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField form={form} name="code" label="Code">
+        {(control) => (
+          <Input
+            {...control}
+            className="uppercase placeholder:normal-case"
+            placeholder="SSC FOUNDATION"
+          />
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 
@@ -267,11 +251,11 @@ function NewProgramCard({
  * a `fieldErrors.code`. Nothing on this row counts the holders, so the input stays editable and
  * the save is what refuses.
  */
-function EditProgramCard({
+function EditProgramDialog({
   program,
   onDone,
-  onCancel,
-}: Readonly<{ program: Program; onDone: () => void; onCancel: () => void }>) {
+  onClose,
+}: Readonly<{ program: Program; onDone: () => void; onClose: () => void }>) {
   const form = useForm<UpdateProgramInput>({
     resolver: zodResolver(updateProgramSchema),
     defaultValues: { code: program.code, name: program.name },
@@ -285,38 +269,30 @@ function EditProgramCard({
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>Edit {program.name}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => save.mutate(values))}>
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => <Input {...control} autoFocus />}
-          </FormField>
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={`Edit ${program.name}`}
+      submitLabel="Save"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} autoFocus />}
+      </FormField>
 
-          <FormField
-            form={form}
-            name="code"
-            label="Code"
-            className="min-w-40 flex-1"
-            hint="Free to change only while no student and no series carries it — the save is refused after that."
-          >
-            {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={save.isPending}>
-              Save
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField
+        form={form}
+        name="code"
+        label="Code"
+        hint="Free to change only while no student and no series carries it — the save is refused after that."
+      >
+        {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
+      </FormField>
+    </FormDialog>
   );
 }
 

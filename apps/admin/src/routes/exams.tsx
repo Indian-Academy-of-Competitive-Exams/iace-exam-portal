@@ -22,16 +22,10 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   ConfirmDialog,
   DataTable,
-  FormActions,
+  FormDialog,
   FormField,
-  FormRow,
   Input,
   NumericInput,
   PageHeader,
@@ -204,7 +198,7 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
             size="sm"
             onClick={() => {
               setEditing(null);
-              setCreating((open) => !open);
+              setCreating(true);
             }}
           >
             <Plus aria-hidden />
@@ -213,24 +207,25 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
         ) : null}
       </div>
 
-      {creating ? (
-        <NewExamCard
-          onDone={() => {
-            setCreating(false);
-            refresh();
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
+      <NewExamDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          refresh();
+        }}
+      />
 
+      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
       {editing ? (
-        <EditExamCard
+        <EditExamDialog
+          key={editing.id}
           exam={editing}
           onDone={() => {
             setEditing(null);
             refresh();
           }}
-          onCancel={() => setEditing(null)}
+          onClose={() => setEditing(null)}
         />
       ) : null}
 
@@ -248,7 +243,11 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
 
 // ---------------------------------------------------------------------------
 
-function NewExamCard({ onDone, onCancel }: Readonly<{ onDone: () => void; onCancel: () => void }>) {
+function NewExamDialog({
+  open,
+  onOpenChange,
+  onDone,
+}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateExamInput>({
     resolver: zodResolver(createExamSchema),
     defaultValues: { family: EXAM_FAMILIES[0], name: '', code: '' },
@@ -262,56 +261,38 @@ function NewExamCard({ onDone, onCancel }: Readonly<{ onDone: () => void; onCanc
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>New exam</CardTitle>
-        <CardDescription>
-          The name is what admins read; the code is what an enrolment stores. Choose the code
-          carefully — once any student is enrolled on it, it can no longer be changed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="family" label="Family" className="min-w-40">
-            {(control) => (
-              <Select {...control}>
-                {EXAM_FAMILIES.map((family) => (
-                  <option key={family} value={family}>
-                    {familyLabel(family)}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New exam"
+      description="The name is what admins read; the code is what an enrolment stores. Choose the code carefully — once any student is enrolled on it, it can no longer be changed."
+      submitLabel="Create"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="family" label="Family">
+        {(control) => (
+          <Select {...control}>
+            {EXAM_FAMILIES.map((family) => (
+              <option key={family} value={family}>
+                {familyLabel(family)}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
 
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => (
-              <Input {...control} placeholder="SSC Combined Graduate Level" autoFocus />
-            )}
-          </FormField>
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} placeholder="SSC Combined Graduate Level" autoFocus />}
+      </FormField>
 
-          <FormField form={form} name="code" label="Code" className="min-w-40 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                className="uppercase placeholder:normal-case"
-                placeholder="SSC CGL"
-              />
-            )}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={create.isPending}>
-              Create
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField form={form} name="code" label="Code">
+        {(control) => (
+          <Input {...control} className="uppercase placeholder:normal-case" placeholder="SSC CGL" />
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 
@@ -322,11 +303,11 @@ function NewExamCard({ onDone, onCancel }: Readonly<{ onDone: () => void; onCanc
  * refuses (`examEditBlocker`). There is no enrolment count on this row, so the input stays
  * editable and the save is what refuses.
  */
-function EditExamCard({
+function EditExamDialog({
   exam,
   onDone,
-  onCancel,
-}: Readonly<{ exam: Exam; onDone: () => void; onCancel: () => void }>) {
+  onClose,
+}: Readonly<{ exam: Exam; onDone: () => void; onClose: () => void }>) {
   const form = useForm<UpdateExamInput>({
     resolver: zodResolver(updateExamSchema),
     defaultValues: { family: exam.family, name: exam.name, code: exam.code },
@@ -340,50 +321,42 @@ function EditExamCard({
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>Edit {exam.name}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => save.mutate(values))}>
-          <FormField form={form} name="family" label="Family" className="min-w-40">
-            {(control) => (
-              <Select {...control}>
-                {EXAM_FAMILIES.map((family) => (
-                  <option key={family} value={family}>
-                    {familyLabel(family)}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={`Edit ${exam.name}`}
+      submitLabel="Save"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="family" label="Family">
+        {(control) => (
+          <Select {...control}>
+            {EXAM_FAMILIES.map((family) => (
+              <option key={family} value={family}>
+                {familyLabel(family)}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
 
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => <Input {...control} autoFocus />}
-          </FormField>
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} autoFocus />}
+      </FormField>
 
-          <FormField
-            form={form}
-            name="code"
-            label="Code"
-            className="min-w-40 flex-1"
-            hint="Free to change only while no student is enrolled on it — the save is refused after that."
-          >
-            {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={save.isPending}>
-              Save
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField
+        form={form}
+        name="code"
+        label="Code"
+        hint="Free to change only while no student is enrolled on it — the save is refused after that."
+      >
+        {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
+      </FormField>
+    </FormDialog>
   );
 }
 
@@ -637,7 +610,7 @@ function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
             size="sm"
             onClick={() => {
               setEditing(null);
-              setCreating((open) => !open);
+              setCreating(true);
             }}
           >
             <Plus aria-hidden />
@@ -646,25 +619,26 @@ function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
         ) : null}
       </div>
 
-      {creating ? (
-        <NewStageCard
-          examId={examId}
-          onDone={() => {
-            setCreating(false);
-            refresh();
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
+      <NewStageDialog
+        examId={examId}
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          refresh();
+        }}
+      />
 
+      {/* Keyed and mounted only while editing, so its defaults are the row that was clicked. */}
       {editing ? (
-        <EditStageCard
+        <EditStageDialog
+          key={editing.id}
           stage={editing}
           onDone={() => {
             setEditing(null);
             refresh();
           }}
-          onCancel={() => setEditing(null)}
+          onClose={() => setEditing(null)}
         />
       ) : null}
 
@@ -685,11 +659,17 @@ function StageStatus({ stage }: Readonly<{ stage: ExamStage }>) {
   return <Badge variant="neutral">Retired</Badge>;
 }
 
-function NewStageCard({
+function NewStageDialog({
   examId,
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
-}: Readonly<{ examId: string; onDone: () => void; onCancel: () => void }>) {
+}: Readonly<{
+  examId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}>) {
   const form = useForm<CreateExamStageInput>({
     resolver: zodResolver(createExamStageSchema),
     // Seeded from the filter: adding stages to the exam you are looking at is the normal case.
@@ -705,90 +685,78 @@ function NewStageCard({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New stage</CardTitle>
-        <CardDescription>
-          The key is what a seed script and the exam-pattern workbook address this stage by, so it
-          is unique across every exam and cannot change once a base config hangs off it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="examId" label="Exam" className="min-w-56">
-            {(control) => (
-              <ExamPicker
-                id={control.id}
-                value={chosenExam}
-                placeholder="Choose an exam"
-                onChange={(value) => form.setValue('examId', value, { shouldValidate: true })}
-              />
-            )}
-          </FormField>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+      title="New stage"
+      description="The key is what a seed script and the exam-pattern workbook address this stage by, so it is unique across every exam and cannot change once a base config hangs off it."
+      submitLabel="Add stage"
+      loading={create.isPending}
+    >
+      <FormField form={form} name="examId" label="Exam">
+        {(control) => (
+          <ExamPicker
+            id={control.id}
+            value={chosenExam}
+            placeholder="Choose an exam"
+            onChange={(value) => form.setValue('examId', value, { shouldValidate: true })}
+          />
+        )}
+      </FormField>
 
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => <Input {...control} placeholder="Tier 1" autoFocus />}
-          </FormField>
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} placeholder="Tier 1" autoFocus />}
+      </FormField>
 
-          <FormField form={form} name="stageKey" label="Key" className="min-w-40 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                className="uppercase placeholder:normal-case"
-                placeholder="SSC_CGL_T1"
-              />
-            )}
-          </FormField>
+      <FormField form={form} name="stageKey" label="Key">
+        {(control) => (
+          <Input
+            {...control}
+            className="uppercase placeholder:normal-case"
+            placeholder="SSC_CGL_T1"
+          />
+        )}
+      </FormField>
 
-          <FormField form={form} name="order" label="Order" hint="Lowest first" className="w-24">
-            {(control) => <NumericInput {...control} {...form.register('order')} />}
-          </FormField>
+      <FormField form={form} name="order" label="Order" hint="Lowest first">
+        {(control) => <NumericInput {...control} {...form.register('order')} />}
+      </FormField>
 
-          <FormField form={form} name="mode" label="Mode" className="w-40">
-            {(control) => (
-              <Select {...control} {...form.register('mode')}>
-                {EXAM_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
+      <FormField form={form} name="mode" label="Mode">
+        {(control) => (
+          <Select {...control} {...form.register('mode')}>
+            {EXAM_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
 
-          <FormField form={form} name="disposition" label="Runs as" className="w-48">
-            {(control) => (
-              <Select {...control} {...form.register('disposition')}>
-                {STAGE_DISPOSITIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {DISPOSITION_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={create.isPending}>
-              Add stage
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField form={form} name="disposition" label="Runs as">
+        {(control) => (
+          <Select {...control} {...form.register('disposition')}>
+            {STAGE_DISPOSITIONS.map((value) => (
+              <option key={value} value={value}>
+                {DISPOSITION_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 
 /** A stage never moves exam, so the exam is stated here rather than offered. */
-function EditStageCard({
+function EditStageDialog({
   stage,
   onDone,
-  onCancel,
-}: Readonly<{ stage: ExamStage; onDone: () => void; onCancel: () => void }>) {
+  onClose,
+}: Readonly<{ stage: ExamStage; onDone: () => void; onClose: () => void }>) {
   const form = useForm<UpdateExamStageInput>({
     resolver: zodResolver(updateExamStageSchema),
     defaultValues: {
@@ -808,82 +776,69 @@ function EditStageCard({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          Edit {stage.exam.code} / {stage.name}
-        </CardTitle>
-        <CardDescription>
-          A stage stays with its exam — every base config, series and test under it would change
-          meaning otherwise.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => save.mutate(values))}>
-          <FormField form={form} name="name" label="Name" className="min-w-56 flex-1">
-            {(control) => <Input {...control} autoFocus />}
-          </FormField>
+    <FormDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={`Edit ${stage.exam.code} / ${stage.name}`}
+      description="A stage stays with its exam — every base config, series and test under it would change meaning otherwise."
+      submitLabel="Save"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="name" label="Name">
+        {(control) => <Input {...control} autoFocus />}
+      </FormField>
 
-          <FormField
-            form={form}
-            name="stageKey"
-            label="Key"
-            className="min-w-40 flex-1"
-            hint={
-              stage.configCount > 0
-                ? `${plural(stage.configCount, 'base config')} hangs off this key — it can no longer change.`
-                : 'Free to change only while no base config hangs off it.'
-            }
-          >
-            {(control) => (
-              <Input
-                {...control}
-                disabled={stage.configCount > 0}
-                className="uppercase placeholder:normal-case"
-              />
-            )}
-          </FormField>
+      <FormField
+        form={form}
+        name="stageKey"
+        label="Key"
+        hint={
+          stage.configCount > 0
+            ? `${plural(stage.configCount, 'base config')} hangs off this key — it can no longer change.`
+            : 'Free to change only while no base config hangs off it.'
+        }
+      >
+        {(control) => (
+          <Input
+            {...control}
+            disabled={stage.configCount > 0}
+            className="uppercase placeholder:normal-case"
+          />
+        )}
+      </FormField>
 
-          <FormField form={form} name="order" label="Order" hint="Lowest first" className="w-24">
-            {(control) => <NumericInput {...control} {...form.register('order')} />}
-          </FormField>
+      <FormField form={form} name="order" label="Order" hint="Lowest first">
+        {(control) => <NumericInput {...control} {...form.register('order')} />}
+      </FormField>
 
-          <FormField form={form} name="mode" label="Mode" className="w-40">
-            {(control) => (
-              <Select {...control} {...form.register('mode')}>
-                {EXAM_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {mode}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
+      <FormField form={form} name="mode" label="Mode">
+        {(control) => (
+          <Select {...control} {...form.register('mode')}>
+            {EXAM_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
 
-          <FormField form={form} name="disposition" label="Runs as" className="w-48">
-            {(control) => (
-              <Select {...control} {...form.register('disposition')}>
-                {STAGE_DISPOSITIONS.map((value) => (
-                  <option key={value} value={value}>
-                    {DISPOSITION_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={save.isPending}>
-              Save
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+      <FormField form={form} name="disposition" label="Runs as">
+        {(control) => (
+          <Select {...control} {...form.register('disposition')}>
+            {STAGE_DISPOSITIONS.map((value) => (
+              <option key={value} value={value}>
+                {DISPOSITION_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 
