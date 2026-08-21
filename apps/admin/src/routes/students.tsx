@@ -23,17 +23,13 @@ import {
   Badge,
   BadgeList,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   cn,
   Combobox,
   ConfirmDialog,
   DataTable,
   digitsOnly,
   Field,
+  FormDialog,
   FormField,
   Input,
   linkVariants,
@@ -213,45 +209,34 @@ export function StudentsPage() {
   const columns = useMemo(() => studentColumns(), []);
 
   const header = (
-    <>
-      <PageHeader
-        title="Students"
-        description="Everyone enrolled, however they got here — self-signup, added by hand, or imported."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <SyncStudentsButton />
-            {/* Write actions appear only with WRITE. Hiding is not the security
+    <PageHeader
+      title="Students"
+      description="Everyone enrolled, however they got here — self-signup, added by hand, or imported."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <SyncStudentsButton />
+          {/* Write actions appear only with WRITE. Hiding is not the security
                 — the endpoints enforce it — it is not offering a control that
                 would be refused. */}
-            {canWrite ? (
-              <>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to={ROUTES.IMPORT_STUDENTS}>
-                    <Upload aria-hidden />
-                    Import
-                  </Link>
-                </Button>
-                <Button size="sm" asChild>
-                  <Link to={`${ROUTES.STUDENTS}?new=1`}>
-                    <UserPlus aria-hidden />
-                    Add student
-                  </Link>
-                </Button>
-              </>
-            ) : null}
-          </div>
-        }
-      />
-
-      {creating ? (
-        <NewStudentCard
-          onClose={() => {
-            searchParams.delete('new');
-            setSearchParams(searchParams);
-          }}
-        />
-      ) : null}
-    </>
+          {canWrite ? (
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link to={ROUTES.IMPORT_STUDENTS}>
+                  <Upload aria-hidden />
+                  Import
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link to={`${ROUTES.STUDENTS}?new=1`}>
+                  <UserPlus aria-hidden />
+                  Add student
+                </Link>
+              </Button>
+            </>
+          ) : null}
+        </div>
+      }
+    />
   );
 
   const toolbar = (
@@ -433,7 +418,16 @@ export function StudentsPage() {
   );
 
   return (
-    <TableFrame framed={!creating} header={header} toolbar={toolbar}>
+    <TableFrame header={header} toolbar={toolbar}>
+      {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
+          sits in the tree costs the pinned header nothing. */}
+      <NewStudentDialog
+        open={creating}
+        onClose={() => {
+          searchParams.delete('new');
+          setSearchParams(searchParams);
+        }}
+      />
       {/* "None match" and "there are none" are different facts, and telling
           an admin the wrong one sends them looking in the wrong place. Any
           filter at all means the former. */}
@@ -498,7 +492,7 @@ const NEW_STUDENT_FIELDS = [
 ] as const;
 
 /** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
-function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
+function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: () => void }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -544,121 +538,84 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>Add a student</CardTitle>
-        <CardDescription>
-          The mobile number and the student type are required. They will set their own PIN the first
-          time they sign in, and land on this same record.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={form.handleSubmit((values) => create.mutate(values))}
-          noValidate
-        >
-          <div className="flex flex-wrap gap-4">
-            <FormField form={form} name="mobile" label="Mobile number" className="min-w-56 flex-1">
-              {(control) => (
-                <NumericInput
-                  {...control}
-                  autoFocus
-                  prefix="+91"
-                  // Room to paste a +91-prefixed number; normaliseMobile trims
-                  // it back rather than truncating to the wrong ten digits.
-                  maxLength={15}
-                  sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
-                  placeholder="98765 43210"
-                  className="tabular-nums"
-                />
-              )}
-            </FormField>
+    <FormDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Add a student"
+      description="The mobile number and the student type are required. They will set their own PIN the first time they sign in, and land on this same record."
+      submitLabel="Add student"
+      loading={create.isPending}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+    >
+      <FormField form={form} name="mobile" label="Mobile number">
+        {(control) => (
+          <NumericInput
+            {...control}
+            autoFocus
+            prefix="+91"
+            // Room to paste a +91 prefix; normaliseMobile trims it rather than truncating.
+            maxLength={15}
+            sanitize={(raw) => normaliseMobile(digitsOnly(raw)).slice(0, MOBILE_DIGITS)}
+            placeholder="98765 43210"
+            className="tabular-nums"
+          />
+        )}
+      </FormField>
 
-            <FormField form={form} name="fullName" label="Full name" className="min-w-56 flex-1">
-              {(control) => <Input {...control} />}
-            </FormField>
-          </div>
+      <FormField form={form} name="fullName" label="Full name">
+        {(control) => <Input {...control} />}
+      </FormField>
 
-          <div className="flex flex-wrap gap-4">
-            <FormField
-              form={form}
-              name="studentType"
-              label="Student type"
-              className="min-w-56 flex-1"
-            >
-              {(control) => (
-                <Select {...control}>
-                  {STUDENT_TYPES.map((value) => (
-                    <option key={value} value={value}>
-                      {STUDENT_TYPE_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </FormField>
+      <FormField form={form} name="studentType" label="Student type">
+        {(control) => (
+          <Select {...control}>
+            {STUDENT_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {STUDENT_TYPE_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </FormField>
 
-            <FormField
-              form={form}
-              name="enrolledExams"
-              label="Enrolled exams"
-              className="min-w-56 flex-1"
-            >
-              {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
-                <MultiCombobox
-                  id={id}
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid}
-                  value={enrolledExams}
-                  onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-                  items={exams.map((exam) => ({
-                    value: exam.code,
-                    label: exam.code,
-                    hint: exam.name,
-                  }))}
-                  placeholder="None yet"
-                  emptyLabel="No exam matches that"
-                />
-              )}
-            </FormField>
+      <FormField form={form} name="enrolledExams" label="Enrolled exams">
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <MultiCombobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            value={enrolledExams}
+            onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
+            items={exams.map((exam) => ({
+              value: exam.code,
+              label: exam.code,
+              hint: exam.name,
+            }))}
+            placeholder="None yet"
+            emptyLabel="No exam matches that"
+          />
+        )}
+      </FormField>
 
-            <FormField
-              form={form}
-              name="currentBranchId"
-              label="Current branch"
-              hint={branch.hint}
-              className="min-w-56 flex-1"
-            >
-              {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
-                <Combobox
-                  id={id}
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid}
-                  disabled={branch.locked}
-                  value={chosenBranchId}
-                  onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
-                  items={branch.branches.map((option) => ({
-                    value: option.id,
-                    label: option.name,
-                  }))}
-                  placeholder="Not recorded"
-                  emptyLabel="No branch matches that"
-                />
-              )}
-            </FormField>
-          </div>
-
-          <div className="flex gap-2">
-            <Button type="submit" loading={create.isPending}>
-              Add student
-            </Button>
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      <FormField form={form} name="currentBranchId" label="Current branch" hint={branch.hint}>
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <Combobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            disabled={branch.locked}
+            value={chosenBranchId}
+            onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
+            items={branch.branches.map((option) => ({ value: option.id, label: option.name }))}
+            placeholder="Not recorded"
+            emptyLabel="No branch matches that"
+          />
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 

@@ -14,16 +14,10 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   ConfirmDialog,
   DataTable,
-  FormActions,
+  FormDialog,
   FormField,
-  FormRow,
   Input,
   linkVariants,
   PageHeader,
@@ -115,7 +109,7 @@ export function BranchesPage() {
         description="The centres the institute teaches at. Every student attends one, and scheduling reads it."
         action={
           isSuperAdmin ? (
-            <Button size="sm" onClick={() => setCreating((open) => !open)}>
+            <Button size="sm" onClick={() => setCreating(true)}>
               <Plus aria-hidden />
               New branch
             </Button>
@@ -130,22 +124,22 @@ export function BranchesPage() {
           </span>
         </Alert>
       ) : null}
-
-      {creating ? (
-        <NewBranchCard
-          onDone={() => {
-            setCreating(false);
-            refresh();
-          }}
-          hasOnlineBranch={branches.some((branch) => branch.type === BRANCH_TYPE.VIRTUAL)}
-          onCancel={() => setCreating(false)}
-        />
-      ) : null}
     </>
   );
 
   return (
-    <TableFrame framed={!creating} header={header}>
+    <TableFrame header={header}>
+      {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
+          sits in the tree costs the pinned header nothing. */}
+      <NewBranchDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onDone={() => {
+          setCreating(false);
+          refresh();
+        }}
+        hasOnlineBranch={branches.some((branch) => branch.type === BRANCH_TYPE.VIRTUAL)}
+      />
       {/* No pagination: the branch list is a short, slow-moving one that
           `useBranches` already loads in full, a page at a time. */}
       <DataTable
@@ -161,11 +155,17 @@ export function BranchesPage() {
 
 // ---------------------------------------------------------------------------
 
-function NewBranchCard({
+function NewBranchDialog({
+  open,
+  onOpenChange,
   onDone,
-  onCancel,
   hasOnlineBranch,
-}: Readonly<{ onDone: () => void; onCancel: () => void; hasOnlineBranch: boolean }>) {
+}: Readonly<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+  hasOnlineBranch: boolean;
+}>) {
   const form = useForm<CreateBranchInput>({
     resolver: zodResolver(createBranchSchema),
     defaultValues: { name: '', type: BRANCH_TYPE.PHYSICAL },
@@ -179,56 +179,40 @@ function NewBranchCard({
   });
 
   return (
-    <Card className="mb-5">
-      <CardHeader>
-        <CardTitle>New branch</CardTitle>
-        <CardDescription>
-          A centre, not a batch. Stored in capitals, so it can only ever be spelled one way. The
-          online branch is created once and cannot be renamed, retired or deleted afterwards.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <FormRow onSubmit={form.handleSubmit((values) => create.mutate(values))}>
-          <FormField form={form} name="name" label="Branch name" className="min-w-56 flex-1">
-            {(control) => (
-              <Input
-                {...control}
-                className="uppercase placeholder:normal-case"
-                placeholder="AMEERPET"
-                autoFocus
-              />
-            )}
-          </FormField>
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="New branch"
+      description="A centre, not a batch. Stored in capitals, so it can only ever be spelled one way. The online branch is created once and cannot be renamed, retired or deleted afterwards."
+      submitLabel="Create"
+      loading={create.isPending}
+      form={form}
+      onSubmit={(values) => create.mutate(values)}
+    >
+      <FormField form={form} name="name" label="Branch name">
+        {(control) => (
+          <Input
+            {...control}
+            className="uppercase placeholder:normal-case"
+            placeholder="AMEERPET"
+            autoFocus
+          />
+        )}
+      </FormField>
 
-          <FormField form={form} name="type" label="Type" className="min-w-56 flex-1">
-            {(control) => (
-              <Select {...control}>
-                <option value={BRANCH_TYPE.PHYSICAL}>
-                  {BRANCH_TYPE_LABELS[BRANCH_TYPE.PHYSICAL]}
-                </option>
-                {/* Dropped once one exists: a second is refused server-side, and an option
-                    that can only fail is not a choice. */}
-                {hasOnlineBranch ? null : (
-                  <option value={BRANCH_TYPE.VIRTUAL}>
-                    {BRANCH_TYPE_LABELS[BRANCH_TYPE.VIRTUAL]}
-                  </option>
-                )}
-              </Select>
+      <FormField form={form} name="type" label="Type">
+        {(control) => (
+          <Select {...control}>
+            <option value={BRANCH_TYPE.PHYSICAL}>{BRANCH_TYPE_LABELS[BRANCH_TYPE.PHYSICAL]}</option>
+            {/* Dropped once one exists: a second is refused server-side, and an option
+                that can only fail is not a choice. */}
+            {hasOnlineBranch ? null : (
+              <option value={BRANCH_TYPE.VIRTUAL}>{BRANCH_TYPE_LABELS[BRANCH_TYPE.VIRTUAL]}</option>
             )}
-          </FormField>
-
-          <FormActions>
-            <Button type="submit" loading={create.isPending}>
-              Create
-            </Button>
-            {/* Cancel is neutral grey, never red — it destroys nothing. */}
-            <Button type="button" variant="secondary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </FormActions>
-        </FormRow>
-      </CardContent>
-    </Card>
+          </Select>
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 
