@@ -276,3 +276,6 @@ export const PAGE_SIZE_FOR_PICKERS = 100;
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
 } as const;
+
+/** Served from public/, so the path is the contract with index.html. */
+export const BRAND_MARK_SRC = '/iace-mark.png';

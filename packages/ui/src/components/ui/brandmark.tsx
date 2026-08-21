@@ -26,22 +26,30 @@ const GAP_CLASS = {
   lg: 'gap-3',
 } as const;
 
+const ART_CLASS = {
+  default: 'h-9',
+  lg: 'h-14',
+} as const;
+
 export interface BrandmarkProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof plateVariants> {
   portal?: string;
+  /** The real artwork, passed by the app that owns the file. Without it the plate is drawn in CSS. */
+  src?: string;
 }
 
-/**
- * The IACE lockup: the full name on a brand-red plate, with the portal beside it.
- * `lg` is for a screen the lockup owns — a login card, where it leads the page.
- */
+/** The IACE lockup: the artwork when given `src`, else a CSS plate that themes and scales. */
 const Brandmark = React.forwardRef<HTMLDivElement, BrandmarkProps>(
-  ({ className, portal, size, ...props }, ref) => {
+  ({ className, portal, size, src, ...props }, ref) => {
     const scale = size ?? 'default';
 
     return (
       <div ref={ref} className={cn('flex items-center', GAP_CLASS[scale], className)} {...props}>
-        <span className={plateVariants({ size })}>IACE</span>
+        {src ? (
+          <img src={src} alt="IACE" className={cn('w-auto', ART_CLASS[scale])} />
+        ) : (
+          <span className={plateVariants({ size })}>IACE</span>
+        )}
         {portal ? (
           <span
             className={cn(
