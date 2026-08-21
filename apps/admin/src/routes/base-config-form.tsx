@@ -430,7 +430,7 @@ function ConfigView({
         <PageHeader
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title={config.name}
-          description={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
+          meta={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
           action={
             config.locked ? (
               <Button size="sm" onClick={() => setAsking(true)}>
@@ -498,7 +498,7 @@ function ConfigView({
 
       <FormSection
         title="Sections"
-        description={`${plural(config.sections.length, 'section')}, adding up to ${plural(config.totalQuestions, 'question')} and ${config.totalMarks} marks.`}
+        meta={`${plural(config.sections.length, 'section')}, ${plural(config.totalQuestions, 'question')}, ${config.totalMarks} marks`}
       >
         <DataTable
           columns={lockedSectionColumns()}

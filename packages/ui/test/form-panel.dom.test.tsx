@@ -94,7 +94,7 @@ describe('FormPanel', () => {
   it('gives a section a heading and no border', () => {
     render(
       <FormPanel>
-        <FormSection title="Where it is filed" description="Subject and topic.">
+        <FormSection title="Where it is filed" meta="2 subjects">
           fields
         </FormSection>
       </FormPanel>,
@@ -102,6 +102,6 @@ describe('FormPanel', () => {
 
     const heading = screen.getByRole('heading', { name: 'Where it is filed' });
     assert.equal(heading.closest('section')?.className.includes('border'), false);
-    assert.ok(screen.getByText('Subject and topic.'));
+    assert.ok(screen.getByText('2 subjects'));
   });
 });

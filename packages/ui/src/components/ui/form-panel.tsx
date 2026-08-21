@@ -54,25 +54,19 @@ export function FormPanel({
 
 export interface FormSectionProps {
   title: string;
-  description?: React.ReactNode;
+  /** A value the section is summing up. Never a sentence about what the section is. */
+  meta?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
 
 /** One group inside the panel. A heading and spacing, never a border — see the card rule. */
-export function FormSection({
-  title,
-  description,
-  children,
-  className,
-}: Readonly<FormSectionProps>) {
+export function FormSection({ title, meta, children, className }: Readonly<FormSectionProps>) {
   return (
     <section className={cn('flex flex-col gap-4', className)}>
       <div>
         <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-        {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
-        ) : null}
+        {meta ? <p className="mt-1 text-sm text-muted-foreground">{meta}</p> : null}
       </div>
       {children}
     </section>

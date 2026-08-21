@@ -255,12 +255,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField
-            form={form}
-            name="prerequisiteSeriesId"
-            label="Waits on"
-            hint="The series a student finishes first. Optional."
-          >
+          <FormField form={form} name="prerequisiteSeriesId" label="Waits on" hint="Optional">
             {(control) => (
               <TestSeriesPicker
                 id={control.id}

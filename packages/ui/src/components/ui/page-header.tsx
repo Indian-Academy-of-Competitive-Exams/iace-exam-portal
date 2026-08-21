@@ -1,15 +1,16 @@
 import * as React from 'react';
 
-/** One page heading treatment. The description keeps a measure limit. */
+/** One page heading treatment. `meta` is a VALUE under the title; a screen never explains itself. */
 export function PageHeader({
   title,
-  description,
+  meta,
   action,
   leading,
   breadcrumbs,
 }: Readonly<{
   title: React.ReactNode;
-  description?: React.ReactNode;
+  /** A value this record carries — a mobile, a version, a count. Never a sentence about the screen. */
+  meta?: React.ReactNode;
   action?: React.ReactNode;
   /** Sits before the title — an avatar or an icon. Not a back button: that is the trail's job. */
   leading?: React.ReactNode;
@@ -24,9 +25,7 @@ export function PageHeader({
           {leading}
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-            {description ? (
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
-            ) : null}
+            {meta ? <p className="mt-1 text-sm text-muted-foreground">{meta}</p> : null}
           </div>
         </div>
         {action}

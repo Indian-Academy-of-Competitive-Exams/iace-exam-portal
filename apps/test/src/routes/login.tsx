@@ -227,11 +227,9 @@ function MobileStep({
         <CardTitle>
           {intent === OTP_INTENTS.SIGNUP ? 'Create your account' : 'Reset your PIN'}
         </CardTitle>
-        <CardDescription>
-          {intent === OTP_INTENTS.SIGNUP
-            ? "We'll send a code to verify it, then you pick a PIN."
-            : "Enter your registered mobile number and we'll send a one-time code."}
-        </CardDescription>
+        {intent === OTP_INTENTS.SIGNUP ? (
+          <CardDescription>We&apos;ll verify it, then you pick a PIN.</CardDescription>
+        ) : null}
       </CardHeader>
 
       <CardContent>

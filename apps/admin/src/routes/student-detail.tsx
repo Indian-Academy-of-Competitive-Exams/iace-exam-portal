@@ -638,7 +638,7 @@ export function StudentDetailPage() {
             <PageCrumbs nav={NAV_ITEMS} tail={[{ label: detail.fullName ?? detail.mobile }]} />
           }
           title={detail.fullName ?? detail.mobile}
-          description={`+91 ${detail.mobile}`}
+          meta={`+91 ${detail.mobile}`}
           action={<StudentStateSwitches detail={detail} />}
         />
       }

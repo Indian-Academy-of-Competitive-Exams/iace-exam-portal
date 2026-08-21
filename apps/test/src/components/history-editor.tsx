@@ -1,16 +1,7 @@
 import { useFieldArray, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-} from '@iace/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@iace/ui';
 
 /**
  * Rows a student adds to: schooling, or exams sat elsewhere. Every field but the first
@@ -20,7 +11,6 @@ export function HistoryEditor<T extends FieldValues>({
   control,
   name,
   title,
-  description,
   addLabel,
   columns,
   emptyRow,
@@ -28,7 +18,6 @@ export function HistoryEditor<T extends FieldValues>({
   control: Control<T>;
   name: Path<T>;
   title: string;
-  description?: string;
   addLabel: string;
   /** `span` is a fraction of the row; they need not add up to anything. */
   columns: readonly { key: string; label: string; type?: 'text' | 'number'; span?: number }[];
@@ -45,7 +34,6 @@ export function HistoryEditor<T extends FieldValues>({
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">

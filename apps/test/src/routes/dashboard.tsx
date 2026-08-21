@@ -25,7 +25,7 @@ export function DashboardPage() {
           />
         }
         title={student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
-        description={<span className="tabular-nums">+91 {student?.mobile}</span>}
+        meta={<span className="tabular-nums">+91 {student?.mobile}</span>}
       />
 
       <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
