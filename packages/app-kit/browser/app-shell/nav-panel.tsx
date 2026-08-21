@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@iace/ui';
 import {
   NAV_LAYOUT,
@@ -156,14 +156,78 @@ function SectionAccordion({
   );
 }
 
+/** One level at a time, in the panel itself: over a sheet, a popover is a modal over a modal. */
+function DrilldownNav({
+  items,
+  activePath,
+  onNavigate,
+}: Readonly<{ items: readonly NavItem[]; activePath?: string; onNavigate: () => void }>) {
+  const [section, setSection] = useState<NavItem | null>(null);
+
+  if (section) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setSection(null)}
+          className={cn(
+            'mb-2 flex h-[--nav-item-h-touch] w-full items-center gap-2 rounded-md px-3',
+            'text-sm font-semibold text-foreground',
+            'hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
+          )}
+        >
+          <ChevronLeft className="size-4 shrink-0" aria-hidden />
+          {section.label}
+        </button>
+
+        <SectionChildren item={section} activePath={activePath} onNavigate={onNavigate} />
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-0.5">
+      {items.map((item) => (
+        <li key={item.label}>
+          {isNavSection(item) ? (
+            <button
+              type="button"
+              onClick={() => setSection(item)}
+              className={cn(
+                'flex h-[--nav-item-h-touch] w-full items-center gap-3 rounded-md px-3 text-sm font-medium',
+                isNavItemActive(item, activePath) ? NAV_ROW_ACTIVE : NAV_ROW_IDLE,
+                'focus-visible:shadow-focus focus-visible:outline-none',
+              )}
+            >
+              <SectionGlyph item={item} />
+              <span className="flex-1 text-left">{item.label}</span>
+              <ChevronRight className="size-4 shrink-0" aria-hidden />
+            </button>
+          ) : (
+            <NavLeaf
+              item={item}
+              collapsed={false}
+              activePath={activePath}
+              onNavigate={onNavigate}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The overlay nav: sections drop open in place, one at a time; an oversized one opens beside. */
 export function NavPanel({
   items,
   pathname,
+  drilldown = false,
   onNavigate,
 }: Readonly<{
   items: readonly NavItem[];
   pathname: string;
+  /** Touch: one level at a time in the panel, never a popover. */
+  drilldown?: boolean;
   onNavigate: () => void;
 }>): ReactNode {
   const activePath = activeNavPath(items, pathname);
@@ -171,6 +235,10 @@ export function NavPanel({
   const [openLabel, setOpenLabel] = useState<string | undefined>(
     () => items.find((item) => isNavSection(item) && isNavItemActive(item, activePath))?.label,
   );
+
+  if (drilldown) {
+    return <DrilldownNav items={items} activePath={activePath} onNavigate={onNavigate} />;
+  }
 
   return (
     <ul className="space-y-0.5">

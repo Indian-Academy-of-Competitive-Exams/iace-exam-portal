@@ -184,7 +184,12 @@ export function AppShell({
             </div>
 
             <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
-              <NavPanel items={items} pathname={pathname} onNavigate={closePanel} />
+              <NavPanel
+                items={items}
+                pathname={pathname}
+                drilldown={!isDesktop}
+                onNavigate={closePanel}
+              />
             </nav>
           </SheetContent>
         </Sheet>

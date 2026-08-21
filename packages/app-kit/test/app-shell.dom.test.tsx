@@ -211,6 +211,47 @@ describe('AppShell — the nav panel overlays, it never reflows the page', () =>
     openPanel();
     assert.ok(await screen.findByRole('dialog'));
   });
+
+  /** Touch drills down in the panel: a popover on a phone is a modal over a modal. */
+  it('drills into a section on a small screen rather than expanding it', async () => {
+    setDesktop(false);
+    renderShell({ nav: SECTIONED });
+    openPanel();
+
+    const students = await screen.findByRole('button', { name: /Students/ });
+    assert.equal(students.getAttribute('aria-expanded'), null);
+    assert.equal(students.getAttribute('aria-haspopup'), null);
+
+    fireEvent.click(students);
+
+    // The level replaced the list: its children are here and the siblings are gone.
+    assert.ok(await screen.findByRole('link', { name: 'All students' }));
+    assert.equal(screen.queryByRole('button', { name: /Tests/ }), null);
+  });
+
+  it('offers a way back out of a drilled section', async () => {
+    setDesktop(false);
+    renderShell({ nav: SECTIONED });
+    openPanel();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Students/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Students' }));
+
+    assert.ok(await screen.findByRole('button', { name: /Tests/ }));
+  });
+
+  /** No popover on touch, whatever the child count says. */
+  it('drills into an oversized section on a small screen too', async () => {
+    setDesktop(false);
+    renderShell({ nav: BIG });
+    openPanel();
+
+    const section = await screen.findByRole('button', { name: /Everything/ });
+    assert.equal(section.getAttribute('aria-haspopup'), null);
+
+    fireEvent.click(section);
+    assert.equal((await screen.findAllByRole('link', { name: /^Item / })).length, 7);
+  });
 });
 
 /**
