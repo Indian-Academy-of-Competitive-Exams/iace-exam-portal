@@ -19,6 +19,7 @@ import {
   PageHeader,
   Pagination,
   TableFrame,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { useInfinitePages, useListQuery } from '@iace/app-kit';
@@ -62,7 +63,9 @@ function auditColumns(): DataTableColumn<RowAction>[] {
       key: 'who',
       header: 'Who',
       // A script or the archive job has no name — its actor type is the closest thing to one.
-      cell: (row) => row.actorName ?? AUDIT_ACTOR_TYPE_LABELS[row.actorType],
+      cell: (row) => (
+        <TruncatedText>{row.actorName ?? AUDIT_ACTOR_TYPE_LABELS[row.actorType]}</TruncatedText>
+      ),
     },
     {
       key: 'feature',
@@ -103,7 +106,9 @@ function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[]
     {
       key: 'who',
       header: 'Who',
-      cell: (row) => row.actorName ?? IMPORT_SOURCE_LABELS[row.source],
+      cell: (row) => (
+        <TruncatedText>{row.actorName ?? IMPORT_SOURCE_LABELS[row.source]}</TruncatedText>
+      ),
     },
     {
       key: 'feature',

@@ -20,13 +20,16 @@ import {
   Combobox,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
   PageHeader,
   Pagination,
+  RowActions,
   SearchInput,
   TableFrame,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
@@ -53,7 +56,12 @@ function programColumns(
       header: 'Code',
       cell: (program) => <span className="font-mono text-sm">{program.code}</span>,
     },
-    { key: 'name', header: 'Program', className: 'font-medium', cell: (program) => program.name },
+    {
+      key: 'name',
+      header: 'Program',
+      className: 'max-w-[18rem] font-medium',
+      cell: (program) => <TruncatedText>{program.name}</TruncatedText>,
+    },
     { key: 'status', header: 'Status', cell: (program) => <ProgramStatus program={program} /> },
     {
       key: 'actions',
@@ -335,30 +343,20 @@ function ProgramActions({
   if (!canEdit) return null;
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
+    <RowActions label={`Actions for ${program.name}`}>
+      <DropdownMenuItem disabled={busy} onSelect={onEdit}>
         <Pencil aria-hidden />
         Edit
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onAsk(PROGRAM_CONFIRMS.RETIRE)}
-      >
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(PROGRAM_CONFIRMS.RETIRE)}>
         <Power aria-hidden />
         {program.isActive ? 'Retire' : 'Reactivate'}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        onClick={() => onAsk(PROGRAM_CONFIRMS.DELETE)}
-      >
+      </DropdownMenuItem>
+      <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(PROGRAM_CONFIRMS.DELETE)}>
         <Trash2 aria-hidden />
         Delete
-      </Button>
-    </span>
+      </DropdownMenuItem>
+    </RowActions>
   );
 }
 

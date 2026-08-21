@@ -19,12 +19,15 @@ import {
   Combobox,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   FormDialog,
   FormField,
   Input,
   linkVariants,
   PageHeader,
   plural,
+  RowActions,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
@@ -65,18 +68,6 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
         ) : (
           <span className="text-muted-foreground">0</span>
         ),
-    },
-    {
-      key: 'students',
-      // The students screen, filtered — a branch has no roster of its own.
-      cell: (branch) => (
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
-            <Users aria-hidden />
-            Students
-          </Link>
-        </Button>
-      ),
     },
     { key: 'status', header: 'Status', cell: (branch) => <BranchStatus branch={branch} /> },
     {
@@ -250,30 +241,36 @@ function BranchActions({
   busy: boolean;
   onAsk: (confirm: BranchConfirm) => void;
 }>) {
-  // The online branch is never editable, whoever is looking.
-  if (!canEdit || branch.type === BRANCH_TYPE.VIRTUAL) return null;
+  // The online branch is never editable, so its menu would hold only the students link.
+  const editable = canEdit && branch.type !== BRANCH_TYPE.VIRTUAL;
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onAsk(BRANCH_CONFIRMS.RETIRE)}
-      >
-        <Power aria-hidden />
-        {branch.isActive ? 'Retire' : 'Reactivate'}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        onClick={() => onAsk(BRANCH_CONFIRMS.DELETE)}
-      >
-        <Trash2 aria-hidden />
-        Delete
-      </Button>
-    </span>
+    <RowActions label={`Actions for ${branch.name}`}>
+      <DropdownMenuItem asChild>
+        <Link to={`${ROUTES.STUDENTS}?branchId=${branch.id}`}>
+          <Users aria-hidden />
+          Students
+        </Link>
+      </DropdownMenuItem>
+
+      {editable ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={busy} onSelect={() => onAsk(BRANCH_CONFIRMS.RETIRE)}>
+            <Power aria-hidden />
+            {branch.isActive ? 'Retire' : 'Reactivate'}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            destructive
+            disabled={busy}
+            onSelect={() => onAsk(BRANCH_CONFIRMS.DELETE)}
+          >
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </RowActions>
   );
 }
 

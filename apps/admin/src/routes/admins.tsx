@@ -17,11 +17,13 @@ import {
   Checkbox,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
   PageHeader,
   Pagination,
+  RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
@@ -41,8 +43,18 @@ const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
   return [
-    { key: 'email', header: 'Email', className: 'font-medium', cell: (a) => a.email },
-    { key: 'name', header: 'Name', cell: (a) => a.fullName ?? '—' },
+    {
+      key: 'email',
+      header: 'Email',
+      className: 'max-w-[18rem] font-medium',
+      cell: (a) => <TruncatedText>{a.email}</TruncatedText>,
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      className: 'max-w-[14rem]',
+      cell: (a) => <TruncatedText>{a.fullName}</TruncatedText>,
+    },
     {
       key: 'role',
       header: 'Role',
@@ -195,27 +207,16 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
 
   return (
     <>
-      {admin.isActive ? (
-        <Button
-          variant="destructive"
-          size="sm"
-          icon={<UserMinus aria-hidden />}
-          loading={busy}
-          onClick={() => setConfirming(true)}
+      <RowActions label={`Actions for ${admin.email}`}>
+        <DropdownMenuItem
+          destructive={admin.isActive}
+          disabled={busy}
+          onSelect={() => setConfirming(true)}
         >
-          Deactivate
-        </Button>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<UserCheck aria-hidden />}
-          loading={busy}
-          onClick={() => setConfirming(true)}
-        >
-          Reactivate
-        </Button>
-      )}
+          {admin.isActive ? <UserMinus aria-hidden /> : <UserCheck aria-hidden />}
+          {admin.isActive ? 'Deactivate' : 'Reactivate'}
+        </DropdownMenuItem>
+      </RowActions>
 
       {/* Both directions ask, and the reverse one is not politeness: switching an
           admin back on restores their sign-in and NOT the permissions that were

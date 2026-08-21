@@ -10,12 +10,15 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
   linkVariants,
   PageHeader,
   Pagination,
   plural,
+  RowActions,
   SearchInput,
   TableFrame,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -39,10 +42,10 @@ function seriesColumns(
     {
       key: 'name',
       header: 'Series',
-      className: 'font-medium',
+      className: 'max-w-[20rem] font-medium',
       cell: (series) => (
         <Link to={ROUTES.TEST_SERIES_DETAIL(series.id)} className={linkVariants()}>
-          {series.name}
+          <TruncatedText>{series.name}</TruncatedText>
         </Link>
       ),
     },
@@ -240,23 +243,18 @@ function SeriesRowActions({
 
   return (
     <>
-      <span className="inline-flex items-center gap-2">
-        <Button size="sm" variant="outline" asChild>
+      <RowActions label={`Actions for ${series.name}`}>
+        <DropdownMenuItem asChild>
           <Link to={ROUTES.TEST_SERIES_DETAIL(series.id)}>
             <Pencil aria-hidden />
             Edit
           </Link>
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={remove.isPending}
-          onClick={() => setAsking(true)}
-        >
+        </DropdownMenuItem>
+        <DropdownMenuItem destructive disabled={remove.isPending} onSelect={() => setAsking(true)}>
           <Trash2 aria-hidden />
           Delete
-        </Button>
-      </span>
+        </DropdownMenuItem>
+      </RowActions>
 
       <ConfirmDialog
         open={asking}

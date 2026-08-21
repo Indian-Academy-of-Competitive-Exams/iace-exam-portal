@@ -19,6 +19,7 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Button,
   DataTable,
+  DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
@@ -26,11 +27,13 @@ import {
   PageFrame,
   PageHeader,
   Pagination,
+  RowActions,
   SearchInput,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -94,11 +97,16 @@ function topicsOf(subjectId: string): string {
 
 function subjectColumns(): DataTableColumn<Subject>[] {
   return [
-    { key: 'name', header: 'Subject', className: 'font-medium', cell: (row) => row.name },
+    {
+      key: 'name',
+      header: 'Subject',
+      className: 'max-w-[16rem] font-medium',
+      cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
+    },
     {
       key: 'code',
       header: 'Code',
-      cell: (row) => row.code ?? <span className="text-muted-foreground">—</span>,
+      cell: (row) => <TruncatedText>{row.code}</TruncatedText>,
     },
     {
       key: 'topics',
@@ -115,15 +123,18 @@ function subjectColumns(): DataTableColumn<Subject>[] {
     },
     { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
     {
-      key: 'openTopics',
+      key: 'actions',
+      className: 'text-right',
       // The topics list, filtered — a subject has no topic list of its own.
       cell: (row) => (
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={topicsOf(row.id)}>
-            <ListTree aria-hidden />
-            Topics
-          </Link>
-        </Button>
+        <RowActions label={`Actions for ${row.name}`}>
+          <DropdownMenuItem asChild>
+            <Link to={topicsOf(row.id)}>
+              <ListTree aria-hidden />
+              Topics
+            </Link>
+          </DropdownMenuItem>
+        </RowActions>
       ),
     },
   ];
@@ -226,8 +237,18 @@ function NewSubjectDialog({
 
 function topicColumns(): DataTableColumn<Topic>[] {
   return [
-    { key: 'name', header: 'Topic', className: 'font-medium', cell: (row) => row.name },
-    { key: 'subject', header: 'Subject', cell: (row) => row.subject.name },
+    {
+      key: 'name',
+      header: 'Topic',
+      className: 'max-w-[16rem] font-medium',
+      cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
+    },
+    {
+      key: 'subject',
+      header: 'Subject',
+      className: 'max-w-[14rem]',
+      cell: (row) => <TruncatedText>{row.subject.name}</TruncatedText>,
+    },
     { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
   ];
 }

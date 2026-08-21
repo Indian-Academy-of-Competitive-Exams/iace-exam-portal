@@ -29,6 +29,8 @@ import {
   Combobox,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   FormDialog,
   FormField,
   Input,
@@ -38,11 +40,13 @@ import {
   PageHeader,
   Pagination,
   plural,
+  RowActions,
   SearchInput,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
@@ -65,7 +69,12 @@ function examColumns(
 ): DataTableColumn<Exam>[] {
   return [
     { key: 'family', header: 'Family', cell: (exam) => familyLabel(exam.family) },
-    { key: 'name', header: 'Exam', className: 'font-medium', cell: (exam) => exam.name },
+    {
+      key: 'name',
+      header: 'Exam',
+      className: 'max-w-[18rem] font-medium',
+      cell: (exam) => <TruncatedText>{exam.name}</TruncatedText>,
+    },
     {
       key: 'code',
       header: 'Code',
@@ -83,18 +92,6 @@ function examColumns(
         ) : (
           <span className="text-muted-foreground">0</span>
         ),
-    },
-    {
-      key: 'openStages',
-      // The stages list, filtered — an exam has no stage list of its own.
-      cell: (exam) => (
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={stagesOf(exam.id)}>
-            <Layers aria-hidden />
-            Stages
-          </Link>
-        </Button>
-      ),
     },
     { key: 'status', header: 'Status', cell: (exam) => <ExamStatus exam={exam} /> },
     {
@@ -431,28 +428,37 @@ function ExamActions({
   onAsk: (confirm: ExamConfirm) => void;
   onEdit: () => void;
 }>) {
-  if (!canEdit) return null;
-
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
-        <Pencil aria-hidden />
-        Edit
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onAsk(EXAM_CONFIRMS.RETIRE)}
-      >
-        <Power aria-hidden />
-        {exam.isActive ? 'Retire' : 'Reactivate'}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={busy} onClick={() => onAsk(EXAM_CONFIRMS.DELETE)}>
-        <Trash2 aria-hidden />
-        Delete
-      </Button>
-    </span>
+    <RowActions label={`Actions for ${exam.name}`}>
+      <DropdownMenuItem asChild>
+        <Link to={stagesOf(exam.id)}>
+          <Layers aria-hidden />
+          Stages
+        </Link>
+      </DropdownMenuItem>
+
+      {canEdit ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={busy} onSelect={onEdit}>
+            <Pencil aria-hidden />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={busy} onSelect={() => onAsk(EXAM_CONFIRMS.RETIRE)}>
+            <Power aria-hidden />
+            {exam.isActive ? 'Retire' : 'Reactivate'}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            destructive
+            disabled={busy}
+            onSelect={() => onAsk(EXAM_CONFIRMS.DELETE)}
+          >
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </RowActions>
   );
 }
 
@@ -571,7 +577,12 @@ function stageColumns(
       cell: (stage) => <span className="font-mono text-sm">{stage.exam.code}</span>,
     },
     { key: 'order', header: '#', numeric: true, cell: (stage) => stage.order },
-    { key: 'name', header: 'Stage', className: 'font-medium', cell: (stage) => stage.name },
+    {
+      key: 'name',
+      header: 'Stage',
+      className: 'max-w-[16rem] font-medium',
+      cell: (stage) => <TruncatedText>{stage.name}</TruncatedText>,
+    },
     {
       key: 'stageKey',
       header: 'Key',
@@ -950,30 +961,24 @@ function StageRowActions({
 
   return (
     <>
-      <span className="inline-flex items-center gap-2">
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => onEdit(stage)}>
+      <RowActions label={`Actions for ${stage.name}`}>
+        <DropdownMenuItem disabled={busy} onSelect={() => onEdit(stage)}>
           <Pencil aria-hidden />
           Edit
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => setAsking(EXAM_CONFIRMS.RETIRE)}
-        >
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={busy} onSelect={() => setAsking(EXAM_CONFIRMS.RETIRE)}>
           <Power aria-hidden />
           {stage.isActive ? 'Retire' : 'Reactivate'}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          destructive
           disabled={busy}
-          onClick={() => setAsking(EXAM_CONFIRMS.DELETE)}
+          onSelect={() => setAsking(EXAM_CONFIRMS.DELETE)}
         >
           <Trash2 aria-hidden />
           Delete
-        </Button>
-      </span>
+        </DropdownMenuItem>
+      </RowActions>
 
       <ConfirmDialog
         open={asking === EXAM_CONFIRMS.RETIRE}

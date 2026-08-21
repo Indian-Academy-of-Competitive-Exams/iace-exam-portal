@@ -15,12 +15,15 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  DropdownMenuItem,
   linkVariants,
   PageHeader,
   Pagination,
   plural,
+  RowActions,
   SearchInput,
   TableFrame,
+  TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -52,10 +55,10 @@ function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<
     {
       key: 'name',
       header: 'Config',
-      className: 'font-medium',
+      className: 'max-w-[20rem] font-medium',
       cell: (config) => (
         <Link to={ROUTES.BASE_CONFIG(config.id)} className={linkVariants()}>
-          {config.name}
+          <TruncatedText>{config.name}</TruncatedText>
         </Link>
       ),
     },
@@ -222,41 +225,26 @@ function ConfigActions({
   if (!canWrite) return null;
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button size="sm" variant="outline" asChild>
+    <RowActions label={`Actions for ${config.name}`}>
+      <DropdownMenuItem asChild>
         <Link to={ROUTES.BASE_CONFIG(config.id)}>
           <Pencil aria-hidden />
           Edit
         </Link>
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onAsk(CONFIG_CONFIRMS.CLONE)}
-      >
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.CLONE)}>
         <Copy aria-hidden />
         Clone
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onAsk(CONFIG_CONFIRMS.RETIRE)}
-      >
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.RETIRE)}>
         <Power aria-hidden />
         {config.isActive ? 'Retire' : 'Reactivate'}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        onClick={() => onAsk(CONFIG_CONFIRMS.DELETE)}
-      >
+      </DropdownMenuItem>
+      <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(CONFIG_CONFIRMS.DELETE)}>
         <Trash2 aria-hidden />
         Delete
-      </Button>
-    </span>
+      </DropdownMenuItem>
+    </RowActions>
   );
 }
 
