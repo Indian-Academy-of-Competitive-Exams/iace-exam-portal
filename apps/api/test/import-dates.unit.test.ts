@@ -10,7 +10,7 @@ import {
   dobSchema,
 } from '@iace/contracts';
 import { buildStudentTemplate } from '../src/imports/workbook';
-import { normaliseHeader, readUploadedTable } from '../src/common/importing';
+import { normaliseHeader, readUploadedTable, toIsoDate } from '../src/common/importing';
 
 const DOB_INDEX = STUDENT_IMPORT_COLUMNS.findIndex((column) => column.key === 'dob') + 1;
 
@@ -80,5 +80,51 @@ describe('the student template', () => {
     const first = table.rows[0];
     assert.ok(first);
     assert.equal(first.values[normaliseHeader('Date of Birth')], '2003-04-11');
+  });
+});
+
+describe('toIsoDate', () => {
+  it('takes what Excel writes back after it reformats a typed date', () => {
+    for (const raw of ['2003-04-11', '2003/04/11', '2003.04.11']) {
+      assert.equal(toIsoDate(raw), '2003-04-11');
+    }
+  });
+
+  it('takes a day-first date whatever separates it', () => {
+    for (const raw of ['11/04/2003', '11-04-2003', '11.04.2003']) {
+      assert.equal(toIsoDate(raw), '2003-04-11');
+    }
+  });
+
+  it('reads a named month either way round, so no order has to be guessed', () => {
+    for (const raw of ['11-Apr-2003', '11 April 2003', 'April 11, 2003', 'Apr 11 2003']) {
+      assert.equal(toIsoDate(raw), '2003-04-11');
+    }
+  });
+
+  it('uses the part that cannot be a month as the day', () => {
+    assert.equal(toIsoDate('04/25/2003'), '2003-04-25');
+    assert.equal(toIsoDate('25/04/2003'), '2003-04-25');
+  });
+
+  it('reads day-first when both parts could be a month, as this institute writes them', () => {
+    assert.equal(toIsoDate('04/11/2003'), '2003-11-04');
+  });
+
+  it('decodes a bare Excel serial', () => {
+    assert.equal(toIsoDate('37722'), '2003-04-11');
+  });
+
+  it('leaves a stray small number alone rather than calling it 1900', () => {
+    assert.equal(toIsoDate('5'), '5');
+    assert.equal(dobSchema.safeParse(toIsoDate('5')).success, false);
+  });
+
+  it('hands anything it cannot read straight back, for the schema to refuse', () => {
+    for (const raw of ['yesterday', '', 'Q3 2003']) assert.equal(toIsoDate(raw), raw);
+  });
+
+  it('never turns an impossible date into a real one', () => {
+    assert.equal(dobSchema.safeParse(toIsoDate('31/02/2003')).success, false);
   });
 });

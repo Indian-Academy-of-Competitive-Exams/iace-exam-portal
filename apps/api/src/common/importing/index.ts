@@ -10,3 +10,4 @@ export {
 } from './csv';
 export { looksLikeWorkbook, readUploadedTable, type ReadSheetOptions } from './sheet-reader';
 export { importFileKey } from './import-log';
+export { toIsoDate } from './date-cell';

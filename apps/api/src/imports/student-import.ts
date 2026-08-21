@@ -21,7 +21,7 @@ import {
   type StudentImportPlan,
   type StudentType,
 } from '@iace/contracts';
-import { type CsvRow, type CsvTable } from '../common/importing';
+import { toIsoDate, type CsvRow, type CsvTable } from '../common/importing';
 import { studentBranchBlocker } from '../branches';
 
 /** Decides what a roster file WOULD do, without doing any of it. */
@@ -255,8 +255,11 @@ function readProfile(row: CsvRow): { profile: StudentImportProfile; errors: stri
   const rawDob = columnValue(row, 'dob').trim();
   let dob: string | null = null;
   if (rawDob !== '') {
-    const parsed = dobSchema.safeParse(toIsoDate(rawDob));
+    const iso = toIsoDate(rawDob);
+    const parsed = dobSchema.safeParse(iso);
     if (parsed.success) dob = parsed.data;
+    // Unchanged means nothing recognised it, and the schema's "use YYYY-MM-DD" would be a lie.
+    else if (iso === rawDob) errors.push(`Date of birth: "${rawDob}" is not a date we can read`);
     else errors.push(`Date of birth: ${parsed.error.issues[0]?.message ?? 'not a valid date'}`);
   }
 
@@ -290,14 +293,6 @@ function readProfile(row: CsvRow): { profile: StudentImportProfile; errors: stri
     },
     errors,
   };
-}
-
-/** Both orders a spreadsheet actually produces, normalised to the one the schema wants. */
-function toIsoDate(raw: string): string {
-  const dmy = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
-  if (!dmy) return raw;
-  const [, day, month, year] = dmy;
-  return `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}`;
 }
 
 /** One row's plan. */
