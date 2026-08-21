@@ -30,6 +30,9 @@ function isRealCalendarDay(value: string): boolean {
 /** The earliest birth year worth accepting — anything older is a typo. */
 export const EARLIEST_BIRTH_YEAR = 1900;
 
+/** The same floor as a picker bound, so a calendar cannot offer what dobSchema refuses. */
+export const EARLIEST_BIRTH_DATE = `${EARLIEST_BIRTH_YEAR}-01-01`;
+
 /** A real date, in the past, and this side of plausible — it feeds the pre-test gate. */
 export const dobSchema = dateOnlySchema
   .refine((value) => value <= todayISO(), 'A date of birth cannot be in the future')

@@ -7,7 +7,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import ExcelJS from 'exceljs';
-import { EARLIEST_BIRTH_YEAR, STUDENT_IMPORT_COLUMNS, dobSchema } from '@iace/contracts';
+import {
+  EARLIEST_BIRTH_DATE,
+  EARLIEST_BIRTH_YEAR,
+  STUDENT_IMPORT_COLUMNS,
+  dobSchema,
+} from '@iace/contracts';
 import { buildStudentTemplate } from '../src/imports/workbook';
 import { normaliseHeader, readUploadedTable } from '../src/common/importing';
 
@@ -35,6 +40,13 @@ describe('dobSchema', () => {
       const result = dobSchema.safeParse(value);
       assert.equal(result.success && result.data, value);
     }
+  });
+
+  it('agrees with the floor the pickers are bounded by', () => {
+    assert.equal(dobSchema.safeParse(EARLIEST_BIRTH_DATE).success, true);
+    const dayBefore = new Date(`${EARLIEST_BIRTH_DATE}T00:00:00Z`);
+    dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+    assert.equal(dobSchema.safeParse(dayBefore.toISOString().slice(0, 10)).success, false);
   });
 
   it('still refuses the future and the implausible past', () => {

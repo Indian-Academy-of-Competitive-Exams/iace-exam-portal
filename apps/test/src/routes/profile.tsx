@@ -3,6 +3,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  EARLIEST_BIRTH_DATE,
   GENDERS,
   todayISO,
   updateMeSchema,
@@ -154,9 +155,10 @@ export function ProfilePage() {
                 error={form.formState.errors.profile?.dob?.message}
               >
                 {(control) => (
-                  // Capped at today: a picker offering next year offers what the server refuses.
+                  // Bounded both ends: a picker offering what the server refuses is a dead end.
                   <DatePicker
                     {...control}
+                    min={EARLIEST_BIRTH_DATE}
                     max={todayISO()}
                     value={dob ?? ''}
                     onChange={(next) =>

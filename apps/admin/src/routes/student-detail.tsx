@@ -5,6 +5,7 @@ import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import {
   AUDIT_FEATURE,
+  EARLIEST_BIRTH_DATE,
   EXAM_FAMILIES,
   STUDENT_TYPE,
   STUDENT_TYPES,
@@ -712,10 +713,11 @@ export function StudentDetailPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field htmlFor="dob" label="Date of birth" error={form.formState.errors.dob?.message}>
-                {/* Capped at today: a picker offering next year offers what the server refuses. */}
+                {/* Bounded both ends: a picker offering what the server refuses is a dead end. */}
                 {(control) => (
                   <DatePicker
                     {...control}
+                    min={EARLIEST_BIRTH_DATE}
                     max={todayISO()}
                     value={dob}
                     onChange={(next) => form.setValue('dob', next, { shouldDirty: true })}
