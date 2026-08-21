@@ -22,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  Combobox,
   ConfirmDialog,
   Field,
   FormActions,
@@ -30,7 +31,6 @@ import {
   PageFrame,
   PageHeader,
   plural,
-  Select,
   Skeleton,
   SkeletonParagraph,
   StatRow,
@@ -157,6 +157,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   });
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
+  const unlockMode = useWatch({ control: form.control, name: 'unlockMode' }) ?? UNLOCK_MODE.AUTO;
   const programCode = useWatch({ control: form.control, name: 'programCode' });
   const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
   const banner = bannerMessage(save.error, SERVER_FIELDS);
@@ -255,13 +256,20 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <FormField form={form} name="unlockMode" label="Unlocks">
               {(control) => (
-                <Select {...control}>
-                  {UNLOCK_MODES.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {UNLOCK_MODE_LABELS[mode]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={unlockMode}
+                  onChange={(next) =>
+                    form.setValue('unlockMode', next as UnlockMode, { shouldDirty: true })
+                  }
+                  items={UNLOCK_MODES.map((mode) => ({
+                    value: mode,
+                    label: UNLOCK_MODE_LABELS[mode],
+                  }))}
+                />
               )}
             </FormField>
 

@@ -18,6 +18,8 @@ export const BRANCH_TYPE = {
 } as const;
 export const branchTypeSchema = z.enum(BRANCH_TYPE);
 export type BranchType = z.infer<typeof branchTypeSchema>;
+/** The same values as a list, for building a picker without restating them — as `GENDERS` does. */
+export const BRANCH_TYPES = branchTypeSchema.options;
 
 export const branchSchema = z.object({
   id: z.string(),

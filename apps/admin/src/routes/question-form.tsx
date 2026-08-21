@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
   ANSWER_MODE,
   ANSWER_MODES,
@@ -27,6 +27,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Combobox,
   FormActions,
   FormField,
   Input,
@@ -34,7 +35,6 @@ import {
   PageHeader,
   RadioGroup,
   RadioGroupItem,
-  Select,
   Skeleton,
   SkeletonParagraph,
   Tabs,
@@ -229,11 +229,14 @@ export function QuestionFormPage() {
     onError: (error) => applyFieldErrors(error, form.setError, [...SERVER_FIELDS]),
   });
 
-  const type = form.watch('type');
-  const subjectId = form.watch('subjectId');
-  const topicId = form.watch('topicId');
-  const correctOption = form.watch('correctOption');
-  const answerMode = form.watch('answerMode');
+  // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
+  const type = useWatch({ control: form.control, name: 'type' });
+  const subjectId = useWatch({ control: form.control, name: 'subjectId' });
+  const topicId = useWatch({ control: form.control, name: 'topicId' });
+  const correctOption = useWatch({ control: form.control, name: 'correctOption' });
+  const answerMode = useWatch({ control: form.control, name: 'answerMode' });
+  const difficulty = useWatch({ control: form.control, name: 'difficulty' });
+  const status = useWatch({ control: form.control, name: 'status' });
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
 
   if (editing && question.isLoading) {
@@ -303,37 +306,56 @@ export function QuestionFormPage() {
 
             <FormField form={form} name="type" label="Type">
               {(control) => (
-                <Select {...control}>
-                  {QUESTION_TYPES.map((value) => (
-                    <option key={value} value={value}>
-                      {value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer'}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={type}
+                  onChange={(next) =>
+                    form.setValue('type', next as QuestionFormValues['type'], { shouldDirty: true })
+                  }
+                  items={QUESTION_TYPES.map((value) => ({
+                    value,
+                    label: value === QUESTION_TYPE.SINGLE_MCQ ? 'Multiple choice' : 'Typed answer',
+                  }))}
+                />
               )}
             </FormField>
 
             <FormField form={form} name="difficulty" label="Difficulty">
               {(control) => (
-                <Select {...control}>
-                  {DIFFICULTY_LEVELS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={difficulty}
+                  onChange={(next) =>
+                    form.setValue('difficulty', next as QuestionFormValues['difficulty'], {
+                      shouldDirty: true,
+                    })
+                  }
+                  items={DIFFICULTY_LEVELS.map((value) => ({ value, label: value }))}
+                />
               )}
             </FormField>
 
             <FormField form={form} name="status" label="Status">
               {(control) => (
-                <Select {...control}>
-                  {QUESTION_STATUSES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={status}
+                  onChange={(next) =>
+                    form.setValue('status', next as QuestionFormValues['status'], {
+                      shouldDirty: true,
+                    })
+                  }
+                  items={QUESTION_STATUSES.map((value) => ({ value, label: value }))}
+                />
               )}
             </FormField>
           </CardContent>
@@ -386,13 +408,22 @@ export function QuestionFormPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField form={form} name="answerMode" label="How the answer is compared">
                   {(control) => (
-                    <Select {...control}>
-                      {ANSWER_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric'}
-                        </option>
-                      ))}
-                    </Select>
+                    <Combobox
+                      id={control.id}
+                      aria-describedby={control['aria-describedby']}
+                      aria-invalid={control['aria-invalid']}
+                      clearable={false}
+                      value={answerMode ?? ANSWER_MODE.EXACT}
+                      onChange={(next) =>
+                        form.setValue('answerMode', next as QuestionFormValues['answerMode'], {
+                          shouldDirty: true,
+                        })
+                      }
+                      items={ANSWER_MODES.map((mode) => ({
+                        value: mode,
+                        label: mode === ANSWER_MODE.EXACT ? 'Exact text' : 'Numeric',
+                      }))}
+                    />
                   )}
                 </FormField>
 

@@ -28,12 +28,12 @@ import {
   CardTitle,
   Combobox,
   ConfirmDialog,
+  DatePicker,
   Field,
   Input,
   MultiCombobox,
   PageFrame,
   PageHeader,
-  Select,
   Skeleton,
   SkeletonParagraph,
 } from '@iace/ui';
@@ -171,13 +171,20 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
           error={form.formState.errors.studentType?.message}
         >
           {(control) => (
-            <Select {...control} {...form.register('studentType')}>
-              {STUDENT_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {STUDENT_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              id={control.id}
+              aria-describedby={control['aria-describedby']}
+              aria-invalid={control['aria-invalid']}
+              clearable={false}
+              value={studentType}
+              onChange={(next) =>
+                form.setValue('studentType', next as StudentType, { shouldDirty: true })
+              }
+              items={STUDENT_TYPES.map((value) => ({
+                value,
+                label: STUDENT_TYPE_LABELS[value],
+              }))}
+            />
           )}
         </Field>
 
@@ -554,6 +561,8 @@ export function StudentDetailPage() {
   // useWatch, not form.watch: a fresh function each render re-renders the picker on every keystroke.
   // The same choice the Access card renders, so the save cannot send what the picker never showed.
   const branch = useBranchChoice(useWatch({ control: form.control, name: 'studentType' }));
+  const gender = useWatch({ control: form.control, name: 'gender' }) ?? '';
+  const dob = useWatch({ control: form.control, name: 'dob' }) ?? '';
 
   // Seeded on load and only when the id changes, or a refetch wipes an in-progress edit.
   useEffect(() => {
@@ -717,20 +726,34 @@ export function StudentDetailPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field htmlFor="dob" label="Date of birth" error={form.formState.errors.dob?.message}>
-                {/* The browser's own picker refuses a future date too, so the
-                    rule is visible before it is enforced. */}
+                {/* Capped at today: a picker offering next year offers what the server refuses. */}
                 {(control) => (
-                  <Input {...control} type="date" max={todayISO()} {...form.register('dob')} />
+                  <DatePicker
+                    {...control}
+                    max={todayISO()}
+                    value={dob}
+                    onChange={(next) => form.setValue('dob', next, { shouldDirty: true })}
+                  />
                 )}
               </Field>
               <Field htmlFor="gender" label="Gender" error={form.formState.errors.gender?.message}>
                 {(control) => (
-                  <Select {...control} {...form.register('gender')}>
-                    <option value="">Not recorded</option>
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
-                    <option value="OTHER">Other</option>
-                  </Select>
+                  <Combobox
+                    id={control.id}
+                    aria-describedby={control['aria-describedby']}
+                    aria-invalid={control['aria-invalid']}
+                    clearable={false}
+                    value={gender}
+                    onChange={(next) =>
+                      form.setValue('gender', next as FormValues['gender'], { shouldDirty: true })
+                    }
+                    items={[
+                      { value: '', label: 'Not recorded' },
+                      { value: 'MALE', label: 'Male' },
+                      { value: 'FEMALE', label: 'Female' },
+                      { value: 'OTHER', label: 'Other' },
+                    ]}
+                  />
                 )}
               </Field>
             </div>

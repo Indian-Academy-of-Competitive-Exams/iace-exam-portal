@@ -15,7 +15,10 @@ import {
   type CreateExamInput,
   type CreateExamStageInput,
   type Exam,
+  type ExamFamily,
+  type ExamMode,
   type ExamStage,
+  type StageDisposition,
   type UpdateExamInput,
   type UpdateExamStageInput,
 } from '@iace/contracts';
@@ -23,6 +26,7 @@ import {
   Alert,
   Badge,
   Button,
+  Combobox,
   ConfirmDialog,
   DataTable,
   FormDialog,
@@ -35,7 +39,6 @@ import {
   Pagination,
   plural,
   SearchInput,
-  Select,
   Tabs,
   TabsContent,
   TabsList,
@@ -209,18 +212,16 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
           />
         </div>
         <div className="w-44">
-          <Select
+          <Combobox
             aria-label="Filter by family"
+            clearable={false}
             value={family}
-            onChange={(event) => filters.set({ family: event.target.value })}
-          >
-            <option value="">Any family</option>
-            {EXAM_FAMILIES.map((value) => (
-              <option key={value} value={value}>
-                {familyLabel(value)}
-              </option>
-            ))}
-          </Select>
+            onChange={(next) => filters.set({ family: next })}
+            items={[
+              { value: '', label: 'Any family' },
+              ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
+            ]}
+          />
         </div>
         {canWrite ? (
           <Button
@@ -282,6 +283,8 @@ function NewExamDialog({
     defaultValues: { family: EXAM_FAMILIES[0], name: '', code: '' },
   });
 
+  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? EXAM_FAMILIES[0]!;
+
   const create = useMutation({
     meta: { success: 'Exam created.', fields: NEW_EXAM_FIELDS },
     mutationFn: (values: CreateExamInput) => api.admin.exams.create(values),
@@ -302,13 +305,15 @@ function NewExamDialog({
     >
       <FormField form={form} name="family" label="Family">
         {(control) => (
-          <Select {...control}>
-            {EXAM_FAMILIES.map((family) => (
-              <option key={family} value={family}>
-                {familyLabel(family)}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenFamily}
+            onChange={(next) => form.setValue('family', next as ExamFamily, { shouldDirty: true })}
+            items={EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) }))}
+          />
         )}
       </FormField>
 
@@ -342,6 +347,8 @@ function EditExamDialog({
     defaultValues: { family: exam.family, name: exam.name, code: exam.code },
   });
 
+  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? exam.family;
+
   const save = useMutation({
     meta: { success: 'Exam saved.', fields: EDIT_EXAM_FIELDS },
     mutationFn: (values: UpdateExamInput) => api.admin.exams.update(exam.id, values),
@@ -363,13 +370,15 @@ function EditExamDialog({
     >
       <FormField form={form} name="family" label="Family">
         {(control) => (
-          <Select {...control}>
-            {EXAM_FAMILIES.map((family) => (
-              <option key={family} value={family}>
-                {familyLabel(family)}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenFamily}
+            onChange={(next) => form.setValue('family', next as ExamFamily, { shouldDirty: true })}
+            items={EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) }))}
+          />
         )}
       </FormField>
 
@@ -706,6 +715,10 @@ function NewStageDialog({
   });
   const chosenExam = useWatch({ control: form.control, name: 'examId' }) ?? '';
 
+  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? EXAM_MODES[0]!;
+  const chosenDisposition =
+    useWatch({ control: form.control, name: 'disposition' }) ?? STAGE_DISPOSITIONS[0]!;
+
   const create = useMutation({
     meta: { success: 'Stage added.', fields: NEW_STAGE_FIELDS },
     mutationFn: (values: CreateExamStageInput) => api.admin.examStages.create(values),
@@ -755,25 +768,34 @@ function NewStageDialog({
 
       <FormField form={form} name="mode" label="Mode">
         {(control) => (
-          <Select {...control} {...form.register('mode')}>
-            {EXAM_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenMode}
+            onChange={(next) => form.setValue('mode', next as ExamMode, { shouldDirty: true })}
+            items={EXAM_MODES.map((mode) => ({ value: mode, label: mode }))}
+          />
         )}
       </FormField>
 
       <FormField form={form} name="disposition" label="Runs as">
         {(control) => (
-          <Select {...control} {...form.register('disposition')}>
-            {STAGE_DISPOSITIONS.map((value) => (
-              <option key={value} value={value}>
-                {DISPOSITION_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenDisposition}
+            onChange={(next) =>
+              form.setValue('disposition', next as StageDisposition, { shouldDirty: true })
+            }
+            items={STAGE_DISPOSITIONS.map((value) => ({
+              value,
+              label: DISPOSITION_LABELS[value],
+            }))}
+          />
         )}
       </FormField>
     </FormDialog>
@@ -796,6 +818,10 @@ function EditStageDialog({
       disposition: stage.disposition,
     },
   });
+
+  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? EXAM_MODES[0]!;
+  const chosenDisposition =
+    useWatch({ control: form.control, name: 'disposition' }) ?? STAGE_DISPOSITIONS[0]!;
 
   const save = useMutation({
     meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
@@ -846,25 +872,34 @@ function EditStageDialog({
 
       <FormField form={form} name="mode" label="Mode">
         {(control) => (
-          <Select {...control} {...form.register('mode')}>
-            {EXAM_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenMode}
+            onChange={(next) => form.setValue('mode', next as ExamMode, { shouldDirty: true })}
+            items={EXAM_MODES.map((mode) => ({ value: mode, label: mode }))}
+          />
         )}
       </FormField>
 
       <FormField form={form} name="disposition" label="Runs as">
         {(control) => (
-          <Select {...control} {...form.register('disposition')}>
-            {STAGE_DISPOSITIONS.map((value) => (
-              <option key={value} value={value}>
-                {DISPOSITION_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={chosenDisposition}
+            onChange={(next) =>
+              form.setValue('disposition', next as StageDisposition, { shouldDirty: true })
+            }
+            items={STAGE_DISPOSITIONS.map((value) => ({
+              value,
+              label: DISPOSITION_LABELS[value],
+            }))}
+          />
         )}
       </FormField>
     </FormDialog>

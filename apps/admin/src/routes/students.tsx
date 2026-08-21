@@ -20,6 +20,7 @@ import {
   type ExamFamily,
   type StudentSort,
   type StudentSummary,
+  type StudentType,
 } from '@iace/contracts';
 import {
   Badge,
@@ -28,6 +29,7 @@ import {
   cn,
   Combobox,
   ConfirmDialog,
+  DatePicker,
   DataTable,
   digitsOnly,
   Field,
@@ -40,7 +42,6 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
-  Select,
   TableFrame,
   Tooltip,
   TooltipContent,
@@ -270,31 +271,35 @@ export function StudentsPage() {
         </div>
 
         <div className="w-44">
-          <Select
+          <Combobox
             aria-label="Filter by status"
+            clearable={false}
             value={status}
-            onChange={(event) => filters.set({ status: event.target.value })}
-          >
-            <option value="all">All students</option>
-            <option value="active">Active</option>
-            <option value="inactive">Sign-in suspended</option>
-            <option value="blocked">Blocked from tests</option>
-            <option value="invited">Never signed in</option>
-            <option value="defaultpin">Still on the default PIN</option>
-          </Select>
+            onChange={(next) => filters.set({ status: next })}
+            items={[
+              { value: 'all', label: 'All students' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Sign-in suspended' },
+              { value: 'blocked', label: 'Blocked from tests' },
+              { value: 'invited', label: 'Never signed in' },
+              { value: 'defaultpin', label: 'Still on the default PIN' },
+            ]}
+          />
         </div>
 
         <div className="w-44">
-          <Select
+          <Combobox
             aria-label="Sort by"
+            clearable={false}
             value={filters.get('sort') || STUDENT_SORTS.RECENT}
-            onChange={(event) => filters.set({ sort: event.target.value })}
-          >
-            <option value={STUDENT_SORTS.RECENT}>Newest first</option>
-            <option value={STUDENT_SORTS.OLDEST}>Oldest first</option>
-            <option value={STUDENT_SORTS.NAME}>Name (A–Z)</option>
-            <option value={STUDENT_SORTS.MOBILE}>Mobile number</option>
-          </Select>
+            onChange={(next) => filters.set({ sort: next })}
+            items={[
+              { value: STUDENT_SORTS.RECENT, label: 'Newest first' },
+              { value: STUDENT_SORTS.OLDEST, label: 'Oldest first' },
+              { value: STUDENT_SORTS.NAME, label: 'Name (A–Z)' },
+              { value: STUDENT_SORTS.MOBILE, label: 'Mobile number' },
+            ]}
+          />
         </div>
 
         {/*
@@ -318,46 +323,48 @@ export function StudentsPage() {
         <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field htmlFor="filter-branch" label="Branch">
             {(control) => (
-              <Select
+              <Combobox
                 {...control}
+                clearable={false}
                 value={branchId}
-                onChange={(event) => filters.set({ branchId: event.target.value })}
-              >
-                <option value="">Any branch</option>
-                {branches.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={(next) => filters.set({ branchId: next })}
+                items={[
+                  { value: '', label: 'Any branch' },
+                  ...branches.map((option) => ({ value: option.id, label: option.name })),
+                ]}
+              />
             )}
           </Field>
 
           <Field htmlFor="filter-pretest" label="Pre-test details">
             {(control) => (
-              <Select
+              <Combobox
                 {...control}
+                clearable={false}
                 value={filters.get('preTestReady')}
-                onChange={(event) => filters.set({ preTestReady: event.target.value })}
-              >
-                <option value="">Any</option>
-                <option value="true">On file</option>
-                <option value="false">Needed</option>
-              </Select>
+                onChange={(next) => filters.set({ preTestReady: next })}
+                items={[
+                  { value: '', label: 'Any' },
+                  { value: 'true', label: 'On file' },
+                  { value: 'false', label: 'Needed' },
+                ]}
+              />
             )}
           </Field>
 
           <Field htmlFor="filter-profile" label="Full profile">
             {(control) => (
-              <Select
+              <Combobox
                 {...control}
+                clearable={false}
                 value={filters.get('profileCompleted')}
-                onChange={(event) => filters.set({ profileCompleted: event.target.value })}
-              >
-                <option value="">Any</option>
-                <option value="true">Complete</option>
-                <option value="false">Incomplete</option>
-              </Select>
+                onChange={(next) => filters.set({ profileCompleted: next })}
+                items={[
+                  { value: '', label: 'Any' },
+                  { value: 'true', label: 'Complete' },
+                  { value: 'false', label: 'Incomplete' },
+                ]}
+              />
             )}
           </Field>
 
@@ -367,38 +374,38 @@ export function StudentsPage() {
             hint="No enrolment and no program of their own — not the same as no access."
           >
             {(control) => (
-              <Select
+              <Combobox
                 {...control}
+                clearable={false}
                 value={filters.get('noAccess')}
-                onChange={(event) => filters.set({ noAccess: event.target.value })}
-              >
-                <option value="">Any</option>
-                <option value="true">Nothing of their own</option>
-                <option value="false">Has an enrolment or program</option>
-              </Select>
+                onChange={(next) => filters.set({ noAccess: next })}
+                items={[
+                  { value: '', label: 'Any' },
+                  { value: 'true', label: 'Nothing of their own' },
+                  { value: 'false', label: 'Has an enrolment or program' },
+                ]}
+              />
             )}
           </Field>
 
           <Field htmlFor="filter-from" label="Enrolled from">
             {(control) => (
-              <Input
+              <DatePicker
                 {...control}
-                type="date"
                 max={todayISO()}
                 value={filters.get('joinedFrom')}
-                onChange={(event) => filters.set({ joinedFrom: event.target.value })}
+                onChange={(next) => filters.set({ joinedFrom: next })}
               />
             )}
           </Field>
 
           <Field htmlFor="filter-to" label="Enrolled until">
             {(control) => (
-              <Input
+              <DatePicker
                 {...control}
-                type="date"
                 max={todayISO()}
                 value={filters.get('joinedTo')}
-                onChange={(event) => filters.set({ joinedTo: event.target.value })}
+                onChange={(next) => filters.set({ joinedTo: next })}
               />
             )}
           </Field>
@@ -577,13 +584,17 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
 
       <FormField form={form} name="studentType" label="Student type">
         {(control) => (
-          <Select {...control}>
-            {STUDENT_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {STUDENT_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={studentType}
+            onChange={(next) =>
+              form.setValue('studentType', next as StudentType, { shouldDirty: true })
+            }
+            items={STUDENT_TYPES.map((value) => ({ value, label: STUDENT_TYPE_LABELS[value] }))}
+          />
         )}
       </FormField>
 

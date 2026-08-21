@@ -17,13 +17,13 @@ import {
   Badge,
   BadgeList,
   Button,
+  Combobox,
   ConfirmDialog,
   DataTable,
   linkVariants,
   PageHeader,
   Pagination,
   SearchInput,
-  Select,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
@@ -192,48 +192,45 @@ export function QuestionsPage() {
       </div>
 
       <div className="w-40">
-        <Select
+        <Combobox
           aria-label="Filter by difficulty"
+          clearable={false}
           value={filters.get('difficulty')}
-          onChange={(event) => filters.set({ difficulty: event.target.value })}
-        >
-          <option value="">Any difficulty</option>
-          {DIFFICULTY_LEVELS.map((level) => (
-            <option key={level} value={level}>
-              {level}
-            </option>
-          ))}
-        </Select>
+          onChange={(next) => filters.set({ difficulty: next })}
+          items={[
+            { value: '', label: 'Any difficulty' },
+            ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
+          ]}
+        />
       </div>
 
       <div className="w-40">
-        <Select
+        <Combobox
           aria-label="Filter by type"
+          clearable={false}
           value={filters.get('type')}
-          onChange={(event) => filters.set({ type: event.target.value })}
-        >
-          <option value="">Any type</option>
-          {QUESTION_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer'}
-            </option>
-          ))}
-        </Select>
+          onChange={(next) => filters.set({ type: next })}
+          items={[
+            { value: '', label: 'Any type' },
+            ...QUESTION_TYPES.map((type) => ({
+              value: type,
+              label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
+            })),
+          ]}
+        />
       </div>
 
       <div className="w-40">
-        <Select
+        <Combobox
           aria-label="Filter by status"
+          clearable={false}
           value={filters.get('status')}
-          onChange={(event) => filters.set({ status: event.target.value })}
-        >
-          <option value="">Any status</option>
-          {QUESTION_STATUSES.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </Select>
+          onChange={(next) => filters.set({ status: next })}
+          items={[
+            { value: '', label: 'Any status' },
+            ...QUESTION_STATUSES.map((value) => ({ value, label: value })),
+          ]}
+        />
       </div>
     </div>
   );

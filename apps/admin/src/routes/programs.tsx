@@ -15,6 +15,7 @@ import {
   Alert,
   Badge,
   Button,
+  Combobox,
   ConfirmDialog,
   DataTable,
   FormDialog,
@@ -23,7 +24,6 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
-  Select,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
@@ -143,14 +143,16 @@ export function ProgramsPage() {
         />
       </div>
       <div className="w-44">
-        <Select
+        <Combobox
           aria-label="Filter by status"
+          clearable={false}
           value={activeOnly}
-          onChange={(event) => filters.set({ activeOnly: event.target.value })}
-        >
-          <option value="">Any status</option>
-          <option value="true">Offered now</option>
-        </Select>
+          onChange={(next) => filters.set({ activeOnly: next })}
+          items={[
+            { value: '', label: 'Any status' },
+            { value: 'true', label: 'Offered now' },
+          ]}
+        />
       </div>
     </div>
   );

@@ -14,6 +14,32 @@ const box = (props: Partial<React.ComponentProps<typeof Combobox>> = {}) => (
   <Combobox value="" onChange={() => {}} items={items} placeholder="Choose…" {...props} />
 );
 
+/** The search box is the only text field in the app; it must focus like every other one. */
+describe('Combobox search focus', () => {
+  const searchable = { search: '', onSearchChange: () => {}, searchPlaceholder: 'Search groups' };
+
+  it('gives the search row the wrapper ring, as input and select do', () => {
+    render(box(searchable));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
+
+    const row = screen.getByLabelText('Search groups').parentElement;
+
+    assert.equal(row?.getAttribute('data-focus-ring'), 'wrapper');
+    assert.ok(row?.className.includes('shadow-focus'));
+  });
+
+  /** It autofocuses on every open, so focus-within would flash a ring nobody asked for. */
+  it('rings on focus-visible, not on the autofocus that opening it causes', () => {
+    render(box(searchable));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose…' }));
+
+    const row = screen.getByLabelText('Search groups').parentElement;
+
+    assert.ok(row?.className.includes('has-[:focus-visible]:shadow-focus'));
+    assert.equal(row?.className.includes('focus-within:shadow-focus'), false);
+  });
+});
+
 describe('Combobox', () => {
   it('reads as its placeholder while nothing is chosen', () => {
     render(box());

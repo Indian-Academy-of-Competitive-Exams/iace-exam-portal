@@ -2,18 +2,21 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Plus, Power, Trash2, Users } from 'lucide-react';
 import {
   BRANCH_TYPE,
+  BRANCH_TYPES,
   createBranchSchema,
   type Branch,
+  type BranchType,
   type CreateBranchInput,
 } from '@iace/contracts';
 import {
   Alert,
   Badge,
   Button,
+  Combobox,
   ConfirmDialog,
   DataTable,
   FormDialog,
@@ -22,7 +25,6 @@ import {
   linkVariants,
   PageHeader,
   plural,
-  Select,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
@@ -171,6 +173,8 @@ function NewBranchDialog({
     defaultValues: { name: '', type: BRANCH_TYPE.PHYSICAL },
   });
 
+  const type = useWatch({ control: form.control, name: 'type' }) ?? BRANCH_TYPE.PHYSICAL;
+
   const create = useMutation({
     meta: { success: 'Branch created.', fields: NEW_BRANCH_FIELDS },
     mutationFn: (values: CreateBranchInput) => api.admin.branches.create(values),
@@ -201,15 +205,19 @@ function NewBranchDialog({
       </FormField>
 
       <FormField form={form} name="type" label="Type">
-        {(control) => (
-          <Select {...control}>
-            <option value={BRANCH_TYPE.PHYSICAL}>{BRANCH_TYPE_LABELS[BRANCH_TYPE.PHYSICAL]}</option>
-            {/* Dropped once one exists: a second is refused server-side, and an option
-                that can only fail is not a choice. */}
-            {hasOnlineBranch ? null : (
-              <option value={BRANCH_TYPE.VIRTUAL}>{BRANCH_TYPE_LABELS[BRANCH_TYPE.VIRTUAL]}</option>
-            )}
-          </Select>
+        {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+          <Combobox
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            clearable={false}
+            value={type}
+            onChange={(next) => form.setValue('type', next as BranchType, { shouldDirty: true })}
+            // Virtual goes once one exists: an option that can only fail is not a choice.
+            items={BRANCH_TYPES.filter(
+              (value) => value !== BRANCH_TYPE.VIRTUAL || !hasOnlineBranch,
+            ).map((value) => ({ value, label: BRANCH_TYPE_LABELS[value] }))}
+          />
         )}
       </FormField>
     </FormDialog>

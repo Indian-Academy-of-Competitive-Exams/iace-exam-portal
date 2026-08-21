@@ -6,6 +6,14 @@ import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
 import { Skeleton } from './skeleton';
 
+/** The closed look every popover-backed field wears, so combobox and date picker cannot drift. */
+export const FIELD_TRIGGER_CLASS = [
+  'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface px-3 text-sm shadow-sm',
+  'transition-[box-shadow,border-color] hover:border-ring',
+  'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
+  'disabled:cursor-not-allowed disabled:opacity-50',
+].join(' ');
+
 /** How close to the end counts as "nearly there", in pixels. */
 const LOAD_MORE_THRESHOLD_PX = 160;
 
@@ -106,14 +114,7 @@ export function ComboboxShell({
           id={id}
           aria-label={ariaLabel}
           disabled={disabled}
-          // Same height as Select: the two sit side by side in a filter row.
-          className={cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface px-3 text-sm shadow-sm',
-            'transition-[box-shadow,border-color] hover:border-ring',
-            'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            className,
-          )}
+          className={cn(FIELD_TRIGGER_CLASS, className)}
         >
           <span className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
             {triggerLabel}
@@ -130,17 +131,24 @@ export function ComboboxShell({
           className="z-50 w-[var(--radix-popover-trigger-width)] min-w-56 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
         >
           {onSearchChange ? (
-            <div className="flex items-center gap-2 border-b border-border px-3">
+            // focus-visible, not focus-within: it autofocuses on open, and a ring then is noise.
+            <div
+              data-focus-ring="wrapper"
+              className={cn(
+                'flex items-center gap-2 border-b border-border px-3',
+                'transition-[box-shadow,border-color]',
+                'has-[:focus-visible]:border-ring has-[:focus-visible]:shadow-focus',
+              )}
+            >
               <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              {/* Debounced for the same reason as SearchInput: this searches
-                  the SERVER, so an unwaited keystroke is a request, and the
-                  answers to the first seven letters of a group name are ones
-                  nobody reads. The field itself stays instant. */}
+              {/* Debounced like SearchInput: this searches the SERVER, so an unwaited keystroke is
+                  a request nobody reads the answer to. The field itself stays instant. */}
               <input
                 autoFocus
                 value={searchDraft}
                 onChange={(event) => typeSearch(event.target.value)}
                 placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
                 className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>

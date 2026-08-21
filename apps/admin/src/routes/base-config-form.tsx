@@ -39,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  Combobox,
   ConfirmDialog,
   DataTable,
   FormActions,
@@ -47,7 +48,6 @@ import {
   PageFrame,
   PageHeader,
   plural,
-  Select,
   Skeleton,
   SkeletonParagraph,
   StatRow,
@@ -553,6 +553,9 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
+  const navigation = useWatch({ control: form.control, name: 'navigation' });
+  const defaultTestUi = useWatch({ control: form.control, name: 'defaultTestUi' });
+  const languageMode = useWatch({ control: form.control, name: 'languageMode' });
   const watchedSections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
   const watchedModules = useWatch({ control: form.control, name: 'modules' }) ?? [];
@@ -647,49 +650,74 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
             <FormField form={form} name="timerTemplate" label="Timer">
               {(control) => (
-                <Select {...control}>
-                  {TIMER_TEMPLATES.map((value) => (
-                    <option key={value} value={value}>
-                      {TIMER_TEMPLATE_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={timerTemplate}
+                  onChange={(next) =>
+                    form.setValue('timerTemplate', next as TimerTemplate, { shouldDirty: true })
+                  }
+                  items={TIMER_TEMPLATES.map((value) => ({
+                    value,
+                    label: TIMER_TEMPLATE_LABELS[value],
+                  }))}
+                />
               )}
             </FormField>
 
             <FormField form={form} name="navigation" label="Navigation">
               {(control) => (
-                <Select {...control}>
-                  {NAVIGATION_POLICIES.map((value) => (
-                    <option key={value} value={value}>
-                      {NAVIGATION_POLICY_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={navigation}
+                  onChange={(next) =>
+                    form.setValue('navigation', next as NavigationPolicy, { shouldDirty: true })
+                  }
+                  items={NAVIGATION_POLICIES.map((value) => ({
+                    value,
+                    label: NAVIGATION_POLICY_LABELS[value],
+                  }))}
+                />
               )}
             </FormField>
 
             <FormField form={form} name="defaultTestUi" label="Interface">
               {(control) => (
-                <Select {...control}>
-                  {TEST_UIS.map((value) => (
-                    <option key={value} value={value}>
-                      {TEST_UI_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={defaultTestUi}
+                  onChange={(next) =>
+                    form.setValue('defaultTestUi', next as TestUi, { shouldDirty: true })
+                  }
+                  items={TEST_UIS.map((value) => ({ value, label: TEST_UI_LABELS[value] }))}
+                />
               )}
             </FormField>
 
             <FormField form={form} name="languageMode" label="Language mode">
               {(control) => (
-                <Select {...control}>
-                  {LANGUAGE_MODES.map((value) => (
-                    <option key={value} value={value}>
-                      {LANGUAGE_MODE_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={languageMode}
+                  onChange={(next) =>
+                    form.setValue('languageMode', next as LanguageMode, { shouldDirty: true })
+                  }
+                  items={LANGUAGE_MODES.map((value) => ({
+                    value,
+                    label: LANGUAGE_MODE_LABELS[value],
+                  }))}
+                />
               )}
             </FormField>
 
@@ -897,6 +925,7 @@ function SectionCard({
 }>) {
   const subjectId = useWatch({ control: form.control, name: `sections.${index}.subjectId` });
   const merit = useWatch({ control: form.control, name: `sections.${index}.meritOrQualifying` });
+  const moduleOrder = useWatch({ control: form.control, name: `sections.${index}.moduleOrder` });
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
@@ -970,13 +999,19 @@ function SectionCard({
 
         <FormField form={form} name={`sections.${index}.meritOrQualifying`} label="Counts as">
           {(control) => (
-            <Select {...control}>
-              {MERIT_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {MERIT_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              id={control.id}
+              aria-describedby={control['aria-describedby']}
+              aria-invalid={control['aria-invalid']}
+              clearable={false}
+              value={merit}
+              onChange={(next) =>
+                form.setValue(`sections.${index}.meritOrQualifying`, next as MeritType, {
+                  shouldDirty: true,
+                })
+              }
+              items={MERIT_TYPES.map((value) => ({ value, label: MERIT_TYPE_LABELS[value] }))}
+            />
           )}
         </FormField>
 
@@ -994,14 +1029,23 @@ function SectionCard({
         {moduleNames.length > 0 ? (
           <FormField form={form} name={`sections.${index}.moduleOrder`} label="Session">
             {(control) => (
-              <Select {...control}>
-                <option value="">The first session</option>
-                {moduleNames.map((name, moduleIndex) => (
-                  <option key={`${moduleIndex}-${name}`} value={String(moduleIndex)}>
-                    {name || `Session ${moduleIndex + 1}`}
-                  </option>
-                ))}
-              </Select>
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={moduleOrder ?? ''}
+                onChange={(next) =>
+                  form.setValue(`sections.${index}.moduleOrder`, next, { shouldDirty: true })
+                }
+                items={[
+                  { value: '', label: 'The first session' },
+                  ...moduleNames.map((name, moduleIndex) => ({
+                    value: String(moduleIndex),
+                    label: name || `Session ${moduleIndex + 1}`,
+                  })),
+                ]}
+              />
             )}
           </FormField>
         ) : null}

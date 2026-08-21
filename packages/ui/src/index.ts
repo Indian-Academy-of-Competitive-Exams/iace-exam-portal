@@ -96,6 +96,15 @@ export {
   type ConfirmDialogProps,
 } from './components/ui/dialog';
 export { FormDialog, type FormDialogProps } from './components/ui/form-dialog';
+export {
+  DatePicker,
+  toISODate,
+  parseISODate,
+  monthGrid,
+  isOutOfRange,
+  type DatePickerProps,
+  type CalendarDay,
+} from './components/ui/date-picker';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
 export { MultiCombobox, type MultiComboboxProps } from './components/ui/multi-combobox';
 export {

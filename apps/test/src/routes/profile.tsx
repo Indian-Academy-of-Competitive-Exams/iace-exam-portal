@@ -1,10 +1,16 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
-import { GENDERS, todayISO, updateMeSchema, type UpdateMeInput } from '@iace/contracts';
+import {
+  GENDERS,
+  todayISO,
+  updateMeSchema,
+  type UpdateMeInput,
+  type Gender,
+} from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
@@ -14,11 +20,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Combobox,
+  DatePicker,
   Field,
   Input,
   PageFrame,
   PageHeader,
-  Select,
   SkeletonParagraph,
   Textarea,
 } from '@iace/ui';
@@ -48,6 +55,8 @@ export function ProfilePage() {
     resolver: zodResolver(updateMeSchema),
     defaultValues: { fullName: '', profile: { educationDetails: [], pastExamHistory: [] } },
   });
+  const gender = useWatch({ control: form.control, name: 'profile.gender' });
+  const dob = useWatch({ control: form.control, name: 'profile.dob' });
 
   // Filled once the record arrives. `reset` rather than defaultValues, because
   // the form mounts before the fetch resolves.
@@ -152,13 +161,14 @@ export function ProfilePage() {
                 error={form.formState.errors.profile?.dob?.message}
               >
                 {(control) => (
-                  // Capped at today: a picker that offers next year is offering
-                  // something the server will refuse.
-                  <Input
-                    type="date"
-                    max={todayISO()}
+                  // Capped at today: a picker offering next year offers what the server refuses.
+                  <DatePicker
                     {...control}
-                    {...form.register('profile.dob')}
+                    max={todayISO()}
+                    value={dob ?? ''}
+                    onChange={(next) =>
+                      form.setValue('profile.dob', next || null, { shouldDirty: true })
+                    }
                   />
                 )}
               </Field>
@@ -195,14 +205,25 @@ export function ProfilePage() {
                 error={form.formState.errors.profile?.gender?.message}
               >
                 {(control) => (
-                  <Select {...control} {...form.register('profile.gender')}>
-                    <option value="">Prefer not to say</option>
-                    {GENDERS.map((gender) => (
-                      <option key={gender} value={gender}>
-                        {gender.charAt(0) + gender.slice(1).toLowerCase()}
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    id={control.id}
+                    aria-describedby={control['aria-describedby']}
+                    aria-invalid={control['aria-invalid']}
+                    clearable={false}
+                    value={gender ?? ''}
+                    onChange={(next) =>
+                      form.setValue('profile.gender', (next || null) as Gender | null, {
+                        shouldDirty: true,
+                      })
+                    }
+                    items={[
+                      { value: '', label: 'Prefer not to say' },
+                      ...GENDERS.map((value) => ({
+                        value,
+                        label: value.charAt(0) + value.slice(1).toLowerCase(),
+                      })),
+                    ]}
+                  />
                 )}
               </Field>
 

@@ -18,7 +18,6 @@ import {
   DataTable,
   PageHeader,
   Pagination,
-  Select,
   TableFrame,
   type DataTableColumn,
 } from '@iace/ui';
@@ -187,33 +186,35 @@ export function AuditActivityPage() {
 
       <div className="mb-3 flex flex-wrap gap-3">
         <div className="w-48">
-          <Select
+          <Combobox
             aria-label="Filter by feature"
+            clearable={false}
             value={feature}
-            onChange={(event) => filters.set({ feature: event.target.value })}
-          >
-            <option value="">All features</option>
-            {auditFeatureSchema.options.map((value) => (
-              <option key={value} value={value}>
-                {AUDIT_FEATURE_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+            onChange={(next) => filters.set({ feature: next })}
+            items={[
+              { value: '', label: 'All features' },
+              ...auditFeatureSchema.options.map((value) => ({
+                value,
+                label: AUDIT_FEATURE_LABELS[value],
+              })),
+            ]}
+          />
         </div>
 
         <div className="w-44">
-          <Select
+          <Combobox
             aria-label="Filter by action"
+            clearable={false}
             value={action}
-            onChange={(event) => filters.set({ action: event.target.value })}
-          >
-            <option value="">All actions</option>
-            {auditActionSchema.options.map((value) => (
-              <option key={value} value={value}>
-                {AUDIT_ACTION_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+            onChange={(next) => filters.set({ action: next })}
+            items={[
+              { value: '', label: 'All actions' },
+              ...auditActionSchema.options.map((value) => ({
+                value,
+                label: AUDIT_ACTION_LABELS[value],
+              })),
+            ]}
+          />
         </div>
 
         {isSuperAdmin ? (
