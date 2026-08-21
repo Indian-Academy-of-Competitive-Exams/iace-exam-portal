@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 
 /** The plate carries the mark, so its size is the lockup's size. */
 const plateVariants = cva(
-  'inline-flex items-center rounded-lg bg-primary font-extrabold tracking-wide text-primary-foreground',
+  'inline-flex items-center rounded-lg bg-primary font-brand text-primary-foreground font-extrabold tracking-brand',
   {
     variants: {
       size: {

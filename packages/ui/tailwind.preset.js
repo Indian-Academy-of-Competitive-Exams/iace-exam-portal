@@ -261,6 +261,11 @@ module.exports = {
         // resolves to Tailwind's default stack instead of ours, so the token
         // reads as unused while the system quietly has two mono faces.
         mono: ['var(--font-mono)'],
+        brand: ['var(--font-brand)'],
+      },
+      letterSpacing: {
+        // Only the brand step; every other tracking-* still takes Tailwind's own scale.
+        brand: 'var(--tracking-brand)',
       },
       fontVariantNumeric: {
         tabular: 'tabular-nums',

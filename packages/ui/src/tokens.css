@@ -17,6 +17,10 @@
    Your v0.1 colour work is preserved except two corrections, marked FIX.
    ========================================================================== */
 
+/* Self-hosted so a timed test never waits on a font CDN. Nunito is brand-only. */
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource/nunito/latin-800.css';
+
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
@@ -87,9 +91,11 @@
   /* FIX-1: bilingual stack. system-ui does not reliably cover Telugu; the
      Indic faces sit AFTER the Latin ones so the browser resolves per-glyph. */
   --font-sans:
-    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Telugu',
+    'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Telugu',
     'Noto Sans Devanagari', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The mark only. Nunito's rounded terminals carry the brand; body text stays Inter. */
+  --font-brand: 'Nunito', var(--font-sans);
 
   --text-2xs: 0.6875rem; /* 11 — dense meta, chart legends       */
   --text-xs: 0.75rem; /* 12 — overlines, captions, badges     */
@@ -120,6 +126,7 @@
   --tracking-snug: -0.01em;
   --tracking-normal: 0;
   --tracking-wide: 0.06em;
+  --tracking-brand: 0.01em;
 
   /* ==========================================================================
      3. SPACING — 4px base, no off-grid values
