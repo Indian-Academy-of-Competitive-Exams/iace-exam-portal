@@ -21,7 +21,7 @@ import {
   ThemeToggle,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { BRAND_MARK_SRC, ROUTES } from '../lib/constants';
+import { ROUTES } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
 const codeFormSchema = z.object({ code: otpCodeSchema });
@@ -49,12 +49,7 @@ export function LoginPage() {
 
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
-          <Brandmark
-            size="lg"
-            portal="Admin"
-            src={BRAND_MARK_SRC}
-            className="justify-center px-6 pt-7"
-          />
+          <Brandmark size="lg" portal="Admin" className="justify-center px-6 pt-7" />
 
           {email === null || challenge === null ? (
             <EmailStep

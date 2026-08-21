@@ -34,7 +34,7 @@ import {
   digitsOnly,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { BRAND_MARK_SRC, ROUTES } from '../lib/constants';
+import { ROUTES } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { useAuth } from '../providers/auth';
 /** Why the student is going through the OTP flow — it only changes the words. */
@@ -84,7 +84,7 @@ export function LoginPage() {
           low on a tall screen, and this is the only thing on the page. */}
       <main className="flex flex-1 items-center justify-center px-5 pb-24">
         <Card className="w-full max-w-[26rem] shadow-md">
-          <Brandmark size="lg" src={BRAND_MARK_SRC} className="justify-center px-6 pt-7" />
+          <Brandmark size="lg" className="justify-center px-6 pt-7" />
 
           {step.kind === 'signIn' ? (
             <SignInStep

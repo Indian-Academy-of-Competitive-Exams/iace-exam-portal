@@ -36,6 +36,3 @@ export const STORAGE_KEYS = {
   // Named for the app, not the audience: the student portal is a separate SPA on this origin.
   AUTH: 'iace.test.auth',
 } as const;
-
-/** Served from public/, so the path is the contract with index.html. */
-export const BRAND_MARK_SRC = '/iace-mark.png';
