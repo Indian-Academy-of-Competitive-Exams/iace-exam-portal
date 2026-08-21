@@ -105,36 +105,78 @@ Verified on the live report. We ship the core in V1 and fast-follow the rest.
 
 ---
 
-## 7. Access model — Student → Group → Test Series → Test
+## 7. Access model — Student → Test Series → Test
 
-There is **no product concept** and **no direct student↔test or student↔series link**. Access flows entirely through groups:
+**There are no groups.** A student reaches a `TestSeries` by one of three paths, and every one of
+them is then gated by the `BranchTestConfig` row for their current branch:
 
-1. A **student is always in ≥1 group** (batch) — that's how students are organized.
-2. A **group is linked to test series** (many-to-many).
-3. A **test series contains tests** (many-to-many).
+1. **Exam match** — the series sits on a stage of an exam in `Student.enrolledExams`. Only for a
+   series with no `programCode`.
+2. **Program match** — the series carries a `programCode` the student carries. A program-tagged
+   series is program-ONLY: an exam enrolment alone never opens a cohort's paper to somebody
+   outside the cohort.
+3. **`StudentGrant`** — one explicit row, the escape hatch for access that is not exam-, program-
+   or branch-derivable.
 
-So a student can access exactly the tests that sit in the series linked to their groups. To give a batch a set of tests, link their group to the series; to give one person access, put them in the right group. A `shareSlug` link exists for edge cases (public / one-off). In-app `Notification` on assignment.
+A student with no current branch reaches nothing, grants included: the enable flag and the
+availability window both live on the branch's row, so there is nowhere for the answer to come from.
 
-This scales cleanly to the general-public rollout: everyone belongs to a group (even a default "public" group), and access is managed at the **series** level — never per test or per student.
+Reaching a series is not the same as being able to start it. `unlockMode` decides that — `AUTO`
+opens once its prerequisite series is satisfied, `REQUEST` goes through a queue an admin decides,
+`ADMIN` opens for nobody on its own. A locked series is still listed, so the student can see what
+is coming and ask for it. `isTestBlocked` leaves the whole catalog readable and starts nothing.
+
+One function answers all of it (`AccessResolverService`), and both callers read that one answer:
+the student's catalog and the attempt-start guard. A `shareSlug` link exists for edge cases
+(public / one-off). In-app `Notification` on assignment, carrying `testSeriesId` as the deep link.
+
+This scales to the general-public rollout unchanged: access is managed at the **series** level,
+never per test, and the only per-student row in the model is the grant.
 
 ---
 
 ## 8. Data-model additions (beyond the base architecture doc)
 
-> **`prisma/schema.prisma` is the authoritative model (19 models).** The bullets below summarize it.
+> **`prisma/schema.prisma` is the authoritative model (36 models).** The bullets below summarize
+> it. Where this file and the schema disagree, the schema is right and this list is stale.
 
-- **Student / Admin** — separate tables. Student: `mobile` is the only mandatory field. Admin: `email`, `isSuperAdmin`, page-level permissions (`Page` + implicit M:N). OTP, sessions, and device binding live in **Redis**, not the DB.
-- **StudentProfile (1:1)** — email, address, gender, dob, photo, Aadhaar/PAN links, education + past-exam history (JSON). `Student.profileCompleted` gates the first test and is true once **photo + DOB + gender + Aadhaar + PAN** are present.
-- **ExamType / BaseConfig (+ BaseConfigSection)** — reusable blueprint: sections, per-section time, marks, negative marking, total questions, default difficulty mix, shuffle rules. A Test copies + overrides it.
-- **Question / QuestionOption** — options carry a **stable id + isCorrect** (the answer key survives shuffling/editing). Localized content is **JSON** (`Question.content`, `QuestionOption.text`) keyed by language; each field is rich (text / `$LaTeX$` / inline **S3 image URL**). Tags: subject, topic, sub-topic, difficulty (L/M/H). One question, reused everywhere; dedup on import. **No separate media table.**
-- **Subject / Topic / SubTopic** — the three-level taxonomy. A **Topic** belongs to exactly one Subject. A **SubTopic** is **shared**: it joins **many-to-many to Topic**, so one "PERCENTAGES" row serves Arithmetic and Data Interpretation, in Quant and in Banking alike. It never hangs off a Subject directly — a sub-topic means nothing outside a topic, and it reaches a second subject only _through_ one. `name` is unique table-wide, so admin and importer **match before they create**; a duplicate row would split the per-sub-topic accuracy analytics this level exists to produce. A question's `subTopicId` must be one linked to its `topicId` — enforced in the service, since the M:N puts it out of reach of a foreign key.
-- **Test** — links a BaseConfig; overrides, schedule window, **status (active/inactive)**, lock state, `shareSlug`. Independent of any series.
-- **TestSection** — per-section time, mandatory, marks/negative, difficulty override, order.
-- **PaperQuestion (frozen paper)** — the fixed questions drawn at finalize; per-question marks/negative; status (**active / dropped / bonus**).
-- **Attempt** — live state (`startedAt`, server `endsAt`, `sectionState`, `status`, `shuffleSeed`, `resumeCount`) **and** the scored fields (score, correct/wrong/unattempted, sectionScores, rank/percentile). **No separate Result table.**
-- **AttemptAnswer** — only questions the student **interacted with** (composite PK): option chosen, state, time; (post-scoring) isCorrect, marksAwarded. These are the analytics data points, captured day one.
-- **Access** — a test grants access to **groups** and/or **individual students** via implicit M:N on `Test`, plus a `shareSlug` link. No product/access-code entities. `Notification` on assignment.
-- **TestSeries** — many-to-many with Test (implicit), optional, **flat** (no nesting). Standalone attempts allowed. Marks use `Decimal(6,2)`.
+- **Student / Admin** — separate tables. Student: `mobile` and `studentType` are mandatory, and
+  `mobile` is unique among LIVE rows only. Admin: `email`, `isSuperAdmin`, and one row per grant
+  in `AdminFeaturePermission(adminId, featureKey, level)` — feature keys are code-owned, and there
+  is no `Feature` table. OTP, sessions, and device binding live in **Redis**, not the DB.
+- **StudentProfile (1:1)** — email, address, gender, dob, photo, education + past-exam history
+  (JSON). Aadhaar and PAN are `aadhaarVerified` / `panVerified` booleans; **the images are never
+  stored**, so the photo is the only upload. `preTestReady` (mother's + father's name + DOB)
+  prompts before a test; `profileCompleted` only drives a nudge and **never blocks**.
+- **Exam / ExamStage / BaseConfig (+ BaseConfigModule, BaseConfigSection)** — the taxonomy is
+  `ExamFamily` (enum) → `Exam` → `ExamStage`, and the STAGE is what everything hangs off. A
+  BaseConfig is a stage's blueprint and a Test **inherits** its shape rather than copying it.
+  Marks, negative marks, timing and merit/qualifying are **per section**. A config locks at the
+  first finalize built from it; the way to change a locked one is to clone it.
+- **Question / QuestionVersion** — `Question` is identity (type, taxonomy, status, tags,
+  `stemHash`, `currentVersionId`). Every edit inserts an **immutable** `QuestionVersion` holding
+  content, options as JSON and the answer key, then repoints `currentVersionId` — so a paper or an
+  attempt that pinned a version never moves. Option ids carry over by position. Localized content
+  is JSON keyed by language, rich (text / `$LaTeX$` / inline **S3 image URL**). **No separate
+  media table, and no `QuestionOption` table.**
+- **Subject / Topic** — two levels only. A `Topic` belongs to exactly one Subject, and anything
+  finer is a `topic:` tag on the question. A question's `topicId` must belong to its `subjectId` —
+  enforced in the service, since no foreign key can express it.
+- **Test** — links a BaseConfig (and, denormalised, its stage, so a composite FK enforces the
+  pair); scope, evaluation mode, paper binding, status, lock state, `shareSlug`.
+- **PaperQuestion (frozen paper)** — drawn once at finalize and shared by every student; per-question
+  marks/negative; status (**active / dropped / bonus**). Per-student order comes from
+  `Attempt.shuffleSeed`, not from a second paper.
+- **Attempt** — live state (`startedAt`, server `endsAt`, `sectionState`, `status`, `shuffleSeed`,
+  `resumeCount`) **and** the scored fields. **No separate Result table.**
+- **AttemptQuestion** — only questions the student **interacted with** (composite PK): option
+  chosen, state, time; (post-scoring) isCorrect, marksAwarded. The analytics data points, captured
+  day one.
+- **Access** — `Program`, `TestSeries`, `TestSeriesTest`, `StudentGrant`, `BranchTestConfig`, plus
+  `StudentSeriesUnlock` and `SeriesUnlockRequest` for unlocking. See §7 — there is no group table
+  and no student↔test link.
+- **TestSeries** — many-to-many with Test, optional, **flat** (no nesting). Standalone attempts
+  allowed. Marks use `Decimal(6,2)`.
 
 ---
 
@@ -148,12 +190,12 @@ This scales cleanly to the general-public rollout: everyone belongs to a group (
 - Central question bank with one forgiving import screen; text + image + equation.
 - Students: mobile + OTP **at signup**, then a **4-digit PIN** for later logins (OTP resets it; rate-limit in Redis). Admins: email + OTP. OTP/sessions/devices in Redis. **Pre-test gate is minimal** — mother's name + father's name + DOB; the full profile is optional and gently prompted.
 - No certificates in V1; trimmed settings.
-- Access = **Student → Group → TestSeries → Test** (no direct student/test grants). A student is always in ≥1 group; groups link to series; series contain tests. A shareSlug link for edge cases. No products/access-codes.
+- Access = **Student → TestSeries → Test**, by exam match, program match or an explicit `StudentGrant`, every one of them gated by the student's branch (`BranchTestConfig`). **No groups.** A shareSlug link for edge cases. No products/access-codes.
 - **Three portals:** Student (future broad platform), **Test** (this build, `apps/test`), Admin. V1 = Test + Admin. Internal IACE students first, general public later.
 - Student portal is **enhanced, not copied**: snappy, uncluttered, icon-driven, with a replayable tour; **Report is the post-login landing dashboard**; Test and Report tabs get the most UX care. The in-exam screen still mirrors the real exam.
 - All analytics data points captured from day one; per-test analytics screen built this phase if quick, else fast-follow.
 - Category/test series is **decoupled from creation** — optional, many-to-many, assigned as a separate flow; a test can be attempted individually.
-- Test **status (active/inactive)** and **access (groups/individuals)** are post-creation management actions, not part of the creation flow.
+- Test **status (active/inactive)** and **access (which branches run a series, and when)** are post-creation management actions, not part of the creation flow.
 - Two test-taking UIs, chosen per test: the standard government CBT interface (**primary V1 build**; full mocks; all formats share it) and a generic test UI (**secondary — only if time permits**, for lighter types). The portal/admin app shell is a separate, single modern design system.
 - **Language display is per test** (`languageMode`, defaulted from base config): **SINGLE** (pick one, optional per-question toggle) or **DUAL** (both languages shown together — stem + options — no toggle). All content is already in the JSON; it's purely a render mode. `Test.languages` is the **ordered** list that drives render order.
 
