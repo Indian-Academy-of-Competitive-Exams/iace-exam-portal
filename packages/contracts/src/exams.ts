@@ -88,6 +88,18 @@ export const examSchema = z.object({
 });
 export type Exam = z.infer<typeof examSchema>;
 
+/** Families lead the hierarchy, so they narrow the exams — but never drop one already chosen. */
+export function examsInFamilies<T extends { code: string; family: ExamFamily }>(
+  exams: readonly T[],
+  families: readonly ExamFamily[],
+  alreadyChosen: readonly string[] = [],
+): T[] {
+  if (families.length === 0) return [...exams];
+  const wanted = new Set(families);
+  const chosen = new Set(alreadyChosen);
+  return exams.filter((exam) => wanted.has(exam.family) || chosen.has(exam.code));
+}
+
 export const examListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   family: examFamilySchema.optional(),

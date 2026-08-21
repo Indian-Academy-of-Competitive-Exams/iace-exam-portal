@@ -4,9 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import {
-  AUDIT_FEATURE,
   EARLIEST_BIRTH_DATE,
   EXAM_FAMILIES,
+  examsInFamilies,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
@@ -35,7 +35,6 @@ import {
   Skeleton,
   SkeletonParagraph,
 } from '@iace/ui';
-import { EntityHistory } from '../components/entity-history';
 import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
@@ -192,7 +191,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               aria-invalid={invalid}
               value={enrolledExams}
               onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-              items={exams.map((exam) => ({
+              items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
                 value: exam.code,
                 label: exam.code,
                 hint: exam.name,
@@ -668,8 +667,6 @@ export function StudentDetailPage() {
           <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
         </div>
       </FormSection>
-
-      <EntityHistory feature={AUDIT_FEATURE.STUDENT} entityId={detail.id} />
 
       <div className="grid gap-8 lg:grid-cols-2">
         <FormSection title="Details">

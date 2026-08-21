@@ -7,6 +7,7 @@ import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from '
 import {
   BRANCH_TYPE,
   EXAM_FAMILIES,
+  examsInFamilies,
   FEATURE_KEYS,
   MOBILE_DIGITS,
   PERMISSION_LEVELS,
@@ -606,7 +607,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             aria-invalid={invalid}
             value={enrolledExams}
             onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-            items={exams.map((exam) => ({
+            items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
               value: exam.code,
               label: exam.code,
               hint: exam.name,

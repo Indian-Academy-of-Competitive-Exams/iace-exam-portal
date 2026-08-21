@@ -3,10 +3,7 @@ import type { AuditAction, RowAction } from '@iace/contracts';
 import { Badge, BadgeList, linkVariants, TruncatedText } from '@iace/ui';
 import { ROUTES } from './constants';
 
-/**
- * How an audit row renders, shared by the global Audit screen and any per-entity
- * history card (`EntityHistory`) — one rendering of a `RowAction`, not two.
- */
+/** One rendering of a `RowAction`, shared by every screen that shows one. */
 
 export const WHEN_FORMATTER = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
