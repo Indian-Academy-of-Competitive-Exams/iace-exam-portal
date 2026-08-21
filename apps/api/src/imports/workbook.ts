@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
+import { EARLIEST_BIRTH_YEAR, IMPORT_MAX_ROWS, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
 
 /** The sample file the UI offers. */
 export function buildStudentTemplate(): Promise<Buffer> {
@@ -41,12 +41,46 @@ async function buildTemplate(options: {
   // ones in exponent form, and the file that comes back is full of "9.87654E+09".
   sheet.getColumn(1).numFmt = '@';
 
+  applyDateColumns(sheet, columns);
+
   const notes = workbook.addWorksheet('How to use');
   notes.getColumn(1).width = 100;
   for (const line of noteLines) notes.addRow(line);
   notes.getRow(1).font = { bold: true };
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+/** Which columns hold a date, so the rule below is stated once per key rather than per index. */
+const DATE_COLUMN_KEYS = ['dob'] as const;
+
+/** A real date column stores a serial, so how Excel DRAWS it can never reach the importer. */
+function applyDateColumns(sheet: ExcelJS.Worksheet, columns: readonly { key: string }[]): void {
+  const earliest = new Date(Date.UTC(EARLIEST_BIRTH_YEAR, 0, 1));
+
+  for (const key of DATE_COLUMN_KEYS) {
+    const index = columns.findIndex((column) => column.key === key);
+    if (index === -1) continue;
+
+    sheet.getColumn(index + 1).numFmt = 'yyyy-mm-dd';
+
+    // Per cell: ExcelJS has no column-level dataValidation. Capped where the importer caps.
+    for (let row = 2; row <= IMPORT_MAX_ROWS + 1; row += 1) {
+      sheet.getCell(row, index + 1).dataValidation = {
+        type: 'date',
+        operator: 'between',
+        allowBlank: true,
+        formulae: [earliest, new Date()],
+        showInputMessage: true,
+        promptTitle: 'Date of birth',
+        prompt: 'Type it however you normally do. It will show as YYYY-MM-DD once Excel reads it.',
+        showErrorMessage: true,
+        errorStyle: 'error',
+        errorTitle: 'That is not a usable date of birth',
+        error: `Use a real calendar date between 1 Jan ${EARLIEST_BIRTH_YEAR} and today.`,
+      };
+    }
+  }
 }
 
 // Column order must match STUDENT_IMPORT_COLUMNS.
@@ -61,7 +95,7 @@ const STUDENT_IMPORT_EXAMPLES = [
     'SSC FOUNDATION',
     'Lakshmi Kumari',
     'Ravi Kumar',
-    '2003-04-11',
+    new Date(Date.UTC(2003, 3, 11)),
     'asha@example.com',
     'FEMALE',
     'Ameerpet, Hyderabad',
@@ -106,7 +140,11 @@ const STUDENT_IMPORT_NOTES = [
   ['Mother’s Name, Father’s Name and Date of Birth are the three a student needs before'],
   ['they can sit a test. Filling them here saves asking for them later.'],
   [''],
-  ['Date of Birth — 2003-04-11, or 11/04/2003. Gender — MALE, FEMALE or OTHER.'],
+  ['Date of Birth — type it however your Excel expects; the column is a real date column,'],
+  ['so it will redraw as 2003-04-11 once Excel has understood it. If it does NOT redraw, Excel'],
+  ['read it as text and the day and month may be the wrong way round — retype it.'],
+  [''],
+  ['Gender — MALE, FEMALE or OTHER.'],
   [''],
   ['Nothing is written until you press Import. The preview shows exactly what would'],
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],

@@ -17,7 +17,15 @@ export const GENDERS = genderSchema.options;
 export const dateOnlySchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD')
-  .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), 'That is not a real date');
+  // Round-tripped, not parsed: Date.parse rolls 1998-02-31 over to 03-03 instead of failing.
+  .refine((v) => isRealCalendarDay(v), 'That is not a real date');
+
+/** Guards toISOString, which THROWS on an invalid date rather than returning NaN. */
+function isRealCalendarDay(value: string): boolean {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.toISOString().slice(0, 10) === value;
+}
 
 /** The earliest birth year worth accepting — anything older is a typo. */
 export const EARLIEST_BIRTH_YEAR = 1900;
