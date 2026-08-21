@@ -42,6 +42,8 @@ const DropdownMenuItem = React.forwardRef<
     ref={ref}
     className={cn(
       'flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors',
+      // Sized here, as Button does: lucide defaults to 24px, which is half again the row's text.
+      '[&_svg]:size-4 [&_svg]:shrink-0',
       // data-highlighted follows the arrow keys as well as the pointer.
       destructive
         ? 'text-destructive data-[highlighted]:bg-destructive/10'

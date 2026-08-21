@@ -57,3 +57,35 @@ describe('RowActions', () => {
     assert.match(screen.getByRole('button').className, /rounded-full/);
   });
 });
+
+describe('the row menu and focus', () => {
+  /** lucide defaults to 24px, which is half again the row's text. The menu sizes it, not the caller. */
+  it('sizes an item icon like the trigger sizes its own', async () => {
+    render(
+      <RowActions>
+        <DropdownMenuItem>
+          <svg data-testid="glyph" />
+          Retire
+        </DropdownMenuItem>
+      </RowActions>,
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Row actions' }), { button: 0 });
+    const item = (await screen.findByTestId('glyph')).parentElement;
+
+    assert.match(item?.className ?? '', /\[&_svg\]:size-4/);
+  });
+
+  /** The one focus treatment the rest of the system uses; Button had hand-rolled its own. */
+  it('focuses the way every other control does', () => {
+    render(
+      <RowActions>
+        <DropdownMenuItem>Retire</DropdownMenuItem>
+      </RowActions>,
+    );
+
+    const trigger = screen.getByRole('button');
+    assert.match(trigger.className, /focus-visible:shadow-focus/);
+    assert.equal(trigger.className.includes('focus-visible:ring-2'), false);
+  });
+});

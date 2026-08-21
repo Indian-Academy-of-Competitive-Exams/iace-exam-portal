@@ -61,30 +61,60 @@ export interface DialogContentProps
 const DialogContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, size, showClose = true, closeLabel = 'Close', ...props }, ref) => (
-  <DialogPrimitive.Portal>
-    <DialogOverlay />
-    {/* Centres without a transform, so the entry animation can end at `transform: none`. It does
-        NOT scroll — DialogBody is the one scroller, and a second here nests two scrollbars. */}
-    <div className="pointer-events-none fixed inset-0 z-[--z-modal] grid place-items-center overflow-hidden p-4">
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(dialogVariants({ size }), className)}
-        {...props}
-      >
-        {children}
-        {showClose ? (
-          <DialogPrimitive.Close
-            className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none"
-            aria-label={closeLabel}
+>(
+  (
+    {
+      className,
+      children,
+      size,
+      showClose = true,
+      closeLabel = 'Close',
+      onOpenAutoFocus,
+      onCloseAutoFocus,
+      ...props
+    },
+    ref,
+  ) => {
+    // Controlled by `open` with no DialogTrigger, so Radix has nothing to hand focus back to.
+    const opener = React.useRef<HTMLElement | null>(null);
+
+    return (
+      <DialogPrimitive.Portal>
+        <DialogOverlay />
+        {/* Centres without a transform, so the entry animation can end at `transform: none`. It does
+            NOT scroll — DialogBody is the one scroller, and a second here nests two scrollbars. */}
+        <div className="pointer-events-none fixed inset-0 z-[--z-modal] grid place-items-center overflow-hidden p-4">
+          <DialogPrimitive.Content
+            ref={ref}
+            className={cn(dialogVariants({ size }), className)}
+            // Fires before focus moves in, so this is still whatever opened the dialog.
+            onOpenAutoFocus={(event) => {
+              opener.current = document.activeElement as HTMLElement | null;
+              onOpenAutoFocus?.(event);
+            }}
+            onCloseAutoFocus={(event) => {
+              onCloseAutoFocus?.(event);
+              if (event.defaultPrevented) return;
+              event.preventDefault();
+              opener.current?.focus();
+            }}
+            {...props}
           >
-            <X className="size-4" aria-hidden />
-          </DialogPrimitive.Close>
-        ) : null}
-      </DialogPrimitive.Content>
-    </div>
-  </DialogPrimitive.Portal>
-));
+            {children}
+            {showClose ? (
+              <DialogPrimitive.Close
+                className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none"
+                aria-label={closeLabel}
+              >
+                <X className="size-4" aria-hidden />
+              </DialogPrimitive.Close>
+            ) : null}
+          </DialogPrimitive.Content>
+        </div>
+      </DialogPrimitive.Portal>
+    );
+  },
+);
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 /** Padded on the right whether or not the ✕ is there, so a long title wraps in

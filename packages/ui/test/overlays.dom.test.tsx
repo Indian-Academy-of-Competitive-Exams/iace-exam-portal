@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as React from 'react';
 import { afterEach, describe, it, mock } from 'node:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '../src/components/ui/sheet';
@@ -11,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '../src/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../src/components/ui/tabs';
+import { ConfirmDialog } from '../src/components/ui/dialog';
 
 afterEach(cleanup);
 
@@ -169,5 +171,40 @@ describe('overlays animate out as well as in', () => {
     const panel = screen.getByRole('dialog');
     assert.match(panel.className, /data-\[state=closed\]:animate-sheet-out-left/);
     assert.match(panel.className, /data-\[state=open\]:animate-sheet-in-left/);
+  });
+});
+
+/** No DialogTrigger to return to, so a keyboard used to close onto the top of the document. */
+describe('a dialog gives focus back to whatever opened it', () => {
+  function Harness() {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <ConfirmDialog
+          open={open}
+          onOpenChange={setOpen}
+          title="Sure?"
+          description="Yes?"
+          confirmLabel="Do it"
+          onConfirm={() => setOpen(false)}
+        />
+      </>
+    );
+  }
+
+  it('returns focus to the opener, not the document', async () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Open' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => assert.equal(screen.queryByRole('dialog'), null));
+    await waitFor(() => assert.equal(document.activeElement, opener));
   });
 });
