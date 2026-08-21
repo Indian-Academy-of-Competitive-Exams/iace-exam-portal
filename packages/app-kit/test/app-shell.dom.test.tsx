@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PAGE_CONTENT_CLASS, ThemeProvider } from '@iace/ui';
 import { AppShell } from '../browser/app-shell';
 import { type NavItem } from '../src';
@@ -100,6 +100,116 @@ describe('AppShell', () => {
     assert.equal(page?.className.includes(PAGE_CONTENT_CLASS), true);
     assert.match(container.firstElementChild?.className ?? '', /h-dvh/);
     assert.match(container.firstElementChild?.className ?? '', /overflow-hidden/);
+  });
+});
+
+const SECTIONED: readonly NavItem[] = [
+  {
+    label: 'Students',
+    children: [
+      { to: '/students', label: 'All students' },
+      { to: '/students/import', label: 'Import students' },
+    ],
+  },
+  {
+    label: 'Tests',
+    children: [
+      { to: '/tests/configs', label: 'Base configs' },
+      { to: '/tests/series', label: 'Test series' },
+    ],
+  },
+];
+
+/** Seven children, one past NAV_INLINE_MAX_ITEMS, so it resolves to PANEL. */
+const BIG: readonly NavItem[] = [
+  {
+    label: 'Everything',
+    children: Array.from({ length: 7 }, (_, i) => ({ to: `/x/${i}`, label: `Item ${i}` })),
+  },
+];
+
+const openPanel = () => fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+describe('AppShell — the nav panel overlays, it never reflows the page', () => {
+  /** It used to widen a flex sibling of <main>, so opening the menu moved every screen. */
+  it('leaves the rail the same width whether the panel is open or shut', async () => {
+    setDesktop(true);
+    renderShell({ nav: SECTIONED });
+
+    const rail = screen.getByRole('navigation', { name: 'Sections' }).parentElement;
+    const shut = rail?.className;
+
+    openPanel();
+    await screen.findByRole('dialog');
+
+    assert.equal(rail?.className, shut);
+    assert.match(shut ?? '', /w-\[--sidebar-w-rail\]/);
+  });
+
+  /** Portalled out of the layout row, so nothing it covers is asked to make space for it. */
+  it('renders the panel outside the row that holds the page', async () => {
+    setDesktop(true);
+    renderShell({ nav: SECTIONED });
+    openPanel();
+
+    const dialog = await screen.findByRole('dialog');
+    const pageRow = screen.getByText('Page').closest('main')?.parentElement;
+
+    assert.ok(pageRow);
+    assert.equal(pageRow?.contains(dialog), false);
+  });
+
+  it('closes itself when a destination is chosen', async () => {
+    setDesktop(true);
+    renderShell({ nav: SECTIONED });
+    openPanel();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Students/ }));
+    fireEvent.click(await screen.findByRole('link', { name: 'All students' }));
+
+    await waitFor(() => assert.equal(screen.queryByRole('dialog'), null));
+  });
+
+  /** Two open at once would grow the list past the panel and hand it a scrollbar. */
+  it('keeps one section open at a time', async () => {
+    setDesktop(true);
+    renderShell({ nav: SECTIONED });
+    openPanel();
+
+    const students = await screen.findByRole('button', { name: /Students/ });
+    fireEvent.click(students);
+    assert.equal(students.getAttribute('aria-expanded'), 'true');
+
+    const tests = screen.getByRole('button', { name: /Tests/ });
+    fireEvent.click(tests);
+
+    await waitFor(() => assert.equal(students.getAttribute('aria-expanded'), 'false'));
+    assert.equal(tests.getAttribute('aria-expanded'), 'true');
+  });
+
+  /** Past the threshold it opens beside the panel instead, so the panel never scrolls. */
+  it('gives an oversized section a popover rather than an accordion', async () => {
+    setDesktop(true);
+    renderShell({ nav: BIG });
+    openPanel();
+
+    // A popover trigger also carries aria-expanded, so haspopup is what tells the two apart.
+    const section = await screen.findByRole('button', { name: /Everything/ });
+    assert.equal(section.getAttribute('aria-haspopup'), 'dialog');
+
+    fireEvent.click(section);
+    const listed = await screen.findAllByRole('link', { name: /^Item / });
+    assert.equal(listed.length, 7);
+  });
+
+  /** Below the rail breakpoint there is no nav in the page, so the header button is the way in. */
+  it('draws no rail on a small screen, but still opens the same panel', async () => {
+    setDesktop(false);
+    renderShell({ nav: SECTIONED });
+
+    assert.equal(screen.queryByRole('navigation', { name: 'Sections' }), null);
+    openPanel();
+    assert.ok(await screen.findByRole('dialog'));
   });
 });
 

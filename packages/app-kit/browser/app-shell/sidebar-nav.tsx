@@ -221,4 +221,4 @@ export function SidebarNav({
   );
 }
 
-export { Leaf as NavLeaf, ROW as NAV_ROW, ROW_IDLE as NAV_ROW_IDLE };
+export { Leaf as NavLeaf, ROW as NAV_ROW, ROW_IDLE as NAV_ROW_IDLE, ROW_ACTIVE as NAV_ROW_ACTIVE };
