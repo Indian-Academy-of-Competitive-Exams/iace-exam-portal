@@ -90,7 +90,7 @@ describe('the row menu and focus', () => {
     assert.equal(trigger.className.includes('focus-visible:ring-2'), false);
   });
 
-  /** The rows inside never had a ring either — they mark position with a fill. */
+  /** The global [tabindex] ring reaches the row Radix focuses, so an item opts out by name. */
   it('gives its items a highlight rather than a ring', async () => {
     render(
       <RowActions>
@@ -101,7 +101,7 @@ describe('the row menu and focus', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Row actions' }), { button: 0 });
     const item = await screen.findByRole('menuitem', { name: 'Retire' });
 
-    assert.match(item.className, /outline-none/);
+    assert.match(item.className, /focus-visible:shadow-none/);
     assert.match(item.className, /data-\[highlighted\]:bg-muted/);
     assert.equal(/focus-visible:shadow-focus|focus-visible:ring/.test(item.className), false);
   });

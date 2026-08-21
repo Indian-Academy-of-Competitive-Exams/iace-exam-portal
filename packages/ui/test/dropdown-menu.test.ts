@@ -12,6 +12,7 @@ const userMenu = readFileSync(
   path.resolve(REPO_ROOT, 'packages/app-kit/browser/app-shell/user-menu.tsx'),
   'utf8',
 );
+const tokens = readFileSync(path.resolve(import.meta.dirname, '..', 'src/tokens.css'), 'utf8');
 
 describe('DropdownMenu', () => {
   /** `hover:` alone leaves the keyboard selection moving with nothing following it. */
@@ -19,6 +20,12 @@ describe('DropdownMenu', () => {
     assert.match(menu, /data-\[highlighted\]:bg-muted/);
     assert.match(menu, /data-\[highlighted\]:bg-destructive\/10/);
     assert.ok(!/hover:bg-muted/.test(menu), 'hover alone would miss the keyboard');
+  });
+
+  /** The global floor rings anything with a tabindex, and Radix focuses the row it highlights. */
+  it('opts its items out of the global focus ring', () => {
+    assert.match(tokens, /\[tabindex\]\):focus-visible/);
+    assert.match(menu, /focus-visible:shadow-none/);
   });
 });
 
