@@ -94,7 +94,7 @@ export function AppShell({
           {hasNav && !isDesktop ? (
             <Button
               variant="ghost"
-              size="sm"
+              size="iconSm"
               aria-label="Open navigation"
               aria-expanded={panelOpen}
               onClick={() => setPanelOpen(true)}
@@ -178,7 +178,7 @@ export function AppShell({
                   because the logo beside it is the visible one. */}
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <SheetClose asChild>
-                <Button variant="ghost" size="sm" aria-label="Close navigation">
+                <Button variant="ghost" size="iconSm" aria-label="Close navigation">
                   <X aria-hidden />
                 </Button>
               </SheetClose>

@@ -207,6 +207,23 @@ module.exports = {
           from: { transform: 'translateX(100%)' },
           to: { transform: 'translateX(0)' },
         },
+        // Radix keeps a closing panel mounted only while an animation runs on it.
+        'overlay-out': {
+          from: { opacity: '1' },
+          to: { opacity: '0' },
+        },
+        'dialog-out': {
+          from: { opacity: '1', transform: 'none' },
+          to: { opacity: '0', transform: 'translateY(0.5rem) scale(0.98)' },
+        },
+        'sheet-out-left': {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-100%)' },
+        },
+        'sheet-out-right': {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(100%)' },
+        },
         // The sheen crossing a skeleton. Travels from off one edge to off the
         // other, so it never parks in the middle of the placeholder.
         'skeleton-sweep': {
@@ -229,6 +246,11 @@ module.exports = {
         // panel that bounces off the screen edge it is attached to looks loose.
         'sheet-in-left': 'sheet-in-left 220ms cubic-bezier(0.2, 0, 0, 1)',
         'sheet-in-right': 'sheet-in-right 220ms cubic-bezier(0.2, 0, 0, 1)',
+        // Quicker than arriving, and eased IN: nobody waits on a thing already dismissed.
+        'overlay-out': 'overlay-out 120ms cubic-bezier(0.4, 0, 1, 1)',
+        'dialog-out': 'dialog-out 140ms cubic-bezier(0.4, 0, 1, 1)',
+        'sheet-out-left': 'sheet-out-left 180ms cubic-bezier(0.4, 0, 1, 1)',
+        'sheet-out-right': 'sheet-out-right 180ms cubic-bezier(0.4, 0, 1, 1)',
       },
       fontFamily: {
         // Single source of truth: the bilingual Inter + Noto stack lives in

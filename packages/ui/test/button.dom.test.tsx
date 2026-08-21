@@ -99,3 +99,27 @@ describe('Button type', () => {
     assert.equal(link.getAttribute('type'), null);
   });
 });
+
+describe('the icon-only sizes', () => {
+  /** The target IS the glyph, so its hover is a disc around it, not a box containing it. */
+  it('are round, not rounded rectangles', () => {
+    const { container } = render(
+      <>
+        <Button size="icon" aria-label="Big" />
+        <Button size="iconSm" aria-label="Small" />
+      </>,
+    );
+
+    for (const button of container.querySelectorAll('button')) {
+      assert.ok(button.className.includes('rounded-full'), button.getAttribute('aria-label') ?? '');
+      assert.equal(button.className.includes('rounded-md'), false);
+    }
+  });
+
+  /** Square, or the disc is an ellipse. */
+  it('are square', () => {
+    const { container } = render(<Button size="icon" aria-label="Only" />);
+
+    assert.match(container.querySelector('button')?.className ?? '', /\bsize-10\b/);
+  });
+});

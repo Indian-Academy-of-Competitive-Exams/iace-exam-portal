@@ -20,6 +20,9 @@ const ROW = [
 ].join(' ');
 
 const ROW_IDLE = 'text-muted-foreground hover:bg-muted hover:text-foreground';
+
+/** Collapsed, the row IS the glyph: square and round, so the hover is a disc around it. */
+const ROW_RAIL = 'mx-auto w-[--nav-item-h] justify-center rounded-full px-0';
 const ROW_ACTIVE = 'bg-primary-subtle text-primary-ink';
 
 function Glyph({ item, collapsed }: Readonly<{ item: NavItem; collapsed: boolean }>) {
@@ -55,7 +58,7 @@ function Leaf({
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       aria-current={isActive ? 'page' : undefined}
-      className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && 'justify-center px-0')}
+      className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && ROW_RAIL)}
     >
       <Glyph item={item} collapsed={collapsed} />
       {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
@@ -102,7 +105,7 @@ function SectionPopover({
             className={cn(
               ROW,
               isNavItemActive(item, activePath) || open ? ROW_ACTIVE : ROW_IDLE,
-              collapsed && 'justify-center px-0',
+              collapsed && ROW_RAIL,
             )}
           >
             <Glyph item={item} collapsed={collapsed} />

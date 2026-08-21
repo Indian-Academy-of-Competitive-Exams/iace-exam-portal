@@ -23,7 +23,9 @@ const buttonVariants = cva(
         sm: 'h-8 px-3 text-xs',
         default: 'h-10 px-4 py-2',
         lg: 'h-11 px-6',
-        icon: 'h-10 w-10',
+        // Round: the target IS the glyph, so its corners would belong to nothing.
+        icon: 'size-10 rounded-full',
+        iconSm: 'size-8 rounded-full',
       },
     },
     defaultVariants: {

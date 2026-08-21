@@ -154,3 +154,20 @@ describe('Tabs', () => {
     );
   });
 });
+
+/** With an entry animation and no exit, a sheet vanished on the frame the state flipped. */
+describe('overlays animate out as well as in', () => {
+  it('gives the sheet and its scrim a closed-state animation', () => {
+    render(
+      <Sheet open>
+        <SheetContent side="left">
+          <SheetTitle>Nav</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    const panel = screen.getByRole('dialog');
+    assert.match(panel.className, /data-\[state=closed\]:animate-sheet-out-left/);
+    assert.match(panel.className, /data-\[state=open\]:animate-sheet-in-left/);
+  });
+});

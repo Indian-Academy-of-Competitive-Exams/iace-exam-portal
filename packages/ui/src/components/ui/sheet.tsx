@@ -20,8 +20,9 @@ const sheetVariants = cva(
   {
     variants: {
       side: {
-        left: 'left-0 border-r border-border animate-sheet-in-left',
-        right: 'right-0 border-l border-border animate-sheet-in-right',
+        left: 'left-0 border-r border-border data-[state=open]:animate-sheet-in-left data-[state=closed]:animate-sheet-out-left',
+        right:
+          'right-0 border-l border-border data-[state=open]:animate-sheet-in-right data-[state=closed]:animate-sheet-out-right',
       },
     },
     defaultVariants: { side: 'left' },
@@ -42,7 +43,7 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(({ className, children, side, showClose = true, closeLabel = 'Close', ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-[--z-drawer] bg-[--overlay-bg] animate-overlay-in" />
+    <DialogPrimitive.Overlay className="fixed inset-0 z-[--z-drawer] bg-[--overlay-bg] data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}

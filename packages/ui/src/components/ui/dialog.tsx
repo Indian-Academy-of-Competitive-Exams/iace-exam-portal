@@ -16,7 +16,11 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-[--z-overlay] bg-[--overlay-bg] animate-overlay-in', className)}
+    className={cn(
+      'fixed inset-0 z-[--z-overlay] bg-[--overlay-bg]',
+      'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+      className,
+    )}
     {...props}
   />
 ));
@@ -28,7 +32,8 @@ const dialogVariants = cva(
     'pointer-events-auto relative flex w-full flex-col',
     'max-h-[calc(100dvh-4rem)]',
     'bg-surface text-foreground rounded-[--modal-radius] shadow-[--shadow-overlay]',
-    'animate-dialog-in focus:outline-none',
+    'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
+    'focus:outline-none',
   ].join(' '),
   {
     variants: {
