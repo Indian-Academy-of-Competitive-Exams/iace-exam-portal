@@ -1,8 +1,4 @@
-/**
- * A date of birth that is wrong by a few days is worse than one that is rejected: it is an
- * identity field, it gates the pre-test check, and nothing downstream ever questions it. These
- * cover the two ways a roster file used to get one silently wrong.
- */
+/** Dates of birth: impossible days, and what the template does to Excel's formatting. */
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

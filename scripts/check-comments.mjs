@@ -22,6 +22,9 @@ const SKIPPED = /(^|\/)(dist|node_modules|coverage)\//;
 const DIVIDER = /^\s*(\/\/|\*|\/\*)[\s*]*[-=]{8,}/;
 const MAX_LINES = 1;
 
+/** A file's map, not a place to put the essay the one-line rule refused. */
+const MAX_HEADER_LINES = 6;
+
 function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
@@ -105,8 +108,8 @@ for (const file of staged) {
   for (const block of commentBlocks(source)) {
     if (block.lines <= MAX_LINES) continue;
     if (block.banner) continue;
-    // The block at the very top of a file is its map, not an explanation of a line.
-    if (block.start === 1) continue;
+    // The block at the very top of a file is its map — bounded, or it becomes the loophole.
+    if (block.start === 1 && block.lines <= MAX_HEADER_LINES) continue;
 
     let touched = false;
     for (let line = block.start; line <= block.end && !touched; line += 1) {
@@ -123,6 +126,8 @@ if (offences.length > 0) {
   for (const o of offences) {
     console.error(`  ${o.file}:${o.start}  ${o.lines} lines`);
   }
-  console.error('\n  Exempt: the block at the top of a file, and ----- / ===== section banners.\n');
+  console.error(
+    `\n  Exempt: ----- / ===== section banners, and a file's top block up to ${MAX_HEADER_LINES} lines.\n`,
+  );
   process.exit(1);
 }
