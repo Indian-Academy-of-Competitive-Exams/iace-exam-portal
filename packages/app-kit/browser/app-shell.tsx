@@ -169,7 +169,8 @@ export function AppShell({
               nothing to describe. Radix otherwise warns in dev that a dialog
               without a description is probably missing one. */}
           <SheetContent side="left" showClose={false} aria-describedby={undefined}>
-            <div className="mb-2 flex items-center justify-between">
+            {/* The lockup is a heading, not the first row of the list. */}
+            <div className="mb-5 flex items-center justify-between border-b border-border pb-3">
               <Link to={homeTo} onClick={closePanel} className="rounded-md">
                 <Brandmark />
               </Link>

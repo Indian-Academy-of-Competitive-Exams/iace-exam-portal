@@ -54,7 +54,7 @@ A learning platform for **IACE**, a government-exam coaching institute (SSC, Ban
 
 ## Where things live
 
-- `.claude/skills/ui-conventions/` — **the binding shared-code + UI-behaviour rules.** Invoke the `ui-conventions` skill before writing any screen or component.
+- `.claude/skills/ui-conventions/` — **the binding shared-code + UI-behaviour rules. No deviations.** Invoke the `ui-conventions` skill before writing or changing any screen, component or table — it is the single source for how UI behaves here, and it is not advisory. A rule you cannot follow is a conversation, not a judgement call.
 - `packages/ui/src/index.ts` — **the component inventory. Read it before building any UI.**
 - `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
 - `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: test-taking UI variants (§14), language display (§2), student journey and landing page (§5), results and solutions (§6).

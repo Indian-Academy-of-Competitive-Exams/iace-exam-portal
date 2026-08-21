@@ -5,8 +5,12 @@ description: The binding shared-code and UI-behaviour rules for this repo - wher
 
 # UI conventions
 
-Every bullet is a rule to follow, not background. Read `packages/ui/src/index.ts` — the component
-inventory — before building any UI.
+Every bullet is a rule, not background. **They are binding: no deviations.** Where a bullet allows
+a judgement it says so, and then the judgement is one sentence you write down — not a silent
+choice. Read `packages/ui/src/index.ts` — the component inventory — before building any UI.
+
+Existing code that breaks a rule is named in the bullet that breaks it. Those are the shapes to
+stop copying, not licence to add another.
 
 ## Shared code
 
@@ -44,6 +48,10 @@ inventory — before building any UI.
   - **`Select` remains only for what is genuinely a native control** — nothing today. Reaching for it needs a reason you can state, and "it is fewer lines" is not one.
 - **A date is picked with `DatePicker`, never `<input type="date">`.** The browser's picker is drawn by the browser: Chrome, Safari and Firefox each render a different calendar, and a phone renders a fourth. `DatePicker` speaks `YYYY-MM-DD` — the shape `dateOnlySchema` takes — and computes in UTC, because a day built from a local `Date` serialises as the day before in any zone behind Greenwich. Pass `max={todayISO()}` for anything the server caps at today, so the rule is visible before it is enforced.
 - **A list control never ends silently at its first page.** `PAGE_SIZE_MAX` stays 100; anything that can outgrow it uses `Combobox` + `useInfinitePages` with server-side search. Never a plain `<select>` over one capped request.
+- **A row's actions live behind ONE menu, never spread across the row.** `DropdownMenu` with a single icon trigger in the last column; Edit, Retire, Delete and "open the children" are all items inside it. Every extra button is a fixed strip of width taken from every row forever, and it is the content that pays — the wider the table, the more of it goes. A `ConfirmDialog` still guards what needs guarding; the menu item opens it.
+  - **A count is a link, not a button.** Reaching a row's children costs nothing extra when the number already on screen is the affordance (`branch.studentCount` → the students screen). Prefer that to a labelled button, and never ship both.
+  - The shape to stop copying: `branches.tsx`, `exams.tsx`, `programs.tsx`, `base-configs.tsx`, `test-series.tsx` and `taxonomy.tsx` each spread two to four buttons across a row today.
+- **Text in a table cell is `TruncatedText`. Always — this is not a per-column decision.** One line, cut to the column, a tooltip only when something is genuinely hidden, and a muted dash when the value is null. A bare `{row.name}` lets one long value widen its column and push the rest off the screen, and the row that did it is never the row you were looking at.
 - **Variable chips in a table cell use `BadgeList`** — first one (or `max`), then a focusable `+N` whose tooltip lists the rest. Never put a value only in a tooltip; anything a decision depends on belongs on a detail screen or behind a filter.
 
 ## Design system
