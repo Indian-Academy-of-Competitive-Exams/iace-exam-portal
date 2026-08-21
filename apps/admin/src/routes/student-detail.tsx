@@ -29,6 +29,7 @@ import {
   Field,
   Input,
   MultiCombobox,
+  PageFrame,
   PageHeader,
   Select,
   Skeleton,
@@ -586,20 +587,24 @@ export function StudentDetailPage() {
   const detail = student.data;
 
   return (
-    <>
-      <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
-        <Link to={ROUTES.STUDENTS}>
-          <ArrowLeft aria-hidden />
-          All students
-        </Link>
-      </Button>
+    <PageFrame
+      header={
+        <>
+          <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
+            <Link to={ROUTES.STUDENTS}>
+              <ArrowLeft aria-hidden />
+              All students
+            </Link>
+          </Button>
 
-      <PageHeader
-        title={detail.fullName ?? detail.mobile}
-        description={`+91 ${detail.mobile}`}
-        action={<StudentStateSwitches detail={detail} />}
-      />
-
+          <PageHeader
+            title={detail.fullName ?? detail.mobile}
+            description={`+91 ${detail.mobile}`}
+            action={<StudentStateSwitches detail={detail} />}
+          />
+        </>
+      }
+    >
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <Avatar
           src={detail.profile?.photoUrl}
@@ -730,6 +735,6 @@ export function StudentDetailPage() {
           </Card>
         </div>
       </form>
-    </>
+    </PageFrame>
   );
 }

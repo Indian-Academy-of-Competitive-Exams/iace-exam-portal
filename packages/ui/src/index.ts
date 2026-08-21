@@ -115,9 +115,11 @@ export { PageHeader } from './components/ui/page-header';
 export { DataTable, type DataTableColumn, type DataTableProps } from './components/ui/data-table';
 export {
   TableFrame,
+  PageFrame,
   useInTableFrame,
   PAGE_CONTENT_CLASS,
   type TableFrameProps,
+  type PageFrameProps,
 } from './components/ui/table-frame';
 export {
   TruncatedText,

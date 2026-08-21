@@ -21,6 +21,7 @@ import {
   FileDropzone,
   LoadingState,
   linkVariants,
+  PageFrame,
   PageHeader,
   StatRow,
   Table,
@@ -74,19 +75,23 @@ export function ImportStudentsPage() {
     file !== null && plan !== null && plan.summary.willCreate + plan.summary.willUpdate > 0;
 
   return (
-    <>
-      <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
-        <Link to={ROUTES.STUDENTS}>
-          <ArrowLeft aria-hidden />
-          All students
-        </Link>
-      </Button>
+    <PageFrame
+      header={
+        <>
+          <Button variant="ghost" size="sm" className="mb-3 -ml-2" asChild>
+            <Link to={ROUTES.STUDENTS}>
+              <ArrowLeft aria-hidden />
+              All students
+            </Link>
+          </Button>
 
-      <PageHeader
-        title="Import students"
-        description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
-      />
-
+          <PageHeader
+            title="Import students"
+            description="Only Mobile Number is required. Each new student is given a starting PIN — the first four digits of their own number — which they should change on first sign-in."
+          />
+        </>
+      }
+    >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="order-2 p-4 lg:order-1">
           {plan?.fileErrors.length ? (
@@ -210,7 +215,7 @@ export function ImportStudentsPage() {
           ) : null}
         </div>
       </div>
-    </>
+    </PageFrame>
   );
 }
 

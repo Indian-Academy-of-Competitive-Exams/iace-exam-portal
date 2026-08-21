@@ -16,6 +16,7 @@ import {
   CardTitle,
   Field,
   Input,
+  PageFrame,
   PageHeader,
   Select,
   SkeletonParagraph,
@@ -83,19 +84,23 @@ export function ProfilePage() {
   });
 
   return (
-    <>
-      <Button variant="ghost" size="sm" className="-ml-2 mb-3" asChild>
-        <Link to={ROUTES.PROFILE}>
-          <ArrowLeft aria-hidden />
-          Back to profile
-        </Link>
-      </Button>
+    <PageFrame
+      header={
+        <>
+          <Button variant="ghost" size="sm" className="-ml-2 mb-3" asChild>
+            <Link to={ROUTES.PROFILE}>
+              <ArrowLeft aria-hidden />
+              Back to profile
+            </Link>
+          </Button>
 
-      <PageHeader
-        title="Your details"
-        description="Only three of these are needed before a test. The rest you can fill in whenever you like."
-      />
-
+          <PageHeader
+            title="Your details"
+            description="Only three of these are needed before a test. The rest you can fill in whenever you like."
+          />
+        </>
+      }
+    >
       {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
 
       {me.isPending && (
@@ -261,6 +266,6 @@ export function ProfilePage() {
           </div>
         </form>
       )}
-    </>
+    </PageFrame>
   );
 }

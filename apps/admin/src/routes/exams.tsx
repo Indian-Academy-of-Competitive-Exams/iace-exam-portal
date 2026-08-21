@@ -28,6 +28,7 @@ import {
   FormField,
   Input,
   NumericInput,
+  PageFrame,
   PageHeader,
   Pagination,
   plural,
@@ -100,20 +101,24 @@ export function ExamsPage() {
   const level = filters.get('level') || LEVELS.EXAMS;
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Exams"
-        description="Family, exam and stage — the journey a student is coached through. An enrolment stores the exam code; every base config, series and test hangs off a stage."
-      />
+    <PageFrame
+      header={
+        <>
+          <PageHeader
+            title="Exams"
+            description="Family, exam and stage — the journey a student is coached through. An enrolment stores the exam code; every base config, series and test hangs off a stage."
+          />
 
-      {!isSuperAdmin ? (
-        <Alert variant="info">
-          <span>
-            Only a super admin can add or change the catalog. You can see it to pick from.
-          </span>
-        </Alert>
-      ) : null}
-
+          {!isSuperAdmin ? (
+            <Alert variant="info" className="mb-4">
+              <span>
+                Only a super admin can add or change the catalog. You can see it to pick from.
+              </span>
+            </Alert>
+          ) : null}
+        </>
+      }
+    >
       <Tabs
         value={level}
         onValueChange={(value) => filters.set({ level: value, q: '', examId: '' })}
@@ -130,7 +135,7 @@ export function ExamsPage() {
           <StagesTab canWrite={isSuperAdmin} />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageFrame>
   );
 }
 

@@ -16,6 +16,7 @@ import {
   Card,
   Checkbox,
   ConfirmDialog,
+  PageFrame,
   PageHeader,
   plural,
   Skeleton,
@@ -85,39 +86,44 @@ export function PermissionsPage() {
 
   return (
     <SuperAdminOnly title="Permissions">
-      <PageHeader
-        title="Permissions"
-        description="What each admin may do. Write covers create, update and delete, and always includes read. Tick what they should have, then save the lot."
-      />
+      <PageFrame
+        header={
+          <>
+            <PageHeader
+              title="Permissions"
+              description="What each admin may do. Write covers create, update and delete, and always includes read. Tick what they should have, then save the lot."
+            />
 
-      {!isLoading && registered.length === 0 ? (
-        <Alert variant="warning" className="mb-5">
-          <span>
-            No features are defined, so there is nothing to grant. Feature keys live in the code —
-            screen first.
-          </span>
-        </Alert>
-      ) : null}
+            {!isLoading && registered.length === 0 ? (
+              <Alert variant="warning" className="mb-5">
+                <span>
+                  No features are defined, so there is nothing to grant. Feature keys live in the
+                  code — screen first.
+                </span>
+              </Alert>
+            ) : null}
+          </>
+        }
+      >
+        {isLoading ? (
+          // Panel-shaped, because that is what is coming — a word would be replaced and jump.
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-14 rounded-lg" />
+            <Skeleton className="h-14 rounded-lg" />
+            <Skeleton className="h-14 rounded-lg" />
+          </div>
+        ) : null}
 
-      {isLoading ? (
-        // Panel-shaped, because that is what is coming — a word in a card would
-        // be replaced by three of them and shove the page down.
         <div className="flex flex-col gap-3">
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
-          <Skeleton className="h-14 rounded-lg" />
+          {rows.map((admin) => (
+            <AdminPanel key={admin.id} admin={admin} features={registered} onSaved={refresh} />
+          ))}
         </div>
-      ) : null}
 
-      <div className="flex flex-col gap-3">
-        {rows.map((admin) => (
-          <AdminPanel key={admin.id} admin={admin} features={registered} onSaved={refresh} />
-        ))}
-      </div>
-
-      {!isLoading && rows.length === 0 ? (
-        <Card className="p-4 text-sm text-muted-foreground">No active admins.</Card>
-      ) : null}
+        {!isLoading && rows.length === 0 ? (
+          <Card className="p-4 text-sm text-muted-foreground">No active admins.</Card>
+        ) : null}
+      </PageFrame>
     </SuperAdminOnly>
   );
 }

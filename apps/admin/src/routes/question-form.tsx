@@ -30,6 +30,7 @@ import {
   FormActions,
   FormField,
   Input,
+  PageFrame,
   PageHeader,
   RadioGroup,
   RadioGroupItem,
@@ -246,14 +247,22 @@ export function QuestionFormPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={editing ? 'Edit question' : 'New question'}
-        description="English is required. Fill in Hindi or Telugu only where the whole question is translated — a half-translated paper cannot be sat in that language."
-      />
+    <PageFrame
+      header={
+        <>
+          <PageHeader
+            title={editing ? 'Edit question' : 'New question'}
+            description="English is required. Fill in Hindi or Telugu only where the whole question is translated — a half-translated paper cannot be sat in that language."
+          />
 
-      {banner ? <Alert variant="danger">{banner}</Alert> : null}
-
+          {banner ? (
+            <Alert variant="danger" className="mb-4">
+              {banner}
+            </Alert>
+          ) : null}
+        </>
+      }
+    >
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -425,7 +434,7 @@ export function QuestionFormPage() {
           </Button>
         </FormActions>
       </form>
-    </div>
+    </PageFrame>
   );
 }
 

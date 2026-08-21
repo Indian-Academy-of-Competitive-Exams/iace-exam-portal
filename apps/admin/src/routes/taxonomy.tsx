@@ -20,6 +20,7 @@ import {
   FormDialog,
   FormField,
   Input,
+  PageFrame,
   PageHeader,
   Pagination,
   SearchInput,
@@ -52,12 +53,14 @@ export function TaxonomyPage() {
   const level = filters.get('level') || LEVELS.SUBJECTS;
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Subjects and topics"
-        description="Where a question is filed, and what the import template offers. Anything finer than a topic is a tag on the question."
-      />
-
+    <PageFrame
+      header={
+        <PageHeader
+          title="Subjects and topics"
+          description="Where a question is filed, and what the import template offers. Anything finer than a topic is a tag on the question."
+        />
+      }
+    >
       <Tabs value={level} onValueChange={(value) => filters.set({ level: value, q: '' })}>
         <TabsList>
           <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
@@ -71,7 +74,7 @@ export function TaxonomyPage() {
           <TopicsTab canWrite={canWrite} />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageFrame>
   );
 }
 

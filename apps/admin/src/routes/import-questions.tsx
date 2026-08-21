@@ -22,6 +22,7 @@ import {
   FileDropzone,
   linkVariants,
   LoadingState,
+  PageFrame,
   PageHeader,
   StatRow,
   Table,
@@ -94,12 +95,14 @@ export function ImportQuestionsPage() {
   const { file, plan, preview, commit, sample, choose, canCommit } = useQuestionImport();
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title="Import questions"
-        description="One row is one question, in as many of the three languages as you have. Nothing is written until you press Import."
-      />
-
+    <PageFrame
+      header={
+        <PageHeader
+          title="Import questions"
+          description="One row is one question, in as many of the three languages as you have. Nothing is written until you press Import."
+        />
+      }
+    >
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <Card className="order-2 p-4 lg:order-1">
           {plan?.fileErrors.length ? (
@@ -216,7 +219,7 @@ export function ImportQuestionsPage() {
           ) : null}
         </div>
       </div>
-    </div>
+    </PageFrame>
   );
 }
 

@@ -44,6 +44,7 @@ import {
   FormActions,
   FormField,
   Input,
+  PageFrame,
   PageHeader,
   plural,
   Select,
@@ -409,18 +410,20 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={config.name}
-        description={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
-        action={
-          <Button size="sm" onClick={() => setAsking(true)}>
-            <Copy aria-hidden />
-            Clone to change it
-          </Button>
-        }
-      />
-
+    <PageFrame
+      header={
+        <PageHeader
+          title={config.name}
+          description={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
+          action={
+            <Button size="sm" onClick={() => setAsking(true)}>
+              <Copy aria-hidden />
+              Clone to change it
+            </Button>
+          }
+        />
+      }
+    >
       <Alert variant="warning">
         <span>
           This config is locked — a test built from it has already been finalized, and a paper
@@ -508,7 +511,7 @@ function LockedConfig({ config }: Readonly<{ config: BaseConfigDetail }>) {
         confirmLabel="Clone config"
         onConfirm={() => clone.mutate()}
       />
-    </div>
+    </PageFrame>
   );
 }
 
@@ -561,14 +564,22 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   ]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={editing ? `Edit ${detail.name}` : 'New base config'}
-        description="The shape every test under this stage inherits. It freezes the moment a test built from it is first finalized — after that only a clone can change it."
-      />
+    <PageFrame
+      header={
+        <>
+          <PageHeader
+            title={editing ? `Edit ${detail.name}` : 'New base config'}
+            description="The shape every test under this stage inherits. It freezes the moment a test built from it is first finalized — after that only a clone can change it."
+          />
 
-      {banner ? <Alert variant="danger">{banner}</Alert> : null}
-
+          {banner ? (
+            <Alert variant="danger" className="mb-4">
+              {banner}
+            </Alert>
+          ) : null}
+        </>
+      }
+    >
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -814,7 +825,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
           </Button>
         </FormActions>
       </form>
-    </div>
+    </PageFrame>
   );
 }
 

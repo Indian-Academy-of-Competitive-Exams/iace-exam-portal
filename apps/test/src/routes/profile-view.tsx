@@ -11,6 +11,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  PageFrame,
   PageHeader,
   SkeletonParagraph,
 } from '@iace/ui';
@@ -39,20 +40,22 @@ export function ProfileViewPage() {
   const profile = me.data.profile;
 
   return (
-    <>
-      <PageHeader
-        title="Your profile"
-        description="What we hold about you, and what is still missing."
-        action={
-          <Button variant="outline" size="sm" asChild>
-            <Link to={ROUTES.PROFILE_EDIT}>
-              <Pencil aria-hidden />
-              Edit details
-            </Link>
-          </Button>
-        }
-      />
-
+    <PageFrame
+      header={
+        <PageHeader
+          title="Your profile"
+          description="What we hold about you, and what is still missing."
+          action={
+            <Button variant="outline" size="sm" asChild>
+              <Link to={ROUTES.PROFILE_EDIT}>
+                <Pencil aria-hidden />
+                Edit details
+              </Link>
+            </Button>
+          }
+        />
+      }
+    >
       <PreTestPrompt preTestReady={me.data.preTestReady} />
 
       <div className="flex flex-col gap-5">
@@ -111,7 +114,7 @@ export function ProfileViewPage() {
           }))}
         />
       </div>
-    </>
+    </PageFrame>
   );
 }
 

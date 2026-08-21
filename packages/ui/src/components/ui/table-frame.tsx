@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Card } from './card';
+import { cn } from '../../lib/utils';
 
 /**
  * The app shell's content wrapper. Here rather than in the shell so this and the
@@ -13,6 +14,23 @@ export const PAGE_CONTENT_CLASS = [
 ].join(' ');
 
 const TableFrameContext = React.createContext(false);
+
+export interface PageFrameProps {
+  /** Pinned above the body — usually a `PageHeader` carrying the page's actions. */
+  header?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}
+
+/** Any page that is not a list: header held still, body the only scroller. */
+export function PageFrame({ header, children, className }: Readonly<PageFrameProps>) {
+  return (
+    <div data-page-frame className="flex min-h-0 flex-1 flex-col">
+      {header ? <div className="shrink-0">{header}</div> : null}
+      <div className={cn('min-h-0 flex-1 overflow-y-auto', className)}>{children}</div>
+    </div>
+  );
+}
 
 export function useInTableFrame(): boolean {
   return React.useContext(TableFrameContext);

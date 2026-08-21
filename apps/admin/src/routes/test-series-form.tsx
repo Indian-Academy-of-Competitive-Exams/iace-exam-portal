@@ -27,6 +27,7 @@ import {
   FormActions,
   FormField,
   Input,
+  PageFrame,
   PageHeader,
   plural,
   Select,
@@ -168,14 +169,22 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={editing ? `Edit ${detail.name}` : 'New test series'}
-        description="A test reaches a student only through a series. Who can see it is decided here; where it runs is decided per branch."
-      />
+    <PageFrame
+      header={
+        <>
+          <PageHeader
+            title={editing ? `Edit ${detail.name}` : 'New test series'}
+            description="A test reaches a student only through a series. Who can see it is decided here; where it runs is decided per branch."
+          />
 
-      {banner ? <Alert variant="danger">{banner}</Alert> : null}
-
+          {banner ? (
+            <Alert variant="danger" className="mb-4">
+              {banner}
+            </Alert>
+          ) : null}
+        </>
+      }
+    >
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -305,7 +314,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       </form>
 
       {editing ? <BranchScheduleCard series={detail} /> : null}
-    </div>
+    </PageFrame>
   );
 }
 
