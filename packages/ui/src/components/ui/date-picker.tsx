@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FIELD_TRIGGER_CLASS } from './combobox-shell';
 
@@ -246,6 +246,7 @@ export function DatePicker({
 
   const block = yearBlock(view.year);
   const heading = headingFor(mode, view, block);
+  const canZoomOut = MODE_OUT[mode] !== mode;
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpen}>
@@ -275,14 +276,17 @@ export function DatePicker({
             <NavButton label={PAGE_BACK_LABEL[mode]} onClick={() => page(-1)}>
               <ChevronLeft className="size-4" aria-hidden />
             </NavButton>
+            {/* The caret is the whole affordance: without it the heading reads as a label. */}
             <button
               type="button"
               onClick={() => setMode(MODE_OUT[mode])}
+              disabled={!canZoomOut}
               aria-live="polite"
-              aria-label={`${heading}. ${ZOOM_OUT_LABEL[mode]}`}
-              className="rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none"
+              aria-label={canZoomOut ? `${heading}. ${ZOOM_OUT_LABEL[mode]}` : heading}
+              className="flex items-center gap-1 rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none disabled:hover:bg-transparent [&_svg]:size-3.5 [&_svg]:text-muted-foreground"
             >
               {heading}
+              {canZoomOut ? <ChevronDown aria-hidden /> : null}
             </button>
             <NavButton label={PAGE_NEXT_LABEL[mode]} onClick={() => page(1)}>
               <ChevronRight className="size-4" aria-hidden />
@@ -369,7 +373,7 @@ const PAGE_NEXT_LABEL: Readonly<Record<CalendarMode, string>> = {
 const ZOOM_OUT_LABEL: Readonly<Record<CalendarMode, string>> = {
   day: 'Choose a month',
   month: 'Choose a year',
-  year: 'Choose a year',
+  year: '',
 };
 
 function DayGrid({
