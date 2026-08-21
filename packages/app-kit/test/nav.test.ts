@@ -216,9 +216,22 @@ describe('navTrail', () => {
     ]);
   });
 
-  /** A section groups screens without being one, so it carries no link to follow. */
-  it('gives a section no link', () => {
-    assert.equal(navTrail(NAV, '/students/import')[0]?.to, undefined);
+  /** Without this the trail had no linkable ancestor, so mobile rendered no back link at all. */
+  it('points a section at the first screen it holds', () => {
+    assert.deepEqual(navTrail(NAV, '/students/import')[0], {
+      label: 'Students',
+      to: '/students',
+    });
+  });
+
+  it('always leaves something to go back to', () => {
+    const trail = navTrail(NAV, '/students/import');
+    assert.ok(trail.slice(0, -1).some((crumb) => crumb.to !== undefined));
+  });
+
+  /** A link to the page you are on is a dead link, and a back arrow that goes nowhere. */
+  it('does not point an ancestor at the current page', () => {
+    assert.equal(navTrail(NAV, '/students')[0]?.to, undefined);
   });
 
   /** A trail built by prefix would name `/students` an ancestor of `/students/import`. */

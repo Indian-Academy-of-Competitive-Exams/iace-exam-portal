@@ -79,18 +79,29 @@ export function activeNavPath(items: readonly NavItem[], pathname: string): stri
 /** One step on the way to the current page. Only the last one is where you already are. */
 export interface Crumb {
   label: string;
-  /** Absent for a section, which groups screens without being one. */
+  /** Absent only when nothing under this step can be navigated to. */
   to?: string;
 }
 
-/** The trail to `pathname`. A section has no link, and a one-item trail is no trail. */
+/** A section is not a screen, so its crumb goes to the first screen it holds. */
+function firstScreenIn(item: NavItem): string | undefined {
+  if (item.to !== undefined) return item.to;
+  for (const child of item.children ?? []) {
+    const found = firstScreenIn(child);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** The trail to `pathname`, always with one crumb you can follow back. A one-item trail is none. */
 export function navTrail(items: readonly NavItem[], pathname: string): Crumb[] {
   const active = activeNavPath(items, pathname);
   if (active === undefined) return [];
 
   const walk = (list: readonly NavItem[], above: Crumb[]): Crumb[] | undefined => {
     for (const item of list) {
-      const here = [...above, { label: item.label, ...(item.to ? { to: item.to } : {}) }];
+      const to = item.to ?? firstScreenIn(item);
+      const here = [...above, { label: item.label, ...(to !== undefined ? { to } : {}) }];
       if (item.to === active) return here;
 
       const deeper = walk(item.children ?? [], here);
@@ -100,7 +111,13 @@ export function navTrail(items: readonly NavItem[], pathname: string): Crumb[] {
   };
 
   const trail = walk(items, []) ?? [];
-  return trail.length > 1 ? trail : [];
+  if (trail.length < 2) return [];
+
+  // An ancestor pointing at the current page is a link that goes nowhere, and a back arrow to here.
+  const last = trail.at(-1);
+  return trail.map((crumb, index) =>
+    index < trail.length - 1 && crumb.to === last?.to ? { label: crumb.label } : crumb,
+  );
 }
 
 /** Does this item, or anything under it, own `activePath`? Marks a collapsed section current. */
