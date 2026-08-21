@@ -128,7 +128,7 @@ export function AppShell({
             className={cn(
               // `relative` positions the expand toggle that hangs off the edge.
               'relative flex h-full w-[--sidebar-w-rail] shrink-0 flex-col',
-              'border-r border-border bg-surface p-[--sidebar-pad]',
+              'border-r border-border bg-surface p-[--sidebar-rail-pad]',
             )}
           >
             {/* mt-8 clears the toggle below, which hangs off the right edge at top-3 and is

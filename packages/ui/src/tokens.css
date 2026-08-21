@@ -320,8 +320,11 @@
      between light and dark.
      ========================================================================== */
   --sidebar-w: 16rem; /* 256 — fits a two-word label plus icon without wrapping */
-  --sidebar-w-rail: 3.5rem; /* 56 — icon + the 44px touch target it sits in     */
+  --sidebar-w-rail: 3.5rem; /* 56 — a 36px disc, 8px padding, 2px of air either side */
   --sidebar-pad: var(--space-3);
+  /* Its own, smaller than --sidebar-pad: that left a 32px content box for a 36px disc,
+     so the round hover was clipped 2px each side. 56 - 2*8 = 40 fits it with air. */
+  --sidebar-rail-pad: var(--space-2);
   --nav-item-h: var(--control-h-md);
   --nav-item-h-touch: var(--control-h-lg); /* the drawer: thumbs, not pointers  */
 

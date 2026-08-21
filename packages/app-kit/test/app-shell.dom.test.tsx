@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PAGE_CONTENT_CLASS, ThemeProvider } from '@iace/ui';
+import { PAGE_CONTENT_CLASS, ThemeProvider, TooltipProvider } from '@iace/ui';
 import { AppShell } from '../browser/app-shell';
 import { type NavItem } from '../src';
 
@@ -27,11 +27,14 @@ const NAV: readonly NavItem[] = [{ to: '/students', label: 'Students' }];
 function renderShell(props: Partial<React.ComponentProps<typeof AppShell>> = {}) {
   return render(
     <MemoryRouter>
-      {/* The header's ThemeToggle reads the theme context and throws without it. */}
+      {/* Both are mounted by AppProviders in the real app: the header's ThemeToggle reads one,
+          and the rail's per-icon tooltip reads the other. */}
       <ThemeProvider>
-        <AppShell nav={NAV} userLabel="admin@iace.co.in" onSignOut={() => {}} {...props}>
-          <p>Page</p>
-        </AppShell>
+        <TooltipProvider>
+          <AppShell nav={NAV} userLabel="admin@iace.co.in" onSignOut={() => {}} {...props}>
+            <p>Page</p>
+          </AppShell>
+        </TooltipProvider>
       </ThemeProvider>
     </MemoryRouter>,
   );
@@ -212,6 +215,19 @@ describe('AppShell — the nav panel overlays, it never reflows the page', () =>
     assert.ok(await screen.findByRole('dialog'));
   });
 
+  /** A rail row is a bare glyph, so the name has to arrive on hover — and on focus. */
+  it('names a rail icon with a tooltip, not just a title attribute', async () => {
+    setDesktop(true);
+    renderShell({ nav: SECTIONED });
+
+    const row = screen.getByRole('button', { name: /Students/ });
+    assert.equal(row.getAttribute('title'), null);
+
+    fireEvent.focus(row);
+    const named = await screen.findAllByText('Students');
+    assert.ok(named.length > 1, 'the tooltip should add a second rendering of the label');
+  });
+
   /** Touch drills down in the panel: a popover on a phone is a modal over a modal. */
   it('drills into a section on a small screen rather than expanding it', async () => {
     setDesktop(false);
@@ -275,9 +291,11 @@ describe('AppShell — which row is current', () => {
     render(
       <MemoryRouter initialEntries={[pathname]}>
         <ThemeProvider>
-          <AppShell nav={SECTIONED} userLabel="admin@iace.co.in" onSignOut={() => {}}>
-            <p>content</p>
-          </AppShell>
+          <TooltipProvider>
+            <AppShell nav={SECTIONED} userLabel="admin@iace.co.in" onSignOut={() => {}}>
+              <p>content</p>
+            </AppShell>
+          </TooltipProvider>
         </ThemeProvider>
       </MemoryRouter>,
     );

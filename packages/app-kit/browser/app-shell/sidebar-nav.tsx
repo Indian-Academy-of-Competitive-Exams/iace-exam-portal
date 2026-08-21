@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import * as Popover from '@radix-ui/react-popover';
 import { ChevronRight } from 'lucide-react';
-import { cn } from '@iace/ui';
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
 import {
   NAV_LAYOUT,
   activeNavPath,
@@ -24,6 +24,22 @@ const ROW_IDLE = 'text-muted-foreground hover:bg-muted hover:text-foreground';
 /** Collapsed, the row IS the glyph: square and round, so the hover is a disc around it. */
 const ROW_RAIL = 'mx-auto w-[--nav-item-h] justify-center rounded-full px-0';
 const ROW_ACTIVE = 'bg-primary-subtle text-primary-ink';
+
+/** In the rail a row is a bare glyph, so the label has to arrive on hover and on focus. */
+function RailTooltip({
+  label,
+  collapsed,
+  children,
+}: Readonly<{ label: string; collapsed: boolean; children: ReactNode }>) {
+  if (!collapsed) return <>{children}</>;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function Glyph({ item, collapsed }: Readonly<{ item: NavItem; collapsed: boolean }>) {
   const Icon = item.icon;
@@ -53,16 +69,17 @@ function Leaf({
   const isActive = item.to !== undefined && item.to === activePath;
 
   return (
-    <Link
-      to={item.to ?? '#'}
-      onClick={onNavigate}
-      title={collapsed ? item.label : undefined}
-      aria-current={isActive ? 'page' : undefined}
-      className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && ROW_RAIL)}
-    >
-      <Glyph item={item} collapsed={collapsed} />
-      {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
-    </Link>
+    <RailTooltip label={item.label} collapsed={collapsed}>
+      <Link
+        to={item.to ?? '#'}
+        onClick={onNavigate}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && ROW_RAIL)}
+      >
+        <Glyph item={item} collapsed={collapsed} />
+        {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+      </Link>
+    </RailTooltip>
   );
 }
 
@@ -98,27 +115,28 @@ function SectionPopover({
   return (
     <li>
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            title={collapsed ? item.label : undefined}
-            className={cn(
-              ROW,
-              isNavItemActive(item, activePath) || open ? ROW_ACTIVE : ROW_IDLE,
-              collapsed && ROW_RAIL,
-            )}
-          >
-            <Glyph item={item} collapsed={collapsed} />
-            {collapsed ? (
-              <span className="sr-only">{item.label}</span>
-            ) : (
-              <>
-                <span className="flex-1 text-left">{item.label}</span>
-                <ChevronRight className="size-4 shrink-0" aria-hidden />
-              </>
-            )}
-          </button>
-        </Popover.Trigger>
+        <RailTooltip label={item.label} collapsed={collapsed}>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              className={cn(
+                ROW,
+                isNavItemActive(item, activePath) || open ? ROW_ACTIVE : ROW_IDLE,
+                collapsed && ROW_RAIL,
+              )}
+            >
+              <Glyph item={item} collapsed={collapsed} />
+              {collapsed ? (
+                <span className="sr-only">{item.label}</span>
+              ) : (
+                <>
+                  <span className="flex-1 text-left">{item.label}</span>
+                  <ChevronRight className="size-4 shrink-0" aria-hidden />
+                </>
+              )}
+            </button>
+          </Popover.Trigger>
+        </RailTooltip>
 
         <Popover.Portal>
           <Popover.Content
