@@ -7,6 +7,11 @@ import { FIELD_TRIGGER_CLASS } from './combobox-shell';
 /** Six weeks, always: a month that needs five must not resize the popover when you page to one that needs six. */
 const GRID_CELLS = 42;
 const DAYS_IN_WEEK = 7;
+const MONTHS_IN_YEAR = 12;
+
+/** One screen of years: a decade, plus the year either side to fill the month grid's 3x4 shape. */
+const YEARS_PER_PAGE = 12;
+const YEARS_IN_DECADE = 10;
 
 export interface CalendarDay {
   /** `YYYY-MM-DD`, the shape `dateOnlySchema` takes and the wire carries. */
@@ -15,6 +20,9 @@ export interface CalendarDay {
   /** False for the leading and trailing days borrowed from the neighbouring months. */
   inMonth: boolean;
 }
+
+/** Which grid the popover is showing. Clicking the heading drills out, picking drills back in. */
+export type CalendarMode = 'day' | 'month' | 'year';
 
 /** `YYYY-MM-DD` from parts. UTC throughout, or a picker west of Greenwich lands a day early. */
 export function toISODate(year: number, month: number, day: number): string {
@@ -54,9 +62,53 @@ export function isOutOfRange(iso: string, min?: string, max?: string): boolean {
   return Boolean((min && iso < min) || (max && iso > max));
 }
 
-function shiftMonth(year: number, month: number, by: number) {
+/** A span is only unreachable when EVERY day in it is, so a half-allowed month stays clickable. */
+function isSpanOutOfRange(first: string, last: string, min?: string, max?: string): boolean {
+  return Boolean((min && last < min) || (max && first > max));
+}
+
+/** Whether no day of this month can be chosen. */
+export function isMonthOutOfRange(
+  year: number,
+  month: number,
+  min?: string,
+  max?: string,
+): boolean {
+  return isSpanOutOfRange(toISODate(year, month, 1), toISODate(year, month + 1, 0), min, max);
+}
+
+/** Whether no day of this year can be chosen. */
+export function isYearOutOfRange(year: number, min?: string, max?: string): boolean {
+  return isSpanOutOfRange(toISODate(year, 0, 1), toISODate(year, 11, 31), min, max);
+}
+
+export function shiftMonth(year: number, month: number, by: number) {
   const date = new Date(Date.UTC(year, month + by, 1));
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() };
+}
+
+/** The decade a year belongs to. Decades rather than 12s, so the heading reads 2020 - 2029. */
+export function yearBlock(year: number): { start: number; end: number } {
+  const start = Math.floor(year / YEARS_IN_DECADE) * YEARS_IN_DECADE;
+  return { start, end: start + YEARS_IN_DECADE - 1 };
+}
+
+/** The decade's ten, bookended by one neighbour each side — the borrowed days of the year grid. */
+export function yearsOf(block: { start: number }): number[] {
+  return Array.from({ length: YEARS_PER_PAGE }, (_, index) => block.start - 1 + index);
+}
+
+type DateParts = { year: number; month: number; day: number };
+
+function shiftDays(from: DateParts, by: number): string {
+  return toISODate(from.year, from.month, from.day + by);
+}
+
+/** Clamped, so 31 January plus a month is 28 February rather than rolling into March. */
+function addMonths(from: DateParts, by: number): string {
+  const { year, month } = shiftMonth(from.year, from.month, by);
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return toISODate(year, month, Math.min(from.day, lastDay));
 }
 
 /** Where an arrow key moves the focused day. */
@@ -67,7 +119,29 @@ const ARROW_DAYS: Readonly<Record<string, number>> = {
   ArrowDown: DAYS_IN_WEEK,
 };
 
+/** The next focused day for a keystroke, or null when the key is not ours to handle. */
+export function nextFocusedDate(iso: string, key: string, shiftKey = false): string | null {
+  const from = parseISODate(iso);
+  if (!from) return null;
+
+  const days = ARROW_DAYS[key];
+  if (days !== undefined) return shiftDays(from, days);
+
+  if (key === 'Home' || key === 'End') {
+    const weekday = new Date(Date.UTC(from.year, from.month, from.day)).getUTCDay();
+    return shiftDays(from, key === 'Home' ? -weekday : DAYS_IN_WEEK - 1 - weekday);
+  }
+
+  if (key === 'PageUp' || key === 'PageDown') {
+    const by = key === 'PageUp' ? -1 : 1;
+    return addMonths(from, shiftKey ? by * MONTHS_IN_YEAR : by);
+  }
+
+  return null;
+}
+
 const MONTH_LABEL = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
+const MONTH_NAME = new Intl.DateTimeFormat(undefined, { month: 'short' });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const FULL_LABEL = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' });
 const TRIGGER_LABEL = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
@@ -76,6 +150,28 @@ const TRIGGER_LABEL = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }
 const WEEKDAYS = Array.from({ length: DAYS_IN_WEEK }, (_, index) =>
   WEEKDAY_LABEL.format(new Date(Date.UTC(2024, 0, 7 + index))),
 );
+
+const MONTH_NAMES = Array.from({ length: MONTHS_IN_YEAR }, (_, index) =>
+  MONTH_NAME.format(new Date(Date.UTC(2024, index, 1))),
+);
+
+/** What the heading reads in each mode — the month, its year, or the decade on show. */
+export function headingFor(
+  mode: CalendarMode,
+  view: { year: number; month: number },
+  block: { start: number; end: number },
+): string {
+  if (mode === 'day') return MONTH_LABEL.format(new Date(Date.UTC(view.year, view.month, 1)));
+  if (mode === 'month') return String(view.year);
+  return `${block.start} – ${block.end}`;
+}
+
+/** What the heading says and does in each mode, and what a chevron pages by. */
+const MODE_OUT: Readonly<Record<CalendarMode, CalendarMode>> = {
+  day: 'month',
+  month: 'year',
+  year: 'year',
+};
 
 export interface DatePickerProps {
   /** `YYYY-MM-DD`, or '' for nothing chosen. */
@@ -112,6 +208,7 @@ export function DatePicker({
 
   const opening = selected ?? parseISODate(today)!;
   const [view, setView] = React.useState({ year: opening.year, month: opening.month });
+  const [mode, setMode] = React.useState<CalendarMode>('day');
   const [focused, setFocused] = React.useState(value || today);
 
   // Re-seeded on every open, so reopening lands on the chosen month rather than wherever it was left.
@@ -120,23 +217,19 @@ export function DatePicker({
       const from = parseISODate(value) ?? parseISODate(today)!;
       setView({ year: from.year, month: from.month });
       setFocused(value || today);
+      setMode('day');
     }
     setOpen(next);
   };
 
-  const move = (by: number) => {
-    const from = parseISODate(focused) ?? parseISODate(today)!;
-    const next = new Date(Date.UTC(from.year, from.month, from.day + by));
-    const iso = next.toISOString().slice(0, 10);
-    setFocused(iso);
-    setView({ year: next.getUTCFullYear(), month: next.getUTCMonth() });
-  };
-
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const by = ARROW_DAYS[event.key];
-    if (by === undefined) return;
+    if (mode !== 'day') return;
+    const iso = nextFocusedDate(focused || today, event.key, event.shiftKey);
+    if (iso === null) return;
     event.preventDefault();
-    move(by);
+    const parts = parseISODate(iso)!;
+    setFocused(iso);
+    setView({ year: parts.year, month: parts.month });
   };
 
   const choose = (iso: string) => {
@@ -144,7 +237,15 @@ export function DatePicker({
     setOpen(false);
   };
 
-  const page = (by: number) => setView((current) => shiftMonth(current.year, current.month, by));
+  // A chevron pages by whatever the current grid is a page of.
+  const page = (by: number) => {
+    if (mode === 'day') return setView((c) => shiftMonth(c.year, c.month, by));
+    const years = mode === 'month' ? by : by * YEARS_IN_DECADE;
+    setView((c) => ({ ...c, year: c.year + years }));
+  };
+
+  const block = yearBlock(view.year);
+  const heading = headingFor(mode, view, block);
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpen}>
@@ -171,53 +272,72 @@ export function DatePicker({
           className="z-50 w-[17.5rem] rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
-            <MonthButton label="Previous month" onClick={() => page(-1)}>
+            <NavButton label={PAGE_BACK_LABEL[mode]} onClick={() => page(-1)}>
               <ChevronLeft className="size-4" aria-hidden />
-            </MonthButton>
-            <span aria-live="polite" className="text-sm font-medium">
-              {MONTH_LABEL.format(new Date(Date.UTC(view.year, view.month, 1)))}
-            </span>
-            <MonthButton label="Next month" onClick={() => page(1)}>
+            </NavButton>
+            <button
+              type="button"
+              onClick={() => setMode(MODE_OUT[mode])}
+              aria-live="polite"
+              aria-label={`${heading}. ${ZOOM_OUT_LABEL[mode]}`}
+              className="rounded-sm px-2 py-1 text-sm font-medium tabular-nums hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none"
+            >
+              {heading}
+            </button>
+            <NavButton label={PAGE_NEXT_LABEL[mode]} onClick={() => page(1)}>
               <ChevronRight className="size-4" aria-hidden />
-            </MonthButton>
+            </NavButton>
           </div>
 
-          {/* A real table: a calendar IS a week-by-weekday grid, and <td> carries the
-              gridcell role so the day stays a plain button. */}
-          <table className="w-full border-collapse" aria-label="Calendar">
-            <thead>
-              <tr>
-                {WEEKDAYS.map((name) => (
-                  <th
-                    key={name}
-                    scope="col"
-                    className="pb-1 text-center text-xs font-medium text-muted-foreground"
-                  >
-                    {name.slice(0, 2)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {weeksOf(monthGrid(view.year, view.month)).map((week) => (
-                <tr key={week[0]!.iso}>
-                  {week.map((cell) => (
-                    <td key={cell.iso} className="p-[1px]">
-                      <DayCell
-                        cell={cell}
-                        selected={cell.iso === value}
-                        today={cell.iso === today}
-                        focused={cell.iso === focused}
-                        disabled={isOutOfRange(cell.iso, min, max)}
-                        onSelect={choose}
-                        onFocus={setFocused}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* One height for all three grids, so drilling in and out never resizes the popover. */}
+          <div className="min-h-[14rem]">
+            {mode === 'day' ? (
+              <DayGrid
+                view={view}
+                value={value}
+                today={today}
+                focused={focused}
+                min={min}
+                max={max}
+                onSelect={choose}
+                onFocus={setFocused}
+              />
+            ) : null}
+
+            {mode === 'month' ? (
+              <PickerGrid
+                label="Choose a month"
+                items={MONTH_NAMES.map((name, month) => ({
+                  key: month,
+                  label: name,
+                  current: month === view.month,
+                  outside: false,
+                  disabled: isMonthOutOfRange(view.year, month, min, max),
+                }))}
+                onPick={(month) => {
+                  setView((c) => ({ ...c, month }));
+                  setMode('day');
+                }}
+              />
+            ) : null}
+
+            {mode === 'year' ? (
+              <PickerGrid
+                label="Choose a year"
+                items={yearsOf(block).map((year) => ({
+                  key: year,
+                  label: String(year),
+                  current: year === view.year,
+                  outside: year < block.start || year > block.end,
+                  disabled: isYearOutOfRange(year, min, max),
+                }))}
+                onPick={(year) => {
+                  setView((c) => ({ ...c, year }));
+                  setMode('month');
+                }}
+              />
+            ) : null}
+          </div>
 
           {clearable ? (
             <button
@@ -234,7 +354,122 @@ export function DatePicker({
   );
 }
 
-function MonthButton({
+const PAGE_BACK_LABEL: Readonly<Record<CalendarMode, string>> = {
+  day: 'Previous month',
+  month: 'Previous year',
+  year: 'Previous years',
+};
+
+const PAGE_NEXT_LABEL: Readonly<Record<CalendarMode, string>> = {
+  day: 'Next month',
+  month: 'Next year',
+  year: 'Next years',
+};
+
+const ZOOM_OUT_LABEL: Readonly<Record<CalendarMode, string>> = {
+  day: 'Choose a month',
+  month: 'Choose a year',
+  year: 'Choose a year',
+};
+
+function DayGrid({
+  view,
+  value,
+  today,
+  focused,
+  min,
+  max,
+  onSelect,
+  onFocus,
+}: Readonly<{
+  view: { year: number; month: number };
+  value: string;
+  today: string;
+  focused: string;
+  min?: string;
+  max?: string;
+  onSelect: (iso: string) => void;
+  onFocus: (iso: string) => void;
+}>) {
+  return (
+    // A calendar IS a week-by-weekday grid, and <td> carries the gridcell role for free.
+    <table className="w-full border-collapse" aria-label="Calendar">
+      <thead>
+        <tr>
+          {WEEKDAYS.map((name) => (
+            <th
+              key={name}
+              scope="col"
+              className="pb-1 text-center text-xs font-medium text-muted-foreground"
+            >
+              {name.slice(0, 2)}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {weeksOf(monthGrid(view.year, view.month)).map((week) => (
+          <tr key={week[0]!.iso}>
+            {week.map((cell) => (
+              <td key={cell.iso} className="p-[1px]">
+                <DayCell
+                  cell={cell}
+                  selected={cell.iso === value}
+                  today={cell.iso === today}
+                  focused={cell.iso === focused}
+                  disabled={isOutOfRange(cell.iso, min, max)}
+                  onSelect={onSelect}
+                  onFocus={onFocus}
+                />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+interface PickerItem {
+  key: number;
+  label: string;
+  current: boolean;
+  /** Shown for continuity but belonging to the neighbouring decade, like a borrowed day. */
+  outside: boolean;
+  disabled: boolean;
+}
+
+/** The month and year grids are the same control twice, so they are one component. */
+function PickerGrid({
+  label,
+  items,
+  onPick,
+}: Readonly<{ label: string; items: PickerItem[]; onPick: (key: number) => void }>) {
+  return (
+    <fieldset className="grid min-w-0 grid-cols-3 gap-1" aria-label={label}>
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          disabled={item.disabled}
+          aria-current={item.current ? 'true' : undefined}
+          onClick={() => onPick(item.key)}
+          className={cn(
+            'h-11 rounded-sm text-sm tabular-nums transition-colors',
+            'hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none',
+            item.outside && 'text-muted-foreground/60',
+            item.current && 'bg-primary text-primary-foreground hover:bg-primary',
+            item.disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent',
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+function NavButton({
   label,
   onClick,
   children,
