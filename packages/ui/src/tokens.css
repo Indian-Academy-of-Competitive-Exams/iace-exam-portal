@@ -173,6 +173,11 @@
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --border: #e2e8f0;
+  /* The scrollbar. Thin and muted because a card's own body is the scrollport now: a
+     platform-width bar in brand-free grey sits on the rounded edge and reads as a seam. */
+  --scrollbar-size: 10px;
+  --scrollbar-thumb: var(--slate-300);
+  --scrollbar-thumb-hover: var(--slate-400);
   --border-strong: #cbd5e1;
   --input: #e2e8f0;
   --ring: #2563eb;
@@ -423,6 +428,8 @@
   --muted-foreground: #94a3b8;
   --border: #262c35;
   --border-strong: #343b47;
+  --scrollbar-thumb: #343b47;
+  --scrollbar-thumb-hover: #475569;
   --input: #262c35;
   --ring: #60a5fa;
 
