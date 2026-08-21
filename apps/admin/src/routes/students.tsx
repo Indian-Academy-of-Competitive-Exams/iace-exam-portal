@@ -29,6 +29,7 @@ import {
   CardHeader,
   CardTitle,
   cn,
+  Combobox,
   ConfirmDialog,
   DataTable,
   digitsOnly,
@@ -488,7 +489,13 @@ function StudentNameCell({ student }: Readonly<{ student: StudentSummary }>) {
 
 // ---------------------------------------------------------------------------
 
-const NEW_STUDENT_FIELDS = ['mobile', 'fullName', 'studentType', 'enrolledExams'] as const;
+const NEW_STUDENT_FIELDS = [
+  'mobile',
+  'fullName',
+  'studentType',
+  'enrolledExams',
+  'currentBranchId',
+] as const;
 
 /** Adds a student before signup. The mobile is the join key, so the OTP flow upserts onto this row. */
 function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
@@ -502,11 +509,14 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
+      currentBranchId: '',
     },
   });
 
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
+  const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const exams = useExams({ activeOnly: true });
+  const branches = useBranches({ activeOnly: true });
 
   const create = useMutation({
     meta: {
@@ -520,6 +530,8 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
         fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
         studentType: values.studentType,
         enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
+        // An untouched picker is "not recorded"; '' is not a branch id the server could resolve.
+        currentBranchId: values.currentBranchId || undefined,
       }),
     onSuccess: (student) => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
@@ -610,6 +622,27 @@ function NewStudentCard({ onClose }: Readonly<{ onClose: () => void }>) {
                   }))}
                   placeholder="None yet"
                   emptyLabel="No exam matches that"
+                />
+              )}
+            </FormField>
+
+            <FormField
+              form={form}
+              name="currentBranchId"
+              label="Current branch"
+              hint="Without one they reach no series"
+              className="min-w-56 flex-1"
+            >
+              {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
+                <Combobox
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  value={currentBranchId}
+                  onChange={(next) => form.setValue('currentBranchId', next, { shouldDirty: true })}
+                  items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                  placeholder="Not recorded"
+                  emptyLabel="No branch matches that"
                 />
               )}
             </FormField>

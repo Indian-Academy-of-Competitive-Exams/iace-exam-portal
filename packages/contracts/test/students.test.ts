@@ -63,6 +63,21 @@ describe('createStudentSchema — what a student is here for', () => {
     assert.equal(parsed.currentBranchId, 'br_1');
   });
 
+  /**
+   * The failure this prevents: the add-student form seeds its branch picker with '', so an admin who
+   * leaves it alone would post an empty id. The service reads that as falsy, skips `assertUsable`,
+   * and writes '' straight into the branch FK.
+   */
+  it('reads an untouched branch picker as absent, not as an empty branch id', () => {
+    const parsed = createStudentSchema.parse({
+      mobile: '9876543210',
+      studentType: STUDENT_TYPE.ONLINE,
+      currentBranchId: '',
+    });
+
+    assert.equal(parsed.currentBranchId, undefined);
+  });
+
   it('leaves the programs absent when nobody named one', () => {
     const parsed = createStudentSchema.parse({
       mobile: '9876543210',
