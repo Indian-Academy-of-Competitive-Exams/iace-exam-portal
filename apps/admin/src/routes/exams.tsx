@@ -380,12 +380,7 @@ function EditExamDialog({
         {(control) => <Input {...control} autoFocus />}
       </FormField>
 
-      <FormField
-        form={form}
-        name="code"
-        label="Code"
-        hint="Free to change only while no student is enrolled on it — the save is refused after that."
-      >
+      <FormField form={form} name="code" label="Code" hint="Locked once a student is enrolled">
         {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
       </FormField>
     </FormDialog>

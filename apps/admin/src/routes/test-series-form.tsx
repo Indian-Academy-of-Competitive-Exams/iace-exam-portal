@@ -216,12 +216,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField
-            form={form}
-            name="programCode"
-            label="Program"
-            hint="Set it and only students carrying that program reach the series."
-          >
+          <FormField form={form} name="programCode" label="Program">
             {(control) => (
               <ProgramPicker
                 id={control.id}
@@ -288,12 +283,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
               label="Unlock the tests in order"
               hint="Off opens every test in the series together."
             />
-            <SeriesToggle
-              form={form}
-              name="isFree"
-              label="Free"
-              hint="Pricing only — who can reach it is decided above."
-            />
+            <SeriesToggle form={form} name="isFree" label="Free" />
           </div>
         </div>
       </FormSection>

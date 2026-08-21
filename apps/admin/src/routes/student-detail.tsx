@@ -205,7 +205,6 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <Field
           htmlFor="enrolledFamilies"
           label="Enrolled families"
-          hint="Every exam in the family is reachable, not just one."
           error={form.formState.errors.enrolledFamilies?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (

@@ -636,19 +636,14 @@ function ConfigEditor({
             {(control) => <Input {...control} placeholder="SSC CGL Tier 1 — 2024 pattern" />}
           </FormField>
 
-          <ToggleField
-            form={form}
-            name="isDefault"
-            label="The stage's default pattern"
-            hint="Offered first when anyone builds a test on this stage."
-          />
+          <ToggleField form={form} name="isDefault" label="The stage's default pattern" />
 
           {editing ? (
             <ToggleField
               form={form}
               name="isActive"
               label="Offered when building a test"
-              hint="Retiring it changes nothing already built from it."
+              hint="Tests already built keep it"
             />
           ) : null}
         </div>
@@ -1035,7 +1030,6 @@ function SectionCard({
             form={form}
             name={`sections.${index}.qualifyingCutoff`}
             label="Qualifying cutoff"
-            hint="Marks needed to pass it"
           >
             {(control) => <Input {...control} inputMode="decimal" />}
           </FormField>

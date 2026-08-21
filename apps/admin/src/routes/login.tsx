@@ -100,9 +100,6 @@ function EmailStep({
     <>
       <CardHeader className={STEP_HEADER}>
         <CardTitle>Admin sign in</CardTitle>
-        <CardDescription>
-          Enter your work email and we&apos;ll send you a one-time code.
-        </CardDescription>
       </CardHeader>
 
       <CardContent>

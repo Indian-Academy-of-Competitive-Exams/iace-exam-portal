@@ -370,11 +370,7 @@ export function StudentsPage() {
             )}
           </Field>
 
-          <Field
-            htmlFor="filter-no-access"
-            label="Access"
-            hint="No enrolment and no program of their own — not the same as no access."
-          >
+          <Field htmlFor="filter-no-access" label="Access">
             {(control) => (
               <Combobox
                 {...control}
@@ -618,12 +614,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         )}
       </FormField>
 
-      <FormField
-        form={form}
-        name="enrolledFamilies"
-        label="Enrolled families"
-        hint="A whole family, for a student coached across every exam in it"
-      >
+      <FormField form={form} name="enrolledFamilies" label="Enrolled families">
         {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
           <MultiCombobox
             id={id}

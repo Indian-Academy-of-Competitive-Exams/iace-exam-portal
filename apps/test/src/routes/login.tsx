@@ -152,7 +152,6 @@ function SignInStep({
     <>
       <CardHeader className={STEP_HEADER}>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>Your mobile number and your {PIN_LENGTH}-digit PIN.</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -230,7 +229,7 @@ function MobileStep({
         </CardTitle>
         <CardDescription>
           {intent === OTP_INTENTS.SIGNUP
-            ? "Enter your mobile number. We'll send a one-time code to verify it, then you'll pick a PIN."
+            ? "We'll send a code to verify it, then you pick a PIN."
             : "Enter your registered mobile number and we'll send a one-time code."}
         </CardDescription>
       </CardHeader>
@@ -365,9 +364,7 @@ function SetPinStep({
     <>
       <CardHeader className={STEP_HEADER}>
         <CardTitle>{ticket.pinAlreadySet ? 'Choose a new PIN' : 'Choose your PIN'}</CardTitle>
-        <CardDescription>
-          {PIN_LENGTH} digits — this is how you&apos;ll sign in from now on. No more codes.
-        </CardDescription>
+        <CardDescription>This is how you sign in from now on — no more codes.</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -384,7 +381,7 @@ function SetPinStep({
             masked
             autoFocus
             autoComplete="new-password"
-            hint={`${PIN_LENGTH} digits — avoid 1234 or all one digit`}
+            hint="Not a run like 1234, and not all one digit"
           />
           <PinField
             name="confirmPin"
@@ -419,12 +416,7 @@ function MobileField({
   register: UseFormRegisterReturn;
 }>) {
   return (
-    <Field
-      htmlFor="mobile"
-      label="Mobile number"
-      error={error}
-      hint="The number you signed up with"
-    >
+    <Field htmlFor="mobile" label="Mobile number" error={error}>
       {(control) => (
         <NumericInput
           {...control}

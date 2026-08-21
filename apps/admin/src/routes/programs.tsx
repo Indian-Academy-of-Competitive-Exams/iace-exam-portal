@@ -295,12 +295,7 @@ function EditProgramDialog({
         {(control) => <Input {...control} autoFocus />}
       </FormField>
 
-      <FormField
-        form={form}
-        name="code"
-        label="Code"
-        hint="Free to change only while no student and no series carries it — the save is refused after that."
-      >
+      <FormField form={form} name="code" label="Code" hint="Locked once anything carries it">
         {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
       </FormField>
     </FormDialog>
