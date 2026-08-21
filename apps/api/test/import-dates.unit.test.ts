@@ -128,3 +128,44 @@ describe('toIsoDate', () => {
     assert.equal(dobSchema.safeParse(toIsoDate('31/02/2003')).success, false);
   });
 });
+
+describe('a date typed into the template', () => {
+  /** What Excel actually stores: a serial carrying a display format, per the typist's locale. */
+  const DOB_COLUMN = STUDENT_IMPORT_COLUMNS.findIndex((column) => column.key === 'dob') + 1;
+  const SERIAL_11_APRIL_2003 = 37722;
+
+  const roundTrip = async (displayFormat: string): Promise<string> => {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load((await buildStudentTemplate()) as unknown as ArrayBuffer);
+    const sheet = workbook.getWorksheet('Students');
+    assert.ok(sheet);
+
+    const row = sheet.getRow(5);
+    row.getCell(1).value = '9876500000';
+    const cell = row.getCell(DOB_COLUMN);
+    cell.value = SERIAL_11_APRIL_2003 as never;
+    cell.numFmt = displayFormat;
+    row.commit();
+
+    const table = await readUploadedTable(Buffer.from(await workbook.xlsx.writeBuffer()));
+    const raw = table.rows.at(-1)?.values[normaliseHeader('Date of Birth')] ?? '';
+    return toIsoDate(raw);
+  };
+
+  it('survives whatever format Excel redraws it in', async () => {
+    for (const displayFormat of [
+      'dd/mm/yyyy',
+      'mm/dd/yyyy',
+      'yyyy-mm-dd',
+      'dd.mm.yyyy',
+      '[$-409]d-mmm-yy;@',
+    ]) {
+      assert.equal(await roundTrip(displayFormat), '2003-04-11', `broke on ${displayFormat}`);
+    }
+  });
+
+  it('stores a day the schema accepts, not just a string that parses', async () => {
+    const result = dobSchema.safeParse(await roundTrip('mm/dd/yyyy'));
+    assert.equal(result.success && result.data, '2003-04-11');
+  });
+});
