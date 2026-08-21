@@ -4,12 +4,12 @@ import { cn } from '../../lib/utils';
 
 /** The plate carries the mark, so its size is the lockup's size. */
 const plateVariants = cva(
-  'inline-flex items-center rounded-lg bg-primary font-brand text-primary-foreground font-extrabold tracking-brand',
+  'inline-flex items-center rounded-md bg-primary font-brand text-primary-foreground font-extrabold tracking-brand',
   {
     variants: {
       size: {
-        default: 'px-3 py-2 text-lg',
-        lg: 'px-5 py-3 text-3xl',
+        default: 'px-4 py-1.5 text-brand',
+        lg: 'px-6 py-2.5 text-3xl',
       },
     },
     defaultVariants: { size: 'default' },

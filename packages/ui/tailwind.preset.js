@@ -263,6 +263,10 @@ module.exports = {
         mono: ['var(--font-mono)'],
         brand: ['var(--font-brand)'],
       },
+      fontSize: {
+        // lineHeight 1 sets it solid: the plate's height is then padding alone.
+        brand: ['var(--text-brand)', { lineHeight: '1' }],
+      },
       letterSpacing: {
         // Only the brand step; every other tracking-* still takes Tailwind's own scale.
         brand: 'var(--tracking-brand)',

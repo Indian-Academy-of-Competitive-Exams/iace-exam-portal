@@ -88,7 +88,7 @@ export function AppShell({
     // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
       <header className="flex-none border-b border-border bg-surface">
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-3 px-4 py-2">
           {/* Below the rail there is no nav in the page at all, so the button is the only
               way in. Above it the rail is present and the toggle lives on its edge. */}
           {hasNav && !isDesktop ? (
