@@ -27,6 +27,49 @@ export function civilDate(at: Date = new Date()): string {
   return INSTITUTE_CIVIL_DATE.format(at);
 }
 
+/** Parts of an instant as the institute's clock reads them, which is what an offset is derived from. */
+const INSTITUTE_PARTS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+function instituteFieldsAt(at: Date): Record<string, number> {
+  const fields: Record<string, number> = {};
+  for (const part of INSTITUTE_PARTS.formatToParts(at)) {
+    if (part.type !== 'literal') fields[part.type] = Number(part.value);
+  }
+  return fields;
+}
+
+/** Derived per instant rather than hard-coded, so a zone that ever gains a DST rule still works. */
+function instituteOffsetMs(at: Date): number {
+  const f = instituteFieldsAt(at);
+  const asIfUtc = Date.UTC(f.year!, f.month! - 1, f.day!, f.hour! % 24, f.minute!, f.second!);
+  return asIfUtc - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/** An instant as `YYYY-MM-DDTHH:mm` on the institute's clock — what `datetime-local` takes. */
+export function instituteWallTime(at: Date): string {
+  const f = instituteFieldsAt(at);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${f.year}-${pad(f.month!)}-${pad(f.day!)}T${pad(f.hour! % 24)}:${pad(f.minute!)}`;
+}
+
+/** `YYYY-MM-DDTHH:mm` read as the institute's clock, back to the instant it names. */
+export function fromInstituteWallTime(wallTime: string): Date {
+  const [datePart, timePart = '00:00'] = wallTime.split('T');
+  const [year, month, day] = datePart!.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const naive = Date.UTC(year!, month! - 1, day!, hour ?? 0, minute ?? 0);
+  return new Date(naive - instituteOffsetMs(new Date(naive)));
+}
+
 export const actorTypeSchema = z.enum(ActorTypes);
 
 /** An Indian mobile number, once normalised: 10 digits, leading 6-9. */

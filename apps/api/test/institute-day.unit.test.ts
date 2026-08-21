@@ -3,7 +3,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { INSTITUTE_TIME_ZONE, civilDate, todayISO } from '@iace/contracts';
-import { endOfInstituteDay, startOfInstituteDay } from '../src/common/time/institute-day';
+import {
+  endOfInstituteDay,
+  fromDateColumn,
+  startOfInstituteDay,
+  toDateColumn,
+} from '../src/common/time/institute-day';
 
 describe('civilDate', () => {
   it('is the date on the wall in India, not the date at Greenwich', () => {
@@ -52,5 +57,17 @@ describe('institute day bounds', () => {
   it('is unaffected by the server own zone, which is the point of naming one', () => {
     assert.equal(startOfInstituteDay('2026-01-15').toISOString(), '2026-01-14T18:30:00.000Z');
     assert.equal(startOfInstituteDay('2026-07-15').toISOString(), '2026-07-14T18:30:00.000Z');
+  });
+});
+
+describe('a DATE column', () => {
+  it('round-trips a civil date unchanged', () => {
+    for (const day of ['1998-07-14', '2000-02-29', '1900-01-01']) {
+      assert.equal(fromDateColumn(toDateColumn(day)), day);
+    }
+  });
+
+  it('stores at UTC midnight, which is the convention for a column with no time', () => {
+    assert.equal(toDateColumn('1998-07-14').toISOString(), '1998-07-14T00:00:00.000Z');
   });
 });

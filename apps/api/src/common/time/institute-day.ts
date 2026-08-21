@@ -28,3 +28,13 @@ export function instituteDayOf(at: Date): string {
 export function shiftInstituteDay(day: string, days: number): string {
   return civilDate(new Date(addDays(atInstitute(day), days)));
 }
+
+/** A `@db.Date` column holds a civil date at UTC midnight — a storage convention, not a zone. */
+export function toDateColumn(day: string): Date {
+  return new Date(`${day}T00:00:00Z`);
+}
+
+/** The civil date a `@db.Date` column was holding. */
+export function fromDateColumn(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}

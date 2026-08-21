@@ -18,6 +18,7 @@ import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
+import { toDateColumn } from '../common/time/institute-day';
 
 /**
  * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue
@@ -291,7 +292,7 @@ function profileData(row: StudentImportRow) {
     ...(p.motherName === null ? {} : { motherName: p.motherName }),
     ...(p.fatherName === null ? {} : { fatherName: p.fatherName }),
     // Prisma wants a Date for a DATE column; the sheet carries a plain day.
-    ...(p.dob === null ? {} : { dob: new Date(`${p.dob}T00:00:00Z`) }),
+    ...(p.dob === null ? {} : { dob: toDateColumn(p.dob) }),
     ...(p.email === null ? {} : { email: p.email }),
     ...(p.gender === null ? {} : { gender: p.gender }),
     ...(p.address === null ? {} : { address: p.address }),

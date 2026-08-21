@@ -7,6 +7,8 @@ import {
   PERMISSION_LEVELS,
   UNLOCK_MODE,
   UNLOCK_MODES,
+  fromInstituteWallTime,
+  instituteWallTime,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type TestSeriesSummary,
@@ -431,14 +433,11 @@ interface ScheduleDraft {
   endAt: string;
 }
 
-/** The API speaks UTC ISO; `datetime-local` speaks the reader's clock with no zone. */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return '';
-  const at = new Date(iso);
-  return new Date(at.getTime() - at.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
+/** Both ends read the institute's clock, so a window means the same wherever the admin is. */
+const toLocalInput = (iso: string | null): string => (iso ? instituteWallTime(new Date(iso)) : '');
 
-const toIso = (local: string): string | null => (local ? new Date(local).toISOString() : null);
+const toIso = (local: string): string | null =>
+  local ? fromInstituteWallTime(local).toISOString() : null;
 
 const draftOf = (row: BranchTestConfigRow): ScheduleDraft => ({
   enabled: row.enabled,

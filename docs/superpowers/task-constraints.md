@@ -35,6 +35,35 @@ Raw-SQL for what Prisma can't express (composite FKs, partial-uniques, CHECKs, t
 - Feature keys are **code-owned** (`FEATURE_KEYS`), never UI-registered; super admin assigns permissions only.
 - Live-test hot path off Postgres: client timer, autosave to Redis, BullMQ scoring, Redis leaderboard.
 
+## Dates
+
+**The institute runs on IST. Storage is UTC; every USE of a date is `Asia/Kolkata`.**
+An instant (`createdAt`, `startedAt`, `endsAt`) stays `timestamptz` and serialises with
+`.toISOString()` — that is correct and needs no helper. A CIVIL date (what day is it, which day
+did this fall on, when does a day start and end) is never derived with `getUTC*` or
+`toISOString().slice(0, 10)` on a stored instant: UTC is 5.5 hours behind and gets the answer
+wrong every night between midnight and 05:30.
+
+Never write a new date helper. There is one of each, and a second one is a bug waiting for the
+day the two disagree:
+
+- `packages/contracts` — `INSTITUTE_TIME_ZONE`, `civilDate(at)`, `todayISO()`,
+  `instituteWallTime(at)`, `fromInstituteWallTime(wall)`. Intl-based and dependency-free,
+  because contracts ships to both SPAs.
+- `apps/api/src/common/time/institute-day.ts` — `startOfInstituteDay`, `endOfInstituteDay`,
+  `instituteDayOf`, `shiftInstituteDay`, `toDateColumn`, `fromDateColumn`. Uses `date-fns` and
+  `@date-fns/tz`, which stay SERVER-ONLY — a date library in contracts lands in every student's
+  browser.
+- `apps/api/src/common/importing/date-cell.ts` — `toIsoDate` for a spreadsheet cell of unknown
+  format. Validate the DATE, never the format.
+
+A date range from a `YYYY-MM-DD` filter uses `startOfInstituteDay`/`endOfInstituteDay`, never a
+hand-built `T00:00:00.000Z`. Anything shown to a user passes `timeZone: INSTITUTE_TIME_ZONE`, never
+the device's default. A `@db.Date` column is a civil date at UTC midnight — that is a storage
+convention, not a timezone, so use `toDateColumn`/`fromDateColumn` and do not "fix" it to IST.
+`packages/ui` holds no zone: it is design, so a picker's dates are UTC-built civil dates and an app
+that needs a clock passes `min`/`max`.
+
 ## API
 
 One envelope (types in `packages/contracts`). Success: `{ success: true, data, meta }`. Failure: `{ success: false, error: { code, message, fieldErrors? }, meta }`.

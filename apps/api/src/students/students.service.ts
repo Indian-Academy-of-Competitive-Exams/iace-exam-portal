@@ -30,6 +30,7 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
+import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 
 /** The `fieldErrors` keys the student forms own — `applyFieldErrors` drops any other. */
 const ENROLLED_EXAMS_FIELD = 'enrolledExams';
@@ -146,7 +147,7 @@ export class StudentsService {
     return {
       motherName: profile.motherName,
       fatherName: profile.fatherName,
-      dob: profile.dob ? toDateOnly(profile.dob) : null,
+      dob: profile.dob ? fromDateColumn(profile.dob) : null,
       email: profile.email,
       address: profile.address,
       gender: profile.gender,
@@ -478,11 +479,6 @@ function addedTo(before: string[], after: string[]): string[] {
   return after.filter((code) => !held.has(code));
 }
 
-/** A DATE column round-trips as YYYY-MM-DD; the time part is not ours to invent. */
-function toDateOnly(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 function stripUndefined<T extends object>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
@@ -492,8 +488,6 @@ function toProfileData(patch: NonNullable<UpdateStudentBody['profile']>) {
   return {
     ...data,
     // Prisma wants a Date for a DATE column; the wire format is a plain day.
-    ...(data.dob === undefined
-      ? {}
-      : { dob: data.dob === null ? null : new Date(`${data.dob}T00:00:00Z`) }),
+    ...(data.dob === undefined ? {} : { dob: data.dob === null ? null : toDateColumn(data.dob) }),
   };
 }
