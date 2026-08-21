@@ -59,11 +59,9 @@ const DialogContent = React.forwardRef<
 >(({ className, children, size, showClose = true, closeLabel = 'Close', ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogOverlay />
-    {/* The dialog is centred by this wrapper rather than by a transform of its
-        own, so the entry animation can end at `transform: none` without
-        knocking it off centre. The wrapper scrolls when a tall dialog meets a
-        short window — the page behind is already locked by Radix. */}
-    <div className="pointer-events-none fixed inset-0 z-[--z-modal] grid place-items-center overflow-y-auto p-4">
+    {/* Centres without a transform, so the entry animation can end at `transform: none`. It does
+        NOT scroll — DialogBody is the one scroller, and a second here nests two scrollbars. */}
+    <div className="pointer-events-none fixed inset-0 z-[--z-modal] grid place-items-center overflow-hidden p-4">
       <DialogPrimitive.Content
         ref={ref}
         className={cn(dialogVariants({ size }), className)}
@@ -127,7 +125,8 @@ function DialogBody({ className, ...props }: Readonly<React.HTMLAttributes<HTMLD
   return (
     <div
       className={cn(
-        'overflow-y-auto px-[--modal-pad] text-sm leading-normal text-foreground-secondary',
+        // min-h-0 flex-1, or the flex child refuses to shrink and overflows the dialog instead.
+        'min-h-0 flex-1 overflow-y-auto px-[--modal-pad] text-sm leading-normal text-foreground-secondary',
         className,
       )}
       {...props}

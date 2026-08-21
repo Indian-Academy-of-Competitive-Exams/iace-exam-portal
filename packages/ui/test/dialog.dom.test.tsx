@@ -14,6 +14,26 @@ const props = {
   onConfirm: () => {},
 };
 
+/** One scroller per dialog: a scrollbar inside a scrollbar strands content between the two. */
+describe('dialog scrollports', () => {
+  it('gives a dialog exactly one vertical scroller, and it is the body', () => {
+    render(<ConfirmDialog {...props}>a long body</ConfirmDialog>);
+
+    const scrollers = document.querySelectorAll('[class*="overflow-y-auto"]');
+
+    assert.equal(scrollers.length, 1);
+    assert.ok(scrollers[0]?.className.includes('--modal-pad'));
+  });
+
+  it('lets that body shrink, so it scrolls instead of pushing the dialog off-screen', () => {
+    render(<ConfirmDialog {...props}>a long body</ConfirmDialog>);
+
+    const body = document.querySelector('[class*="overflow-y-auto"]');
+
+    assert.ok(body?.className.includes('min-h-0'));
+  });
+});
+
 describe('ConfirmDialog', () => {
   /** Enter on a dialog that appeared under someone's fingers must not delete. */
   it('opens with the focus on Cancel, not on the destructive action', async () => {
