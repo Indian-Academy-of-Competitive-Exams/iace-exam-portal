@@ -87,15 +87,15 @@ describe('studentWhere — access-shaped filters', () => {
 });
 
 describe('studentWhere — joined between', () => {
-  it('covers the WHOLE of the last day, not up to its midnight', () => {
+  it('covers the WHOLE of the last day, as the day runs at the institute', () => {
     const [condition] = conditionsFor({ joinedFrom: '2026-08-03', joinedTo: '2026-08-03' });
     const range = (condition as { createdAt: { gte: Date; lte: Date } }).createdAt;
 
-    assert.equal(range.gte.toISOString(), '2026-08-03T00:00:00.000Z');
-    // Someone who enrolled at 4pm on the 3rd is inside a 3rd-to-3rd range. A
-    // midnight bound would return nothing and read as "there are none".
-    assert.equal(range.lte.toISOString(), '2026-08-03T23:59:59.999Z');
+    // The 3rd in IST, so the bounds are 05:30 either side of the UTC day of the same name.
+    assert.equal(range.gte.toISOString(), '2026-08-02T18:30:00.000Z');
+    assert.equal(range.lte.toISOString(), '2026-08-03T18:29:59.999Z');
     assert.ok(new Date('2026-08-03T16:00:00.000Z') <= range.lte);
+    assert.ok(new Date('2026-08-02T19:00:00.000Z') >= range.gte);
   });
 
   it('accepts an open-ended range at either end', () => {

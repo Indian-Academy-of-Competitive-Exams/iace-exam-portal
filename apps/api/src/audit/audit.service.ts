@@ -14,6 +14,7 @@ import {
   type RowAction,
   type RowActionListQuery,
 } from '@iace/contracts';
+import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
 import { type AuditRowActionEvent } from '../common/events/event-catalog';
 
@@ -27,8 +28,8 @@ export interface AuditViewer {
 /** A calendar-day bound. `rowActionListQuerySchema` already rejects anything else; this is what
  *  keeps a direct caller from reaching Prisma with an Invalid Date. */
 function parseDateOnlyBound(value: string, field: 'from' | 'to'): Date {
-  const boundary = field === 'from' ? 'T00:00:00.000Z' : 'T23:59:59.999Z';
-  const parsed = dateOnlySchema.safeParse(value).success ? new Date(`${value}${boundary}`) : null;
+  const bound = field === 'from' ? startOfInstituteDay : endOfInstituteDay;
+  const parsed = dateOnlySchema.safeParse(value).success ? bound(value) : null;
   if (!parsed || Number.isNaN(parsed.getTime())) {
     const message = `${field} must be a date in YYYY-MM-DD form`;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {

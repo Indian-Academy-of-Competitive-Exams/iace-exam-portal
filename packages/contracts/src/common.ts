@@ -11,6 +11,22 @@ export const ActorTypes = {
 
 export type ActorType = (typeof ActorTypes)[keyof typeof ActorTypes];
 
+/** Every civil date — "today", a scheduling day, a report's day — is this clock, never UTC. */
+export const INSTITUTE_TIME_ZONE = 'Asia/Kolkata';
+
+/** `en-CA` is the locale that formats as YYYY-MM-DD, which is why it and not `en-IN`. */
+const INSTITUTE_CIVIL_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** The civil date at the institute for an instant — UTC would be a day behind before 05:30 IST. */
+export function civilDate(at: Date = new Date()): string {
+  return INSTITUTE_CIVIL_DATE.format(at);
+}
+
 export const actorTypeSchema = z.enum(ActorTypes);
 
 /** An Indian mobile number, once normalised: 10 digits, leading 6-9. */

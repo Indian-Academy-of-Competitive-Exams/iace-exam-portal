@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
+import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
@@ -65,8 +66,8 @@ function dateRange(
 
   return {
     createdAt: {
-      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-      ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
+      ...(from ? { gte: startOfInstituteDay(from) } : {}),
+      ...(to ? { lte: endOfInstituteDay(to) } : {}),
     },
   };
 }

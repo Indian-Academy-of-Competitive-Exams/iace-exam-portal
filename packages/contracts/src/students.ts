@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { mobileSchema, optionalBooleanQuery, searchQuery } from './common';
+import { civilDate, mobileSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { examFamilySchema } from './exams';
 
@@ -41,9 +41,9 @@ export const dobSchema = dateOnlySchema
     `That year looks like a typo — use ${EARLIEST_BIRTH_YEAR} or later`,
   );
 
-/** Today, as YYYY-MM-DD. Also what a date input should cap itself at. */
+/** Today at the institute, as YYYY-MM-DD — what a date input caps itself at. */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return civilDate();
 }
 
 /**
