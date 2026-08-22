@@ -457,11 +457,28 @@ export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;
  * ARCHIVED retires a question rather than deleting it: it is hidden from the bank and
  * drawn into no future paper, while every paper that already pinned a version is untouched.
  */
+/** A page of drafts is 100 at most, so a bulk decision can never be larger than what was shown. */
+export const BULK_STATUS_MAX = 100;
+
 export const setQuestionStatusSchema = z.object({
   status: questionStatusSchema,
 });
 export type SetQuestionStatusInput = z.input<typeof setQuestionStatusSchema>;
 export type SetQuestionStatusBody = z.infer<typeof setQuestionStatusSchema>;
+
+/** Reviewing a batch is one decision, so it is one request rather than one per row. */
+export const bulkQuestionStatusSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(BULK_STATUS_MAX),
+  status: questionStatusSchema,
+});
+export type BulkQuestionStatusInput = z.input<typeof bulkQuestionStatusSchema>;
+export type BulkQuestionStatusBody = z.infer<typeof bulkQuestionStatusSchema>;
+
+/** What one bulk decision did, so the screen can say it rather than guess. */
+export const bulkQuestionStatusResultSchema = z.object({
+  updated: z.number(),
+});
+export type BulkQuestionStatusResult = z.infer<typeof bulkQuestionStatusResultSchema>;
 
 // ============================================================================
 // The import sheet. These columns are the ONE definition of the format: the
@@ -630,6 +647,7 @@ export const ADMIN_QUESTION_ROUTES = {
   get: (id: string) => `/admin/questions/${id}`,
   update: (id: string) => `/admin/questions/${id}`,
   setStatus: (id: string) => `/admin/questions/${id}/status`,
+  bulkStatus: '/admin/questions/status',
   uploadImage: '/admin/questions/images',
 } as const;
 

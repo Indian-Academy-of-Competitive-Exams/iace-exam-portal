@@ -134,7 +134,12 @@ export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination } from './components/ui/pagination';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
 export { PageHeader } from './components/ui/page-header';
-export { DataTable, type DataTableColumn, type DataTableProps } from './components/ui/data-table';
+export {
+  DataTable,
+  type DataTableColumn,
+  type DataTableProps,
+  type DataTableSelection,
+} from './components/ui/data-table';
 export {
   TableFrame,
   PageFrame,

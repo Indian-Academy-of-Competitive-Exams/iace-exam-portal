@@ -137,6 +137,7 @@ import {
 
 import {
   ADMIN_QUESTION_ROUTES,
+  bulkQuestionStatusResultSchema,
   QUESTION_IMAGE_FILE_FIELD,
   questionImageSchema,
   ADMIN_TAXONOMY_ROUTES,
@@ -150,6 +151,8 @@ import {
   type CreateSubjectInput,
   type CreateTopicInput,
   type QuestionDetail,
+  type BulkQuestionStatusInput,
+  type BulkQuestionStatusResult,
   type QuestionImage,
   type QuestionDraftInput,
   type QuestionImportPlan,
@@ -842,6 +845,14 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: questionDetailSchema,
+          }),
+
+        /** One decision over a page of drafts — one request, so nothing is half-approved. */
+        bulkSetStatus: (input: BulkQuestionStatusInput): Promise<BulkQuestionStatusResult> =>
+          request(ADMIN_QUESTION_ROUTES.bulkStatus, {
+            method: 'PATCH',
+            body: input,
+            schema: bulkQuestionStatusResultSchema,
           }),
 
         /** Content stores the `key`; the `url` is for showing the image that was just chosen. */

@@ -1723,6 +1723,20 @@ export class FakeQuestionBankPrisma {
       if (topic !== undefined) row.topicId = relationIdOf(data, 'topic');
       return Promise.resolve(this.hydrate(row));
     },
+
+    /** Counts what it changed, as Prisma does — an id that matches nothing is simply not counted. */
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: { in: string[] } };
+      data: Record<string, unknown>;
+    }) => {
+      const wanted = new Set(where.id.in);
+      const rows = this.questions.filter((question) => wanted.has(question.id));
+      for (const row of rows) Object.assign(row, data);
+      return Promise.resolve({ count: rows.length });
+    },
   };
 
   readonly questionVersion = {

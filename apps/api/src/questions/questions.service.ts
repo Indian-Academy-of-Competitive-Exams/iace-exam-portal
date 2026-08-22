@@ -15,6 +15,8 @@ import {
   type QuestionListQuery,
   type QuestionOption,
   type QuestionSummary,
+  type BulkQuestionStatusBody,
+  type BulkQuestionStatusResult,
   type SetQuestionStatusBody,
   type ValidationIssue,
 } from '@iace/contracts';
@@ -188,6 +190,22 @@ export class QuestionsService {
     );
 
     return this.signed(toDetail(updated));
+  }
+
+  /** One decision over many rows: one statement, so a half-applied batch is not a state. */
+  async bulkSetStatus(body: BulkQuestionStatusBody): Promise<BulkQuestionStatusResult> {
+    const ids = [...new Set(body.ids)];
+    const { count } = await this.prisma.question.updateMany({
+      where: { id: { in: ids } },
+      data: { status: body.status },
+    });
+
+    // The row is the batch, not any one question — the interceptor has no :id to fall back on.
+    this.auditContext.setEntityId(`${count} questions`);
+    // A batch has many befores, so the trail records the decision rather than inventing one.
+    this.auditContext.setChanged({ status: { from: 'many', to: body.status } });
+
+    return { updated: count };
   }
 
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */

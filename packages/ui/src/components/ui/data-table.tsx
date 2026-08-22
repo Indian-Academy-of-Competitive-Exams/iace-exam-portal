@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Checkbox } from './checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableState } from './table';
 
 export interface DataTableColumn<TRow> {
@@ -25,6 +26,15 @@ export interface DataTableProps<TRow> {
   skeletonRows?: number;
   /** Usually a `<Pagination />`. Rendered only when given. */
   footer?: React.ReactNode;
+  /** Given this, the table grows a checkbox column. The caller owns what "selected" means. */
+  selection?: DataTableSelection;
+}
+
+export interface DataTableSelection {
+  selected: ReadonlySet<string>;
+  onChange: (selected: ReadonlySet<string>) => void;
+  /** The label the header checkbox announces, since a table has no heading of its own. */
+  label?: string;
 }
 
 /**
@@ -40,12 +50,44 @@ export function DataTable<TRow>({
   loading,
   skeletonRows,
   footer,
+  selection,
 }: Readonly<DataTableProps<TRow>>) {
+  const keys = rows.map(rowKey);
+  // Only what is on screen: a header box that silently took the other nine pages would be a lie.
+  const allShown = keys.length > 0 && keys.every((key) => selection?.selected.has(key));
+
+  const toggleAll = (on: boolean) => {
+    const next = new Set(selection?.selected);
+    for (const key of keys) {
+      if (on) next.add(key);
+      else next.delete(key);
+    }
+    selection?.onChange(next);
+  };
+
+  const toggleOne = (key: string, on: boolean) => {
+    const next = new Set(selection?.selected);
+    if (on) next.add(key);
+    else next.delete(key);
+    selection?.onChange(next);
+  };
+
+  const span = columns.length + (selection ? 1 : 0);
+
   return (
     <>
       <Table>
         <TableHeader>
           <TableRow>
+            {selection ? (
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label={selection.label ?? 'Select every row shown'}
+                  checked={allShown}
+                  onChange={(event) => toggleAll(event.target.checked)}
+                />
+              </TableHead>
+            ) : null}
             {columns.map((column) => (
               <TableHead key={column.key} numeric={column.numeric}>
                 {column.header}
@@ -57,13 +99,22 @@ export function DataTable<TRow>({
           <TableState
             isLoading={isLoading}
             isEmpty={rows.length === 0}
-            colSpan={columns.length}
+            colSpan={span}
             empty={empty}
             loading={loading}
             skeletonRows={skeletonRows}
           >
             {rows.map((row) => (
               <TableRow key={rowKey(row)}>
+                {selection ? (
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`Select row ${rowKey(row)}`}
+                      checked={selection.selected.has(rowKey(row))}
+                      onChange={(event) => toggleOne(rowKey(row), event.target.checked)}
+                    />
+                  </TableCell>
+                ) : null}
                 {columns.map((column) => (
                   <TableCell key={column.key} numeric={column.numeric} className={column.className}>
                     {column.cell(row)}

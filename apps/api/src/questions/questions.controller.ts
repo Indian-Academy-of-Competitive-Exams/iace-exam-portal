@@ -20,11 +20,14 @@ import {
   PERMISSION_LEVELS,
   questionDraftSchema,
   QUESTION_IMAGE_FILE_FIELD,
+  bulkQuestionStatusSchema,
   questionListQuerySchema,
   setQuestionStatusSchema,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
+  type BulkQuestionStatusBody,
+  type BulkQuestionStatusResult,
   type QuestionImage,
   type QuestionListQuery,
   type QuestionSummary,
@@ -64,6 +67,16 @@ export class QuestionsController {
   @UseInterceptors(FileInterceptor(QUESTION_IMAGE_FILE_FIELD))
   uploadImage(@UploadedFile() file?: UploadedFileLike): Promise<QuestionImage> {
     return this.questions.saveImage(file);
+  }
+
+  /** Before `:id`, or "status" is read as a question id. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch('status')
+  bulkSetStatus(
+    @Body(new ZodBody(bulkQuestionStatusSchema)) body: BulkQuestionStatusBody,
+  ): Promise<BulkQuestionStatusResult> {
+    return this.questions.bulkSetStatus(body);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)

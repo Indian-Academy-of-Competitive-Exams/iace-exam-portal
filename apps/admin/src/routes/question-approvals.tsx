@@ -14,8 +14,10 @@ import {
 import { useListQuery } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
+  Alert,
   Badge,
   BadgeList,
+  Button,
   Combobox,
   ConfirmDialog,
   DataTable,
@@ -23,13 +25,14 @@ import {
   DropdownMenuSeparator,
   Field,
   FilterBar,
+  linkVariants,
   PageHeader,
   Pagination,
+  plural,
   RowActions,
   SearchInput,
   TableFrame,
   TruncatedText,
-  linkVariants,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -122,6 +125,7 @@ export function QuestionApprovalsPage() {
   });
 
   const columns = useMemo(() => approvalColumns(), []);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const header = (
     <PageHeader
@@ -192,6 +196,10 @@ export function QuestionApprovalsPage() {
     </>
   );
 
+  // Narrowed to what is on screen: a row the reader cannot see must never be in the batch.
+  const shown = new Set(questions.items.map((question) => question.id));
+  const chosen = new Set([...selected].filter((id) => shown.has(id)));
+
   const toolbar = (
     <FilterBar
       activeCount={filters.activeCount(ALL_FILTERS)}
@@ -214,11 +222,14 @@ export function QuestionApprovalsPage() {
     <TableFrame header={header} toolbar={toolbar}>
       {/* "None match" and "there are none" are different facts, and telling an
           admin the wrong one sends them looking in the wrong place. */}
+      <BulkApproval selected={chosen} onDone={() => setSelected(new Set())} />
+
       <DataTable
         columns={columns}
         rows={questions.items}
         rowKey={(question) => question.id}
         isLoading={questions.isLoading}
+        selection={{ selected: chosen, onChange: setSelected, label: 'Select every draft shown' }}
         empty={
           filters.activeCount(ALL_FILTERS) > 0
             ? 'No drafts match those filters.'
@@ -227,6 +238,56 @@ export function QuestionApprovalsPage() {
         footer={questions.hasLoaded ? <Pagination {...questions.pagination} /> : null}
       />
     </TableFrame>
+  );
+}
+
+/** Only when something is chosen: a bar that is always there is a bar nobody reads. */
+function BulkApproval({
+  selected,
+  onDone,
+}: Readonly<{ selected: ReadonlySet<string>; onDone: () => void }>) {
+  const { can } = useAuth();
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const count = selected.size;
+
+  const approve = useMutation({
+    meta: { success: `${plural(count, 'question')} approved.` },
+    mutationFn: () =>
+      api.admin.questions.bulkSetStatus({
+        ids: [...selected],
+        status: QUESTION_STATUS.ACTIVE,
+      }),
+    onSuccess: async () => {
+      setAsking(false);
+      onDone();
+      await queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
+    },
+    onError: () => setAsking(false),
+  });
+
+  if (count === 0 || !can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)) return null;
+
+  return (
+    <Alert variant="info" className="mb-4">
+      <span className="flex flex-wrap items-center justify-between gap-3">
+        <span>{plural(count, 'question')} selected.</span>
+        <Button size="sm" onClick={() => setAsking(true)}>
+          <Check aria-hidden />
+          Approve selected
+        </Button>
+      </span>
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        loading={approve.isPending}
+        title={`Approve ${plural(count, 'question')}?`}
+        description={`They go into the bank as ACTIVE and can be drawn into any paper built from now on. Approving does not put them into a paper that already exists.`}
+        confirmLabel="Approve them"
+        onConfirm={() => approve.mutate()}
+      />
+    </Alert>
   );
 }
 

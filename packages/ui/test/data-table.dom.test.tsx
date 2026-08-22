@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DataTable, type DataTableColumn } from '../src/components/ui/data-table';
 
 afterEach(cleanup);
@@ -84,5 +84,73 @@ describe('DataTable', () => {
 
     rerender(table({ footer: <div data-testid="footer">1–2 of 2</div> }));
     assert.ok(screen.getByTestId('footer'));
+  });
+});
+
+describe('DataTable selection', () => {
+  const rows = [
+    { id: 'a', name: 'Alpha' },
+    { id: 'b', name: 'Beta' },
+  ];
+  const columns = [{ key: 'name', header: 'Name', cell: (row: (typeof rows)[number]) => row.name }];
+
+  const table = (
+    selected: ReadonlySet<string>,
+    onChange: (next: ReadonlySet<string>) => void = () => {},
+  ) =>
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isLoading={false}
+        empty="none"
+        selection={{ selected, onChange }}
+      />,
+    );
+
+  it('draws no checkbox column when no selection is offered', () => {
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isLoading={false}
+        empty="none"
+      />,
+    );
+
+    assert.equal(screen.queryAllByRole('checkbox').length, 0);
+  });
+
+  it('draws one per row plus the header', () => {
+    table(new Set());
+
+    assert.equal(screen.getAllByRole('checkbox').length, rows.length + 1);
+  });
+
+  it('reports the row that was ticked, keeping what was already chosen', () => {
+    let got: ReadonlySet<string> = new Set();
+    table(new Set(['a']), (next) => (got = next));
+
+    fireEvent.click(screen.getByLabelText('Select row b'));
+
+    assert.deepEqual([...got].sort(), ['a', 'b']);
+  });
+
+  /** Only the rows on screen: a header box that silently took the other nine pages would be a lie. */
+  it('takes every row shown, and only those', () => {
+    let got: ReadonlySet<string> = new Set();
+    table(new Set(['elsewhere']), (next) => (got = next));
+
+    fireEvent.click(screen.getByLabelText('Select every row shown'));
+
+    assert.deepEqual([...got].sort(), ['a', 'b', 'elsewhere']);
+  });
+
+  it('the header reads as ticked only when every row shown is', () => {
+    table(new Set(['a', 'b']));
+
+    assert.ok((screen.getByLabelText('Select every row shown') as HTMLInputElement).checked);
   });
 });

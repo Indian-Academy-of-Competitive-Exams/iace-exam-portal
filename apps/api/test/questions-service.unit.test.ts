@@ -368,3 +368,45 @@ describe('saveImage', () => {
     assert.equal(storage.objects.size, 0);
   });
 });
+
+describe('bulkSetStatus', () => {
+  // Fresh each time: updateMany mutates the rows, so a shared array leaks between tests.
+  const drafts = () =>
+    ['q1', 'q2', 'q3'].map((id) => makeQuestion({ id, status: QUESTION_STATUS.DRAFT }));
+
+  it('moves every named question in one statement', async () => {
+    const { questions, prisma } = build(drafts());
+
+    const result = await questions.bulkSetStatus({
+      ids: ['q1', 'q2'],
+      status: QUESTION_STATUS.ACTIVE,
+    });
+
+    assert.equal(result.updated, 2);
+    assert.equal(prisma.questions.find((q) => q.id === 'q1')?.status, QUESTION_STATUS.ACTIVE);
+    assert.equal(prisma.questions.find((q) => q.id === 'q3')?.status, QUESTION_STATUS.DRAFT);
+  });
+
+  /** The same row twice must not be counted twice, or the screen reports work it did not do. */
+  it('counts a repeated id once', async () => {
+    const { questions } = build(drafts());
+
+    const result = await questions.bulkSetStatus({
+      ids: ['q1', 'q1', 'q1'],
+      status: QUESTION_STATUS.ACTIVE,
+    });
+
+    assert.equal(result.updated, 1);
+  });
+
+  it('reports what it actually changed, not what it was asked to', async () => {
+    const { questions } = build(drafts());
+
+    const result = await questions.bulkSetStatus({
+      ids: ['q1', 'gone'],
+      status: QUESTION_STATUS.ACTIVE,
+    });
+
+    assert.equal(result.updated, 1);
+  });
+});
