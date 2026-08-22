@@ -5,7 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { RichText } from '../src/components/ui/rich-text';
 import { FormPanel } from '../src/components/ui/form-panel';
 import { TooltipProvider } from '../src/components/ui/tooltip';
-import { imageFilesIn } from '../src/components/ui/rich-text-image';
+import { imageFilesIn, insertUploaded } from '../src/components/ui/rich-text-image';
+import { Toaster, toast } from '../src/components/ui/toast';
 
 afterEach(cleanup);
 
@@ -190,5 +191,57 @@ describe('the equation dialog refuses what will not render', () => {
     open();
 
     assert.equal(screen.queryByRole('alert'), null);
+  });
+});
+
+describe('an image the field will not take', () => {
+  const limits = { accept: ['image/png'], maxBytes: 2 * 1024 * 1024 };
+  const never = () => Promise.reject(new Error('should not have been uploaded'));
+  const file = (size: number, type = 'image/png') =>
+    new File([new Uint8Array(size)], 'a.png', { type });
+  const stubEditor = {
+    chain: () => ({ focus: () => ({ setImage: () => ({ run: () => true }) }) }),
+  } as never;
+
+  afterEach(() => toast.clear());
+
+  /** It reached the server, the server refused it, and nothing told anybody. */
+  it('says so when the upload is refused, rather than failing silently', async () => {
+    render(<Toaster />);
+    insertUploaded(stubEditor, file(10), () =>
+      Promise.reject(new Error('That image is larger than 2MB.')),
+    );
+
+    assert.ok(await screen.findByText(/larger than 2MB/));
+  });
+
+  /** Refused here, so ten megabytes are never put on the wire to be refused there. */
+  it('refuses an oversized file without uploading it at all', async () => {
+    render(<Toaster />);
+    insertUploaded(stubEditor, file(3 * 1024 * 1024), never, limits);
+
+    assert.ok(await screen.findByText(/larger than 2MB/));
+  });
+
+  it('refuses a type the server would not take, and names what it would', async () => {
+    render(<Toaster />);
+    insertUploaded(stubEditor, file(10, 'image/svg+xml'), never, limits);
+
+    assert.ok(await screen.findByText(/not accepted/));
+  });
+
+  it('lets an acceptable file through to the uploader', () => {
+    let asked = false;
+    insertUploaded(
+      stubEditor,
+      file(10),
+      () => {
+        asked = true;
+        return Promise.resolve({ key: 'k', url: 'u' });
+      },
+      limits,
+    );
+
+    assert.ok(asked, 'a file inside the limits must reach the uploader');
   });
 });

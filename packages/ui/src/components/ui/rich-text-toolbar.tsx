@@ -26,7 +26,7 @@ import {
 } from './dialog';
 import { Label } from './label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
-import { type UploadImage } from './rich-text-image';
+import { insertUploaded, type ImageLimits, type UploadImage } from './rich-text-image';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -243,6 +243,7 @@ export interface RichTextToolbarProps {
   onMathChange: (math: MathDraft | null) => void;
   /** Absent means this field takes no images, so no button offers one. */
   onUploadImage?: UploadImage;
+  imageLimits?: ImageLimits;
 }
 
 export function RichTextToolbar({
@@ -251,18 +252,12 @@ export function RichTextToolbar({
   math,
   onMathChange,
   onUploadImage,
+  imageLimits,
 }: Readonly<RichTextToolbarProps>) {
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const choose = (file: File | undefined) => {
-    if (!file || !onUploadImage) return;
-    void onUploadImage(file).then(({ key, url }) =>
-      editor
-        .chain()
-        .focus()
-        .setImage({ src: url, 'data-key': key } as never)
-        .run(),
-    );
+    if (file && onUploadImage) insertUploaded(editor, file, onUploadImage, imageLimits);
   };
 
   const submit = () => {
@@ -319,7 +314,7 @@ export function RichTextToolbar({
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept={imageLimits?.accept?.join(',')}
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];

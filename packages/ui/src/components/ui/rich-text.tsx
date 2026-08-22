@@ -8,7 +8,13 @@ import { TableKit } from '@tiptap/extension-table';
 import { cn } from '../../lib/utils';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
-import { QuestionImage, imageFilesIn, insertUploaded, type UploadImage } from './rich-text-image';
+import {
+  QuestionImage,
+  imageFilesIn,
+  insertUploaded,
+  type ImageLimits,
+  type UploadImage,
+} from './rich-text-image';
 
 export interface RichTextProps {
   value: string;
@@ -21,6 +27,8 @@ export interface RichTextProps {
   singleLine?: boolean;
   /** Given one, the editor takes images; without it there is no image button and paste falls through. */
   onUploadImage?: UploadImage;
+  /** What the server will accept, so a file it would refuse is refused here first. */
+  imageLimits?: ImageLimits;
   id?: string;
   'aria-describedby'?: string;
   'aria-invalid'?: true;
@@ -47,13 +55,14 @@ function takeImages(
   view: unknown,
   data: DataTransfer | null,
   upload: UploadImage | undefined,
+  limits: ImageLimits | undefined,
 ): boolean {
   if (!upload) return false;
   const files = imageFilesIn(data);
   if (files.length === 0) return false;
 
   const editor = (view as unknown as { editor: Parameters<typeof insertUploaded>[0] }).editor;
-  for (const file of files) insertUploaded(editor, file, upload);
+  for (const file of files) insertUploaded(editor, file, upload, limits);
   return true;
 }
 
@@ -75,6 +84,7 @@ export function RichText({
   lang,
   singleLine = false,
   onUploadImage,
+  imageLimits,
   id,
   'aria-describedby': describedBy,
   'aria-invalid': invalid,
@@ -105,9 +115,10 @@ export function RichText({
     onUpdate: ({ editor: current }: { editor: Editor }) => onChange(current.getHTML()),
     editorProps: {
       // Without these a pasted image becomes a base64 `data:` uri inside the question row.
-      handlePaste: (view, event) => takeImages(view, event.clipboardData, onUploadImage),
+      handlePaste: (view, event) =>
+        takeImages(view, event.clipboardData, onUploadImage, imageLimits),
       handleDrop: (view, event) =>
-        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage),
+        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage, imageLimits),
       attributes: {
         class: cn(CONTENT, singleLine && 'whitespace-nowrap'),
         ...(id ? { id } : {}),
@@ -141,6 +152,7 @@ export function RichText({
           math={math}
           onMathChange={setMath}
           onUploadImage={onUploadImage}
+          imageLimits={imageLimits}
         />
       ) : null}
       <EditorContent editor={editor} />

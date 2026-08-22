@@ -22,6 +22,8 @@ import {
   type QuestionDetail,
   type QuestionDraftInput,
   type QuestionLanguage,
+  QUESTION_IMAGE_ACCEPTED_TYPES,
+  QUESTION_IMAGE_MAX_BYTES,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -76,6 +78,12 @@ interface QuestionFormValues {
 }
 
 const emptyLanguages = (): LanguageMap => ({ en: '', hi: '', te: '' });
+
+/** From the contract, so the picker offers exactly what checkQuestionImage will accept. */
+const IMAGE_LIMITS = {
+  accept: QUESTION_IMAGE_ACCEPTED_TYPES,
+  maxBytes: QUESTION_IMAGE_MAX_BYTES,
+} as const;
 
 /** ARCHIVED is a retirement, so it is only on offer once there is something to retire. */
 function statusChoices(existing: boolean) {
@@ -510,6 +518,7 @@ function Rich({
       lang={lang}
       singleLine={singleLine}
       onUploadImage={(file) => api.admin.questions.uploadImage(file)}
+      imageLimits={IMAGE_LIMITS}
       value={value ?? ''}
       onChange={(html) => form.setValue(name, html as never, { shouldDirty: true })}
     />
