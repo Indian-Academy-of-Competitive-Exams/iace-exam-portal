@@ -6,6 +6,7 @@ interface RadioGroupContextValue {
   value?: string;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
+  inline?: boolean;
 }
 
 const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(null);
@@ -41,8 +42,8 @@ export function RadioGroup({
   ...props
 }: Readonly<RadioGroupProps>) {
   const context = React.useMemo(
-    () => ({ name, value, onValueChange, disabled }),
-    [name, value, onValueChange, disabled],
+    () => ({ name, value, onValueChange, disabled, inline }),
+    [name, value, onValueChange, disabled, inline],
   );
   const labelId = React.useId();
 
@@ -91,7 +92,9 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
       <label
         htmlFor={id}
         className={cn(
-          'flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60',
+          'flex cursor-pointer gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60',
+          // Centred in a row; a stacked one aligns to the first line, since a hint sits under it.
+          group.inline ? 'items-center' : 'items-start',
           'has-[input:disabled]:cursor-not-allowed has-[input:disabled]:opacity-50',
           'has-[input:checked]:bg-primary-subtle',
           className,
@@ -106,7 +109,10 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
           disabled={group.disabled}
           // Uncontrolled when the group has no `value`: react-hook-form owns it.
           checked={group.value === undefined ? undefined : group.value === value}
-          className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:shadow-focus focus-visible:outline-none"
+          className={cn(
+            'size-4 shrink-0 accent-primary focus-visible:shadow-focus focus-visible:outline-none',
+            !group.inline && 'mt-0.5',
+          )}
           onChange={(event) => {
             onChange?.(event);
             if (event.target.checked) group.onValueChange?.(value);
