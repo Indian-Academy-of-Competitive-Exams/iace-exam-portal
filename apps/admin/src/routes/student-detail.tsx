@@ -384,10 +384,12 @@ function GrantList({
 
   if (grants.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No series has been granted to this student. Everything they reach comes from their
-        enrolments and programs.
-      </p>
+      <Alert variant="info">
+        <span>
+          No series has been granted to this student. Everything they reach comes from their
+          enrolments and programs.
+        </span>
+      </Alert>
     );
   }
 

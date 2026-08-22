@@ -216,10 +216,12 @@ function AdminPanel({
     >
       {admin.isSuperAdmin ? (
         // No checkboxes: a super admin bypasses every check, so a grant changes nothing.
-        <p className="text-sm text-muted-foreground">
-          Bypasses every feature check, so there is nothing to grant. Remove super admin on the
-          Admins screen to give them specific access instead.
-        </p>
+        <Alert variant="info">
+          <span>
+            Bypasses every feature check, so there is nothing to grant. Remove super admin on the
+            Admins screen to give them specific access instead.
+          </span>
+        </Alert>
       ) : (
         <>
           <FeatureGrid
@@ -231,26 +233,25 @@ function AdminPanel({
           />
 
           {changes.length > 0 ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-              <p className="text-sm text-muted-foreground">
-                {plural(changes.length, 'unsaved change')} — nothing has been sent yet.
-              </p>
-              <div className="flex gap-2">
-                {/* Cancel is neutral grey, never red: discarding a draft
-                    destroys nothing that exists. */}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={save.isPending}
-                  onClick={() => setDraft(new Map<FeatureKey, Level>())}
-                >
-                  Discard
-                </Button>
-                <Button size="sm" loading={save.isPending} onClick={() => setConfirming(true)}>
-                  Save changes
-                </Button>
+            <Alert variant="warning" className="mt-3">
+              <div className="flex flex-1 flex-wrap items-center justify-between gap-2">
+                <span>{plural(changes.length, 'unsaved change')} — nothing has been sent yet.</span>
+                <div className="flex gap-2">
+                  {/* Cancel is neutral grey, never red: discarding a draft destroys nothing. */}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={save.isPending}
+                    onClick={() => setDraft(new Map<FeatureKey, Level>())}
+                  >
+                    Discard
+                  </Button>
+                  <Button size="sm" loading={save.isPending} onClick={() => setConfirming(true)}>
+                    Save changes
+                  </Button>
+                </div>
               </div>
-            </div>
+            </Alert>
           ) : null}
 
           <ConfirmDialog

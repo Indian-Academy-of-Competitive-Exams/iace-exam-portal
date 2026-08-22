@@ -2,21 +2,19 @@ import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import {
   DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
   GENDERS,
   todayISO,
   updateMeSchema,
-  type Me,
   type UpdateMeInput,
   type Gender,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import {
   Alert,
-  Badge,
   Button,
   Combobox,
   DatePicker,
@@ -140,8 +138,6 @@ export function ProfilePage() {
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
       {ready && me.data && (
         <>
-          {!isEditing && <Outstanding me={me.data} />}
-
           <FormSection title="Needed before a test">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -295,46 +291,5 @@ export function ProfilePage() {
         </>
       )}
     </FormPanel>
-  );
-}
-
-/** What is left to do, as a list rather than a percentage. Editing hides it: the fields are the list. */
-function Outstanding({ me }: Readonly<{ me: Me }>) {
-  const profile = me.profile;
-  const items = [
-    { label: "Mother's name", done: Boolean(profile?.motherName), preTest: true },
-    { label: "Father's name", done: Boolean(profile?.fatherName), preTest: true },
-    { label: 'Date of birth', done: Boolean(profile?.dob), preTest: true },
-    { label: 'Gender', done: Boolean(profile?.gender), preTest: false },
-    { label: 'Passport photo', done: Boolean(profile?.photoUrl), preTest: false },
-  ];
-  const outstanding = items.filter((item) => !item.done);
-
-  if (outstanding.length === 0) {
-    return (
-      <Alert variant="success">
-        <span className="flex items-center gap-2">
-          <Check className="size-4" aria-hidden />
-          Your profile is complete. Nothing else needed.
-        </span>
-      </Alert>
-    );
-  }
-
-  return (
-    <FormSection title="Still to add">
-      <div className="flex flex-col gap-2">
-        {outstanding.map((item) => (
-          <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-foreground">{item.label}</span>
-            {item.preTest ? (
-              <Badge variant="warning">Needed before a test</Badge>
-            ) : (
-              <Badge variant="neutral">Optional</Badge>
-            )}
-          </div>
-        ))}
-      </div>
-    </FormSection>
   );
 }
