@@ -4,7 +4,8 @@
  * Do NOT add colours, spacing or radii here — add a token in packages/ui.
  */
 import animate from 'tailwindcss-animate';
-import preset from '@iace/ui/tailwind.preset';
+// Relative, not the '@iace/ui' specifier: Tailwind watches a config's relative imports only.
+import preset from '../../packages/ui/tailwind.preset.js';
 
 /** @type {import('tailwindcss').Config} */
 export default {
