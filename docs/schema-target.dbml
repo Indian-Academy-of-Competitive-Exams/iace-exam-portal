@@ -107,8 +107,8 @@ Enum QuestionType {
 }
 
 Enum AnswerMode {  // how a TEXT_FIELD answer is matched
-  NUMERIC  // exact / within answerTolerance
-  TEXT  // normalized string equality (case/space-insensitive)
+  EXACT  // normalized string equality (case/space-insensitive)
+  NUMERIC  // parsed both sides, within answerTolerance either way
 }
 
 Enum QuestionStatus {
@@ -280,7 +280,6 @@ Enum PermissionLevel {
 Enum AuditFeature {  // extensible
   STUDENT
   STUDENT_PROFILE
-  GROUP
   BRANCH
   ADMIN
   QUESTION
@@ -288,6 +287,9 @@ Enum AuditFeature {  // extensible
   TEST_SERIES
   BASE_CONFIG
   EXAM_TAXONOMY
+  TAXONOMY_SUBJECT
+  TAXONOMY_TOPIC
+  FEATURE_PERMISSION
 }
 Enum AuditAction {
   CREATE
@@ -295,6 +297,8 @@ Enum AuditAction {
   DELETE
   ACTIVATE
   DEACTIVATE
+  BLOCK
+  UNBLOCK
   IMPORT
 }
 Enum ActorType {
