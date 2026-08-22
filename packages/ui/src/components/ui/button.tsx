@@ -4,20 +4,29 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+/** A filled control reads as off by going grey, not by fading — half-opacity on a pale card is still pale. */
+const OFF = 'disabled:bg-disabled disabled:text-disabled-foreground';
+
 /** default = brand red, secondary = neutral grey (what Cancel uses), destructive = crimson. */
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:shadow-focus focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:shadow-focus focus-visible:outline-none disabled:pointer-events-none disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
-        destructive:
+        default: ['bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover', OFF],
+        secondary: ['bg-secondary text-secondary-foreground hover:bg-secondary-hover', OFF],
+        destructive: [
           'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive-hover',
-        outline:
+          OFF,
+        ],
+        outline: [
           'border border-border bg-surface text-foreground shadow-sm hover:bg-muted hover:text-foreground',
-        ghost: 'text-foreground hover:bg-muted',
-        link: 'text-primary underline-offset-4 hover:underline',
+          OFF,
+          'disabled:border-disabled-border',
+        ],
+        // No fill to mute, so these take the ink alone.
+        ghost: 'text-foreground hover:bg-muted disabled:text-disabled-foreground',
+        link: 'text-primary underline-offset-4 hover:underline disabled:text-disabled-foreground disabled:no-underline',
       },
       size: {
         sm: 'h-8 px-3 text-xs',

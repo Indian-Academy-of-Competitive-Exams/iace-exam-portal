@@ -36,7 +36,13 @@ export function DocumentCard({
   const rules = `${accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ')} · up to ${megabytes}MB`;
 
   return (
-    <div className="flex w-56 flex-col gap-3 rounded-md border border-border p-3">
+    // Keyed on the file input, not the button: the button is also disabled mid-upload.
+    <div
+      className={cn(
+        'flex w-56 flex-col gap-3 rounded-md border border-border p-3',
+        'has-[input:disabled]:border-disabled-border has-[input:disabled]:bg-disabled',
+      )}
+    >
       <Preview url={url} label={label} />
 
       <div className="flex items-center justify-between gap-2">
