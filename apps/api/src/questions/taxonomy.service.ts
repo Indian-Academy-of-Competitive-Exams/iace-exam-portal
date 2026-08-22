@@ -112,7 +112,7 @@ export class TaxonomyService {
   async listTopics(query: TopicListQuery): Promise<Paginated<Topic>> {
     const where: Prisma.TopicWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

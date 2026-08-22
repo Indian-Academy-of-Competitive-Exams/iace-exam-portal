@@ -8,11 +8,12 @@ export function questionWhere(
 ): Prisma.QuestionWhereInput {
   const and: Prisma.QuestionWhereInput[] = [];
 
-  if (query.subjectId) and.push({ subjectId: query.subjectId });
-  if (query.topicId) and.push({ topicId: query.topicId });
-  if (query.type) and.push({ type: query.type });
-  if (query.difficulty) and.push({ difficulty: query.difficulty });
-  if (query.status) and.push({ status: query.status });
+  // A set, or undefined — never [], which Prisma reads as "match nothing" rather than "any".
+  if (query.subjectId) and.push({ subjectId: { in: query.subjectId } });
+  if (query.topicId) and.push({ topicId: { in: query.topicId } });
+  if (query.type) and.push({ type: { in: query.type } });
+  if (query.difficulty) and.push({ difficulty: { in: query.difficulty } });
+  if (query.status) and.push({ status: { in: query.status } });
   if (query.tag) and.push({ tags: { has: query.tag } });
 
   // A language is present when the CURRENT version has a stem in it, which is the key

@@ -28,12 +28,12 @@ import {
   TableFrame,
   TruncatedText,
   type DataTableColumn,
-  type ListFilterControl,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
+import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty';
 
@@ -95,9 +95,9 @@ function approvalColumns(): DataTableColumn<QuestionSummary>[] {
 }
 
 export function QuestionApprovalsPage() {
-  // Held outside the spec: a subject change also has to drop the topic under it.
+  // Held outside the spec: changing the subjects also has to drop the topics under them.
   const filters = useFilters<FilterKey>();
-  const subjectId = filters.get('subjectId');
+  const subjectIds = filters.get('subjectId').split(',').filter(Boolean);
 
   // Everything but the search folds: a queue is read top to bottom before it is narrowed.
   const filterSpec = [
@@ -110,45 +110,40 @@ export function QuestionApprovalsPage() {
     },
     {
       key: 'subjectId',
-      kind: 'custom',
+      kind: 'customMulti',
       label: 'Subject',
-      render: (control: ListFilterControl) => (
-        <SubjectPicker
+      render: (control: ListFilterMultiControl) => (
+        <SubjectMultiPicker
           {...control}
-          clearable
-          // A topic under the old subject would filter everything away.
-          onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
+          // A topic under a subject no longer chosen would filter everything away.
+          onChange={(value) => filters.set({ subjectId: value.join(','), topicId: '' })}
         />
       ),
     },
     {
       key: 'topicId',
-      kind: 'custom',
+      kind: 'customMulti',
       label: 'Topic',
-      render: (control: ListFilterControl) => (
-        <TopicPicker {...control} subjectId={subjectId} clearable />
+      render: (control: ListFilterMultiControl) => (
+        <TopicMultiPicker {...control} subjectIds={subjectIds} />
       ),
     },
     {
       key: 'difficulty',
-      kind: 'choice',
+      kind: 'multi',
       label: 'Difficulty',
-      items: [
-        { value: '', label: 'Any difficulty' },
-        ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-      ],
+      placeholder: 'Any difficulty',
+      items: DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
     },
     {
       key: 'type',
-      kind: 'choice',
+      kind: 'multi',
       label: 'Type',
-      items: [
-        { value: '', label: 'Any type' },
-        ...QUESTION_TYPES.map((type) => ({
-          value: type,
-          label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-        })),
-      ],
+      placeholder: 'Any type',
+      items: QUESTION_TYPES.map((type) => ({
+        value: type,
+        label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
+      })),
     },
   ] as const;
 
@@ -158,11 +153,11 @@ export function QuestionApprovalsPage() {
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
-      subjectId: values.subjectId || undefined,
-      topicId: values.topicId || undefined,
-      type: (values.type || undefined) as QuestionSummary['type'] | undefined,
-      difficulty: (values.difficulty || undefined) as QuestionSummary['difficulty'] | undefined,
-      status: QUESTION_STATUS.DRAFT,
+      subjectId: values.subjectId,
+      topicId: values.topicId,
+      type: values.type as QuestionSummary['type'][],
+      difficulty: values.difficulty as QuestionSummary['difficulty'][],
+      status: [QUESTION_STATUS.DRAFT],
     }),
     fetchPage: (params) => api.admin.questions.list(params),
   });

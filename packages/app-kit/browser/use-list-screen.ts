@@ -1,12 +1,18 @@
 import { type QueryKey } from '@tanstack/react-query';
 import { CSV_SEPARATOR, type Paginated } from '@iace/contracts';
-import { type ListFilter, type ListState, type PaginationProps } from '@iace/ui';
+import {
+  holdsASet,
+  type ListFilter,
+  type ListState,
+  type PaginationProps,
+  type SetKind,
+} from '@iace/ui';
 import { useListQuery } from '../src';
 import { useFilters } from './use-filters';
 
-/** A `multi` filter reads as a set, every other kind as a string. Keyed off the spec's `kind`. */
+/** A set-valued filter reads as a set, every other kind as a string. Keyed off the spec's `kind`. */
 type ListValues<TSpec extends readonly ListFilter[]> = {
-  [K in TSpec[number] as K['key']]: K extends { kind: 'multi' } ? string[] : string;
+  [K in TSpec[number] as K['key']]: K extends { kind: SetKind } ? string[] : string;
 };
 
 /** One filtered, paginated list: the spec declares the URL keys, so nothing can disagree. */
@@ -29,7 +35,7 @@ export function useListScreen<
   // The one place the wire format lives on this side: a set is CSV in the URL and on the query.
   const readValue = (filter: ListFilter): string | string[] => {
     const raw = urlFilters.get(filter.key);
-    if (filter.kind !== 'multi') return raw;
+    if (!holdsASet(filter)) return raw;
     return raw ? raw.split(CSV_SEPARATOR).filter(Boolean) : [];
   };
 

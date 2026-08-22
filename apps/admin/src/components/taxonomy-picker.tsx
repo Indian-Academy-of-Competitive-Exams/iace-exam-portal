@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
-import { Combobox } from '@iace/ui';
+import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
 
 /**
@@ -78,6 +78,81 @@ export function TopicPicker({
       isLoading={pages.isLoading}
       isLoadingMore={pages.isLoadingMore}
       emptyLabel="No topics in that subject"
+    />
+  );
+}
+
+/** The same two lists, choosing several. A filter narrows to a set; a form still picks one. */
+interface MultiPickerProps {
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  selectedLabels?: Readonly<Record<string, string>>;
+  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+}
+
+export function SubjectMultiPicker(props: Readonly<MultiPickerProps>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: ['admin', 'subjects', 'picker', search],
+    fetchPage: (page) =>
+      api.admin.taxonomy.listSubjects({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  });
+
+  return (
+    <MultiCombobox
+      {...props}
+      placeholder={props.placeholder ?? 'All subjects'}
+      items={pages.items.map((subject) => ({ value: subject.id, label: subject.name }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search subjects"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No subjects yet"
+    />
+  );
+}
+
+export function TopicMultiPicker({
+  subjectIds,
+  ...props
+}: Readonly<MultiPickerProps & { subjectIds: readonly string[] }>) {
+  const [search, setSearch] = useState('');
+  const scope = [...subjectIds].join(',');
+
+  const pages = useInfinitePages({
+    queryKey: ['admin', 'topics', 'picker', scope, search],
+    fetchPage: (page) =>
+      api.admin.taxonomy.listTopics({
+        page,
+        pageSize: PAGE_SIZE_MAX,
+        q: search,
+        subjectId: [...subjectIds],
+      }),
+    enabled: subjectIds.length > 0,
+  });
+
+  return (
+    <MultiCombobox
+      {...props}
+      disabled={subjectIds.length === 0}
+      placeholder={
+        subjectIds.length === 0 ? 'Choose a subject first' : (props.placeholder ?? 'All topics')
+      }
+      items={pages.items.map((topic) => ({ value: topic.id, label: topic.name }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search topics"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No topics in those subjects"
     />
   );
 }

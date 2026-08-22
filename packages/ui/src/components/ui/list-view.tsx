@@ -29,6 +29,12 @@ export interface ListFilterControl extends ListFilterLabelling {
   onChange: (next: string) => void;
 }
 
+/** The same, for a control choosing several. It never sees the wire format — that is the hook's. */
+export interface ListFilterMultiControl extends ListFilterLabelling {
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+}
+
 interface ListFilterBase<K extends string> {
   key: K;
   /** Names the control: its `aria-label` on screen, its `Field` label behind the fold. */
@@ -51,6 +57,11 @@ export type ListFilter<K extends string = string> =
   | (ListFilterBase<K> & {
       kind: 'custom';
       render: (control: ListFilterControl) => React.ReactNode;
+    })
+  /** The same list, choosing several of it. */
+  | (ListFilterBase<K> & {
+      kind: 'customMulti';
+      render: (control: ListFilterMultiControl) => React.ReactNode;
     });
 
 /** What `useListScreen` returns, declared here so design does not import from app-kit. */
@@ -91,9 +102,18 @@ const asText = (value: ListFilterValue | undefined): string =>
 const asSet = (value: ListFilterValue | undefined): readonly string[] =>
   Array.isArray(value) ? value : [];
 
+/** The kinds whose value is a set. Exported so the hook encoding it cannot list a different pair. */
+export const SET_KINDS = ['multi', 'customMulti'] as const;
+export type SetKind = (typeof SET_KINDS)[number];
+
+/** Widened for the lookup: the tuple above stays literal because `SetKind` is derived from it. */
+const SET_KIND_NAMES: readonly string[] = SET_KINDS;
+
+export const holdsASet = (filter: ListFilter): boolean => SET_KIND_NAMES.includes(filter.kind);
+
 const widthOf = (filter: ListFilter): string => {
   if (filter.kind === 'search') return 'min-w-56 flex-1';
-  return filter.kind === 'multi' ? 'w-56' : 'w-44';
+  return holdsASet(filter) ? 'w-56' : 'w-44';
 };
 
 /** Behind the fold a `Field` names the control, so a second name on it would be one too many. */
@@ -108,6 +128,10 @@ function FilterControl({
   value: ListFilterValue | undefined;
   onChange: (next: ListFilterValue) => void;
 }>) {
+  if (filter.kind === 'customMulti') {
+    return filter.render({ ...naming, value: asSet(value), onChange });
+  }
+
   if (filter.kind === 'multi') {
     return (
       <MultiCombobox

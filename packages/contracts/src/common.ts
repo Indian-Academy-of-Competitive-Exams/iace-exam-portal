@@ -165,22 +165,20 @@ export const CSV_SEPARATOR = ',';
 export const CSV_QUERY_MAX = 50;
 
 /** Absent when it names nothing: Prisma reads `in: []` as "match nothing", never as "don't care". */
-const csvParts = (value: string | undefined): string[] | undefined => {
+const csvParts = (value: string | readonly string[] | undefined): string[] | undefined => {
   if (value === undefined) return undefined;
-  const parts = [
-    ...new Set(
-      value
-        .split(CSV_SEPARATOR)
-        .map((part) => part.trim())
-        .filter(Boolean),
-    ),
-  ];
+  const raw = typeof value === 'string' ? value.split(CSV_SEPARATOR) : value;
+  const parts = [...new Set(raw.map((part) => part.trim()).filter(Boolean))];
   return parts.length > 0 ? parts : undefined;
 };
 
-/** Several values in one param. An unknown member is refused, exactly as a single-value enum is. */
+/** Several values in one param, as CSV or as the set itself. An unknown member is refused. */
 export const csvQuery = <T extends z.ZodType<string, string>>(member: T) =>
-  z.string().optional().transform(csvParts).pipe(z.array(member).max(CSV_QUERY_MAX).optional());
+  z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform(csvParts)
+    .pipe(z.array(member).max(CSV_QUERY_MAX).optional());
 
 /** The same, for ids — there is no set of known members to check them against. */
 export const csvIdQuery = () => csvQuery(z.string());

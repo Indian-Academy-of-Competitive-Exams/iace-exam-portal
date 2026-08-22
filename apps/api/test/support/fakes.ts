@@ -439,7 +439,10 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
 }
 
 /** A column filter that is either an exact value or an `in` list. */
-function matchesKey(value: string, filter: string | { in: string[] } | undefined): boolean {
+/** What Prisma accepts for a scalar column here: the value itself, or a set to be one of. */
+type KeyFilter = string | { in: string[] };
+
+function matchesKey(value: string, filter: KeyFilter | undefined): boolean {
   if (filter === undefined) return true;
   return typeof filter === 'string' ? value === filter : filter.in.includes(value);
 }
@@ -1600,11 +1603,11 @@ export function makeQuestionVersion(
 interface FakeQuestionWhere {
   AND?: FakeQuestionWhere[];
   id?: string | { in?: string[]; not?: string };
-  subjectId?: string;
-  topicId?: string;
-  type?: string;
-  difficulty?: string;
-  status?: string;
+  subjectId?: KeyFilter;
+  topicId?: KeyFilter;
+  type?: KeyFilter;
+  difficulty?: KeyFilter;
+  status?: KeyFilter;
   stemHash?: string | { not?: null };
   tags?: { has?: string };
   currentVersion?: unknown;
@@ -1872,11 +1875,12 @@ function stemHashMatches(row: FakeQuestionRow, stemHash: FakeQuestionWhere['stem
 type QuestionFieldCheck = (row: FakeQuestionRow, where: FakeQuestionWhere) => boolean;
 
 const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
-  (row, where) => !where.subjectId || row.subjectId === where.subjectId,
-  (row, where) => !where.topicId || row.topicId === where.topicId,
-  (row, where) => !where.type || row.type === where.type,
-  (row, where) => !where.difficulty || row.difficulty === where.difficulty,
-  (row, where) => !where.status || row.status === where.status,
+  // Every one of these is a set on the wire, so `in` is the shape the service builds.
+  (row, where) => matchesKey(row.subjectId, where.subjectId),
+  (row, where) => row.topicId === null || matchesKey(row.topicId, where.topicId),
+  (row, where) => matchesKey(row.type, where.type),
+  (row, where) => matchesKey(row.difficulty, where.difficulty),
+  (row, where) => matchesKey(row.status, where.status),
   (row, where) => !where.tags?.has || row.tags.includes(where.tags.has),
 ];
 

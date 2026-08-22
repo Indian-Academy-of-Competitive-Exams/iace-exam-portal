@@ -153,8 +153,12 @@ export {
 } from './components/ui/table-frame';
 export {
   ListView,
+  SET_KINDS,
+  holdsASet,
+  type SetKind,
   type ListFilter,
   type ListFilterControl,
+  type ListFilterMultiControl,
   type ListFilterValue,
   type ListFilterLabelling,
   type ListState,

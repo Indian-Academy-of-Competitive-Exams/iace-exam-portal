@@ -146,13 +146,36 @@ describe('the import column contract', () => {
 });
 
 describe('questionListQuerySchema', () => {
-  it('reads an absent status as "any", and a named one as itself', () => {
-    assert.equal(questionListQuerySchema.parse({}).status, undefined);
-    assert.equal(questionListQuerySchema.parse({ status: 'ARCHIVED' }).status, 'ARCHIVED');
+  const parse = (input: Record<string, unknown>) => questionListQuerySchema.parse(input);
+
+  it('reads an absent status as "any", and a named one as a set of one', () => {
+    assert.equal(parse({}).status, undefined);
+    assert.deepEqual(parse({ status: 'ARCHIVED' }).status, ['ARCHIVED']);
+  });
+
+  it('narrows to several statuses at once', () => {
+    assert.deepEqual(parse({ status: 'DRAFT,ARCHIVED' }).status, ['DRAFT', 'ARCHIVED']);
+  });
+
+  /** A screen holds a set; the URL holds CSV. Both have to reach the same query. */
+  it('takes the set itself, not only the joined form', () => {
+    assert.deepEqual(parse({ difficulty: ['LOW', 'HIGH'] }).difficulty, ['LOW', 'HIGH']);
+    assert.deepEqual(parse({ difficulty: 'LOW,HIGH' }).difficulty, ['LOW', 'HIGH']);
+  });
+
+  /** `in: []` matches nothing, so an emptied filter has to read as "any" rather than "none". */
+  it('reads an emptied filter as absent', () => {
+    assert.equal(parse({ subjectId: [] }).subjectId, undefined);
+    assert.equal(parse({ subjectId: '' }).subjectId, undefined);
+  });
+
+  it('still refuses a status nobody defined', () => {
+    assert.equal(questionListQuerySchema.safeParse({ status: 'RETIRED' }).success, false);
+    assert.equal(questionListQuerySchema.safeParse({ status: 'DRAFT,RETIRED' }).success, false);
   });
 
   it('drops a blank search rather than searching for nothing', () => {
-    assert.equal(questionListQuerySchema.parse({ q: '   ' }).q, undefined);
+    assert.equal(parse({ q: '   ' }).q, undefined);
   });
 });
 

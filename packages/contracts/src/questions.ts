@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { searchQuery } from './common';
+import { csvIdQuery, csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
@@ -233,7 +233,8 @@ export type SubjectListQueryInput = z.input<typeof subjectListQuerySchema>;
 
 export const topicListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
-  subjectId: z.string().optional(),
+  /** Several, because the questions screen narrows topics by every subject it is filtering on. */
+  subjectId: csvIdQuery(),
 });
 export type TopicListQuery = z.infer<typeof topicListQuerySchema>;
 export type TopicListQueryInput = z.input<typeof topicListQuerySchema>;
@@ -441,11 +442,11 @@ export const QUESTION_SORT_VALUES = Object.values(QUESTION_SORTS) as [
 export const questionListQuerySchema = paginationQuerySchema.extend({
   /** Matches the stem in any language, and the question code. */
   q: searchQuery(),
-  subjectId: z.string().optional(),
-  topicId: z.string().optional(),
-  type: questionTypeSchema.optional(),
-  difficulty: difficultyLevelSchema.optional(),
-  status: questionStatusSchema.optional(),
+  subjectId: csvIdQuery(),
+  topicId: csvIdQuery(),
+  type: csvQuery(questionTypeSchema),
+  difficulty: csvQuery(difficultyLevelSchema),
+  status: csvQuery(questionStatusSchema),
   language: languageSchema.optional(),
   tag: tagSchema.optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
