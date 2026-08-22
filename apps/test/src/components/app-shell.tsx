@@ -7,10 +7,7 @@ import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/co
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
 
-/**
- * The student's shell. Narrower than the admin's: they arrive to do one thing,
- * and with no sections there is no sidebar to run beside the page.
- */
+/** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {
   const { identity: student, signOut } = useAuth();
   // Shared cache entry with the profile screens, so a new photo shows in the
@@ -20,7 +17,7 @@ export function AppShell() {
   return (
     <Shell
       nav={NAV_ITEMS}
-      width="narrow"
+      width="wide"
       homeTo={ROUTES.HOME}
       onSignOut={() => void signOut()}
       userMenuItems={USER_MENU_ITEMS}
