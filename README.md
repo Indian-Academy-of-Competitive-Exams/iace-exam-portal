@@ -73,13 +73,9 @@ VALUES (
 Locally: `docker compose exec -T postgres psql -U iace -d iace -c "<the statement above>"`.
 (`iace` is `POSTGRES_USER` in `docker-compose.yml`; there is no `postgres` role in this image.)
 
-That account bypasses every feature check, so it can immediately register `Feature` rows and grant them. Everything after the first row is done in the UI.
+That account bypasses every permission check, so it can immediately grant permissions to other admins. Everything after the first row is done in the UI.
 
-**Feature rows are not seeded either.** A super admin registers each one from the Features screen using a key from `FEATURE_KEYS` in `@iace/contracts`. A key with no row grants nobody anything, which is the safe direction to fail.
-
-The all-students group (`GLOBAL`) is created, and the virtual branch is renamed to `ONLINE`, by
-`20260818120000_group_state_and_singletons`. There is still no seed script: run the migrations and
-both rows are there.
+**Feature keys are code-owned.** They live in `FEATURE_KEYS` (`@iace/contracts`) — there is no `Feature` table and no screen that registers one. A super admin only assigns `READ`/`WRITE` per key, one `AdminFeaturePermission` row per grant. A key nobody has been granted grants nobody anything, which is the safe direction to fail.
 
 ### The API response envelope
 
@@ -154,15 +150,17 @@ Every backend feature ships with its tests in the same commit (see the guardrail
 
 ## Status
 
-**Phase 0 (foundation) complete** — monorepo, local infra, design-system package, shared contracts, NestJS API (config/Prisma/Redis/BullMQ/S3/health), and auth: student signup-OTP + 4-digit PIN, admin email OTP, JWT with rotating refresh. No product features yet; next is the question bank + importer, per the build order in `CLAUDE.md`.
+**Admin side built** — foundation (monorepo, local infra, `packages/ui`, contracts, NestJS API, auth) plus the question bank and its importer, the exam taxonomy, base configurations, test series, students and branches, programs, permissions and the audit log.
 
-The data model is ahead of the code in three places, deliberately — the columns exist and are migrated, but nothing enforces them until the feature that owns them is built. Grep `TODO(pre-test gate)` and `TODO(access)` for the hook points.
+**Not built yet: the test itself** — attempts, the live player, autosave, scoring and the leaderboard. That is what V1 turns on.
+
+The data model runs ahead of the code in two places, deliberately: the columns exist and are migrated, but nothing enforces them until the feature that owns them lands.
 
 | In the schema                       | Enforced when                                                                                                      |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `Student.preTestReady`              | the test engine lands — a prompt for mother's/father's name + DOB on the way into a test, never a hard block       |
-| Student → Group → TestSeries → Test | the test list and attempt-start endpoints exist; there are no direct grants to check                               |
-| `BaseConfig.locked`                 | base-config editing exists — a config freezes at the first attempt on a test built from it, and evolves by cloning |
+| `BranchTestConfig` / `StudentGrant` | the test list and attempt-start endpoints exist — a student reaches a series by exam match, program match or grant |
+| `BaseConfig.locked`                 | a test built from it is first finalized — after that the shape only changes by cloning                             |
 
 ## Notes
 

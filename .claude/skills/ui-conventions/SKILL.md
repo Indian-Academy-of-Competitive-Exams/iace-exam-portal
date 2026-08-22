@@ -5,12 +5,18 @@ description: The binding shared-code and UI-behaviour rules for this repo - wher
 
 # UI conventions
 
+<binding>
+
 Every bullet is a rule, not background. **They are binding: no deviations.** Where a bullet allows
-a judgement it says so, and then the judgement is one sentence you write down — not a silent
-choice. Read `packages/ui/src/index.ts` — the component inventory — before building any UI.
+a judgement it says so, and then the judgement is one sentence you write down — not a silent choice.
+A rule you cannot follow is a conversation, not a judgement call.
+
+Read `packages/ui/src/index.ts` — the component inventory — before building any UI.
 
 Existing code that breaks a rule is named in the bullet that breaks it. Those are the shapes to
 stop copying, not licence to add another.
+
+</binding>
 
 ## Shared code
 
@@ -41,6 +47,10 @@ stop copying, not licence to add another.
   - **Every page carries its trail: `PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}`.** It is derived from the nav and the route, never restated per screen, so it cannot go stale. A detail screen passes `tail` for the one thing the nav cannot know — the record it is showing. A top-level screen renders nothing, because a one-crumb trail says only what the title says. **Never a hand-rolled back button**: the trail already holds the parent, and below `sm` it collapses to exactly that one link.
   - **The nav never takes space from the page.** The icon rail is the resting state and the only nav in the layout flow; its width is fixed, so the content region is a constant. Opening the nav opens a portalled `Sheet` OVER the page, transient — it closes on navigate, Escape and click-outside. Never widen a flex sibling of `<main>`: that reflows every screen to show a menu. In the panel a section drops open in place, one at a time; the rail, and a section past `NAV_INLINE_MAX_ITEMS`, open a popover beside the row instead. **On touch the panel drills down** — one level at a time with a way back, and never a popover, which over a sheet is a modal over a modal.
   - Same rule for confirm dialogs, empty-state wording, badge vocabulary, date formatting and filter placement: one vocabulary per app, and it is whichever one is already there.
+  <scrolling>
+
+Every failure here is silent — the page looks built, and the header or the pager has quietly left.
+
 - **A header that carries actions never scrolls away. Pin the header, scroll only the body.** Not a list-screen trick — it applies to any page whose `PageHeader` holds an action (New, Save, Import, Sync) or a static description. A Save button that scrolls off the top is a button the user has to go hunting for.
   - **Reach for the frame, don't rebuild it.** `TableFrame` for a list, `PageFrame` for everything else — a detail screen, a form, an importer. Both mark themselves `data-page-frame`, which flips the shell's `PAGE_CONTENT_CLASS` from `overflow-y-auto` to `overflow-hidden` via `:has()`, and both hold the header at `shrink-0`. `TableFrame` then makes the table the scroller so filters and pagination stay put too; `PageFrame` makes its body the scroller. A hand-rolled sticky header is the deviation.
   - **One scrollport per page, and one per section. Never two nested.** A scrollbar inside a scrollbar strands content between them: the outer one looks finished while the inner still has rows. Inside a frame the body scrolls and nothing within it takes its own `overflow-y-auto`; a tall child gets `min-h-0` so it can shrink instead. Popovers are portalled and do not count. A dialog is its own page for this purpose — `DialogBody` scrolls, the wrapper does not, and `dialog.dom.test.tsx` asserts there is exactly one.
@@ -48,6 +58,12 @@ stop copying, not licence to add another.
   - **A scrollport must also be a containing block — give it `relative`.** An absolutely positioned descendant of a `static` scroller resolves against the nearest positioned ancestor instead, so it escapes the scroll and grows the DOCUMENT. `sr-only` is `position: absolute`, which is how one hidden `<legend>` put a scrollbar across the whole app.
   - **Every ancestor between the frame and the scroller needs `min-h-0`.** A flex child defaults to `min-height: auto` and refuses to shrink below its content, so one missing `min-h-0` silently hands the scroll back to the page and the header leaves with it.
   - **A page with no frame at all is the deviation.** The only screens that skip one are those whose whole body is the header (`dashboard`). `TableFrame` keeps a `framed={false}` escape for a body not worth pinning; nothing passes it today, so reaching for it needs a reason you can state.
+
+</scrolling>
+
+<copy>
+
+The people reading these screens ran exam centres before they saw them. Write for that reader.
 
 - **Call a thing what the exam world calls it. A label is the standard term, never a description of it.** The people using this screen ran SSC and Banking centres before they saw it: they know _sectional timing_, _composite_, _merit_, _qualifying_, _bilingual_, _negative marking_. Writing "A clock per section" instead of "Sectional" does not simplify anything — it makes a reader who already knows the word translate back into it, and it makes the screen disagree with the notification, the coaching material and the enum underneath.
   - **The enum name is usually the answer already.** `SECTIONAL_LOCKED` is Sectional. `COMPOSITE_FREE` is Composite. `MERIT`/`QUALIFYING` are Merit and Qualifying. If the label has drifted away from the constant it renders, the label is what is wrong.
@@ -69,6 +85,8 @@ stop copying, not licence to add another.
   - **A hint earns its line by carrying a UNIT, a FORMAT, a LIMIT or a RULE the field cannot show**: "Per wrong answer", "Separate with a comma", "Blank means none", "Optional", "Locked once a student is enrolled", "Not a run like 1234, and not all one digit". Each is something the reader would otherwise learn from an error message after typing.
   - **Say the rule, not the advice.** "Avoid 1234" reads as a suggestion for something the server refuses outright — write what will happen, in the fewest words that are still true.
   - Teaching the domain is documentation's job, not the screen's. If a rule is genuinely hard, it belongs in `docs/`, in the field's inline hint, or in the error the server returns when it is broken — not in prose above a table that the people who need it have already learned and the people who haven't will not read.
+
+</copy>
 
 - **A card marks a boundary. No boundary, no card.** It earns its border in exactly two places: between SIBLING RECORDS, where each card is one of many of the same thing (`permissions.tsx` — one card per admin), and between a SURFACE and the page, which is why `TableFrame` wraps a table in one. Everywhere else the border is decoration that costs a rule and `p-4` of padding.
   - **A page that is one continuous form is ONE section, not a stack of cards.** Headings and spacing group it; you only need a line where the eye would otherwise merge two unrelated blocks. `base-config-form.tsx` (10 cards), `student-detail.tsx` (7) and `test-series-form.tsx` (5) are the shape to stop copying — a card inside a card, as in the first, communicates nothing at all.
