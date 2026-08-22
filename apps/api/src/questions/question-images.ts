@@ -54,3 +54,35 @@ export function checkQuestionImage(
     });
   }
 }
+
+const IMG_TAG = /<img\b[^>]*>/gi;
+const DATA_KEY = /\bdata-key="([^"]+)"/i;
+// A single `\s`, never `\s+`: it backtracks, and `\s?` would match the src inside data-src.
+const SRC_ATTR = /\ssrc="[^"]*"/gi;
+const DATA_URI_SRC = /\ssrc="data:[^"]*"/gi;
+
+/** Every image key quoted by a piece of content, so a page of them signs in one pass. */
+export function imageKeysIn(html: string): string[] {
+  return (html.match(IMG_TAG) ?? []).flatMap((tag) => DATA_KEY.exec(tag)?.[1] ?? []);
+}
+
+/** Strips the transient src before storing: a signed one would rot, and a `data:` one is bytes. */
+export function stripImageSrc(html: string): string {
+  return html
+    .replace(IMG_TAG, (tag) => (DATA_KEY.test(tag) ? tag.replace(SRC_ATTR, '') : tag))
+    .replace(IMG_TAG, (tag) => tag.replace(DATA_URI_SRC, ''));
+}
+
+/** Puts a freshly signed src back for the reader. Content on disk still holds only the key. */
+export function applyImageUrls(html: string, urls: ReadonlyMap<string, string>): string {
+  return html.replace(IMG_TAG, (tag) => {
+    const key = DATA_KEY.exec(tag)?.[1];
+    const url = key ? urls.get(key) : undefined;
+    if (!url) return tag;
+
+    // Sliced rather than matched: every tag here ends in `>`, so a regex only adds backtracking.
+    const bare = tag.replace(SRC_ATTR, '');
+    const open = bare.endsWith('/>') ? bare.slice(0, -2) : bare.slice(0, -1);
+    return `${open.trimEnd()} src="${url}">`;
+  });
+}

@@ -17,6 +17,7 @@ import {
   type RichContent,
   type ValidationIssue,
 } from '@iace/contracts';
+import { stripImageSrc } from './question-images';
 
 /**
  * The rules a question is judged by, and the shape it is stored in. Both ways a
@@ -49,8 +50,9 @@ export interface BuiltQuestion {
 
 const blank = (value: string | undefined): boolean => !value || value.trim() === '';
 
+/** The one place content is written, so the transient image src is stripped here and only here. */
 const textNode = (value: string | undefined): RichContent =>
-  blank(value) ? [] : [{ type: 'TEXT', text: value!.trim() }];
+  blank(value) ? [] : [{ type: 'TEXT', text: stripImageSrc(value!.trim()) }];
 
 /** The languages a stem was written in — the only thing that makes a language present. */
 export function languagesIn(stem: LocalizedText): QuestionLanguage[] {

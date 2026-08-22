@@ -20,7 +20,13 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { checkQuestionImage, questionImageKey } from './question-images';
+import {
+  applyImageUrls,
+  checkQuestionImage,
+  imageKeysIn,
+  questionImageKey,
+} from './question-images';
+import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import { buildContent, languagesIn, stemPreviewOf, validateQuestion } from './question-core';
 import { questionOrderBy, questionWhere } from './question-query';
@@ -63,6 +69,23 @@ export class QuestionsService {
     private readonly storage: StorageService,
   ) {}
 
+  /** Signs every image the content quotes, in one pass — a stem and its options share images. */
+  private async signed(detail: QuestionDetail): Promise<QuestionDetail> {
+    const keys = new Set(mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn));
+    if (keys.size === 0) return detail;
+
+    const urls = new Map(
+      await Promise.all(
+        [...keys].map(
+          async (key) =>
+            [key, await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC)] as const,
+        ),
+      ),
+    );
+
+    return rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls));
+  }
+
   /** Hands back the KEY that content quotes, plus a url that only shows what was just picked. */
   async saveImage(file: { buffer: Buffer; size: number; mimetype: string } | undefined) {
     checkQuestionImage(file);
@@ -97,7 +120,7 @@ export class QuestionsService {
   }
 
   async detail(id: string): Promise<QuestionDetail> {
-    return toDetail(await this.require(id));
+    return this.signed(toDetail(await this.require(id)));
   }
 
   async create(draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
@@ -118,7 +141,7 @@ export class QuestionsService {
       });
     });
 
-    return toDetail(row);
+    return this.signed(toDetail(row));
   }
 
   /**
@@ -149,7 +172,7 @@ export class QuestionsService {
       fieldDiff(auditFieldsOf(question), auditFieldsOf(row), AUDITED_QUESTION_FIELDS),
     );
 
-    return toDetail(row);
+    return this.signed(toDetail(row));
   }
 
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
@@ -164,7 +187,7 @@ export class QuestionsService {
       fieldDiff(auditFieldsOf(question), auditFieldsOf(updated), AUDITED_QUESTION_FIELDS),
     );
 
-    return toDetail(updated);
+    return this.signed(toDetail(updated));
   }
 
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */

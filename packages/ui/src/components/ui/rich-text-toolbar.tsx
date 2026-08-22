@@ -6,6 +6,7 @@ import {
   Italic,
   List,
   ListOrdered,
+  ImagePlus,
   Sigma,
   Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon,
@@ -24,6 +25,7 @@ import {
 } from './dialog';
 import { Label } from './label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
+import { type UploadImage } from './rich-text-image';
 
 /** The mark buttons, in the order a writer reaches for them. */
 const MARKS = [
@@ -149,6 +151,8 @@ export interface RichTextToolbarProps {
   /** Lifted, so opening the dialog SETS the value rather than an effect copying it in. */
   math: MathDraft | null;
   onMathChange: (math: MathDraft | null) => void;
+  /** Absent means this field takes no images, so no button offers one. */
+  onUploadImage?: UploadImage;
 }
 
 export function RichTextToolbar({
@@ -156,7 +160,21 @@ export function RichTextToolbar({
   singleLine,
   math,
   onMathChange,
+  onUploadImage,
 }: Readonly<RichTextToolbarProps>) {
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const choose = (file: File | undefined) => {
+    if (!file || !onUploadImage) return;
+    void onUploadImage(file).then(({ key, url }) =>
+      editor
+        .chain()
+        .focus()
+        .setImage({ src: url, 'data-key': key } as never)
+        .run(),
+    );
+  };
+
   const submit = () => {
     if (!math?.latex.trim()) return;
     const { latex, pos } = math;
@@ -200,6 +218,26 @@ export function RichTextToolbar({
       >
         <Sigma aria-hidden />
       </ToolButton>
+
+      {onUploadImage ? (
+        <>
+          <ToolButton label="Image" active={false} onClick={() => fileRef.current?.click()}>
+            <ImagePlus aria-hidden />
+          </ToolButton>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // Cleared so the same file can be chosen twice, as FileDropzone does.
+              event.target.value = '';
+              choose(file);
+            }}
+          />
+        </>
+      ) : null}
 
       <MathDialog
         open={math !== null}

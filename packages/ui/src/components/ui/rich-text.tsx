@@ -7,6 +7,7 @@ import { Subscript } from '@tiptap/extension-subscript';
 import { cn } from '../../lib/utils';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
+import { QuestionImage, imageFilesIn, insertUploaded, type UploadImage } from './rich-text-image';
 
 export interface RichTextProps {
   value: string;
@@ -17,6 +18,8 @@ export interface RichTextProps {
   lang?: string;
   /** One line of prose, no block tools — an MCQ option is not a document. */
   singleLine?: boolean;
+  /** Given one, the editor takes images; without it there is no image button and paste falls through. */
+  onUploadImage?: UploadImage;
   id?: string;
   'aria-describedby'?: string;
   'aria-invalid'?: true;
@@ -38,6 +41,21 @@ function documentFrom(value: string): string | JSONContent {
   };
 }
 
+/** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
+function takeImages(
+  view: unknown,
+  data: DataTransfer | null,
+  upload: UploadImage | undefined,
+): boolean {
+  if (!upload) return false;
+  const files = imageFilesIn(data);
+  if (files.length === 0) return false;
+
+  const editor = (view as unknown as { editor: Parameters<typeof insertUploaded>[0] }).editor;
+  for (const file of files) insertUploaded(editor, file, upload);
+  return true;
+}
+
 const SHELL = [
   'w-full rounded-md border border-input bg-surface px-3 py-2 text-sm text-foreground shadow-sm',
   'transition-[box-shadow,border-color] focus-within:border-ring focus-within:shadow-focus',
@@ -55,6 +73,7 @@ export function RichText({
   disabled,
   lang,
   singleLine = false,
+  onUploadImage,
   id,
   'aria-describedby': describedBy,
   'aria-invalid': invalid,
@@ -71,6 +90,7 @@ export function RichText({
       ),
       Superscript,
       Subscript,
+      ...(onUploadImage ? [QuestionImage] : []),
       Mathematics.configure({
         // A half-typed formula shows in red rather than taking the editor down with it.
         katexOptions: { throwOnError: false },
@@ -82,6 +102,10 @@ export function RichText({
     content: documentFrom(value),
     onUpdate: ({ editor: current }: { editor: Editor }) => onChange(current.getHTML()),
     editorProps: {
+      // Without these a pasted image becomes a base64 `data:` uri inside the question row.
+      handlePaste: (view, event) => takeImages(view, event.clipboardData, onUploadImage),
+      handleDrop: (view, event) =>
+        takeImages(view, (event as DragEvent).dataTransfer, onUploadImage),
       attributes: {
         class: cn(CONTENT, singleLine && 'whitespace-nowrap'),
         ...(id ? { id } : {}),
@@ -113,6 +137,7 @@ export function RichText({
           singleLine={singleLine}
           math={math}
           onMathChange={setMath}
+          onUploadImage={onUploadImage}
         />
       ) : null}
       <EditorContent editor={editor} />

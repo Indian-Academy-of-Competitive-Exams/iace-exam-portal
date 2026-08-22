@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { RichText } from '../src/components/ui/rich-text';
 import { FormPanel } from '../src/components/ui/form-panel';
 import { TooltipProvider } from '../src/components/ui/tooltip';
+import { imageFilesIn } from '../src/components/ui/rich-text-image';
 
 afterEach(cleanup);
 
@@ -85,5 +86,37 @@ describe('RichText', () => {
 
       assert.match(html, /data-latex="x\^2"/);
     });
+  });
+});
+
+describe('images', () => {
+  const upload = () => Promise.resolve({ key: 'questions/images/a.png', url: 'https://s3/a' });
+
+  /** Without an uploader the field takes no images, so nothing offers one. */
+  it('shows no image button when the field cannot take one', () => {
+    show(<RichText value="" onChange={noop} />);
+
+    assert.equal(screen.queryByLabelText('Image'), null);
+  });
+
+  it('offers one when an uploader is given', () => {
+    show(<RichText value="" onChange={noop} onUploadImage={upload} />);
+
+    assert.ok(screen.getByLabelText('Image'));
+  });
+
+  /** The decision that stops the base64 trap; whether ProseMirror routes the event is its own. */
+  it('sees an image on the clipboard, and nothing on a text one', () => {
+    const file = new File(['bytes'], 'a.png', { type: 'image/png' });
+    const asImage = {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+    } as unknown as DataTransfer;
+    const asText = {
+      items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }],
+    } as unknown as DataTransfer;
+
+    assert.deepEqual(imageFilesIn(asImage), [file]);
+    assert.deepEqual(imageFilesIn(asText), []);
+    assert.deepEqual(imageFilesIn(null), []);
   });
 });

@@ -509,6 +509,7 @@ function Rich({
       aria-invalid={control['aria-invalid']}
       lang={lang}
       singleLine={singleLine}
+      onUploadImage={(file) => api.admin.questions.uploadImage(file)}
       value={value ?? ''}
       onChange={(html) => form.setValue(name, html as never, { shouldDirty: true })}
     />
