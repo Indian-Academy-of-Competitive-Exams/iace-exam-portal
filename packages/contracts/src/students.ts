@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { civilDate, mobileSchema, optionalBooleanQuery, searchQuery } from './common';
+import { civilDate, csvIdQuery, mobileSchema, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { examFamilySchema } from './exams';
 
@@ -174,8 +174,8 @@ export const STUDENT_SORT_VALUES = Object.values(STUDENT_SORTS) as [StudentSort,
 export const studentListQuerySchema = paginationQuerySchema.extend({
   /** Matches a mobile number or a name, case-insensitively. */
   q: searchQuery(),
-  /** Everyone whose current branch this is — "who does this centre teach". */
-  branchId: z.string().optional(),
+  /** Everyone whose current branch these are — "who do these centres teach". */
+  branchId: csvIdQuery(),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
   /** Admin-created students who have never set a PIN of their own. */

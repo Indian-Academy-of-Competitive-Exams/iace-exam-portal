@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
 import { Skeleton } from './skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 /** The closed look every popover-backed field wears, so combobox and date picker cannot drift. */
 export const FIELD_TRIGGER_CLASS = [
@@ -62,6 +63,8 @@ export interface ComboboxShellProps extends ComboboxListProps {
   onOpenChange: (open: boolean) => void;
   triggerLabel: string;
   triggerMuted: boolean;
+  /** Names what the trigger had to cut. Omit it and the trigger carries no tooltip. */
+  triggerTooltip?: React.ReactNode;
   /** Announces the list as multi-select, and is what a screen reader counts against. */
   multiple?: boolean;
   children: React.ReactNode;
@@ -73,6 +76,7 @@ export function ComboboxShell({
   onOpenChange,
   triggerLabel,
   triggerMuted,
+  triggerTooltip,
   multiple = false,
   children,
   items,
@@ -106,22 +110,33 @@ export function ComboboxShell({
     if (scrollHeight - scrollTop - clientHeight < LOAD_MORE_THRESHOLD_PX) onLoadMore();
   };
 
+  const trigger = (
+    <PopoverPrimitive.Trigger asChild>
+      <button
+        type="button"
+        id={id}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        className={cn(FIELD_TRIGGER_CLASS, className)}
+      >
+        <span className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
+          {triggerLabel}
+        </span>
+        <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
+    </PopoverPrimitive.Trigger>
+  );
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <PopoverPrimitive.Trigger asChild>
-        <button
-          type="button"
-          id={id}
-          aria-label={ariaLabel}
-          disabled={disabled}
-          className={cn(FIELD_TRIGGER_CLASS, className)}
-        >
-          <span className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
-            {triggerLabel}
-          </span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        </button>
-      </PopoverPrimitive.Trigger>
+      {triggerTooltip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+          <TooltipContent>{triggerTooltip}</TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
 
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content

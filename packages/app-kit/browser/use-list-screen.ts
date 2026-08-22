@@ -28,7 +28,12 @@ export function useListScreen<
   toQuery: (values: ListValues<TSpec>) => TFilters;
   fetchPage: (params: TFilters & { page: number; pageSize: number }) => Promise<Paginated<TItem>>;
   enabled?: boolean;
-}): ListState<TItem> & { total: number; pagination: PaginationProps } {
+}): Omit<ListState<TItem>, 'values'> & {
+  /** Precise per key, so a screen reading a set back gets a set rather than the union. */
+  values: ListValues<TSpec>;
+  total: number;
+  pagination: PaginationProps;
+} {
   const { queryKey, filters, toQuery, fetchPage, enabled } = options;
   const urlFilters = useFilters<string>();
 

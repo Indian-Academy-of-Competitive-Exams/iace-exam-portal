@@ -104,6 +104,7 @@ export function SubjectMultiPicker(props: Readonly<MultiPickerProps>) {
   return (
     <MultiCombobox
       {...props}
+      chips={false}
       placeholder={props.placeholder ?? 'All subjects'}
       items={pages.items.map((subject) => ({ value: subject.id, label: subject.name }))}
       search={search}
@@ -140,6 +141,7 @@ export function TopicMultiPicker({
   return (
     <MultiCombobox
       {...props}
+      chips={false}
       disabled={subjectIds.length === 0}
       placeholder={
         subjectIds.length === 0 ? 'Choose a subject first' : (props.placeholder ?? 'All topics')

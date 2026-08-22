@@ -136,6 +136,7 @@ function FilterControl({
     return (
       <MultiCombobox
         {...naming}
+        chips={false}
         items={filter.items}
         placeholder={filter.placeholder}
         value={asSet(value)}

@@ -13,7 +13,7 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   if (query.profileCompleted !== undefined) add({ profileCompleted: query.profileCompleted });
 
   // The branch a student attends is a column of its own — no join.
-  if (query.branchId) add({ currentBranchId: query.branchId });
+  if (query.branchId) add({ currentBranchId: { in: query.branchId } });
   if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
   if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 

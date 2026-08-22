@@ -463,10 +463,10 @@ function omittedAsNull<T extends Record<string, unknown>>(data: T): T {
 }
 
 interface RowActionLogWhere {
-  feature?: string;
-  action?: string;
+  feature?: KeyFilter;
+  action?: KeyFilter;
   entityId?: string;
-  actorId?: string;
+  actorId?: KeyFilter;
   createdAt?: { gte?: Date; lt?: Date; lte?: Date };
   id?: { gt?: string };
 }
@@ -476,10 +476,10 @@ function matchesRowActionLog(row: Record<string, unknown>, where: RowActionLogWh
   const at = row.createdAt as Date;
   const id = row.id as string;
   return (
-    (where.feature === undefined || row.feature === where.feature) &&
-    (where.action === undefined || row.action === where.action) &&
+    matchesKey(row.feature as string, where.feature) &&
+    matchesKey(row.action as string, where.action) &&
     (where.entityId === undefined || row.entityId === where.entityId) &&
-    (where.actorId === undefined || row.actorId === where.actorId) &&
+    matchesKey(row.actorId as string, where.actorId) &&
     (where.createdAt?.gte === undefined || at >= where.createdAt.gte) &&
     (where.createdAt?.lt === undefined || at < where.createdAt.lt) &&
     (where.createdAt?.lte === undefined || at <= where.createdAt.lte) &&

@@ -10,6 +10,9 @@ export interface MultiComboboxProps extends ComboboxListProps {
 
   /** Labels for values sitting outside the loaded pages, keyed by value. */
   selectedLabels?: Readonly<Record<string, string>>;
+
+  /** False keeps the selection in the trigger alone — a filter bar has a table under it. */
+  chips?: boolean;
 }
 
 /**
@@ -20,6 +23,7 @@ export function MultiCombobox({
   value,
   onChange,
   selectedLabels,
+  chips = true,
   ...list
 }: Readonly<MultiComboboxProps>) {
   const [open, setOpen] = React.useState(false);
@@ -31,11 +35,10 @@ export function MultiCombobox({
   const toggle = (item: string) =>
     onChange(value.includes(item) ? value.filter((chosen) => chosen !== item) : [...value, item]);
 
-  const triggerLabel = () => {
-    if (value.length === 0) return placeholder;
-    if (value.length === 1) return labelFor(value[0] as string);
-    return `${value.length} selected`;
-  };
+  const chosenLabels = value.map(labelFor);
+
+  /** Named, not counted: "2 selected" makes the reader open the list to learn what they chose. */
+  const triggerLabel = () => (value.length === 0 ? placeholder : chosenLabels.join(', '));
 
   return (
     <div className="min-w-0">
@@ -46,6 +49,8 @@ export function MultiCombobox({
         onOpenChange={setOpen}
         triggerLabel={triggerLabel()}
         triggerMuted={value.length === 0}
+        // One choice already reads in full; several are what the trigger has to cut.
+        triggerTooltip={value.length > 1 ? chosenLabels.join(', ') : undefined}
       >
         {list.items.map((item) => (
           <ComboboxOption
@@ -58,7 +63,7 @@ export function MultiCombobox({
         ))}
       </ComboboxShell>
 
-      {value.length > 0 ? (
+      {chips && value.length > 0 ? (
         <div className="mt-2 flex flex-wrap items-center gap-1">
           {value.map((item) => (
             <Badge key={item} variant="neutral" className="gap-1 pr-1">

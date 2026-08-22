@@ -3,6 +3,7 @@ import { afterEach, describe, it } from 'node:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ListView, type ListFilter, type ListState } from '../src/components/ui/list-view';
 import { type DataTableColumn } from '../src/components/ui/data-table';
+import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
 
@@ -58,17 +59,20 @@ function state(over: Partial<ListState<Row>> = {}): ListState<Row> {
   };
 }
 
+/** A multi filter with several chosen puts a Tooltip on its trigger; AppProviders supplies one. */
 const view = (over: Partial<ListState<Row>> = {}, props = {}) =>
   render(
-    <ListView
-      list={state(over)}
-      filters={FILTERS}
-      columns={columns}
-      rowKey={(r) => r.id}
-      empty="No rows yet. Add the first one."
-      emptyFiltered="No rows match those filters."
-      {...props}
-    />,
+    <TooltipProvider>
+      <ListView
+        list={state(over)}
+        filters={FILTERS}
+        columns={columns}
+        rowKey={(r) => r.id}
+        empty="No rows yet. Add the first one."
+        emptyFiltered="No rows match those filters."
+        {...props}
+      />
+    </TooltipProvider>,
   );
 
 describe('ListView', () => {
@@ -123,15 +127,20 @@ describe('ListView', () => {
 });
 
 describe('ListView — a multi filter', () => {
-  it('names the one thing chosen, and counts the rest', () => {
+  it('names what is chosen on the control itself, however many', () => {
     view({ values: { difficulty: ['LOW'] } });
-    assert.ok(screen.getByRole('button', { name: 'Difficulty' }).textContent?.includes('Low'));
+    assert.equal(screen.getByRole('button', { name: 'Difficulty' }).textContent, 'Low');
 
     cleanup();
     view({ values: { difficulty: ['LOW', 'HIGH'] } });
-    assert.ok(
-      screen.getByRole('button', { name: 'Difficulty' }).textContent?.includes('2 selected'),
-    );
+    assert.equal(screen.getByRole('button', { name: 'Difficulty' }).textContent, 'Low, High');
+  });
+
+  /** The rows are what the reader came for: a growing chip strip would push them down the page. */
+  it('keeps the selection on the control, never in a strip under it', () => {
+    view({ values: { difficulty: ['LOW', 'HIGH'] } });
+
+    assert.equal(screen.queryByRole('button', { name: 'Remove Low' }), null);
   });
 
   it('offers no "Any" row — choosing nothing already means all of them', () => {

@@ -105,10 +105,10 @@ export class AuditService {
     this.assertActive(viewer);
     const range = dateRange(query.from, query.to);
     const where: Prisma.RowActionLogWhereInput = {
-      ...(query.feature ? { feature: query.feature } : {}),
-      ...(query.action ? { action: query.action } : {}),
+      ...(query.feature ? { feature: { in: query.feature } } : {}),
+      ...(query.action ? { action: { in: query.action } } : {}),
       ...(query.entityId ? { entityId: query.entityId } : {}),
-      ...(query.actorId ? { actorId: query.actorId } : {}),
+      ...(query.actorId ? { actorId: { in: query.actorId } } : {}),
       ...(range ? { createdAt: range } : {}),
     };
     if (!viewer.isSuperAdmin) where.actorId = viewer.id;

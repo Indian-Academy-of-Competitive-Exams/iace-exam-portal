@@ -108,6 +108,7 @@ export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   return (
     <MultiCombobox
       {...props}
+      chips={false}
       placeholder={props.placeholder ?? 'All exams'}
       items={pages.items.map((exam) => ({ value: exam.id, label: exam.code, hint: exam.name }))}
       search={search}
@@ -144,6 +145,7 @@ export function ExamStageMultiPicker({
   return (
     <MultiCombobox
       {...props}
+      chips={false}
       placeholder={props.placeholder ?? 'All stages'}
       items={pages.items.map((stage) => ({
         value: stage.id,

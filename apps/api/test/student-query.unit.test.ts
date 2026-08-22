@@ -82,7 +82,16 @@ describe('studentWhere — three-state filters', () => {
 describe('studentWhere — access-shaped filters', () => {
   /** The branch a student ATTENDS, which is the one access and scheduling read. */
   it('finds a branch as a column on the student, with no join', () => {
-    assertHas({ branchId: 'b1' }, { currentBranchId: 'b1' });
+    assertHas({ branchId: 'b1' }, { currentBranchId: { in: ['b1'] } });
+  });
+
+  it('takes several branches at once — "who do these centres teach"', () => {
+    assertHas({ branchId: 'b1,b2' }, { currentBranchId: { in: ['b1', 'b2'] } });
+  });
+
+  /** `in: []` matches nothing, so an emptied branch filter must list every student. */
+  it('drops the branch filter when it names none', () => {
+    assert.deepEqual(conditionsFor({ branchId: '' }), []);
   });
 });
 
@@ -116,7 +125,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   it('keeps the branch filter when a status is chosen too', () => {
     const params = { branchId: 'b1', isTestBlocked: 'true' };
 
-    assertHas(params, { currentBranchId: 'b1' });
+    assertHas(params, { currentBranchId: { in: ['b1'] } });
     assertHas(params, { isTestBlocked: true });
     assert.equal(conditionsFor(params).length, 2);
   });
@@ -124,7 +133,7 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
   it('keeps the branch filter alongside the access one', () => {
     const params = { branchId: 'b1', noAccess: 'false' };
 
-    assertHas(params, { currentBranchId: 'b1' });
+    assertHas(params, { currentBranchId: { in: ['b1'] } });
     assertHas(params, {
       NOT: { enrolledExams: { isEmpty: true }, programs: { isEmpty: true } },
     });

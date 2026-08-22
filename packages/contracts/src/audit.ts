@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { csvIdQuery, csvQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { importLogStatusSchema, importSourceSchema } from './imports';
 import { dateOnlySchema } from './students';
@@ -140,11 +141,11 @@ export const rowActionSchema = z.object({
 export type RowAction = z.infer<typeof rowActionSchema>;
 
 export const rowActionListQuerySchema = paginationQuerySchema.extend({
-  feature: auditFeatureSchema.optional(),
-  action: auditActionSchema.optional(),
+  feature: csvQuery(auditFeatureSchema),
+  action: csvQuery(auditActionSchema),
   entityId: z.string().optional(),
   /** Ignored for anyone but a super admin — the service forces its own value. */
-  actorId: z.string().optional(),
+  actorId: csvIdQuery(),
   from: dateOnlySchema.optional(),
   to: dateOnlySchema.optional(),
 });

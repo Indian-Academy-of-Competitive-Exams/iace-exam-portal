@@ -16,16 +16,16 @@ import {
 import {
   Alert,
   Badge,
-  Combobox,
   DropdownMenuItem,
   ListView,
+  MultiCombobox,
   PageHeader,
   RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
   type ListFilter,
-  type ListFilterControl,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
@@ -187,47 +187,42 @@ export function AuditActivityPage() {
     enabled: isSuperAdmin,
   });
 
-  const buildFilters = (selectedActorLabel: string | undefined) =>
+  const buildFilters = (selectedActorLabels: Record<string, string>) =>
     [
       {
         key: 'feature',
-        kind: 'choice',
+        kind: 'multi',
         label: 'Filter by feature',
         primary: true,
-        width: 'w-48',
-        items: [
-          { value: '', label: 'All features' },
-          ...auditFeatureSchema.options.map((value) => ({
-            value,
-            label: AUDIT_FEATURE_LABELS[value],
-          })),
-        ],
+        placeholder: 'All features',
+        items: auditFeatureSchema.options.map((value) => ({
+          value,
+          label: AUDIT_FEATURE_LABELS[value],
+        })),
       },
       {
         key: 'action',
-        kind: 'choice',
+        kind: 'multi',
         label: 'Filter by action',
         primary: true,
-        items: [
-          { value: '', label: 'All actions' },
-          ...auditActionSchema.options.map((value) => ({
-            value,
-            label: AUDIT_ACTION_LABELS[value],
-          })),
-        ],
+        placeholder: 'All actions',
+        items: auditActionSchema.options.map((value) => ({
+          value,
+          label: AUDIT_ACTION_LABELS[value],
+        })),
       },
       ...(isSuperAdmin
         ? ([
             {
               key: 'actorId',
-              kind: 'custom',
+              kind: 'customMulti',
               label: 'Filter by actor',
               primary: true,
-              width: 'w-56',
-              render: (control: ListFilterControl) => (
-                <Combobox
+              render: (control: ListFilterMultiControl) => (
+                <MultiCombobox
                   {...control}
-                  selectedLabel={selectedActorLabel}
+                  chips={false}
+                  selectedLabels={selectedActorLabels}
                   items={actorPages.items.map((admin) => ({
                     value: admin.id,
                     label: admin.fullName ?? admin.email,
@@ -249,25 +244,29 @@ export function AuditActivityPage() {
         : []),
     ] as const satisfies readonly ListFilter[];
 
-  // Called twice from one declaration: the hook needs only the keys, the view needs the label too.
+  // Called twice from one declaration: the hook needs only the keys, the view needs the labels too.
   const activity = useListScreen({
     queryKey: ['admin', 'audit', 'row-actions'],
-    filters: buildFilters(undefined),
+    filters: buildFilters({}),
     toQuery: (values) => ({
-      feature: (values.feature || undefined) as AuditFeature | undefined,
-      action: (values.action || undefined) as AuditAction | undefined,
-      actorId: isSuperAdmin ? values.actorId || undefined : undefined,
+      feature: values.feature as AuditFeature[],
+      action: values.action as AuditAction[],
+      actorId: isSuperAdmin ? values.actorId : undefined,
     }),
     fetchPage: (params) => api.admin.audit.rowActions(params),
   });
 
   const columns = useMemo(() => auditColumns(), []);
 
-  // The chosen admin is often outside the loaded combobox pages; the loaded
-  // rows already carry their name, and that is the one place left to find it.
-  const actorId = activity.values.actorId;
-  const selectedActorLabel =
-    activity.rows.find((row) => row.actorId === actorId)?.actorName ?? undefined;
+  // A chosen admin may sit outside the loaded picker pages; the rows on screen still name them.
+  const chosenActors = activity.values.actorId;
+  const selectedActorLabels = Object.fromEntries(
+    activity.rows.flatMap((row) =>
+      row.actorId && row.actorName && chosenActors.includes(row.actorId)
+        ? [[row.actorId, row.actorName] as const]
+        : [],
+    ),
+  );
 
   return (
     <TableFrame
@@ -275,7 +274,7 @@ export function AuditActivityPage() {
     >
       <ListView
         list={activity}
-        filters={buildFilters(selectedActorLabel)}
+        filters={buildFilters(selectedActorLabels)}
         columns={columns}
         rowKey={(row) => row.id}
         banner={

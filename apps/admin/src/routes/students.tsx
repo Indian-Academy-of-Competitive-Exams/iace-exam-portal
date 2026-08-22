@@ -191,12 +191,10 @@ export function StudentsPage() {
     },
     {
       key: 'branchId',
-      kind: 'choice',
+      kind: 'multi',
       label: 'Branch',
-      items: [
-        { value: '', label: 'Any branch' },
-        ...branches.map((option) => ({ value: option.id, label: option.name })),
-      ],
+      placeholder: 'Any branch',
+      items: branches.map((option) => ({ value: option.id, label: option.name })),
     },
     {
       key: 'preTestReady',
@@ -237,7 +235,7 @@ export function StudentsPage() {
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
-      branchId: values.branchId || undefined,
+      branchId: values.branchId,
       preTestReady: asBooleanParam(values.preTestReady),
       profileCompleted: asBooleanParam(values.profileCompleted),
       noAccess: asBooleanParam(values.noAccess),
@@ -249,7 +247,9 @@ export function StudentsPage() {
     fetchPage: (params) => api.admin.students.list(params),
   });
 
-  const branch = branches.find((candidate) => candidate.id === students.values.branchId);
+  const chosenBranches = branches.filter((candidate) =>
+    students.values.branchId.includes(candidate.id),
+  );
   const columns = useMemo(() => studentColumns(), []);
 
   const header = (
@@ -282,15 +282,18 @@ export function StudentsPage() {
     />
   );
 
-  const banner = branch ? (
-    // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
-    <div className="mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-sm text-muted-foreground">Showing</span>
-      <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
-        {branch.name}
-      </Badge>
-    </div>
-  ) : null;
+  const banner =
+    chosenBranches.length > 0 ? (
+      // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Showing</span>
+        {chosenBranches.map((entry) => (
+          <Badge key={entry.id} variant={entry.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+            {entry.name}
+          </Badge>
+        ))}
+      </div>
+    ) : null;
 
   return (
     <TableFrame header={header}>
