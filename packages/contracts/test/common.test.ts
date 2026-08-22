@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { mobileSchema, newPinSchema, pinSchema, PIN_LENGTH } from '../src/index';
+import { z } from 'zod';
+import {
+  csvIdQuery,
+  csvQuery,
+  CSV_QUERY_MAX,
+  mobileSchema,
+  newPinSchema,
+  pinSchema,
+  PIN_LENGTH,
+} from '../src/index';
 
 const parse = (
   schema: { safeParse: (v: unknown) => { success: boolean; data?: unknown } },
@@ -75,5 +84,57 @@ describe('newPinSchema', () => {
     for (const ok of ['4813', '7261', '1122', '2580', '1032']) {
       assert.equal(parse(newPinSchema, ok), ok);
     }
+  });
+});
+
+describe('csvQuery', () => {
+  const status = csvQuery(z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']));
+  const ids = csvIdQuery();
+  const read = (
+    schema: { safeParse: (v: unknown) => { success: boolean; data?: unknown } },
+    v?: string,
+  ) => {
+    const r = schema.safeParse(v);
+    return r.success ? (r.data as string[] | undefined) : null;
+  };
+
+  it('reads several values from one param', () => {
+    assert.deepEqual(read(ids, 'sub_1,sub_2'), ['sub_1', 'sub_2']);
+    assert.deepEqual(read(status, 'DRAFT,ACTIVE'), ['DRAFT', 'ACTIVE']);
+  });
+
+  it('reads a single value as a set of one', () => {
+    assert.deepEqual(read(ids, 'sub_1'), ['sub_1']);
+  });
+
+  /** `in: []` matches NOTHING in Prisma, so an empty filter has to arrive as undefined. */
+  it('is absent, never an empty set', () => {
+    assert.equal(read(ids, undefined), undefined);
+    assert.equal(read(ids, ''), undefined);
+    assert.equal(read(ids, ','), undefined);
+    assert.equal(read(ids, ' , , '), undefined);
+  });
+
+  it('ignores the gaps a hand-edited URL leaves', () => {
+    assert.deepEqual(read(ids, 'sub_1,,sub_2,'), ['sub_1', 'sub_2']);
+    assert.deepEqual(read(ids, ' sub_1 , sub_2 '), ['sub_1', 'sub_2']);
+  });
+
+  it('keeps one of each, so a repeat cannot widen the IN list', () => {
+    assert.deepEqual(read(ids, 'sub_1,sub_1,sub_2'), ['sub_1', 'sub_2']);
+  });
+
+  it('refuses an unknown member, exactly as a single-value enum does', () => {
+    assert.equal(read(status, 'DRAFT,NONSENSE'), null);
+    assert.equal(read(status, 'NONSENSE'), null);
+  });
+
+  it('refuses more members than an IN list should carry', () => {
+    const tooMany = Array.from({ length: CSV_QUERY_MAX + 1 }, (_, i) => `id_${i}`).join(',');
+    assert.equal(read(ids, tooMany), null);
+    assert.equal(
+      read(ids, tooMany.split(',').slice(0, CSV_QUERY_MAX).join(','))?.length,
+      CSV_QUERY_MAX,
+    );
   });
 });

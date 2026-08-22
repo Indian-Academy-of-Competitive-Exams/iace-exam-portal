@@ -155,6 +155,8 @@ export {
   ListView,
   type ListFilter,
   type ListFilterControl,
+  type ListFilterValue,
+  type ListFilterLabelling,
   type ListState,
   type ListViewProps,
 } from './components/ui/list-view';

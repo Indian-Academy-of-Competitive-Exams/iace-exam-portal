@@ -24,6 +24,18 @@ const FILTERS: readonly ListFilter[] = [
       { value: 'active', label: 'Active' },
     ],
   },
+  {
+    key: 'difficulty',
+    kind: 'multi',
+    label: 'Difficulty',
+    primary: true,
+    placeholder: 'Any difficulty',
+    items: [
+      { value: 'LOW', label: 'Low' },
+      { value: 'MEDIUM', label: 'Medium' },
+      { value: 'HIGH', label: 'High' },
+    ],
+  },
 ];
 
 function state(over: Partial<ListState<Row>> = {}): ListState<Row> {
@@ -107,5 +119,50 @@ describe('ListView', () => {
 
     assert.equal(screen.queryByRole('button', { name: /Filters/ }), null);
     assert.equal(screen.queryByRole('searchbox'), null);
+  });
+});
+
+describe('ListView — a multi filter', () => {
+  it('names the one thing chosen, and counts the rest', () => {
+    view({ values: { difficulty: ['LOW'] } });
+    assert.ok(screen.getByRole('button', { name: 'Difficulty' }).textContent?.includes('Low'));
+
+    cleanup();
+    view({ values: { difficulty: ['LOW', 'HIGH'] } });
+    assert.ok(
+      screen.getByRole('button', { name: 'Difficulty' }).textContent?.includes('2 selected'),
+    );
+  });
+
+  it('offers no "Any" row — choosing nothing already means all of them', () => {
+    view({ values: { difficulty: [] } });
+
+    const trigger = screen.getByRole('button', { name: 'Difficulty' });
+    assert.ok(trigger.textContent?.includes('Any difficulty'));
+  });
+
+  /** An empty set is "don't care", so it must not light up Clear or the filtered empty state. */
+  it('is not an active filter until something is chosen', () => {
+    view({ values: { difficulty: [] } });
+
+    assert.equal(screen.queryByRole('button', { name: /Clear filters/ }), null);
+    assert.ok(screen.getByText('No rows yet. Add the first one.'));
+  });
+
+  it('counts as one active filter once something is chosen', () => {
+    view({ values: { difficulty: ['LOW', 'HIGH'] } });
+
+    assert.ok(screen.getByRole('button', { name: /Clear filters/ }));
+    assert.ok(screen.getByText('No rows match those filters.'));
+  });
+
+  it('hands a set back, never a joined string', () => {
+    const seen: unknown[] = [];
+    view({ values: { difficulty: ['LOW'] }, setFilter: (_key, value) => seen.push(value) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Difficulty' }));
+    fireEvent.click(screen.getByRole('option', { name: 'High' }));
+
+    assert.deepEqual(seen, [['LOW', 'HIGH']]);
   });
 });

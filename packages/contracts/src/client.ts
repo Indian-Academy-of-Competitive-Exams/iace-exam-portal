@@ -51,6 +51,7 @@ import {
   type PermissionGrantInput,
   type UpdateAdminInput,
 } from './admins';
+import { CSV_SEPARATOR } from './common';
 import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
@@ -170,10 +171,15 @@ import {
 } from './questions';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
-function queryString(params: Record<string, unknown>): string {
+export function queryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === '') continue;
+    // An empty set is "don't care": sent, the server would read it as `in: []` and match nothing.
+    if (Array.isArray(value)) {
+      if (value.length > 0) search.set(key, value.join(CSV_SEPARATOR));
+      continue;
+    }
     // Primitives only, each named. An object would become "[object Object]" in
     // the URL — a filter the server cannot read and nobody can see is wrong.
     if (typeof value === 'string') search.set(key, value);

@@ -9,17 +9,24 @@ import {
 import { DatePicker } from './date-picker';
 import { Field } from './field';
 import { FilterBar } from './filter-bar';
+import { MultiCombobox } from './multi-combobox';
 import { Pagination, type PaginationProps } from './pagination';
 import { SearchInput } from './search-input';
 import { useInTableFrame } from './table-frame';
 
-/** What every filter control is handed, whichever kind it is. */
-export interface ListFilterControl {
-  value: string;
-  onChange: (next: string) => void;
+/** A set for a `multi` filter, a string for every other kind. */
+export type ListFilterValue = string | readonly string[];
+
+/** What names a control, whichever kind it is. The value and its setter differ by kind. */
+export interface ListFilterLabelling {
   id?: string;
   'aria-label'?: string;
   'aria-describedby'?: string;
+}
+
+export interface ListFilterControl extends ListFilterLabelling {
+  value: string;
+  onChange: (next: string) => void;
 }
 
 interface ListFilterBase<K extends string> {
@@ -37,6 +44,8 @@ export type ListFilter<K extends string = string> =
   | (ListFilterBase<K> & { kind: 'search'; placeholder?: string })
   /** `items` carries its own "Any …" row, so the control is never also clearable. */
   | (ListFilterBase<K> & { kind: 'choice'; items: readonly ComboboxItem[] })
+  /** Several at once. No "Any …" row: choosing nothing already means every one of them. */
+  | (ListFilterBase<K> & { kind: 'multi'; items: readonly ComboboxItem[]; placeholder?: string })
   | (ListFilterBase<K> & { kind: 'date'; min?: string; max?: string })
   /** A list too long to hand over as `items` — a server-searched, paged picker draws itself. */
   | (ListFilterBase<K> & {
@@ -50,8 +59,8 @@ export interface ListState<TRow> {
   isLoading: boolean;
   /** Whether a page has ever arrived — the pager stays hidden until one has. */
   hasLoaded: boolean;
-  values: Readonly<Record<string, string>>;
-  setFilter: (key: string, value: string) => void;
+  values: Readonly<Record<string, ListFilterValue>>;
+  setFilter: (key: string, value: ListFilterValue) => void;
   clearFilters: () => void;
   /** Absent for a list that loads in full. */
   pagination?: PaginationProps;
@@ -73,16 +82,46 @@ export interface ListViewProps<TRow> {
   expand?: DataTableExpand<TRow>;
 }
 
-const isSet = (value: string | undefined): boolean => (value ?? '') !== '';
+const isSet = (value: ListFilterValue | undefined): boolean =>
+  Array.isArray(value) ? value.length > 0 : (value ?? '') !== '';
 
-const widthOf = (filter: ListFilter): string =>
-  filter.kind === 'search' ? 'min-w-56 flex-1' : 'w-44';
+const asText = (value: ListFilterValue | undefined): string =>
+  typeof value === 'string' ? value : '';
+
+const asSet = (value: ListFilterValue | undefined): readonly string[] =>
+  Array.isArray(value) ? value : [];
+
+const widthOf = (filter: ListFilter): string => {
+  if (filter.kind === 'search') return 'min-w-56 flex-1';
+  return filter.kind === 'multi' ? 'w-56' : 'w-44';
+};
 
 /** Behind the fold a `Field` names the control, so a second name on it would be one too many. */
 function FilterControl({
   filter,
-  control,
-}: Readonly<{ filter: ListFilter; control: ListFilterControl }>) {
+  naming,
+  value,
+  onChange,
+}: Readonly<{
+  filter: ListFilter;
+  naming: ListFilterLabelling;
+  value: ListFilterValue | undefined;
+  onChange: (next: ListFilterValue) => void;
+}>) {
+  if (filter.kind === 'multi') {
+    return (
+      <MultiCombobox
+        {...naming}
+        items={filter.items}
+        placeholder={filter.placeholder}
+        value={asSet(value)}
+        onChange={onChange}
+      />
+    );
+  }
+
+  const control: ListFilterControl = { ...naming, value: asText(value), onChange };
+
   if (filter.kind === 'custom') return filter.render(control);
 
   if (filter.kind === 'search') {
@@ -121,9 +160,9 @@ export function ListView<TRow>({
   const primary = spec.filter((filter) => filter.primary);
   const folded = spec.filter((filter) => !filter.primary);
 
-  const bind = (filter: ListFilter): Pick<ListFilterControl, 'value' | 'onChange'> => ({
-    value: list.values[filter.key] ?? '',
-    onChange: (next) => list.setFilter(filter.key, next),
+  const bind = (filter: ListFilter) => ({
+    value: list.values[filter.key],
+    onChange: (next: ListFilterValue) => list.setFilter(filter.key, next),
   });
 
   const countSet = (subset: readonly ListFilter[]) =>
@@ -141,7 +180,7 @@ export function ListView<TRow>({
             ? folded.map((filter) => (
                 <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
                   {(described) => (
-                    <FilterControl filter={filter} control={{ ...described, ...bind(filter) }} />
+                    <FilterControl filter={filter} naming={described} {...bind(filter)} />
                   )}
                 </Field>
               ))
@@ -152,7 +191,8 @@ export function ListView<TRow>({
           <div key={filter.key} className={filter.width ?? widthOf(filter)}>
             <FilterControl
               filter={filter}
-              control={{ 'aria-label': filter.label, ...bind(filter) }}
+              naming={{ 'aria-label': filter.label }}
+              {...bind(filter)}
             />
           </div>
         ))}

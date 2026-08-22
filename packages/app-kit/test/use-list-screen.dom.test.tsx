@@ -14,10 +14,11 @@ afterEach(() => {
   client.clear();
 });
 
-const FILTERS: readonly ListFilter[] = [
+const FILTERS = [
   { key: 'q', kind: 'search', label: 'Search', primary: true },
   { key: 'subjectId', kind: 'choice', label: 'Subject', items: [] },
-];
+  { key: 'difficulty', kind: 'multi', label: 'Difficulty', items: [] },
+] as const satisfies readonly ListFilter[];
 
 const page = { items: [], total: 0, page: 1, pageSize: 20 };
 
@@ -82,5 +83,43 @@ describe('useListScreen', () => {
 
     await waitFor(() => assert.equal(new URLSearchParams(url()).get('q'), 'ratio'));
     assert.equal(new URLSearchParams(url()).get('level'), 'topics');
+  });
+});
+
+/** CSV on the wire, a set in the screen. Both directions, because either alone is a silent bug. */
+describe('useListScreen — a multi filter', () => {
+  it('reads a CSV param as a set', () => {
+    const list = mount('difficulty=LOW,HIGH');
+
+    assert.deepEqual(list().values.difficulty, ['LOW', 'HIGH']);
+  });
+
+  it('reads a missing param as an empty set, not undefined', () => {
+    const list = mount('');
+
+    assert.deepEqual(list().values.difficulty, []);
+  });
+
+  it('writes a set back as CSV', async () => {
+    const list = mount('');
+
+    list().setFilter('difficulty', ['LOW', 'HIGH']);
+
+    await waitFor(() => assert.equal(new URLSearchParams(url()).get('difficulty'), 'LOW,HIGH'));
+  });
+
+  it('drops the param when the last one is unchosen', async () => {
+    const list = mount('difficulty=LOW');
+
+    list().setFilter('difficulty', []);
+
+    await waitFor(() => assert.equal(url(), ''));
+  });
+
+  it('leaves the single-value filters as strings', () => {
+    const list = mount('q=ratio&difficulty=LOW');
+
+    assert.equal(list().values.q, 'ratio');
+    assert.deepEqual(list().values.difficulty, ['LOW']);
   });
 });

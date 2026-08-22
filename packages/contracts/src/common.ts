@@ -160,6 +160,31 @@ export const optionalBooleanQuery = () =>
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true'));
 
+/** How a filter holding several values travels: one param, `a,b`. Ids and enums hold no comma. */
+export const CSV_SEPARATOR = ',';
+export const CSV_QUERY_MAX = 50;
+
+/** Absent when it names nothing: Prisma reads `in: []` as "match nothing", never as "don't care". */
+const csvParts = (value: string | undefined): string[] | undefined => {
+  if (value === undefined) return undefined;
+  const parts = [
+    ...new Set(
+      value
+        .split(CSV_SEPARATOR)
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return parts.length > 0 ? parts : undefined;
+};
+
+/** Several values in one param. An unknown member is refused, exactly as a single-value enum is. */
+export const csvQuery = <T extends z.ZodType<string, string>>(member: T) =>
+  z.string().optional().transform(csvParts).pipe(z.array(member).max(CSV_QUERY_MAX).optional());
+
+/** The same, for ids — there is no set of known members to check them against. */
+export const csvIdQuery = () => csvQuery(z.string());
+
 /** The free-text box every list carries. Blank is absent, not a search for "". */
 export const SEARCH_QUERY_MAX = 64;
 

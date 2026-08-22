@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { z } from 'zod';
 import {
   createApiClient,
+  queryString,
   AppException,
   ErrorCodes,
   type ApiFailure,
@@ -201,5 +202,29 @@ describe('AppException', () => {
 
     assert.equal(error.httpStatus, 404);
     assert.equal(error.message, 'Not found');
+  });
+});
+
+/** The wire format for a multi-select filter. Both failures here are silent. */
+describe('queryString', () => {
+  it('joins a multi-select filter into one param', () => {
+    assert.equal(queryString({ subjectId: ['sub_1', 'sub_2'] }), '?subjectId=sub_1%2Csub_2');
+  });
+
+  /** Sent as `in: []`, this would empty the table rather than widen it. */
+  it('drops an empty multi-select instead of sending it', () => {
+    assert.equal(queryString({ subjectId: [] }), '');
+    assert.equal(queryString({ q: 'ram', subjectId: [] }), '?q=ram');
+  });
+
+  it('still drops what it always dropped', () => {
+    assert.equal(queryString({ q: '', branchId: undefined, page: null }), '');
+  });
+
+  it('carries primitives beside a set', () => {
+    assert.equal(
+      queryString({ page: 2, isActive: true, difficulty: ['LOW', 'HIGH'] }),
+      '?page=2&isActive=true&difficulty=LOW%2CHIGH',
+    );
   });
 });

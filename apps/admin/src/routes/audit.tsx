@@ -187,66 +187,67 @@ export function AuditActivityPage() {
     enabled: isSuperAdmin,
   });
 
-  const buildFilters = (selectedActorLabel: string | undefined): readonly ListFilter[] => [
-    {
-      key: 'feature',
-      kind: 'choice',
-      label: 'Filter by feature',
-      primary: true,
-      width: 'w-48',
-      items: [
-        { value: '', label: 'All features' },
-        ...auditFeatureSchema.options.map((value) => ({
-          value,
-          label: AUDIT_FEATURE_LABELS[value],
-        })),
-      ],
-    },
-    {
-      key: 'action',
-      kind: 'choice',
-      label: 'Filter by action',
-      primary: true,
-      items: [
-        { value: '', label: 'All actions' },
-        ...auditActionSchema.options.map((value) => ({
-          value,
-          label: AUDIT_ACTION_LABELS[value],
-        })),
-      ],
-    },
-    ...(isSuperAdmin
-      ? ([
-          {
-            key: 'actorId',
-            kind: 'custom',
-            label: 'Filter by actor',
-            primary: true,
-            width: 'w-56',
-            render: (control: ListFilterControl) => (
-              <Combobox
-                {...control}
-                selectedLabel={selectedActorLabel}
-                items={actorPages.items.map((admin) => ({
-                  value: admin.id,
-                  label: admin.fullName ?? admin.email,
-                  hint: admin.fullName ? admin.email : undefined,
-                }))}
-                placeholder="Any admin"
-                search={actorSearch}
-                onSearchChange={setActorSearch}
-                searchPlaceholder="Search admins"
-                hasMore={actorPages.hasMore}
-                onLoadMore={actorPages.loadMore}
-                isLoading={actorPages.isLoading}
-                isLoadingMore={actorPages.isLoadingMore}
-                emptyLabel="No admin matches that"
-              />
-            ),
-          },
-        ] as const)
-      : []),
-  ];
+  const buildFilters = (selectedActorLabel: string | undefined) =>
+    [
+      {
+        key: 'feature',
+        kind: 'choice',
+        label: 'Filter by feature',
+        primary: true,
+        width: 'w-48',
+        items: [
+          { value: '', label: 'All features' },
+          ...auditFeatureSchema.options.map((value) => ({
+            value,
+            label: AUDIT_FEATURE_LABELS[value],
+          })),
+        ],
+      },
+      {
+        key: 'action',
+        kind: 'choice',
+        label: 'Filter by action',
+        primary: true,
+        items: [
+          { value: '', label: 'All actions' },
+          ...auditActionSchema.options.map((value) => ({
+            value,
+            label: AUDIT_ACTION_LABELS[value],
+          })),
+        ],
+      },
+      ...(isSuperAdmin
+        ? ([
+            {
+              key: 'actorId',
+              kind: 'custom',
+              label: 'Filter by actor',
+              primary: true,
+              width: 'w-56',
+              render: (control: ListFilterControl) => (
+                <Combobox
+                  {...control}
+                  selectedLabel={selectedActorLabel}
+                  items={actorPages.items.map((admin) => ({
+                    value: admin.id,
+                    label: admin.fullName ?? admin.email,
+                    hint: admin.fullName ? admin.email : undefined,
+                  }))}
+                  placeholder="Any admin"
+                  search={actorSearch}
+                  onSearchChange={setActorSearch}
+                  searchPlaceholder="Search admins"
+                  hasMore={actorPages.hasMore}
+                  onLoadMore={actorPages.loadMore}
+                  isLoading={actorPages.isLoading}
+                  isLoadingMore={actorPages.isLoadingMore}
+                  emptyLabel="No admin matches that"
+                />
+              ),
+            },
+          ] as const)
+        : []),
+    ] as const satisfies readonly ListFilter[];
 
   // Called twice from one declaration: the hook needs only the keys, the view needs the label too.
   const activity = useListScreen({
