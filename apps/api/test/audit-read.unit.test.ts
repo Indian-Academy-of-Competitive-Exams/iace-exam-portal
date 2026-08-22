@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUDIT_FEATURE, AppException, ErrorCodes } from '@iace/contracts';
 import { AuditService, type AuditViewer } from '../src/audit/audit.service';
-import { FakePrisma } from './support/fakes';
+import { FakePrisma, FakeStorage } from './support/fakes';
 
 function viewer(overrides: Partial<AuditViewer> = {}): AuditViewer {
   return { id: 'adm_1', isSuperAdmin: false, isActive: true, ...overrides };
@@ -34,7 +34,7 @@ function seeded() {
       createdAt: new Date('2026-08-10T09:05:00.000Z'),
     },
   );
-  return { prisma, service: new AuditService(prisma as never) };
+  return { prisma, service: new AuditService(prisma as never, new FakeStorage() as never) };
 }
 
 describe('AuditService.listRowActions', () => {
@@ -200,7 +200,7 @@ describe('AuditService.listRowActions', () => {
         createdAt: tiedAt,
       });
     }
-    const service = new AuditService(prisma as never);
+    const service = new AuditService(prisma as never, new FakeStorage() as never);
 
     const seen: string[] = [];
     for (let page = 1; page <= 5; page += 1) {
@@ -224,6 +224,7 @@ describe('AuditService.listImports', () => {
         feature: 'STUDENT',
         source: 'FILE',
         actorId: 'adm_1',
+        fileS3Key: 'imports/student/imp_1.xlsx',
         total: 10,
         created: 10,
         updated: 0,
@@ -238,6 +239,7 @@ describe('AuditService.listImports', () => {
         feature: 'STUDENT',
         source: 'FILE',
         actorId: 'adm_2',
+        fileS3Key: null,
         total: 5,
         created: 5,
         updated: 0,
@@ -248,7 +250,7 @@ describe('AuditService.listImports', () => {
         finishedAt: new Date('2026-08-10T09:06:00.000Z'),
       },
     );
-    return { prisma, service: new AuditService(prisma as never) };
+    return { prisma, service: new AuditService(prisma as never, new FakeStorage() as never) };
   }
 
   it('shows a super admin every import run', async () => {
@@ -281,6 +283,101 @@ describe('AuditService.listImports', () => {
 
     await assert.rejects(
       () => service.listImports({ page: 1, pageSize: 20 } as never, viewer({ isActive: false })),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
+    );
+  });
+
+  it('says which runs still have their file, so a row only offers what it can deliver', async () => {
+    const { service } = seededImports();
+
+    const page = await service.listImports(
+      { page: 1, pageSize: 20 } as never,
+      viewer({ isSuperAdmin: true }),
+    );
+
+    assert.equal(page.items.find((run) => run.id === 'imp_1')?.hasFile, true);
+    assert.equal(page.items.find((run) => run.id === 'imp_2')?.hasFile, false);
+  });
+
+  it('never puts the S3 key in the response', async () => {
+    const { service } = seededImports();
+
+    const page = await service.listImports(
+      { page: 1, pageSize: 20 } as never,
+      viewer({ isSuperAdmin: true }),
+    );
+
+    assert.ok(!JSON.stringify(page).includes('imports/student/imp_1.xlsx'));
+  });
+});
+
+describe('AuditService.importFile', () => {
+  const KEY = 'imports/student/imp_1.xlsx';
+
+  function seeded() {
+    const prisma = new FakePrisma();
+    const storage = new FakeStorage();
+    prisma.importLogs.push(
+      { id: 'imp_1', feature: 'STUDENT', actorId: 'adm_1', fileS3Key: KEY },
+      {
+        id: 'imp_2',
+        feature: 'STUDENT',
+        actorId: 'adm_2',
+        fileS3Key: 'imports/student/imp_2.xlsx',
+      },
+      { id: 'imp_3', feature: 'STUDENT', actorId: 'adm_1', fileS3Key: null },
+    );
+    void storage.upload(KEY, Buffer.from('the sheet'));
+    void storage.upload('imports/student/imp_2.xlsx', Buffer.from('someone else sheet'));
+    return { service: new AuditService(prisma as never, storage as never), storage };
+  }
+
+  it('hands back the bytes that were uploaded', async () => {
+    const { service } = seeded();
+
+    const file = await service.importFile('imp_1', viewer());
+
+    assert.equal(file.body.toString(), 'the sheet');
+  });
+
+  it('names the file after the run, so a download is traceable to it', async () => {
+    const { service } = seeded();
+
+    const file = await service.importFile('imp_1', viewer());
+
+    assert.equal(file.filename, 'student-import-imp_1.xlsx');
+  });
+
+  /** Guessing a run id to reach a sheet of names, mobiles and DOBs is a breach, not a mis-scoped list. */
+  it('refuses a normal admin another admin run, even with the right id', async () => {
+    const { service } = seeded();
+
+    await assert.rejects(
+      () => service.importFile('imp_2', viewer()),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  it('lets a super admin fetch anyone run', async () => {
+    const { service } = seeded();
+
+    assert.ok(await service.importFile('imp_2', viewer({ isSuperAdmin: true })));
+  });
+
+  it('refuses a run that kept no file rather than reading a null key', async () => {
+    const { service } = seeded();
+
+    await assert.rejects(
+      () => service.importFile('imp_3', viewer()),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  it('refuses a deactivated admin', async () => {
+    const { service } = seeded();
+
+    await assert.rejects(
+      () => service.importFile('imp_1', viewer({ isActive: false })),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.FORBIDDEN,
     );
   });

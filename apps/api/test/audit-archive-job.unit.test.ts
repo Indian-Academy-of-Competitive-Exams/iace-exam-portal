@@ -41,7 +41,7 @@ function withRows(count: number) {
       prisma as never,
       storage as never,
       redis.asService(),
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     ),
   };
 }

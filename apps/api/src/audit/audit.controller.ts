@@ -1,6 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, Res } from '@nestjs/common';
+import { type Response } from 'express';
 import {
   ActorTypes,
+  XLSX_CONTENT_TYPE,
   paginationQuerySchema,
   rowActionListQuerySchema,
   type ImportLogSummary,
@@ -44,5 +46,24 @@ export class AuditController {
       isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
     });
+  }
+
+  /** The sheet the run was fed. Streamed, never a signed link: the file is full of student PII. */
+  @Get('imports/:id/file')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Cache-Control', 'no-store')
+  async importFile(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.audit.importFile(id, {
+      id: user.id,
+      isSuperAdmin: user.isSuperAdmin,
+      isActive: user.isActive,
+    });
+
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    response.send(file.body);
   }
 }

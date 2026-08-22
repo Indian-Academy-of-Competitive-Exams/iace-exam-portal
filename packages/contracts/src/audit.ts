@@ -164,6 +164,8 @@ export const importLogSchema = z.object({
   skipped: z.number().int(),
   failed: z.number().int(),
   status: importLogStatusSchema,
+  /** Whether the sheet that produced this run is still fetchable — the key itself never leaves the server. */
+  hasFile: z.boolean(),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
 });
@@ -172,4 +174,5 @@ export type ImportLogSummary = z.infer<typeof importLogSchema>;
 export const ADMIN_AUDIT_ROUTES = {
   rowActions: '/admin/audit/row-actions',
   imports: '/admin/audit/imports',
+  importFile: (id: string) => `/admin/audit/imports/${id}/file`,
 } as const;

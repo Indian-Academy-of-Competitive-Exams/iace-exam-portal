@@ -848,6 +848,16 @@ export class FakePrisma {
       return Promise.resolve(row);
     },
 
+    /** Both keys matter: `actorId` is how a non-super-admin is scoped to their own runs. */
+    findFirst: ({ where = {} }: { where?: { id?: string; actorId?: string } } = {}) =>
+      Promise.resolve(
+        this.importLogs.find(
+          (row) =>
+            (where.id === undefined || row.id === where.id) &&
+            (where.actorId === undefined || row.actorId === where.actorId),
+        ) ?? null,
+      ),
+
     findMany: ({
       where = {},
       orderBy,

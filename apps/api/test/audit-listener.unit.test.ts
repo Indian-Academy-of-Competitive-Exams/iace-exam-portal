@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { AUDIT_ACTION, AUDIT_ACTOR_TYPE, AUDIT_FEATURE } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { AuditListener } from '../src/audit/audit.listener';
-import { FakePrisma } from './support/fakes';
+import { FakePrisma, FakeStorage } from './support/fakes';
 
 const EVENT = {
   feature: AUDIT_FEATURE.STUDENT,
@@ -19,7 +19,7 @@ const EVENT = {
 describe('AuditService.record', () => {
   it('writes the row exactly as the event describes it', async () => {
     const prisma = new FakePrisma();
-    await new AuditService(prisma as never).record(EVENT);
+    await new AuditService(prisma as never, new FakeStorage() as never).record(EVENT);
 
     assert.equal(prisma.rowActionLogs.length, 1);
     assert.equal(prisma.rowActionLogs[0]?.entityId, 'stu_1');

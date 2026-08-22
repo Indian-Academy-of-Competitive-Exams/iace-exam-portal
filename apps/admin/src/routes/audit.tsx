@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import {
   AUDIT_WINDOW_DAYS,
   IMPORT_LOG_STATUS,
@@ -16,8 +18,10 @@ import {
   Badge,
   Combobox,
   DataTable,
+  DropdownMenuItem,
   PageHeader,
   Pagination,
+  RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
@@ -26,6 +30,7 @@ import { useInfinitePages, useListQuery } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
 import { api } from '../lib/api';
+import { saveBlob } from '../lib/save-blob';
 import {
   AUDIT_ACTION_LABELS,
   AUDIT_ACTOR_TYPE_LABELS,
@@ -144,7 +149,33 @@ function importColumns(highlightId: string): DataTableColumn<ImportLogSummary>[]
         </div>
       ),
     },
+    {
+      key: 'actions',
+      className: 'text-right',
+      // A run from before the file was kept has nothing to offer, so it gets no menu at all.
+      cell: (row) => (row.hasFile ? <ImportFileAction run={row} /> : null),
+    },
   ];
+}
+
+/** The sheet the run was fed, fetched through the API because the endpoint is authenticated. */
+function ImportFileAction({ run }: Readonly<{ run: ImportLogSummary }>) {
+  const download = useMutation({
+    meta: { success: 'File downloaded.' },
+    mutationFn: () => api.admin.audit.importFile(run.id),
+    onSuccess: (blob) => saveBlob(blob, `${run.feature.toLowerCase()}-import-${run.id}.xlsx`),
+  });
+
+  return (
+    <RowActions
+      label={`Actions for the run started ${WHEN_FORMATTER.format(new Date(run.startedAt))}`}
+    >
+      <DropdownMenuItem onSelect={() => download.mutate()}>
+        <Download aria-hidden />
+        Download the uploaded file
+      </DropdownMenuItem>
+    </RowActions>
+  );
 }
 
 export function AuditActivityPage() {

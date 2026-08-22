@@ -204,6 +204,7 @@ describe('audit read contracts', () => {
       skipped: 1,
       failed: 0,
       status: IMPORT_LOG_STATUS.COMMITTED,
+      hasFile: true,
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
     };

@@ -16,6 +16,7 @@ import {
 } from '@iace/contracts';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { type AuditRowActionEvent } from '../common/events/event-catalog';
 
 /** Enough of the authenticated caller to scope a read — never the whole `AuthenticatedUser`. */
@@ -54,7 +55,10 @@ function dateRange(
 /** Owns `RowActionLog` — the only module that writes it. */
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   /** `changed` on a CREATE is not a snapshot: `fieldDiff` drops a field that is null on both sides. */
   async record(event: AuditRowActionEvent): Promise<void> {
@@ -162,6 +166,25 @@ export class AuditService {
     };
   }
 
+  /** Scoped like `listImports`: an admin who cannot see the run cannot fetch what it was fed. */
+  async importFile(id: string, viewer: AuditViewer): Promise<{ body: Buffer; filename: string }> {
+    this.assertActive(viewer);
+    const where: Prisma.ImportLogWhereInput = { id };
+    if (!viewer.isSuperAdmin) where.actorId = viewer.id;
+
+    const log = await this.prisma.importLog.findFirst({ where });
+    if (!log?.fileS3Key) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'That import run has no file to download');
+    }
+
+    // The extension comes off the stored key, so the name always matches the bytes.
+    const extension = log.fileS3Key.split('.').pop() ?? 'xlsx';
+    return {
+      body: await this.storage.read(log.fileS3Key),
+      filename: `${log.feature.toLowerCase()}-import-${log.id}.${extension}`,
+    };
+  }
+
   private toRowAction(row: RowActionLog, names: Map<string, string>): RowAction {
     return {
       id: row.id,
@@ -191,6 +214,7 @@ export class AuditService {
       failed: row.failed,
       // The column is a plain string; IMPORT_LOG_STATUS is the only vocabulary written to it.
       status: row.status as ImportLogStatus,
+      hasFile: row.fileS3Key !== null,
       startedAt: row.startedAt.toISOString(),
       finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
     };
