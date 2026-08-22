@@ -87,4 +87,21 @@ Fewer moving parts beats "best in class". Protect the data model and live-test s
 
 ## Tests
 
-`node:test` + `node:assert/strict`, named after the unit (`auth-pin.unit.test.ts`, `envelope.e2e.test.ts`), no Postgres/Redis/S3 (extend `apps/api/test/support/fakes.ts`). Written from the task's acceptance criteria, in the same commit — no `apps/api/test/*.test.ts` (or `packages/contracts/test/*.test.ts`) means not finished. Cover the happy path **and** the failure the change prevents; assert the guarantee, not the implementation. Do not edit the golden invariant suite. `pnpm test` is a release gate and stays green.
+`node:test` + `node:assert/strict`, named after the unit (`auth-pin.unit.test.ts`, `envelope.e2e.test.ts`), no Postgres/Redis/S3 (extend `apps/api/test/support/fakes.ts`).
+
+**Tests are for FEATURES and the invariants above — not for every fix.** A feature, a rule
+the data model depends on, or logic with branches worth naming gets a test in the same
+commit, covering the happy path **and** the failure the change prevents. Anything else —
+a spacing or colour change, a copy edit, a build or config repair, a date formatting
+tweak — gets no test. **Say what to verify on screen and let the reviewer verify it.**
+An untested minor fix is finished; the missing test is not a gap to apologise for.
+
+Never assert an implementation the types or the eye already cover. A test that
+`readFileSync`s a component to look for a Tailwind class, greps `apps/` to prove nobody
+hand-rolled a widget, or pins a string in `tokens.css` is not a test — it is a lint rule
+wearing a test's clothes. It fails on harmless refactors and passes while the screen is
+broken. Fifteen of these were deleted at once; do not write the sixteenth. If a rule is
+worth enforcing mechanically, it belongs in ESLint or in the type system.
+
+Assert the guarantee, not the implementation. Do not edit the golden invariant suite.
+`pnpm test` is a release gate and stays green.

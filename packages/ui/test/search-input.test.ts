@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { globSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { createDebouncer } from '../src/components/ui/search-input';
-
-const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
 /** Timers are mocked: the guarantee is ordering and cancellation, not elapsed time. */
 describe('createDebouncer', () => {
@@ -55,16 +51,5 @@ describe('createDebouncer', () => {
     t.mock.timers.tick(1000);
 
     assert.equal(run.mock.callCount(), 0);
-  });
-});
-
-describe('search boxes', () => {
-  /** Two of the three write the term into the URL, so a keystroke was a history entry too. */
-  it('are not hand-built out of a plain Input and a magnifier', () => {
-    const offenders = globSync('apps/*/src/**/*.tsx', { cwd: REPO_ROOT }).filter((relative) =>
-      /prefix=\{<Search\b/.test(readFileSync(path.join(REPO_ROOT, relative), 'utf8')),
-    );
-
-    assert.deepEqual(offenders, [], 'use SearchInput from @iace/ui — it holds the keystrokes');
   });
 });
