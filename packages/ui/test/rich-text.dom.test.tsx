@@ -287,3 +287,50 @@ describe('the toolbar actually changes the content', () => {
     );
   });
 });
+
+describe('content arriving from outside', () => {
+  /** The bug: loading a question reported itself as a keystroke, and the caller wrote back. */
+  it('does not report a change when the value is pushed in', () => {
+    const changes: string[] = [];
+    const view = show(<RichText value="" onChange={(next) => changes.push(next)} disabled />);
+
+    view.rerender(
+      <TooltipProvider>
+        <RichText
+          value="<p>What is 20% of 150?</p>"
+          onChange={(next) => changes.push(next)}
+          disabled
+        />
+      </TooltipProvider>,
+    );
+
+    assert.deepEqual(changes, [], 'syncing in must not look like the user typing');
+  });
+
+  /** The other half: it has to actually arrive, or the field is silently blank. */
+  it('shows what was pushed in', () => {
+    const view = show(<RichText value="" onChange={noop} disabled />);
+
+    view.rerender(
+      <TooltipProvider>
+        <RichText value="<p>What is 20% of 150?</p>" onChange={noop} disabled />
+      </TooltipProvider>,
+    );
+
+    const editable = document.querySelector('[contenteditable]');
+    assert.match(editable?.textContent ?? '', /20% of 150/);
+  });
+
+  /** A question written before the editor existed is plain text, and must not be parsed as html. */
+  it('takes plain text without losing it', () => {
+    const view = show(<RichText value="" onChange={noop} disabled />);
+
+    view.rerender(
+      <TooltipProvider>
+        <RichText value="Is a < b when a = 2?" onChange={noop} disabled />
+      </TooltipProvider>,
+    );
+
+    assert.match(document.querySelector('[contenteditable]')?.textContent ?? '', /a < b/);
+  });
+});

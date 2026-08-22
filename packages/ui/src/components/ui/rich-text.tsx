@@ -92,6 +92,8 @@ export function RichText({
 }: Readonly<RichTextProps>) {
   const off = useFormDisabled() || (disabled ?? false);
   const [math, setMath] = React.useState<MathDraft | null>(null);
+  // The editor emits an update for its INITIAL content, which is a load and not a keystroke.
+  const settled = React.useRef(false);
 
   const editor = useEditor({
     editable: !off,
@@ -112,7 +114,10 @@ export function RichText({
       }),
     ],
     content: documentFrom(value),
-    onUpdate: ({ editor: current }: { editor: Editor }) => onChange(current.getHTML()),
+    onUpdate: ({ editor: current }: { editor: Editor }) => {
+      if (!settled.current) return;
+      onChange(current.getHTML());
+    },
     editorProps: {
       // Without these a pasted image becomes a base64 `data:` uri inside the question row.
       handlePaste: (view, event) =>
@@ -133,9 +138,16 @@ export function RichText({
     editor?.setEditable(!off);
   }, [editor, off]);
 
+  // After the editor exists, so its creation update has already been and gone.
+  React.useEffect(() => {
+    if (editor) settled.current = true;
+  }, [editor]);
+
   // Only when the two genuinely differ, or every keystroke would reset the caret to the start.
   React.useEffect(() => {
-    if (editor && value !== editor.getHTML()) editor.commands.setContent(documentFrom(value));
+    if (!editor || value === editor.getHTML()) return;
+    // `emitUpdate: false` or loading a question reads as the user typing it — v3 emits by default.
+    editor.commands.setContent(documentFrom(value), { emitUpdate: false });
   }, [editor, value]);
 
   return (
