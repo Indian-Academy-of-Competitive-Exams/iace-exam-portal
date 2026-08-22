@@ -124,6 +124,7 @@ export {
 export {
   FormPanel,
   FormSection,
+  useFormDisabled,
   type FormPanelProps,
   type FormSectionProps,
 } from './components/ui/form-panel';

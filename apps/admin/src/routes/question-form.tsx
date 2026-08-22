@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
+import { useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
 import {
   ANSWER_MODE,
   ANSWER_MODES,
@@ -40,8 +40,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  Textarea,
+  type FieldControl,
 } from '@iace/ui';
+import { RichText } from '@iace/ui/rich-text';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
@@ -485,6 +486,35 @@ export function QuestionFormPage() {
   );
 }
 
+/** `useWatch` per field, so a keystroke in one language does not re-render the other three. */
+function Rich({
+  control,
+  form,
+  name,
+  lang,
+  singleLine,
+}: Readonly<{
+  control: FieldControl;
+  form: UseFormReturn<QuestionFormValues>;
+  name: Path<QuestionFormValues>;
+  lang: QuestionLanguage;
+  singleLine?: boolean;
+}>) {
+  const value = useWatch({ control: form.control, name }) as string | undefined;
+
+  return (
+    <RichText
+      id={control.id}
+      aria-describedby={control['aria-describedby']}
+      aria-invalid={control['aria-invalid']}
+      lang={lang}
+      singleLine={singleLine}
+      value={value ?? ''}
+      onChange={(html) => form.setValue(name, html as never, { shouldDirty: true })}
+    />
+  );
+}
+
 function LanguagePanel({
   form,
   language,
@@ -499,7 +529,9 @@ function LanguagePanel({
   return (
     <>
       <FormField form={form} name={`stem.${language}`} label={`Question text (${label})`}>
-        {(control) => <Textarea {...control} rows={3} />}
+        {(control) => (
+          <Rich control={control} form={form} name={`stem.${language}`} lang={language} />
+        )}
       </FormField>
 
       {type === QUESTION_TYPE.SINGLE_MCQ ? (
@@ -511,18 +543,36 @@ function LanguagePanel({
               name={`options.${index}.text.${language}`}
               label={`Option ${index + 1} (${label})`}
             >
-              {(control) => <Input {...control} />}
+              {(control) => (
+                <Rich
+                  control={control}
+                  form={form}
+                  name={`options.${index}.text.${language}`}
+                  lang={language}
+                  singleLine
+                />
+              )}
             </FormField>
           ))}
         </div>
       ) : (
         <FormField form={form} name={`answers.${language}`} label={`Answer (${label})`}>
-          {(control) => <Input {...control} />}
+          {(control) => (
+            <Rich
+              control={control}
+              form={form}
+              name={`answers.${language}`}
+              lang={language}
+              singleLine
+            />
+          )}
         </FormField>
       )}
 
       <FormField form={form} name={`solution.${language}`} label={`Explanation (${label})`}>
-        {(control) => <Textarea {...control} rows={3} />}
+        {(control) => (
+          <Rich control={control} form={form} name={`solution.${language}`} lang={language} />
+        )}
       </FormField>
     </>
   );

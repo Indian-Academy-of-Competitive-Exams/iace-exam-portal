@@ -18,6 +18,13 @@ export interface FormPanelProps {
 // `relative` is load-bearing: a static scroller lets an sr-only legend escape and grow the doc.
 const BODY = 'relative flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-6';
 
+const FormDisabled = React.createContext(false);
+
+/** For a control a `<fieldset disabled>` cannot reach — a contenteditable is not a form control. */
+export function useFormDisabled(): boolean {
+  return React.useContext(FormDisabled);
+}
+
 /** A page that is ONE thing. Replaces `PageFrame`; nesting the two would be two scrollports. */
 export function FormPanel({
   header,
@@ -31,7 +38,7 @@ export function FormPanel({
     <div className={cn(BODY, className)}>
       {/* A fieldset disables every control under it natively; `contents` keeps it out of the layout. */}
       <fieldset disabled={disabled} className="contents">
-        {children}
+        <FormDisabled.Provider value={disabled ?? false}>{children}</FormDisabled.Provider>
       </fieldset>
     </div>
   );
