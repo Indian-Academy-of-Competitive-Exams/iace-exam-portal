@@ -419,7 +419,7 @@ model Question {
   subjectId        String
   topicId          String?
   difficulty       DifficultyLevel
-  status           QuestionStatus  @default(ACTIVE)
+  status           QuestionStatus  @default(DRAFT)
   currentVersionId String?
   // Namespaced `key:value` convention — paper:, set:, pyq:, src:, topic:.
   tags             String[]        @default([])

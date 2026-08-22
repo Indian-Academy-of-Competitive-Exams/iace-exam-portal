@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  CheckCheck,
   ClipboardList,
   FolderTree,
   GraduationCap,
@@ -50,6 +51,7 @@ export const ROUTES = {
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
   QUESTION_NEW: '/questions/new',
+  QUESTION_APPROVALS: '/questions/approvals',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
@@ -235,6 +237,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     featureKey: FEATURE_KEYS.QUESTION_MANAGEMENT,
     children: [
       { to: ROUTES.QUESTIONS, label: 'All questions', icon: BookOpen },
+      { to: ROUTES.QUESTION_APPROVALS, label: 'Draft questions', icon: CheckCheck },
       { to: ROUTES.IMPORT_QUESTIONS, label: 'Import questions', icon: Upload },
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],

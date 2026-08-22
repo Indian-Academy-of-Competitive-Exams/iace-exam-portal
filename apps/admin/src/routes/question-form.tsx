@@ -11,7 +11,10 @@ import {
   LANGUAGE_LABELS,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
-  QUESTION_STATUSES,
+  QUESTION_INTAKE_HINTS,
+  QUESTION_INTAKE_STATUSES,
+  QUESTION_STATUS,
+  type QUESTION_STATUSES,
   QUESTION_TYPE,
   QUESTION_TYPES,
   TAG_SEPARATOR,
@@ -75,13 +78,24 @@ interface QuestionFormValues {
 
 const emptyLanguages = (): LanguageMap => ({ en: '', hi: '', te: '' });
 
+/** ARCHIVED is a retirement, so it is only on offer once there is something to retire. */
+function statusChoices(existing: boolean) {
+  const intake = QUESTION_INTAKE_STATUSES.map((value) => ({
+    value,
+    label: value,
+    hint: QUESTION_INTAKE_HINTS[value],
+  }));
+  if (!existing) return intake;
+  return [...intake, { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED }];
+}
+
 function emptyValues(): QuestionFormValues {
   return {
     type: QUESTION_TYPE.SINGLE_MCQ,
     subjectId: '',
     topicId: '',
     difficulty: 'MEDIUM',
-    status: 'ACTIVE',
+    status: QUESTION_STATUS.DRAFT,
     questionCode: '',
     tags: '',
     correctOption: '1',
@@ -378,7 +392,7 @@ export function QuestionFormPage() {
                     shouldDirty: true,
                   })
                 }
-                items={QUESTION_STATUSES.map((value) => ({ value, label: value }))}
+                items={statusChoices(existing)}
               />
             )}
           </FormField>

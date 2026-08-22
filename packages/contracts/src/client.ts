@@ -154,6 +154,7 @@ import {
   type QuestionDraftInput,
   type QuestionImportPlan,
   type QuestionImportResult,
+  type QuestionIntakeStatus,
   type QuestionListQueryInput,
   type QuestionSummary,
   type SetQuestionStatusInput,
@@ -885,10 +886,13 @@ export function createApiClient(options: ApiClientOptions) {
             schema: questionImportPlanSchema,
           }),
 
-        commitQuestions: (importLogId: string): Promise<QuestionImportResult> =>
+        commitQuestions: (
+          importLogId: string,
+          status: QuestionIntakeStatus,
+        ): Promise<QuestionImportResult> =>
           request(QUESTION_IMPORT_ROUTES.commit, {
             method: 'POST',
-            body: { importLogId },
+            body: { importLogId, status },
             schema: questionImportResultSchema,
           }),
       },
@@ -898,6 +902,9 @@ export function createApiClient(options: ApiClientOptions) {
           requestPaginated(`${ADMIN_AUDIT_ROUTES.rowActions}${queryString({ ...query })}`, {
             schema: rowActionSchema.array(),
           }),
+
+        /** The sheet a run was fed — a Blob, not an envelope. */
+        importFile: (id: string): Promise<Blob> => requestBlob(ADMIN_AUDIT_ROUTES.importFile(id)),
 
         imports: (query: PaginationQueryInput = {}): Promise<Paginated<ImportLogSummary>> =>
           requestPaginated(`${ADMIN_AUDIT_ROUTES.imports}${queryString({ ...query })}`, {

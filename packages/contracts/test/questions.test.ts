@@ -5,10 +5,13 @@ import {
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_INTAKE_STATUSES,
   QUESTION_TYPE,
   SUPPORTED_LANGUAGES,
   localizedTextSchema,
   questionDraftSchema,
+  questionImportCommitSchema,
+  questionIntakeStatusSchema,
   questionListQuerySchema,
   tagSchema,
   topicNameSchema,
@@ -150,5 +153,26 @@ describe('questionListQuerySchema', () => {
 
   it('drops a blank search rather than searching for nothing', () => {
     assert.equal(questionListQuerySchema.parse({ q: '   ' }).q, undefined);
+  });
+});
+
+describe('what a question may be created as', () => {
+  /** ARCHIVED is a retirement. Offering it at intake would let a question arrive already dead. */
+  it('offers draft and active, never archived', () => {
+    assert.deepEqual([...QUESTION_INTAKE_STATUSES], ['DRAFT', 'ACTIVE']);
+    assert.equal(questionIntakeStatusSchema.safeParse('ARCHIVED').success, false);
+  });
+
+  /** An older client that names no status must not put a whole sheet live by omission. */
+  it('lands an import in review when the commit names no status', () => {
+    const parsed = questionImportCommitSchema.parse({ importLogId: 'imp_1' });
+
+    assert.equal(parsed.status, 'DRAFT');
+  });
+
+  it('takes the status the run chose', () => {
+    const parsed = questionImportCommitSchema.parse({ importLogId: 'imp_1', status: 'ACTIVE' });
+
+    assert.equal(parsed.status, 'ACTIVE');
   });
 });

@@ -7,6 +7,7 @@ import {
   IMPORT_LOG_STATUS,
   IMPORT_SOURCE,
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_STATUS,
   type AuditAction,
   type AuditFeature,
   type QuestionImportColumnKey,
@@ -46,7 +47,7 @@ describe('AuditService.recordImportRows', () => {
   it('writes one thin row per touched entity, all pointing at the run', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows(
+    await new AuditService(prisma as never, new FakeStorage() as never).recordImportRows(
       'imp_1',
       AUDIT_FEATURE.STUDENT,
       [
@@ -65,7 +66,7 @@ describe('AuditService.recordImportRows', () => {
   it('attributes every row to the admin who ran the import', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows(
+    await new AuditService(prisma as never, new FakeStorage() as never).recordImportRows(
       'imp_1',
       AUDIT_FEATURE.STUDENT,
       [{ entityId: 'stu_1', action: AUDIT_ACTION.CREATE }],
@@ -82,7 +83,7 @@ describe('AuditService.recordImportRows', () => {
   it('never stores a diff for an imported row', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows(
+    await new AuditService(prisma as never, new FakeStorage() as never).recordImportRows(
       'imp_1',
       AUDIT_FEATURE.STUDENT,
       [{ entityId: 'stu_1', action: AUDIT_ACTION.CREATE }],
@@ -95,7 +96,7 @@ describe('AuditService.recordImportRows', () => {
   it('writes nothing for an import that touched nothing', async () => {
     const prisma = new FakePrisma();
 
-    await new AuditService(prisma as never).recordImportRows(
+    await new AuditService(prisma as never, new FakeStorage() as never).recordImportRows(
       'imp_1',
       AUDIT_FEATURE.STUDENT,
       [],
@@ -122,7 +123,7 @@ describe('ImportsService — a preview writes nothing at all', () => {
       prisma.asService(),
       fakeAuth(),
       storage as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     );
 
     await service.previewStudents(Buffer.from(roster('mobile\n9876543210')));
@@ -154,7 +155,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       prisma.asService(),
       fakeAuth(),
       storage as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     );
 
     const result = await service.commitStudents(
@@ -215,7 +216,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       prisma.asService(),
       fakeAuth(() => Promise.reject(new Error('argon2 unavailable'))),
       new FakeStorage() as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     );
 
     await assert.rejects(
@@ -243,7 +244,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       prisma.asService(),
       fakeAuth(),
       new FakeStorage() as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     );
 
     await assert.rejects(
@@ -319,7 +320,7 @@ describe('ImportsService — a failed close preserves what openRun already recor
       prisma.asService(),
       fakeAuth(),
       new FakeStorage() as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     );
     const opened = await prisma.importLog.create({
       data: {
@@ -395,7 +396,7 @@ function questionBank() {
     service: new QuestionImportService(
       prisma.asService(),
       storage as never,
-      new AuditService(prisma.asService()),
+      new AuditService(prisma.asService(), new FakeStorage() as never),
     ),
   };
 }
@@ -412,7 +413,7 @@ describe('QuestionImportService.commit — the rows a question sheet leaves behi
     await service.preview(questionSheet('What is 20% of 150?', 'What is 30% of 200?'), 'adm_1');
     const logId = prisma.importLogs[0]!.id as string;
 
-    const result = await service.commit(logId);
+    const result = await service.commit(logId, QUESTION_STATUS.DRAFT);
 
     assert.equal(result.created, 2);
     assert.deepEqual(
@@ -438,8 +439,32 @@ describe('QuestionImportService.commit — the rows a question sheet leaves behi
     const { prisma, service } = questionBank();
 
     await service.preview(questionSheet('What is 20% of 150?'), 'adm_1');
-    await service.commit(prisma.importLogs[0]!.id as string);
+    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.DRAFT);
 
     assert.equal(prisma.rowActionLogs[0]?.changed, null);
+  });
+});
+
+describe('QuestionImportService.commit — the status the run lands in', () => {
+  /** The failure this prevents: a 400-row sheet going live the moment it commits. */
+  it('writes every row in the status the run chose', async () => {
+    const { prisma, service } = questionBank();
+    await service.preview(questionSheet('What is 20% of 150?', 'What is 30% of 200?'), 'adm_1');
+
+    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.DRAFT);
+
+    assert.equal(prisma.questions.length, 2);
+    for (const question of prisma.questions) {
+      assert.equal(question.status, QUESTION_STATUS.DRAFT);
+    }
+  });
+
+  it('puts them straight into the bank when that is what was asked for', async () => {
+    const { prisma, service } = questionBank();
+    await service.preview(questionSheet('What is 20% of 150?'), 'adm_1');
+
+    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.ACTIVE);
+
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
   });
 });

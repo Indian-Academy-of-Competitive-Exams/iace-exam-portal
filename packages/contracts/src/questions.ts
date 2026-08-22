@@ -79,6 +79,17 @@ export const questionStatusSchema = z.enum(QUESTION_STATUS);
 export type QuestionStatus = z.infer<typeof questionStatusSchema>;
 export const QUESTION_STATUSES = questionStatusSchema.options;
 
+/** What a question may be CREATED as. ARCHIVED is a retirement, so nothing arrives in it. */
+export const questionIntakeStatusSchema = z.enum([QUESTION_STATUS.DRAFT, QUESTION_STATUS.ACTIVE]);
+export type QuestionIntakeStatus = z.infer<typeof questionIntakeStatusSchema>;
+export const QUESTION_INTAKE_STATUSES = questionIntakeStatusSchema.options;
+
+/** The one gloss for each, so the form and the importer offer the same words. */
+export const QUESTION_INTAKE_HINTS: Record<QuestionIntakeStatus, string> = {
+  [QUESTION_STATUS.DRAFT]: 'Held for review; no paper can draw it',
+  [QUESTION_STATUS.ACTIVE]: 'Live in the bank straight away',
+};
+
 /**
  * How a typed answer is compared. EXACT is text, folded for case and spacing;
  * NUMERIC parses both sides as numbers and allows `tolerance` either way, which
@@ -588,6 +599,8 @@ export type QuestionImportPlan = z.infer<typeof questionImportPlanSchema>;
 
 export const questionImportCommitSchema = z.object({
   importLogId: z.string().min(1),
+  /** Defaulted, not required: an older client that names no status still lands its rows in review. */
+  status: questionIntakeStatusSchema.default(QUESTION_STATUS.DRAFT),
 });
 export type QuestionImportCommitInput = z.input<typeof questionImportCommitSchema>;
 export type QuestionImportCommitBody = z.infer<typeof questionImportCommitSchema>;

@@ -78,7 +78,7 @@ export class QuestionImportController {
   commit(
     @Body(new ZodBody(questionImportCommitSchema)) body: QuestionImportCommitBody,
   ): Promise<QuestionImportResult> {
-    return this.imports.commit(body.importLogId);
+    return this.imports.commit(body.importLogId, body.status);
   }
 
   /**

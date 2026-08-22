@@ -5,10 +5,14 @@ import { Download, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   LANGUAGE_LABELS,
+  QUESTION_INTAKE_HINTS,
+  QUESTION_INTAKE_STATUSES,
+  QUESTION_STATUS,
   QUESTION_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type QuestionImportPlan,
   type QuestionImportRow,
+  type QuestionIntakeStatus,
 } from '@iace/contracts';
 import {
   Alert,
@@ -19,6 +23,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Combobox,
+  Field,
   FileDropzone,
   linkVariants,
   LoadingState,
@@ -49,6 +55,8 @@ function useQuestionImport() {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [plan, setPlan] = useState<QuestionImportPlan | null>(null);
+  // The whole run lands in one status, so it is chosen once rather than per row.
+  const [status, setStatus] = useState<QuestionIntakeStatus>(QUESTION_STATUS.DRAFT);
 
   const preview = useMutation({
     mutationFn: (chosen: File) => api.admin.imports.previewQuestions(chosen),
@@ -62,7 +70,7 @@ function useQuestionImport() {
         return `Imported: ${result.created} created, ${result.duplicates} already in the bank, ${result.invalid} skipped.`;
       },
     },
-    mutationFn: (importLogId: string) => api.admin.imports.commitQuestions(importLogId),
+    mutationFn: (importLogId: string) => api.admin.imports.commitQuestions(importLogId, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] }),
   });
 
@@ -88,12 +96,15 @@ function useQuestionImport() {
     commit,
     sample,
     choose,
+    status,
+    setStatus,
     canCommit: plan !== null && plan.summary.willCreate > 0 && !commit.isSuccess,
   };
 }
 
 export function ImportQuestionsPage() {
-  const { file, plan, preview, commit, sample, choose, canCommit } = useQuestionImport();
+  const { file, plan, preview, commit, sample, choose, status, setStatus, canCommit } =
+    useQuestionImport();
 
   return (
     <PageFrame
@@ -186,6 +197,23 @@ export function ImportQuestionsPage() {
               />
 
               {preview.isPending ? <LoadingState>Reading the file…</LoadingState> : null}
+
+              <Field htmlFor="import-status" label="Bring them in as">
+                {(control) => (
+                  <Combobox
+                    id={control.id}
+                    aria-describedby={control['aria-describedby']}
+                    clearable={false}
+                    value={status}
+                    onChange={(next) => setStatus(next as QuestionIntakeStatus)}
+                    items={QUESTION_INTAKE_STATUSES.map((value) => ({
+                      value,
+                      label: value,
+                      hint: QUESTION_INTAKE_HINTS[value],
+                    }))}
+                  />
+                )}
+              </Field>
 
               {/* The preview already shows exactly what this does, row by row,
                   so it commits without asking a second time. */}

@@ -158,8 +158,7 @@ export class QuestionsService {
       subjectId: draft.subjectId,
       topicId: draft.topicId ?? null,
       difficulty: draft.difficulty,
-      // Omitted means "leave it": on create the column defaults to ACTIVE, and on edit an
-      // archived question stays archived rather than being silently put back in circulation.
+      // Omitted means "leave it": DRAFT on create, and an archived question stays archived.
       ...(draft.status === undefined ? {} : { status: draft.status }),
       questionCode: draft.questionCode ?? null,
       tags: draft.tags,
