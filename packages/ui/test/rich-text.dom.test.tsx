@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import * as React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { RichText } from '../src/components/ui/rich-text';
 import { FormPanel } from '../src/components/ui/form-panel';
 import { TooltipProvider } from '../src/components/ui/tooltip';
@@ -332,5 +332,37 @@ describe('content arriving from outside', () => {
     );
 
     assert.match(document.querySelector('[contenteditable]')?.textContent ?? '', /a < b/);
+  });
+});
+
+/** setEditable re-emits the current document by default, which reads as somebody typing it. */
+describe('RichText — turning editing off', () => {
+  it('does not report a change when it is only made read-only', async () => {
+    const emitted: string[] = [];
+    const Page = () => {
+      const [off, setOff] = React.useState(false);
+      return (
+        <TooltipProvider>
+          <button type="button" onClick={() => setOff(true)}>
+            lock
+          </button>
+          <FormPanel disabled={off}>
+            <RichText value="<p>Identify the place.</p>" onChange={(html) => emitted.push(html)} />
+          </FormPanel>
+        </TooltipProvider>
+      );
+    };
+
+    render(<Page />);
+    await act(async () => {
+      screen.getByRole('button', { name: 'lock' }).click();
+    });
+
+    assert.deepEqual(emitted, []);
+    assert.equal(
+      document.querySelector('.ProseMirror')?.innerHTML,
+      '<p>Identify the place.</p>',
+      'the content must survive being locked',
+    );
   });
 });

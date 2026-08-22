@@ -134,8 +134,9 @@ export function RichText({
     },
   });
 
+  // `false`: it defaults to re-emitting the CURRENT document, which reads as the user typing it.
   React.useEffect(() => {
-    editor?.setEditable(!off);
+    editor?.setEditable(!off, false);
   }, [editor, off]);
 
   // After the editor exists, so its creation update has already been and gone.
