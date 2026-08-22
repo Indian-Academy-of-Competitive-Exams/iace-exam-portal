@@ -18,6 +18,7 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { stripImageSrc } from './question-images';
+import { firstMathError } from './question-math';
 
 /**
  * The rules a question is judged by, and the shape it is stored in. Both ways a
@@ -184,8 +185,35 @@ export function validateQuestion(
   if (draft.type === QUESTION_TYPE.SINGLE_MCQ) checkOptions(draft, issues);
   else checkTypedAnswer(draft, issues);
   checkTaxonomy(draft, taxonomy, issues);
+  checkMath(draft, issues);
 
   return issues;
+}
+
+/** Both intake paths meet here: the importer writes formulas no dialog ever previewed. */
+function checkMath(draft: QuestionDraft, issues: ValidationIssue[]): void {
+  const fields: readonly (readonly [string, string | undefined])[] = [
+    ...Object.entries(draft.stem).map(([language, text]) => [`stem.${language}`, text] as const),
+    ...Object.entries(draft.solution ?? {}).map(
+      ([language, text]) => [`solution.${language}`, text] as const,
+    ),
+    ...draft.options.flatMap((option, index) =>
+      Object.entries(option.text).map(
+        ([language, text]) => [`options.${index}.text.${language}`, text] as const,
+      ),
+    ),
+  ];
+
+  for (const [field, text] of fields) {
+    const failure = text ? firstMathError(text) : null;
+    if (!failure) continue;
+
+    issues.push({
+      code: CODE.MATH_INVALID,
+      message: `The formula "${failure.latex}" will not render — ${failure.message}`,
+      field,
+    });
+  }
 }
 
 /** A key outside the supported set would be stored as JSON nothing renders. */

@@ -157,3 +157,38 @@ describe('tables', () => {
     assert.equal(screen.queryByRole('menuitem', { name: 'Row above' }), null);
   });
 });
+
+describe('the equation dialog refuses what will not render', () => {
+  const open = () => {
+    show(<RichText value="" onChange={noop} />);
+    fireEvent.click(screen.getByLabelText('Equation'));
+    return screen.getByLabelText('LaTeX');
+  };
+
+  it('lets a formula that renders through', () => {
+    fireEvent.change(open(), { target: { value: '\\frac{a}{b}' } });
+
+    assert.ok(!(screen.getByRole('button', { name: 'Insert' }) as HTMLButtonElement).disabled);
+  });
+
+  /** Stored, this reaches a candidate mid-test as red error text — the author is where it stops. */
+  it('blocks a half-typed one, and says what is wrong', () => {
+    fireEvent.change(open(), { target: { value: '\\frac{a}' } });
+
+    assert.ok((screen.getByRole('button', { name: 'Insert' }) as HTMLButtonElement).disabled);
+    assert.match(screen.getByRole('alert').textContent ?? '', /Unexpected end of input/);
+  });
+
+  it('blocks a command that does not exist, which the preview alone would have drawn', () => {
+    fireEvent.change(open(), { target: { value: '\\notacommand{x}' } });
+
+    assert.ok((screen.getByRole('button', { name: 'Insert' }) as HTMLButtonElement).disabled);
+  });
+
+  /** Typing is not failing: an empty box is not yet a broken formula. */
+  it('says nothing about an empty box', () => {
+    open();
+
+    assert.equal(screen.queryByRole('alert'), null);
+  });
+});

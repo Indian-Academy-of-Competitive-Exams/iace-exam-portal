@@ -184,6 +184,9 @@ importers:
       ioredis:
         specifier: 6.0.0
         version: 6.0.0(supports-color@8.1.1)
+      katex:
+        specifier: 0.18.4
+        version: 0.18.4
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -206,6 +209,9 @@ importers:
       '@types/express':
         specifier: 5.0.6
         version: 5.0.6
+      '@types/katex':
+        specifier: ^0.16.8
+        version: 0.16.8
       '@types/multer':
         specifier: 2.2.0
         version: 2.2.0
@@ -2257,6 +2263,9 @@ packages:
 
   '@types/jsonwebtoken@9.0.10':
     resolution: {integrity: sha512-asx5hIG9Qmf/1oStypjanR7iKTv0gXQ1Ov/jfrX6kS/EO0OFni8orbmGCn0672NHR3kXHwpAwR+B368ZGN/2rA==}
+
+  '@types/katex@0.16.8':
+    resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -6864,6 +6873,8 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
       '@types/node': 22.20.1
+
+  '@types/katex@0.16.8': {}
 
   '@types/ms@2.1.0': {}
 

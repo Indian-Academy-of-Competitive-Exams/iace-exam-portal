@@ -150,9 +150,17 @@ function TableMenu({ editor }: Readonly<{ editor: Editor }>) {
   );
 }
 
-/** KaTeX renders whatever it is given; `throwOnError` off means a half-typed formula shows as red. */
-function preview(latex: string): string {
-  return katex.renderToString(latex || '', { throwOnError: false, displayMode: false });
+/** Parsed strictly to JUDGE it, rendered loosely to SHOW it — a half-typed formula still previews. */
+function parse(latex: string): { html: string; error: string | null } {
+  const html = katex.renderToString(latex || '', { throwOnError: false, displayMode: false });
+  if (!latex.trim()) return { html, error: null };
+
+  try {
+    katex.renderToString(latex, { throwOnError: true, strict: 'error' });
+    return { html, error: null };
+  } catch (error) {
+    return { html, error: (error as Error).message.replace('KaTeX parse error: ', '') };
+  }
 }
 
 /** The LaTeX box. A real dialog rather than `prompt`, which the docs suggest and this repo forbids. */
@@ -171,6 +179,8 @@ function MathDialog({
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
 }>) {
+  const { html, error } = parse(latex);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="sm">
@@ -187,14 +197,20 @@ function MathDialog({
               value={latex}
               onChange={(event) => onLatexChange(event.target.value)}
               placeholder="\frac{a}{b}"
+              invalid={Boolean(error)}
             />
+            {error ? (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex min-h-20 items-center justify-center overflow-x-auto rounded-md border border-border bg-surface-2 px-3 py-2 text-xl">
             <span
               aria-label="Preview"
               // KaTeX's own output, from LaTeX this dialog owns — no user HTML reaches here.
-              dangerouslySetInnerHTML={{ __html: preview(latex) }}
+              dangerouslySetInnerHTML={{ __html: html }}
             />
           </div>
         </DialogBody>
@@ -203,7 +219,7 @@ function MathDialog({
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={!latex.trim()} onClick={onSubmit}>
+          <Button type="button" disabled={!latex.trim() || Boolean(error)} onClick={onSubmit}>
             {editing ? 'Update' : 'Insert'}
           </Button>
         </DialogFooter>
