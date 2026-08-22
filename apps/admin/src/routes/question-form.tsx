@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type Path, type UseFormReturn } from 'react-hook-form';
@@ -24,6 +24,8 @@ import {
   type QuestionLanguage,
   QUESTION_IMAGE_ACCEPTED_TYPES,
   QUESTION_IMAGE_MAX_BYTES,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -31,6 +33,7 @@ import {
   Alert,
   Button,
   Combobox,
+  ConfirmDialog,
   FormField,
   FormPanel,
   FormSection,
@@ -46,6 +49,7 @@ import {
 } from '@iace/ui';
 import { RichText } from '@iace/ui/rich-text';
 import { api } from '../lib/api';
+import { useAuth } from '../providers/auth';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
@@ -302,12 +306,12 @@ export function QuestionFormPage() {
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={title}
             action={
-              isEditing ? undefined : (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil aria-hidden />
-                  Edit question
-                </Button>
-              )
+              <HeaderActions
+                isEditing={isEditing}
+                isDraft={question.data?.status === QUESTION_STATUS.DRAFT}
+                id={id}
+                onEdit={() => setIsEditing(true)}
+              />
             }
           />
 
@@ -491,6 +495,65 @@ export function QuestionFormPage() {
         </div>
       </FormSection>
     </FormPanel>
+  );
+}
+
+/** Editing hides both: while the form is live, Save and Cancel are the only decisions on offer. */
+function HeaderActions({
+  isEditing,
+  isDraft,
+  id,
+  onEdit,
+}: Readonly<{ isEditing: boolean; isDraft: boolean; id?: string; onEdit: () => void }>) {
+  if (isEditing) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {isDraft && id ? <ApproveButton id={id} /> : null}
+      <Button variant="outline" size="sm" onClick={onEdit}>
+        <Pencil aria-hidden />
+        Edit question
+      </Button>
+    </div>
+  );
+}
+
+/** Reviewing here rather than only from the list: the reader who just read it is the one deciding. */
+function ApproveButton({ id }: Readonly<{ id: string }>) {
+  const { can } = useAuth();
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+
+  const approve = useMutation({
+    meta: { success: 'Question approved.' },
+    mutationFn: () => api.admin.questions.setStatus(id, { status: QUESTION_STATUS.ACTIVE }),
+    onSuccess: async () => {
+      setAsking(false);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'question', id] });
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+    },
+    onError: () => setAsking(false),
+  });
+
+  if (!can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)) return null;
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setAsking(true)}>
+        <Check aria-hidden />
+        Approve
+      </Button>
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={setAsking}
+        loading={approve.isPending}
+        title="Approve this question?"
+        description="It goes into the bank as ACTIVE and can be drawn into any paper built from now on. Approving does not put it into a paper that already exists."
+        confirmLabel="Approve it"
+        onConfirm={() => approve.mutate()}
+      />
+    </>
   );
 }
 
