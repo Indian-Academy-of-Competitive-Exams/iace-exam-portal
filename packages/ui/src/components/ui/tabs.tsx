@@ -50,7 +50,11 @@ const TabsContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn('pt-4 focus-visible:shadow-focus focus-visible:outline-none', className)}
+    className={cn(
+      // !hidden or a caller's `flex` wins: same specificity as preflight's [hidden], and later.
+      'pt-4 focus-visible:shadow-focus focus-visible:outline-none data-[state=inactive]:!hidden',
+      className,
+    )}
     {...props}
   />
 ));
