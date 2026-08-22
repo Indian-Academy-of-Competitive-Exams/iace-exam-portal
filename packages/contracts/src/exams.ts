@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, csvQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
@@ -102,7 +102,7 @@ export function examsInFamilies<T extends { code: string; family: ExamFamily }>(
 
 export const examListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
-  family: examFamilySchema.optional(),
+  family: csvQuery(examFamilySchema),
   /** Pickers offer active exams only; the admin screen shows all. */
   activeOnly: optionalBooleanQuery(),
 });
@@ -202,7 +202,8 @@ export type ExamStage = z.infer<typeof examStageSchema>;
 
 export const examStageListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
-  examId: z.string().optional(),
+  /** Several, because a screen filtering on several exams narrows its stage list by all of them. */
+  examId: csvIdQuery(),
   family: examFamilySchema.optional(),
   disposition: stageDispositionSchema.optional(),
   activeOnly: optionalBooleanQuery(),

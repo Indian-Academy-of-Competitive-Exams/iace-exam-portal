@@ -59,6 +59,38 @@ describe('ExamStagesService — listing', () => {
     assert.equal(page.items[0]?.stageKey, 'RRB_JE_CBT1');
   });
 
+  it('narrows to any of the exams chosen, which is how a stage picker scopes itself', async () => {
+    const { service } = serviceWith(
+      [
+        makeExamStage({ id: 'stage_1', examId: 'exam_1' }),
+        makeExamStage({ id: 'stage_2', examId: 'exam_2', stageKey: 'RRB_JE_CBT1' }),
+        makeExamStage({ id: 'stage_3', examId: 'exam_3', stageKey: 'IBPS_PO_PRE' }),
+      ],
+      [
+        makeExam(),
+        makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE' }),
+        makeExam({ id: 'exam_3', code: 'IBPS PO', name: 'IBPS PO' }),
+      ],
+    );
+
+    const page = await service.list(listQuery({ examId: ['exam_1', 'exam_3'] }));
+
+    assert.equal(page.total, 2);
+  });
+
+  /** An emptied filter is "any exam", so the picker must keep offering every stage. */
+  it('lists every stage when the exam filter is emptied', async () => {
+    const { service } = serviceWith(
+      [
+        makeExamStage({ id: 'stage_1', examId: 'exam_1' }),
+        makeExamStage({ id: 'stage_2', examId: 'exam_2', stageKey: 'RRB_JE_CBT1' }),
+      ],
+      [makeExam(), makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE' })],
+    );
+
+    assert.equal((await service.list(listQuery({ examId: [] }))).total, 2);
+  });
+
   /** The Exams screen filters by family; a stage reaches one only through its exam. */
   it('narrows to one family, through the exam above it', async () => {
     const { service } = serviceWith(

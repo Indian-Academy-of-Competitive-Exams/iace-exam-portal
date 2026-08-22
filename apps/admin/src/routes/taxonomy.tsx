@@ -29,12 +29,12 @@ import {
   TableFrame,
   TruncatedText,
   type DataTableColumn,
-  type ListFilterControl,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { SubjectPicker } from '../components/taxonomy-picker';
+import { SubjectMultiPicker, SubjectPicker } from '../components/taxonomy-picker';
 
 /**
  * Subject -> topic, the two levels a question is filed under and
@@ -45,6 +45,12 @@ import { SubjectPicker } from '../components/taxonomy-picker';
 // ============================================================================
 // Subjects
 // ============================================================================
+
+/** A new topic starts in the subject being looked at, and only when exactly one is. */
+function onlySubjectFiltered(filtered: string): string {
+  const chosen = filtered.split(',').filter(Boolean);
+  return chosen.length === 1 ? (chosen[0] as string) : '';
+}
 
 /** The topics tab, already filtered to one subject — the child list reached from its parent. */
 function topicsOf(subjectId: string): string {
@@ -149,7 +155,7 @@ export function TaxonomyPage() {
         <NewSubjectDialog open={creating} onOpenChange={setCreating} onDone={done('subjects')} />
       ) : (
         <NewTopicDialog
-          subjectId={filters.get('subjectId')}
+          subjectId={onlySubjectFiltered(filters.get('subjectId'))}
           open={creating}
           onOpenChange={setCreating}
           onDone={done('topics')}
@@ -255,11 +261,10 @@ const TOPIC_FILTERS = [
   { key: 'q', kind: 'search', label: 'Search topics', placeholder: 'Search topics', primary: true },
   {
     key: 'subjectId',
-    kind: 'custom',
+    kind: 'customMulti',
     label: 'Subject',
     primary: true,
-    width: 'w-56',
-    render: (control: ListFilterControl) => <SubjectPicker {...control} clearable />,
+    render: (control: ListFilterMultiControl) => <SubjectMultiPicker {...control} />,
   },
 ] as const;
 
@@ -271,7 +276,7 @@ function TopicsList() {
     filters: TOPIC_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,
-      subjectId: values.subjectId || undefined,
+      subjectId: values.subjectId,
     }),
     fetchPage: (params) => api.admin.taxonomy.listTopics(params),
   });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { examRefSchema, languageCodeSchema } from './exams';
 import { questionMarksSchema } from './questions';
@@ -240,7 +240,7 @@ export type CloneBaseConfigBody = z.infer<typeof cloneBaseConfigSchema>;
 export const baseConfigListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   examStageId: z.string().optional(),
-  examId: z.string().optional(),
+  examId: csvIdQuery(),
   /** The stage's official pattern, as opposed to a custom one somebody built. */
   defaultOnly: optionalBooleanQuery(),
   activeOnly: optionalBooleanQuery(),

@@ -51,7 +51,7 @@ export class ExamStagesService {
   async list(query: ExamStageListQuery): Promise<Paginated<ExamStage>> {
     const where: Prisma.ExamStageWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.examId ? { examId: query.examId } : {}),
+      ...(query.examId ? { examId: { in: query.examId } } : {}),
       ...(query.family ? { exam: { family: query.family } } : {}),
       ...(query.disposition ? { disposition: query.disposition } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),

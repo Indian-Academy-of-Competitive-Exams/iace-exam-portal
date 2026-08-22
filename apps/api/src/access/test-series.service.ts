@@ -7,6 +7,7 @@ import {
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type Paginated,
+  type TestSeriesListQuery,
   type TestSeriesSummary,
   type UpdateBranchTestConfigBody,
   type UpdateTestSeriesBody,
@@ -50,17 +51,10 @@ export class TestSeriesService {
     private readonly events: DomainEventBus,
   ) {}
 
-  async list(query: {
-    page: number;
-    pageSize: number;
-    q?: string;
-    examStageId?: string;
-    programCode?: string;
-    isFree?: boolean;
-  }): Promise<Paginated<TestSeriesSummary>> {
+  async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {
     const where: Prisma.TestSeriesWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.examStageId ? { examStageId: query.examStageId } : {}),
+      ...(query.examStageId ? { examStageId: { in: query.examStageId } } : {}),
       ...(query.programCode ? { programCode: query.programCode } : {}),
       ...(query.isFree === undefined ? {} : { isFree: query.isFree }),
     };

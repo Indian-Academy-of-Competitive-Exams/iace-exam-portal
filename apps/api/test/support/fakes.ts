@@ -1281,7 +1281,7 @@ export function makeExamStage(overrides: Partial<FakeExamStage> = {}): FakeExamS
 
 interface StageWhere {
   name?: { contains: string; mode?: 'insensitive' };
-  examId?: string;
+  examId?: KeyFilter;
   exam?: { family: ExamFamily };
   disposition?: StageDisposition;
   isActive?: boolean;
@@ -1291,7 +1291,7 @@ function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]
   const exam = exams.find((candidate) => candidate.id === stage.examId);
   return (
     (where.name ? stage.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
-    (where.examId === undefined || stage.examId === where.examId) &&
+    matchesKey(stage.examId, where.examId) &&
     (where.exam === undefined || exam?.family === where.exam.family) &&
     (where.disposition === undefined || stage.disposition === where.disposition) &&
     (where.isActive === undefined || stage.isActive === where.isActive)
@@ -1301,7 +1301,7 @@ function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]
 interface ExamWhere {
   name?: { contains: string; mode?: 'insensitive' };
   code?: { in: string[] };
-  family?: ExamFamily;
+  family?: KeyFilter;
   isActive?: boolean;
 }
 
@@ -1309,7 +1309,7 @@ function matchesExam(exam: FakeExam, where: ExamWhere): boolean {
   return (
     (where.name ? exam.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
     (where.code ? where.code.in.includes(exam.code) : true) &&
-    (where.family === undefined || exam.family === where.family) &&
+    matchesKey(exam.family, where.family) &&
     (where.isActive === undefined || exam.isActive === where.isActive)
   );
 }

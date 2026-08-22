@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
-import { Combobox } from '@iace/ui';
+import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
 
 /**
@@ -68,6 +68,81 @@ export function ExamStagePicker({ examId, ...props }: Readonly<PickerProps & { e
 
   return (
     <Combobox
+      {...props}
+      placeholder={props.placeholder ?? 'All stages'}
+      items={pages.items.map((stage) => ({
+        value: stage.id,
+        label: `${stage.exam.code} / ${stage.name}`,
+        hint: stage.stageKey,
+      }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search stages"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No stage matches that"
+    />
+  );
+}
+
+/** The same two lists, choosing several. A filter narrows to a set; a form still picks one. */
+interface MultiPickerProps {
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  selectedLabels?: Readonly<Record<string, string>>;
+  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+}
+
+export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: ['admin', 'exams', 'picker', search],
+    fetchPage: (page) => api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  });
+
+  return (
+    <MultiCombobox
+      {...props}
+      placeholder={props.placeholder ?? 'All exams'}
+      items={pages.items.map((exam) => ({ value: exam.id, label: exam.code, hint: exam.name }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search exams"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No exam matches that"
+    />
+  );
+}
+
+export function ExamStageMultiPicker({
+  examIds,
+  ...props
+}: Readonly<MultiPickerProps & { examIds: readonly string[] }>) {
+  const [search, setSearch] = useState('');
+  const scope = [...examIds].join(',');
+
+  const pages = useInfinitePages({
+    queryKey: ['admin', 'exam-stages', 'picker', scope, search],
+    fetchPage: (page) =>
+      api.admin.examStages.list({
+        page,
+        pageSize: PAGE_SIZE_MAX,
+        q: search,
+        examId: [...examIds],
+        activeOnly: 'true',
+      }),
+  });
+
+  return (
+    <MultiCombobox
       {...props}
       placeholder={props.placeholder ?? 'All stages'}
       items={pages.items.map((stage) => ({

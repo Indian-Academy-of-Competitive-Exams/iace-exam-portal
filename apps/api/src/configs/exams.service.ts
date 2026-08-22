@@ -60,7 +60,7 @@ export class ExamsService {
   async list(query: ExamListQuery): Promise<Paginated<Exam>> {
     const where: Prisma.ExamWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.family ? { family: query.family } : {}),
+      ...(query.family ? { family: { in: query.family } } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
     };
 

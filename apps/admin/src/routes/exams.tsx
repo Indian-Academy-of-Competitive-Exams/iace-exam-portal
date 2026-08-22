@@ -94,13 +94,11 @@ const EXAM_FILTERS = [
   { key: 'q', kind: 'search', label: 'Search exams', placeholder: 'Search exams', primary: true },
   {
     key: 'family',
-    kind: 'choice',
+    kind: 'multi',
     label: 'Filter by family',
     primary: true,
-    items: [
-      { value: '', label: 'Any family' },
-      ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
-    ],
+    placeholder: 'Any family',
+    items: EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
   },
 ] as const;
 
@@ -133,7 +131,7 @@ export function ExamsPage() {
     filters: EXAM_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,
-      family: (values.family || undefined) as Exam['family'] | undefined,
+      family: values.family as Exam['family'][],
     }),
     fetchPage: (params) => api.admin.exams.list(params),
   });

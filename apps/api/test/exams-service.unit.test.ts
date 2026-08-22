@@ -84,6 +84,33 @@ describe('ExamsService — listing', () => {
     assert.equal(page.items[0]?.code, 'RRB JE');
   });
 
+  it('narrows to any of the families chosen', async () => {
+    const { service } = serviceWith([
+      makeExam({ id: 'exam_1', family: EXAM_FAMILY.SSC }),
+      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
+      makeExam({ id: 'exam_3', code: 'IBPS PO', name: 'IBPS PO', family: EXAM_FAMILY.BANKING }),
+    ]);
+
+    const page = await service.list(listQuery({ family: [EXAM_FAMILY.RRB, EXAM_FAMILY.BANKING] }));
+
+    assert.equal(page.total, 2);
+    assert.deepEqual(
+      page.items.map((item) => item.code).sort((a, b) => a.localeCompare(b)),
+      ['IBPS PO', 'RRB JE'],
+    );
+  });
+
+  /** An emptied filter is "any family", so it must not narrow the list to nothing. */
+  it('lists every exam when the family filter is emptied', async () => {
+    const { service } = serviceWith([
+      makeExam({ id: 'exam_1', family: EXAM_FAMILY.SSC }),
+      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
+    ]);
+
+    assert.equal((await service.list(listQuery({ family: [] }))).total, 2);
+    assert.equal((await service.list(listQuery({ family: '' }))).total, 2);
+  });
+
   it('returns dates as strings, never Date objects', async () => {
     const { service } = serviceWith();
 

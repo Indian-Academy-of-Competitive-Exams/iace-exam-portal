@@ -17,12 +17,12 @@ import {
   linkVariants,
   plural,
   type DataTableColumn,
-  type ListFilterControl,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
+import { ExamMultiPicker, ExamStageMultiPicker } from '../components/exam-picker';
 
 type FilterKey = 'q' | 'examId' | 'examStageId';
 
@@ -91,9 +91,9 @@ export function TestSeriesPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
-  // Held outside the spec: choosing an exam also has to drop the stage under it.
+  // Held outside the spec: changing the exams also has to drop the stages under them.
   const filters = useFilters<FilterKey>();
-  const examId = filters.get('examId');
+  const examIds = filters.get('examId').split(',').filter(Boolean);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
@@ -111,27 +111,24 @@ export function TestSeriesPage() {
     },
     {
       key: 'examId',
-      kind: 'custom',
+      kind: 'customMulti',
       label: 'Filter by exam',
       primary: true,
-      width: 'w-48',
       // Narrows the stage list, not the table: "Tier 1" alone names half a dozen papers.
-      render: (control: ListFilterControl) => (
-        <ExamPicker
+      render: (control: ListFilterMultiControl) => (
+        <ExamMultiPicker
           {...control}
-          clearable
-          onChange={(value) => filters.set({ examId: value, examStageId: '' })}
+          onChange={(value) => filters.set({ examId: value.join(','), examStageId: '' })}
         />
       ),
     },
     {
       key: 'examStageId',
-      kind: 'custom',
+      kind: 'customMulti',
       label: 'Filter by stage',
       primary: true,
-      width: 'w-56',
-      render: (control: ListFilterControl) => (
-        <ExamStagePicker {...control} examId={examId} clearable />
+      render: (control: ListFilterMultiControl) => (
+        <ExamStageMultiPicker {...control} examIds={examIds} />
       ),
     },
   ] as const;
@@ -141,7 +138,7 @@ export function TestSeriesPage() {
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
-      examStageId: values.examStageId || undefined,
+      examStageId: values.examStageId,
     }),
     fetchPage: (params) => api.admin.testSeries.list(params),
   });

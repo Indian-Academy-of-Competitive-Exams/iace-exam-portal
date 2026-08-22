@@ -76,7 +76,7 @@ export class BaseConfigsService {
     const where: Prisma.BaseConfigWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
       ...(query.examStageId ? { examStageId: query.examStageId } : {}),
-      ...(query.examId ? { examStage: { examId: query.examId } } : {}),
+      ...(query.examId ? { examStage: { examId: { in: query.examId } } } : {}),
       ...(query.defaultOnly ? { isDefault: true } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
     };

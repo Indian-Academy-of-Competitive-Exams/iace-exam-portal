@@ -22,13 +22,13 @@ import {
   linkVariants,
   plural,
   type DataTableColumn,
-  type ListFilterControl,
+  type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
-import { ExamPicker } from '../components/exam-picker';
+import { ExamMultiPicker } from '../components/exam-picker';
 
 const CONFIG_FILTERS = [
   {
@@ -40,11 +40,10 @@ const CONFIG_FILTERS = [
   },
   {
     key: 'examId',
-    kind: 'custom',
+    kind: 'customMulti',
     label: 'Filter by exam',
     primary: true,
-    width: 'w-56',
-    render: (control: ListFilterControl) => <ExamPicker {...control} clearable />,
+    render: (control: ListFilterMultiControl) => <ExamMultiPicker {...control} />,
   },
 ] as const;
 
@@ -124,7 +123,7 @@ export function BaseConfigsPage() {
     filters: CONFIG_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,
-      examId: values.examId || undefined,
+      examId: values.examId,
     }),
     fetchPage: (params) => api.admin.baseConfigs.list(params),
   });
