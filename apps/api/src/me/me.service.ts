@@ -54,13 +54,13 @@ export class MeService {
     return updated;
   }
 
-  /** Stores the student's photo and points the profile at it. */
+  /** Stores an uploaded document and points the profile column for its kind at it. */
   async saveDocument(
     studentId: string,
     kind: DocumentKind,
     file: { buffer: Buffer; size: number; mimetype: string } | undefined,
   ): Promise<Me> {
-    checkDocument(file);
+    checkDocument(file, kind);
     if (!file) throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload');
 
     // Before the upload, not after: an object pushed to S3 for a student who

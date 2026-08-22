@@ -146,6 +146,8 @@ export const studentProfileSchema = z.object({
    */
   aadhaarVerified: z.boolean(),
   panVerified: z.boolean(),
+  /** Also a short-lived SIGNED URL. Unlike Aadhaar and PAN this one IS stored — it is a certificate, not an identity document. */
+  tenthMarksheetUrl: z.string().nullable(),
   educationDetails: z.array(educationEntrySchema).nullable(),
   pastExamHistory: z.array(pastExamEntrySchema).nullable(),
 });

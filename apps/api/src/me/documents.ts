@@ -1,18 +1,17 @@
 import {
   AppException,
   DOCUMENT_KINDS,
+  ACCEPTED_TYPES_FOR,
   DOCUMENT_MAX_BYTES,
   ErrorCodes,
-  PHOTO_ACCEPTED_TYPES,
   type DocumentKind,
 } from '@iace/contracts';
 import { type ProfileDocumentColumn } from '../students';
 
-/** The rules for a student's uploaded photo. */
-
 /** Which profile column each kind writes to. The client never chooses this. */
 const COLUMN_FOR: Record<DocumentKind, ProfileDocumentColumn> = {
   [DOCUMENT_KINDS.PHOTO]: 'photoUrl',
+  [DOCUMENT_KINDS.TENTH_MARKSHEET]: 'tenthMarksheetUrl',
 };
 
 export function columnFor(kind: DocumentKind): ProfileDocumentColumn {
@@ -23,6 +22,7 @@ const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'application/pdf': 'pdf',
 };
 
 /** Where an upload is stored. */
@@ -37,14 +37,17 @@ export function documentKey(
 }
 
 /** Whether this file may be stored, and why not if it may not. */
-export function checkDocument(file: { size: number; mimetype: string } | undefined): void {
+export function checkDocument(
+  file: { size: number; mimetype: string } | undefined,
+  kind: DocumentKind,
+): void {
   if (!file) {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose a file to upload', {
       fieldErrors: { file: ['Choose a file to upload'] },
     });
   }
 
-  const accepted: readonly string[] = PHOTO_ACCEPTED_TYPES;
+  const accepted = ACCEPTED_TYPES_FOR[kind];
   if (!accepted.includes(file.mimetype)) {
     const readable = accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ');
     throw new AppException(
@@ -58,7 +61,7 @@ export function checkDocument(file: { size: number; mimetype: string } | undefin
     const mb = Math.round(DOCUMENT_MAX_BYTES / 1024 / 1024);
     throw new AppException(
       ErrorCodes.VALIDATION_ERROR,
-      `That file is larger than ${mb}MB. Take a smaller photo, or compress it.`,
+      `That file is larger than ${mb}MB. Compress it, or scan it at a lower quality.`,
       { fieldErrors: { file: ['That file is too large'] } },
     );
   }

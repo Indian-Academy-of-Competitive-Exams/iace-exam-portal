@@ -92,6 +92,7 @@ describe('admin student contracts', () => {
     photoUrl: null,
     aadhaarVerified: false,
     panVerified: false,
+    tenthMarksheetUrl: null,
     educationDetails: null,
     pastExamHistory: null,
   };

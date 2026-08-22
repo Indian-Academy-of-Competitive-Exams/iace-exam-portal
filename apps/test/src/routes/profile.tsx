@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Pencil } from 'lucide-react';
 import {
+  DOCUMENT_KINDS,
   EARLIEST_BIRTH_DATE,
   GENDERS,
   todayISO,
@@ -247,12 +248,17 @@ export function ProfilePage() {
             </div>
           </FormSection>
 
-          <FormSection title="Your photo">
+          <FormSection title="Your documents">
             <div className="flex flex-wrap gap-4">
               <DocumentCard
-                kind="photo"
+                kind={DOCUMENT_KINDS.PHOTO}
                 label="Passport photo"
                 url={me.data.profile?.photoUrl ?? null}
+              />
+              <DocumentCard
+                kind={DOCUMENT_KINDS.TENTH_MARKSHEET}
+                label="Class 10 marksheet"
+                url={me.data.profile?.tenthMarksheetUrl ?? null}
               />
             </div>
           </FormSection>

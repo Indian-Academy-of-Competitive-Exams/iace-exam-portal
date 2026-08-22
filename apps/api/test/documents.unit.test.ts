@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import { AppException, DOCUMENT_KINDS, DOCUMENT_MAX_BYTES } from '@iace/contracts';
 import { checkDocument, columnFor, documentKey } from '../src/me/documents';
 
+const { PHOTO, TENTH_MARKSHEET } = DOCUMENT_KINDS;
+
 const file = (over: Partial<{ size: number; mimetype: string }> = {}) => ({
   size: 1024,
   mimetype: 'image/jpeg',
@@ -48,8 +50,9 @@ describe('documentKey', () => {
 
 describe('columnFor', () => {
   /** Aadhaar and PAN are not here: their images are never stored, only a verified flag. */
-  it('maps the photo to its own column', () => {
-    assert.equal(columnFor(DOCUMENT_KINDS.PHOTO), 'photoUrl');
+  it('maps each kind to its own column', () => {
+    assert.equal(columnFor(PHOTO), 'photoUrl');
+    assert.equal(columnFor(TENTH_MARKSHEET), 'tenthMarksheetUrl');
   });
 
   it('gives every kind a distinct column', () => {
@@ -60,7 +63,7 @@ describe('columnFor', () => {
 
 describe('checkDocument', () => {
   it('accepts an ordinary phone photo', () => {
-    assert.doesNotThrow(() => checkDocument(file()));
+    assert.doesNotThrow(() => checkDocument(file(), PHOTO));
   });
 
   /**
@@ -69,7 +72,7 @@ describe('checkDocument', () => {
    */
   it('refuses a PDF where a photograph is meant', () => {
     assert.throws(
-      () => checkDocument(file({ mimetype: 'application/pdf' })),
+      () => checkDocument(file({ mimetype: 'application/pdf' }), PHOTO),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /not accepted/);
@@ -80,13 +83,13 @@ describe('checkDocument', () => {
 
   it('refuses a type nobody asked for', () => {
     for (const mimetype of ['application/zip', 'text/html', 'application/x-msdownload']) {
-      assert.throws(() => checkDocument(file({ mimetype })), AppException.is);
+      assert.throws(() => checkDocument(file({ mimetype }), PHOTO), AppException.is);
     }
   });
 
   it('refuses a file over the limit, and says what to do', () => {
     assert.throws(
-      () => checkDocument(file({ size: DOCUMENT_MAX_BYTES + 1 })),
+      () => checkDocument(file({ size: DOCUMENT_MAX_BYTES + 1 }), PHOTO),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.match(error.message, /5MB/);
@@ -96,16 +99,37 @@ describe('checkDocument', () => {
   });
 
   it('accepts a file exactly at the limit', () => {
-    assert.doesNotThrow(() => checkDocument(file({ size: DOCUMENT_MAX_BYTES })));
+    assert.doesNotThrow(() => checkDocument(file({ size: DOCUMENT_MAX_BYTES }), PHOTO));
   });
 
   it('refuses an empty file rather than storing nothing', () => {
-    assert.throws(() => checkDocument(file({ size: 0 })), AppException.is);
+    assert.throws(() => checkDocument(file({ size: 0 }), PHOTO), AppException.is);
+  });
+
+  /** The kind decides, not a single list: a scanned certificate is a PDF far more often than not. */
+  it('takes a PDF for a marksheet, having refused one for a photo', () => {
+    assert.doesNotThrow(() =>
+      checkDocument(file({ mimetype: 'application/pdf' }), TENTH_MARKSHEET),
+    );
+  });
+
+  it('still refuses a type nobody asked for, whichever kind it is', () => {
+    assert.throws(
+      () => checkDocument(file({ mimetype: 'text/html' }), TENTH_MARKSHEET),
+      AppException.is,
+    );
+  });
+
+  it('holds the size limit for every kind', () => {
+    assert.throws(
+      () => checkDocument(file({ size: DOCUMENT_MAX_BYTES + 1 }), TENTH_MARKSHEET),
+      AppException.is,
+    );
   });
 
   it('refuses a request that carried no file at all', () => {
     assert.throws(
-      () => checkDocument(undefined),
+      () => checkDocument(undefined, PHOTO),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.ok(error.fieldErrors?.file);

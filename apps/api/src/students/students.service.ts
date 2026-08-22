@@ -141,6 +141,7 @@ export class StudentsService {
     photoUrl: string | null;
     aadhaarVerified: boolean;
     panVerified: boolean;
+    tenthMarksheetUrl: string | null;
     educationDetails: unknown;
     pastExamHistory: unknown;
   }): Promise<StudentDetail['profile']> {
@@ -154,6 +155,7 @@ export class StudentsService {
       photoUrl: await this.signed(profile.photoUrl),
       aadhaarVerified: profile.aadhaarVerified,
       panVerified: profile.panVerified,
+      tenthMarksheetUrl: await this.signed(profile.tenthMarksheetUrl),
       // Parsed rather than cast: this is JSON written by an older build or by hand, and a malformed row
       // should read as "nothing recorded" rather than reach a screen that assumes an array.
       educationDetails:

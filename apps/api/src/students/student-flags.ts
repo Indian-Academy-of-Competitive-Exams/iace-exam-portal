@@ -14,7 +14,7 @@ export interface ProfileCompletionFields extends PreTestFields {
 }
 
 /** The `StudentProfile` columns an uploaded file lands in. */
-export type ProfileDocumentColumn = 'photoUrl';
+export type ProfileDocumentColumn = 'photoUrl' | 'tenthMarksheetUrl';
 
 const present = (value: unknown): boolean =>
   value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '');

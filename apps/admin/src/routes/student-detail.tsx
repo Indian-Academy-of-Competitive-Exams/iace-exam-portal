@@ -687,6 +687,7 @@ export function StudentDetailPage() {
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">
           <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
+          <DocumentLink label="Class 10 marksheet" url={detail.profile?.tenthMarksheetUrl} />
         </div>
       </FormSection>
 

@@ -2,8 +2,8 @@ import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, FileText, ImageOff, Upload } from 'lucide-react';
 import {
+  ACCEPTED_TYPES_FOR,
   DOCUMENT_MAX_BYTES,
-  PHOTO_ACCEPTED_TYPES,
   type DocumentKind,
   type Me,
 } from '@iace/contracts';
@@ -30,7 +30,7 @@ export function DocumentCard({
     },
   });
 
-  const accepted: readonly string[] = PHOTO_ACCEPTED_TYPES;
+  const accepted = ACCEPTED_TYPES_FOR[kind];
   const megabytes = Math.round(DOCUMENT_MAX_BYTES / 1024 / 1024);
   // Said before they choose, not after it is refused.
   const rules = `${accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ')} · up to ${megabytes}MB`;
