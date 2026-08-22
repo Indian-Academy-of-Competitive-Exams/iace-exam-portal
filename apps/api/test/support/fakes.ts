@@ -442,6 +442,16 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
 /** What Prisma accepts for a scalar column here: the value itself, or a set to be one of. */
 type KeyFilter = string | { in: string[] };
 
+/** Loud, because the silence is the bug: an unread key matches everything and the test still passes. */
+function onlyUnderstands(where: object, known: readonly string[], matcher: string): void {
+  const unknown = Object.keys(where).filter((key) => !known.includes(key));
+  if (unknown.length === 0) return;
+  throw new Error(
+    `${matcher} was handed ${unknown.join(', ')}, which it ignores. Teach it those keys, ` +
+      `or the test is asserting against a query the service no longer builds.`,
+  );
+}
+
 /** Prisma's AND/OR: a flat matcher handed a nested `where` reads every field as undefined. */
 function matchesTree<W extends { AND?: W[]; OR?: W[] }>(
   where: W,
@@ -484,12 +494,23 @@ interface RowActionLogWhere {
 }
 
 /** The archive job's day/cursor scan and the read API's filtered page share this one matcher. */
+const ROW_ACTION_WHERE_KEYS = [
+  'AND',
+  'OR',
+  'feature',
+  'action',
+  'entityId',
+  'actorId',
+  'createdAt',
+  'id',
+] as const;
+
 function matchesRowActionLog(row: Record<string, unknown>, where: RowActionLogWhere): boolean {
   const at = row.createdAt as Date;
   const id = row.id as string;
-  return matchesTree(
-    where,
-    (clause) =>
+  return matchesTree(where, (clause) => {
+    onlyUnderstands(clause, ROW_ACTION_WHERE_KEYS, 'The audit fake');
+    return (
       matchesKey(row.feature as string, clause.feature) &&
       matchesKey(row.action as string, clause.action) &&
       (clause.entityId === undefined || row.entityId === clause.entityId) &&
@@ -497,8 +518,9 @@ function matchesRowActionLog(row: Record<string, unknown>, where: RowActionLogWh
       (clause.createdAt?.gte === undefined || at >= clause.createdAt.gte) &&
       (clause.createdAt?.lt === undefined || at < clause.createdAt.lt) &&
       (clause.createdAt?.lte === undefined || at <= clause.createdAt.lte) &&
-      (clause.id?.gt === undefined || id > clause.id.gt),
-  );
+      (clause.id?.gt === undefined || id > clause.id.gt)
+    );
+  });
 }
 
 type OrderSpec = Record<string, 'asc' | 'desc' | undefined>;
@@ -1899,15 +1921,30 @@ const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
   (row, where) => !where.tags?.has || row.tags.includes(where.tags.has),
 ];
 
+const QUESTION_WHERE_KEYS = [
+  'AND',
+  'OR',
+  'id',
+  'subjectId',
+  'topicId',
+  'type',
+  'difficulty',
+  'status',
+  'stemHash',
+  'tags',
+  'currentVersion',
+] as const;
+
 function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
   if (!where) return true;
-  return matchesTree(
-    where,
-    (clause) =>
+  return matchesTree(where, (clause) => {
+    onlyUnderstands(clause, QUESTION_WHERE_KEYS, 'The question fake');
+    return (
       idMatches(row, clause.id) &&
       stemHashMatches(row, clause.stemHash) &&
-      QUESTION_FIELD_CHECKS.every((check) => check(row, clause)),
-  );
+      QUESTION_FIELD_CHECKS.every((check) => check(row, clause))
+    );
+  });
 }
 
 function subjectIdOf(data: Record<string, unknown>): string {
