@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '../src/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../src/components/ui/tabs';
+import { FormPanel } from '../src/components/ui/form-panel';
 import { ConfirmDialog } from '../src/components/ui/dialog';
 
 afterEach(cleanup);
@@ -206,5 +207,48 @@ describe('a dialog gives focus back to whatever opened it', () => {
 
     await waitFor(() => assert.equal(screen.queryByRole('dialog'), null));
     await waitFor(() => assert.equal(document.activeElement, opener));
+  });
+});
+
+/** A read-only record is still a record you read in every language it was written in. */
+describe('Tabs inside a read-only form', () => {
+  const question = () => (
+    <FormPanel disabled>
+      <Tabs defaultValue="en">
+        <TabsList>
+          <TabsTrigger value="en">English</TabsTrigger>
+          <TabsTrigger value="hi">Hindi</TabsTrigger>
+        </TabsList>
+        <TabsContent value="en">What is 20% of 150?</TabsContent>
+        <TabsContent value="hi">150 ka 20% kitna hai?</TabsContent>
+      </Tabs>
+    </FormPanel>
+  );
+
+  it('still switches language when the form around it is disabled', async () => {
+    render(question());
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Hindi' }));
+
+    await waitFor(() => assert.ok(screen.getByText('150 ka 20% kitna hai?')));
+    assert.equal(screen.queryByText('What is 20% of 150?'), null);
+  });
+
+  /** `fieldset[disabled]` disables every BUTTON under it, which is why a trigger is not one. */
+  it('keeps the trigger out of the disabled fieldset by not being a form control', () => {
+    render(question());
+
+    assert.equal(screen.getByRole('tab', { name: 'Hindi' }).tagName, 'SPAN');
+  });
+
+  it('is still reachable and operable from the keyboard', async () => {
+    render(question());
+    const open = screen.getByRole('tab', { name: 'English' });
+    open.focus();
+
+    assert.equal(document.activeElement, open);
+    fireEvent.keyDown(open, { key: 'ArrowRight' });
+
+    await waitFor(() => assert.ok(screen.getByText('150 ka 20% kitna hai?')));
   });
 });

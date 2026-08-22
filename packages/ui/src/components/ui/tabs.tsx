@@ -24,23 +24,27 @@ const TabsList = React.forwardRef<
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
 
+/** A SPAN: `fieldset[disabled]` kills every button under it, and reading a tab is not editing. */
 const TabsTrigger = React.forwardRef<
   React.ComponentRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      'relative -mb-px inline-flex items-center gap-2 whitespace-nowrap rounded-t-md px-3 py-2 text-sm font-medium transition-colors',
-      'border-b-2 border-transparent text-muted-foreground',
-      'hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none',
-      // Border as well as colour, for readers who cannot separate the two.
-      'data-[state=active]:border-primary data-[state=active]:text-foreground',
-      'disabled:pointer-events-none disabled:opacity-50',
-      className,
-    )}
-    {...props}
-  />
+>(({ className, children, ...props }, ref) => (
+  <TabsPrimitive.Trigger asChild ref={ref} {...props}>
+    <span
+      className={cn(
+        'relative -mb-px inline-flex cursor-pointer select-none items-center gap-2 whitespace-nowrap rounded-t-md px-3 py-2 text-sm font-medium transition-colors',
+        'border-b-2 border-transparent text-muted-foreground',
+        'hover:text-foreground focus-visible:shadow-focus focus-visible:outline-none',
+        // Border as well as colour, for readers who cannot separate the two.
+        'data-[state=active]:border-primary data-[state=active]:text-foreground',
+        // `data-`, not `:disabled` — a span is never `:disabled`, whatever Radix was told.
+        'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  </TabsPrimitive.Trigger>
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
