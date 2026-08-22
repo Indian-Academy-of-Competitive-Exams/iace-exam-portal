@@ -19,6 +19,7 @@ import {
   Combobox,
   DataTable,
   DropdownMenuItem,
+  FilterBar,
   PageHeader,
   Pagination,
   RowActions,
@@ -222,7 +223,10 @@ export function AuditActivityPage() {
         </span>
       </Alert>
 
-      <div className="mb-3 flex flex-wrap gap-3">
+      <FilterBar
+        activeCount={filters.activeCount(ROW_ACTION_FILTERS)}
+        onClear={() => filters.clear()}
+      >
         <div className="w-48">
           <Combobox
             aria-label="Filter by feature"
@@ -279,7 +283,7 @@ export function AuditActivityPage() {
             />
           </div>
         ) : null}
-      </div>
+      </FilterBar>
     </>
   );
 

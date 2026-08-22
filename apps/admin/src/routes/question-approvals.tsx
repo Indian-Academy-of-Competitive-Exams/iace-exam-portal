@@ -21,13 +21,15 @@ import {
   DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  linkVariants,
+  Field,
+  FilterBar,
   PageHeader,
   Pagination,
   RowActions,
   SearchInput,
   TableFrame,
   TruncatedText,
+  linkVariants,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -38,6 +40,8 @@ import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /** Every filter this screen owns. Named once so "clear all" cannot miss one. */
 const ALL_FILTERS = ['q', 'subjectId', 'topicId', 'type', 'difficulty'] as const;
+/** Everything but the search: a queue is read top to bottom before it is narrowed. */
+const FOLDED_FILTERS = ['subjectId', 'topicId', 'type', 'difficulty'] as const;
 type FilterKey = (typeof ALL_FILTERS)[number];
 
 const QUESTIONS_KEY = ['admin', 'questions'] as const;
@@ -127,8 +131,74 @@ export function QuestionApprovalsPage() {
     />
   );
 
+  const advancedFilters = (
+    <>
+      <Field htmlFor="filter-subject" label="Subject">
+        {(control) => (
+          <SubjectPicker
+            {...control}
+            value={subjectId}
+            clearable
+            // A topic under the old subject would filter everything away.
+            onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-topic" label="Topic">
+        {(control) => (
+          <TopicPicker
+            {...control}
+            subjectId={subjectId}
+            value={topicId}
+            clearable
+            onChange={(value) => filters.set({ topicId: value })}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-difficulty" label="Difficulty">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={filters.get('difficulty')}
+            onChange={(next) => filters.set({ difficulty: next })}
+            items={[
+              { value: '', label: 'Any difficulty' },
+              ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
+            ]}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-type" label="Type">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={filters.get('type')}
+            onChange={(next) => filters.set({ type: next })}
+            items={[
+              { value: '', label: 'Any type' },
+              ...QUESTION_TYPES.map((type) => ({
+                value: type,
+                label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
+              })),
+            ]}
+          />
+        )}
+      </Field>
+    </>
+  );
+
   const toolbar = (
-    <div className="mb-4 flex flex-wrap gap-3">
+    <FilterBar
+      activeCount={filters.activeCount(ALL_FILTERS)}
+      advancedCount={filters.activeCount(FOLDED_FILTERS)}
+      onClear={() => filters.clear()}
+      advanced={advancedFilters}
+    >
       <div className="min-w-56 flex-1">
         <SearchInput
           aria-label="Search draft questions"
@@ -137,56 +207,7 @@ export function QuestionApprovalsPage() {
           onChange={(q) => filters.set({ q })}
         />
       </div>
-
-      <div className="w-52">
-        <SubjectPicker
-          aria-label="Filter by subject"
-          value={subjectId}
-          clearable
-          // A topic under the old subject would filter everything away.
-          onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
-        />
-      </div>
-
-      <div className="w-52">
-        <TopicPicker
-          aria-label="Filter by topic"
-          subjectId={subjectId}
-          value={topicId}
-          clearable
-          onChange={(value) => filters.set({ topicId: value })}
-        />
-      </div>
-
-      <div className="w-40">
-        <Combobox
-          aria-label="Filter by difficulty"
-          clearable={false}
-          value={filters.get('difficulty')}
-          onChange={(next) => filters.set({ difficulty: next })}
-          items={[
-            { value: '', label: 'Any difficulty' },
-            ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-          ]}
-        />
-      </div>
-
-      <div className="w-40">
-        <Combobox
-          aria-label="Filter by type"
-          clearable={false}
-          value={filters.get('type')}
-          onChange={(next) => filters.set({ type: next })}
-          items={[
-            { value: '', label: 'Any type' },
-            ...QUESTION_TYPES.map((type) => ({
-              value: type,
-              label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-            })),
-          ]}
-        />
-      </div>
-    </div>
+    </FilterBar>
   );
 
   return (

@@ -16,14 +16,15 @@ import {
   ConfirmDialog,
   DataTable,
   DropdownMenuItem,
-  linkVariants,
+  FilterBar,
   PageHeader,
   Pagination,
-  plural,
   RowActions,
   SearchInput,
   TableFrame,
   TruncatedText,
+  linkVariants,
+  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -135,7 +136,7 @@ export function BaseConfigsPage() {
   );
 
   const toolbar = (
-    <div className="mb-4 flex flex-wrap gap-3">
+    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
       <div className="min-w-56 flex-1">
         <SearchInput
           aria-label="Search base configs"
@@ -152,7 +153,7 @@ export function BaseConfigsPage() {
           onChange={(value) => filters.set({ examId: value })}
         />
       </div>
-    </div>
+    </FilterBar>
   );
 
   return (

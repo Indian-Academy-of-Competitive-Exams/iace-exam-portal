@@ -8,6 +8,7 @@ export { StatRow, type StatRowProps } from './components/ui/stat-row';
 export { StepIcon, type StepIconProps } from './components/ui/step-icon';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
+export { FilterBar, type FilterBarProps } from './components/ui/filter-bar';
 export {
   FormActions,
   FormField,

@@ -21,6 +21,7 @@ import {
   ConfirmDialog,
   DataTable,
   DropdownMenuItem,
+  FilterBar,
   FormDialog,
   FormField,
   Input,
@@ -143,7 +144,7 @@ export function ProgramsPage() {
   );
 
   const toolbar = (
-    <div className="mb-4 flex flex-wrap gap-3">
+    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
       <div className="min-w-56 flex-1">
         <SearchInput
           aria-label="Search programs"
@@ -164,7 +165,7 @@ export function ProgramsPage() {
           ]}
         />
       </div>
-    </div>
+    </FilterBar>
   );
 
   return (

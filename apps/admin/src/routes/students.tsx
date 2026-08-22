@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, RefreshCw, SlidersHorizontal, Upload, UserPlus, X } from 'lucide-react';
+import { RefreshCw, Upload, UserPlus, X } from 'lucide-react';
 import {
   BRANCH_TYPE,
   EXAM_FAMILIES,
@@ -27,17 +27,15 @@ import {
   Badge,
   BadgeList,
   Button,
-  cn,
   Combobox,
   ConfirmDialog,
-  DatePicker,
   DataTable,
-  digitsOnly,
+  DatePicker,
   Field,
+  FilterBar,
   FormDialog,
   FormField,
   Input,
-  linkVariants,
   MultiCombobox,
   NumericInput,
   PageHeader,
@@ -48,9 +46,12 @@ import {
   TooltipContent,
   TooltipTrigger,
   TruncatedText,
-  useTruncation,
-  type DataTableColumn,
+  cn,
+  digitsOnly,
+  linkVariants,
   toast,
+  type DataTableColumn,
+  useTruncation,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { familyLabel, NAV_ITEMS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
@@ -173,7 +174,6 @@ function AccessCell({ student }: Readonly<{ student: StudentSummary }>) {
 export function StudentsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [showAll, setShowAll] = useState(false);
 
   // Every filter lives in the URL, so a link into this screen — from a branch —
   // and the controls on it are the same state. See useFilters.
@@ -189,7 +189,6 @@ export function StudentsPage() {
   const branch = branches.find((candidate) => candidate.id === branchId);
 
   const extraCount = filters.activeCount(EXTRA_FILTERS);
-  const filtersOpen = showAll || extraCount > 0;
 
   const query = {
     q: filters.get('q') || undefined,
@@ -244,6 +243,95 @@ export function StudentsPage() {
     />
   );
 
+  const advancedFilters = (
+    <>
+      <Field htmlFor="filter-branch" label="Branch">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={branchId}
+            onChange={(next) => filters.set({ branchId: next })}
+            items={[
+              { value: '', label: 'Any branch' },
+              ...branches.map((option) => ({ value: option.id, label: option.name })),
+            ]}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-pretest" label="Pre-test details">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={filters.get('preTestReady')}
+            onChange={(next) => filters.set({ preTestReady: next })}
+            items={[
+              { value: '', label: 'Any' },
+              { value: 'true', label: 'On file' },
+              { value: 'false', label: 'Needed' },
+            ]}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-profile" label="Full profile">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={filters.get('profileCompleted')}
+            onChange={(next) => filters.set({ profileCompleted: next })}
+            items={[
+              { value: '', label: 'Any' },
+              { value: 'true', label: 'Complete' },
+              { value: 'false', label: 'Incomplete' },
+            ]}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-no-access" label="Access">
+        {(control) => (
+          <Combobox
+            {...control}
+            clearable={false}
+            value={filters.get('noAccess')}
+            onChange={(next) => filters.set({ noAccess: next })}
+            items={[
+              { value: '', label: 'Any' },
+              { value: 'true', label: 'Nothing of their own' },
+              { value: 'false', label: 'Has an enrolment or program' },
+            ]}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-from" label="Enrolled from">
+        {(control) => (
+          <DatePicker
+            {...control}
+            max={todayISO()}
+            value={filters.get('joinedFrom')}
+            onChange={(next) => filters.set({ joinedFrom: next })}
+          />
+        )}
+      </Field>
+
+      <Field htmlFor="filter-to" label="Enrolled until">
+        {(control) => (
+          <DatePicker
+            {...control}
+            max={todayISO()}
+            value={filters.get('joinedTo')}
+            onChange={(next) => filters.set({ joinedTo: next })}
+          />
+        )}
+      </Field>
+    </>
+  );
+
   const toolbar = (
     <>
       {/* Arrived from somewhere: say where, and offer the way back out. */}
@@ -262,7 +350,12 @@ export function StudentsPage() {
         </div>
       ) : null}
 
-      <div className="mb-3 flex flex-wrap gap-3">
+      <FilterBar
+        activeCount={filters.activeCount(ALL_FILTERS)}
+        advancedCount={extraCount}
+        onClear={() => filters.clear()}
+        advanced={advancedFilters}
+      >
         <div className="min-w-56 flex-1">
           <SearchInput
             aria-label="Search students"
@@ -303,124 +396,7 @@ export function StudentsPage() {
             ]}
           />
         </div>
-
-        {/*
-            The rest are folded away by default. Seven controls across the top
-            of the roster is a wall to read past every time you only wanted to
-            search a name — but the count keeps a hidden filter from being a
-            silent one.
-          */}
-        <Button variant="outline" onClick={() => setShowAll((open) => !open)}>
-          <SlidersHorizontal aria-hidden />
-          Filters
-          {extraCount > 0 ? <Badge variant="primary">{extraCount}</Badge> : null}
-          <ChevronDown
-            aria-hidden
-            className={cn('transition-transform', showAll && 'rotate-180')}
-          />
-        </Button>
-      </div>
-
-      {filtersOpen ? (
-        <div className="mb-4 grid gap-3 rounded-lg border border-border bg-muted/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field htmlFor="filter-branch" label="Branch">
-            {(control) => (
-              <Combobox
-                {...control}
-                clearable={false}
-                value={branchId}
-                onChange={(next) => filters.set({ branchId: next })}
-                items={[
-                  { value: '', label: 'Any branch' },
-                  ...branches.map((option) => ({ value: option.id, label: option.name })),
-                ]}
-              />
-            )}
-          </Field>
-
-          <Field htmlFor="filter-pretest" label="Pre-test details">
-            {(control) => (
-              <Combobox
-                {...control}
-                clearable={false}
-                value={filters.get('preTestReady')}
-                onChange={(next) => filters.set({ preTestReady: next })}
-                items={[
-                  { value: '', label: 'Any' },
-                  { value: 'true', label: 'On file' },
-                  { value: 'false', label: 'Needed' },
-                ]}
-              />
-            )}
-          </Field>
-
-          <Field htmlFor="filter-profile" label="Full profile">
-            {(control) => (
-              <Combobox
-                {...control}
-                clearable={false}
-                value={filters.get('profileCompleted')}
-                onChange={(next) => filters.set({ profileCompleted: next })}
-                items={[
-                  { value: '', label: 'Any' },
-                  { value: 'true', label: 'Complete' },
-                  { value: 'false', label: 'Incomplete' },
-                ]}
-              />
-            )}
-          </Field>
-
-          <Field htmlFor="filter-no-access" label="Access">
-            {(control) => (
-              <Combobox
-                {...control}
-                clearable={false}
-                value={filters.get('noAccess')}
-                onChange={(next) => filters.set({ noAccess: next })}
-                items={[
-                  { value: '', label: 'Any' },
-                  { value: 'true', label: 'Nothing of their own' },
-                  { value: 'false', label: 'Has an enrolment or program' },
-                ]}
-              />
-            )}
-          </Field>
-
-          <Field htmlFor="filter-from" label="Enrolled from">
-            {(control) => (
-              <DatePicker
-                {...control}
-                max={todayISO()}
-                value={filters.get('joinedFrom')}
-                onChange={(next) => filters.set({ joinedFrom: next })}
-              />
-            )}
-          </Field>
-
-          <Field htmlFor="filter-to" label="Enrolled until">
-            {(control) => (
-              <DatePicker
-                {...control}
-                max={todayISO()}
-                value={filters.get('joinedTo')}
-                onChange={(next) => filters.set({ joinedTo: next })}
-              />
-            )}
-          </Field>
-
-          <div className="flex items-end">
-            <Button
-              variant="secondary"
-              className="w-full"
-              disabled={filters.activeCount(ALL_FILTERS) === 0}
-              onClick={() => filters.clear()}
-            >
-              <X aria-hidden />
-              Clear all filters
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      </FilterBar>
     </>
   );
 

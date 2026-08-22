@@ -11,14 +11,15 @@ import {
   ConfirmDialog,
   DataTable,
   DropdownMenuItem,
-  linkVariants,
+  FilterBar,
   PageHeader,
   Pagination,
-  plural,
   RowActions,
   SearchInput,
   TableFrame,
   TruncatedText,
+  linkVariants,
+  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -130,7 +131,7 @@ export function TestSeriesPage() {
   );
 
   const toolbar = (
-    <div className="mb-4 flex flex-wrap gap-3">
+    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
       <div className="min-w-56 flex-1">
         <SearchInput
           aria-label="Search test series"
@@ -158,7 +159,7 @@ export function TestSeriesPage() {
           onChange={(value) => filters.set({ examStageId: value })}
         />
       </div>
-    </div>
+    </FilterBar>
   );
 
   return (
