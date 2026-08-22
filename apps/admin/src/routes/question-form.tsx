@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -196,12 +197,14 @@ export function QuestionFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const editing = id !== undefined;
+  const existing = id !== undefined;
+  // A new question opens ready to type; one that already exists opens read-only.
+  const [isEditing, setIsEditing] = useState(!existing);
 
   const question = useQuery({
     queryKey: ['admin', 'question', id],
     queryFn: () => api.admin.questions.detail(id!),
-    enabled: editing,
+    enabled: existing,
   });
 
   const form = useForm<QuestionFormValues>({ defaultValues: emptyValues() });
@@ -214,9 +217,9 @@ export function QuestionFormPage() {
   }, [loaded, form]);
 
   const save = useMutation({
-    meta: { success: editing ? 'Question saved.' : 'Question added.' },
+    meta: { success: existing ? 'Question saved.' : 'Question added.' },
     mutationFn: (values: QuestionFormValues) =>
-      editing
+      existing
         ? api.admin.questions.update(id!, toDraft(values))
         : api.admin.questions.create(toDraft(values)),
     onSuccess: async () => {
@@ -236,7 +239,17 @@ export function QuestionFormPage() {
   const status = useWatch({ control: form.control, name: 'status' });
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
 
-  if (editing && question.isLoading) {
+  let title = 'New question';
+  if (existing) title = isEditing ? 'Edit question' : 'Question';
+
+  /** A new question has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
+  const cancel = () => {
+    if (!existing) return navigate(ROUTES.QUESTIONS);
+    form.reset();
+    setIsEditing(false);
+  };
+
+  if (existing && question.isLoading) {
     // The form has a known shape, so it is drawn and held rather than spun at.
     return (
       <div className="flex flex-col gap-4">
@@ -248,22 +261,33 @@ export function QuestionFormPage() {
 
   return (
     <FormPanel
+      disabled={!isEditing}
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
-        <>
-          <Button type="button" variant="outline" onClick={() => navigate(ROUTES.QUESTIONS)}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save question' : 'Add question'}
-          </Button>
-        </>
+        isEditing ? (
+          <>
+            <Button type="button" variant="outline" onClick={cancel}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={save.isPending}>
+              {existing ? 'Save question' : 'Add question'}
+            </Button>
+          </>
+        ) : undefined
       }
       header={
         <>
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-            title={editing ? 'Edit question' : 'New question'}
+            title={title}
+            action={
+              isEditing ? undefined : (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil aria-hidden />
+                  Edit question
+                </Button>
+              )
+            }
           />
 
           {banner ? (

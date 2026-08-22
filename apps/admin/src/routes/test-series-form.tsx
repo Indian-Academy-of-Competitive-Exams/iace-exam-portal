@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
@@ -101,16 +102,16 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
 
 export function TestSeriesFormPage() {
   const { id } = useParams();
-  const editing = id !== undefined;
+  const existing = id !== undefined;
 
   const series = useQuery({
     queryKey: seriesKey(id ?? ''),
     queryFn: () => api.admin.testSeries.detail(id!),
-    enabled: editing,
+    enabled: existing,
   });
 
   // The form has a known shape, so it is drawn and held rather than spun at.
-  if (editing && series.isLoading) {
+  if (existing && series.isLoading) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton variant="title" />
@@ -121,7 +122,7 @@ export function TestSeriesFormPage() {
     );
   }
 
-  if (editing && (series.error || !series.data)) {
+  if (existing && (series.error || !series.data)) {
     return <Alert variant="danger">Could not load this series.</Alert>;
   }
 
@@ -132,12 +133,14 @@ export function TestSeriesFormPage() {
 function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const editing = detail !== null;
+  const existing = detail !== null;
+  // A new series opens ready to type; one that already exists opens read-only.
+  const [isEditing, setIsEditing] = useState(!existing);
 
   const form = useForm<SeriesFormValues>({ defaultValues: valuesOf(detail) });
 
   const save = useMutation({
-    meta: { success: editing ? 'Series saved.' : 'Series created.', fields: SERVER_FIELDS },
+    meta: { success: existing ? 'Series saved.' : 'Series created.', fields: SERVER_FIELDS },
     mutationFn: (values: SeriesFormValues) =>
       detail
         ? api.admin.testSeries.update(detail.id, bodyOf(values))
@@ -147,7 +150,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       queryClient.setQueryData(seriesKey(saved.id), saved);
       // A new series is switched off at every branch, so the next step is always
       // the scheduling card — which only exists once it has been created.
-      navigate(editing ? ROUTES.TEST_SERIES : ROUTES.TEST_SERIES_DETAIL(saved.id));
+      navigate(existing ? ROUTES.TEST_SERIES : ROUTES.TEST_SERIES_DETAIL(saved.id));
     },
     onError: (error) => applyFieldErrors(error, form.setError, SERVER_FIELDS),
   });
@@ -158,6 +161,16 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
   const banner = bannerMessage(save.error, SERVER_FIELDS);
 
+  /** A new series has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
+  const cancel = () => {
+    if (!existing) return navigate(ROUTES.TEST_SERIES);
+    form.reset();
+    setIsEditing(false);
+  };
+
+  let title = 'New test series';
+  if (detail) title = isEditing ? `Edit ${detail.name}` : detail.name;
+
   // The series it waits on can sit outside the picker's first page, and an id is not a name.
   const prerequisite = useQuery({
     queryKey: seriesKey(prerequisiteSeriesId),
@@ -167,22 +180,33 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
   return (
     <FormPanel
+      disabled={!isEditing}
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
-        <>
-          <Button type="button" variant="outline" asChild>
-            <Link to={ROUTES.TEST_SERIES}>Cancel</Link>
-          </Button>
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save series' : 'Create series'}
-          </Button>
-        </>
+        isEditing ? (
+          <>
+            <Button type="button" variant="outline" onClick={cancel}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={save.isPending}>
+              {existing ? 'Save series' : 'Create series'}
+            </Button>
+          </>
+        ) : undefined
       }
       header={
         <>
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-            title={editing ? `Edit ${detail.name}` : 'New test series'}
+            title={title}
+            action={
+              isEditing ? undefined : (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil aria-hidden />
+                  Edit series
+                </Button>
+              )
+            }
           />
 
           {banner ? (
@@ -283,7 +307,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </div>
       </FormSection>
 
-      {editing ? <BranchSchedule series={detail} /> : null}
+      {existing ? <BranchSchedule series={detail} /> : null}
     </FormPanel>
   );
 }
