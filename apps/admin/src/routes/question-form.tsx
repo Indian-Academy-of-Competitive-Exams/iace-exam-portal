@@ -34,8 +34,6 @@ import {
   FormSection,
   Input,
   PageHeader,
-  RadioGroup,
-  RadioGroupItem,
   Skeleton,
   SkeletonParagraph,
   Tabs,
@@ -418,26 +416,24 @@ export function QuestionFormPage() {
         </Tabs>
 
         {type === QUESTION_TYPE.SINGLE_MCQ ? (
-          <FormField form={form} name="correctOption" label="Correct option">
-            {() => (
-              <RadioGroup
-                name="correctOption"
-                legend="Which option is correct"
-                hideLegend
-                value={correctOption}
-                onValueChange={(value) => form.setValue('correctOption', value)}
-                className="flex flex-wrap gap-4"
-              >
-                {Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => (
-                  <RadioGroupItem
-                    key={index + 1}
-                    value={String(index + 1)}
-                    label={`Option ${index + 1}`}
-                  />
-                ))}
-              </RadioGroup>
-            )}
-          </FormField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField form={form} name="correctOption" label="Correct option">
+              {(control) => (
+                <Combobox
+                  id={control.id}
+                  aria-describedby={control['aria-describedby']}
+                  aria-invalid={control['aria-invalid']}
+                  clearable={false}
+                  value={correctOption}
+                  onChange={(value) => form.setValue('correctOption', value)}
+                  items={Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => ({
+                    value: String(index + 1),
+                    label: `Option ${index + 1}`,
+                  }))}
+                />
+              )}
+            </FormField>
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField form={form} name="answerMode" label="How the answer is compared">
