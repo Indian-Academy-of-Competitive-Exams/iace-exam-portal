@@ -32,13 +32,11 @@ import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
-  Badge,
   Button,
   Card,
   Checkbox,
   Combobox,
   ConfirmDialog,
-  DataTable,
   FormActions,
   FormField,
   FormPanel,
@@ -49,7 +47,6 @@ import {
   Skeleton,
   SkeletonParagraph,
   StatRow,
-  type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import {
@@ -66,7 +63,7 @@ import {
   TIMER_TEMPLATE_HINTS,
   TIMER_TEMPLATE_LABELS,
 } from '../lib/constants';
-import { durationLabel, minutesFieldOf, secondsFromMinutes } from '../lib/duration';
+import { minutesFieldOf, secondsFromMinutes } from '../lib/duration';
 import { ExamStagePicker } from '../components/exam-picker';
 import { SubjectPicker } from '../components/taxonomy-picker';
 
@@ -304,17 +301,16 @@ const BANNER_HANDLED_ELSEWHERE = ['sections', 'durationSec'] as const;
 
 export function BaseConfigFormPage() {
   const { id } = useParams();
-  const editing = id !== undefined;
-  const [openForEditing, setOpenForEditing] = useState(false);
+  const existing = id !== undefined;
 
   const config = useQuery({
     queryKey: ['admin', 'base-config', id],
     queryFn: () => api.admin.baseConfigs.detail(id!),
-    enabled: editing,
+    enabled: existing,
   });
 
   // The form has a known shape, so it is drawn and held rather than spun at.
-  if (editing && config.isLoading) {
+  if (existing && config.isLoading) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton variant="title" />
@@ -328,90 +324,64 @@ export function BaseConfigFormPage() {
     );
   }
 
-  if (editing && (config.error || !config.data)) {
+  if (existing && (config.error || !config.data)) {
     return <Alert variant="danger">Could not load this config.</Alert>;
   }
 
-  // A saved config is READ first. Editing is a thing you choose, not the state you land in.
-  if (config.data && !openForEditing) {
-    return <ConfigView config={config.data} onEdit={() => setOpenForEditing(true)} />;
-  }
-
   // Mounted only once the saved config is here, so a refetch cannot throw away a half-typed edit.
-  return <ConfigEditor detail={config.data ?? null} onClose={() => setOpenForEditing(false)} />;
+  return <ConfigEditor detail={config.data ?? null} />;
 }
 
 // ============================================================================
-// Locked: the shape is frozen, so the screen states it rather than offering it
+// The editor
 // ============================================================================
 
-const yesNo = (on: boolean) => (on ? 'Yes' : 'No');
-
-function lockedSectionColumns(): DataTableColumn<BaseConfigSection>[] {
-  return [
-    {
-      key: 'name',
-      header: 'Section',
-      className: 'font-medium',
-      cell: (section) => (
-        <span className="inline-flex items-center gap-2">
-          {section.name}
-          {section.mandatory ? null : <Badge variant="neutral">Optional</Badge>}
-        </span>
-      ),
-    },
-    {
-      key: 'questions',
-      header: 'Questions',
-      numeric: true,
-      cell: (section) => section.questionCount,
-    },
-    {
-      key: 'marks',
-      header: 'Marks per question',
-      numeric: true,
-      cell: (section) => section.marksPerQuestion,
-    },
-    {
-      key: 'negative',
-      header: 'Negative',
-      numeric: true,
-      cell: (section) => section.negativeMarks,
-    },
-    {
-      key: 'time',
-      header: 'Time',
-      numeric: true,
-      cell: (section) => durationLabel(section.durationSec),
-    },
-    {
-      key: 'merit',
-      header: 'Merit or qualifying',
-      cell: (section) => (
-        <span className="text-muted-foreground">
-          {MERIT_TYPE_LABELS[section.meritOrQualifying]}
-          {section.qualifyingCutoff === null ? '' : ` — cutoff ${section.qualifyingCutoff}`}
-        </span>
-      ),
-    },
-  ];
+function configTitle(detail: BaseConfigDetail | null, isEditing: boolean): string {
+  if (!detail) return 'New base config';
+  return isEditing ? `Edit ${detail.name}` : detail.name;
 }
 
-/**
- * A locked config refuses every shape change, so no form is offered: filling one in and being
- * told no at the end is worse than being told first. Cloning is the way forward and is the
- * primary action here.
- */
-function ConfigView({
-  config,
+function stageMetaOf(detail: BaseConfigDetail | null): string | undefined {
+  if (!detail) return undefined;
+  return `${detail.examStage.exam.code} / ${detail.examStage.name} — version ${detail.version}`;
+}
+
+/** Locked is the one state with no way into the form, so it offers the clone instead. */
+function HeaderAction({
+  isEditing,
+  locked,
+  onClone,
   onEdit,
-}: Readonly<{ config: BaseConfigDetail; onEdit: () => void }>) {
+}: Readonly<{ isEditing: boolean; locked: boolean; onClone: () => void; onEdit: () => void }>) {
+  if (isEditing) return null;
+  if (locked) {
+    return (
+      <Button size="sm" onClick={onClone}>
+        <Copy aria-hidden />
+        Clone to change it
+      </Button>
+    );
+  }
+  return (
+    <Button size="sm" onClick={onEdit}>
+      <Pencil aria-hidden />
+      Edit
+    </Button>
+  );
+}
+
+function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const existing = detail !== null;
+  // A locked config can never be edited, so it is the one that never leaves read-only.
+  const locked = detail?.locked ?? false;
+  const [isEditing, setIsEditing] = useState(!existing);
   const [asking, setAsking] = useState(false);
 
   const clone = useMutation({
     meta: { success: 'Config cloned.' },
-    mutationFn: () => api.admin.baseConfigs.clone(config.id, {}),
+    mutationFn: () => api.admin.baseConfigs.clone(detail!.id, {}),
     onSuccess: (copy: BaseConfigDetail) => {
       setAsking(false);
       navigate(ROUTES.BASE_CONFIG(copy.id));
@@ -419,127 +389,12 @@ function ConfigView({
     onError: () => setAsking(false),
   });
 
-  return (
-    <FormPanel
-      footer={
-        <Button variant="outline" asChild>
-          <Link to={ROUTES.BASE_CONFIGS}>Back to configs</Link>
-        </Button>
-      }
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-          title={config.name}
-          meta={`${config.examStage.exam.code} / ${config.examStage.name} — version ${config.version}`}
-          action={
-            config.locked ? (
-              <Button size="sm" onClick={() => setAsking(true)}>
-                <Copy aria-hidden />
-                Clone to change it
-              </Button>
-            ) : (
-              <Button size="sm" onClick={onEdit}>
-                <Pencil aria-hidden />
-                Edit
-              </Button>
-            )
-          }
-        />
-      }
-    >
-      {config.locked ? (
-        <Alert variant="warning">
-          <span>
-            This config is locked — a test built from it has already been finalized, and a paper
-            somebody has sat cannot change shape underneath them. The duration, the timer, the
-            navigation, the languages and every section below are fixed for good, which is why there
-            is no form here to fill in. Clone it to carry all of this into a copy you can edit: the
-            copy starts unlocked and is not the stage&apos;s default until you promote it. The name,
-            and whether this one is still offered, can be changed from the configs list.
-          </span>
-        </Alert>
-      ) : null}
-
-      <FormSection title="How the paper runs">
-        <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-          <StatRow label="Timing pattern" value={TIMER_TEMPLATE_LABELS[config.timerTemplate]} />
-          <StatRow label="Navigation" value={NAVIGATION_POLICY_LABELS[config.navigation]} />
-          <StatRow label="Duration" value={durationLabel(config.durationSec)} />
-          <StatRow label="Test interface" value={TEST_UI_LABELS[config.defaultTestUi]} />
-          <StatRow
-            label="Languages"
-            value={config.languages.map((code) => LANGUAGE_CODE_LABELS[code]).join(', ') || '—'}
-          />
-          <StatRow label="Language mode" value={LANGUAGE_MODE_LABELS[config.languageMode]} />
-          <StatRow label="Shuffle questions" value={yesNo(config.shuffleQuestions)} />
-          <StatRow label="Shuffle options" value={yesNo(config.shuffleOptions)} />
-          <StatRow label="Calculator" value={yesNo(config.calculatorEnabled)} />
-          <StatRow
-            label="Optional sections"
-            value={config.optionalSectionCount ?? 'None — every section counts'}
-          />
-          <StatRow label="Tests built from it" value={config.testCount} />
-        </div>
-      </FormSection>
-
-      {config.modules.length > 0 ? (
-        <FormSection title="Sessions">
-          <div className="flex flex-col gap-2">
-            {config.modules.map((module) => (
-              <StatRow
-                key={module.id}
-                label={module.name}
-                value={durationLabel(module.durationSec)}
-              />
-            ))}
-          </div>
-        </FormSection>
-      ) : null}
-
-      <FormSection
-        title="Sections"
-        meta={`${plural(config.sections.length, 'section')}, ${plural(config.totalQuestions, 'question')}, ${config.totalMarks} marks`}
-      >
-        <DataTable
-          columns={lockedSectionColumns()}
-          rows={config.sections}
-          rowKey={(section) => section.id}
-          isLoading={false}
-          empty="This config has no sections."
-        />
-      </FormSection>
-
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={setAsking}
-        loading={clone.isPending}
-        title={`Clone ${config.name}?`}
-        description={`The copy carries every setting and all ${plural(config.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${config.name} is left exactly as it is. You will land on the copy.`}
-        confirmLabel="Clone config"
-        onConfirm={() => clone.mutate()}
-      />
-    </FormPanel>
-  );
-}
-
-// ============================================================================
-// The editor
-// ============================================================================
-
-function ConfigEditor({
-  detail,
-  onClose,
-}: Readonly<{ detail: BaseConfigDetail | null; onClose: () => void }>) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const editing = detail !== null;
-
   const form = useForm<ConfigFormValues>({ defaultValues: valuesOf(detail) });
   const sections = useFieldArray({ control: form.control, name: 'sections' });
   const modules = useFieldArray({ control: form.control, name: 'modules' });
 
   const save = useMutation({
-    meta: { success: editing ? 'Config saved.' : 'Config created.' },
+    meta: { success: existing ? 'Config saved.' : 'Config created.' },
     mutationFn: (values: ConfigFormValues) =>
       detail
         ? api.admin.baseConfigs.update(detail.id, {
@@ -570,6 +425,13 @@ function ConfigEditor({
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
   const watchedModules = useWatch({ control: form.control, name: 'modules' }) ?? [];
 
+  /** A new config has nowhere to fall back to, so Cancel leaves; a saved one returns to itself. */
+  const cancel = () => {
+    if (!existing) return navigate(ROUTES.BASE_CONFIGS);
+    form.reset();
+    setIsEditing(false);
+  };
+
   const issues = sectionIssuesOf(save.error);
   const banner = bannerMessage(save.error, [
     ...serverFields(watchedSections.length).map(String),
@@ -578,28 +440,38 @@ function ConfigEditor({
 
   return (
     <FormPanel
+      disabled={!isEditing}
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
-        <>
-          {editing ? (
-            <Button type="button" variant="outline" onClick={onClose}>
+        isEditing ? (
+          <>
+            <Button type="button" variant="outline" onClick={cancel}>
               Cancel
             </Button>
-          ) : (
-            <Button type="button" variant="outline" asChild>
-              <Link to={ROUTES.BASE_CONFIGS}>Cancel</Link>
+            <Button type="submit" loading={save.isPending}>
+              {existing ? 'Save config' : 'Create config'}
             </Button>
-          )}
-          <Button type="submit" loading={save.isPending}>
-            {editing ? 'Save config' : 'Create config'}
+          </>
+        ) : (
+          <Button variant="outline" asChild>
+            <Link to={ROUTES.BASE_CONFIGS}>Back to configs</Link>
           </Button>
-        </>
+        )
       }
       header={
         <>
           <PageHeader
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-            title={editing ? `Edit ${detail.name}` : 'New base config'}
+            title={configTitle(detail, isEditing)}
+            meta={stageMetaOf(detail)}
+            action={
+              <HeaderAction
+                isEditing={isEditing}
+                locked={locked}
+                onClone={() => setAsking(true)}
+                onEdit={() => setIsEditing(true)}
+              />
+            }
           />
 
           {banner ? (
@@ -610,9 +482,21 @@ function ConfigEditor({
         </>
       }
     >
+      {locked ? (
+        <Alert variant="warning">
+          <span>
+            This config is locked — a test built from it has already been finalized, and a paper
+            somebody has sat cannot change shape underneath them. Every field below is fixed for
+            good. Clone it to carry all of this into a copy you can edit: the copy starts unlocked
+            and is not the stage&apos;s default until you promote it. The name, and whether this one
+            is still offered, can be changed from the configs list.
+          </span>
+        </Alert>
+      ) : null}
+
       <FormSection title="Which stage this is for">
         <div className="grid gap-4 sm:grid-cols-2">
-          {editing ? (
+          {existing ? (
             <ReadOnlyField
               label="Stage"
               value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
@@ -638,7 +522,7 @@ function ConfigEditor({
 
           <ToggleField form={form} name="isDefault" label="The stage's default pattern" />
 
-          {editing ? (
+          {existing ? (
             <ToggleField
               form={form}
               name="isActive"
@@ -841,6 +725,18 @@ function ConfigEditor({
       </FormSection>
 
       <Totals sections={watchedSections} />
+
+      {detail ? (
+        <ConfirmDialog
+          open={asking}
+          onOpenChange={setAsking}
+          loading={clone.isPending}
+          title={`Clone ${detail.name}?`}
+          description={`The copy carries every setting and all ${plural(detail.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${detail.name} is left exactly as it is. You will land on the copy.`}
+          confirmLabel="Clone config"
+          onConfirm={() => clone.mutate()}
+        />
+      ) : null}
     </FormPanel>
   );
 }
