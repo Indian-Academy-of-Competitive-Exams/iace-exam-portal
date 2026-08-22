@@ -196,5 +196,7 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 - `docs/01-architecture-and-plan.md` — architecture & roadmap.
 - `docs/02-mocktest-feature-spec.md` — the mock‑test feature.
 - `docs/03-shared-architecture.md` — what's shared, module boundaries, conventions.
-- `docs/04-students-groups-access-model.md` — students/groups/branches/access.
+- `docs/archive/04-students-groups-access-model.md` — the students/branches/access design as first
+  approved. **Superseded**: it models access through groups, and the schema has none. Kept for the
+  reasoning, not as current truth — `prisma/schema.prisma` wins.
 - `prisma/schema.prisma` — the data model (source of truth).

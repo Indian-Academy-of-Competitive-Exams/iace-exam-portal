@@ -1,8 +1,8 @@
 # Audit Log — Design
 
 **Date:** 2026-08-19
-**Status:** implemented. See `docs/superpowers/plans/2026-08-19-audit-log.md` for the plan and the git history from `88c89ec` for the work. Sections below marked **As built** record where the shipped code deliberately differs from the original design.
-**Supersedes nothing.** Implements `docs/04-students-groups-access-model.md` §8 and resolves the retention policy that section leaves open.
+**Status:** implemented — see the git history from `88c89ec`. Sections below marked **As built** record where the shipped code deliberately differs from the original design.
+**Supersedes nothing.** Implements `docs/archive/04-students-groups-access-model.md` §8 and resolves the retention policy that section leaves open.
 
 ## Goal
 

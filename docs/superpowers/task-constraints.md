@@ -30,8 +30,7 @@ No `Co-Authored-By`, no tool attribution. Never `git push`, no branches/PRs — 
 branch, and if HEAD is ever on `prod` or `test`, stop and ask.
 
 Never `git add -A` blind — stage whole files, prettier first, `git diff --stat` clean. A partly
-staged file makes lint-staged stash the rest, and its restore has corrupted `.gitignore` and staged
-ignored files.
+staged file makes lint-staged stash the rest, and its restore has corrupted tracked files before.
 
 Never rewrite published history: `--amend`, `rebase`, `reset --hard` only on commits made this
 session. Node 22 in the committing shell (`source ~/.nvm/nvm.sh && nvm use 22`).
@@ -62,10 +61,9 @@ Never break these:
 **The institute runs on IST. Storage is UTC; every USE of a date is `Asia/Kolkata`.**
 
 An instant (`createdAt`, `startedAt`, `endsAt`) stays `timestamptz` and serialises with
-`.toISOString()` — correct, and needs no helper. A CIVIL date (what day is it, which day did this
-fall on, when does a day start and end) is never derived with `getUTC*` or
-`toISOString().slice(0, 10)` on a stored instant: UTC is 5.5 hours behind and gets the answer wrong
-every night between midnight and 05:30.
+`.toISOString()` — correct, no helper needed. A CIVIL date (what day is it, which day did this fall
+on, when does a day start and end) is never derived with `getUTC*` or `toISOString().slice(0, 10)`
+on a stored instant: UTC is 5.5 hours behind, so it is wrong every night between midnight and 05:30.
 
 **Never write a new date helper.** There is one of each, and a second is a bug waiting for the day
 the two disagree:
@@ -177,10 +175,9 @@ a gap to apologise for.
 
 Never assert an implementation the types or the eye already cover. A test that `readFileSync`s a
 component to look for a Tailwind class, greps `apps/` to prove nobody hand-rolled a widget, or pins
-a string in `tokens.css` is not a test — it is a lint rule wearing a test's clothes. It fails on
-harmless refactors and passes while the screen is broken. Fifteen of these were deleted at once; do
-not write the sixteenth. If a rule is worth enforcing mechanically, it belongs in ESLint or in the
-type system.
+a string in `tokens.css` is not a test — it is a lint rule wearing a test's clothes: it fails on
+harmless refactors and passes while the screen is broken. A rule worth enforcing mechanically
+belongs in ESLint or the type system.
 
 </not-a-test>
 

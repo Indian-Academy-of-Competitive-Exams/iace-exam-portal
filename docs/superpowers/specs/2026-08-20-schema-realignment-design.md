@@ -1,7 +1,7 @@
 # Schema realignment + no-groups migration — design spec
 
 > **Binding.** This spec plus `prisma/schema.prisma` are the source of every
-> decision in the paired plan (`docs/superpowers/plans/2026-08-20-schema-realignment.md`).
+> decision in the paired plan, which landed and was removed with the rest of the spent task lists.
 > On any data-model conflict, the generated `prisma/schema.prisma` wins.
 
 ## Why
