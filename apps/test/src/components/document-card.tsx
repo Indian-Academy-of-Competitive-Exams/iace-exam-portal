@@ -11,10 +11,7 @@ import { Button, cn } from '@iace/ui';
 import { api } from '../lib/api';
 import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../lib/constants';
 
-/**
- * One uploadable thing. A fixed column — preview, name, button, rules — so three
- * side by side line up whatever each holds. The preview IS the link.
- */
+/** One uploadable thing, at a fixed width so it never grows with the page. The preview IS the link. */
 export function DocumentCard({
   kind,
   label,
@@ -39,7 +36,7 @@ export function DocumentCard({
   const rules = `${accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ')} · up to ${megabytes}MB`;
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+    <div className="flex w-56 flex-col gap-3 rounded-md border border-border p-3">
       <Preview url={url} label={label} />
 
       <div className="flex items-center justify-between gap-2">

@@ -248,7 +248,7 @@ export function ProfilePage() {
           </FormSection>
 
           <FormSection title="Your photo">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-wrap gap-4">
               <DocumentCard
                 kind="photo"
                 label="Passport photo"
