@@ -53,8 +53,7 @@ export const ROUTES = {
   QUESTION_NEW: '/questions/new',
   QUESTION_APPROVALS: '/questions/approvals',
   IMPORT_QUESTIONS: '/questions/import',
-  SUBJECTS: '/questions/subjects',
-  TOPICS: '/questions/topics',
+  TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
   QUESTION_PATTERN: '/questions/:id',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
@@ -240,8 +239,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.QUESTIONS, label: 'All questions', icon: BookOpen },
       { to: ROUTES.QUESTION_APPROVALS, label: 'Draft questions', icon: CheckCheck },
       { to: ROUTES.IMPORT_QUESTIONS, label: 'Import questions', icon: Upload },
-      { to: ROUTES.SUBJECTS, label: 'Subjects', icon: FolderTree },
-      { to: ROUTES.TOPICS, label: 'Topics', icon: FolderTree },
+      { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
   {

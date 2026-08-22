@@ -14,7 +14,7 @@ import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
 import { QuestionApprovalsPage } from './routes/question-approvals';
 import { ImportQuestionsPage } from './routes/import-questions';
-import { SubjectsPage, TopicsPage } from './routes/taxonomy';
+import { TaxonomyPage } from './routes/taxonomy';
 import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
 import { TestSeriesPage } from './routes/test-series';
@@ -55,8 +55,7 @@ export function App() {
           <Route path={ROUTES.QUESTION_NEW} element={<QuestionFormPage />} />
           <Route path={ROUTES.QUESTION_APPROVALS} element={<QuestionApprovalsPage />} />
           <Route path={ROUTES.IMPORT_QUESTIONS} element={<ImportQuestionsPage />} />
-          <Route path={ROUTES.SUBJECTS} element={<SubjectsPage />} />
-          <Route path={ROUTES.TOPICS} element={<TopicsPage />} />
+          <Route path={ROUTES.TAXONOMY} element={<TaxonomyPage />} />
           <Route path={ROUTES.QUESTION_PATTERN} element={<QuestionFormPage />} />
           <Route path={ROUTES.BASE_CONFIGS} element={<BaseConfigsPage />} />
           {/* Before the :id route, or "new" would be read as a config id. */}

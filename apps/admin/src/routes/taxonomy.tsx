@@ -25,11 +25,15 @@ import {
   FormField,
   Input,
   linkVariants,
+  PageFrame,
   PageHeader,
   Pagination,
   RowActions,
   SearchInput,
-  TableFrame,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
@@ -49,9 +53,9 @@ import { SubjectPicker } from '../components/taxonomy-picker';
 // Subjects
 // ============================================================================
 
-/** The topics list, already filtered to one subject — the child list reached from its parent. */
+/** The topics tab, already filtered to one subject — the child list reached from its parent. */
 function topicsOf(subjectId: string): string {
-  return `${ROUTES.TOPICS}?subjectId=${subjectId}`;
+  return `${ROUTES.TAXONOMY}?level=${LEVELS.TOPICS}&subjectId=${subjectId}`;
 }
 
 function subjectColumns(): DataTableColumn<Subject>[] {
@@ -99,11 +103,76 @@ function subjectColumns(): DataTableColumn<Subject>[] {
   ];
 }
 
-export function SubjectsPage() {
+/** Two levels of one taxonomy, so one nav row and a tab each rather than two menu entries. */
+const LEVELS = {
+  SUBJECTS: 'subjects',
+  TOPICS: 'topics',
+} as const;
+
+export function TaxonomyPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [creating, setCreating] = useState(false);
   const queryClient = useQueryClient();
+  const filters = useFilters<'level' | 'q' | 'subjectId'>();
+  const level = filters.get('level') || LEVELS.SUBJECTS;
+  const onSubjects = level === LEVELS.SUBJECTS;
+
+  const header = (
+    <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+      title="Subjects and topics"
+      action={
+        canWrite ? (
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
+            {onSubjects ? 'New subject' : 'New topic'}
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+
+  const done = (key: string) => () => {
+    setCreating(false);
+    void queryClient.invalidateQueries({ queryKey: ['admin', key] });
+  };
+
+  return (
+    <PageFrame header={header}>
+      {/* Filters clear with the tab: the other list's would narrow one nobody set them on. */}
+      <Tabs
+        value={level}
+        onValueChange={(value) => filters.set({ level: value, q: '', subjectId: '' })}
+      >
+        <TabsList>
+          <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
+          <TabsTrigger value={LEVELS.TOPICS}>Topics</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={LEVELS.SUBJECTS}>
+          <SubjectsList />
+        </TabsContent>
+        <TabsContent value={LEVELS.TOPICS}>
+          <TopicsList />
+        </TabsContent>
+      </Tabs>
+
+      {onSubjects ? (
+        <NewSubjectDialog open={creating} onOpenChange={setCreating} onDone={done('subjects')} />
+      ) : (
+        <NewTopicDialog
+          subjectId={filters.get('subjectId')}
+          open={creating}
+          onOpenChange={setCreating}
+          onDone={done('topics')}
+        />
+      )}
+    </PageFrame>
+  );
+}
+
+function SubjectsList() {
   const filters = useFilters<'q'>();
   const columns = useMemo(() => subjectColumns(), []);
 
@@ -113,44 +182,18 @@ export function SubjectsPage() {
     fetchPage: (params) => api.admin.taxonomy.listSubjects(params),
   });
 
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Subjects"
-      action={
-        canWrite ? (
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus aria-hidden />
-            New subject
-          </Button>
-        ) : undefined
-      }
-    />
-  );
-
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(['q'])} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search subjects"
-          placeholder="Search subjects"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      <NewSubjectDialog
-        open={creating}
-        onOpenChange={setCreating}
-        onDone={() => {
-          setCreating(false);
-          void queryClient.invalidateQueries({ queryKey: ['admin', 'subjects'] });
-        }}
-      />
+    <div className="flex flex-col gap-4 pt-4">
+      <FilterBar activeCount={filters.activeCount(['q'])} onClear={() => filters.clear()}>
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search subjects"
+            placeholder="Search subjects"
+            value={filters.get('q')}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
+      </FilterBar>
 
       <DataTable
         columns={columns}
@@ -160,7 +203,7 @@ export function SubjectsPage() {
         empty="No subjects yet. Add the first one — questions are filed under it."
         footer={subjects.hasLoaded ? <Pagination {...subjects.pagination} /> : null}
       />
-    </TableFrame>
+    </div>
   );
 }
 
@@ -227,11 +270,7 @@ function topicColumns(): DataTableColumn<Topic>[] {
   ];
 }
 
-export function TopicsPage() {
-  const { can } = useAuth();
-  const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [creating, setCreating] = useState(false);
-  const queryClient = useQueryClient();
+function TopicsList() {
   const filters = useFilters<'q' | 'subjectId'>();
   const subjectId = filters.get('subjectId');
   const columns = useMemo(() => topicColumns(), []);
@@ -242,54 +281,27 @@ export function TopicsPage() {
     fetchPage: (params) => api.admin.taxonomy.listTopics(params),
   });
 
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Topics"
-      action={
-        canWrite ? (
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus aria-hidden />
-            New topic
-          </Button>
-        ) : undefined
-      }
-    />
-  );
-
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(TOPIC_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search topics"
-          placeholder="Search topics"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-
-      <div className="w-56">
-        <SubjectPicker
-          aria-label="Filter by subject"
-          value={subjectId}
-          clearable
-          onChange={(value) => filters.set({ subjectId: value })}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      <NewTopicDialog
-        subjectId={subjectId}
-        open={creating}
-        onOpenChange={setCreating}
-        onDone={() => {
-          setCreating(false);
-          void queryClient.invalidateQueries({ queryKey: ['admin', 'topics'] });
-        }}
-      />
+    <div className="flex flex-col gap-4 pt-4">
+      <FilterBar activeCount={filters.activeCount(TOPIC_FILTERS)} onClear={() => filters.clear()}>
+        <div className="min-w-56 flex-1">
+          <SearchInput
+            aria-label="Search topics"
+            placeholder="Search topics"
+            value={filters.get('q')}
+            onChange={(q) => filters.set({ q })}
+          />
+        </div>
+
+        <div className="w-56">
+          <SubjectPicker
+            aria-label="Filter by subject"
+            value={subjectId}
+            clearable
+            onChange={(value) => filters.set({ subjectId: value })}
+          />
+        </div>
+      </FilterBar>
 
       <DataTable
         columns={columns}
@@ -299,7 +311,7 @@ export function TopicsPage() {
         empty="No topics here yet."
         footer={topics.hasLoaded ? <Pagination {...topics.pagination} /> : null}
       />
-    </TableFrame>
+    </div>
   );
 }
 
