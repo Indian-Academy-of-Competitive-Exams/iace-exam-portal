@@ -10,7 +10,7 @@ import {
 } from '@iace/contracts';
 import { AUDITED_QUESTION_FIELDS, QuestionsService } from '../src/questions/questions.service';
 import { AuditContext } from '../src/audit';
-import { FakeQuestionBankPrisma, makeSubject, makeTopic } from './support/fakes';
+import { FakeQuestionBankPrisma, FakeStorage, makeSubject, makeTopic } from './support/fakes';
 
 describe('the question audit diff', () => {
   it('covers the columns a question edit can change', () => {
@@ -101,7 +101,7 @@ function build() {
   return {
     prisma,
     auditContext,
-    questions: new QuestionsService(prisma.asService(), auditContext),
+    questions: new QuestionsService(prisma.asService(), auditContext, new FakeStorage() as never),
   };
 }
 

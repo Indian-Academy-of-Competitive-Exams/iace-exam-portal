@@ -271,7 +271,10 @@ export class FakeMessageSender implements MessageSender {
  * In-memory `StorageService`, typed against the two methods it stands in for so a signature
  * drift here fails the build rather than surfacing as a confusing test failure.
  */
-export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize' | 'read'> {
+export class FakeStorage implements Pick<
+  StorageService,
+  'upload' | 'objectSize' | 'read' | 'createDownloadUrl'
+> {
   objects = new Map<string, Buffer>();
   failNextUpload = false;
   private readonly reportedSizes = new Map<string, number>();
@@ -297,6 +300,11 @@ export class FakeStorage implements Pick<StorageService, 'upload' | 'objectSize'
     const object = this.objects.get(key);
     if (!object) return Promise.reject(new Error(`no object ${key}`));
     return Promise.resolve(object);
+  }
+
+  /** The ttl is in the string so a test can assert one was asked for, not just that a url came back. */
+  createDownloadUrl(key: string, expiresInSec = 900): Promise<string> {
+    return Promise.resolve(`memory://${key}?ttl=${expiresInSec}`);
   }
 }
 

@@ -19,6 +19,8 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { checkQuestionImage, questionImageKey } from './question-images';
 import { AuditContext } from '../audit';
 import { buildContent, languagesIn, stemPreviewOf, validateQuestion } from './question-core';
 import { questionOrderBy, questionWhere } from './question-query';
@@ -49,13 +51,27 @@ export const AUDITED_QUESTION_FIELDS = [
   'answerKey',
 ] as const;
 
+/** Long enough to survive an authoring session; content stores the key, so nothing outlives it. */
+const QUESTION_IMAGE_URL_TTL_SEC = 3600;
+
 /** Owns `Question` and `QuestionVersion` (docs/03 §5) — the only module that writes them. */
 @Injectable()
 export class QuestionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
+    private readonly storage: StorageService,
   ) {}
+
+  /** Hands back the KEY that content quotes, plus a url that only shows what was just picked. */
+  async saveImage(file: { buffer: Buffer; size: number; mimetype: string } | undefined) {
+    checkQuestionImage(file);
+
+    const key = questionImageKey(file.mimetype);
+    await this.storage.upload(key, file.buffer, file.mimetype);
+
+    return { key, url: await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC) };
+  }
 
   async list(query: QuestionListQuery): Promise<Paginated<QuestionSummary>> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;

@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -6,11 +19,13 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   questionDraftSchema,
+  QUESTION_IMAGE_FILE_FIELD,
   questionListQuerySchema,
   setQuestionStatusSchema,
   type Paginated,
   type QuestionDetail,
   type QuestionDraft,
+  type QuestionImage,
   type QuestionListQuery,
   type QuestionSummary,
   type SetQuestionStatusBody,
@@ -19,6 +34,13 @@ import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '..
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { QuestionsService } from './questions.service';
+
+/** What multer hands back; typed here rather than pulling Express types into a controller. */
+interface UploadedFileLike {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+}
 
 /** The question bank itself. Every route is gated on QUESTION_MANAGEMENT. */
 @Controller('admin/questions')
@@ -32,6 +54,16 @@ export class QuestionsController {
     @Query(new ZodQuery(questionListQuerySchema)) query: QuestionListQuery,
   ): Promise<Paginated<QuestionSummary>> {
     return this.questions.list(query);
+  }
+
+  /** Before `:id`, or "images" is read as a question id. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post('images')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(QUESTION_IMAGE_FILE_FIELD))
+  uploadImage(@UploadedFile() file?: UploadedFileLike): Promise<QuestionImage> {
+    return this.questions.saveImage(file);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)

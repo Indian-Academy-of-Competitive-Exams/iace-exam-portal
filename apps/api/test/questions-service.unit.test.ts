@@ -15,7 +15,13 @@ import {
 import { QuestionsService } from '../src/questions/questions.service';
 import { TaxonomyService } from '../src/questions/taxonomy.service';
 import { AuditContext } from '../src/audit';
-import { FakeQuestionBankPrisma, makeQuestion, makeSubject, makeTopic } from './support/fakes';
+import {
+  FakeQuestionBankPrisma,
+  FakeStorage,
+  makeQuestion,
+  makeSubject,
+  makeTopic,
+} from './support/fakes';
 
 const ADMIN = 'adm_1';
 
@@ -32,7 +38,11 @@ function build(questions = [] as ReturnType<typeof makeQuestion>[]) {
 
   return {
     prisma,
-    questions: new QuestionsService(prisma.asService(), new AuditContext()),
+    questions: new QuestionsService(
+      prisma.asService(),
+      new AuditContext(),
+      new FakeStorage() as never,
+    ),
     taxonomy: new TaxonomyService(prisma.asService(), new AuditContext()),
   };
 }
@@ -320,5 +330,41 @@ describe('QuestionsService.list', () => {
     assert.equal(page.items[0]?.stemPreview, 'What is 20% of 150?');
     assert.deepEqual(page.items[0]?.languages, ['en', 'hi']);
     assert.equal(page.items[0]?.type, QUESTION_TYPE.SINGLE_MCQ);
+  });
+});
+
+describe('saveImage', () => {
+  it('stores the bytes and hands back the key, plus a url to show it with', async () => {
+    const storage = new FakeStorage();
+    const questions = new QuestionsService(
+      build().prisma.asService(),
+      new AuditContext(),
+      storage as never,
+    );
+
+    const saved = await questions.saveImage({
+      buffer: Buffer.from('png-bytes'),
+      size: 9,
+      mimetype: 'image/png',
+    });
+
+    assert.ok(saved.key.startsWith('questions/images/'));
+    assert.equal(storage.objects.get(saved.key)?.toString(), 'png-bytes');
+    assert.ok(saved.url.includes(saved.key), 'the url has to point at what was just stored');
+  });
+
+  /** Content quotes the key; a rejected upload must not leave one behind for it to quote. */
+  it('refuses before it uploads, so a bad file leaves nothing in the bucket', async () => {
+    const storage = new FakeStorage();
+    const questions = new QuestionsService(
+      build().prisma.asService(),
+      new AuditContext(),
+      storage as never,
+    );
+
+    await assert.rejects(() =>
+      questions.saveImage({ buffer: Buffer.from('<svg/>'), size: 6, mimetype: 'image/svg+xml' }),
+    );
+    assert.equal(storage.objects.size, 0);
   });
 });

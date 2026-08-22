@@ -137,6 +137,8 @@ import {
 
 import {
   ADMIN_QUESTION_ROUTES,
+  QUESTION_IMAGE_FILE_FIELD,
+  questionImageSchema,
   ADMIN_TAXONOMY_ROUTES,
   QUESTION_IMPORT_ROUTES,
   questionDetailSchema,
@@ -148,6 +150,7 @@ import {
   type CreateSubjectInput,
   type CreateTopicInput,
   type QuestionDetail,
+  type QuestionImage,
   type QuestionDraftInput,
   type QuestionImportPlan,
   type QuestionImportResult,
@@ -840,6 +843,17 @@ export function createApiClient(options: ApiClientOptions) {
             body: input,
             schema: questionDetailSchema,
           }),
+
+        /** Content stores the `key`; the `url` is for showing the image that was just chosen. */
+        uploadImage: (file: File): Promise<QuestionImage> => {
+          const form = new FormData();
+          form.append(QUESTION_IMAGE_FILE_FIELD, file);
+          return request(ADMIN_QUESTION_ROUTES.uploadImage, {
+            method: 'POST',
+            body: form,
+            schema: questionImageSchema,
+          });
+        },
       },
 
       imports: {

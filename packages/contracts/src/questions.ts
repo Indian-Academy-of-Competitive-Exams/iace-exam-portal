@@ -628,7 +628,33 @@ export const ADMIN_QUESTION_ROUTES = {
   get: (id: string) => `/admin/questions/${id}`,
   update: (id: string) => `/admin/questions/${id}`,
   setStatus: (id: string) => `/admin/questions/${id}/status`,
+  uploadImage: '/admin/questions/images',
 } as const;
+
+// ============================================================================
+// Question images
+// ============================================================================
+
+/** The multipart field the image arrives in. */
+export const QUESTION_IMAGE_FILE_FIELD = 'file';
+
+/** A diagram, not a photograph — 2MB is generous for the pictorial-reasoning art this holds. */
+export const QUESTION_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+
+/** SVG is absent on purpose: it is a script container, and this renders in the student's browser. */
+export const QUESTION_IMAGE_ACCEPTED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const;
+
+/** Content stores the KEY, never the url: a signed url would rot inside every question quoting it. */
+export const questionImageSchema = z.object({
+  key: z.string(),
+  url: z.string(),
+});
+export type QuestionImage = z.infer<typeof questionImageSchema>;
 
 /**
  * Under /imports, which is the one path with the larger body limit — see
