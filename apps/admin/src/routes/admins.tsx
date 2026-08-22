@@ -1,11 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
-  PAGE_SIZE_OPTIONS,
   type Admin,
   type CreateAdminInput,
   type FeatureKey,
@@ -16,20 +15,19 @@ import {
   Button,
   Checkbox,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
-import { applyFieldErrors, usePageSize } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { ADMINS_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
@@ -92,14 +90,14 @@ function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
 }
 
 export function AdminsPage() {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = usePageSize();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
-  const admins = useQuery({
-    queryKey: [...ADMINS_QUERY_KEY, page, pageSize],
-    queryFn: () => api.admin.admins.list({ page, pageSize }),
+  const admins = useListScreen({
+    queryKey: ADMINS_QUERY_KEY,
+    filters: [],
+    toQuery: () => ({}),
+    fetchPage: (params) => api.admin.admins.list(params),
   });
 
   const refresh = useCallback(
@@ -134,24 +132,7 @@ export function AdminsPage() {
             refresh();
           }}
         />
-        <DataTable
-          columns={columns}
-          rows={admins.data?.items ?? []}
-          rowKey={(a) => a.id}
-          isLoading={admins.isPending}
-          empty="No admins yet."
-          // As the footer, not a sibling: it stays put under the scrolling body.
-          footer={
-            <Pagination
-              page={page}
-              pageSize={pageSize}
-              total={admins.data?.total ?? 0}
-              onPageChange={setPage}
-              onPageSizeChange={setPageSize}
-              pageSizeOptions={PAGE_SIZE_OPTIONS}
-            />
-          }
-        />
+        <ListView list={admins} columns={columns} rowKey={(a) => a.id} empty="No admins yet." />
       </TableFrame>
     </SuperAdminOnly>
   );

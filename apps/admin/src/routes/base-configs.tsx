@@ -8,35 +8,45 @@ import {
   type BaseConfig,
   type BaseConfigDetail,
 } from '@iace/contracts';
-import { useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
-  FilterBar,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
-  SearchInput,
   TableFrame,
   TruncatedText,
   linkVariants,
   plural,
   type DataTableColumn,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
-import { useFilters } from '../lib/use-filters';
 import { ExamPicker } from '../components/exam-picker';
 
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = ['q', 'examId'] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
+const CONFIG_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search base configurations',
+    placeholder: 'Search configurations by name',
+    primary: true,
+  },
+  {
+    key: 'examId',
+    kind: 'custom',
+    label: 'Filter by exam',
+    primary: true,
+    width: 'w-56',
+    render: (control: ListFilterControl) => <ExamPicker {...control} clearable />,
+  },
+] as const;
 
 const CONFIGS_KEY = ['admin', 'base-configs'] as const;
 
@@ -103,18 +113,19 @@ export function BaseConfigsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
-  const filters = useFilters<FilterKey>();
-  const examId = filters.get('examId');
-
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: CONFIGS_KEY });
   }, [queryClient]);
 
   const columns = useMemo(() => configColumns(canWrite, refresh), [canWrite, refresh]);
 
-  const configs = useListQuery({
+  const configs = useListScreen({
     queryKey: CONFIGS_KEY,
-    filters: { q: filters.get('q') || undefined, examId: examId || undefined },
+    filters: CONFIG_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      examId: values.examId || undefined,
+    }),
     fetchPage: (params) => api.admin.baseConfigs.list(params),
   });
 
@@ -135,42 +146,15 @@ export function BaseConfigsPage() {
     />
   );
 
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search base configurations"
-          placeholder="Search configurations by name"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-      <div className="w-56">
-        <ExamPicker
-          aria-label="Filter by exam"
-          value={examId}
-          clearable
-          onChange={(value) => filters.set({ examId: value })}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      {/* "None match" and "there are none" are different facts, and telling an
-          admin the wrong one sends them looking in the wrong place. */}
-      <DataTable
+    <TableFrame header={header}>
+      <ListView
+        list={configs}
+        filters={CONFIG_FILTERS}
         columns={columns}
-        rows={configs.items}
         rowKey={(config) => config.id}
-        isLoading={configs.isLoading}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No configurations match those filters.'
-            : 'No base configurations yet. Build the first one — every test hangs its shape off one.'
-        }
-        footer={configs.hasLoaded ? <Pagination {...configs.pagination} /> : null}
+        empty="No base configurations yet. Build the first one — every test hangs its shape off one."
+        emptyFiltered="No configurations match those filters."
       />
     </TableFrame>
   );

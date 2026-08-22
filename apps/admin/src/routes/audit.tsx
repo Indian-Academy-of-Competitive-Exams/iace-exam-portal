@@ -17,18 +17,18 @@ import {
   Alert,
   Badge,
   Combobox,
-  DataTable,
   DropdownMenuItem,
-  FilterBar,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
+  type ListFilter,
+  type ListFilterControl,
 } from '@iace/ui';
-import { useInfinitePages, useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { useInfinitePages } from '@iace/app-kit';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
@@ -39,12 +39,7 @@ import {
   IMPORT_SOURCE_LABELS,
   NAV_ITEMS,
 } from '../lib/constants';
-import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
-
-/** The Activity screen's filters — what the empty-state wording and the filter count read. */
-const ROW_ACTION_FILTERS = ['feature', 'action', 'actorId'] as const;
-type ActivityFilterKey = (typeof ROW_ACTION_FILTERS)[number];
 
 const IMPORT_STATUS_LABELS: Readonly<Record<ImportLogStatus, string>> = {
   [IMPORT_LOG_STATUS.PREVIEWED]: 'Previewed',
@@ -182,11 +177,6 @@ function ImportFileAction({ run }: Readonly<{ run: ImportLogSummary }>) {
 export function AuditActivityPage() {
   const { identity } = useAuth();
   const isSuperAdmin = identity?.isSuperAdmin ?? false;
-  const filters = useFilters<ActivityFilterKey>();
-
-  const feature = filters.get('feature');
-  const action = filters.get('action');
-  const actorId = filters.get('actorId');
 
   /** Every admin, a page at a time, searched server-side. The server ignores this filter for
    *  anyone but a super admin, so it is fetched — and shown — only for one. */
@@ -197,13 +187,76 @@ export function AuditActivityPage() {
     enabled: isSuperAdmin,
   });
 
-  const activity = useListQuery({
-    queryKey: ['admin', 'audit', 'row-actions'],
-    filters: {
-      feature: (feature || undefined) as AuditFeature | undefined,
-      action: (action || undefined) as AuditAction | undefined,
-      actorId: isSuperAdmin ? actorId || undefined : undefined,
+  const buildFilters = (selectedActorLabel: string | undefined): readonly ListFilter[] => [
+    {
+      key: 'feature',
+      kind: 'choice',
+      label: 'Filter by feature',
+      primary: true,
+      width: 'w-48',
+      items: [
+        { value: '', label: 'All features' },
+        ...auditFeatureSchema.options.map((value) => ({
+          value,
+          label: AUDIT_FEATURE_LABELS[value],
+        })),
+      ],
     },
+    {
+      key: 'action',
+      kind: 'choice',
+      label: 'Filter by action',
+      primary: true,
+      items: [
+        { value: '', label: 'All actions' },
+        ...auditActionSchema.options.map((value) => ({
+          value,
+          label: AUDIT_ACTION_LABELS[value],
+        })),
+      ],
+    },
+    ...(isSuperAdmin
+      ? ([
+          {
+            key: 'actorId',
+            kind: 'custom',
+            label: 'Filter by actor',
+            primary: true,
+            width: 'w-56',
+            render: (control: ListFilterControl) => (
+              <Combobox
+                {...control}
+                selectedLabel={selectedActorLabel}
+                items={actorPages.items.map((admin) => ({
+                  value: admin.id,
+                  label: admin.fullName ?? admin.email,
+                  hint: admin.fullName ? admin.email : undefined,
+                }))}
+                placeholder="Any admin"
+                search={actorSearch}
+                onSearchChange={setActorSearch}
+                searchPlaceholder="Search admins"
+                hasMore={actorPages.hasMore}
+                onLoadMore={actorPages.loadMore}
+                isLoading={actorPages.isLoading}
+                isLoadingMore={actorPages.isLoadingMore}
+                emptyLabel="No admin matches that"
+              />
+            ),
+          },
+        ] as const)
+      : []),
+  ];
+
+  // Called twice from one declaration: the hook needs only the keys, the view needs the label too.
+  const activity = useListScreen({
+    queryKey: ['admin', 'audit', 'row-actions'],
+    filters: buildFilters(undefined),
+    toQuery: (values) => ({
+      feature: (values.feature || undefined) as AuditFeature | undefined,
+      action: (values.action || undefined) as AuditAction | undefined,
+      actorId: isSuperAdmin ? values.actorId || undefined : undefined,
+    }),
     fetchPage: (params) => api.admin.audit.rowActions(params),
   });
 
@@ -211,98 +264,29 @@ export function AuditActivityPage() {
 
   // The chosen admin is often outside the loaded combobox pages; the loaded
   // rows already carry their name, and that is the one place left to find it.
+  const actorId = activity.values.actorId;
   const selectedActorLabel =
-    activity.items.find((row) => row.actorId === actorId)?.actorName ?? undefined;
-
-  const toolbar = (
-    <>
-      <Alert variant="info" className="mb-4">
-        <span>
-          Showing the last {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and is
-          not shown here.
-        </span>
-      </Alert>
-
-      <FilterBar
-        activeCount={filters.activeCount(ROW_ACTION_FILTERS)}
-        onClear={() => filters.clear()}
-      >
-        <div className="w-48">
-          <Combobox
-            aria-label="Filter by feature"
-            clearable={false}
-            value={feature}
-            onChange={(next) => filters.set({ feature: next })}
-            items={[
-              { value: '', label: 'All features' },
-              ...auditFeatureSchema.options.map((value) => ({
-                value,
-                label: AUDIT_FEATURE_LABELS[value],
-              })),
-            ]}
-          />
-        </div>
-
-        <div className="w-44">
-          <Combobox
-            aria-label="Filter by action"
-            clearable={false}
-            value={action}
-            onChange={(next) => filters.set({ action: next })}
-            items={[
-              { value: '', label: 'All actions' },
-              ...auditActionSchema.options.map((value) => ({
-                value,
-                label: AUDIT_ACTION_LABELS[value],
-              })),
-            ]}
-          />
-        </div>
-
-        {isSuperAdmin ? (
-          <div className="w-56">
-            <Combobox
-              aria-label="Filter by actor"
-              value={actorId}
-              onChange={(next) => filters.set({ actorId: next })}
-              selectedLabel={selectedActorLabel}
-              items={actorPages.items.map((admin) => ({
-                value: admin.id,
-                label: admin.fullName ?? admin.email,
-                hint: admin.fullName ? admin.email : undefined,
-              }))}
-              placeholder="Any admin"
-              search={actorSearch}
-              onSearchChange={setActorSearch}
-              searchPlaceholder="Search admins"
-              hasMore={actorPages.hasMore}
-              onLoadMore={actorPages.loadMore}
-              isLoading={actorPages.isLoading}
-              isLoadingMore={actorPages.isLoadingMore}
-              emptyLabel="No admin matches that"
-            />
-          </div>
-        ) : null}
-      </FilterBar>
-    </>
-  );
+    activity.rows.find((row) => row.actorId === actorId)?.actorName ?? undefined;
 
   return (
     <TableFrame
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Audit log" />}
-      toolbar={toolbar}
     >
-      <DataTable
+      <ListView
+        list={activity}
+        filters={buildFilters(selectedActorLabel)}
         columns={columns}
-        rows={activity.items}
         rowKey={(row) => row.id}
-        isLoading={activity.isLoading}
-        empty={
-          filters.activeCount(ROW_ACTION_FILTERS) > 0
-            ? `No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days.`
-            : `No activity in the last ${AUDIT_WINDOW_DAYS} days.`
+        banner={
+          <Alert variant="info" className="mb-4">
+            <span>
+              Showing the last {AUDIT_WINDOW_DAYS} days. Older activity is archived to storage and
+              is not shown here.
+            </span>
+          </Alert>
         }
-        footer={activity.hasLoaded ? <Pagination {...activity.pagination} /> : null}
+        empty={`No activity in the last ${AUDIT_WINDOW_DAYS} days.`}
+        emptyFiltered={`No activity matches those filters in the last ${AUDIT_WINDOW_DAYS} days.`}
       />
     </TableFrame>
   );
@@ -313,9 +297,10 @@ export function AuditImportsPage() {
   const filters = useFilters<'run'>();
   const highlightRunId = filters.get('run');
 
-  const imports = useListQuery({
+  const imports = useListScreen({
     queryKey: ['admin', 'audit', 'imports'],
-    filters: {},
+    filters: [],
+    toQuery: () => ({}),
     fetchPage: (params) => api.admin.audit.imports(params),
   });
 
@@ -325,13 +310,11 @@ export function AuditImportsPage() {
     <TableFrame
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import runs" />}
     >
-      <DataTable
+      <ListView
+        list={imports}
         columns={columns}
-        rows={imports.items}
         rowKey={(row) => row.id}
-        isLoading={imports.isLoading}
         empty="No import runs yet."
-        footer={imports.hasLoaded ? <Pagination {...imports.pagination} /> : null}
       />
     </TableFrame>
   );

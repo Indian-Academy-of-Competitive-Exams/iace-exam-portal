@@ -11,41 +11,31 @@ import {
   QUESTION_TYPES,
   type QuestionSummary,
 } from '@iace/contracts';
-import { useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
   BadgeList,
   Button,
-  Combobox,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  Field,
-  FilterBar,
   linkVariants,
+  ListView,
   PageHeader,
-  Pagination,
   plural,
   RowActions,
-  SearchInput,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { useFilters } from '../lib/use-filters';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = ['q', 'subjectId', 'topicId', 'type', 'difficulty'] as const;
-/** Everything but the search: a queue is read top to bottom before it is narrowed. */
-const FOLDED_FILTERS = ['subjectId', 'topicId', 'type', 'difficulty'] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
+type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty';
 
 const QUESTIONS_KEY = ['admin', 'questions'] as const;
 
@@ -105,22 +95,75 @@ function approvalColumns(): DataTableColumn<QuestionSummary>[] {
 }
 
 export function QuestionApprovalsPage() {
+  // Held outside the spec: a subject change also has to drop the topic under it.
   const filters = useFilters<FilterKey>();
   const subjectId = filters.get('subjectId');
-  const topicId = filters.get('topicId');
+
+  // Everything but the search folds: a queue is read top to bottom before it is narrowed.
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search draft questions',
+      placeholder: 'Search the question text or a code',
+      primary: true,
+    },
+    {
+      key: 'subjectId',
+      kind: 'custom',
+      label: 'Subject',
+      render: (control: ListFilterControl) => (
+        <SubjectPicker
+          {...control}
+          clearable
+          // A topic under the old subject would filter everything away.
+          onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
+        />
+      ),
+    },
+    {
+      key: 'topicId',
+      kind: 'custom',
+      label: 'Topic',
+      render: (control: ListFilterControl) => (
+        <TopicPicker {...control} subjectId={subjectId} clearable />
+      ),
+    },
+    {
+      key: 'difficulty',
+      kind: 'choice',
+      label: 'Difficulty',
+      items: [
+        { value: '', label: 'Any difficulty' },
+        ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
+      ],
+    },
+    {
+      key: 'type',
+      kind: 'choice',
+      label: 'Type',
+      items: [
+        { value: '', label: 'Any type' },
+        ...QUESTION_TYPES.map((type) => ({
+          value: type,
+          label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
+        })),
+      ],
+    },
+  ] as const;
 
   // Status is not a filter here: a screen for approving drafts shows drafts.
-  const questions = useListQuery({
+  const questions = useListScreen({
     queryKey: [...QUESTIONS_KEY, 'drafts'],
-    filters: {
-      q: filters.get('q') || undefined,
-      subjectId: subjectId || undefined,
-      topicId: topicId || undefined,
-      type: (filters.get('type') || undefined) as QuestionSummary['type'] | undefined,
-      difficulty: (filters.get('difficulty') || undefined) as
-        QuestionSummary['difficulty'] | undefined,
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      subjectId: values.subjectId || undefined,
+      topicId: values.topicId || undefined,
+      type: (values.type || undefined) as QuestionSummary['type'] | undefined,
+      difficulty: (values.difficulty || undefined) as QuestionSummary['difficulty'] | undefined,
       status: QUESTION_STATUS.DRAFT,
-    },
+    }),
     fetchPage: (params) => api.admin.questions.list(params),
   });
 
@@ -131,111 +174,26 @@ export function QuestionApprovalsPage() {
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
       title="Draft questions"
-      meta={questions.hasLoaded ? `${questions.pagination.total} waiting` : undefined}
+      meta={questions.hasLoaded ? `${questions.total} waiting` : undefined}
     />
   );
 
-  const advancedFilters = (
-    <>
-      <Field htmlFor="filter-subject" label="Subject">
-        {(control) => (
-          <SubjectPicker
-            {...control}
-            value={subjectId}
-            clearable
-            // A topic under the old subject would filter everything away.
-            onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-topic" label="Topic">
-        {(control) => (
-          <TopicPicker
-            {...control}
-            subjectId={subjectId}
-            value={topicId}
-            clearable
-            onChange={(value) => filters.set({ topicId: value })}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-difficulty" label="Difficulty">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('difficulty')}
-            onChange={(next) => filters.set({ difficulty: next })}
-            items={[
-              { value: '', label: 'Any difficulty' },
-              ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-type" label="Type">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('type')}
-            onChange={(next) => filters.set({ type: next })}
-            items={[
-              { value: '', label: 'Any type' },
-              ...QUESTION_TYPES.map((type) => ({
-                value: type,
-                label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-              })),
-            ]}
-          />
-        )}
-      </Field>
-    </>
-  );
-
   // Narrowed to what is on screen: a row the reader cannot see must never be in the batch.
-  const shown = new Set(questions.items.map((question) => question.id));
+  const shown = new Set(questions.rows.map((question) => question.id));
   const chosen = new Set([...selected].filter((id) => shown.has(id)));
 
-  const toolbar = (
-    <FilterBar
-      activeCount={filters.activeCount(ALL_FILTERS)}
-      advancedCount={filters.activeCount(FOLDED_FILTERS)}
-      onClear={() => filters.clear()}
-      advanced={advancedFilters}
-    >
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search draft questions"
-          placeholder="Search the question text or a code"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      {/* "None match" and "there are none" are different facts, and telling an
-          admin the wrong one sends them looking in the wrong place. */}
+    <TableFrame header={header}>
       <BulkApproval selected={chosen} onDone={() => setSelected(new Set())} />
 
-      <DataTable
+      <ListView
+        list={questions}
+        filters={filterSpec}
         columns={columns}
-        rows={questions.items}
         rowKey={(question) => question.id}
-        isLoading={questions.isLoading}
         selection={{ selected: chosen, onChange: setSelected, label: 'Select every draft shown' }}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No drafts match those filters.'
-            : 'Nothing waiting for review.'
-        }
-        footer={questions.hasLoaded ? <Pagination {...questions.pagination} /> : null}
+        empty="Nothing waiting for review."
+        emptyFiltered="No drafts match those filters."
       />
     </TableFrame>
   );

@@ -6,14 +6,7 @@ import { Combobox } from './combobox';
  * Shows the range ("1–20 of 337"), not just the page number.
  * Page sizes are passed in: the cap is declared in @iace/contracts, not here.
  */
-export function Pagination({
-  page,
-  pageSize,
-  total,
-  onPageChange,
-  onPageSizeChange,
-  pageSizeOptions,
-}: Readonly<{
+export interface PaginationProps {
   page: number;
   pageSize: number;
   total: number;
@@ -21,7 +14,16 @@ export function Pagination({
   /** Omit to hide the rows-per-page control entirely. */
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: readonly number[];
-}>) {
+}
+
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions,
+}: Readonly<PaginationProps>) {
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);

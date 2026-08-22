@@ -3,34 +3,28 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { FEATURE_KEYS, PERMISSION_LEVELS, type TestSeriesSummary } from '@iace/contracts';
-import { useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
-  FilterBar,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
-  SearchInput,
   TableFrame,
   TruncatedText,
   linkVariants,
   plural,
   type DataTableColumn,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { useFilters } from '../lib/use-filters';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = ['q', 'examId', 'examStageId'] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
+type FilterKey = 'q' | 'examId' | 'examStageId';
 
 const SERIES_KEY = ['admin', 'test-series'] as const;
 
@@ -97,9 +91,9 @@ export function TestSeriesPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
+  // Held outside the spec: choosing an exam also has to drop the stage under it.
   const filters = useFilters<FilterKey>();
   const examId = filters.get('examId');
-  const examStageId = filters.get('examStageId');
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
@@ -107,9 +101,48 @@ export function TestSeriesPage() {
 
   const columns = useMemo(() => seriesColumns(canWrite, refresh), [canWrite, refresh]);
 
-  const series = useListQuery({
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search test series',
+      placeholder: 'Search series by name',
+      primary: true,
+    },
+    {
+      key: 'examId',
+      kind: 'custom',
+      label: 'Filter by exam',
+      primary: true,
+      width: 'w-48',
+      // Narrows the stage list, not the table: "Tier 1" alone names half a dozen papers.
+      render: (control: ListFilterControl) => (
+        <ExamPicker
+          {...control}
+          clearable
+          onChange={(value) => filters.set({ examId: value, examStageId: '' })}
+        />
+      ),
+    },
+    {
+      key: 'examStageId',
+      kind: 'custom',
+      label: 'Filter by stage',
+      primary: true,
+      width: 'w-56',
+      render: (control: ListFilterControl) => (
+        <ExamStagePicker {...control} examId={examId} clearable />
+      ),
+    },
+  ] as const;
+
+  const series = useListScreen({
     queryKey: SERIES_KEY,
-    filters: { q: filters.get('q') || undefined, examStageId: examStageId || undefined },
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      examStageId: values.examStageId || undefined,
+    }),
     fetchPage: (params) => api.admin.testSeries.list(params),
   });
 
@@ -130,53 +163,15 @@ export function TestSeriesPage() {
     />
   );
 
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search test series"
-          placeholder="Search series by name"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-      {/* The exam narrows the stage list rather than the table: a series hangs off
-          a stage, and "Tier 1" alone names half a dozen different papers. */}
-      <div className="w-48">
-        <ExamPicker
-          aria-label="Filter by exam"
-          value={examId}
-          clearable
-          onChange={(value) => filters.set({ examId: value, examStageId: '' })}
-        />
-      </div>
-      <div className="w-56">
-        <ExamStagePicker
-          aria-label="Filter by stage"
-          examId={examId}
-          value={examStageId}
-          clearable
-          onChange={(value) => filters.set({ examStageId: value })}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      {/* "None match" and "there are none" are different facts, and telling an
-          admin the wrong one sends them looking in the wrong place. */}
-      <DataTable
+    <TableFrame header={header}>
+      <ListView
+        list={series}
+        filters={filterSpec}
         columns={columns}
-        rows={series.items}
         rowKey={(row) => row.id}
-        isLoading={series.isLoading}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No series match those filters.'
-            : 'No series yet. Build the first one — a test reaches a student only through one.'
-        }
-        footer={series.hasLoaded ? <Pagination {...series.pagination} /> : null}
+        empty="No series yet. Build the first one — a test reaches a student only through one."
+        emptyFiltered="No series match those filters."
       />
     </TableFrame>
   );

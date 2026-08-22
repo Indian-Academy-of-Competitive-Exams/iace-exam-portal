@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Card } from './card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { cn } from '../../lib/utils';
 
 /**
@@ -13,6 +14,9 @@ export const PAGE_CONTENT_CLASS = [
   'has-[[data-page-frame]]:overflow-hidden',
 ].join(' ');
 
+/** Every ancestor between the frame and the table has to shrink, or the page takes the scroll. */
+const FILLS = 'flex min-h-0 flex-1 flex-col';
+
 const TableFrameContext = React.createContext(false);
 
 export interface PageFrameProps {
@@ -25,7 +29,7 @@ export interface PageFrameProps {
 /** Any page that is not a list: header held still, body the only scroller. */
 export function PageFrame({ header, children, className }: Readonly<PageFrameProps>) {
   return (
-    <div data-page-frame className="flex min-h-0 flex-1 flex-col">
+    <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
       <div className={cn('relative min-h-0 flex-1 overflow-y-auto', className)}>{children}</div>
     </div>
@@ -36,44 +40,88 @@ export function useInTableFrame(): boolean {
   return React.useContext(TableFrameContext);
 }
 
+export interface TableFrameTab {
+  value: string;
+  label: string;
+  content: React.ReactNode;
+}
+
+export interface TableFrameTabs {
+  value: string;
+  onValueChange: (value: string) => void;
+  items: readonly TableFrameTab[];
+}
+
 export interface TableFrameProps {
   /** Pinned above the card — usually a `PageHeader`. */
   header?: React.ReactNode;
-  /** Pinned inside the card, above the table — filters, a context banner. */
+  /** Pinned inside the card, above the table — a context banner a `ListView` does not own. */
   toolbar?: React.ReactNode;
+  /** Sub-features close enough to be one idea. The strip sits inside the card, above the tab. */
+  tabs?: TableFrameTabs;
   /** False scrolls the page instead. Pinning a tall create form leaves no table. */
   framed?: boolean;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 /** A list screen: header and filters held still, the table body the only scroller. */
 export function TableFrame({
   header,
   toolbar,
+  tabs,
   framed = true,
   children,
 }: Readonly<TableFrameProps>) {
+  const body = tabs ? (
+    <>
+      {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
+      <TabsList className="-mx-4 mb-4 px-4">
+        {tabs.items.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {tabs.items.map((tab) => (
+        <TabsContent key={tab.value} value={tab.value} className={cn(FILLS, 'pt-0')}>
+          {tab.content}
+        </TabsContent>
+      ))}
+    </>
+  ) : (
+    children
+  );
+
   if (!framed) {
     return (
       <>
         {header}
         <Card className="p-4">
           {toolbar}
-          {children}
+          {body}
         </Card>
       </>
     );
   }
 
-  return (
+  const frame = (
     <TableFrameContext value={true}>
-      <div data-page-frame className="flex min-h-0 flex-1 flex-col">
+      <div data-page-frame className={FILLS}>
         {header ? <div className="shrink-0">{header}</div> : null}
-        <Card className="flex min-h-0 flex-1 flex-col p-4">
+        <Card className={cn(FILLS, 'p-4')}>
           {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
-          {children}
+          {body}
         </Card>
       </div>
     </TableFrameContext>
+  );
+
+  // Outside the frame so the strip can sit inside the card while the table stays the scroller.
+  return tabs ? (
+    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
+      {frame}
+    </Tabs>
+  ) : (
+    frame
   );
 }

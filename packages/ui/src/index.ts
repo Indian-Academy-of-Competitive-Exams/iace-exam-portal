@@ -131,7 +131,7 @@ export {
 } from './components/ui/form-panel';
 export { RowActions, type RowActionsProps } from './components/ui/row-actions';
 export { linkVariants, type LinkVariants } from './components/ui/link';
-export { Pagination } from './components/ui/pagination';
+export { Pagination, type PaginationProps } from './components/ui/pagination';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
 export { PageHeader } from './components/ui/page-header';
 export {
@@ -147,8 +147,17 @@ export {
   useInTableFrame,
   PAGE_CONTENT_CLASS,
   type TableFrameProps,
+  type TableFrameTab,
+  type TableFrameTabs,
   type PageFrameProps,
 } from './components/ui/table-frame';
+export {
+  ListView,
+  type ListFilter,
+  type ListFilterControl,
+  type ListState,
+  type ListViewProps,
+} from './components/ui/list-view';
 export {
   TruncatedText,
   useTruncation,

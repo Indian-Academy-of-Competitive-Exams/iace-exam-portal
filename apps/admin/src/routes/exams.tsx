@@ -27,19 +27,16 @@ import {
   Button,
   Combobox,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  FilterBar,
   FormDialog,
   FormField,
   Input,
+  ListView,
   NumericInput,
   PageHeader,
-  Pagination,
   plural,
   RowActions,
-  SearchInput,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
@@ -47,10 +44,9 @@ import {
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { familyLabel, NAV_ITEMS } from '../lib/constants';
-import { useFilters } from '../lib/use-filters';
 import { ExamPicker } from '../components/exam-picker';
-import { applyFieldErrors, useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 
 const NEW_EXAM_FIELDS = ['family', 'name', 'code'] as const;
 const EDIT_EXAM_FIELDS = ['family', 'name', 'code'] as const;
@@ -94,7 +90,19 @@ function examColumns(
 }
 
 /** Every filter the bar can clear. Two controls, so nothing folds. */
-const ALL_FILTERS = ['q', 'family'] as const;
+const EXAM_FILTERS = [
+  { key: 'q', kind: 'search', label: 'Search exams', placeholder: 'Search exams', primary: true },
+  {
+    key: 'family',
+    kind: 'choice',
+    label: 'Filter by family',
+    primary: true,
+    items: [
+      { value: '', label: 'Any family' },
+      ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
+    ],
+  },
+] as const;
 
 const EXAMS_KEY = ['admin', 'exams'] as const;
 const STAGES_KEY = ['admin', 'exam-stages'] as const;
@@ -106,9 +114,6 @@ export function ExamsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
-  const filters = useFilters<'q' | 'family'>();
-  const family = filters.get('family');
-
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: EXAMS_KEY });
   }, [queryClient]);
@@ -123,12 +128,13 @@ export function ExamsPage() {
     [canWrite, refresh, startEdit],
   );
 
-  const exams = useListQuery({
+  const exams = useListScreen({
     queryKey: EXAMS_KEY,
-    filters: {
-      q: filters.get('q') || undefined,
-      family: (family || undefined) as Exam['family'] | undefined,
-    },
+    filters: EXAM_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      family: (values.family || undefined) as Exam['family'] | undefined,
+    }),
     fetchPage: (params) => api.admin.exams.list(params),
   });
 
@@ -163,34 +169,8 @@ export function ExamsPage() {
     </>
   );
 
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search exams"
-          placeholder="Search exams"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-
-      <div className="w-44">
-        <Combobox
-          aria-label="Filter by family"
-          clearable={false}
-          value={family}
-          onChange={(next) => filters.set({ family: next })}
-          items={[
-            { value: '', label: 'Any family' },
-            ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
-          ]}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
+    <TableFrame header={header}>
       <NewExamDialog
         open={creating}
         onOpenChange={setCreating}
@@ -213,17 +193,17 @@ export function ExamsPage() {
         />
       ) : null}
 
-      <DataTable
+      <ListView
+        list={exams}
+        filters={EXAM_FILTERS}
         columns={columns}
-        rows={exams.items}
         rowKey={(exam) => exam.id}
-        isLoading={exams.isLoading}
         empty="No exams yet. Add the first one — every stage hangs off it."
+        emptyFiltered="No exams match those filters."
         expand={{
           render: (exam) => <ExamStages exam={exam} canWrite={canWrite} />,
           label: (exam) => `Show the stages under ${exam.name}`,
         }}
-        footer={exams.hasLoaded ? <Pagination {...exams.pagination} /> : null}
       />
     </TableFrame>
   );
@@ -573,9 +553,10 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
   );
 
   // Keyed by the exam, so opening a second row does not read the first one's page.
-  const stages = useListQuery({
+  const stages = useListScreen({
     queryKey: [...STAGES_KEY, examId],
-    filters: { examId },
+    filters: [],
+    toQuery: () => ({ examId }),
     fetchPage: (params) => api.admin.examStages.list(params),
   });
 
@@ -620,18 +601,11 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
         />
       ) : null}
 
-      <DataTable
+      <ListView
+        list={stages}
         columns={columns}
-        rows={stages.items}
         rowKey={(stage) => stage.id}
-        isLoading={stages.isLoading}
         empty="No stages here yet. A base config, a series and a test all hang off one."
-        footer={
-          // An exam has a handful of stages, so this appears only if one page cannot hold them.
-          stages.pagination.total > stages.pagination.pageSize ? (
-            <Pagination {...stages.pagination} />
-          ) : null
-        }
       />
     </div>
   );

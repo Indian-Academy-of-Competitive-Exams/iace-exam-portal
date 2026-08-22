@@ -28,18 +28,13 @@ import {
   BadgeList,
   Button,
   Combobox,
-  DataTable,
-  DatePicker,
-  Field,
-  FilterBar,
   FormDialog,
   FormField,
   Input,
+  ListView,
   MultiCombobox,
   NumericInput,
   PageHeader,
-  Pagination,
-  SearchInput,
   TableFrame,
   Tooltip,
   TooltipContent,
@@ -53,32 +48,12 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { familyLabel, NAV_ITEMS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
-import { applyFieldErrors, useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
-import { useFilters } from '../lib/use-filters';
 import { useAuth } from '../providers/auth';
 type StatusFilter = 'all' | 'active' | 'inactive' | 'blocked' | 'invited' | 'defaultpin';
-
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = [
-  'q',
-  'status',
-  'sort',
-  'branchId',
-  'preTestReady',
-  'profileCompleted',
-  'noAccess',
-  'joinedFrom',
-  'joinedTo',
-] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
-
-/** The ones behind the "Filters" fold — what the count on the button counts. */
-const EXTRA_FILTERS = ALL_FILTERS.filter(
-  (key) => !['q', 'status', 'sort'].includes(key),
-) as readonly FilterKey[];
 
 /** `false` is a question ("not ready yet"), not "don't care" — absent is "don't care". */
 function asBooleanParam(value: string): 'true' | 'false' | undefined {
@@ -173,41 +148,108 @@ export function StudentsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
-  // Every filter lives in the URL, so a link into this screen — from a branch —
-  // and the controls on it are the same state. See useFilters.
-  const filters = useFilters<FilterKey>();
   const [searchParams, setSearchParams] = useSearchParams();
   // The "Add student" button links here; reading it is what makes it work.
   const creating = searchParams.get('new') === '1';
 
-  const branchId = filters.get('branchId');
-  const status = (filters.get('status') || 'all') as StatusFilter;
-
   const branches = useBranches();
-  const branch = branches.find((candidate) => candidate.id === branchId);
 
-  const extraCount = filters.activeCount(EXTRA_FILTERS);
+  // The spec declares the URL keys, so the controls, Clear and the query cannot disagree.
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search students',
+      placeholder: 'Search by name or mobile',
+      primary: true,
+    },
+    {
+      key: 'status',
+      kind: 'choice',
+      label: 'Filter by status',
+      primary: true,
+      items: [
+        { value: 'all', label: 'All students' },
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Sign-in suspended' },
+        { value: 'blocked', label: 'Blocked from tests' },
+        { value: 'invited', label: 'Never signed in' },
+        { value: 'defaultpin', label: 'Still on the default PIN' },
+      ],
+    },
+    {
+      key: 'sort',
+      kind: 'choice',
+      label: 'Sort by',
+      primary: true,
+      items: [
+        { value: STUDENT_SORTS.RECENT, label: 'Newest first' },
+        { value: STUDENT_SORTS.OLDEST, label: 'Oldest first' },
+        { value: STUDENT_SORTS.NAME, label: 'Name (A–Z)' },
+        { value: STUDENT_SORTS.MOBILE, label: 'Mobile number' },
+      ],
+    },
+    {
+      key: 'branchId',
+      kind: 'choice',
+      label: 'Branch',
+      items: [
+        { value: '', label: 'Any branch' },
+        ...branches.map((option) => ({ value: option.id, label: option.name })),
+      ],
+    },
+    {
+      key: 'preTestReady',
+      kind: 'choice',
+      label: 'Pre-test details',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'On file' },
+        { value: 'false', label: 'Needed' },
+      ],
+    },
+    {
+      key: 'profileCompleted',
+      kind: 'choice',
+      label: 'Full profile',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'Complete' },
+        { value: 'false', label: 'Incomplete' },
+      ],
+    },
+    {
+      key: 'noAccess',
+      kind: 'choice',
+      label: 'Access',
+      items: [
+        { value: '', label: 'Any' },
+        { value: 'true', label: 'Nothing of their own' },
+        { value: 'false', label: 'Has an enrolment or program' },
+      ],
+    },
+    { key: 'joinedFrom', kind: 'date', label: 'Enrolled from', max: todayISO() },
+    { key: 'joinedTo', kind: 'date', label: 'Enrolled until', max: todayISO() },
+  ] as const;
 
-  const query = {
-    q: filters.get('q') || undefined,
-    branchId: branchId || undefined,
-    preTestReady: asBooleanParam(filters.get('preTestReady')),
-    profileCompleted: asBooleanParam(filters.get('profileCompleted')),
-    noAccess: asBooleanParam(filters.get('noAccess')),
-    joinedFrom: filters.get('joinedFrom') || undefined,
-    joinedTo: filters.get('joinedTo') || undefined,
-    sort: (filters.get('sort') || undefined) as StudentSort | undefined,
-    ...STATUS_QUERY[status],
-  };
-
-  // The page resets itself whenever `query` changes, and the rows hold still
-  // while the next one arrives — see useListQuery.
-  const students = useListQuery({
+  const students = useListScreen({
     queryKey: ['admin', 'students'],
-    filters: query,
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      branchId: values.branchId || undefined,
+      preTestReady: asBooleanParam(values.preTestReady),
+      profileCompleted: asBooleanParam(values.profileCompleted),
+      noAccess: asBooleanParam(values.noAccess),
+      joinedFrom: values.joinedFrom || undefined,
+      joinedTo: values.joinedTo || undefined,
+      sort: (values.sort || undefined) as StudentSort | undefined,
+      ...STATUS_QUERY[(values.status || 'all') as StatusFilter],
+    }),
     fetchPage: (params) => api.admin.students.list(params),
   });
 
+  const branch = branches.find((candidate) => candidate.id === students.values.branchId);
   const columns = useMemo(() => studentColumns(), []);
 
   const header = (
@@ -240,159 +282,18 @@ export function StudentsPage() {
     />
   );
 
-  const advancedFilters = (
-    <>
-      <Field htmlFor="filter-branch" label="Branch">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={branchId}
-            onChange={(next) => filters.set({ branchId: next })}
-            items={[
-              { value: '', label: 'Any branch' },
-              ...branches.map((option) => ({ value: option.id, label: option.name })),
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-pretest" label="Pre-test details">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('preTestReady')}
-            onChange={(next) => filters.set({ preTestReady: next })}
-            items={[
-              { value: '', label: 'Any' },
-              { value: 'true', label: 'On file' },
-              { value: 'false', label: 'Needed' },
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-profile" label="Full profile">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('profileCompleted')}
-            onChange={(next) => filters.set({ profileCompleted: next })}
-            items={[
-              { value: '', label: 'Any' },
-              { value: 'true', label: 'Complete' },
-              { value: 'false', label: 'Incomplete' },
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-no-access" label="Access">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('noAccess')}
-            onChange={(next) => filters.set({ noAccess: next })}
-            items={[
-              { value: '', label: 'Any' },
-              { value: 'true', label: 'Nothing of their own' },
-              { value: 'false', label: 'Has an enrolment or program' },
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-from" label="Enrolled from">
-        {(control) => (
-          <DatePicker
-            {...control}
-            max={todayISO()}
-            value={filters.get('joinedFrom')}
-            onChange={(next) => filters.set({ joinedFrom: next })}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-to" label="Enrolled until">
-        {(control) => (
-          <DatePicker
-            {...control}
-            max={todayISO()}
-            value={filters.get('joinedTo')}
-            onChange={(next) => filters.set({ joinedTo: next })}
-          />
-        )}
-      </Field>
-    </>
-  );
-
-  const toolbar = (
-    <>
-      {/* Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once. */}
-      {branch ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">Showing</span>
-          <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
-            {branch.name}
-          </Badge>
-        </div>
-      ) : null}
-
-      <FilterBar
-        activeCount={filters.activeCount(ALL_FILTERS)}
-        advancedCount={extraCount}
-        onClear={() => filters.clear()}
-        advanced={advancedFilters}
-      >
-        <div className="min-w-56 flex-1">
-          <SearchInput
-            aria-label="Search students"
-            placeholder="Search by name or mobile"
-            value={filters.get('q')}
-            onChange={(q) => filters.set({ q })}
-          />
-        </div>
-
-        <div className="w-44">
-          <Combobox
-            aria-label="Filter by status"
-            clearable={false}
-            value={status}
-            onChange={(next) => filters.set({ status: next })}
-            items={[
-              { value: 'all', label: 'All students' },
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Sign-in suspended' },
-              { value: 'blocked', label: 'Blocked from tests' },
-              { value: 'invited', label: 'Never signed in' },
-              { value: 'defaultpin', label: 'Still on the default PIN' },
-            ]}
-          />
-        </div>
-
-        <div className="w-44">
-          <Combobox
-            aria-label="Sort by"
-            clearable={false}
-            value={filters.get('sort') || STUDENT_SORTS.RECENT}
-            onChange={(next) => filters.set({ sort: next })}
-            items={[
-              { value: STUDENT_SORTS.RECENT, label: 'Newest first' },
-              { value: STUDENT_SORTS.OLDEST, label: 'Oldest first' },
-              { value: STUDENT_SORTS.NAME, label: 'Name (A–Z)' },
-              { value: STUDENT_SORTS.MOBILE, label: 'Mobile number' },
-            ]}
-          />
-        </div>
-      </FilterBar>
-    </>
-  );
+  const banner = branch ? (
+    // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <span className="text-sm text-muted-foreground">Showing</span>
+      <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+        {branch.name}
+      </Badge>
+    </div>
+  ) : null;
 
   return (
-    <TableFrame header={header} toolbar={toolbar}>
+    <TableFrame header={header}>
       {/* Rendered inside the frame, not the header: a dialog is portalled, so where it
           sits in the tree costs the pinned header nothing. */}
       <NewStudentDialog
@@ -402,20 +303,14 @@ export function StudentsPage() {
           setSearchParams(searchParams);
         }}
       />
-      {/* "None match" and "there are none" are different facts, and telling
-          an admin the wrong one sends them looking in the wrong place. Any
-          filter at all means the former. */}
-      <DataTable
+      <ListView
+        list={students}
+        filters={filterSpec}
+        banner={banner}
         columns={columns}
-        rows={students.items}
         rowKey={(student) => student.id}
-        isLoading={students.isLoading}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No students match those filters.'
-            : 'No students yet. Add one, or import a roster.'
-        }
-        footer={students.hasLoaded ? <Pagination {...students.pagination} /> : null}
+        empty="No students yet. Add one, or import a roster."
+        emptyFiltered="No students match those filters."
       />
     </TableFrame>
   );

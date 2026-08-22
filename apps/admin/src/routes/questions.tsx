@@ -12,36 +12,26 @@ import {
   QUESTION_TYPES,
   type QuestionSummary,
 } from '@iace/contracts';
-import { useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
   BadgeList,
   Button,
-  Combobox,
   ConfirmDialog,
-  DataTable,
-  Field,
-  FilterBar,
+  ListView,
   PageHeader,
-  Pagination,
-  SearchInput,
   TableFrame,
   TruncatedText,
   linkVariants,
   type DataTableColumn,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { useFilters } from '../lib/use-filters';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = ['q', 'subjectId', 'topicId', 'type', 'difficulty', 'status'] as const;
-/** Status says WHICH SET you are looking at, so it stays out; these narrow within it. */
-const FOLDED_FILTERS = ['subjectId', 'topicId', 'type', 'difficulty'] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
+type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
 
 /** ARCHIVED questions are out of circulation, so the list opens on the ones that are not. */
 const DEFAULT_STATUS = QUESTION_STATUS.ACTIVE;
@@ -117,24 +107,84 @@ export function QuestionsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
-  // Every filter lives in the URL, so a link into this screen and the controls
-  // on it are the same state.
+  // Held outside the spec: a subject change also has to drop the topic under it.
   const filters = useFilters<FilterKey>();
   const subjectId = filters.get('subjectId');
-  const topicId = filters.get('topicId');
-  const status = (filters.get('status') || DEFAULT_STATUS) as QuestionSummary['status'] | '';
 
-  const questions = useListQuery({
-    queryKey: ['admin', 'questions'],
-    filters: {
-      q: filters.get('q') || undefined,
-      subjectId: subjectId || undefined,
-      topicId: topicId || undefined,
-      type: (filters.get('type') || undefined) as QuestionSummary['type'] | undefined,
-      difficulty: (filters.get('difficulty') || undefined) as
-        QuestionSummary['difficulty'] | undefined,
-      status: status || undefined,
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search questions',
+      placeholder: 'Search the question text or a code',
+      primary: true,
     },
+    {
+      key: 'status',
+      kind: 'choice',
+      label: 'Filter by status',
+      primary: true,
+      width: 'w-40',
+      items: [
+        { value: '', label: 'Any status' },
+        ...QUESTION_STATUSES.map((value) => ({ value, label: value })),
+      ],
+    },
+    {
+      key: 'subjectId',
+      kind: 'custom',
+      label: 'Subject',
+      render: (control: ListFilterControl) => (
+        <SubjectPicker
+          {...control}
+          clearable
+          // A topic under the old subject would filter everything away.
+          onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
+        />
+      ),
+    },
+    {
+      key: 'topicId',
+      kind: 'custom',
+      label: 'Topic',
+      render: (control: ListFilterControl) => (
+        <TopicPicker {...control} subjectId={subjectId} clearable />
+      ),
+    },
+    {
+      key: 'difficulty',
+      kind: 'choice',
+      label: 'Difficulty',
+      items: [
+        { value: '', label: 'Any difficulty' },
+        ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
+      ],
+    },
+    {
+      key: 'type',
+      kind: 'choice',
+      label: 'Type',
+      items: [
+        { value: '', label: 'Any type' },
+        ...QUESTION_TYPES.map((type) => ({
+          value: type,
+          label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
+        })),
+      ],
+    },
+  ] as const;
+
+  const questions = useListScreen({
+    queryKey: ['admin', 'questions'],
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      subjectId: values.subjectId || undefined,
+      topicId: values.topicId || undefined,
+      type: (values.type || undefined) as QuestionSummary['type'] | undefined,
+      difficulty: (values.difficulty || undefined) as QuestionSummary['difficulty'] | undefined,
+      status: ((values.status || DEFAULT_STATUS) as QuestionSummary['status']) || undefined,
+    }),
     fetchPage: (params) => api.admin.questions.list(params),
   });
 
@@ -165,113 +215,15 @@ export function QuestionsPage() {
     />
   );
 
-  const advancedFilters = (
-    <>
-      <Field htmlFor="filter-subject" label="Subject">
-        {(control) => (
-          <SubjectPicker
-            {...control}
-            value={subjectId}
-            clearable
-            // A topic under the old subject would filter everything away.
-            onChange={(value) => filters.set({ subjectId: value, topicId: '' })}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-topic" label="Topic">
-        {(control) => (
-          <TopicPicker
-            {...control}
-            subjectId={subjectId}
-            value={topicId}
-            clearable
-            onChange={(value) => filters.set({ topicId: value })}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-difficulty" label="Difficulty">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('difficulty')}
-            onChange={(next) => filters.set({ difficulty: next })}
-            items={[
-              { value: '', label: 'Any difficulty' },
-              ...DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level })),
-            ]}
-          />
-        )}
-      </Field>
-
-      <Field htmlFor="filter-type" label="Type">
-        {(control) => (
-          <Combobox
-            {...control}
-            clearable={false}
-            value={filters.get('type')}
-            onChange={(next) => filters.set({ type: next })}
-            items={[
-              { value: '', label: 'Any type' },
-              ...QUESTION_TYPES.map((type) => ({
-                value: type,
-                label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
-              })),
-            ]}
-          />
-        )}
-      </Field>
-    </>
-  );
-
-  const toolbar = (
-    <FilterBar
-      activeCount={filters.activeCount(ALL_FILTERS)}
-      advancedCount={filters.activeCount(FOLDED_FILTERS)}
-      onClear={() => filters.clear()}
-      advanced={advancedFilters}
-    >
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search questions"
-          placeholder="Search the question text or a code"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-
-      <div className="w-40">
-        <Combobox
-          aria-label="Filter by status"
-          clearable={false}
-          value={filters.get('status')}
-          onChange={(next) => filters.set({ status: next })}
-          items={[
-            { value: '', label: 'Any status' },
-            ...QUESTION_STATUSES.map((value) => ({ value, label: value })),
-          ]}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
-      {/* "None match" and "there are none" are different facts, and telling an
-          admin the wrong one sends them looking in the wrong place. */}
-      <DataTable
+    <TableFrame header={header}>
+      <ListView
+        list={questions}
+        filters={filterSpec}
         columns={columns}
-        rows={questions.items}
         rowKey={(question) => question.id}
-        isLoading={questions.isLoading}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No questions match those filters.'
-            : 'No questions yet. Import a sheet, or add one.'
-        }
-        footer={questions.hasLoaded ? <Pagination {...questions.pagination} /> : null}
+        empty="No questions yet. Import a sheet, or add one."
+        emptyFiltered="No questions match those filters."
       />
     </TableFrame>
   );

@@ -10,38 +10,49 @@ import {
   type Program,
   type UpdateProgramInput,
 } from '@iace/contracts';
-import { applyFieldErrors, useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { NAV_ITEMS } from '../lib/constants';
 import {
   Alert,
   Badge,
   Button,
-  Combobox,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
-  FilterBar,
   FormDialog,
   FormField,
   Input,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
-  SearchInput,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { useFilters } from '../lib/use-filters';
 
 const PROGRAM_FIELDS = ['code', 'name'] as const;
 
-/** Every filter this screen owns. Named once so "clear all" cannot miss one. */
-const ALL_FILTERS = ['q', 'activeOnly'] as const;
-type FilterKey = (typeof ALL_FILTERS)[number];
+const PROGRAM_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search programs',
+    placeholder: 'Search programs by name',
+    primary: true,
+  },
+  {
+    key: 'activeOnly',
+    kind: 'choice',
+    label: 'Filter by status',
+    primary: true,
+    items: [
+      { value: '', label: 'Any status' },
+      { value: 'true', label: 'Offered now' },
+    ],
+  },
+] as const;
 
 const PROGRAMS_KEY = ['admin', 'programs'] as const;
 
@@ -86,9 +97,6 @@ export function ProgramsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Program | null>(null);
   const queryClient = useQueryClient();
-  const filters = useFilters<FilterKey>();
-  const activeOnly = filters.get('activeOnly');
-
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: PROGRAMS_KEY });
   }, [queryClient]);
@@ -103,12 +111,13 @@ export function ProgramsPage() {
     [isSuperAdmin, refresh, startEdit],
   );
 
-  const programs = useListQuery({
+  const programs = useListScreen({
     queryKey: PROGRAMS_KEY,
-    filters: {
-      q: filters.get('q') || undefined,
-      activeOnly: (activeOnly || undefined) as 'true' | undefined,
-    },
+    filters: PROGRAM_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      activeOnly: (values.activeOnly || undefined) as 'true' | undefined,
+    }),
     fetchPage: (params) => api.admin.programs.list(params),
   });
 
@@ -143,33 +152,8 @@ export function ProgramsPage() {
     </>
   );
 
-  const toolbar = (
-    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search programs"
-          placeholder="Search programs by name"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-      <div className="w-44">
-        <Combobox
-          aria-label="Filter by status"
-          clearable={false}
-          value={activeOnly}
-          onChange={(next) => filters.set({ activeOnly: next })}
-          items={[
-            { value: '', label: 'Any status' },
-            { value: 'true', label: 'Offered now' },
-          ]}
-        />
-      </div>
-    </FilterBar>
-  );
-
   return (
-    <TableFrame header={header} toolbar={toolbar}>
+    <TableFrame header={header}>
       {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
       <NewProgramDialog
         open={creating}
@@ -192,19 +176,13 @@ export function ProgramsPage() {
           onClose={() => setEditing(null)}
         />
       ) : null}
-      {/* "None match" and "there are none" are different facts, and telling an
-          admin the wrong one sends them looking in the wrong place. */}
-      <DataTable
+      <ListView
+        list={programs}
+        filters={PROGRAM_FILTERS}
         columns={columns}
-        rows={programs.items}
         rowKey={(program) => program.id}
-        isLoading={programs.isLoading}
-        empty={
-          filters.activeCount(ALL_FILTERS) > 0
-            ? 'No programs match those filters.'
-            : 'No programs yet. Add the first one — a series can then be aimed at it.'
-        }
-        footer={programs.hasLoaded ? <Pagination {...programs.pagination} /> : null}
+        empty="No programs yet. Add the first one — a series can then be aimed at it."
+        emptyFiltered="No programs match those filters."
       />
     </TableFrame>
   );

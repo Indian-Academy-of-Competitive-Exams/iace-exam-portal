@@ -14,33 +14,26 @@ import {
   type Subject,
   type Topic,
 } from '@iace/contracts';
-import { applyFieldErrors, useListQuery } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { applyFieldErrors } from '@iace/app-kit';
+import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Button,
-  DataTable,
   DropdownMenuItem,
-  FilterBar,
   FormDialog,
   FormField,
   Input,
   linkVariants,
+  ListView,
   PageHeader,
-  Pagination,
   RowActions,
-  SearchInput,
   TableFrame,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   TruncatedText,
   type DataTableColumn,
+  type ListFilterControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { useFilters } from '../lib/use-filters';
 import { SubjectPicker } from '../components/taxonomy-picker';
 
 /**
@@ -139,33 +132,18 @@ export function TaxonomyPage() {
   };
 
   return (
-    // Tabs wraps the frame so the strip can sit in the header while the table stays the scroller.
-    <Tabs
-      value={level}
-      onValueChange={(value) => filters.set({ level: value, q: '', subjectId: '' })}
-      className="flex min-h-0 flex-1 flex-col"
-    >
+    <>
       <TableFrame
         header={header}
-        toolbar={
-          <>
-            {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
-            <TabsList className="-mx-4 mb-4 px-4">
-              <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
-              <TabsTrigger value={LEVELS.TOPICS}>Topics</TabsTrigger>
-            </TabsList>
-
-            {onSubjects ? <SubjectsFilters /> : <TopicsFilters />}
-          </>
-        }
-      >
-        <TabsContent value={LEVELS.SUBJECTS} className="flex min-h-0 flex-1 flex-col pt-0">
-          <SubjectsTable />
-        </TabsContent>
-        <TabsContent value={LEVELS.TOPICS} className="flex min-h-0 flex-1 flex-col pt-0">
-          <TopicsTable />
-        </TabsContent>
-      </TableFrame>
+        tabs={{
+          value: level,
+          onValueChange: (value) => filters.set({ level: value, q: '', subjectId: '' }),
+          items: [
+            { value: LEVELS.SUBJECTS, label: 'Subjects', content: <SubjectsList /> },
+            { value: LEVELS.TOPICS, label: 'Topics', content: <TopicsList /> },
+          ],
+        }}
+      />
 
       {onSubjects ? (
         <NewSubjectDialog open={creating} onOpenChange={setCreating} onDone={done('subjects')} />
@@ -177,45 +155,38 @@ export function TaxonomyPage() {
           onDone={done('topics')}
         />
       )}
-    </Tabs>
+    </>
   );
 }
 
-function SubjectsFilters() {
-  const filters = useFilters<'q'>();
+const SUBJECT_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search subjects',
+    placeholder: 'Search subjects',
+    primary: true,
+  },
+] as const;
 
-  return (
-    <FilterBar activeCount={filters.activeCount(['q'])} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search subjects"
-          placeholder="Search subjects"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-    </FilterBar>
-  );
-}
-
-function SubjectsTable() {
-  const filters = useFilters<'q'>();
+function SubjectsList() {
   const columns = useMemo(() => subjectColumns(), []);
 
-  const subjects = useListQuery({
+  const subjects = useListScreen({
     queryKey: ['admin', 'subjects'],
-    filters: { q: filters.get('q') || undefined },
+    filters: SUBJECT_FILTERS,
+    toQuery: (values) => ({ q: values.q || undefined }),
     fetchPage: (params) => api.admin.taxonomy.listSubjects(params),
   });
 
   return (
-    <DataTable
+    <ListView
+      list={subjects}
+      filters={SUBJECT_FILTERS}
       columns={columns}
-      rows={subjects.items}
       rowKey={(row) => row.id}
-      isLoading={subjects.isLoading}
       empty="No subjects yet. Add the first one — questions are filed under it."
-      footer={subjects.hasLoaded ? <Pagination {...subjects.pagination} /> : null}
+      emptyFiltered="No subjects match that search."
     />
   );
 }
@@ -262,9 +233,6 @@ function NewSubjectDialog({
 // Topics
 // ============================================================================
 
-/** Named so the bar knows what Clear drops — and so search and subject stay in step. */
-const TOPIC_FILTERS = ['q', 'subjectId'] as const;
-
 function topicColumns(): DataTableColumn<Topic>[] {
   return [
     {
@@ -283,51 +251,39 @@ function topicColumns(): DataTableColumn<Topic>[] {
   ];
 }
 
-function TopicsFilters() {
-  const filters = useFilters<'q' | 'subjectId'>();
+const TOPIC_FILTERS = [
+  { key: 'q', kind: 'search', label: 'Search topics', placeholder: 'Search topics', primary: true },
+  {
+    key: 'subjectId',
+    kind: 'custom',
+    label: 'Subject',
+    primary: true,
+    width: 'w-56',
+    render: (control: ListFilterControl) => <SubjectPicker {...control} clearable />,
+  },
+] as const;
 
-  return (
-    <FilterBar activeCount={filters.activeCount(TOPIC_FILTERS)} onClear={() => filters.clear()}>
-      <div className="min-w-56 flex-1">
-        <SearchInput
-          aria-label="Search topics"
-          placeholder="Search topics"
-          value={filters.get('q')}
-          onChange={(q) => filters.set({ q })}
-        />
-      </div>
-
-      <div className="w-56">
-        <SubjectPicker
-          aria-label="Filter by subject"
-          value={filters.get('subjectId')}
-          clearable
-          onChange={(value) => filters.set({ subjectId: value })}
-        />
-      </div>
-    </FilterBar>
-  );
-}
-
-function TopicsTable() {
-  const filters = useFilters<'q' | 'subjectId'>();
-  const subjectId = filters.get('subjectId');
+function TopicsList() {
   const columns = useMemo(() => topicColumns(), []);
 
-  const topics = useListQuery({
+  const topics = useListScreen({
     queryKey: ['admin', 'topics'],
-    filters: { q: filters.get('q') || undefined, subjectId: subjectId || undefined },
+    filters: TOPIC_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      subjectId: values.subjectId || undefined,
+    }),
     fetchPage: (params) => api.admin.taxonomy.listTopics(params),
   });
 
   return (
-    <DataTable
+    <ListView
+      list={topics}
+      filters={TOPIC_FILTERS}
       columns={columns}
-      rows={topics.items}
       rowKey={(row) => row.id}
-      isLoading={topics.isLoading}
       empty="No topics here yet."
-      footer={topics.hasLoaded ? <Pagination {...topics.pagination} /> : null}
+      emptyFiltered="No topics match those filters."
     />
   );
 }
