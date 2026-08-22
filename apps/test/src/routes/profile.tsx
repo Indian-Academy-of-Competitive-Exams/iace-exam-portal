@@ -132,7 +132,9 @@ export function ProfilePage() {
         />
       }
     >
-      {me.data ? <PreTestPrompt preTestReady={me.data.preTestReady} /> : null}
+      {me.data ? (
+        <PreTestPrompt preTestReady={me.data.preTestReady} onAdd={() => setIsEditing(true)} />
+      ) : null}
 
       {me.isPending && <SkeletonParagraph lines={8} />}
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}

@@ -3,11 +3,11 @@ import { ClipboardList } from 'lucide-react';
 import { Alert, Button } from '@iace/ui';
 import { ROUTES } from '../lib/constants';
 
-/**
- * The pre-test gate: mother's name, father's name, DOB. A PROMPT, never a wall.
- * Rendered on the profile only; the exam engine will also show it on the way into a test.
- */
-export function PreTestPrompt({ preTestReady }: Readonly<{ preTestReady: boolean }>) {
+/** The pre-test gate — mother's name, father's name, DOB. A PROMPT, never a wall. */
+export function PreTestPrompt({
+  preTestReady,
+  onAdd,
+}: Readonly<{ preTestReady: boolean; onAdd?: () => void }>) {
   if (preTestReady) return null;
 
   return (
@@ -21,9 +21,16 @@ export function PreTestPrompt({ preTestReady }: Readonly<{ preTestReady: boolean
             ticket. It takes a minute.
           </span>
         </span>
-        <Button size="sm" asChild>
-          <Link to={ROUTES.PROFILE}>Add them</Link>
-        </Button>
+        {/* Already on the profile, the fields are here — so it opens them rather than navigating. */}
+        {onAdd ? (
+          <Button size="sm" onClick={onAdd}>
+            Add them
+          </Button>
+        ) : (
+          <Button size="sm" asChild>
+            <Link to={ROUTES.PROFILE}>Add them</Link>
+          </Button>
+        )}
       </div>
     </Alert>
   );
