@@ -51,7 +51,7 @@ describe('destructive actions', () => {
       'apps/admin/src/routes/student-detail.tsx': 'Allow tests',
       'apps/admin/src/routes/branches.tsx': 'Reactivate branch',
       'apps/admin/src/routes/exams.tsx': 'Reactivate exam',
-      'apps/admin/src/routes/base-configs.tsx': 'Reactivate config',
+      'apps/admin/src/routes/base-configs.tsx': 'Reactivate configuration',
       'apps/admin/src/routes/programs.tsx': 'Reactivate program',
     };
 

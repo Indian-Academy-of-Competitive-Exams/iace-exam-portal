@@ -325,7 +325,7 @@ export function BaseConfigFormPage() {
   }
 
   if (existing && (config.error || !config.data)) {
-    return <Alert variant="danger">Could not load this config.</Alert>;
+    return <Alert variant="danger">Could not load this configuration.</Alert>;
   }
 
   // Mounted only once the saved config is here, so a refetch cannot throw away a half-typed edit.
@@ -337,7 +337,7 @@ export function BaseConfigFormPage() {
 // ============================================================================
 
 function configTitle(detail: BaseConfigDetail | null, isEditing: boolean): string {
-  if (!detail) return 'New base config';
+  if (!detail) return 'New base configuration';
   return isEditing ? `Edit ${detail.name}` : detail.name;
 }
 
@@ -380,7 +380,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const [asking, setAsking] = useState(false);
 
   const clone = useMutation({
-    meta: { success: 'Config cloned.' },
+    meta: { success: 'Configuration cloned.' },
     mutationFn: () => api.admin.baseConfigs.clone(detail!.id, {}),
     onSuccess: (copy: BaseConfigDetail) => {
       setAsking(false);
@@ -394,7 +394,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const modules = useFieldArray({ control: form.control, name: 'modules' });
 
   const save = useMutation({
-    meta: { success: existing ? 'Config saved.' : 'Config created.' },
+    meta: { success: existing ? 'Configuration saved.' : 'Configuration created.' },
     mutationFn: (values: ConfigFormValues) =>
       detail
         ? api.admin.baseConfigs.update(detail.id, {
@@ -449,7 +449,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               Cancel
             </Button>
             <Button type="submit" loading={save.isPending}>
-              {existing ? 'Save config' : 'Create config'}
+              {existing ? 'Save configuration' : 'Create configuration'}
             </Button>
           </>
         ) : (
@@ -485,11 +485,11 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
       {locked ? (
         <Alert variant="warning">
           <span>
-            This config is locked — a test built from it has already been finalized, and a paper
-            somebody has sat cannot change shape underneath them. Every field below is fixed for
-            good. Clone it to carry all of this into a copy you can edit: the copy starts unlocked
-            and is not the stage&apos;s default until you promote it. The name, and whether this one
-            is still offered, can be changed from the configs list.
+            This configuration is locked — a test built from it has already been finalized, and a
+            paper somebody has sat cannot change shape underneath them. Every field below is fixed
+            for good. Clone it to carry all of this into a copy you can edit: the copy starts
+            unlocked and is not the stage&apos;s default until you promote it. The name, and whether
+            this one is still offered, can be changed from the configurations list.
           </span>
         </Alert>
       ) : null}
@@ -733,7 +733,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
           loading={clone.isPending}
           title={`Clone ${detail.name}?`}
           description={`The copy carries every setting and all ${plural(detail.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${detail.name} is left exactly as it is. You will land on the copy.`}
-          confirmLabel="Clone config"
+          confirmLabel="Clone configuration"
           onConfirm={() => clone.mutate()}
         />
       ) : null}

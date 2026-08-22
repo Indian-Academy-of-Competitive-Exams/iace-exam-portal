@@ -55,7 +55,7 @@ function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<
     },
     {
       key: 'name',
-      header: 'Config',
+      header: 'Configuration',
       className: 'max-w-[20rem] font-medium',
       cell: (config) => (
         <Link to={ROUTES.BASE_CONFIG(config.id)} className={linkVariants()}>
@@ -121,13 +121,13 @@ export function BaseConfigsPage() {
   const header = (
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Base configs"
+      title="Base configurations"
       action={
         canWrite ? (
           <Button size="sm" asChild>
             <Link to={ROUTES.BASE_CONFIG_NEW}>
               <Plus aria-hidden />
-              New config
+              New configuration
             </Link>
           </Button>
         ) : undefined
@@ -139,8 +139,8 @@ export function BaseConfigsPage() {
     <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
       <div className="min-w-56 flex-1">
         <SearchInput
-          aria-label="Search base configs"
-          placeholder="Search configs by name"
+          aria-label="Search base configurations"
+          placeholder="Search configurations by name"
           value={filters.get('q')}
           onChange={(q) => filters.set({ q })}
         />
@@ -167,8 +167,8 @@ export function BaseConfigsPage() {
         isLoading={configs.isLoading}
         empty={
           filters.activeCount(ALL_FILTERS) > 0
-            ? 'No configs match those filters.'
-            : 'No base configs yet. Build the first one — every test hangs its shape off one.'
+            ? 'No configurations match those filters.'
+            : 'No base configurations yet. Build the first one — every test hangs its shape off one.'
         }
         footer={configs.hasLoaded ? <Pagination {...configs.pagination} /> : null}
       />
@@ -258,7 +258,7 @@ function ConfigRowActions({
   const close = () => setAsking(null);
 
   const clone = useMutation({
-    meta: { success: 'Config cloned.' },
+    meta: { success: 'Configuration cloned.' },
     mutationFn: () => api.admin.baseConfigs.clone(config.id, {}),
     onSuccess: (copy: BaseConfigDetail) => {
       close();
@@ -305,7 +305,7 @@ function ConfigRowActions({
         loading={clone.isPending}
         title={`Clone ${config.name}?`}
         description={`The copy carries every setting and all ${plural(config.totalQuestions, 'question')} of its sections as they stand now. It starts unlocked, is not the stage's default, and ${config.name} is left exactly as it is. You will land on the copy.`}
-        confirmLabel="Clone config"
+        confirmLabel="Clone configuration"
         onConfirm={() => clone.mutate()}
       />
 
@@ -316,10 +316,10 @@ function ConfigRowActions({
         title={config.isActive ? `Retire ${config.name}?` : `Reactivate ${config.name}?`}
         description={
           config.isActive
-            ? `Nothing it already holds changes — ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this config will no longer be offered when anyone builds a test. Reactivating puts it back.`
-            : 'The config is offered again when anyone builds a test. Nothing else changes.'
+            ? `Nothing it already holds changes — ${plural(config.testCount, 'test')} built from it keep working exactly as now. What stops is new ones: this configuration will no longer be offered when anyone builds a test. Reactivating puts it back.`
+            : 'The configuration is offered again when anyone builds a test. Nothing else changes.'
         }
-        confirmLabel={config.isActive ? 'Retire config' : 'Reactivate config'}
+        confirmLabel={config.isActive ? 'Retire configuration' : 'Reactivate configuration'}
         onConfirm={() => setActive.mutate(!config.isActive)}
       />
 

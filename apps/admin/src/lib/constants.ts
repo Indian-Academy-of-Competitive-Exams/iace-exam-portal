@@ -101,7 +101,7 @@ export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   QUESTION: 'Question',
   TEST: 'Test',
   TEST_SERIES: 'Test series',
-  BASE_CONFIG: 'Base config',
+  BASE_CONFIG: 'Base configuration',
   EXAM_TAXONOMY: 'Exam catalog',
   TAXONOMY_SUBJECT: 'Subject',
   TAXONOMY_TOPIC: 'Topic',
@@ -247,7 +247,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     icon: ClipboardList,
     featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
     children: [
-      { to: ROUTES.BASE_CONFIGS, label: 'Base configs', icon: SlidersHorizontal },
+      { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
     ],
   },

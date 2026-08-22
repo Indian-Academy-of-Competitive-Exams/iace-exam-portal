@@ -588,7 +588,7 @@ function stageColumns(
         </Badge>
       ),
     },
-    { key: 'configs', header: 'Configs', numeric: true, cell: (stage) => stage.configCount },
+    { key: 'configs', header: 'Configurations', numeric: true, cell: (stage) => stage.configCount },
     { key: 'status', header: 'Status', cell: (stage) => <StageStatus stage={stage} /> },
     {
       key: 'actions',
@@ -854,8 +854,8 @@ function EditStageDialog({
         label="Key"
         hint={
           stage.configCount > 0
-            ? `${plural(stage.configCount, 'base config')} hangs off this key — it can no longer change.`
-            : 'Free to change only while no base config hangs off it.'
+            ? `${plural(stage.configCount, 'base configuration')} hangs off this key — it can no longer change.`
+            : 'Free to change only while no base configuration hangs off it.'
         }
       >
         {(control) => (
@@ -975,8 +975,8 @@ function StageRowActions({
         title={stage.isActive ? `Retire ${stage.name}?` : `Reactivate ${stage.name}?`}
         description={
           stage.isActive
-            ? `Nothing it already holds changes — ${plural(stage.configCount, 'base config')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a config, a series or a test. Reactivating puts it back.`
-            : 'The stage is offered again when anyone builds a config, a series or a test. Nothing else changes.'
+            ? `Nothing it already holds changes — ${plural(stage.configCount, 'base configuration')} and ${plural(stage.testCount, 'test')} keep working exactly as now. What stops is new ones: this stage will no longer be offered when anyone builds a configuration, a series or a test. Reactivating puts it back.`
+            : 'The stage is offered again when anyone builds a configuration, a series or a test. Nothing else changes.'
         }
         confirmLabel={stage.isActive ? 'Retire stage' : 'Reactivate stage'}
         onConfirm={() => setActive.mutate(!stage.isActive)}
@@ -993,7 +993,7 @@ function StageRowActions({
         description={
           stage.configCount + stage.testCount + stage.seriesCount === 0
             ? `Nothing hangs off ${stage.stageKey}. Deleting cannot be undone.`
-            : `${plural(stage.configCount, 'base config')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
+            : `${plural(stage.configCount, 'base configuration')}, ${plural(stage.testCount, 'test')} and ${plural(stage.seriesCount, 'series', 'series')} still hang off ${stage.stageKey}, and deleting it will be refused. Retire the stage instead — it keeps everything it has and is simply no longer offered.`
         }
         confirmLabel="Delete stage"
         onConfirm={() => remove.mutate()}

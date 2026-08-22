@@ -117,7 +117,7 @@ const SECTIONED: readonly NavItem[] = [
   {
     label: 'Tests',
     children: [
-      { to: '/tests/configs', label: 'Base configs' },
+      { to: '/tests/configs', label: 'Base configurations' },
       { to: '/tests/series', label: 'Test series' },
     ],
   },
