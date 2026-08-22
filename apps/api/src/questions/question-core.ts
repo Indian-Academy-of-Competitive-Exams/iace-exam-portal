@@ -19,6 +19,7 @@ import {
 } from '@iace/contracts';
 import { stripImageSrc } from './question-images';
 import { firstMathError } from './question-math';
+import { previewTextOf } from './question-content';
 
 /**
  * The rules a question is judged by, and the shape it is stored in. Both ways a
@@ -433,6 +434,7 @@ function checkTaxonomy(
 
 /** The English stem, shortened — what a list row and an import preview show. */
 export function stemPreviewOf(content: LocalizedContent, limit = 140): string {
-  const stem = plainTextOf(content[DEFAULT_LANGUAGE]?.stem);
+  // Stripped BEFORE slicing: cutting html at 140 characters can land inside a tag.
+  const stem = previewTextOf(plainTextOf(content[DEFAULT_LANGUAGE]?.stem));
   return stem.length > limit ? `${stem.slice(0, limit - 1)}…` : stem;
 }
