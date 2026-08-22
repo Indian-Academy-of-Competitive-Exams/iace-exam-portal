@@ -1,2 +1,19 @@
 /* KaTeX's own stylesheet. An app import, like tokens.css: node cannot load .css in a test. */
 @import 'katex/dist/katex.min.css';
+
+/* Bigger than its surroundings on purpose — a formula is read glyph by glyph, prose is not. */
+.tiptap-mathematics-render {
+  font-size: calc(1em * var(--math-scale));
+  padding: 0 var(--space-0-5);
+}
+
+/* Editable math is a click target, so it says so before it is clicked. */
+.tiptap-mathematics-render--editable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.tiptap-mathematics-render--editable:hover {
+  background-color: var(--surface-hover);
+}

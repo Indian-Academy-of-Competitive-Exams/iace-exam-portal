@@ -116,7 +116,7 @@ function MathDialog({
             />
           </div>
 
-          <div className="flex min-h-14 items-center justify-center rounded-md border border-border bg-surface-2 px-3 py-2">
+          <div className="flex min-h-20 items-center justify-center overflow-x-auto rounded-md border border-border bg-surface-2 px-3 py-2 text-xl">
             <span
               aria-label="Preview"
               // KaTeX's own output, from LaTeX this dialog owns — no user HTML reaches here.

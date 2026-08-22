@@ -129,6 +129,9 @@
   --tracking-wide: 0.06em;
   --tracking-brand: 0.01em;
 
+  /* Rendered math, relative to the text around it: at 13px a superscript is 9px and unreadable. */
+  --math-scale: 1.25;
+
   /* ==========================================================================
      3. SPACING — 4px base, no off-grid values
      ========================================================================== */
