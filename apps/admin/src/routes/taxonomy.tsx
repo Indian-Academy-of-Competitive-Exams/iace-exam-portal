@@ -25,11 +25,11 @@ import {
   FormField,
   Input,
   linkVariants,
-  PageFrame,
   PageHeader,
   Pagination,
   RowActions,
   SearchInput,
+  TableFrame,
   Tabs,
   TabsContent,
   TabsList,
@@ -139,24 +139,31 @@ export function TaxonomyPage() {
   };
 
   return (
-    <PageFrame header={header}>
-      {/* Filters clear with the tab: the other list's would narrow one nobody set them on. */}
-      <Tabs
-        value={level}
-        onValueChange={(value) => filters.set({ level: value, q: '', subjectId: '' })}
+    // Tabs wraps the frame so the strip can sit in the header while the table stays the scroller.
+    <Tabs
+      value={level}
+      onValueChange={(value) => filters.set({ level: value, q: '', subjectId: '' })}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <TableFrame
+        header={
+          <>
+            {header}
+            <TabsList>
+              <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
+              <TabsTrigger value={LEVELS.TOPICS}>Topics</TabsTrigger>
+            </TabsList>
+          </>
+        }
+        toolbar={onSubjects ? <SubjectsFilters /> : <TopicsFilters />}
       >
-        <TabsList>
-          <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
-          <TabsTrigger value={LEVELS.TOPICS}>Topics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={LEVELS.SUBJECTS}>
-          <SubjectsList />
+        <TabsContent value={LEVELS.SUBJECTS} className="flex min-h-0 flex-1 flex-col pt-0">
+          <SubjectsTable />
         </TabsContent>
-        <TabsContent value={LEVELS.TOPICS}>
-          <TopicsList />
+        <TabsContent value={LEVELS.TOPICS} className="flex min-h-0 flex-1 flex-col pt-0">
+          <TopicsTable />
         </TabsContent>
-      </Tabs>
+      </TableFrame>
 
       {onSubjects ? (
         <NewSubjectDialog open={creating} onOpenChange={setCreating} onDone={done('subjects')} />
@@ -168,11 +175,28 @@ export function TaxonomyPage() {
           onDone={done('topics')}
         />
       )}
-    </PageFrame>
+    </Tabs>
   );
 }
 
-function SubjectsList() {
+function SubjectsFilters() {
+  const filters = useFilters<'q'>();
+
+  return (
+    <FilterBar activeCount={filters.activeCount(['q'])} onClear={() => filters.clear()}>
+      <div className="min-w-56 flex-1">
+        <SearchInput
+          aria-label="Search subjects"
+          placeholder="Search subjects"
+          value={filters.get('q')}
+          onChange={(q) => filters.set({ q })}
+        />
+      </div>
+    </FilterBar>
+  );
+}
+
+function SubjectsTable() {
   const filters = useFilters<'q'>();
   const columns = useMemo(() => subjectColumns(), []);
 
@@ -183,27 +207,14 @@ function SubjectsList() {
   });
 
   return (
-    <div className="flex flex-col gap-4 pt-4">
-      <FilterBar activeCount={filters.activeCount(['q'])} onClear={() => filters.clear()}>
-        <div className="min-w-56 flex-1">
-          <SearchInput
-            aria-label="Search subjects"
-            placeholder="Search subjects"
-            value={filters.get('q')}
-            onChange={(q) => filters.set({ q })}
-          />
-        </div>
-      </FilterBar>
-
-      <DataTable
-        columns={columns}
-        rows={subjects.items}
-        rowKey={(row) => row.id}
-        isLoading={subjects.isLoading}
-        empty="No subjects yet. Add the first one — questions are filed under it."
-        footer={subjects.hasLoaded ? <Pagination {...subjects.pagination} /> : null}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      rows={subjects.items}
+      rowKey={(row) => row.id}
+      isLoading={subjects.isLoading}
+      empty="No subjects yet. Add the first one — questions are filed under it."
+      footer={subjects.hasLoaded ? <Pagination {...subjects.pagination} /> : null}
+    />
   );
 }
 
@@ -270,7 +281,33 @@ function topicColumns(): DataTableColumn<Topic>[] {
   ];
 }
 
-function TopicsList() {
+function TopicsFilters() {
+  const filters = useFilters<'q' | 'subjectId'>();
+
+  return (
+    <FilterBar activeCount={filters.activeCount(TOPIC_FILTERS)} onClear={() => filters.clear()}>
+      <div className="min-w-56 flex-1">
+        <SearchInput
+          aria-label="Search topics"
+          placeholder="Search topics"
+          value={filters.get('q')}
+          onChange={(q) => filters.set({ q })}
+        />
+      </div>
+
+      <div className="w-56">
+        <SubjectPicker
+          aria-label="Filter by subject"
+          value={filters.get('subjectId')}
+          clearable
+          onChange={(value) => filters.set({ subjectId: value })}
+        />
+      </div>
+    </FilterBar>
+  );
+}
+
+function TopicsTable() {
   const filters = useFilters<'q' | 'subjectId'>();
   const subjectId = filters.get('subjectId');
   const columns = useMemo(() => topicColumns(), []);
@@ -282,36 +319,14 @@ function TopicsList() {
   });
 
   return (
-    <div className="flex flex-col gap-4 pt-4">
-      <FilterBar activeCount={filters.activeCount(TOPIC_FILTERS)} onClear={() => filters.clear()}>
-        <div className="min-w-56 flex-1">
-          <SearchInput
-            aria-label="Search topics"
-            placeholder="Search topics"
-            value={filters.get('q')}
-            onChange={(q) => filters.set({ q })}
-          />
-        </div>
-
-        <div className="w-56">
-          <SubjectPicker
-            aria-label="Filter by subject"
-            value={subjectId}
-            clearable
-            onChange={(value) => filters.set({ subjectId: value })}
-          />
-        </div>
-      </FilterBar>
-
-      <DataTable
-        columns={columns}
-        rows={topics.items}
-        rowKey={(row) => row.id}
-        isLoading={topics.isLoading}
-        empty="No topics here yet."
-        footer={topics.hasLoaded ? <Pagination {...topics.pagination} /> : null}
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      rows={topics.items}
+      rowKey={(row) => row.id}
+      isLoading={topics.isLoading}
+      empty="No topics here yet."
+      footer={topics.hasLoaded ? <Pagination {...topics.pagination} /> : null}
+    />
   );
 }
 
