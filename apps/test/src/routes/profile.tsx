@@ -1,19 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Pencil } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   GENDERS,
   todayISO,
   updateMeSchema,
+  type Me,
   type UpdateMeInput,
   type Gender,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
+  Badge,
   Button,
   Combobox,
   DatePicker,
@@ -25,10 +27,11 @@ import {
   SkeletonParagraph,
   Textarea,
 } from '@iace/ui';
+import { DocumentCard } from '../components/document-card';
 import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../lib/constants';
 
 /** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
@@ -41,9 +44,10 @@ const FORM_FIELDS = [
   'profile.gender',
 ] as const;
 
-/** The three pre-test fields sit in their own card; everything below is optional and says so. */
+/** One page in two states: view mode is the same fields, inert, so nothing moves on Edit. */
 export function ProfilePage() {
   const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
 
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
 
@@ -84,22 +88,28 @@ export function ProfilePage() {
       // what changes it — without this the prompt would still be there.
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
       form.reset(form.getValues());
+      setIsEditing(false);
     },
     onError: (error) => applyFieldErrors(error, form.setError, FORM_FIELDS),
   });
 
+  const ready = !me.isPending && !me.error;
+
   return (
     <FormPanel
+      disabled={!isEditing}
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
-        !me.isPending && !me.error ? (
+        ready && isEditing ? (
           <>
             {/* Cancel is neutral grey, never red — it destroys nothing. */}
             <Button
               type="button"
               variant="secondary"
-              disabled={!form.formState.isDirty}
-              onClick={() => form.reset()}
+              onClick={() => {
+                form.reset();
+                setIsEditing(false);
+              }}
             >
               Discard
             </Button>
@@ -111,13 +121,15 @@ export function ProfilePage() {
       }
       header={
         <PageHeader
-          breadcrumbs={
-            <PageCrumbs
-              nav={NAV_ITEMS}
-              tail={[{ label: 'Profile', to: ROUTES.PROFILE }, { label: 'Your details' }]}
-            />
+          title="Your profile"
+          action={
+            ready && !isEditing ? (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Pencil aria-hidden />
+                Edit details
+              </Button>
+            ) : undefined
           }
-          title="Your details"
         />
       }
     >
@@ -125,8 +137,10 @@ export function ProfilePage() {
 
       {me.isPending && <SkeletonParagraph lines={8} />}
       {me.error && <Alert variant="danger">Could not load your details.</Alert>}
-      {!me.isPending && !me.error && (
+      {ready && me.data && (
         <>
+          {!isEditing && <Outstanding me={me.data} />}
+
           <FormSection title="Needed before a test">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -174,6 +188,11 @@ export function ProfilePage() {
                 error={form.formState.errors.fullName?.message}
               >
                 {(control) => <Input {...control} {...form.register('fullName')} />}
+              </Field>
+
+              <Field htmlFor="mobile" label="Mobile">
+                {/* The one field an admin owns; it is here so the page shows the whole record. */}
+                {(control) => <Input {...control} readOnly value={`+91 ${me.data.mobile}`} />}
               </Field>
 
               <Field
@@ -228,11 +247,22 @@ export function ProfilePage() {
             </div>
           </FormSection>
 
+          <FormSection title="Your photo">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <DocumentCard
+                kind="photo"
+                label="Passport photo"
+                url={me.data.profile?.photoUrl ?? null}
+              />
+            </div>
+          </FormSection>
+
           <HistoryEditor
             control={form.control}
             name="profile.educationDetails"
             title="Education"
             addLabel="Add a qualification"
+            empty="No qualifications added yet."
             columns={[
               { key: 'level', label: 'Qualification', span: 3 },
               { key: 'board', label: 'Board / University', span: 3 },
@@ -248,6 +278,7 @@ export function ProfilePage() {
             name="profile.pastExamHistory"
             title="Exams sat elsewhere"
             addLabel="Add an exam"
+            empty="No previous exams added yet."
             columns={[
               { key: 'exam', label: 'Exam', span: 3 },
               { key: 'year', label: 'Year', type: 'number', span: 1.4 },
@@ -258,5 +289,46 @@ export function ProfilePage() {
         </>
       )}
     </FormPanel>
+  );
+}
+
+/** What is left to do, as a list rather than a percentage. Editing hides it: the fields are the list. */
+function Outstanding({ me }: Readonly<{ me: Me }>) {
+  const profile = me.profile;
+  const items = [
+    { label: "Mother's name", done: Boolean(profile?.motherName), preTest: true },
+    { label: "Father's name", done: Boolean(profile?.fatherName), preTest: true },
+    { label: 'Date of birth', done: Boolean(profile?.dob), preTest: true },
+    { label: 'Gender', done: Boolean(profile?.gender), preTest: false },
+    { label: 'Passport photo', done: Boolean(profile?.photoUrl), preTest: false },
+  ];
+  const outstanding = items.filter((item) => !item.done);
+
+  if (outstanding.length === 0) {
+    return (
+      <Alert variant="success">
+        <span className="flex items-center gap-2">
+          <Check className="size-4" aria-hidden />
+          Your profile is complete. Nothing else needed.
+        </span>
+      </Alert>
+    );
+  }
+
+  return (
+    <FormSection title="Still to add">
+      <div className="flex flex-col gap-2">
+        {outstanding.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-foreground">{item.label}</span>
+            {item.preTest ? (
+              <Badge variant="warning">Needed before a test</Badge>
+            ) : (
+              <Badge variant="neutral">Optional</Badge>
+            )}
+          </div>
+        ))}
+      </div>
+    </FormSection>
   );
 }

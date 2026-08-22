@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { FormPanel, FormSection } from '../src/components/ui/form-panel';
+import { Combobox } from '../src/components/ui/combobox';
+import { Input } from '../src/components/ui/input';
 
 afterEach(cleanup);
 
@@ -103,5 +105,46 @@ describe('FormPanel', () => {
     const heading = screen.getByRole('heading', { name: 'Where it is filed' });
     assert.equal(heading.closest('section')?.className.includes('border'), false);
     assert.ok(screen.getByText('2 subjects'));
+  });
+});
+
+describe('a read-only FormPanel', () => {
+  /** `.disabled` reflects an element's OWN attribute, so the guarantee is `:disabled`. */
+  it('makes every control inside inert, including the button a Combobox renders', () => {
+    render(
+      <FormPanel disabled>
+        <Input aria-label="Full name" />
+        <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
+      </FormPanel>,
+    );
+
+    assert.ok(screen.getByLabelText('Full name').matches(':disabled'), 'the input is inert');
+    assert.ok(
+      screen.getByLabelText('Gender').matches(':disabled'),
+      'the combobox trigger is inert',
+    );
+  });
+
+  /** The way out of read-only lives in the footer, so disabling it would strand the reader. */
+  it('leaves the footer live, so Edit is still reachable', () => {
+    render(
+      <FormPanel disabled footer={<button type="button">Edit details</button>}>
+        <Input aria-label="Full name" />
+      </FormPanel>,
+    );
+
+    assert.ok(!screen.getByRole('button', { name: 'Edit details' }).matches(':disabled'));
+  });
+
+  it('leaves the same controls live when it is not disabled', () => {
+    render(
+      <FormPanel>
+        <Input aria-label="Full name" />
+        <Combobox aria-label="Gender" value="" onChange={() => {}} items={[]} />
+      </FormPanel>,
+    );
+
+    assert.ok(!screen.getByLabelText('Full name').matches(':disabled'));
+    assert.ok(!screen.getByLabelText('Gender').matches(':disabled'));
   });
 });

@@ -1,7 +1,7 @@
 import { useFieldArray, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import { PROFILE_LIST_MAX } from '@iace/contracts';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@iace/ui';
+import { Button, FormSection, Input, Label } from '@iace/ui';
 
 /**
  * Rows a student adds to: schooling, or exams sat elsewhere. Every field but the first
@@ -13,12 +13,15 @@ export function HistoryEditor<T extends FieldValues>({
   title,
   addLabel,
   columns,
+  empty,
   emptyRow,
 }: Readonly<{
   control: Control<T>;
   name: Path<T>;
   title: string;
   addLabel: string;
+  /** What the section says when the student has added nothing yet. */
+  empty: string;
   /** `span` is a fraction of the row; they need not add up to anything. */
   columns: readonly { key: string; label: string; type?: 'text' | 'number'; span?: number }[];
   emptyRow: Record<string, string>;
@@ -31,15 +34,9 @@ export function HistoryEditor<T extends FieldValues>({
   const template = `${columns.map((c) => track(c.span ?? 1)).join(' ')} auto`;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-
-      <CardContent className="flex flex-col gap-4">
-        {fields.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing added yet.</p>
-        ) : null}
+    <FormSection title={title}>
+      <div className="flex flex-col gap-4">
+        {fields.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : null}
 
         {fields.map((field, index) => (
           <div
@@ -96,7 +93,7 @@ export function HistoryEditor<T extends FieldValues>({
             {addLabel}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </FormSection>
   );
 }

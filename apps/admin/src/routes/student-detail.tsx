@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
-import { FileText, Plus, Save, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   EXAM_FAMILIES,
@@ -517,7 +517,7 @@ function StudentStateSwitches({ detail }: Readonly<{ detail: StudentDetail }>) {
 export function StudentDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
-  const [saved, setSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const student = useQuery({
     queryKey: ['admin', 'student', id],
@@ -577,7 +577,7 @@ export function StudentDetailPage() {
       queryClient.setQueryData(['admin', 'student', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
       form.reset(toFormValues(updated));
-      setSaved(true);
+      setIsEditing(false);
     },
     onError: (error) => {
       applyFieldErrors(error, form.setError, FORM_FIELDS);
@@ -614,23 +614,35 @@ export function StudentDetailPage() {
 
   return (
     <FormPanel
-      onSubmit={form.handleSubmit((values) => {
-        setSaved(false);
-        save.mutate(values);
-      })}
+      disabled={!isEditing}
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
-        <>
-          {save.error ? <Alert variant="danger">Check the highlighted fields above.</Alert> : null}
-          {saved && !form.formState.isDirty ? <Alert variant="success">Saved.</Alert> : null}
-          <Button
-            type="submit"
-            icon={<Save aria-hidden />}
-            loading={save.isPending}
-            disabled={!form.formState.isDirty}
-          >
-            Save changes
-          </Button>
-        </>
+        isEditing ? (
+          <>
+            {save.error ? (
+              <Alert variant="danger">Check the highlighted fields above.</Alert>
+            ) : null}
+            {/* Cancel is neutral grey, never red — it destroys nothing. */}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                form.reset();
+                setIsEditing(false);
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              type="submit"
+              icon={<Save aria-hidden />}
+              loading={save.isPending}
+              disabled={!form.formState.isDirty}
+            >
+              Save changes
+            </Button>
+          </>
+        ) : undefined
       }
       header={
         <PageHeader
@@ -639,7 +651,18 @@ export function StudentDetailPage() {
           }
           title={detail.fullName ?? detail.mobile}
           meta={`+91 ${detail.mobile}`}
-          action={<StudentStateSwitches detail={detail} />}
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Outside the fieldset, so suspending a sign-in never waits on Edit. */}
+              <StudentStateSwitches detail={detail} />
+              {!isEditing ? (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil aria-hidden />
+                  Edit details
+                </Button>
+              ) : null}
+            </div>
+          }
         />
       }
     >

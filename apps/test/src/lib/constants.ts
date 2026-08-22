@@ -7,7 +7,6 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
   PROFILE: '/profile',
-  PROFILE_EDIT: '/profile/edit',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
   NOT_FOUND: '*',

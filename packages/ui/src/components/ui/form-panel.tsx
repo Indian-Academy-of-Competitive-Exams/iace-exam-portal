@@ -9,6 +9,8 @@ export interface FormPanelProps {
   footer?: React.ReactNode;
   /** Makes the card a real `<form>`, so Enter submits and the footer button can be `type="submit"`. */
   onSubmit?: NonNullable<React.FormHTMLAttributes<HTMLFormElement>['onSubmit']>;
+  /** Read-only: the same layout, every control inert. The footer stays live, so Edit is reachable. */
+  disabled?: boolean;
   children: React.ReactNode;
   className?: string;
 }
@@ -21,10 +23,18 @@ export function FormPanel({
   header,
   footer,
   onSubmit,
+  disabled,
   children,
   className,
 }: Readonly<FormPanelProps>) {
-  const body = <div className={cn(BODY, className)}>{children}</div>;
+  const body = (
+    <div className={cn(BODY, className)}>
+      {/* A fieldset disables every control under it natively; `contents` keeps it out of the layout. */}
+      <fieldset disabled={disabled} className="contents">
+        {children}
+      </fieldset>
+    </div>
+  );
   const foot = footer ? (
     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-4">
       {footer}
