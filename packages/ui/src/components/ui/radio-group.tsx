@@ -10,10 +10,7 @@ interface RadioGroupContextValue {
 
 const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(null);
 
-export interface RadioGroupProps extends Omit<
-  React.HTMLAttributes<HTMLFieldSetElement>,
-  'onChange'
-> {
+export interface RadioGroupProps extends Omit<React.HTMLAttributes<HTMLElement>, 'onChange'> {
   /** Shared by every radio in the group — the browser keys arrow-key roving off it. */
   name: string;
   value?: string;
@@ -23,6 +20,8 @@ export interface RadioGroupProps extends Omit<
   legend: React.ReactNode;
   /** The stem is already on screen above the options, so it is not repeated. */
   hideLegend?: boolean;
+  /** One row, label and all. A `legend` is drawn above its fieldset and cannot sit in a line. */
+  inline?: boolean;
 }
 
 /**
@@ -36,6 +35,7 @@ export function RadioGroup({
   disabled,
   legend,
   hideLegend = false,
+  inline = false,
   className,
   children,
   ...props
@@ -44,6 +44,23 @@ export function RadioGroup({
     () => ({ name, value, onValueChange, disabled }),
     [name, value, onValueChange, disabled],
   );
+  const labelId = React.useId();
+
+  if (inline) {
+    return (
+      <div
+        role="radiogroup"
+        aria-labelledby={labelId}
+        className={cn('flex flex-wrap items-center gap-x-2 gap-y-1', className)}
+        {...props}
+      >
+        <span id={labelId} className="text-sm font-medium text-foreground">
+          {legend}
+        </span>
+        <RadioGroupContext.Provider value={context}>{children}</RadioGroupContext.Provider>
+      </div>
+    );
+  }
 
   return (
     <fieldset className={cn('flex flex-col gap-1', className)} disabled={disabled} {...props}>
@@ -86,6 +103,7 @@ export const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemP
           type="radio"
           name={group.name}
           value={value}
+          disabled={group.disabled}
           // Uncontrolled when the group has no `value`: react-hook-form owns it.
           checked={group.value === undefined ? undefined : group.value === value}
           className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:shadow-focus focus-visible:outline-none"

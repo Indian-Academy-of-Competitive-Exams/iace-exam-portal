@@ -182,15 +182,24 @@ describe('ListView — matching all or any', () => {
   it('offers the choice once there are two filters to combine', () => {
     view(matchable);
 
-    assert.ok(screen.getByRole('radio', { name: 'all filters' }));
-    assert.ok(screen.getByRole('radio', { name: 'any filter' }));
+    assert.ok(screen.getByRole('radio', { name: 'All' }));
+    assert.ok(screen.getByRole('radio', { name: 'Any' }));
   });
 
   it('says it in words the reader already uses, not AND and OR', () => {
     view(matchable);
 
+    assert.ok(screen.getByText('Match filters'));
     assert.equal(screen.queryByText('AND'), null);
     assert.equal(screen.queryByText('OR'), null);
+  });
+
+  /** One row beside the other controls: a fieldset's legend is drawn above, on a line of its own. */
+  it('names the group without taking a row for the name', () => {
+    view(matchable);
+
+    const group = screen.getByRole('radiogroup', { name: 'Match filters' });
+    assert.equal(group.tagName, 'DIV');
   });
 
   /** With one thing to combine, all and any ask the same question — the control is noise. */
@@ -210,7 +219,7 @@ describe('ListView — matching all or any', () => {
       </TooltipProvider>,
     );
 
-    assert.equal(screen.queryByRole('radio', { name: 'all filters' }), null);
+    assert.equal(screen.queryByRole('radio', { name: 'All' }), null);
   });
 
   /** A sort is an order and a date range scopes the report: neither is a choice to combine. */
@@ -231,14 +240,14 @@ describe('ListView — matching all or any', () => {
       </TooltipProvider>,
     );
 
-    assert.equal(screen.queryByRole('radio', { name: 'all filters' }), null);
+    assert.equal(screen.queryByRole('radio', { name: 'All' }), null);
   });
 
   it('hands back which way the reader chose', () => {
     const seen: boolean[] = [];
     view({ matchAny: false, setMatchAny: (next) => seen.push(next) });
 
-    fireEvent.click(screen.getByRole('radio', { name: 'any filter' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Any' }));
     assert.deepEqual(seen, [true]);
   });
 });

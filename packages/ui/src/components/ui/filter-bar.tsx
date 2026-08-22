@@ -56,14 +56,14 @@ export function FilterBar({
         {/* Plain words: the people reading this ran exam centres, not query planners. */}
         {onMatchAnyChange ? (
           <RadioGroup
-            className="flex-row items-center gap-3"
+            inline
             name="filter-match"
-            legend="Match"
+            legend="Match filters"
             value={matchAny ? MATCH_ANY_VALUE : MATCH_ALL_VALUE}
             onValueChange={(next) => onMatchAnyChange(next === MATCH_ANY_VALUE)}
           >
-            <RadioGroupItem value={MATCH_ALL_VALUE} label="all filters" />
-            <RadioGroupItem value={MATCH_ANY_VALUE} label="any filter" />
+            <RadioGroupItem value={MATCH_ALL_VALUE} label="All" />
+            <RadioGroupItem value={MATCH_ANY_VALUE} label="Any" />
           </RadioGroup>
         ) : null}
 

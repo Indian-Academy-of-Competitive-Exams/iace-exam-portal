@@ -102,3 +102,29 @@ describe('RadioGroup', () => {
     );
   });
 });
+
+/** A filter bar puts the label and the choices on one line; a fieldset's legend cannot do that. */
+describe('RadioGroup — inline', () => {
+  it('names the group from a label sitting in the same row', () => {
+    render(
+      <RadioGroup inline name="match" legend="Match filters" value="all">
+        <RadioGroupItem value="all" label="All" />
+        <RadioGroupItem value="any" label="Any" />
+      </RadioGroup>,
+    );
+
+    const group = screen.getByRole('radiogroup', { name: 'Match filters' });
+    assert.equal(group.tagName, 'DIV');
+    assert.ok(screen.getByRole('radio', { name: 'All' }));
+  });
+
+  it('still disables every radio when the group is disabled', () => {
+    render(
+      <RadioGroup inline disabled name="match" legend="Match filters" value="all">
+        <RadioGroupItem value="all" label="All" />
+      </RadioGroup>,
+    );
+
+    assert.equal((screen.getByRole('radio', { name: 'All' }) as HTMLInputElement).disabled, true);
+  });
+});
