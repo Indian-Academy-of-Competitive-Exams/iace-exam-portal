@@ -15,7 +15,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         'transition-[box-shadow,border-color] placeholder:text-muted-foreground',
         'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
         'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:shadow-focus-invalid',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled disabled:text-disabled-foreground',
         className,
       )}
       {...props}

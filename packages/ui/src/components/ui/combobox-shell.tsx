@@ -11,7 +11,7 @@ export const FIELD_TRIGGER_CLASS = [
   'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface px-3 text-sm shadow-sm',
   'transition-[box-shadow,border-color] hover:border-ring',
   'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
-  'disabled:cursor-not-allowed disabled:opacity-50',
+  'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled disabled:text-disabled-foreground',
 ].join(' ');
 
 /** How close to the end counts as "nearly there", in pixels. */
