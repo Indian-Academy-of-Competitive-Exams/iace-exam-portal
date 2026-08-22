@@ -158,7 +158,15 @@ describe('TableFrame', () => {
 describe('a framed table inside a tab', () => {
   const tabbed = () => (
     <Tabs value="a">
-      <TableFrame header={<TabsList>{null}</TabsList>} toolbar={<input aria-label="Search" />}>
+      <TableFrame
+        header={<h1>Subjects and topics</h1>}
+        toolbar={
+          <>
+            <TabsList className="-mx-4 mb-4 px-4">{null}</TabsList>
+            <input aria-label="Search" />
+          </>
+        }
+      >
         <TabsContent value="a" className="flex min-h-0 flex-1 flex-col pt-0">
           {table()}
         </TabsContent>

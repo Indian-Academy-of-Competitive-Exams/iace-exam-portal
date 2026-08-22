@@ -146,16 +146,18 @@ export function TaxonomyPage() {
       className="flex min-h-0 flex-1 flex-col"
     >
       <TableFrame
-        header={
+        header={header}
+        toolbar={
           <>
-            {header}
-            <TabsList>
+            {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
+            <TabsList className="-mx-4 mb-4 px-4">
               <TabsTrigger value={LEVELS.SUBJECTS}>Subjects</TabsTrigger>
               <TabsTrigger value={LEVELS.TOPICS}>Topics</TabsTrigger>
             </TabsList>
+
+            {onSubjects ? <SubjectsFilters /> : <TopicsFilters />}
           </>
         }
-        toolbar={onSubjects ? <SubjectsFilters /> : <TopicsFilters />}
       >
         <TabsContent value={LEVELS.SUBJECTS} className="flex min-h-0 flex-1 flex-col pt-0">
           <SubjectsTable />
