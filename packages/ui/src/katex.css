@@ -1,0 +1,2 @@
+/* KaTeX's own stylesheet. An app import, like tokens.css: node cannot load .css in a test. */
+@import 'katex/dist/katex.min.css';

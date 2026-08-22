@@ -2,9 +2,11 @@ import * as React from 'react';
 import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Mathematics } from '@tiptap/extension-mathematics';
-import 'katex/dist/katex.min.css';
+import { Superscript } from '@tiptap/extension-superscript';
+import { Subscript } from '@tiptap/extension-subscript';
 import { cn } from '../../lib/utils';
 import { useFormDisabled } from './form-panel';
+import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 
 export interface RichTextProps {
   value: string;
@@ -59,6 +61,7 @@ export function RichText({
   className,
 }: Readonly<RichTextProps>) {
   const off = useFormDisabled() || (disabled ?? false);
+  const [math, setMath] = React.useState<MathDraft | null>(null);
 
   const editor = useEditor({
     editable: !off,
@@ -66,7 +69,15 @@ export function RichText({
       StarterKit.configure(
         singleLine ? { heading: false, bulletList: false, orderedList: false } : {},
       ),
-      Mathematics,
+      Superscript,
+      Subscript,
+      Mathematics.configure({
+        // A half-typed formula shows in red rather than taking the editor down with it.
+        katexOptions: { throwOnError: false },
+        inlineOptions: {
+          onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
+        },
+      }),
     ],
     content: documentFrom(value),
     onUpdate: ({ editor: current }: { editor: Editor }) => onChange(current.getHTML()),
@@ -95,6 +106,15 @@ export function RichText({
       className={cn(SHELL, !singleLine && 'min-h-24', off && OFF, className)}
       aria-invalid={invalid}
     >
+      {/* No toolbar when it is read-only: a row of inert buttons says nothing the grey does not. */}
+      {editor && !off ? (
+        <RichTextToolbar
+          editor={editor}
+          singleLine={singleLine}
+          math={math}
+          onMathChange={setMath}
+        />
+      ) : null}
       <EditorContent editor={editor} />
     </div>
   );

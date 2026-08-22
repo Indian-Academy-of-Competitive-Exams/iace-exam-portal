@@ -2,6 +2,8 @@
 // against these CSS variables. Static imports, so the bundler can see them.
 import '@iace/ui/tokens.css';
 import '@iace/ui/components.css';
+// Only admin authors questions, so the exam app never pays for the equation styles.
+import '@iace/ui/katex.css';
 import './index.css';
 
 import { toast } from '@iace/ui';
