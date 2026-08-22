@@ -361,15 +361,3 @@ describe('AdminsService — setActive', () => {
     );
   });
 });
-
-describe('AdminsService — student sync', () => {
-  it('is a finished trigger around an unfinished body, and changes nothing', async () => {
-    const ctx = build();
-
-    const result = await ctx.service.triggerStudentSync();
-
-    assert.equal(result.status, 'NOT_IMPLEMENTED');
-    assert.equal(result.syncedCount, null);
-    assert.ok(Date.parse(result.startedAt) > 0, 'startedAt must be a real timestamp');
-  });
-});

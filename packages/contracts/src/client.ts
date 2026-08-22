@@ -41,17 +41,14 @@ import {
 import {
   ADMIN_ADMIN_ROUTES,
   ADMIN_FEATURE_ROUTES,
-  ADMIN_SYNC_ROUTES,
   adminSchema,
   featureSchema,
-  studentSyncResultSchema,
   type Admin,
   type AdminListQueryInput,
   type CreateAdminInput,
   type Feature,
   type PermissionGrantBody,
   type PermissionGrantInput,
-  type StudentSyncResult,
   type UpdateAdminInput,
 } from './admins';
 import { healthResponseSchema, type HealthResponse } from './health';
@@ -568,15 +565,6 @@ export function createApiClient(options: ApiClientOptions) {
           }),
       },
 
-      sync: {
-        /** Stubbed server-side — the plumbing is finished, the fetch is not. */
-        students: (): Promise<StudentSyncResult> =>
-          request(ADMIN_SYNC_ROUTES.students, {
-            method: 'POST',
-            schema: studentSyncResultSchema,
-          }),
-      },
-
       branches: {
         list: (query: BranchListQueryInput = {}): Promise<Paginated<Branch>> =>
           requestPaginated(`${ADMIN_BRANCH_ROUTES.list}${queryString({ ...query })}`, {
@@ -870,6 +858,19 @@ export function createApiClient(options: ApiClientOptions) {
           request(IMPORT_ROUTES.studentsCommit, {
             method: 'POST',
             body: fileBody(file),
+            schema: studentImportResultSchema,
+          }),
+
+        /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */
+        previewPortalStudents: (): Promise<StudentImportPlan> =>
+          request(IMPORT_ROUTES.studentsPortalPreview, {
+            method: 'POST',
+            schema: studentImportPlanSchema,
+          }),
+
+        commitPortalStudents: (): Promise<StudentImportResult> =>
+          request(IMPORT_ROUTES.studentsPortalCommit, {
+            method: 'POST',
             schema: studentImportResultSchema,
           }),
         /** The question workbook: Questions, Instructions, and the live taxonomy on Lists. */

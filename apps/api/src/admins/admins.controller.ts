@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -17,7 +17,6 @@ import {
   type Feature,
   type PermissionGrantBody,
   type SetAdminActiveBody,
-  type StudentSyncResult,
   type UpdateAdminBody,
 } from '@iace/contracts';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -96,12 +95,5 @@ export class AdminsController {
       level: permissionLevelSchema.parse(level),
       adminId,
     });
-  }
-
-  /** Stubbed service body; the plumbing around it is finished. */
-  @Post('sync/students')
-  @HttpCode(200)
-  syncStudents(): Promise<StudentSyncResult> {
-    return this.admins.triggerStudentSync();
   }
 }

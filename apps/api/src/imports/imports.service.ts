@@ -7,6 +7,7 @@ import {
   type AuditAction,
   type AuditFeature,
   type ImportLogStatus,
+  type ImportSource,
   type StudentImportPlan,
   type StudentImportResult,
   type StudentImportRow,
@@ -16,6 +17,7 @@ import { AuthService, defaultPinFor } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
+import { fetchPortalRoster, type PortalFetch } from './portal-roster';
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 import { toDateColumn } from '../common/time/institute-day';
@@ -57,7 +59,36 @@ export class ImportsService {
    */
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     const plan = await this.planStudents(file);
-    const logId = await this.openRun(file, plan.summary.total, plan.fileErrors, actorId);
+    return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
+  }
+
+  /** What the portal WOULD do, judged by the same planner the sheet goes through. */
+  async previewPortalStudents(): Promise<StudentImportPlan> {
+    const fetched = await fetchPortalRoster();
+    return this.planPortal(fetched);
+  }
+
+  /** Re-fetches rather than trusting a plan sent back: the roster may have moved on. */
+  async commitPortalStudents(actorId: string): Promise<StudentImportResult> {
+    const fetched = await fetchPortalRoster();
+    const plan = await this.planPortal(fetched);
+    return this.applyPlan(plan, fetched.payload, IMPORT_SOURCE.SCRIPT, actorId);
+  }
+
+  /** The write half, shared: the two sources differ in origin and artifact, never in what is written. */
+  private async applyPlan(
+    plan: StudentImportPlan,
+    artifact: Buffer,
+    source: ImportSource,
+    actorId: string,
+  ): Promise<StudentImportResult> {
+    const logId = await this.openRun(
+      artifact,
+      plan.summary.total,
+      plan.fileErrors,
+      source,
+      actorId,
+    );
 
     let created = 0;
     let updated = 0;
@@ -149,6 +180,12 @@ export class ImportsService {
     return planStudentImport(table, await this.contextFor(table));
   }
 
+  /** A failed fetch is a SOURCE error, never a row error — there are no rows to blame. */
+  private async planPortal(fetched: PortalFetch): Promise<StudentImportPlan> {
+    const plan = planStudentImport(fetched.table, await this.contextFor(fetched.table));
+    return { ...plan, fileErrors: [...fetched.errors, ...plan.fileErrors] };
+  }
+
   /**
    * Mobile -> the hash of that student's starting PIN. Bounded concurrency, not
    * Promise.all: argon2 is memory-hard, and a thousand at once would ask for ~19GB.
@@ -213,12 +250,13 @@ export class ImportsService {
     file: Buffer,
     total: number,
     fileErrors: readonly string[],
+    source: ImportSource,
     actorId: string,
   ): Promise<string> {
     const log = await this.prisma.importLog.create({
       data: {
         feature: AUDIT_FEATURE.STUDENT,
-        source: IMPORT_SOURCE.SHEET,
+        source,
         actorId,
         total,
         status: IMPORT_LOG_STATUS.PREVIEWED,

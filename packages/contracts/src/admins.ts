@@ -160,20 +160,6 @@ export const permissionGrantSchema = z.object({
 export type PermissionGrantInput = z.input<typeof permissionGrantSchema>;
 export type PermissionGrantBody = z.infer<typeof permissionGrantSchema>;
 
-// ============================================================================
-// Student sync (stub)
-// ============================================================================
-
-/** The shape the trigger answers with. The service body is the only unfinished part. */
-export const studentSyncResultSchema = z.object({
-  startedAt: z.string(),
-  /** Null while the sync is a stub — there is nothing to count yet. */
-  syncedCount: z.number().int().nullable(),
-  status: z.enum(['NOT_IMPLEMENTED', 'COMPLETED']),
-  message: z.string(),
-});
-export type StudentSyncResult = z.infer<typeof studentSyncResultSchema>;
-
 export const ADMIN_ADMIN_ROUTES = {
   list: '/admin/admins',
   create: '/admin/admins',
@@ -189,8 +175,4 @@ export const ADMIN_FEATURE_ROUTES = {
   /** In the path, not a body: proxies drop a DELETE body, and a silent no-op revoke is the worst case. */
   revoke: (featureKey: FeatureKey, level: PermissionLevel, adminId: string) =>
     `/admin/features/${featureKey}/permissions/${level}/${adminId}`,
-} as const;
-
-export const ADMIN_SYNC_ROUTES = {
-  students: '/admin/sync/students',
 } as const;

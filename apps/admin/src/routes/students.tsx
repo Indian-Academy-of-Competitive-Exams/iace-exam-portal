@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RefreshCw, Upload, UserPlus } from 'lucide-react';
+import { Upload, UserPlus } from 'lucide-react';
 import {
   BRANCH_TYPE,
   EXAM_FAMILIES,
@@ -28,7 +28,6 @@ import {
   BadgeList,
   Button,
   Combobox,
-  ConfirmDialog,
   DataTable,
   DatePicker,
   Field,
@@ -49,7 +48,6 @@ import {
   cn,
   digitsOnly,
   linkVariants,
-  toast,
   type DataTableColumn,
   useTruncation,
 } from '@iace/ui';
@@ -218,7 +216,6 @@ export function StudentsPage() {
       title="Students"
       action={
         <div className="flex flex-wrap gap-2">
-          <SyncStudentsButton />
           {/* Write actions appear only with WRITE. Hiding is not the security
                 — the endpoints enforce it — it is not offering a control that
                 would be refused. */}
@@ -620,53 +617,5 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         )}
       </FormField>
     </FormDialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** Pulls students from the main portal. Super admin only, and a stub today — it says so. */
-function SyncStudentsButton() {
-  const { identity: admin } = useAuth();
-  const [confirming, setConfirming] = useState(false);
-
-  const sync = useMutation({
-    mutationFn: () => api.admin.sync.students(),
-    onSuccess: (result) => {
-      setConfirming(false);
-      toast.info(result.message);
-    },
-  });
-
-  if (!admin?.isSuperAdmin) return null;
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        icon={<RefreshCw aria-hidden />}
-        loading={sync.isPending}
-        onClick={() => setConfirming(true)}
-        title="Pull students from the main portal"
-      >
-        Sync from portal
-      </Button>
-
-      {/* One click, an unknown number of student records written from a system
-          this screen does not control, and no preview of what is about to
-          change — the three things that make an action worth asking about. Its
-          neighbours on this page (import, add student) each show what they
-          would do before they do it; this one cannot, so it asks instead. */}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        loading={sync.isPending}
-        title="Pull students from the main portal?"
-        description="Every student the portal returns is created here, or updated if they already exist. There is no preview and no undo — what the portal says is what this roster will hold."
-        confirmLabel="Pull from portal"
-        onConfirm={() => sync.mutate()}
-      />
-    </>
   );
 }

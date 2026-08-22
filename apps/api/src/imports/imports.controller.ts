@@ -23,7 +23,13 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  CurrentUser,
+  RequiresFeature,
+  RequiresSuperAdmin,
+  type AuthenticatedUser,
+} from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
 import { buildStudentTemplate } from './workbook';
@@ -79,6 +85,21 @@ export class ImportsController {
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
     return this.imports.commitStudents(this.bufferOf(file), user.id);
+  }
+
+  /** Super admin, as the old fire-and-forget trigger was: it pulls a whole roster from elsewhere. */
+  @RequiresSuperAdmin()
+  @Post('students/portal/preview')
+  @HttpCode(HttpStatus.OK)
+  previewPortal(): Promise<StudentImportPlan> {
+    return this.imports.previewPortalStudents();
+  }
+
+  @RequiresSuperAdmin()
+  @Post('students/portal/commit')
+  @HttpCode(HttpStatus.OK)
+  commitPortal(@CurrentUser() user: AuthenticatedUser): Promise<StudentImportResult> {
+    return this.imports.commitPortalStudents(user.id);
   }
 
   /**

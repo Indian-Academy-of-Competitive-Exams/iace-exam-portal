@@ -18,7 +18,6 @@ import {
   type PermissionGrantBody,
   type Paginated,
   type PermissionLevel,
-  type StudentSyncResult,
   type UpdateAdminBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -301,22 +300,6 @@ export class AdminsService {
     }
 
     return this.featureWithGrants(input.featureKey);
-  }
-
-  // ==========================================================================
-  // Student sync — trigger only
-  // ==========================================================================
-
-  /** Pull students from the institute's main portal. */
-  // No await yet — the body is a stub. `async` stays so the signature does not
-  // change when the real fetch lands.
-  async triggerStudentSync(): Promise<StudentSyncResult> {
-    return {
-      startedAt: new Date().toISOString(),
-      syncedCount: null,
-      status: 'NOT_IMPLEMENTED',
-      message: 'Student sync is not implemented yet. Nothing was changed.',
-    };
   }
 
   // ==========================================================================

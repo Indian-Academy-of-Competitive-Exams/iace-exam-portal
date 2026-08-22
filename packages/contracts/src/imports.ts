@@ -79,7 +79,7 @@ export type StudentImportSummary = z.infer<typeof studentImportSummarySchema>;
 export const studentImportPlanSchema = z.object({
   rows: z.array(studentImportRowSchema),
   summary: studentImportSummarySchema,
-  /** Wrong with the FILE rather than a row — a missing column, an empty upload. */
+  /** Wrong with the SOURCE rather than a row — a missing column, an empty upload, an unreachable portal. */
   fileErrors: z.array(z.string()),
 });
 export type StudentImportPlan = z.infer<typeof studentImportPlanSchema>;
@@ -95,6 +95,9 @@ export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
+  /** The same two steps, with the main portal as the source instead of an upload. */
+  studentsPortalPreview: '/imports/students/portal/preview',
+  studentsPortalCommit: '/imports/students/portal/commit',
   /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
   studentsTemplate: '/imports/students/template',
 } as const;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Download, Upload } from 'lucide-react';
+import { Download, RefreshCw, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
@@ -35,17 +35,28 @@ import {
   TruncatedText,
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
+import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
-/** Preview, then commit. Three bad rows still import the other 397. */
+/** Which roster the plan on screen came from, so Import applies the one that was previewed. */
+type ImportSourceChoice = 'file' | 'portal';
+
+/** Preview, then commit — from a file or from the portal. Three bad rows still import the other 397. */
 export function ImportStudentsPage() {
+  const { identity: admin } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [plan, setPlan] = useState<StudentImportPlan | null>(null);
+  const [source, setSource] = useState<ImportSourceChoice>('file');
 
   const preview = useMutation({
     mutationFn: (chosen: File) => api.admin.imports.previewStudents(chosen),
+    onSuccess: setPlan,
+  });
+
+  const portalPreview = useMutation({
+    mutationFn: () => api.admin.imports.previewPortalStudents(),
     onSuccess: setPlan,
   });
 
@@ -56,7 +67,10 @@ export function ImportStudentsPage() {
         return `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`;
       },
     },
-    mutationFn: (chosen: File) => api.admin.imports.commitStudents(chosen),
+    mutationFn: (chosen: File | null) =>
+      chosen === null
+        ? api.admin.imports.commitPortalStudents()
+        : api.admin.imports.commitStudents(chosen),
   });
 
   const sample = useMutation({
@@ -67,15 +81,28 @@ export function ImportStudentsPage() {
   /** Choosing a file previews it at once — that is why they chose it. */
   const choose = (chosen: File | undefined) => {
     if (!chosen) return;
+    setSource('file');
     setFile(chosen);
     setPlan(null);
     commit.reset();
+    portalPreview.reset();
     preview.reset();
     preview.mutate(chosen);
   };
 
+  /** The portal replaces whatever file was staged: two rosters on one screen is two answers. */
+  const pullFromPortal = () => {
+    setSource('portal');
+    setFile(null);
+    setPlan(null);
+    commit.reset();
+    preview.reset();
+    portalPreview.mutate();
+  };
+
+  const staged = source === 'portal' || file !== null;
   const canCommit =
-    file !== null && plan !== null && plan.summary.willCreate + plan.summary.willUpdate > 0;
+    staged && plan !== null && plan.summary.willCreate + plan.summary.willUpdate > 0;
 
   return (
     <PageFrame
@@ -119,7 +146,7 @@ export function ImportStudentsPage() {
                 colSpan={5}
                 empty={
                   plan === null
-                    ? 'Choose an Excel file to see exactly what it would do. Nothing is written until you press Import.'
+                    ? 'Choose a file, or pull from the portal, to see exactly what it would do. Nothing is written until you press Import.'
                     : 'No rows in that file.'
                 }
               >
@@ -158,6 +185,32 @@ export function ImportStudentsPage() {
             </CardContent>
           </Card>
 
+          {/* Super admin only, as the old trigger was: it pulls a whole roster from a system
+              this screen does not control. */}
+          {admin?.isSuperAdmin ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>From the main portal</CardTitle>
+                <CardDescription>
+                  Reads the roster the portal holds and shows what it would change here. Nothing is
+                  written until you press Import.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <Button
+                  variant="outline"
+                  icon={<RefreshCw aria-hidden />}
+                  loading={portalPreview.isPending}
+                  onClick={pullFromPortal}
+                >
+                  Sync from portal
+                </Button>
+
+                {portalPreview.isPending ? <LoadingState>Reading the portal…</LoadingState> : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Your file</CardTitle>
@@ -180,7 +233,7 @@ export function ImportStudentsPage() {
                 icon={<Upload aria-hidden />}
                 loading={commit.isPending}
                 disabled={!canCommit}
-                onClick={() => file && commit.mutate(file)}
+                onClick={() => commit.mutate(file)}
               >
                 Import {plan ? `${plan.summary.willCreate + plan.summary.willUpdate} rows` : ''}
               </Button>
