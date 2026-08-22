@@ -308,3 +308,50 @@
     background: transparent;
   }
 }
+
+/* ============================================================================
+   RICH CONTENT — a question's own markup, wherever it is shown
+   The editor carries this class and so will the exam renderer, so a table looks
+   the same to the author and to the candidate from one stylesheet.
+   ========================================================================== */
+.rich-content table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin: var(--space-3) 0;
+  overflow: hidden;
+}
+
+.rich-content th,
+.rich-content td {
+  border: 1px solid var(--border-strong);
+  padding: var(--pad-cell-y) var(--pad-cell-x);
+  vertical-align: top;
+  text-align: left;
+  position: relative;
+}
+
+.rich-content th {
+  background-color: var(--surface-2);
+  font-weight: var(--weight-semibold);
+}
+
+/* The cell the caret is in, and any cells dragged across. */
+.rich-content .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--info-subtle);
+  pointer-events: none;
+}
+
+/* The drag handle between columns; it has no width of its own to grab. */
+.rich-content .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--ring);
+  cursor: col-resize;
+}

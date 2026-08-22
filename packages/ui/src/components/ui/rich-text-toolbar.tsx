@@ -7,6 +7,7 @@ import {
   List,
   ListOrdered,
   ImagePlus,
+  Table as TableIcon,
   Sigma,
   Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon,
@@ -26,6 +27,13 @@ import {
 import { Label } from './label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { type UploadImage } from './rich-text-image';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './dropdown-menu';
 
 /** The mark buttons, in the order a writer reaches for them. */
 const MARKS = [
@@ -73,6 +81,72 @@ function ToolButton({
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** In a table the row and column actions apply; out of one only inserting does. */
+function TableMenu({ editor }: Readonly<{ editor: Editor }>) {
+  const inTable = editor.isActive('table');
+  type Chain = ReturnType<Editor['chain']>;
+  // `.run()` is what commits it — a chain that is only built does nothing at all.
+  const run = (act: (chain: Chain) => Chain) => () => {
+    act(editor.chain().focus()).run();
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Table"
+          className={cn(
+            'flex size-7 items-center justify-center rounded-sm text-muted-foreground',
+            'transition-colors hover:bg-muted hover:text-foreground',
+            'focus-visible:shadow-focus focus-visible:outline-none [&_svg]:size-4',
+            inTable && 'bg-muted text-foreground',
+          )}
+        >
+          <TableIcon aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="start">
+        {inTable ? null : (
+          <DropdownMenuItem
+            onSelect={run((chain) => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))}
+          >
+            Insert a table
+          </DropdownMenuItem>
+        )}
+
+        {inTable ? (
+          <>
+            <DropdownMenuItem onSelect={run((chain) => chain.addRowBefore())}>
+              Row above
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={run((chain) => chain.addRowAfter())}>
+              Row below
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={run((chain) => chain.addColumnBefore())}>
+              Column left
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={run((chain) => chain.addColumnAfter())}>
+              Column right
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteRow())}>
+              Delete row
+            </DropdownMenuItem>
+            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteColumn())}>
+              Delete column
+            </DropdownMenuItem>
+            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteTable())}>
+              Delete table
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -210,6 +284,8 @@ export function RichTextToolbar({
               <Icon aria-hidden />
             </ToolButton>
           ))}
+
+      {singleLine ? null : <TableMenu editor={editor} />}
 
       <ToolButton
         label="Equation"

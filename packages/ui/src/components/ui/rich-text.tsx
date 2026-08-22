@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Mathematics } from '@tiptap/extension-mathematics';
 import { Superscript } from '@tiptap/extension-superscript';
 import { Subscript } from '@tiptap/extension-subscript';
+import { TableKit } from '@tiptap/extension-table';
 import { cn } from '../../lib/utils';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
@@ -65,7 +66,7 @@ const SHELL = [
 const OFF = 'cursor-not-allowed border-disabled-border bg-disabled text-disabled-foreground';
 
 /** ProseMirror owns the inner element, so its own classes go on through `editorProps`. */
-const CONTENT = 'outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
+const CONTENT = 'rich-content outline-none [&_.ProseMirror]:outline-none [&_p]:m-0';
 
 export function RichText({
   value,
@@ -90,6 +91,7 @@ export function RichText({
       ),
       Superscript,
       Subscript,
+      ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } })]),
       ...(onUploadImage ? [QuestionImage] : []),
       Mathematics.configure({
         // A half-typed formula shows in red rather than taking the editor down with it.
