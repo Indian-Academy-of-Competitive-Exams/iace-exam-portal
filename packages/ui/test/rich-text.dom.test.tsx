@@ -245,3 +245,45 @@ describe('an image the field will not take', () => {
     assert.ok(asked, 'a file inside the limits must reach the uploader');
   });
 });
+
+describe('the toolbar actually changes the content', () => {
+  /** The buttons existing was asserted; that they did anything was not, and one of them did not. */
+  const write = () => {
+    let html = '';
+    show(<RichText value="<p>hello</p>" onChange={(next) => (html = next)} />);
+    return () => html;
+  };
+
+  it('makes a bullet list', () => {
+    const html = write();
+    fireEvent.click(screen.getByLabelText('Bullet list'));
+
+    assert.match(html(), /<ul>/);
+    assert.match(html(), /<li>/);
+  });
+
+  it('makes a numbered list', () => {
+    const html = write();
+    fireEvent.click(screen.getByLabelText('Numbered list'));
+
+    assert.match(html(), /<ol>/);
+  });
+
+  it('turns a list back off', () => {
+    const html = write();
+    fireEvent.click(screen.getByLabelText('Bullet list'));
+    fireEvent.click(screen.getByLabelText('Bullet list'));
+
+    assert.doesNotMatch(html(), /<ul>/);
+  });
+
+  /** A list a reader cannot see is the bug this suite missed, so the style is asserted too. */
+  it('gives the content the class the list styles hang off', () => {
+    const { container } = show(<RichText value="<p>x</p>" onChange={noop} />);
+
+    assert.ok(
+      container.querySelector('.rich-content'),
+      'components.css styles .rich-content lists',
+    );
+  });
+});

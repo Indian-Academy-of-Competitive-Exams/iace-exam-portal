@@ -314,6 +314,41 @@
    The editor carries this class and so will the exam renderer, so a table looks
    the same to the author and to the candidate from one stylesheet.
    ========================================================================== */
+/* Preflight strips list-style from every ul and ol, so a list here is built and invisible. */
+.rich-content ul,
+.rich-content ol {
+  padding-left: var(--space-6);
+  margin: var(--space-2) 0;
+}
+
+.rich-content ul {
+  list-style: disc;
+}
+
+.rich-content ol {
+  list-style: decimal;
+}
+
+.rich-content li > p {
+  margin: 0;
+}
+
+/* Reachable by typing "> " even with no button for it, so it is flattened the same way. */
+.rich-content blockquote {
+  border-left: 2px solid var(--border-strong);
+  padding-left: var(--space-3);
+  color: var(--foreground-secondary);
+  margin: var(--space-2) 0;
+}
+
+.rich-content code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background-color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
 .rich-content table {
   width: 100%;
   table-layout: fixed;
