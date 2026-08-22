@@ -626,7 +626,12 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
         rowKey={(stage) => stage.id}
         isLoading={stages.isLoading}
         empty="No stages here yet. A base config, a series and a test all hang off one."
-        footer={stages.hasLoaded ? <Pagination {...stages.pagination} /> : null}
+        footer={
+          // An exam has a handful of stages, so this appears only if one page cannot hold them.
+          stages.pagination.total > stages.pagination.pageSize ? (
+            <Pagination {...stages.pagination} />
+          ) : null
+        }
       />
     </div>
   );
