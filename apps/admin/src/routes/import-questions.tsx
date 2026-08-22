@@ -19,15 +19,12 @@ import {
   Badge,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Combobox,
   Field,
   FileDropzone,
   linkVariants,
   LoadingState,
+  FormSection,
   PageFrame,
   PageHeader,
   StatRow,
@@ -161,16 +158,9 @@ export function ImportQuestionsPage() {
           </Table>
         </Card>
 
-        <div className="relative order-1 flex flex-col gap-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle>Start from the template</CardTitle>
-              <CardDescription>
-                An Excel file with the right columns, two example rows, and dropdowns that follow
-                each other: the topics offered are the ones under the subject you picked.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
+        <Card className="relative order-1 flex flex-col gap-6 p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
+          <FormSection title="Start from the template">
+            <div className="flex flex-col gap-2">
               <Button
                 variant="outline"
                 icon={<Download aria-hidden />}
@@ -179,17 +169,11 @@ export function ImportQuestionsPage() {
               >
                 Download template
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Your file</CardTitle>
-              <CardDescription>
-                Excel (.xlsx). A .csv from another system works too.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+          <FormSection title="Your file">
+            <div className="flex flex-col gap-3">
               <FileDropzone
                 accept={`${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`}
                 file={file}
@@ -217,8 +201,8 @@ export function ImportQuestionsPage() {
                 )}
               </Field>
 
-              {/* The preview already shows exactly what this does, row by row,
-                  so it commits without asking a second time. */}
+              {/* The preview already shows exactly what this does, row by row, so it commits
+                  without asking a second time. */}
               <Button
                 icon={<Upload aria-hidden />}
                 loading={commit.isPending}
@@ -227,23 +211,20 @@ export function ImportQuestionsPage() {
               >
                 Import {plan ? `${plan.summary.willCreate} questions` : ''}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </FormSection>
 
           {plan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>What this would do</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
+            <FormSection title="What this would do">
+              <div className="flex flex-col gap-2 text-sm">
                 <StatRow label="Rows read" value={plan.summary.total} />
                 <StatRow label="New questions" value={plan.summary.willCreate} />
                 <StatRow label="Already in the bank" value={plan.summary.duplicates} />
                 <StatRow label="Skipped (have problems)" value={plan.summary.invalid} />
-              </CardContent>
-            </Card>
+              </div>
+            </FormSection>
           ) : null}
-        </div>
+        </Card>
       </div>
     </PageFrame>
   );
