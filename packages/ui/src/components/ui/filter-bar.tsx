@@ -3,6 +3,7 @@ import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Badge } from './badge';
 import { Button } from './button';
+import { RadioGroup, RadioGroupItem } from './radio-group';
 
 export interface FilterBarProps {
   /** Every filter that is set, folded or not. Clear is absent when there is nothing to clear. */
@@ -14,8 +15,14 @@ export interface FilterBarProps {
   advancedCount?: number;
   /** The controls that stay on screen: the search box, and at most one choice beside it. */
   children: React.ReactNode;
+  /** True widens instead of narrowing. Omit the pair for a bar with nothing to combine. */
+  matchAny?: boolean;
+  onMatchAnyChange?: (matchAny: boolean) => void;
   className?: string;
 }
+
+const MATCH_ALL_VALUE = 'all';
+const MATCH_ANY_VALUE = 'any';
 
 /** The row above a table: rows are what the reader came for, so anything past a search box folds. */
 export function FilterBar({
@@ -24,6 +31,8 @@ export function FilterBar({
   advanced,
   advancedCount = 0,
   children,
+  matchAny,
+  onMatchAnyChange,
   className,
 }: Readonly<FilterBarProps>) {
   const [showAll, setShowAll] = React.useState(false);
@@ -42,6 +51,20 @@ export function FilterBar({
             {advancedCount > 0 ? <Badge variant="primary">{advancedCount}</Badge> : null}
             <ChevronDown aria-hidden className={cn('transition-transform', open && 'rotate-180')} />
           </Button>
+        ) : null}
+
+        {/* Plain words: the people reading this ran exam centres, not query planners. */}
+        {onMatchAnyChange ? (
+          <RadioGroup
+            className="flex-row items-center gap-3"
+            name="filter-match"
+            legend="Match"
+            value={matchAny ? MATCH_ANY_VALUE : MATCH_ALL_VALUE}
+            onValueChange={(next) => onMatchAnyChange(next === MATCH_ANY_VALUE)}
+          >
+            <RadioGroupItem value={MATCH_ALL_VALUE} label="all filters" />
+            <RadioGroupItem value={MATCH_ANY_VALUE} label="any filter" />
+          </RadioGroup>
         ) : null}
 
         {/* Shown only when it would do something — a permanently greyed Clear teaches nobody. */}

@@ -123,3 +123,37 @@ describe('useListScreen — a multi filter', () => {
     assert.deepEqual(list().values.difficulty, ['LOW']);
   });
 });
+
+/** The toggle is a filter like any other: it lives in the URL, so a link carries it. */
+describe('useListScreen — matching all or any', () => {
+  it('narrows by default, with nothing in the URL to say so', () => {
+    const list = mount('');
+
+    assert.equal(list().matchAny, false);
+  });
+
+  it('reads the widened mode from the URL', () => {
+    const list = mount('match=any');
+
+    assert.equal(list().matchAny, true);
+  });
+
+  it('writes the mode, and drops it again rather than spelling out the default', async () => {
+    const list = mount('q=ratio');
+
+    list().setMatchAny?.(true);
+    await waitFor(() => assert.equal(new URLSearchParams(url()).get('match'), 'any'));
+
+    list().setMatchAny?.(false);
+    await waitFor(() => assert.equal(new URLSearchParams(url()).get('match'), null));
+  });
+
+  /** Clearing the filters clears how they were being combined — it governed nothing else. */
+  it('drops the mode when the filters are cleared', async () => {
+    const list = mount('q=ratio&match=any&level=topics');
+
+    list().clearFilters();
+
+    await waitFor(() => assert.equal(url(), 'level=topics'));
+  });
+});

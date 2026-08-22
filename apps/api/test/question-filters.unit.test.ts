@@ -47,6 +47,37 @@ describe('questionWhere — a filter holding several values', () => {
     ]);
   });
 
+  /** Two subjects OR two difficulties is one question; two DIFFERENT filters is another. */
+  it('widens across the filters when the reader asks to match any', () => {
+    const where = conditions({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' });
+
+    assert.deepEqual(where, [
+      { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
+    ]);
+  });
+
+  /** One filter ORed with itself is just that filter, and `OR: []` would match nothing. */
+  it('narrows as usual when only one filter is set, whichever mode is asked for', () => {
+    assert.deepEqual(conditions({ subjectId: 'sub_1', match: 'any' }), [
+      { subjectId: { in: ['sub_1'] } },
+    ]);
+  });
+
+  /** A search says what you are looking for; matching "any" must not list what you did not. */
+  it('keeps a search narrowing even when matching any', () => {
+    const where = questionWhere(
+      questionListQuerySchema.parse({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' }),
+      ['q_1'],
+    );
+
+    assert.deepEqual(where, {
+      AND: [
+        { id: { in: ['q_1'] } },
+        { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
+      ],
+    });
+  });
+
   /** The search runs as its own query; no result must still match nothing, not everything. */
   it('keeps an empty search result matching nothing', () => {
     const where = questionWhere(questionListQuerySchema.parse({}) as QuestionListQuery, []);

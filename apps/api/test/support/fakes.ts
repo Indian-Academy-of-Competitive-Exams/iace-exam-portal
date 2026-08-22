@@ -442,6 +442,16 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
 /** What Prisma accepts for a scalar column here: the value itself, or a set to be one of. */
 type KeyFilter = string | { in: string[] };
 
+/** Prisma's AND/OR: a flat matcher handed a nested `where` reads every field as undefined. */
+function matchesTree<W extends { AND?: W[]; OR?: W[] }>(
+  where: W,
+  leaf: (clause: W) => boolean,
+): boolean {
+  if (where.AND && !where.AND.every((clause) => matchesTree(clause, leaf))) return false;
+  if (where.OR && !where.OR.some((clause) => matchesTree(clause, leaf))) return false;
+  return leaf(where);
+}
+
 function matchesKey(value: string, filter: KeyFilter | undefined): boolean {
   if (filter === undefined) return true;
   return typeof filter === 'string' ? value === filter : filter.in.includes(value);
@@ -463,6 +473,8 @@ function omittedAsNull<T extends Record<string, unknown>>(data: T): T {
 }
 
 interface RowActionLogWhere {
+  AND?: RowActionLogWhere[];
+  OR?: RowActionLogWhere[];
   feature?: KeyFilter;
   action?: KeyFilter;
   entityId?: string;
@@ -475,15 +487,17 @@ interface RowActionLogWhere {
 function matchesRowActionLog(row: Record<string, unknown>, where: RowActionLogWhere): boolean {
   const at = row.createdAt as Date;
   const id = row.id as string;
-  return (
-    matchesKey(row.feature as string, where.feature) &&
-    matchesKey(row.action as string, where.action) &&
-    (where.entityId === undefined || row.entityId === where.entityId) &&
-    matchesKey(row.actorId as string, where.actorId) &&
-    (where.createdAt?.gte === undefined || at >= where.createdAt.gte) &&
-    (where.createdAt?.lt === undefined || at < where.createdAt.lt) &&
-    (where.createdAt?.lte === undefined || at <= where.createdAt.lte) &&
-    (where.id?.gt === undefined || id > where.id.gt)
+  return matchesTree(
+    where,
+    (clause) =>
+      matchesKey(row.feature as string, clause.feature) &&
+      matchesKey(row.action as string, clause.action) &&
+      (clause.entityId === undefined || row.entityId === clause.entityId) &&
+      matchesKey(row.actorId as string, clause.actorId) &&
+      (clause.createdAt?.gte === undefined || at >= clause.createdAt.gte) &&
+      (clause.createdAt?.lt === undefined || at < clause.createdAt.lt) &&
+      (clause.createdAt?.lte === undefined || at <= clause.createdAt.lte) &&
+      (clause.id?.gt === undefined || id > clause.id.gt),
   );
 }
 
@@ -1602,6 +1616,7 @@ export function makeQuestionVersion(
 
 interface FakeQuestionWhere {
   AND?: FakeQuestionWhere[];
+  OR?: FakeQuestionWhere[];
   id?: string | { in?: string[]; not?: string };
   subjectId?: KeyFilter;
   topicId?: KeyFilter;
@@ -1886,12 +1901,12 @@ const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
 
 function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
   if (!where) return true;
-  if (where.AND && !where.AND.every((clause) => matches(row, clause))) return false;
-
-  return (
-    idMatches(row, where.id) &&
-    stemHashMatches(row, where.stemHash) &&
-    QUESTION_FIELD_CHECKS.every((check) => check(row, where))
+  return matchesTree(
+    where,
+    (clause) =>
+      idMatches(row, clause.id) &&
+      stemHashMatches(row, clause.stemHash) &&
+      QUESTION_FIELD_CHECKS.every((check) => check(row, clause)),
   );
 }
 

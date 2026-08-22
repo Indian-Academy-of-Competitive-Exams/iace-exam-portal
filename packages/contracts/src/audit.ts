@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csvIdQuery, csvQuery } from './common';
+import { csvIdQuery, csvQuery, matchModeQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { importLogStatusSchema, importSourceSchema } from './imports';
 import { dateOnlySchema } from './students';
@@ -148,6 +148,7 @@ export const rowActionListQuerySchema = paginationQuerySchema.extend({
   actorId: csvIdQuery(),
   from: dateOnlySchema.optional(),
   to: dateOnlySchema.optional(),
+  match: matchModeQuery(),
 });
 export type RowActionListQuery = z.infer<typeof rowActionListQuerySchema>;
 export type RowActionListQueryInput = z.input<typeof rowActionListQuerySchema>;

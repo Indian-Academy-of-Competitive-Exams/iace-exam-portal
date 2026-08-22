@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csvIdQuery, optionalBooleanQuery, searchQuery } from './common';
+import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
@@ -154,6 +154,7 @@ export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   examStageId: csvIdQuery(),
   programCode: z.string().optional(),
   isFree: optionalBooleanQuery(),
+  match: matchModeQuery(),
 });
 export type TestSeriesListQuery = z.infer<typeof testSeriesListQuerySchema>;
 export type TestSeriesListQueryInput = z.input<typeof testSeriesListQuerySchema>;

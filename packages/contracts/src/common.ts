@@ -183,6 +183,17 @@ export const csvQuery = <T extends z.ZodType<string, string>>(member: T) =>
 /** The same, for ids — there is no set of known members to check them against. */
 export const csvIdQuery = () => csvQuery(z.string());
 
+/** How a list combines its filters. A search and a date range sit outside it and always narrow. */
+export const MATCH_MODES = {
+  ALL: 'all',
+  ANY: 'any',
+} as const;
+export type MatchMode = (typeof MATCH_MODES)[keyof typeof MATCH_MODES];
+export const MATCH_MODE_VALUES = Object.values(MATCH_MODES) as [MatchMode, ...MatchMode[]];
+
+/** Absent means ALL: a link that names no mode narrows, which is what every list did before. */
+export const matchModeQuery = () => z.enum(MATCH_MODE_VALUES).optional().default(MATCH_MODES.ALL);
+
 /** The free-text box every list carries. Blank is absent, not a search for "". */
 export const SEARCH_QUERY_MAX = 64;
 

@@ -1,5 +1,5 @@
 import { type QueryKey } from '@tanstack/react-query';
-import { CSV_SEPARATOR, type Paginated } from '@iace/contracts';
+import { CSV_SEPARATOR, MATCH_MODES, type MatchMode, type Paginated } from '@iace/contracts';
 import {
   holdsASet,
   type ListFilter,
@@ -16,6 +16,9 @@ type ListValues<TSpec extends readonly ListFilter[]> = {
 };
 
 /** One filtered, paginated list: the spec declares the URL keys, so nothing can disagree. */
+/** The match toggle lives in the URL beside the filters it governs, so a link carries it. */
+const MATCH_KEY = 'match';
+
 export function useListScreen<
   const TSpec extends readonly ListFilter[],
   TItem,
@@ -26,7 +29,9 @@ export function useListScreen<
   filters: TSpec;
   /** The spec's values as the endpoint wants them — one filter may set several params. */
   toQuery: (values: ListValues<TSpec>) => TFilters;
-  fetchPage: (params: TFilters & { page: number; pageSize: number }) => Promise<Paginated<TItem>>;
+  fetchPage: (
+    params: TFilters & { page: number; pageSize: number; match?: MatchMode },
+  ) => Promise<Paginated<TItem>>;
   enabled?: boolean;
 }): Omit<ListState<TItem>, 'values'> & {
   /** Precise per key, so a screen reading a set back gets a set rather than the union. */
@@ -48,7 +53,16 @@ export function useListScreen<
     filters.map((filter) => [filter.key, readValue(filter)]),
   ) as ListValues<TSpec>;
 
-  const list = useListQuery({ queryKey, filters: toQuery(values), fetchPage, enabled });
+  // Absent unless it is ANY: every list narrowed before this existed, and still does by default.
+  const matchAny = urlFilters.get(MATCH_KEY) === MATCH_MODES.ANY;
+  const match = matchAny ? MATCH_MODES.ANY : undefined;
+
+  const list = useListQuery({
+    queryKey,
+    filters: { ...toQuery(values), match },
+    fetchPage,
+    enabled,
+  });
 
   return {
     rows: list.items,
@@ -61,6 +75,12 @@ export function useListScreen<
       urlFilters.set({ [key]: typeof value === 'string' ? value : value.join(CSV_SEPARATOR) }),
     // Only this list's own keys: a tab, or another list on the page, is not a filter it may drop.
     clearFilters: () =>
-      urlFilters.set(Object.fromEntries(filters.map((filter) => [filter.key, undefined]))),
+      urlFilters.set({
+        ...Object.fromEntries(filters.map((filter) => [filter.key, undefined])),
+        [MATCH_KEY]: undefined,
+      }),
+    matchAny,
+    setMatchAny: (next: boolean) =>
+      urlFilters.set({ [MATCH_KEY]: next ? MATCH_MODES.ANY : undefined }),
   };
 }

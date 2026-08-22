@@ -1,11 +1,15 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
+import { matchFilters } from '../common/match-filters';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
-  const and: Prisma.StudentWhereInput[] = [];
-  const add = (condition: Prisma.StudentWhereInput) => and.push(condition);
+  /** What the match toggle governs. */
+  const chosen: Prisma.StudentWhereInput[] = [];
+  const add = (condition: Prisma.StudentWhereInput) => chosen.push(condition);
+  /** What narrows the roster whichever mode is chosen: the search box and the date range. */
+  const always: Prisma.StudentWhereInput[] = [];
 
   if (query.isActive !== undefined) add({ isActive: query.isActive });
   if (query.isTestBlocked !== undefined) add({ isTestBlocked: query.isTestBlocked });
@@ -20,17 +24,19 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
 
   const joined = dateRange(query.joinedFrom, query.joinedTo);
-  if (joined) add(joined);
+  if (joined) always.push(joined);
 
   const search = query.q?.trim();
   if (search) {
-    add({
+    always.push({
       OR: [
         { mobile: { contains: search } },
         { fullName: { contains: search, mode: 'insensitive' } },
       ],
     });
   }
+
+  const and = matchFilters(always, chosen, query.match);
 
   // An empty AND is a valid Prisma filter, but returning {} keeps "no filters"
   // obvious to anyone reading a log or a test.

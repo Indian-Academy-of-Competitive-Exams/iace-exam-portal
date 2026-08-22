@@ -12,6 +12,7 @@ import {
   type UpdateBranchTestConfigBody,
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
+import { matchFilters } from '../common/match-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
@@ -52,12 +53,17 @@ export class TestSeriesService {
   ) {}
 
   async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {
-    const where: Prisma.TestSeriesWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-      ...(query.examStageId ? { examStageId: { in: query.examStageId } } : {}),
-      ...(query.programCode ? { programCode: query.programCode } : {}),
-      ...(query.isFree === undefined ? {} : { isFree: query.isFree }),
-    };
+    const chosen: Prisma.TestSeriesWhereInput[] = [
+      ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
+      ...(query.programCode ? [{ programCode: query.programCode }] : []),
+      ...(query.isFree === undefined ? [] : [{ isFree: query.isFree }]),
+    ];
+    const always: Prisma.TestSeriesWhereInput[] = query.q
+      ? [{ name: { contains: query.q, mode: 'insensitive' } }]
+      : [];
+
+    const and = matchFilters(always, chosen, query.match);
+    const where: Prisma.TestSeriesWhereInput = and.length > 0 ? { AND: and } : {};
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.testSeries.findMany({

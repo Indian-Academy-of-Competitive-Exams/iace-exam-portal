@@ -182,6 +182,8 @@ export function StudentsPage() {
       kind: 'choice',
       label: 'Sort by',
       primary: true,
+      // An order, not a filter: it narrows nothing, so it is not one of the things to match.
+      alwaysApplies: true,
       items: [
         { value: STUDENT_SORTS.RECENT, label: 'Newest first' },
         { value: STUDENT_SORTS.OLDEST, label: 'Oldest first' },

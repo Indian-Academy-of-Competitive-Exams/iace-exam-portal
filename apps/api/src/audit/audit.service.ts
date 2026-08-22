@@ -15,6 +15,7 @@ import {
   type RowActionListQuery,
 } from '@iace/contracts';
 import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+import { matchFilters } from '../common/match-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { type AuditRowActionEvent } from '../common/events/event-catalog';
@@ -104,13 +105,20 @@ export class AuditService {
   ): Promise<Paginated<RowAction>> {
     this.assertActive(viewer);
     const range = dateRange(query.from, query.to);
-    const where: Prisma.RowActionLogWhereInput = {
-      ...(query.feature ? { feature: { in: query.feature } } : {}),
-      ...(query.action ? { action: { in: query.action } } : {}),
-      ...(query.entityId ? { entityId: query.entityId } : {}),
-      ...(query.actorId ? { actorId: { in: query.actorId } } : {}),
-      ...(range ? { createdAt: range } : {}),
-    };
+    const chosen: Prisma.RowActionLogWhereInput[] = [
+      ...(query.feature ? [{ feature: { in: query.feature } }] : []),
+      ...(query.action ? [{ action: { in: query.action } }] : []),
+      // Honoured for a super admin only: ANDing an ignored one against the pin below finds nobody.
+      ...(viewer.isSuperAdmin && query.actorId ? [{ actorId: { in: query.actorId } }] : []),
+    ];
+    const always: Prisma.RowActionLogWhereInput[] = [
+      ...(query.entityId ? [{ entityId: query.entityId }] : []),
+      ...(range ? [{ createdAt: range }] : []),
+    ];
+
+    const and = matchFilters(always, chosen, query.match);
+    const where: Prisma.RowActionLogWhereInput = and.length > 0 ? { AND: and } : {};
+    // Outside the AND: it narrows whatever the mode built, so ANY cannot widen past the viewer.
     if (!viewer.isSuperAdmin) where.actorId = viewer.id;
 
     const skip = (query.page - 1) * query.pageSize;

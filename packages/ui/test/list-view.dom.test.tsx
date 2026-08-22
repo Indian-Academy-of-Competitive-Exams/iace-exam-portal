@@ -175,3 +175,70 @@ describe('ListView — a multi filter', () => {
     assert.deepEqual(seen, [['LOW', 'HIGH']]);
   });
 });
+
+describe('ListView — matching all or any', () => {
+  const matchable = { matchAny: false, setMatchAny: () => {} };
+
+  it('offers the choice once there are two filters to combine', () => {
+    view(matchable);
+
+    assert.ok(screen.getByRole('radio', { name: 'all filters' }));
+    assert.ok(screen.getByRole('radio', { name: 'any filter' }));
+  });
+
+  it('says it in words the reader already uses, not AND and OR', () => {
+    view(matchable);
+
+    assert.equal(screen.queryByText('AND'), null);
+    assert.equal(screen.queryByText('OR'), null);
+  });
+
+  /** With one thing to combine, all and any ask the same question — the control is noise. */
+  it('withholds the choice from a list with only one filter to combine', () => {
+    render(
+      <TooltipProvider>
+        <ListView
+          list={{ ...state(), ...matchable }}
+          filters={[
+            { key: 'q', kind: 'search', label: 'Search rows', primary: true },
+            { key: 'status', kind: 'choice', label: 'Status', items: [] },
+          ]}
+          columns={columns}
+          rowKey={(r) => r.id}
+          empty="No rows yet."
+        />
+      </TooltipProvider>,
+    );
+
+    assert.equal(screen.queryByRole('radio', { name: 'all filters' }), null);
+  });
+
+  /** A sort is an order and a date range scopes the report: neither is a choice to combine. */
+  it('counts neither a sort nor a date range among the filters to combine', () => {
+    render(
+      <TooltipProvider>
+        <ListView
+          list={{ ...state(), ...matchable }}
+          filters={[
+            { key: 'status', kind: 'choice', label: 'Status', items: [] },
+            { key: 'sort', kind: 'choice', label: 'Sort by', items: [], alwaysApplies: true },
+            { key: 'from', kind: 'date', label: 'Joined from' },
+          ]}
+          columns={columns}
+          rowKey={(r) => r.id}
+          empty="No rows yet."
+        />
+      </TooltipProvider>,
+    );
+
+    assert.equal(screen.queryByRole('radio', { name: 'all filters' }), null);
+  });
+
+  it('hands back which way the reader chose', () => {
+    const seen: boolean[] = [];
+    view({ matchAny: false, setMatchAny: (next) => seen.push(next) });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'any filter' }));
+    assert.deepEqual(seen, [true]);
+  });
+});

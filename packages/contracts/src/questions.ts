@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csvIdQuery, csvQuery, searchQuery } from './common';
+import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
@@ -450,6 +450,7 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   language: languageSchema.optional(),
   tag: tagSchema.optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
+  match: matchModeQuery(),
 });
 export type QuestionListQuery = z.infer<typeof questionListQuerySchema>;
 export type QuestionListQueryInput = z.input<typeof questionListQuerySchema>;

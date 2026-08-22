@@ -43,6 +43,8 @@ interface ListFilterBase<K extends string> {
   primary?: boolean;
   /** Overrides the width a primary control gets from its kind. */
   width?: string;
+  /** True keeps it narrowing whichever way "match all / any" is set — a sort, or a date range. */
+  alwaysApplies?: boolean;
 }
 
 /** The controls a filter can be. A fifth kind is a change here, not a slot at a call site. */
@@ -75,6 +77,9 @@ export interface ListState<TRow> {
   clearFilters: () => void;
   /** Absent for a list that loads in full. */
   pagination?: PaginationProps;
+  /** Both present offers the reader the choice; omit them and the filters narrow, as always. */
+  matchAny?: boolean;
+  setMatchAny?: (matchAny: boolean) => void;
 }
 
 export interface ListViewProps<TRow> {
@@ -110,6 +115,10 @@ export type SetKind = (typeof SET_KINDS)[number];
 const SET_KIND_NAMES: readonly string[] = SET_KINDS;
 
 export const holdsASet = (filter: ListFilter): boolean => SET_KIND_NAMES.includes(filter.kind);
+
+/** A search says what you are looking for and a date range scopes it; neither is a choice to combine. */
+const ALWAYS_NARROWS = (filter: ListFilter): boolean =>
+  filter.kind === 'search' || filter.kind === 'date' || filter.alwaysApplies === true;
 
 const widthOf = (filter: ListFilter): string => {
   if (filter.kind === 'search') return 'min-w-56 flex-1';
@@ -194,12 +203,18 @@ export function ListView<TRow>({
     subset.filter((filter) => isSet(list.values[filter.key])).length;
   const activeCount = countSet(spec);
 
+  // With fewer than two to combine, "all" and "any" ask the same question and the choice is noise.
+  const combinable = spec.filter((filter) => !ALWAYS_NARROWS(filter)).length;
+  const offersMatch = Boolean(list.setMatchAny) && combinable > 1;
+
   const bar =
     spec.length > 0 ? (
       <FilterBar
         activeCount={activeCount}
         advancedCount={countSet(folded)}
         onClear={list.clearFilters}
+        matchAny={list.matchAny}
+        onMatchAnyChange={offersMatch ? list.setMatchAny : undefined}
         advanced={
           folded.length > 0
             ? folded.map((filter) => (

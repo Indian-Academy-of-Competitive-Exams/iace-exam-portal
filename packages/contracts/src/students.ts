@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { civilDate, csvIdQuery, mobileSchema, optionalBooleanQuery, searchQuery } from './common';
+import {
+  civilDate,
+  csvIdQuery,
+  matchModeQuery,
+  mobileSchema,
+  optionalBooleanQuery,
+  searchQuery,
+} from './common';
 import { paginationQuerySchema } from './envelope';
 import { examFamilySchema } from './exams';
 
@@ -191,6 +198,7 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   joinedFrom: dateOnlySchema.optional(),
   joinedTo: dateOnlySchema.optional(),
   sort: z.enum(STUDENT_SORT_VALUES).optional().default(STUDENT_SORTS.RECENT),
+  match: matchModeQuery(),
 });
 export type StudentListQuery = z.infer<typeof studentListQuerySchema>;
 export type StudentListQueryInput = z.input<typeof studentListQuerySchema>;
