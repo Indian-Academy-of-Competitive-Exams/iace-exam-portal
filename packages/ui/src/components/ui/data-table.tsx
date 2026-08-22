@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Checkbox } from './checkbox';
+import { useInTableFrame } from './table-frame';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableState } from './table';
 
 export interface DataTableColumn<TRow> {
@@ -92,8 +93,9 @@ export function DataTable<TRow>({
   };
 
   const span = columns.length + (selection ? 1 : 0) + (expand ? 1 : 0);
+  const fills = useInTableFrame();
 
-  return (
+  const body = (
     <>
       <Table>
         <TableHeader>
@@ -190,4 +192,7 @@ export function DataTable<TRow>({
       {footer}
     </>
   );
+
+  // Owning the column rather than borrowing the parent's: the footer pins wherever this is dropped.
+  return fills ? <div className="flex min-h-0 flex-1 flex-col">{body}</div> : body;
 }

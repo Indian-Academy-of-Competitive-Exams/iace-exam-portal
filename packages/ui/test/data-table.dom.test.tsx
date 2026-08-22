@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import * as React from 'react';
 import { DataTable, type DataTableColumn } from '../src/components/ui/data-table';
+import { TableFrame } from '../src/components/ui/table-frame';
 
 afterEach(cleanup);
 
@@ -242,5 +244,52 @@ describe('DataTable expandable rows', () => {
     const panel = container.querySelector('.overflow-y-auto');
     assert.ok(panel, 'the panel scrolls inside itself');
     assert.match(panel?.className ?? '', /max-h-/);
+  });
+});
+
+describe('where the footer sits', () => {
+  const pager = <div data-testid="pager">1–10 of 40</div>;
+
+  const framed = (wrap: (table: React.ReactNode) => React.ReactNode) =>
+    render(
+      <TableFrame>
+        {wrap(
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            isLoading={false}
+            empty="none"
+            footer={pager}
+          />,
+        )}
+      </TableFrame>,
+    );
+
+  /** It returned a fragment, so the pager pinned only if the PARENT happened to be right. */
+  it('keeps the table and the pager in one column of its own', () => {
+    const { container } = framed((table) => table);
+    const column = container.querySelector('[data-testid="pager"]')?.parentElement;
+
+    assert.match(column?.className ?? '', /flex-col/);
+    assert.match(column?.className ?? '', /flex-1/);
+    assert.match(column?.className ?? '', /min-h-0/);
+  });
+
+  it('puts the pager last, under the scroller', () => {
+    const { container } = framed((table) => table);
+    const column = container.querySelector('[data-testid="pager"]')?.parentElement;
+
+    assert.equal(column?.lastElementChild?.getAttribute('data-testid'), 'pager');
+    assert.match(column?.firstElementChild?.className ?? '', /overflow-auto/);
+  });
+
+  /** The case that raised it: a plain wrapper between the frame and the table must not matter. */
+  it('does the same inside a wrapper that is not a flex column', () => {
+    const { container } = framed((table) => <div>{table}</div>);
+    const column = container.querySelector('[data-testid="pager"]')?.parentElement;
+
+    assert.match(column?.className ?? '', /flex-col/);
+    assert.equal(column?.lastElementChild?.getAttribute('data-testid'), 'pager');
   });
 });
