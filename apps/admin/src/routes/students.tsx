@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RefreshCw, Upload, UserPlus, X } from 'lucide-react';
+import { RefreshCw, Upload, UserPlus } from 'lucide-react';
 import {
   BRANCH_TYPE,
   EXAM_FAMILIES,
@@ -334,19 +334,13 @@ export function StudentsPage() {
 
   const toolbar = (
     <>
-      {/* Arrived from somewhere: say where, and offer the way back out. */}
+      {/* Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once. */}
       {branch ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Showing</span>
-          {branch ? (
-            <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
-              {branch.name}
-            </Badge>
-          ) : null}
-          <Button variant="ghost" size="sm" onClick={() => filters.set({ branchId: '' })}>
-            <X aria-hidden />
-            Clear
-          </Button>
+          <Badge variant={branch.type === BRANCH_TYPE.VIRTUAL ? 'info' : 'primary'}>
+            {branch.name}
+          </Badge>
         </div>
       ) : null}
 
