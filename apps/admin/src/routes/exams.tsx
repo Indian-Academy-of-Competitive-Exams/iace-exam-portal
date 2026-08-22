@@ -30,16 +30,17 @@ import {
   DataTable,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  FilterBar,
   FormDialog,
   FormField,
   Input,
   NumericInput,
-  PageFrame,
   PageHeader,
   Pagination,
   plural,
   RowActions,
   SearchInput,
+  TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
@@ -92,39 +93,16 @@ function examColumns(
   ];
 }
 
+/** Every filter the bar can clear. Two controls, so nothing folds. */
+const ALL_FILTERS = ['q', 'family'] as const;
+
 const EXAMS_KEY = ['admin', 'exams'] as const;
 const STAGES_KEY = ['admin', 'exam-stages'] as const;
 
 /** Anyone managing students may read the catalog, because they pick from it. Only a super admin writes. */
 export function ExamsPage() {
   const { identity: admin } = useAuth();
-  const isSuperAdmin = admin?.isSuperAdmin ?? false;
-  return (
-    <PageFrame
-      header={
-        <>
-          <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Exams" />
-
-          {!isSuperAdmin ? (
-            <Alert variant="info" className="mb-4">
-              <span>
-                Only a super admin can add or change the catalog. You can see it to pick from.
-              </span>
-            </Alert>
-          ) : null}
-        </>
-      }
-    >
-      <ExamsTab canWrite={isSuperAdmin} />
-    </PageFrame>
-  );
-}
-
-// ============================================================================
-// Exams
-// ============================================================================
-
-function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
+  const canWrite = admin?.isSuperAdmin ?? false;
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
@@ -154,43 +132,65 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
     fetchPage: (params) => api.admin.exams.list(params),
   });
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-56 flex-1">
-          <SearchInput
-            aria-label="Search exams"
-            placeholder="Search exams"
-            value={filters.get('q')}
-            onChange={(q) => filters.set({ q })}
-          />
-        </div>
-        <div className="w-44">
-          <Combobox
-            aria-label="Filter by family"
-            clearable={false}
-            value={family}
-            onChange={(next) => filters.set({ family: next })}
-            items={[
-              { value: '', label: 'Any family' },
-              ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
-            ]}
-          />
-        </div>
-        {canWrite ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setCreating(true);
-            }}
-          >
-            <Plus aria-hidden />
-            New exam
-          </Button>
-        ) : null}
+  const header = (
+    <>
+      <PageHeader
+        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+        title="Exams"
+        action={
+          canWrite ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setCreating(true);
+              }}
+            >
+              <Plus aria-hidden />
+              New exam
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {!canWrite ? (
+        <Alert variant="info" className="mb-4">
+          <span>
+            Only a super admin can add or change the catalog. You can see it to pick from.
+          </span>
+        </Alert>
+      ) : null}
+    </>
+  );
+
+  const toolbar = (
+    <FilterBar activeCount={filters.activeCount(ALL_FILTERS)} onClear={() => filters.clear()}>
+      <div className="min-w-56 flex-1">
+        <SearchInput
+          aria-label="Search exams"
+          placeholder="Search exams"
+          value={filters.get('q')}
+          onChange={(q) => filters.set({ q })}
+        />
       </div>
 
+      <div className="w-44">
+        <Combobox
+          aria-label="Filter by family"
+          clearable={false}
+          value={family}
+          onChange={(next) => filters.set({ family: next })}
+          items={[
+            { value: '', label: 'Any family' },
+            ...EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
+          ]}
+        />
+      </div>
+    </FilterBar>
+  );
+
+  return (
+    <TableFrame header={header} toolbar={toolbar}>
       <NewExamDialog
         open={creating}
         onOpenChange={setCreating}
@@ -225,7 +225,7 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
         }}
         footer={exams.hasLoaded ? <Pagination {...exams.pagination} /> : null}
       />
-    </div>
+    </TableFrame>
   );
 }
 
