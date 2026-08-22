@@ -128,6 +128,7 @@ export function RichText({
   return (
     <div
       className={cn(SHELL, !singleLine && 'min-h-24', off && OFF, className)}
+      data-focus-ring="wrapper"
       aria-invalid={invalid}
     >
       {/* No toolbar when it is read-only: a row of inert buttons says nothing the grey does not. */}

@@ -557,7 +557,7 @@
    per component, on the element that actually makes the claim — and so the next
    wrapper control gets it right by copying the pattern rather than by
    remembering this paragraph. */
-[data-focus-ring='wrapper'] :where(input, select, textarea):focus-visible {
+[data-focus-ring='wrapper'] :where(input, select, textarea, [contenteditable]):focus-visible {
   box-shadow: none;
 }
 
