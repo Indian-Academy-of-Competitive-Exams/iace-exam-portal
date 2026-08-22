@@ -108,10 +108,12 @@ export function ImportQuestionsPage() {
 
   return (
     <PageFrame
+      // Below lg the two columns stack, so the page scrolls; side by side they scroll separately.
+      className="lg:overflow-hidden"
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import questions" />}
     >
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card className="order-2 p-4 lg:order-1">
+      <div className="grid gap-4 lg:h-full lg:min-h-0 lg:grid-cols-[2fr_1fr]">
+        <Card className="relative order-2 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
           {plan?.fileErrors.length ? (
             <Alert variant="danger" className="mb-4">
               <span>{plan.fileErrors.join(' ')}</span>
@@ -159,7 +161,7 @@ export function ImportQuestionsPage() {
           </Table>
         </Card>
 
-        <div className="order-1 flex flex-col gap-4 lg:order-2">
+        <div className="relative order-1 flex flex-col gap-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
           <Card>
             <CardHeader>
               <CardTitle>Start from the template</CardTitle>

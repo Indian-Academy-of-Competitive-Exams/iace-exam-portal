@@ -106,10 +106,12 @@ export function ImportStudentsPage() {
 
   return (
     <PageFrame
+      // Below lg the two columns stack, so the page scrolls; side by side they scroll separately.
+      className="lg:overflow-hidden"
       header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Import students" />}
     >
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="order-2 p-4 lg:order-1">
+      <div className="grid gap-5 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="relative order-2 p-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
           {plan?.fileErrors.length ? (
             <Alert variant="danger" className="mb-4">
               <span>{plan.fileErrors.join(' ')}</span>
@@ -158,7 +160,7 @@ export function ImportStudentsPage() {
           </Table>
         </Card>
 
-        <div className="order-1 flex flex-col gap-4 lg:order-2">
+        <div className="relative order-1 flex flex-col gap-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
           {/*
             The sample comes first. An admin who has never done this before
             needs the shape of the file before they need anywhere to put one,
