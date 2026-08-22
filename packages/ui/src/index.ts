@@ -137,6 +137,7 @@ export { PageHeader } from './components/ui/page-header';
 export {
   DataTable,
   type DataTableColumn,
+  type DataTableExpand,
   type DataTableProps,
   type DataTableSelection,
 } from './components/ui/data-table';

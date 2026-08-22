@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Layers, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import {
   EXAM_FAMILIES,
   EXAM_MODES,
@@ -34,7 +33,6 @@ import {
   FormDialog,
   FormField,
   Input,
-  linkVariants,
   NumericInput,
   PageFrame,
   PageHeader,
@@ -42,16 +40,12 @@ import {
   plural,
   RowActions,
   SearchInput,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { familyLabel, NAV_ITEMS, ROUTES } from '../lib/constants';
+import { familyLabel, NAV_ITEMS } from '../lib/constants';
 import { useFilters } from '../lib/use-filters';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors, useListQuery } from '@iace/app-kit';
@@ -85,13 +79,7 @@ function examColumns(
       header: 'Stages',
       numeric: true,
       cell: (exam) =>
-        exam.stageCount > 0 ? (
-          <Link to={stagesOf(exam.id)} className={linkVariants()}>
-            {exam.stageCount}
-          </Link>
-        ) : (
-          <span className="text-muted-foreground">0</span>
-        ),
+        exam.stageCount > 0 ? exam.stageCount : <span className="text-muted-foreground">0</span>,
     },
     { key: 'status', header: 'Status', cell: (exam) => <ExamStatus exam={exam} /> },
     {
@@ -104,17 +92,6 @@ function examColumns(
   ];
 }
 
-/** The two levels of the catalog. A family is a fixed enum, so it is a filter here, not a tab. */
-const LEVELS = {
-  EXAMS: 'exams',
-  STAGES: 'stages',
-} as const;
-
-/** The stages tab, already filtered to one exam — the child list reached from its parent. */
-function stagesOf(examId: string): string {
-  return `${ROUTES.EXAMS}?level=${LEVELS.STAGES}&examId=${examId}`;
-}
-
 const EXAMS_KEY = ['admin', 'exams'] as const;
 const STAGES_KEY = ['admin', 'exam-stages'] as const;
 
@@ -122,9 +99,6 @@ const STAGES_KEY = ['admin', 'exam-stages'] as const;
 export function ExamsPage() {
   const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
-  const filters = useFilters<'level' | 'q' | 'family' | 'examId'>();
-  const level = filters.get('level') || LEVELS.EXAMS;
-
   return (
     <PageFrame
       header={
@@ -141,22 +115,7 @@ export function ExamsPage() {
         </>
       }
     >
-      <Tabs
-        value={level}
-        onValueChange={(value) => filters.set({ level: value, q: '', examId: '' })}
-      >
-        <TabsList>
-          <TabsTrigger value={LEVELS.EXAMS}>Exams</TabsTrigger>
-          <TabsTrigger value={LEVELS.STAGES}>Stages</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={LEVELS.EXAMS}>
-          <ExamsTab canWrite={isSuperAdmin} />
-        </TabsContent>
-        <TabsContent value={LEVELS.STAGES}>
-          <StagesTab canWrite={isSuperAdmin} />
-        </TabsContent>
-      </Tabs>
+      <ExamsTab canWrite={isSuperAdmin} />
     </PageFrame>
   );
 }
@@ -260,6 +219,10 @@ function ExamsTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
         rowKey={(exam) => exam.id}
         isLoading={exams.isLoading}
         empty="No exams yet. Add the first one — every stage hangs off it."
+        expand={{
+          render: (exam) => <ExamStages exam={exam} canWrite={canWrite} />,
+          label: (exam) => `Show the stages under ${exam.name}`,
+        }}
         footer={exams.hasLoaded ? <Pagination {...exams.pagination} /> : null}
       />
     </div>
@@ -420,13 +383,6 @@ function ExamActions({
 }>) {
   return (
     <RowActions label={`Actions for ${exam.name}`}>
-      <DropdownMenuItem asChild>
-        <Link to={stagesOf(exam.id)}>
-          <Layers aria-hidden />
-          Stages
-        </Link>
-      </DropdownMenuItem>
-
       {canEdit ? (
         <>
           <DropdownMenuSeparator />
@@ -560,12 +516,6 @@ function stageColumns(
   onEdit: (stage: ExamStage) => void,
 ): DataTableColumn<ExamStage>[] {
   return [
-    { key: 'family', header: 'Family', cell: (stage) => familyLabel(stage.exam.family) },
-    {
-      key: 'exam',
-      header: 'Exam',
-      cell: (stage) => <span className="font-mono text-sm">{stage.exam.code}</span>,
-    },
     { key: 'order', header: '#', numeric: true, cell: (stage) => stage.order },
     {
       key: 'name',
@@ -600,15 +550,16 @@ function stageColumns(
   ];
 }
 
-function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
+/** The stages of ONE exam, under its row. The exam is the context, so it is not a column here. */
+function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean }>) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ExamStage | null>(null);
   const queryClient = useQueryClient();
-  const filters = useFilters<'q' | 'examId'>();
-  const examId = filters.get('examId');
+  const examId = exam.id;
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: STAGES_KEY });
+    void queryClient.invalidateQueries({ queryKey: EXAMS_KEY });
   }, [queryClient]);
 
   const startEdit = useCallback((stage: ExamStage) => {
@@ -621,34 +572,20 @@ function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
     [canWrite, refresh, startEdit],
   );
 
+  // Keyed by the exam, so opening a second row does not read the first one's page.
   const stages = useListQuery({
-    queryKey: STAGES_KEY,
-    filters: { q: filters.get('q') || undefined, examId: examId || undefined },
+    queryKey: [...STAGES_KEY, examId],
+    filters: { examId },
     fetchPage: (params) => api.admin.examStages.list(params),
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-56 flex-1">
-          <SearchInput
-            aria-label="Search stages"
-            placeholder="Search stages"
-            value={filters.get('q')}
-            onChange={(q) => filters.set({ q })}
-          />
-        </div>
-        <div className="w-56">
-          <ExamPicker
-            aria-label="Filter by exam"
-            value={examId}
-            clearable
-            onChange={(value) => filters.set({ examId: value })}
-          />
-        </div>
-        {canWrite ? (
+    <div className="flex flex-col gap-3">
+      {canWrite ? (
+        <div className="flex justify-end">
           <Button
             size="sm"
+            variant="outline"
             onClick={() => {
               setEditing(null);
               setCreating(true);
@@ -657,8 +594,8 @@ function StagesTab({ canWrite }: Readonly<{ canWrite: boolean }>) {
             <Plus aria-hidden />
             New stage
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <NewStageDialog
         examId={examId}

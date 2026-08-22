@@ -154,3 +154,93 @@ describe('DataTable selection', () => {
     assert.ok((screen.getByLabelText('Select every row shown') as HTMLInputElement).checked);
   });
 });
+
+describe('DataTable expandable rows', () => {
+  const rows = [
+    { id: 'a', name: 'Alpha' },
+    { id: 'b', name: 'Beta' },
+  ];
+  const columns = [{ key: 'name', header: 'Name', cell: (row: (typeof rows)[number]) => row.name }];
+
+  const table = () =>
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isLoading={false}
+        empty="none"
+        expand={{
+          render: (row) => <p>Children of {row.name}</p>,
+          label: (row) => `Show the children of ${row.name}`,
+        }}
+      />,
+    );
+
+  it('draws no chevron when a row has nothing to open', () => {
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isLoading={false}
+        empty="none"
+      />,
+    );
+
+    assert.equal(screen.queryByLabelText('Show the children of Alpha'), null);
+  });
+
+  it('keeps the panel shut until it is asked for', () => {
+    table();
+
+    assert.equal(screen.queryByText('Children of Alpha'), null);
+  });
+
+  it('opens the row that was clicked, and only that one', () => {
+    table();
+    fireEvent.click(screen.getByLabelText('Show the children of Alpha'));
+
+    assert.ok(screen.getByText('Children of Alpha'));
+    assert.equal(screen.queryByText('Children of Beta'), null);
+  });
+
+  /** Two open at once: comparing one exam's stages with another is the reason to expand in place. */
+  it('holds more than one open', () => {
+    table();
+    fireEvent.click(screen.getByLabelText('Show the children of Alpha'));
+    fireEvent.click(screen.getByLabelText('Show the children of Beta'));
+
+    assert.ok(screen.getByText('Children of Alpha'));
+    assert.ok(screen.getByText('Children of Beta'));
+  });
+
+  it('shuts again on a second click', () => {
+    table();
+    const toggle = screen.getByLabelText('Show the children of Alpha');
+
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    assert.equal(screen.queryByText('Children of Alpha'), null);
+  });
+
+  it('says whether it is open, since a chevron alone tells a screen reader nothing', () => {
+    table();
+    const toggle = screen.getByLabelText('Show the children of Alpha');
+
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    fireEvent.click(toggle);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  });
+
+  /** A long child list must not push the parent rows off the screen used to navigate them. */
+  it('gives the panel its own capped scrollport', () => {
+    const { container } = table();
+    fireEvent.click(screen.getByLabelText('Show the children of Alpha'));
+
+    const panel = container.querySelector('.overflow-y-auto');
+    assert.ok(panel, 'the panel scrolls inside itself');
+    assert.match(panel?.className ?? '', /max-h-/);
+  });
+});
