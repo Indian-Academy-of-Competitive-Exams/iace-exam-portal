@@ -152,28 +152,53 @@ describe('QuestionsService.create', () => {
 describe('QuestionsService — retiring and status', () => {
   it('retires a question without deleting it', async () => {
     const { questions, prisma } = build();
-    const created = await questions.create(draft(), ADMIN);
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
 
-    const archived = await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+    const archived = await questions.archive(created.id);
 
     assert.equal(archived.status, QUESTION_STATUS.ARCHIVED);
     assert.equal(prisma.questions.length, 1);
   });
 
-  it('hides a retired question from the bank while an unfiltered list still counts it', async () => {
+  it('puts a retired question back into circulation', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    await questions.archive(created.id);
+
+    const back = await questions.unarchive(created.id);
+
+    assert.equal(back.status, QUESTION_STATUS.ACTIVE);
+  });
+
+  /** A draft was never in circulation, so archiving it would be a second way to publish it. */
+  it('refuses to archive a draft', async () => {
+    const { questions } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    await assert.rejects(
+      () => questions.archive(created.id),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+    );
+  });
+
+  /** Out of circulation is out of the bank: a reader has to ask for the retired by name. */
+  it('keeps a retired question out of the bank until it is asked for', async () => {
     const { questions } = build([
       makeQuestion({ id: 'q_live' }),
       makeQuestion({ id: 'q_dead', status: QUESTION_STATUS.ARCHIVED, stemHash: 'hash_2' }),
     ]);
 
-    const active = await questions.list(listQuery({ status: QUESTION_STATUS.ACTIVE }));
+    const bank = await questions.list(listQuery());
     assert.deepEqual(
-      active.items.map((item) => item.id),
+      bank.items.map((item) => item.id),
       ['q_live'],
     );
 
-    const all = await questions.list(listQuery());
-    assert.equal(all.total, 2);
+    const retired = await questions.list(listQuery({ status: QUESTION_STATUS.ARCHIVED }));
+    assert.deepEqual(
+      retired.items.map((item) => item.id),
+      ['q_dead'],
+    );
   });
 
   it('answers NOT_FOUND for a question that is not there', async () => {
@@ -285,8 +310,8 @@ describe('QuestionsService.update — what versioning is for', () => {
    */
   it('leaves an archived question archived when the save does not name a status', async () => {
     const { questions } = build();
-    const created = await questions.create(draft(), ADMIN);
-    await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    await questions.archive(created.id);
 
     const edited = await questions.update(created.id, draft({ questionCode: 'QA-002' }), ADMIN);
 
@@ -459,6 +484,30 @@ describe('QuestionsService — publishing is one way', () => {
       refused,
     );
     assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.DRAFT);
+  });
+
+  /** The review screen approves a page of drafts at once, which must stay possible. */
+  it('lets a batch of drafts be approved together', async () => {
+    const { questions } = build([
+      makeQuestion({ id: 'q_a', status: QUESTION_STATUS.DRAFT }),
+      makeQuestion({ id: 'q_b', status: QUESTION_STATUS.DRAFT, stemHash: 'hash_2' }),
+    ]);
+
+    const result = await questions.bulkSetStatus({
+      ids: ['q_a', 'q_b'],
+      status: QUESTION_STATUS.ACTIVE,
+    });
+
+    assert.equal(result.updated, 2);
+  });
+
+  it('refuses a batch that would archive a draft', async () => {
+    const { questions } = build([makeQuestion({ id: 'q_a', status: QUESTION_STATUS.DRAFT })]);
+
+    await assert.rejects(
+      () => questions.bulkSetStatus({ ids: ['q_a'], status: QUESTION_STATUS.ARCHIVED }),
+      refused,
+    );
   });
 
   it('still lets a draft be published, retired and put back', async () => {

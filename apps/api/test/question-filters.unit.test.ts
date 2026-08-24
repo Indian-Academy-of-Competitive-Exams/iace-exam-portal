@@ -33,8 +33,21 @@ describe('questionWhere — a filter holding several values', () => {
     }
   });
 
-  it('asks for everything when nothing is filtered', () => {
-    assert.deepEqual(whereFor({}), {});
+  /** Retired questions are out of the bank, so an untouched list is not "everything". */
+  it('leaves the archived out when nothing is filtered', () => {
+    assert.deepEqual(conditions({}), [{ status: { not: 'ARCHIVED' } }]);
+  });
+
+  it('shows them to a reader who asks for them by name', () => {
+    assert.deepEqual(conditionFor({ status: 'ARCHIVED' }, 'status'), { in: ['ARCHIVED'] });
+  });
+
+  /** The default narrows whichever way the reader is combining filters. */
+  it('keeps the archived out even when matching any', () => {
+    assert.deepEqual(conditions({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' }), [
+      { status: { not: 'ARCHIVED' } },
+      { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
+    ]);
   });
 
   it('ANDs the filters, so they narrow together rather than widening', () => {
@@ -52,6 +65,7 @@ describe('questionWhere — a filter holding several values', () => {
     const where = conditions({ subjectId: 'sub_1', difficulty: 'LOW', match: 'any' });
 
     assert.deepEqual(where, [
+      { status: { not: 'ARCHIVED' } },
       { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
     ]);
   });
@@ -59,6 +73,7 @@ describe('questionWhere — a filter holding several values', () => {
   /** One filter ORed with itself is just that filter, and `OR: []` would match nothing. */
   it('narrows as usual when only one filter is set, whichever mode is asked for', () => {
     assert.deepEqual(conditions({ subjectId: 'sub_1', match: 'any' }), [
+      { status: { not: 'ARCHIVED' } },
       { subjectId: { in: ['sub_1'] } },
     ]);
   });
@@ -72,6 +87,7 @@ describe('questionWhere — a filter holding several values', () => {
 
     assert.deepEqual(where, {
       AND: [
+        { status: { not: 'ARCHIVED' } },
         { id: { in: ['q_1'] } },
         { OR: [{ subjectId: { in: ['sub_1'] } }, { difficulty: { in: ['LOW'] } }] },
       ],
@@ -82,6 +98,6 @@ describe('questionWhere — a filter holding several values', () => {
   it('keeps an empty search result matching nothing', () => {
     const where = questionWhere(questionListQuerySchema.parse({}) as QuestionListQuery, []);
 
-    assert.deepEqual(where, { AND: [{ id: { in: [] } }] });
+    assert.deepEqual(where, { AND: [{ status: { not: 'ARCHIVED' } }, { id: { in: [] } }] });
   });
 });

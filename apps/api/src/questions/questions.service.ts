@@ -154,7 +154,7 @@ export class QuestionsService {
   /** A draft still being written is revised in place; anything published gains a version instead. */
   async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
-    assertNotUnpublishing(question.status, draft.status);
+    assertStatusMove(question.status, draft.status);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
@@ -179,6 +179,7 @@ export class QuestionsService {
   ): Promise<QuestionRow> {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+    assertStatusMove(question.status, draft.status);
 
     const revisable = await this.revisableVersionId(tx, question);
     const currentVersionId = revisable
@@ -255,7 +256,7 @@ export class QuestionsService {
 
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
     const question = await this.require(id);
-    assertNotUnpublishing(question.status, body.status);
+    assertStatusMove(question.status, body.status);
     const updated = await this.prisma.question.update({
       where: { id },
       data: { status: body.status },
@@ -269,13 +270,24 @@ export class QuestionsService {
     return this.signed(toDetail(updated));
   }
 
+  /** The soft remove: out of circulation and out of the bank, reversible and losing nothing. */
+  archive(id: string): Promise<QuestionDetail> {
+    return this.setStatus(id, { status: QUESTION_STATUS.ARCHIVED });
+  }
+
+  /** Back into circulation, which is the only place an archived question can go. */
+  unarchive(id: string): Promise<QuestionDetail> {
+    return this.setStatus(id, { status: QUESTION_STATUS.ACTIVE });
+  }
+
   /** One decision over many rows: one statement, so a half-applied batch is not a state. */
   async bulkSetStatus(body: BulkQuestionStatusBody): Promise<BulkQuestionStatusResult> {
     const ids = [...new Set(body.ids)];
-    await this.assertNonePublished(ids, body.status);
-    const { count } = await this.prisma.question.updateMany({
-      where: { id: { in: ids } },
-      data: { status: body.status },
+
+    // Checked and applied together, so a row that changes underneath is not half-decided.
+    const { count } = await this.prisma.$transaction(async (tx) => {
+      await this.assertBatchCanMove(tx, ids, body.status);
+      return tx.question.updateMany({ where: { id: { in: ids } }, data: { status: body.status } });
     });
 
     // The row is the batch, not any one question — the interceptor has no :id to fall back on.
@@ -286,14 +298,20 @@ export class QuestionsService {
     return { updated: count };
   }
 
-  /** A batch is one decision, so one published row in it refuses the batch rather than half-applying. */
-  private async assertNonePublished(ids: string[], status: QuestionStatus): Promise<void> {
-    if (status !== QUESTION_STATUS.DRAFT) return;
+  /** A batch is one decision, so one row that cannot make the move refuses all of it. */
+  private async assertBatchCanMove(
+    tx: Prisma.TransactionClient,
+    ids: string[],
+    status: QuestionStatus,
+  ): Promise<void> {
+    const blocked = BLOCKED_BEFORE[status];
+    if (!blocked) return;
 
-    const published = await this.prisma.question.count({
-      where: { id: { in: ids }, status: { not: QUESTION_STATUS.DRAFT } },
+    const rows = await tx.question.findMany({
+      where: { id: { in: ids }, status: blocked },
+      take: 1,
     });
-    if (published > 0) throw unpublishRefused();
+    if (rows[0]) assertStatusMove(rows[0].status, status);
   }
 
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */
@@ -381,18 +399,32 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
   return fieldErrors;
 }
 
-/** Publishing is one-way: what a draft may rewrite in place must never include an approved version. */
-function assertNotUnpublishing(from: QuestionStatus, to: QuestionStatus | undefined): void {
-  if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
-  throw unpublishRefused();
+/** The status a row may NOT already be in, for each status a batch can move it to. */
+const BLOCKED_BEFORE: Partial<Record<QuestionStatus, Prisma.QuestionWhereInput['status']>> = {
+  [QUESTION_STATUS.DRAFT]: { not: QUESTION_STATUS.DRAFT },
+  [QUESTION_STATUS.ARCHIVED]: QUESTION_STATUS.DRAFT,
+};
+
+/** Publishing is one-way, and only what was in circulation can be taken out of it. */
+function assertStatusMove(from: QuestionStatus, to: QuestionStatus | undefined): void {
+  if (to === undefined || to === from) return;
+
+  if (to === QUESTION_STATUS.DRAFT) {
+    throw refused(
+      'A question that has been published cannot go back to draft. Archive it instead.',
+      'This question has already been published',
+    );
+  }
+  if (to === QUESTION_STATUS.ARCHIVED && from === QUESTION_STATUS.DRAFT) {
+    throw refused(
+      'A draft was never in circulation, so there is nothing to archive.',
+      'This question is still a draft',
+    );
+  }
 }
 
-const unpublishRefused = () =>
-  new AppException(
-    ErrorCodes.CONFLICT,
-    'A question that has been published cannot go back to draft. Archive it instead.',
-    { fieldErrors: { status: ['This question has already been published'] } },
-  );
+const refused = (message: string, field: string) =>
+  new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { status: [field] } });
 
 /** An attempt stores the option id it was shown, so a position that had one keeps it. */
 function optionsWithIds(built: BuiltQuestion, previous: QuestionOption[]) {

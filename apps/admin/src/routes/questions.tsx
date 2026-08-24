@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { EyeOff, Plus, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus, Upload } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -18,7 +18,9 @@ import {
   BadgeList,
   Button,
   ConfirmDialog,
+  DropdownMenuItem,
   ListView,
+  RowActions,
   PageHeader,
   TableFrame,
   TruncatedText,
@@ -32,9 +34,6 @@ import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'status';
-
-/** ARCHIVED questions are out of circulation, so the list opens on the ones that are not. */
-const DEFAULT_STATUS = QUESTION_STATUS.ACTIVE;
 
 const DIFFICULTY_VARIANT = {
   LOW: 'success',
@@ -175,11 +174,8 @@ export function QuestionsPage() {
       topicId: values.topicId,
       type: values.type as QuestionSummary['type'][],
       difficulty: values.difficulty as QuestionSummary['difficulty'][],
-      // ARCHIVED is out of circulation, so an untouched filter opens on the rest.
-      status:
-        values.status.length > 0
-          ? (values.status as QuestionSummary['status'][])
-          : [DEFAULT_STATUS],
+      // Naming no status is how you ask for the bank; the server leaves the retired out of it.
+      status: values.status as QuestionSummary['status'][],
     }),
     fetchPage: (params) => api.admin.questions.list(params),
   });
@@ -233,12 +229,12 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
 
-  const setStatus = useMutation({
-    meta: { success: isArchived ? 'Question back in circulation.' : 'Question retired.' },
+  const move = useMutation({
+    meta: { success: isArchived ? 'Question back in circulation.' : 'Question archived.' },
     mutationFn: () =>
-      api.admin.questions.setStatus(question.id, {
-        status: isArchived ? QUESTION_STATUS.ACTIVE : QUESTION_STATUS.ARCHIVED,
-      }),
+      isArchived
+        ? api.admin.questions.unarchive(question.id)
+        : api.admin.questions.archive(question.id),
     onSuccess: () => {
       setConfirming(false);
       return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
@@ -250,38 +246,49 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
   if (!canWrite) return null;
 
-  return (
-    <span className="inline-flex items-center gap-1">
-      <Button size="sm" variant="outline" asChild>
-        <Link to={ROUTES.QUESTION(question.id)}>Edit</Link>
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-label={isArchived ? 'Return this question' : 'Retire this question'}
-        onClick={() => {
-          setStatus.reset();
-          setConfirming(true);
-        }}
-      >
-        <EyeOff aria-hidden />
-      </Button>
+  const draftOnly = question.status === QUESTION_STATUS.DRAFT;
 
-      {/* Retiring changes what future papers can draw, and nothing on the row
+  return (
+    <>
+      <RowActions label={`Actions for question ${question.questionCode ?? question.id}`}>
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.QUESTION(question.id)}>
+            <Pencil aria-hidden />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+
+        {/* A draft was never in circulation, so there is nothing to take it out of. */}
+        {draftOnly ? null : (
+          <DropdownMenuItem
+            destructive={!isArchived}
+            disabled={move.isPending}
+            onSelect={() => {
+              move.reset();
+              setConfirming(true);
+            }}
+          >
+            {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+            {isArchived ? 'Unarchive' : 'Archive'}
+          </DropdownMenuItem>
+        )}
+      </RowActions>
+
+      {/* Archiving changes what future papers can draw, and nothing on the row
           shows that having happened — so it is confirmed in both directions. */}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        loading={setStatus.isPending}
-        title={isArchived ? 'Put this question back?' : 'Retire this question?'}
+        loading={move.isPending}
+        title={isArchived ? 'Put this question back?' : 'Archive this question?'}
         description={
           isArchived
             ? 'It becomes available to new papers again.'
             : 'It stops being drawn into new papers and disappears from the bank. Papers that already pinned a version of it are untouched, and it can be brought back.'
         }
-        confirmLabel={isArchived ? 'Put back' : 'Retire'}
-        onConfirm={() => setStatus.mutate()}
+        confirmLabel={isArchived ? 'Unarchive' : 'Archive'}
+        onConfirm={() => move.mutate()}
       />
-    </span>
+    </>
   );
 }

@@ -1,5 +1,10 @@
 import { Prisma } from '@prisma/client';
-import { QUESTION_SORTS, type QuestionListQuery, type QuestionSort } from '@iace/contracts';
+import {
+  QUESTION_SORTS,
+  QUESTION_STATUS,
+  type QuestionListQuery,
+  type QuestionSort,
+} from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 
 /** The filter half of the questions list. Pure, so it is testable without a database. */
@@ -17,7 +22,9 @@ export function questionWhere(
   if (query.topicId) chosen.push({ topicId: { in: query.topicId } });
   if (query.type) chosen.push({ type: { in: query.type } });
   if (query.difficulty) chosen.push({ difficulty: { in: query.difficulty } });
+  // Out of circulation is out of the bank: naming a status is how you ask to see them.
   if (query.status) chosen.push({ status: { in: query.status } });
+  else always.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   if (query.tag) chosen.push({ tags: { has: query.tag } });
 
   // A language is present when the CURRENT version has a stem in it, which is the key

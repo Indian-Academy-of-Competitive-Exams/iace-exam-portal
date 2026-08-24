@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, EyeOff } from 'lucide-react';
+import { Check } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -244,40 +244,25 @@ function BulkApproval({
   );
 }
 
-const DECISIONS = {
-  APPROVE: 'APPROVE',
-  ARCHIVE: 'ARCHIVE',
-} as const;
-type Decision = (typeof DECISIONS)[keyof typeof DECISIONS];
-
 function ApprovalActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [asking, setAsking] = useState<Decision | null>(null);
+  const [asking, setAsking] = useState(false);
   const queryClient = useQueryClient();
 
-  const approving = asking === DECISIONS.APPROVE;
-
-  const decide = useMutation({
-    meta: { success: approving ? 'Question approved.' : 'Draft retired.' },
-    mutationFn: (decision: Decision) =>
-      api.admin.questions.setStatus(question.id, {
-        status: decision === DECISIONS.APPROVE ? QUESTION_STATUS.ACTIVE : QUESTION_STATUS.ARCHIVED,
-      }),
+  const approve = useMutation({
+    meta: { success: 'Question approved.' },
+    mutationFn: () =>
+      api.admin.questions.setStatus(question.id, { status: QUESTION_STATUS.ACTIVE }),
     onSuccess: () => {
-      setAsking(null);
+      setAsking(false);
       return queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
     },
     // On failure, drop the confirm — the row must not keep asking an answered question.
-    onError: () => setAsking(null),
+    onError: () => setAsking(false),
   });
 
   if (!canWrite) return null;
-
-  const ask = (decision: Decision) => {
-    decide.reset();
-    setAsking(decision);
-  };
 
   return (
     <>
@@ -288,34 +273,27 @@ function ApprovalActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem disabled={decide.isPending} onSelect={() => ask(DECISIONS.APPROVE)}>
+        <DropdownMenuItem
+          disabled={approve.isPending}
+          onSelect={() => {
+            approve.reset();
+            setAsking(true);
+          }}
+        >
           <Check aria-hidden />
           Approve
         </DropdownMenuItem>
-        <DropdownMenuItem
-          destructive
-          disabled={decide.isPending}
-          onSelect={() => ask(DECISIONS.ARCHIVE)}
-        >
-          <EyeOff aria-hidden />
-          Retire
-        </DropdownMenuItem>
       </RowActions>
 
-      {/* Approving puts it in front of students, and nothing on the row shows
-          that having happened — so both directions are confirmed. */}
+      {/* Approving puts it in front of students, and nothing on the row shows that having happened. */}
       <ConfirmDialog
-        open={asking !== null}
-        onOpenChange={(open) => !open && setAsking(null)}
-        loading={decide.isPending}
-        title={approving ? 'Approve this question?' : 'Retire this draft?'}
-        description={
-          approving
-            ? 'It joins the bank and can be drawn into any paper built from now on.'
-            : 'It leaves the review list and is drawn into no paper. It can be brought back from the questions screen.'
-        }
-        confirmLabel={approving ? 'Approve' : 'Retire'}
-        onConfirm={() => asking && decide.mutate(asking)}
+        open={asking}
+        onOpenChange={setAsking}
+        loading={approve.isPending}
+        title="Approve this question?"
+        description="It joins the bank and can be drawn into any paper built from now on."
+        confirmLabel="Approve"
+        onConfirm={() => approve.mutate()}
       />
     </>
   );

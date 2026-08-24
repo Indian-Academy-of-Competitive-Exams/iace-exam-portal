@@ -118,4 +118,21 @@ export class QuestionsController {
   ): Promise<QuestionDetail> {
     return this.questions.setStatus(id, body);
   }
+
+  /** The soft remove. Named rather than a status body, so the trail says what was meant. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/archive')
+  archive(@Param('id') id: string): Promise<QuestionDetail> {
+    return this.questions.archive(id);
+  }
+
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/unarchive')
+  unarchive(@Param('id') id: string): Promise<QuestionDetail> {
+    return this.questions.unarchive(id);
+  }
 }

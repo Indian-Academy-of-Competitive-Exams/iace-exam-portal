@@ -853,6 +853,19 @@ export function createApiClient(options: ApiClientOptions) {
             schema: questionDetailSchema,
           }),
 
+        /** The soft remove: out of circulation and out of the bank, losing nothing. */
+        archive: (id: string): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.archive(id), {
+            method: 'POST',
+            schema: questionDetailSchema,
+          }),
+
+        unarchive: (id: string): Promise<QuestionDetail> =>
+          request(ADMIN_QUESTION_ROUTES.unarchive(id), {
+            method: 'POST',
+            schema: questionDetailSchema,
+          }),
+
         /** One decision over a page of drafts — one request, so nothing is half-approved. */
         bulkSetStatus: (input: BulkQuestionStatusInput): Promise<BulkQuestionStatusResult> =>
           request(ADMIN_QUESTION_ROUTES.bulkStatus, {
