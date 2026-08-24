@@ -103,13 +103,17 @@ import {
   type UpdateBaseConfigInput,
 } from './configs';
 import {
+  ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
   testDetailSchema,
+  testPaperSchema,
   testSchema,
+  type AssemblePaperInput,
   type CreateTestInput,
   type Test,
   type TestDetail,
   type TestListQueryInput,
+  type TestPaper,
   type UpdateTestInput,
 } from './tests';
 import {
@@ -817,6 +821,17 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        /** The draft paper. Assembling REPLACES it — a re-draw is a new paper, not a merge. */
+        readPaper: (id: string): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.read(id), { schema: testPaperSchema }),
+
+        assemblePaper: (id: string, input: AssemblePaperInput = {}): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.assemble(id), {
+            method: 'POST',
+            body: input,
+            schema: testPaperSchema,
+          }),
       },
 
       /** Subject -> Topic. Anything finer than a topic is a `topic:` tag on the question. */

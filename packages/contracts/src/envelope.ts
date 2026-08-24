@@ -24,6 +24,7 @@ export const ErrorCodes = {
   PIN_LOCKED: 'PIN_LOCKED',
   PIN_INVALID: 'PIN_INVALID',
   ADMIN_NOT_REGISTERED: 'ADMIN_NOT_REGISTERED',
+  DRAW_SHORTFALL: 'DRAW_SHORTFALL',
   INTERNAL: 'INTERNAL',
 } as const;
 
@@ -47,6 +48,8 @@ export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   [ErrorCodes.PIN_INVALID]: 401,
   // Locked is a throttle, and 429 is what tells a client to back off.
   [ErrorCodes.PIN_LOCKED]: 429,
+  // The request was fine; the bank simply does not hold enough to build the paper it asked for.
+  [ErrorCodes.DRAW_SHORTFALL]: 422,
   [ErrorCodes.INTERNAL]: 500,
 };
 
@@ -64,6 +67,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCodes.PIN_LOCKED]: 'Too many incorrect attempts — try again later',
   [ErrorCodes.ADMIN_NOT_REGISTERED]:
     'That email has no admin account. Ask a super admin to create one for you.',
+  [ErrorCodes.DRAW_SHORTFALL]:
+    'The question bank does not hold enough questions to fill every section of this paper.',
   [ErrorCodes.INTERNAL]: 'Something went wrong. Please try again.',
 };
 

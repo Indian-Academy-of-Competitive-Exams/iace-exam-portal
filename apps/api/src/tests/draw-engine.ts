@@ -60,6 +60,8 @@ export interface DrawRequest {
   seed: number;
   /** What this student has already been served. Empty at finalize, real per attempt in Phase 3. */
   seen?: ReadonlySet<string>;
+  /** Chosen by hand, per section, already resolved against the bank. The draw fills what is left. */
+  pinned?: ReadonlyMap<string, readonly DrawCandidate[]>;
 }
 
 /** Fills every section to its exact count, or says which ones it could not. */
@@ -69,13 +71,16 @@ export function drawPaper(request: DrawRequest): DrawResult {
 
   const questions: DrawnQuestion[] = [];
   const shortfalls: SectionShortfall[] = [];
-  const used = new Set<string>();
+  // Pins are spoken for up front, or an earlier section draws one a later section was pinned to.
+  const used = new Set(pinnedIds(request.pinned));
 
   for (const section of [...request.sections].sort(byOrder)) {
+    const chosen = request.pinned?.get(section.id) ?? [];
+    const room = Math.max(0, section.questionCount - chosen.length);
     const eligible = ordered.filter(
       (candidate) => !used.has(candidate.id) && matches(candidate, section, request.filter),
     );
-    const taken = eligible.slice(0, section.questionCount);
+    const taken = [...chosen, ...eligible.slice(0, room)];
 
     for (const candidate of taken) {
       used.add(candidate.id);
@@ -104,6 +109,47 @@ export function drawPaper(request: DrawRequest): DrawResult {
 }
 
 const EMPTY_SEEN: ReadonlySet<string> = new Set<string>();
+
+function pinnedIds(pinned: DrawRequest['pinned']): string[] {
+  return [...(pinned?.values() ?? [])].flatMap((picks) => picks.map((pick) => pick.id));
+}
+
+/** What a hand-picked paper has to satisfy before the draw is asked to fill the rest of it. */
+export function manualPickIssues(
+  sections: readonly DrawSection[],
+  pinned: ReadonlyMap<string, readonly DrawCandidate[]>,
+): string[] {
+  const byId = new Map(sections.map((section) => [section.id, section]));
+  const issues: string[] = [];
+  const counts = new Map<string, number>();
+
+  for (const [sectionId, picks] of pinned) {
+    const section = byId.get(sectionId);
+    if (!section) {
+      issues.push('A question was chosen for a section this configuration does not have.');
+      continue;
+    }
+    if (picks.length > section.questionCount) {
+      issues.push(
+        `${section.name} holds ${section.questionCount}, and ${picks.length} were chosen for it.`,
+      );
+    }
+    const offSubject = picks.filter(
+      (pick) => section.subjectId !== null && pick.subjectId !== section.subjectId,
+    );
+    if (offSubject.length > 0) {
+      issues.push(`${offSubject.length} chosen for ${section.name} are not from its subject.`);
+    }
+    for (const pick of picks) counts.set(pick.id, (counts.get(pick.id) ?? 0) + 1);
+  }
+
+  const repeated = [...counts.values()].filter((count) => count > 1).length;
+  if (repeated > 0) {
+    issues.push(`${repeated} chosen twice — a paper cannot ask the same question in two places.`);
+  }
+
+  return issues;
+}
 
 const byOrder = (a: DrawSection, b: DrawSection) => a.order - b.order;
 

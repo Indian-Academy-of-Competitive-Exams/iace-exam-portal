@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  assemblePaperSchema,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   createTestSchema,
@@ -19,23 +20,29 @@ import {
   PERMISSION_LEVELS,
   testListQuerySchema,
   updateTestSchema,
+  type AssemblePaperBody,
   type CreateTestBody,
   type Paginated,
   type Test,
   type TestDetail,
   type TestListQuery,
+  type TestPaper,
   type UpdateTestBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TestsService } from './tests.service';
+import { PaperService } from './paper.service';
 
 /** The tests built from a stage's blueprints. Gated on TEST_MANAGEMENT, like the configs are. */
 @Controller('admin/tests')
 @Actors(ActorTypes.ADMIN)
 export class TestsController {
-  constructor(private readonly tests: TestsService) {}
+  constructor(
+    private readonly tests: TestsService,
+    private readonly paper: PaperService,
+  ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
@@ -68,6 +75,24 @@ export class TestsController {
     @Body(new ZodBody(updateTestSchema)) body: UpdateTestBody,
   ): Promise<TestDetail> {
     return this.tests.update(id, body);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get(':id/paper')
+  readPaper(@Param('id') id: string): Promise<TestPaper> {
+    return this.paper.read(id);
+  }
+
+  /** Replaces the draft paper: a re-draw is a new paper, not a merge into invisible rows. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/paper')
+  @HttpCode(HttpStatus.OK)
+  assemblePaper(
+    @Param('id') id: string,
+    @Body(new ZodBody(assemblePaperSchema)) body: AssemblePaperBody,
+  ): Promise<TestPaper> {
+    return this.paper.assemble(id, body);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.DELETE)

@@ -37,6 +37,7 @@ import {
   type DrawStrategy,
   type EvaluationMode,
   type PaperBinding,
+  type PaperQuestionStatus,
   type QuestionPoolFilter,
   type TestScope,
   type TestScopeRef,
@@ -1270,6 +1271,20 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
   };
 }
 
+/** A row of an assembled paper, before finalize freezes it. */
+export interface FakePaperRow {
+  id: string;
+  testId: string;
+  baseConfigId: string;
+  baseConfigSectionId: string;
+  questionId: string;
+  questionVersionId: string;
+  order: number;
+  marks: number;
+  negativeMarks: number;
+  status: PaperQuestionStatus;
+}
+
 /** The configs fake plus the `Test` table, because a test is only ever read through its config. */
 export class FakeTestsPrisma extends FakeConfigPrisma {
   private testSeq = 0;
@@ -1280,8 +1295,51 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     sections: FakeSectionRow[] = [makeSection()],
     readonly attempts: { testId: string }[] = [],
     readonly seriesTests: { testId: string }[] = [],
+    readonly questions: FakeQuestionRow[] = [],
+    readonly paperQuestions: FakePaperRow[] = [],
   ) {
     super(configs, sections);
+  }
+
+  readonly question = {
+    findMany: ({ where = {} }: { where?: DrawPoolWhere; select?: unknown } = {}) =>
+      Promise.resolve(this.questions.filter((row) => matchesPoolWhere(row, where))),
+  };
+
+  readonly paperQuestion = {
+    findMany: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(
+        this.paperQuestions
+          .filter((row) => row.testId === where.testId)
+          .sort((a, b) => a.order - b.order)
+          .map((row) => ({ ...row, question: this.questionRef(row.questionId) })),
+      ),
+
+    deleteMany: ({ where }: { where: { testId: string } }) => {
+      const kept = this.paperQuestions.filter((row) => row.testId !== where.testId);
+      const removed = this.paperQuestions.length - kept.length;
+      this.paperQuestions.length = 0;
+      this.paperQuestions.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+
+    createMany: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status'>[] }) => {
+      for (const row of data) {
+        this.paperQuestions.push({ ...row, id: `pq_${row.testId}_${row.order}`, status: 'ACTIVE' });
+      }
+      return Promise.resolve({ count: data.length });
+    },
+  };
+
+  private questionRef(questionId: string) {
+    const question = this.questions.find((row) => row.id === questionId);
+    return {
+      id: questionId,
+      questionCode: question?.questionCode ?? null,
+      difficulty: question?.difficulty ?? 'MEDIUM',
+      subjectId: question?.subjectId ?? '',
+      topicId: question?.topicId ?? null,
+    };
   }
 
   readonly test = {
@@ -1364,6 +1422,29 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       },
     };
   }
+}
+
+interface DrawPoolWhere {
+  id?: { in: string[] };
+  status?: string;
+  currentVersionId?: { not: null };
+  subjectId?: { in: string[] };
+  topicId?: { in: string[] };
+  difficulty?: { in: string[] };
+  tags?: { hasSome: string[] };
+}
+
+/** The `where` the draw's pool query builds, evaluated by the columns it constrains. */
+function matchesPoolWhere(row: FakeQuestionRow, where: DrawPoolWhere): boolean {
+  if (where.id && !where.id.in.includes(row.id)) return false;
+  if (where.status !== undefined && row.status !== where.status) return false;
+  if (where.currentVersionId && row.currentVersionId === null) return false;
+  if (where.subjectId && !where.subjectId.in.includes(row.subjectId)) return false;
+  if (where.topicId && (row.topicId === null || !where.topicId.in.includes(row.topicId)))
+    return false;
+  if (where.difficulty && !where.difficulty.in.includes(row.difficulty)) return false;
+  if (where.tags && !where.tags.hasSome.some((tag) => row.tags.includes(tag))) return false;
+  return true;
 }
 
 /** `Prisma.DbNull` is how the service says "clear it"; the row just holds null. */
@@ -1742,6 +1823,7 @@ export interface FakeQuestionRow {
   currentVersionId: string | null;
   tags: string[];
   stemHash: string | null;
+  fixedUseCount: number;
   createdById: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -1769,6 +1851,7 @@ export function makeQuestion(overrides: Partial<FakeQuestionRow> = {}): FakeQues
     currentVersionId: null,
     tags: [],
     stemHash: 'hash_1',
+    fixedUseCount: 0,
     createdById: null,
     createdAt: FIXED_NOW,
     updatedAt: FIXED_NOW,

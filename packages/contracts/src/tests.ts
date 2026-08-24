@@ -209,3 +209,61 @@ export const ADMIN_TEST_ROUTES = {
   update: (id: string) => `/admin/tests/${id}`,
   remove: (id: string) => `/admin/tests/${id}`,
 } as const;
+
+// ============================================================================
+// The paper. Drawn or hand-picked while the test is still a draft, frozen at
+// finalize — `Test.isLocked` is the freeze, not the existence of these rows.
+// ============================================================================
+
+/** Enough of a question to recognise a row of the paper without loading its content. */
+export const paperQuestionRefSchema = z.object({
+  id: z.string(),
+  questionCode: z.string().nullable(),
+  difficulty: difficultyLevelSchema,
+  subjectId: z.string(),
+  topicId: z.string().nullable(),
+});
+export type PaperQuestionRef = z.infer<typeof paperQuestionRefSchema>;
+
+export const paperRowSchema = paperQuestionSchema.extend({
+  question: paperQuestionRefSchema,
+});
+export type PaperRow = z.infer<typeof paperRowSchema>;
+
+/** One section of the assembled paper, beside the count the config asks it to hold. */
+export const paperSectionSchema = z.object({
+  baseConfigSectionId: z.string(),
+  name: z.string(),
+  order: z.number().int(),
+  questionCount: z.number().int(),
+  questions: z.array(paperRowSchema),
+});
+export type PaperSection = z.infer<typeof paperSectionSchema>;
+
+export const testPaperSchema = z.object({
+  testId: z.string(),
+  totalQuestions: z.number().int(),
+  sections: z.array(paperSectionSchema),
+});
+export type TestPaper = z.infer<typeof testPaperSchema>;
+
+/** Chosen by hand for one section. The draw fills whatever is left of its count. */
+export const manualSectionPickSchema = z.object({
+  baseConfigSectionId: z.string().min(1),
+  questionIds: z.array(z.string().min(1)),
+});
+export type ManualSectionPick = z.infer<typeof manualSectionPickSchema>;
+
+/** Assembling REPLACES the draft paper — a merge over rows the admin cannot see is nobody's ask. */
+export const assemblePaperSchema = z.object({
+  /** Same seed, same pool, same paper. Omitted means a fresh draw. */
+  seed: z.coerce.number().int().min(0).optional(),
+  manual: z.array(manualSectionPickSchema).optional(),
+});
+export type AssemblePaperInput = z.input<typeof assemblePaperSchema>;
+export type AssemblePaperBody = z.infer<typeof assemblePaperSchema>;
+
+export const ADMIN_TEST_PAPER_ROUTES = {
+  read: (id: string) => `/admin/tests/${id}/paper`,
+  assemble: (id: string) => `/admin/tests/${id}/paper`,
+} as const;

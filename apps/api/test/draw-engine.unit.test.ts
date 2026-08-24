@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { DIFFICULTY_LEVEL, DRAW_STRATEGY, type DrawStrategy } from '@iace/contracts';
 import {
   drawPaper,
+  manualPickIssues,
   type DrawCandidate,
   type DrawRequest,
   type DrawSection,
@@ -413,5 +414,115 @@ describe('drawPaper — the seed', () => {
 
     // The failure this prevents: the same seed and rows, a different order, a different paper.
     assert.deepEqual(forwards, backwards);
+  });
+});
+
+// --------------------------------------------------------------------------- manual picks
+// ---------------------------------------------------------------------------
+
+describe('drawPaper — a paper the admin has had a hand in', () => {
+  it('keeps every hand-picked question and draws only the rest', () => {
+    const bank = pool(20);
+    const chosen = [bank[3]!, bank[7]!];
+
+    const questions = questionsOf(
+      draw({
+        sections: [section({ id: 'sec_1', questionCount: 5 })],
+        pool: bank,
+        pinned: new Map([['sec_1', chosen]]),
+      }),
+    );
+
+    assert.equal(questions.length, 5);
+    // First, and in the order they were chosen: the admin's paper reads the way they built it.
+    assert.deepEqual(
+      questions.slice(0, 2).map((row) => row.questionId),
+      ['q4', 'q8'],
+    );
+  });
+
+  it('never auto-draws a question a LATER section was pinned to', () => {
+    // Section 1 could otherwise take q1 on its way past, and section 2 would serve it again.
+    const bank = pool(4);
+    const sections = [
+      section({ id: 'sec_1', order: 1, questionCount: 3 }),
+      section({ id: 'sec_2', order: 2, questionCount: 1 }),
+    ];
+
+    const questions = questionsOf(
+      draw({ sections, pool: bank, pinned: new Map([['sec_2', [bank[0]!]]]) }),
+    );
+
+    assert.equal(new Set(questions.map((row) => row.questionId)).size, 4);
+    assert.equal(questions.find((row) => row.baseConfigSectionId === 'sec_2')?.questionId, 'q1');
+  });
+
+  it('a fully hand-picked section leaves the draw nothing to do', () => {
+    const bank = pool(10);
+
+    const questions = questionsOf(
+      draw({
+        sections: [section({ id: 'sec_1', questionCount: 2 })],
+        pool: bank,
+        pinned: new Map([['sec_1', [bank[5]!, bank[2]!]]]),
+      }),
+    );
+
+    assert.deepEqual(
+      questions.map((row) => row.questionId),
+      ['q6', 'q3'],
+    );
+  });
+});
+
+describe('manualPickIssues', () => {
+  const sections = [
+    section({ id: 'sec_1', name: 'Reasoning', questionCount: 3, subjectId: 'subject_reasoning' }),
+  ];
+
+  it('passes a pick that fits its section', () => {
+    const picks = pool(2, { subjectId: 'subject_reasoning' });
+
+    assert.deepEqual(manualPickIssues(sections, new Map([['sec_1', picks]])), []);
+  });
+
+  it('refuses more questions than the section holds', () => {
+    const picks = pool(4, { subjectId: 'subject_reasoning' });
+
+    // The failure this prevents: a 3-question section finalized carrying 4.
+    const issues = manualPickIssues(sections, new Map([['sec_1', picks]]));
+    assert.equal(issues.length, 1);
+    assert.match(issues[0]!, /Reasoning holds 3, and 4 were chosen/);
+  });
+
+  it('refuses a question from another subject', () => {
+    const picks = pool(1, { subjectId: 'subject_quant' });
+
+    assert.match(
+      manualPickIssues(sections, new Map([['sec_1', picks]]))[0]!,
+      /not from its subject/,
+    );
+  });
+
+  it('refuses the same question in two sections', () => {
+    const twoSections = [
+      section({ id: 'sec_1', name: 'A', questionCount: 3, subjectId: null }),
+      section({ id: 'sec_2', name: 'B', questionCount: 3, subjectId: null }),
+    ];
+    const shared = pool(1);
+
+    const issues = manualPickIssues(
+      twoSections,
+      new Map([
+        ['sec_1', shared],
+        ['sec_2', shared],
+      ]),
+    );
+
+    assert.match(issues[0]!, /same question in two places/);
+  });
+
+  it('refuses a section this configuration does not have', () => {
+    assert.match(manualPickIssues(sections, new Map([['sec_gone', pool(1)]]))[0]!, /does not have/);
   });
 });
