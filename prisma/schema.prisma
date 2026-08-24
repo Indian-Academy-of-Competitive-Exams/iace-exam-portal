@@ -445,7 +445,7 @@ model Question {
   @@index([tags], type: Gin)
 }
 
-// Immutable: an edit inserts a new row and repoints Question.currentVersionId.
+// Immutable once published: editing a DRAFT rewrites its row, any other edit inserts one.
 // Options live in `options` so one read is the whole question on the exam path.
 model QuestionVersion {
   id          String   @id @default(cuid())

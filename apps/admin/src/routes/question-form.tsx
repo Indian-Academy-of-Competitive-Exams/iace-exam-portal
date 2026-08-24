@@ -91,14 +91,20 @@ const IMAGE_LIMITS = {
 } as const;
 
 /** ARCHIVED is a retirement, so it is only on offer once there is something to retire. */
-function statusChoices(existing: boolean) {
+function statusChoices(saved: QuestionDetail | undefined) {
   const intake = QUESTION_INTAKE_STATUSES.map((value) => ({
     value,
     label: value,
     hint: QUESTION_INTAKE_HINTS[value],
   }));
-  if (!existing) return intake;
-  return [...intake, { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED }];
+  if (!saved) return intake;
+
+  // Publishing is one-way, so a published question is not offered a way back the server refuses.
+  const reachable =
+    saved.status === QUESTION_STATUS.DRAFT
+      ? intake
+      : intake.filter((option) => option.value !== QUESTION_STATUS.DRAFT);
+  return [...reachable, { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED }];
 }
 
 function emptyValues(): QuestionFormValues {
@@ -404,7 +410,7 @@ export function QuestionFormPage() {
                     shouldDirty: true,
                   })
                 }
-                items={statusChoices(existing)}
+                items={statusChoices(loaded)}
               />
             )}
           </FormField>

@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  QUESTION_STATUS,
   fieldDiff,
   plainTextOf,
   type LocalizedContent,
@@ -14,6 +15,7 @@ import {
   type QuestionLanguage,
   type QuestionListQuery,
   type QuestionOption,
+  type QuestionStatus,
   type QuestionSummary,
   type BulkQuestionStatusBody,
   type BulkQuestionStatusResult,
@@ -30,7 +32,13 @@ import {
 } from './question-images';
 import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
-import { buildContent, languagesIn, stemPreviewOf, validateQuestion } from './question-core';
+import {
+  buildContent,
+  languagesIn,
+  stemPreviewOf,
+  validateQuestion,
+  type BuiltQuestion,
+} from './question-core';
 import { questionOrderBy, questionWhere } from './question-query';
 import { taxonomyForIds } from './taxonomy-context';
 
@@ -42,11 +50,7 @@ const QUESTION_INCLUDE = {
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
 
-/**
- * Excludes localized content — spelling changes as often as meaning, and an edit to it inserts a
- * version rather than changing a column. `correctOptionPositions` is keyed to `position`, which is
- * what survives across versions.
- */
+/** What an edit can change: the columns, plus a fingerprint of what the question actually says. */
 export const AUDITED_QUESTION_FIELDS = [
   'type',
   'subjectId',
@@ -57,6 +61,7 @@ export const AUDITED_QUESTION_FIELDS = [
   'version',
   'correctOptionPositions',
   'answerKey',
+  'content',
 ] as const;
 
 /** Long enough to survive an authoring session; content stores the key, so nothing outlives it. */
@@ -146,29 +151,16 @@ export class QuestionsService {
     return this.signed(toDetail(row));
   }
 
-  /**
-   * An edit INSERTS a version and repoints the question at it. Nothing that already pinned the
-   * old one — a paper, an attempt — moves, which is the entire reason versions exist. Option ids
-   * carry over by position, so a re-save does not churn the ids a screen is holding.
-   */
+  /** A draft still being written is revised in place; anything published gains a version instead. */
   async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
+    assertNotUnpublishing(question.status, draft.status);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
-    const current = currentOptionsOf(question);
-    const nextNumber = (question.currentVersion?.version ?? 0) + 1;
-
-    const row = await this.prisma.$transaction(async (tx) => {
-      const version = await tx.questionVersion.create({
-        data: versionDataOf(id, nextNumber, built, current, createdById),
-      });
-      return tx.question.update({
-        where: { id },
-        data: { ...this.columnsOf(draft, built), currentVersionId: version.id },
-        include: QUESTION_INCLUDE,
-      });
-    });
+    const row = await this.prisma.$transaction((tx) =>
+      this.writeEdit(tx, id, draft, built, createdById),
+    );
 
     this.auditContext.setChanged(
       fieldDiff(auditFieldsOf(question), auditFieldsOf(row), AUDITED_QUESTION_FIELDS),
@@ -177,8 +169,93 @@ export class QuestionsService {
     return this.signed(toDetail(row));
   }
 
+  /** Re-read inside the transaction, so the row this decides on is the row it goes on to write. */
+  private async writeEdit(
+    tx: Prisma.TransactionClient,
+    id: string,
+    draft: QuestionDraft,
+    built: BuiltQuestion,
+    createdById: string,
+  ): Promise<QuestionRow> {
+    const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
+    if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+
+    const revisable = await this.revisableVersionId(tx, question);
+    const currentVersionId = revisable
+      ? await this.revise(tx, revisable, question, built, createdById)
+      : await this.insertVersion(tx, question, built, createdById);
+
+    return tx.question.update({
+      where: { id: question.id },
+      data: { ...this.columnsOf(draft, built), currentVersionId },
+      include: QUESTION_INCLUDE,
+    });
+  }
+
+  /** The current version when it may be rewritten rather than replaced, or null when it may not. */
+  private async revisableVersionId(
+    tx: Prisma.TransactionClient,
+    question: QuestionRow,
+  ): Promise<string | null> {
+    const questionVersionId = question.currentVersionId;
+    if (!questionVersionId || question.status !== QUESTION_STATUS.DRAFT) return null;
+
+    // The guard no status can give: a version a paper or an attempt holds must never move under it.
+    const [papers, attempts] = await Promise.all([
+      tx.paperQuestion.count({ where: { questionId: question.id, questionVersionId } }),
+      tx.attemptQuestion.count({ where: { questionId: question.id, questionVersionId } }),
+    ]);
+
+    return papers + attempts > 0 ? null : questionVersionId;
+  }
+
+  /** Version 1 of a question nobody has drawn stays version 1, however often it is saved. */
+  private async revise(
+    tx: Prisma.TransactionClient,
+    versionId: string,
+    question: QuestionRow,
+    built: BuiltQuestion,
+    createdById: string,
+  ): Promise<string> {
+    await tx.questionVersion.update({
+      where: { id: versionId },
+      data: {
+        content: built.content as Prisma.InputJsonValue,
+        options: optionsWithIds(
+          built,
+          currentOptionsOf(question),
+        ) as unknown as Prisma.InputJsonValue,
+        answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        // The words and the moment are now this admin's, not those of whoever opened the draft.
+        createdById,
+        createdAt: new Date(),
+      },
+    });
+    return versionId;
+  }
+
+  /** Nothing that pinned the old version moves, which is the entire reason versions exist. */
+  private async insertVersion(
+    tx: Prisma.TransactionClient,
+    question: QuestionRow,
+    built: BuiltQuestion,
+    createdById: string,
+  ): Promise<string> {
+    const version = await tx.questionVersion.create({
+      data: versionDataOf(
+        question.id,
+        (question.currentVersion?.version ?? 0) + 1,
+        built,
+        currentOptionsOf(question),
+        createdById,
+      ),
+    });
+    return version.id;
+  }
+
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
     const question = await this.require(id);
+    assertNotUnpublishing(question.status, body.status);
     const updated = await this.prisma.question.update({
       where: { id },
       data: { status: body.status },
@@ -195,6 +272,7 @@ export class QuestionsService {
   /** One decision over many rows: one statement, so a half-applied batch is not a state. */
   async bulkSetStatus(body: BulkQuestionStatusBody): Promise<BulkQuestionStatusResult> {
     const ids = [...new Set(body.ids)];
+    await this.assertNonePublished(ids, body.status);
     const { count } = await this.prisma.question.updateMany({
       where: { id: { in: ids } },
       data: { status: body.status },
@@ -206,6 +284,16 @@ export class QuestionsService {
     this.auditContext.setChanged({ status: { from: 'many', to: body.status } });
 
     return { updated: count };
+  }
+
+  /** A batch is one decision, so one published row in it refuses the batch rather than half-applying. */
+  private async assertNonePublished(ids: string[], status: QuestionStatus): Promise<void> {
+    if (status !== QUESTION_STATUS.DRAFT) return;
+
+    const published = await this.prisma.question.count({
+      where: { id: { in: ids }, status: { not: QUESTION_STATUS.DRAFT } },
+    });
+    if (published > 0) throw unpublishRefused();
   }
 
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */
@@ -293,30 +381,43 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
   return fieldErrors;
 }
 
-/**
- * A version row from a built draft. `previous` supplies an option id for each position that
- * already had one — an attempt stores the id it was shown, so a stable id is worth keeping.
- */
-function versionDataOf(
-  questionId: string,
-  version: number,
-  built: ReturnType<typeof buildContent>,
-  previous: QuestionOption[],
-  createdById: string,
-): Prisma.QuestionVersionUncheckedCreateInput {
-  const options = built.options.map((option) => ({
+/** Publishing is one-way: what a draft may rewrite in place must never include an approved version. */
+function assertNotUnpublishing(from: QuestionStatus, to: QuestionStatus | undefined): void {
+  if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
+  throw unpublishRefused();
+}
+
+const unpublishRefused = () =>
+  new AppException(
+    ErrorCodes.CONFLICT,
+    'A question that has been published cannot go back to draft. Archive it instead.',
+    { fieldErrors: { status: ['This question has already been published'] } },
+  );
+
+/** An attempt stores the option id it was shown, so a position that had one keeps it. */
+function optionsWithIds(built: BuiltQuestion, previous: QuestionOption[]) {
+  return built.options.map((option) => ({
     id: previous.find((old) => old.position === option.position)?.id ?? randomUUID(),
     position: option.position,
     isCorrect: option.isCorrect,
     text: option.text,
   }));
+}
 
+/** A version row from a built draft. */
+function versionDataOf(
+  questionId: string,
+  version: number,
+  built: BuiltQuestion,
+  previous: QuestionOption[],
+  createdById: string,
+): Prisma.QuestionVersionUncheckedCreateInput {
   return {
     questionId,
     version,
     createdById,
     content: built.content as Prisma.InputJsonValue,
-    options: options as unknown as Prisma.InputJsonValue,
+    options: optionsWithIds(built, previous) as unknown as Prisma.InputJsonValue,
     answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
   };
 }
@@ -338,6 +439,7 @@ function auditFieldsOf(row: QuestionRow): {
   version: number | null;
   correctOptionPositions: number[];
   answerKey: unknown;
+  content: string | null;
 } {
   return {
     type: row.type,
@@ -352,7 +454,22 @@ function auditFieldsOf(row: QuestionRow): {
       .filter((option) => option.isCorrect)
       .map((option) => option.position)
       .sort((a, b) => a - b),
+    content: contentHashOf(row),
   };
+}
+
+/** Short: it is read to spot a change, never to rebuild anything. */
+const CONTENT_HASH_CHARS = 16;
+
+/** Moves whenever what the question SAYS moves — which a draft's version number no longer does. */
+function contentHashOf(row: QuestionRow): string | null {
+  const version = row.currentVersion;
+  if (!version) return null;
+
+  return createHash('sha256')
+    .update(JSON.stringify([version.content, version.options, version.answerKey]))
+    .digest('hex')
+    .slice(0, CONTENT_HASH_CHARS);
 }
 
 function toSummary(row: QuestionRow): QuestionSummary {

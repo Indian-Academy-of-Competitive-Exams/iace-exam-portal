@@ -464,7 +464,7 @@ Table Question {  // IDENTITY only — taxonomy, type, draw metadata. Content li
   subjectId            text [not null]
   topicId              text
   difficulty           DifficultyLevel [not null]  // draw filter — stable across versions
-  status               QuestionStatus [not null, default: 'ACTIVE']
+  status               QuestionStatus [not null, default: 'DRAFT']
   currentVersionId     text  // pointer to the latest QuestionVersion (what new papers draw)
   tags                 text[]  // GIN. Free-text tags — plain strings, no naming convention. Drives tag-based search + the FIXED draw's pool filter.
   stemHash             text  // canonical dedup hash of the CURRENT version (see notes)
@@ -495,7 +495,7 @@ Table QuestionVersion {  // immutable snapshot — stem + options + answerKey + 
     (questionId, version) [unique]
     (questionId, id) [unique]  // composite-FK target: lets Question / PaperQuestion / AttemptQuestion pin a version that provably belongs to the same question
   }
-  Note: 'IMMUTABLE — an edit inserts a new version and repoints Question.currentVersionId. Options live inside the `options` JSON, so one row is the whole question incl. options with no join on the exam path. AttemptQuestion.selectedOptionId keys into this JSON (app-validated), not a DB FK.'
+  Note: 'IMMUTABLE ONCE PUBLISHED — editing a DRAFT rewrites its row; any other edit inserts a version and repoints Question.currentVersionId. A version a paper or attempt holds is never rewritten. Options live inside the `options` JSON, so one row is the whole question incl. options with no join on the exam path. AttemptQuestion.selectedOptionId keys into this JSON (app-validated), not a DB FK.'
 }
 
 

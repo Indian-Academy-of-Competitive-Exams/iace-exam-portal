@@ -438,9 +438,8 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
   );
 }
 
-/** A column filter that is either an exact value or an `in` list. */
-/** What Prisma accepts for a scalar column here: the value itself, or a set to be one of. */
-type KeyFilter = string | { in: string[] };
+/** What Prisma accepts for a scalar column here: the value, a set to be one of, or a value to not be. */
+type KeyFilter = string | { in: string[] } | { not: string };
 
 /** Loud, because the silence is the bug: an unread key matches everything and the test still passes. */
 function onlyUnderstands(where: object, known: readonly string[], matcher: string): void {
@@ -464,7 +463,8 @@ function matchesTree<W extends { AND?: W[]; OR?: W[] }>(
 
 function matchesKey(value: string, filter: KeyFilter | undefined): boolean {
   if (filter === undefined) return true;
-  return typeof filter === 'string' ? value === filter : filter.in.includes(value);
+  if (typeof filter === 'string') return value === filter;
+  return 'not' in filter ? value !== filter.not : filter.in.includes(value);
 }
 
 /** Deep enough that mutating the original after this — `update` does, in place — leaves the
@@ -1650,6 +1650,21 @@ interface FakeQuestionWhere {
   currentVersion?: unknown;
 }
 
+/** A paper or an attempt holding one version of one question. */
+export interface FakeVersionRef {
+  questionId: string;
+  questionVersionId: string;
+}
+
+const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
+  row ? { ...row } : null;
+
+const countRefs = (rows: FakeVersionRef[], where: FakeVersionRef): number =>
+  rows.filter(
+    (row) =>
+      row.questionId === where.questionId && row.questionVersionId === where.questionVersionId,
+  ).length;
+
 export class FakeQuestionBankPrisma {
   private seq = 0;
 
@@ -1658,6 +1673,8 @@ export class FakeQuestionBankPrisma {
     readonly subjects: FakeSubjectRow[] = [],
     readonly topics: FakeTopicRow[] = [],
     readonly versions: FakeQuestionVersionRow[] = [],
+    readonly paperRefs: FakeVersionRef[] = [],
+    readonly attemptRefs: FakeVersionRef[] = [],
   ) {}
 
   private id(prefix: string): string {
@@ -1749,6 +1766,8 @@ export class FakeQuestionBankPrisma {
         id: this.id('qst'),
         subjectId: subjectIdOf(data),
         topicId: relationIdOf(data, 'topic'),
+        // The column default, which decides whether an edit revises or versions.
+        status: (data.status as FakeQuestionRow['status']) ?? 'DRAFT',
       });
       this.questions.push(row);
       return Promise.resolve(this.hydrate(row));
@@ -1792,6 +1811,24 @@ export class FakeQuestionBankPrisma {
           (row) => where.questionId === undefined || row.questionId === where.questionId,
         ),
       ),
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.versions.find((version) => version.id === where.id);
+      if (!row) throw new Error(`no question version ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
+  /** What pins a version: the service refuses to rewrite one a paper or an attempt is holding. */
+  readonly paperQuestion = {
+    count: ({ where }: { where: FakeVersionRef }) =>
+      Promise.resolve(countRefs(this.paperRefs, where)),
+  };
+
+  readonly attemptQuestion = {
+    count: ({ where }: { where: FakeVersionRef }) =>
+      Promise.resolve(countRefs(this.attemptRefs, where)),
   };
 
   readonly subject = {
@@ -1885,7 +1922,8 @@ export class FakeQuestionBankPrisma {
       ...row,
       subject: subject ? { id: subject.id, name: subject.name } : { id: row.subjectId, name: '' },
       topic: topic ? { id: topic.id, name: topic.name } : null,
-      currentVersion: this.versions.find((version) => version.id === row.currentVersionId) ?? null,
+      // A copy: an in-place revision must not reach back and rewrite a row already read.
+      currentVersion: copyOf(this.versions.find((v) => v.id === row.currentVersionId)),
     };
   }
 

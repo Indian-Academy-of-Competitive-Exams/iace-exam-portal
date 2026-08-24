@@ -456,7 +456,7 @@ export type QuestionSummary = z.infer<typeof questionSummarySchema>;
 
 /** Everything below comes from the CURRENT version — a question itself carries no content. */
 export const questionDetailSchema = questionSummarySchema.extend({
-  /** Which version this is: 1, 2, 3… Every edit inserts the next one. */
+  /** Which version this is: 1, 2, 3… A published question gains the next one on every edit. */
   version: z.number().int(),
   content: localizedContentSchema,
   options: z.array(questionOptionSchema),

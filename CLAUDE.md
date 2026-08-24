@@ -69,10 +69,12 @@ Do not break these — they are why the live test holds at 4–5K:
   the exam-pattern workbook address a stage by it. Neither can change once something carries it. A
   CATALOG_ONLY stage is listed so the journey reads whole; nothing is built on it.
 - **Question bank:** `Question` is IDENTITY — type, taxonomy, status, tags, `stemHash`,
-  `currentVersionId`. Every edit inserts an immutable `QuestionVersion` (content, options as JSON,
-  answer key) and repoints `currentVersionId`, so a paper or an attempt that pinned a version never
-  moves. Option ids carry over by position. Localized content is JSON keyed by language, rich (text,
-  `$LaTeX$`, S3 image URLs). English default.
+  `currentVersionId`. Editing a DRAFT rewrites its one `QuestionVersion` in place; editing anything
+  published inserts an immutable one (content, options as JSON, answer key) and repoints
+  `currentVersionId`, so a paper or an attempt that pinned a version never moves. A version any
+  paper or attempt already holds is never rewritten, whatever the status says. Option ids carry
+  over by position. Localized content is JSON keyed by language, rich (text, `$LaTeX$`, S3 image
+  URLs). English default.
 - **Question taxonomy: `Subject` → `Topic`.** Two levels only. Anything finer is a free-text tag on
   the question. A `Question` carries `subjectId` + optional `topicId`; **the service must check the
   topic belongs to the subject** — no FK can.

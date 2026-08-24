@@ -37,15 +37,19 @@ function build(questions = [] as ReturnType<typeof makeQuestion>[]) {
     ],
   );
 
+  const audit = new AuditContext();
+
   return {
     prisma,
-    questions: new QuestionsService(
-      prisma.asService(),
-      new AuditContext(),
-      new FakeStorage() as never,
-    ),
+    audit,
+    questions: new QuestionsService(prisma.asService(), audit, new FakeStorage() as never),
     taxonomy: new TaxonomyService(prisma.asService(), new AuditContext()),
   };
+}
+
+/** The interceptor reads `changed` off the request-scoped store, so a test has to run inside one. */
+function recording<T>(audit: AuditContext, work: () => Promise<T>) {
+  return audit.run(async () => ({ result: await work(), changed: audit.current()?.changed }));
 }
 
 /** Parsed by the same schema the controller's ZodQuery applies. */
@@ -227,7 +231,7 @@ describe('QuestionsService.update — what versioning is for', () => {
    */
   it('inserts a new version and leaves the one a paper already pinned untouched', async () => {
     const { questions, prisma } = build();
-    const created = await questions.create(draft(), ADMIN);
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
 
     const pinned = prisma.versions[0]!;
     const pinnedContent = JSON.stringify(pinned.content);
@@ -287,6 +291,188 @@ describe('QuestionsService.update — what versioning is for', () => {
     const edited = await questions.update(created.id, draft({ questionCode: 'QA-002' }), ADMIN);
 
     assert.equal(edited.status, QUESTION_STATUS.ARCHIVED);
+  });
+});
+
+const REWORDED = { en: 'What is 20% of 150, exactly?', hi: '150 का 20% कितना है?' };
+
+const asDraft = (over: Partial<QuestionDraftInput> = {}) =>
+  draft({ status: QUESTION_STATUS.DRAFT, ...over });
+
+describe('QuestionsService.update — a draft is still being written', () => {
+  /** A draft is a working copy: saving it ten times must not leave ten versions to read through. */
+  it('rewrites the one version a draft already has', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+    const versionId = prisma.questions[0]?.currentVersionId;
+
+    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+
+    assert.equal(prisma.versions.length, 1);
+    assert.equal(edited.version, 1);
+    assert.equal(prisma.questions[0]?.currentVersionId, versionId);
+    assert.equal(
+      previewTextOf(plainTextOf(edited.content.en?.stem)),
+      'What is 20% of 150, exactly?',
+    );
+  });
+
+  /** Without a version bump to read, the trail would say a draft was saved and nothing else. */
+  it('records what the draft now says, though its version number did not move', async () => {
+    const { questions, audit } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    const { changed } = await recording(audit, () =>
+      questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN),
+    );
+
+    assert.ok(changed?.content, 'the edit recorded no content change');
+    assert.notEqual(changed.content.from, changed.content.to);
+    assert.equal(changed.version, undefined);
+  });
+
+  /** Every word on the row can be the second admin's, so the row should not still credit the first. */
+  it('credits the admin who rewrote the draft, not the one who opened it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    await questions.update(created.id, asDraft({ stem: REWORDED }), 'adm_2');
+
+    assert.equal(prisma.versions[0]?.createdById, 'adm_2');
+  });
+
+  /** An attempt stores the option id it was shown, and a revision is still an edit of that row. */
+  it('keeps the option ids a revision inherits', async () => {
+    const { questions } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+
+    assert.deepEqual(
+      edited.options.map((option) => option.id),
+      created.options.map((option) => option.id),
+    );
+  });
+
+  it('versions a published question rather than rewriting it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    const versionId = prisma.questions[0]?.currentVersionId;
+
+    const edited = await questions.update(
+      created.id,
+      draft({ status: QUESTION_STATUS.ACTIVE, stem: REWORDED }),
+      ADMIN,
+    );
+
+    assert.equal(edited.version, 2);
+    assert.equal(prisma.versions.length, 2);
+    assert.notEqual(prisma.questions[0]?.currentVersionId, versionId);
+  });
+
+  /** Status is the rule; this is the belt: a held version must not rewrite itself, ever. */
+  for (const holder of ['paperRefs', 'attemptRefs'] as const) {
+    it(`versions a draft whose version a ${holder === 'paperRefs' ? 'paper' : 'attempt'} holds`, async () => {
+      const { questions, prisma } = build();
+      const created = await questions.create(asDraft(), ADMIN);
+      const versionId = prisma.questions[0]?.currentVersionId ?? '';
+      prisma[holder].push({ questionId: created.id, questionVersionId: versionId });
+
+      const edited = await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+
+      assert.equal(edited.version, 2);
+      assert.equal(prisma.versions.length, 2);
+      assert.notEqual(prisma.questions[0]?.currentVersionId, versionId);
+    });
+  }
+
+  /** Publishing is the freeze: what was revisable a moment ago now grows a version instead. */
+  it('stops revising in place once the draft is published', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+    await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+    assert.equal(prisma.versions.length, 1);
+
+    await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
+    const published = await questions.update(
+      created.id,
+      draft({ status: QUESTION_STATUS.ACTIVE, stem: { en: 'What is 25% of 200?', hi: 'x' } }),
+      ADMIN,
+    );
+
+    assert.equal(published.version, 2);
+    assert.equal(prisma.versions.length, 2);
+  });
+});
+
+describe('QuestionsService — publishing is one way', () => {
+  const refused = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  /** Back to draft would make an approved version a working copy the next edit overwrites. */
+  it('refuses to send a published question back to draft', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    await assert.rejects(
+      () => questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT }),
+      refused,
+    );
+  });
+
+  it('refuses the same thing through a save', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    await assert.rejects(
+      () => questions.update(created.id, draft({ status: QUESTION_STATUS.DRAFT }), ADMIN),
+      refused,
+    );
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
+  });
+
+  it('refuses to un-retire a question into draft', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+
+    await assert.rejects(
+      () => questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT }),
+      refused,
+    );
+  });
+
+  /** A batch is one decision, so one published row in it refuses the batch rather than half-applying. */
+  it('refuses a batch that would send a published question back to draft', async () => {
+    const { questions, prisma } = build();
+    const stillDraft = await questions.create(asDraft({ questionCode: 'QA-D' }), ADMIN);
+    const published = await questions.create(
+      draft({
+        status: QUESTION_STATUS.ACTIVE,
+        questionCode: 'QA-A',
+        stem: { en: 'Another one?', hi: 'एक और?' },
+      }),
+      ADMIN,
+    );
+
+    await assert.rejects(
+      () => questions.bulkSetStatus({ ids: [stillDraft.id, published.id], status: 'DRAFT' }),
+      refused,
+    );
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.DRAFT);
+  });
+
+  it('still lets a draft be published, retired and put back', async () => {
+    const { questions } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    const live = await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
+    assert.equal(live.status, QUESTION_STATUS.ACTIVE);
+
+    const retired = await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+    assert.equal(retired.status, QUESTION_STATUS.ARCHIVED);
+
+    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
+    assert.equal(back.status, QUESTION_STATUS.ACTIVE);
   });
 });
 
