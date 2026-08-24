@@ -208,11 +208,13 @@ export class TestSeriesService {
   ): Promise<BranchTestConfigRow> {
     const existing = await this.prisma.branchTestConfig.findUnique({
       where: { branchId_testSeriesId: { branchId, testSeriesId: id } },
-      select: { id: true },
+      select: { id: true, startAt: true, endAt: true },
     });
     if (!existing) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That branch has no row for this series');
     }
+    // Against what the row WILL hold: the body's refine only sees the halves it carries.
+    this.assertWindowRuns(existing, input);
 
     const row = await this.prisma.branchTestConfig.update({
       where: { id: existing.id },
@@ -227,6 +229,20 @@ export class TestSeriesService {
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return toBranchConfig(row);
+  }
+
+  private assertWindowRuns(
+    existing: { startAt: Date | null; endAt: Date | null },
+    input: UpdateBranchTestConfigBody,
+  ): void {
+    const startAt = input.startAt === undefined ? existing.startAt : dateOrNull(input.startAt);
+    const endAt = input.endAt === undefined ? existing.endAt : dateOrNull(input.endAt);
+    if (!startAt || !endAt || startAt < endAt) return;
+
+    const message = 'The window has to end after it starts';
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+      fieldErrors: { endAt: [message] },
+    });
   }
 
   private assertNotItsOwnPrerequisite(id: string, prerequisiteSeriesId: string): void {

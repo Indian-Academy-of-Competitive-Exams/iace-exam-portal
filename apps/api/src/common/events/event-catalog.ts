@@ -24,11 +24,7 @@ export const DOMAIN_EVENTS = {
   AUDIT_ROW_ACTION: 'audit.row_action',
   /** One student's access moved. WIRED — see the access module's cache listener. */
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
-  /**
-   * A series-wide change: every student's cached catalog is stale. WIRED — see access.
-   * `Test.status` flips, `TestSeriesTest` links and `StudentSeriesUnlock` writes are baked into
-   * that cached payload and have no producer today; each must emit this when its module lands.
-   */
+  /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
   /** A series opened for one student — an auto-unlock or an approved request. WIRED — see access. */
   SERIES_UNLOCKED: 'series.unlocked',

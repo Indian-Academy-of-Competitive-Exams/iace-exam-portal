@@ -109,13 +109,19 @@ import {
   testDetailSchema,
   testPaperSchema,
   testSchema,
+  testSeriesLinkSchema,
+  testStatusSchema,
   type AssemblePaperInput,
   type CreateTestInput,
   type FinalizeResult,
+  type SetTestSeriesInput,
+  type SetTestStatusInput,
   type Test,
   type TestDetail,
   type TestListQueryInput,
   type TestPaper,
+  type TestSeriesLink,
+  type TestStatus,
   type UpdateTestInput,
 } from './tests';
 import {
@@ -840,6 +846,23 @@ export function createApiClient(options: ApiClientOptions) {
           request(ADMIN_TEST_PAPER_ROUTES.finalize(id), {
             method: 'POST',
             schema: finalizeResultSchema,
+          }),
+
+        series: (id: string): Promise<TestSeriesLink[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema.array() }),
+
+        setSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.series(id), {
+            method: 'POST',
+            body: input,
+            schema: testSeriesLinkSchema.array(),
+          }),
+
+        setStatus: (id: string, input: SetTestStatusInput): Promise<TestStatus> =>
+          request(ADMIN_TEST_PAPER_ROUTES.setStatus(id), {
+            method: 'PATCH',
+            body: input,
+            schema: testStatusSchema,
           }),
       },
 

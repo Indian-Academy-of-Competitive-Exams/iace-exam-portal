@@ -1332,13 +1332,52 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     readonly seriesTests: FakeSeriesTestRow[] = [],
     readonly questions: FakeQuestionRow[] = [],
     readonly paperQuestions: FakePaperRow[] = [],
+    readonly series: FakeSeriesRow[] = [],
   ) {
     super(configs, sections);
   }
 
   protected override tables(): object[][] {
-    return [...super.tables(), this.tests, this.questions, this.paperQuestions, this.seriesTests];
+    return [
+      ...super.tables(),
+      this.tests,
+      this.questions,
+      this.paperQuestions,
+      this.seriesTests,
+      this.series,
+    ];
   }
+
+  readonly testSeries = {
+    findMany: ({ where }: { where: { id: { in: string[] } } }) =>
+      Promise.resolve(this.series.filter((row) => where.id.in.includes(row.id))),
+  };
+
+  readonly testSeriesTest = {
+    findMany: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(
+        this.seriesTests
+          .filter((row) => row.testId === where.testId)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map((row) => ({
+            ...row,
+            testSeries: { name: this.series.find((s) => s.id === row.testSeriesId)?.name ?? '' },
+          })),
+      ),
+
+    deleteMany: ({ where }: { where: { testId: string } }) => {
+      const kept = this.seriesTests.filter((row) => row.testId !== where.testId);
+      const removed = this.seriesTests.length - kept.length;
+      this.seriesTests.length = 0;
+      this.seriesTests.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+
+    createMany: ({ data }: { data: FakeSeriesTestRow[] }) => {
+      this.seriesTests.push(...data);
+      return Promise.resolve({ count: data.length });
+    },
+  };
 
   readonly question = {
     findMany: ({ where = {} }: { where?: DrawPoolWhere; select?: unknown } = {}) =>

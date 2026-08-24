@@ -272,8 +272,36 @@ export const finalizeResultSchema = z.object({
 });
 export type FinalizeResult = z.infer<typeof finalizeResultSchema>;
 
+export const setTestStatusSchema = z.object({
+  status: testStatusSchema,
+});
+export type SetTestStatusInput = z.input<typeof setTestStatusSchema>;
+export type SetTestStatusBody = z.infer<typeof setTestStatusSchema>;
+
+/** A test reaches a student only through a series, so attaching it is what makes it offerable. */
+export const testSeriesLinkSchema = z.object({
+  testSeriesId: z.string(),
+  name: z.string(),
+  order: z.number().int().nullable(),
+});
+export type TestSeriesLink = z.infer<typeof testSeriesLinkSchema>;
+
+/** The whole set, not a delta: the screen holds every series this test is offered in. */
+export const setTestSeriesSchema = z.object({
+  series: z.array(
+    z.object({
+      testSeriesId: z.string().min(1),
+      order: z.coerce.number().int().min(0).nullish(),
+    }),
+  ),
+});
+export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
+export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;
+
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   assemble: (id: string) => `/admin/tests/${id}/paper`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,
+  setStatus: (id: string) => `/admin/tests/${id}/status`,
+  series: (id: string) => `/admin/tests/${id}/series`,
 } as const;

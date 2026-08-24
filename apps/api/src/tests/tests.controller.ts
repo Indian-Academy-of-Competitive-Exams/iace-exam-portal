@@ -18,16 +18,22 @@ import {
   createTestSchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  setTestSeriesSchema,
+  setTestStatusSchema,
   testListQuerySchema,
   updateTestSchema,
   type AssemblePaperBody,
   type CreateTestBody,
   type FinalizeResult,
   type Paginated,
+  type SetTestSeriesBody,
+  type SetTestStatusBody,
   type Test,
   type TestDetail,
   type TestListQuery,
   type TestPaper,
+  type TestSeriesLink,
+  type TestStatus,
   type UpdateTestBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
@@ -36,6 +42,7 @@ import { Audit } from '../audit';
 import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
 import { FinalizeService } from './finalize.service';
+import { OfferingService } from './offering.service';
 
 /** The tests built from a stage's blueprints. Gated on TEST_MANAGEMENT, like the configs are. */
 @Controller('admin/tests')
@@ -45,6 +52,7 @@ export class TestsController {
     private readonly tests: TestsService,
     private readonly paper: PaperService,
     private readonly finalizer: FinalizeService,
+    private readonly offering: OfferingService,
   ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -105,6 +113,33 @@ export class TestsController {
   @HttpCode(HttpStatus.OK)
   finalize(@Param('id') id: string): Promise<FinalizeResult> {
     return this.finalizer.finalize(id);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get(':id/series')
+  series(@Param('id') id: string): Promise<TestSeriesLink[]> {
+    return this.offering.series(id);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/series')
+  @HttpCode(HttpStatus.OK)
+  setSeries(
+    @Param('id') id: string,
+    @Body(new ZodBody(setTestSeriesSchema)) body: SetTestSeriesBody,
+  ): Promise<TestSeriesLink[]> {
+    return this.offering.setSeries(id, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/status')
+  setStatus(
+    @Param('id') id: string,
+    @Body(new ZodBody(setTestStatusSchema)) body: SetTestStatusBody,
+  ): Promise<TestStatus> {
+    return this.offering.setStatus(id, body.status);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.DELETE)
