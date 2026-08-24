@@ -7,8 +7,10 @@ import {
   MCQ_OPTION_COUNT,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_SHEETS,
+  QUESTION_IMPORT_TAG,
   QUESTION_TYPES,
   TAG_SEPARATOR,
+  TAGS_MAX,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type TaxonomyCatalog } from './taxonomy-context';
@@ -249,6 +251,8 @@ const INSTRUCTIONS = [
   '',
   `tags — separate several with "${TAG_SEPARATOR}". question_code is your own reference and`,
   'must be unique across the bank; leave it blank if you do not use one.',
+  `Every question imported also carries the tag "${QUESTION_IMPORT_TAG}", which is one of the`,
+  `${TAGS_MAX} a question may hold. Filter the bank by it to find what an upload brought in.`,
   '',
   'Marks are not on this sheet: what a question is worth is decided by the section',
   'of the test it is drawn into, not by the bank.',

@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   QUESTION_IMPORT_COLUMNS,
+  QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  TAG_SEPARATOR,
+  TAGS_MAX,
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
@@ -178,7 +181,7 @@ describe('the question sheet', () => {
 
   it('splits tags on a comma and folds them to one casing', () => {
     const row = plan([{ ...MCQ_ROW, tags: 'SSC CGL, percentages ,SSC CGL' }]).rows[0]!;
-    assert.deepEqual(row.draft?.tags, ['ssc cgl', 'percentages']);
+    assert.deepEqual(row.draft?.tags, [QUESTION_IMPORT_TAG, 'ssc cgl', 'percentages']);
   });
 
   it('reports a correct_option outside the four options', () => {
@@ -236,6 +239,33 @@ describe('the question sheet — a cell is text', () => {
 
     assert.equal(row.action, 'duplicate');
     assert.equal(row.duplicateOf, 'q_from_the_form');
+  });
+});
+
+describe('the question sheet — where a question came from', () => {
+  /** One filter on the bank has to answer "what did that upload bring in". */
+  it('marks a question the sheet created, even one that named no tags', () => {
+    const row = plan([MCQ_ROW]).rows[0]!;
+
+    assert.deepEqual(row.draft?.tags, [QUESTION_IMPORT_TAG]);
+  });
+
+  /** The mark takes one of the ten, so a row that filled them is over and says why. */
+  it('refuses a row whose own tags leave no room for the mark', () => {
+    const asked = Array.from({ length: TAGS_MAX }, (_, index) => `tag${index}`);
+    const row = plan([{ ...MCQ_ROW, tags: asked.join(TAG_SEPARATOR) }]).rows[0]!;
+
+    assert.equal(row.action, 'skip');
+    assert.equal(row.issues[0]?.code, QUESTION_VALIDATION_CODE.TAG_INVALID);
+    assert.equal(row.draft, null);
+  });
+
+  it('leaves room for the tags the sheet does ask for', () => {
+    const asked = Array.from({ length: TAGS_MAX - 1 }, (_, index) => `tag${index}`);
+    const row = plan([{ ...MCQ_ROW, tags: asked.join(TAG_SEPARATOR) }]).rows[0]!;
+
+    assert.equal(row.action, 'create');
+    assert.deepEqual(row.draft?.tags, [QUESTION_IMPORT_TAG, ...asked]);
   });
 });
 

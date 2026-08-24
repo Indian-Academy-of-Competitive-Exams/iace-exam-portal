@@ -613,6 +613,9 @@ export const QUESTION_IMPORT_MAX_ROWS = 1000;
 /** Several tags in one cell. */
 export const TAG_SEPARATOR = ',';
 
+/** Carried by every question a sheet creates, so one filter finds what an upload brought in. */
+export const QUESTION_IMPORT_TAG = 'imported';
+
 /**
  * `create` writes the row. `duplicate` is a stem already in the bank or earlier
  * in this file — skipped, and not an error worth blocking the upload for.

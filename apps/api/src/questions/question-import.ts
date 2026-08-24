@@ -6,6 +6,7 @@ import {
   previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
+  QUESTION_IMPORT_TAG,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
   TAG_SEPARATOR,
@@ -422,12 +423,11 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
   return { mode, answers, tolerance };
 }
 
+/** First in the list, so the cap below can only ever drop one the sheet asked for. */
 function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
-  const raw = cellOf(row, 'tags');
-  if (blank(raw)) return [];
+  const tags: string[] = [QUESTION_IMPORT_TAG];
 
-  const tags: string[] = [];
-  for (const part of raw.split(TAG_SEPARATOR)) {
+  for (const part of cellOf(row, 'tags').split(TAG_SEPARATOR)) {
     if (blank(part)) continue;
 
     const parsed = tagSchema.safeParse(part);
@@ -446,7 +446,7 @@ function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   if (tags.length > TAGS_MAX) {
     issues.push({
       code: CODE.TAG_INVALID,
-      message: `A question can carry at most ${TAGS_MAX} tags`,
+      message: `A question can carry at most ${TAGS_MAX} tags, and an imported one already carries "${QUESTION_IMPORT_TAG}"`,
       field: 'tags',
       column: 'tags',
     });
