@@ -105,6 +105,46 @@ describe('BaseConfigsService — creating', () => {
    * The rule the database also holds as a deferred trigger. Checked here so the admin gets a
    * sentence against the sections rather than a Postgres exception at commit.
    */
+  /** The bug this catches: a seeded paper ran 160 minutes over sections that add up to 180. */
+  it('refuses a sectional paper whose sections do not add up to its own clock', async () => {
+    const { service } = serviceWith();
+    const timed = draft({
+      timerTemplate: TIMER_TEMPLATE.SECTIONAL_LOCKED,
+      durationSec: 3600,
+      sections: [
+        { name: 'One', order: 1, questionCount: 25, marksPerQuestion: 2, durationSec: 1200 },
+        { name: 'Two', order: 2, questionCount: 25, marksPerQuestion: 2, durationSec: 1200 },
+      ],
+    } as Partial<CreateBaseConfigBody>);
+
+    await assert.rejects(
+      () => service.create(timed, ADMIN),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /40 minutes.*60 minutes/);
+        return true;
+      },
+    );
+  });
+
+  it('takes a sectional paper whose sections add up', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create(
+      draft({
+        timerTemplate: TIMER_TEMPLATE.SECTIONAL_LOCKED,
+        durationSec: 2400,
+        sections: [
+          { name: 'One', order: 1, questionCount: 25, marksPerQuestion: 2, durationSec: 1200 },
+          { name: 'Two', order: 2, questionCount: 25, marksPerQuestion: 2, durationSec: 1200 },
+        ],
+      } as Partial<CreateBaseConfigBody>),
+      ADMIN,
+    );
+
+    assert.equal(created.durationSec, 2400);
+  });
+
   it('refuses a sectional paper whose sections have no clock', async () => {
     const { service } = serviceWith();
 

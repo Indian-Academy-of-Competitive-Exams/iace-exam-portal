@@ -30,7 +30,7 @@ import {
   imageKeysIn,
   questionImageKey,
 } from './question-images';
-import { mapQuestionHtml, rewriteQuestionHtml } from './question-content';
+import { escapeForContent, mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
 import {
   buildContent,
@@ -455,12 +455,18 @@ export class QuestionsService {
   private async assertNotDuplicate(stemHash: string, exceptId: string | null): Promise<void> {
     const existing = await this.prisma.question.findFirst({
       where: { stemHash, ...(exceptId ? { id: { not: exceptId } } : {}) },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!existing) return;
 
-    throw new AppException(ErrorCodes.CONFLICT, 'That question is already in the bank', {
-      fieldErrors: { 'stem.en': ['That question is already in the bank'] },
+    // The bank does not list the archived, so an admin sent to look would find nothing there.
+    const where =
+      existing.status === QUESTION_STATUS.ARCHIVED
+        ? 'That question is already in the bank, archived. Bring that one back rather than retyping it.'
+        : 'That question is already in the bank';
+
+    throw new AppException(ErrorCodes.CONFLICT, where, {
+      fieldErrors: { 'stem.en': [where] },
       details: { duplicateOf: existing.id },
     });
   }
@@ -476,7 +482,8 @@ export class QuestionsService {
    * per language, so no column holds the text a `contains` filter would read.
    */
   private async searchIds(term: string): Promise<string[]> {
-    const like = `%${term}%`;
+    // Content is stored as html, so "Ram & Shyam" sits in it as "Ram &amp; Shyam".
+    const like = `%${escapeForContent(term)}%`;
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT q."id" FROM "Question" q
       LEFT JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"

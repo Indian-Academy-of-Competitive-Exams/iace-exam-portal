@@ -1762,9 +1762,21 @@ export class FakeQuestionBankPrisma {
     },
   };
 
-  /** The search pre-filter. Tests that do not search never reach it. */
-  $queryRaw(): Promise<{ id: string }[]> {
-    return Promise.resolve(this.questions.map((row) => ({ id: row.id })));
+  /** The search pre-filter, modelled rather than waved through: the ILIKE is the thing under test. */
+  $queryRaw(_sql: TemplateStringsArray, ...values: unknown[]): Promise<{ id: string }[]> {
+    const [pattern] = values;
+    const term = (typeof pattern === 'string' ? pattern : '').replace(/^%|%$/g, '').toLowerCase();
+
+    const holds = (row: FakeQuestionRow): boolean => {
+      const version = this.versions.find((candidate) => candidate.id === row.currentVersionId);
+      const content = version ? JSON.stringify(version.content) : '';
+      return (
+        content.toLowerCase().includes(term) ||
+        (row.questionCode ?? '').toLowerCase().includes(term)
+      );
+    };
+
+    return Promise.resolve(this.questions.filter(holds).map((row) => ({ id: row.id })));
   }
 
   readonly question = {

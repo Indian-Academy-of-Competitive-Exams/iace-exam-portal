@@ -187,8 +187,10 @@ INSERT INTO "ExamStage" ("id","examId","stageKey","name","order","mode","disposi
   ('stage_ts_pc_ar_fwe','exam_tg_ts_police_constable_ar_sar_cpl_tgprb','TS_PC_AR_FWE','Final Written Examination (variant)',1,'OMR','CONDUCTED')
 ON CONFLICT DO NOTHING;
 
+-- SSC CGL Tier 1 is configured in seed.sql, which its tests pin; declaring it again here
+-- inserted a config the primary key skipped and four sections the (baseConfigId, order) partial
+-- unique swallowed, so the catalog silently did nothing for the one exam both files describe.
 INSERT INTO "BaseConfig" ("id","examStageId","name","isDefault","version","totalQuestions","totalMarks","durationSec","timerTemplate","navigation","defaultTestUi","languageMode","languages","shuffleQuestions","shuffleOptions","calculatorEnabled","scoringVersion") VALUES
-  ('config_ssc_cgl_t1','stage_ssc_cgl_t1','SSC CGL — Tier 1 (official pattern)',true,1,100,200.00,3600,'COMPOSITE_FREE','FREE','CBT','DUAL',ARRAY['EN','HI']::"SupportedLanguage"[],true,true,false,1),
   ('config_ssc_cgl_t2_p1_s1','stage_ssc_cgl_t2_p1_s1','SSC CGL — Tier 2 - Paper 1 (Session I: Sec I + Sec II) (official pattern)',true,1,130,390.00,7200,'COMPOSITE_FREE','FREE','CBT','DUAL',ARRAY['EN','HI']::"SupportedLanguage"[],true,true,false,1),
   ('config_ssc_cgl_t2_ckt','stage_ssc_cgl_t2_ckt','SSC CGL — Tier 2 - Paper 1 Sec III Mod I (Computer Knowledge) (official pattern)',true,1,20,60.00,900,'COMPOSITE_FREE','FREE','CBT','DUAL',ARRAY['EN','HI']::"SupportedLanguage"[],true,true,false,1),
   ('config_ssc_chsl_t1','stage_ssc_chsl_t1','SSC CHSL — Tier 1 (official pattern)',true,1,100,200.00,3600,'COMPOSITE_FREE','FREE','CBT','DUAL',ARRAY['EN','HI']::"SupportedLanguage"[],true,true,false,1),
@@ -221,10 +223,6 @@ INSERT INTO "BaseConfig" ("id","examStageId","name","isDefault","version","total
 ON CONFLICT DO NOTHING;
 
 INSERT INTO "BaseConfigSection" ("id","baseConfigId","name","order","subjectId","questionCount","marksPerQuestion","negativeMarks","durationSec","mandatory","meritOrQualifying","difficultyMix") VALUES
-  ('section_ssc_cgl_t1_1','config_ssc_cgl_t1','General Intelligence & Reasoning',1,'subject_reasoning',25,2.00,0.50,NULL,true,'MERIT','{"indicative": "Easy-Moderate"}'::jsonb),
-  ('section_ssc_cgl_t1_2','config_ssc_cgl_t1','General Awareness',2,'subject_gk',25,2.00,0.50,NULL,true,'MERIT','{"indicative": "Moderate"}'::jsonb),
-  ('section_ssc_cgl_t1_3','config_ssc_cgl_t1','Quantitative Aptitude',3,'subject_quantitative',25,2.00,0.50,NULL,true,'MERIT','{"indicative": "Moderate"}'::jsonb),
-  ('section_ssc_cgl_t1_4','config_ssc_cgl_t1','English Comprehension',4,'subject_english',25,2.00,0.50,NULL,true,'MERIT','{"indicative": "Easy-Moderate"}'::jsonb),
   ('section_ssc_cgl_t2_p1_s1_1','config_ssc_cgl_t2_p1_s1','Section I Module I: Mathematical Abilities',1,'subject_quantitative',30,3.00,1.00,NULL,true,'MERIT','{"indicative": "Moderate-Difficult"}'::jsonb),
   ('section_ssc_cgl_t2_p1_s1_2','config_ssc_cgl_t2_p1_s1','Section I Module II: Reasoning & General Intelligence',2,'subject_reasoning',30,3.00,1.00,NULL,true,'MERIT','{"indicative": "Moderate"}'::jsonb),
   ('section_ssc_cgl_t2_p1_s1_3','config_ssc_cgl_t2_p1_s1','Section II Module I: English Language & Comprehension',3,'subject_english',45,3.00,1.00,NULL,true,'MERIT','{"indicative": "Moderate"}'::jsonb),

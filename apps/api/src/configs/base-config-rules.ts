@@ -32,6 +32,7 @@ export function configShapeIssues(
   timerTemplate: TimerTemplate,
   sections: readonly BaseConfigSectionDraft[],
   modules: readonly BaseConfigModuleDraft[],
+  durationSec?: number,
 ): string[] {
   const issues: string[] = [];
 
@@ -41,6 +42,14 @@ export function configShapeIssues(
       issues.push(
         `A sectional paper gives every section its own clock — ${untimed.map((section) => section.name).join(', ')} has no time.`,
       );
+    } else if (durationSec !== undefined) {
+      // The section clocks are the ones a candidate sits, so the paper's own has to be their sum.
+      const clocked = sections.reduce((sum, section) => sum + (section.durationSec ?? 0), 0);
+      if (clocked !== durationSec) {
+        issues.push(
+          `The sections add up to ${minutes(clocked)}, but the paper is set to ${minutes(durationSec)}.`,
+        );
+      }
     }
   }
 
@@ -59,6 +68,11 @@ export function configShapeIssues(
 
   return issues;
 }
+
+const SECONDS_PER_MINUTE = 60;
+
+/** Said in what the reader set it in: a paper's clock is minutes on the screen, seconds in the row. */
+const minutes = (seconds: number) => `${Math.round(seconds / SECONDS_PER_MINUTE)} minutes`;
 
 /** A config with tests built from it is history — deleting it would orphan every one of them. */
 export function configDeletionBlocker(usage: {

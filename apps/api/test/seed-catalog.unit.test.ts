@@ -76,8 +76,10 @@ for (const row of rowsOf('BaseConfigSection')) {
 const round = (value: number) => Math.round(value * 100) / 100;
 
 describe('the exam catalog seed', () => {
-  it('describes thirty configurations, each with sections', () => {
-    assert.equal(configs.length, 30);
+  /** SSC CGL Tier 1 is seed.sql's; a config declared in both files loses to the first one in. */
+  it('describes twenty-nine configurations, each with sections', () => {
+    assert.equal(configs.length, 29);
+    assert.ok(!configs.some((config) => config.id === 'config_ssc_cgl_t1'));
     for (const config of configs) {
       assert.ok(sectionsByConfig.get(config.id)?.length, `${config.id} has no sections`);
     }

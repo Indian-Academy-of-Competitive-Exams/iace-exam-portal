@@ -14,8 +14,11 @@ describe('htmlFromPlainText', () => {
     assert.equal(htmlFromPlainText('<b>Bold</b>'), '<p>&lt;b&gt;Bold&lt;/b&gt;</p>');
   });
 
-  it('makes a paragraph of every line', () => {
-    assert.equal(htmlFromPlainText('One\r\nTwo'), '<p>One</p><p>Two</p>');
+  /** A spreadsheet export can end a line with either, and both mean the same break in a cell. */
+  it('makes a paragraph of every line, however the cell ended it', () => {
+    for (const cell of ['One\r\nTwo', 'One\nTwo', 'One\rTwo']) {
+      assert.equal(htmlFromPlainText(cell), '<p>One</p><p>Two</p>');
+    }
   });
 
   it('has nothing to say about an empty cell', () => {
@@ -31,5 +34,13 @@ describe('asContentHtml', () => {
   /** Every save re-writes the field, so wrapping had better not nest a little deeper each time. */
   it('leaves a field that already has its root alone', () => {
     assert.equal(asContentHtml('<div><p>One</p></div>'), '<div><p>One</p></div>');
+    assert.equal(asContentHtml('<div><div>Nested</div></div>'), '<div><div>Nested</div></div>');
+  });
+
+  /** Opening on a div is not the same as being one: the second root would go unstyled. */
+  it('wraps content that merely starts with a div', () => {
+    for (const two of ['<div>a</div><p>b</p>', '<div>a</div><div>b</div>']) {
+      assert.equal(asContentHtml(two), `<div>${two}</div>`);
+    }
   });
 });

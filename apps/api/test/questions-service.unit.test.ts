@@ -525,6 +525,42 @@ describe('QuestionsService — a question returns to draft while nothing uses it
   });
 });
 
+describe('QuestionsService — finding a question again', () => {
+  /** The bug: both intake paths escape, so a search for the ampersand the admin typed missed it. */
+  it('searches for the characters as content stores them', async () => {
+    const { questions } = build();
+    // What the editor and the importer both write for "Ram & Shyam".
+    await questions.create(
+      draft({
+        stem: { en: '<p>Is Ram &amp; Shyam a pair?</p>', hi: '<p>राम और श्याम?</p>' },
+        status: QUESTION_STATUS.ACTIVE,
+      }),
+      ADMIN,
+    );
+
+    const found = await questions.list(listQuery({ q: 'Ram & Shyam' }));
+
+    assert.equal(found.items.length, 1);
+  });
+
+  /** An archived twin is not in the list the admin is sent back to, so the error has to say so. */
+  it('says where the duplicate is when it is out of circulation', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    await questions.archive(created.id);
+
+    await assert.rejects(
+      () => questions.create(draft({ questionCode: 'QA-DUP' }), ADMIN),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /archived/);
+        assert.deepEqual(error.details, { duplicateOf: created.id });
+        return true;
+      },
+    );
+  });
+});
+
 describe('QuestionsService — what the screen is told', () => {
   it('says a question nothing points at can still be undone', async () => {
     const { questions } = build();

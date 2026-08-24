@@ -105,7 +105,7 @@ export class BaseConfigsService {
 
     const timerTemplate = input.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE;
     const modules = input.modules ?? [];
-    this.assertShape(timerTemplate, input.sections, modules);
+    this.assertShape(timerTemplate, input.sections, modules, input.durationSec);
 
     const id = await this.prisma.$transaction(async (tx) => {
       if (input.isDefault) await clearDefault(tx, input.examStageId, null);
@@ -152,6 +152,7 @@ export class BaseConfigsService {
       timerTemplate,
       sections ?? config.sections.map(toSectionDraft),
       modules ?? config.modules,
+      input.durationSec ?? config.durationSec,
     );
 
     await this.prisma.$transaction(async (tx) => {
@@ -277,8 +278,9 @@ export class BaseConfigsService {
     timerTemplate: TimerTemplate,
     sections: readonly BaseConfigSectionDraft[],
     modules: readonly BaseConfigModuleDraft[],
+    durationSec?: number,
   ): void {
-    const issues = configShapeIssues(timerTemplate, sections, modules);
+    const issues = configShapeIssues(timerTemplate, sections, modules, durationSec);
     if (issues.length === 0) return;
 
     throw new AppException(ErrorCodes.VALIDATION_ERROR, issues[0]!, {

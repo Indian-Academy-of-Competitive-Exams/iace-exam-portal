@@ -49,7 +49,12 @@ export function rewriteQuestionHtml(detail: QuestionDetail, visit: Html): Questi
 
 const ESCAPED: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 
-const DIV_ROOT = /^<div[\s>]/i;
+const DIV_TAG = /<(\/?)div\b[^<>]*>/gi;
+
+/** The characters content escapes on the way in, so a search for them looks for what was stored. */
+export function escapeForContent(text: string): string {
+  return text.replaceAll(/[&<>]/g, (char) => ESCAPED[char]!);
+}
 
 /** A cell as the editor would have written it: one paragraph a line, and nothing interpreted. */
 export function htmlFromPlainText(text: string): string {
@@ -57,15 +62,29 @@ export function htmlFromPlainText(text: string): string {
   if (trimmed === '') return '';
 
   return trimmed
-    .replaceAll('\r\n', '\n')
+    .replaceAll(/\r\n?/g, '\n')
     .split('\n')
-    .map((line) => `<p>${line.replaceAll(/[&<>]/g, (char) => ESCAPED[char]!)}</p>`)
+    .map((line) => `<p>${escapeForContent(line)}</p>`)
     .join('');
 }
 
-/** Gives a field a div root unless it already opens on one, so a reader has a block to style. */
+/** Whether ONE div wraps the whole thing — `<div>a</div><p>b</p>` opens on one but is two roots. */
+function isSingleDivRoot(html: string): boolean {
+  const tags = [...html.matchAll(DIV_TAG)];
+  if (tags.length === 0 || tags[0]!.index !== 0 || tags[0]![1] === '/') return false;
+
+  let depth = 0;
+  for (const tag of tags) {
+    depth += tag[1] === '/' ? -1 : 1;
+    // Closed before the end, so whatever follows is a second root.
+    if (depth === 0) return tag.index + tag[0].length === html.length;
+  }
+  return false;
+}
+
+/** One root per stored field, so a reader styles the block it was given rather than guessing. */
 export function asContentHtml(html: string): string {
   const trimmed = html.trim();
   if (trimmed === '') return '';
-  return DIV_ROOT.test(trimmed) ? trimmed : `<div>${trimmed}</div>`;
+  return isSingleDivRoot(trimmed) ? trimmed : `<div>${trimmed}</div>`;
 }
