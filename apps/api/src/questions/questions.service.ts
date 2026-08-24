@@ -140,7 +140,13 @@ export class QuestionsService {
         data: { ...this.columnsOf(draft, built), createdById },
       });
       const version = await tx.questionVersion.create({
-        data: versionDataOf(question.id, FIRST_VERSION, built, [], createdById),
+        data: versionDataOf(
+          question.id,
+          FIRST_VERSION,
+          built,
+          optionsWithIds(built, []),
+          createdById,
+        ),
       });
       return tx.question.update({
         where: { id: question.id },
@@ -182,16 +188,40 @@ export class QuestionsService {
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
     assertStatusMove(question.status, draft.status);
 
-    const revisable = await this.revisableVersionId(tx, question);
-    const currentVersionId = revisable
-      ? await this.revise(tx, revisable, question, built, createdById)
-      : await this.insertVersion(tx, question, built, createdById);
+    // Conditional, so it takes the row's lock — an approval landing mid-save must not be overwritten.
+    const claimed = await tx.question.updateMany({
+      where: { id, status: question.status },
+      data: this.columnsOf(draft, built),
+    });
+    if (claimed.count !== 1) throw editedElsewhere();
+
+    // Merged here, so what is compared below is exactly what would be written.
+    const options = optionsWithIds(built, currentOptionsOf(question));
 
     return tx.question.update({
-      where: { id: question.id },
-      data: { ...this.columnsOf(draft, built), currentVersionId },
+      where: { id },
+      data: { currentVersionId: await this.versionFor(tx, question, built, options, createdById) },
       include: QUESTION_INCLUDE,
     });
+  }
+
+  /** A save that says the same thing writes no version, and puts no new hand on a draft. */
+  private async versionFor(
+    tx: Prisma.TransactionClient,
+    question: QuestionRow,
+    built: BuiltQuestion,
+    options: QuestionOption[],
+    createdById: string,
+  ): Promise<string | null> {
+    const says = fingerprint(built.content, options, built.answerKey ?? null);
+    if (question.currentVersionId && says === contentHashOf(question)) {
+      return question.currentVersionId;
+    }
+
+    const revisable = await this.revisableVersionId(tx, question);
+    return revisable
+      ? this.revise(tx, revisable, built, options, createdById)
+      : this.insertVersion(tx, question, built, options, createdById);
   }
 
   /** The current version when it may be rewritten rather than replaced, or null when it may not. */
@@ -215,18 +245,15 @@ export class QuestionsService {
   private async revise(
     tx: Prisma.TransactionClient,
     versionId: string,
-    question: QuestionRow,
     built: BuiltQuestion,
+    options: QuestionOption[],
     createdById: string,
   ): Promise<string> {
     await tx.questionVersion.update({
       where: { id: versionId },
       data: {
         content: built.content as Prisma.InputJsonValue,
-        options: optionsWithIds(
-          built,
-          currentOptionsOf(question),
-        ) as unknown as Prisma.InputJsonValue,
+        options: options as unknown as Prisma.InputJsonValue,
         answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         // The words and the moment are now this admin's, not those of whoever opened the draft.
         createdById,
@@ -241,6 +268,7 @@ export class QuestionsService {
     tx: Prisma.TransactionClient,
     question: QuestionRow,
     built: BuiltQuestion,
+    options: QuestionOption[],
     createdById: string,
   ): Promise<string> {
     const version = await tx.questionVersion.create({
@@ -248,7 +276,7 @@ export class QuestionsService {
         question.id,
         (question.currentVersion?.version ?? 0) + 1,
         built,
-        currentOptionsOf(question),
+        options,
         createdById,
       ),
     });
@@ -292,7 +320,13 @@ export class QuestionsService {
         where: { id, status: QUESTION_STATUS.DRAFT },
         data: { currentVersionId: null },
       });
-      if (claimed.count !== 1) assertDeletable((await this.require(id)).status);
+      if (claimed.count !== 1) {
+        // Through `tx`: the pool client would want a second connection while this one holds the lock.
+        const current = await tx.question.findUnique({ where: { id } });
+        if (!current) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
+        assertDeletable(current.status);
+        throw editedElsewhere();
+      }
 
       if (await this.isUsed(tx, id)) {
         throw refused(
@@ -476,6 +510,13 @@ function assertStatusMove(from: QuestionStatus, to: QuestionStatus | undefined):
   }
 }
 
+/** Someone else moved the row between reading it and writing it; the save is not silently applied. */
+const editedElsewhere = () =>
+  refused(
+    'Somebody else changed this question while you were working on it. Open it again.',
+    'This question changed while you were editing it',
+  );
+
 const refused = (message: string, field: string) =>
   new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { status: [field] } });
 
@@ -489,12 +530,12 @@ function optionsWithIds(built: BuiltQuestion, previous: QuestionOption[]) {
   }));
 }
 
-/** A version row from a built draft. */
+/** A version row from a built draft and the options its ids have already been merged into. */
 function versionDataOf(
   questionId: string,
   version: number,
   built: BuiltQuestion,
-  previous: QuestionOption[],
+  options: QuestionOption[],
   createdById: string,
 ): Prisma.QuestionVersionUncheckedCreateInput {
   return {
@@ -502,7 +543,7 @@ function versionDataOf(
     version,
     createdById,
     content: built.content as Prisma.InputJsonValue,
-    options: optionsWithIds(built, previous) as unknown as Prisma.InputJsonValue,
+    options: options as unknown as Prisma.InputJsonValue,
     answerKey: (built.answerKey ?? Prisma.JsonNull) as Prisma.InputJsonValue,
   };
 }
@@ -546,15 +587,29 @@ function auditFieldsOf(row: QuestionRow): {
 /** Short: it is read to spot a change, never to rebuild anything. */
 const CONTENT_HASH_CHARS = 16;
 
-/** Moves whenever what the question SAYS moves — which a draft's version number no longer does. */
-function contentHashOf(row: QuestionRow): string | null {
-  const version = row.currentVersion;
-  if (!version) return null;
+/** jsonb returns keys in its own order, so a freshly built object and a stored one must be levelled. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value === null || typeof value !== 'object') return value;
 
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, nested]) => [key, canonical(nested)]),
+  );
+}
+
+/** Moves whenever what the question SAYS moves — which a draft's version number no longer does. */
+function fingerprint(content: unknown, options: unknown, answerKey: unknown): string {
   return createHash('sha256')
-    .update(JSON.stringify([version.content, version.options, version.answerKey]))
+    .update(JSON.stringify(canonical([content, options, answerKey])))
     .digest('hex')
     .slice(0, CONTENT_HASH_CHARS);
+}
+
+function contentHashOf(row: QuestionRow): string | null {
+  const version = row.currentVersion;
+  return version ? fingerprint(version.content, version.options, version.answerKey) : null;
 }
 
 function toSummary(row: QuestionRow): QuestionSummary {

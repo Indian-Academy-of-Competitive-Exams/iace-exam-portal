@@ -1656,6 +1656,15 @@ export interface FakeVersionRef {
   questionVersionId: string;
 }
 
+/** Prisma's JSON sentinels are how you WRITE null; a read hands back null itself. */
+const jsonNulled = <T extends object>(data: T): T =>
+  Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      value === Prisma.JsonNull || value === Prisma.DbNull ? null : value,
+    ]),
+  ) as T;
+
 const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
   row ? { ...row } : null;
 
@@ -1792,16 +1801,9 @@ export class FakeQuestionBankPrisma {
       return Promise.resolve(row!);
     },
 
-    /** Counts what it changed, as Prisma does — an id that matches nothing is simply not counted. */
-    updateMany: ({
-      where,
-      data,
-    }: {
-      where: { id: { in: string[] } };
-      data: Record<string, unknown>;
-    }) => {
-      const wanted = new Set(where.id.in);
-      const rows = this.questions.filter((question) => wanted.has(question.id));
+    /** The same matcher `findMany` uses: a conditional write is a where, not just a list of ids. */
+    updateMany: ({ where, data }: { where?: FakeQuestionWhere; data: Record<string, unknown> }) => {
+      const rows = this.matching(where);
       for (const row of rows) Object.assign(row, data);
       return Promise.resolve({ count: rows.length });
     },
@@ -1809,7 +1811,7 @@ export class FakeQuestionBankPrisma {
 
   readonly questionVersion = {
     create: ({ data }: { data: Partial<FakeQuestionVersionRow> & { questionId: string } }) => {
-      const row = makeQuestionVersion({ ...data, id: this.id('qv') });
+      const row = makeQuestionVersion({ ...jsonNulled(data), id: this.id('qv') });
       this.versions.push(row);
       return Promise.resolve(row);
     },
@@ -1824,7 +1826,7 @@ export class FakeQuestionBankPrisma {
     update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const row = this.versions.find((version) => version.id === where.id);
       if (!row) throw new Error(`no question version ${where.id}`);
-      Object.assign(row, data);
+      Object.assign(row, jsonNulled(data));
       return Promise.resolve(row);
     },
 

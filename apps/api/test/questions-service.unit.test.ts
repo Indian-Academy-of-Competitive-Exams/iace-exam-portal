@@ -586,6 +586,105 @@ describe('QuestionsService.remove — the one hard delete', () => {
   });
 });
 
+describe('QuestionsService.update — a save that changes nothing', () => {
+  /** The bug: opening a question and pressing Save wrote version 2 of identical content. */
+  /** The failure: one admin's save reverting another's approval, and rewriting the version under it. */
+  it('refuses a save whose question moved under it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    // What a concurrent approval leaves behind between this save's read and its write.
+    prisma.questions[0]!.status = QUESTION_STATUS.ACTIVE;
+
+    await assert.rejects(
+      () => questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+    );
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
+  });
+
+  it('writes no version when the content is byte for byte what is stored', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    const versionId = prisma.questions[0]?.currentVersionId;
+
+    const saved = await questions.update(
+      created.id,
+      draft({ status: QUESTION_STATUS.ACTIVE }),
+      ADMIN,
+    );
+
+    assert.equal(prisma.versions.length, 1);
+    assert.equal(saved.version, 1);
+    assert.equal(prisma.questions[0]?.currentVersionId, versionId);
+  });
+
+  /** Re-crediting a draft on every save would hand it to whoever opened it last. */
+  it('leaves a draft credited to whoever actually wrote it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+    const writtenAt = prisma.versions[0]?.createdAt;
+
+    await questions.update(created.id, asDraft(), 'adm_2');
+
+    assert.equal(prisma.versions[0]?.createdById, ADMIN);
+    assert.equal(prisma.versions[0]?.createdAt, writtenAt);
+  });
+
+  /** Tags live on the question, not the version, so retagging is not a new version of anything. */
+  it('changes what the question row holds without versioning it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    const saved = await questions.update(
+      created.id,
+      draft({
+        status: QUESTION_STATUS.ACTIVE,
+        tags: ['ssc cgl'],
+        difficulty: DIFFICULTY_LEVEL.HIGH,
+      }),
+      ADMIN,
+    );
+
+    assert.equal(prisma.versions.length, 1);
+    assert.deepEqual(saved.tags, ['ssc cgl']);
+    assert.equal(saved.difficulty, DIFFICULTY_LEVEL.HIGH);
+  });
+
+  /** The stem hash reads none of these, which is why it is the wrong comparator for a save. */
+  const ONLY: [string, Partial<QuestionDraftInput>][] = [
+    ['solution', { solution: { en: 'Twenty percent of 150 is 30.' } }],
+    ['translation', { stem: { en: 'What is 20% of 150?', hi: '150 का बीस प्रतिशत?' } }],
+    [
+      'an option in one language',
+      {
+        options: [
+          { position: 1, isCorrect: false, text: { en: '25', hi: 'पच्चीस' } },
+          { position: 2, isCorrect: true, text: { en: '30', hi: '30' } },
+          { position: 3, isCorrect: false, text: { en: '35', hi: '35' } },
+          { position: 4, isCorrect: false, text: { en: '40', hi: '40' } },
+        ],
+      },
+    ],
+  ];
+
+  for (const [what, over] of ONLY) {
+    it(`versions a published question when only ${what} changed`, async () => {
+      const { questions, prisma } = build();
+      const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+      const saved = await questions.update(
+        created.id,
+        draft({ status: QUESTION_STATUS.ACTIVE, ...over }),
+        ADMIN,
+      );
+
+      assert.equal(prisma.versions.length, 2);
+      assert.equal(saved.version, 2);
+    });
+  }
+});
+
 describe('TaxonomyService', () => {
   it('refuses a second subject with the same name', async () => {
     const { taxonomy } = build();

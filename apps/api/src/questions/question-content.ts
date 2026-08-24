@@ -63,7 +63,7 @@ export function htmlFromPlainText(text: string): string {
     .join('');
 }
 
-/** One root per stored field, so a reader styles the block it was given rather than guessing. */
+/** Gives a field a div root unless it already opens on one, so a reader has a block to style. */
 export function asContentHtml(html: string): string {
   const trimmed = html.trim();
   if (trimmed === '') return '';
