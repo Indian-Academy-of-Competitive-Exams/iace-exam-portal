@@ -360,6 +360,8 @@ export const questionDraftSchema = z.object({
   options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_COUNT).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
   tags: z.array(tagSchema).max(TAGS_MAX).default([]),
+  /** The `updatedAt` the editor loaded. Sent, it refuses a save built on a stale screen. */
+  expectedUpdatedAt: z.string().optional(),
 });
 export type QuestionDraft = z.infer<typeof questionDraftSchema>;
 export type QuestionDraftInput = z.input<typeof questionDraftSchema>;
@@ -450,6 +452,8 @@ export const questionSummarySchema = z.object({
   /** Which languages this question has been authored in, in `LANGUAGE_ORDER`. */
   languages: z.array(languageSchema),
   tags: z.array(z.string()),
+  /** Whether a paper, an attempt or a stat points at it — what decides if it can still be undone. */
+  inUse: z.boolean(),
   updatedAt: z.string(),
 });
 export type QuestionSummary = z.infer<typeof questionSummarySchema>;

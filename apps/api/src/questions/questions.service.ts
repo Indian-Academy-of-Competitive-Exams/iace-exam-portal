@@ -46,6 +46,8 @@ const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
   topic: { select: { id: true, name: true } },
   currentVersion: true,
+  // Counted in the row's own query, so a page of questions costs one round trip, not one each.
+  _count: { select: { paperQuestions: true, attemptItems: true, questionStats: true } },
 } as const satisfies Prisma.QuestionInclude;
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
@@ -161,6 +163,7 @@ export class QuestionsService {
   /** A draft still being written is revised in place; anything published gains a version instead. */
   async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
+    assertScreenIsCurrent(question, draft);
     assertTaxonomySettled(question, draft);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
@@ -503,6 +506,13 @@ function assertIntakeStatus(status: QuestionStatus | undefined): void {
   throw refused('A question cannot be created as archived.', 'Create it as a draft or as active');
 }
 
+/** A form open since before somebody else's save would write its stale fields over theirs. */
+function assertScreenIsCurrent(before: QuestionRow, draft: QuestionDraft): void {
+  const expected = draft.expectedUpdatedAt;
+  if (expected === undefined || expected === before.updatedAt.toISOString()) return;
+  throw editedElsewhere();
+}
+
 /** A draft was never in circulation, so retiring it would only be a way to publish it unreviewed. */
 function assertWasInCirculation(from: QuestionStatus, to: QuestionStatus | undefined): void {
   if (to !== QUESTION_STATUS.ARCHIVED || from !== QUESTION_STATUS.DRAFT) return;
@@ -647,8 +657,15 @@ function toSummary(row: QuestionRow): QuestionSummary {
     stemPreview: stemPreviewOf(content),
     languages: languagesInContent(content),
     tags: row.tags,
+    inUse: isReferenced(row),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** What the lifecycle turns on, said once for the screen as well as for the rules. */
+function isReferenced(row: QuestionRow): boolean {
+  const counts = row._count;
+  return counts.paperQuestions + counts.attemptItems + counts.questionStats > 0;
 }
 
 function toDetail(row: QuestionRow): QuestionDetail {

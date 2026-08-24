@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Undo2, Upload } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -221,71 +221,77 @@ export function QuestionsPage() {
   );
 }
 
-const ARCHIVE_PROMPTS = {
-  OUT: {
+/** What a row can do to a question, and what each one is called when it is confirmed. */
+const PROMPTS = {
+  ARCHIVE: {
     title: 'Archive this question?',
     description:
       'It stops being drawn into new papers and disappears from the bank. Papers that already pinned a version of it are untouched, and it can be brought back.',
     confirmLabel: 'Archive',
     destructive: true,
   },
-  BACK: {
+  UNARCHIVE: {
     title: 'Put this question back?',
     description: 'It becomes available to new papers again.',
     confirmLabel: 'Unarchive',
     destructive: false,
   },
+  DRAFT: {
+    title: 'Return this question to draft?',
+    description:
+      'It leaves circulation and becomes a working copy again, so its subject and topic can be changed and edits stop creating versions. Publishing it again puts it back in front of students.',
+    confirmLabel: 'Return to draft',
+    destructive: false,
+  },
+  DELETE: {
+    title: 'Delete this question?',
+    description:
+      'It is removed from the bank for good, along with every version of it. This cannot be undone.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  },
 } as const;
 
-const DELETE_PROMPT = {
-  title: 'Delete this draft?',
-  description:
-    'It is removed from the bank for good, along with everything written on it. This cannot be undone, and only a draft nothing has drawn can be deleted.',
-  confirmLabel: 'Delete',
-  destructive: true,
-} as const;
+type Move = keyof typeof PROMPTS;
+
+const RUN: Record<Move, (id: string) => Promise<unknown>> = {
+  ARCHIVE: (id) => api.admin.questions.archive(id),
+  UNARCHIVE: (id) => api.admin.questions.unarchive(id),
+  DRAFT: (id) => api.admin.questions.setStatus(id, { status: QUESTION_STATUS.DRAFT }),
+  DELETE: (id) => api.admin.questions.remove(id),
+};
 
 function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [confirming, setConfirming] = useState(false);
+  const [asking, setAsking] = useState<Move | null>(null);
   const queryClient = useQueryClient();
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
+  const isDraft = question.status === QUESTION_STATUS.DRAFT;
 
-  const remove = useMutation({
-    meta: { success: 'Draft deleted.' },
-    mutationFn: () => api.admin.questions.remove(question.id),
-    onSuccess: () => {
-      setConfirming(false);
-      return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
-    },
-    onError: () => setConfirming(false),
-  });
+  const settle = () => {
+    setAsking(null);
+    return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+  };
 
-  const move = useMutation({
-    meta: { success: isArchived ? 'Question back in circulation.' : 'Question archived.' },
-    mutationFn: () =>
-      isArchived
-        ? api.admin.questions.unarchive(question.id)
-        : api.admin.questions.archive(question.id),
-    onSuccess: () => {
-      setConfirming(false);
-      return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
-    },
+  const act = useMutation({
+    meta: { success: 'Question updated.' },
+    mutationFn: (move: Move) => RUN[move](question.id),
+    onSuccess: settle,
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
-    onError: () => setConfirming(false),
+    onError: () => setAsking(null),
   });
 
   if (!canWrite) return null;
 
-  const draftOnly = question.status === QUESTION_STATUS.DRAFT;
-  const busy = move.isPending || remove.isPending;
-  const archiveLabel = isArchived ? 'Unarchive' : 'Archive';
-  const archiveIcon = isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />;
-  const archivePrompt = ARCHIVE_PROMPTS[isArchived ? 'BACK' : 'OUT'];
-  const prompt = draftOnly ? DELETE_PROMPT : archivePrompt;
+  const ask = (move: Move) => {
+    act.reset();
+    setAsking(move);
+  };
+
+  const prompt = asking ? PROMPTS[asking] : null;
 
   return (
     <>
@@ -297,33 +303,47 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
           </Link>
         </DropdownMenuItem>
 
-        {/* A draft was never in circulation, so it is deleted rather than taken out of it. */}
-        <DropdownMenuItem
-          destructive={draftOnly || !isArchived}
-          disabled={busy}
-          onSelect={() => {
-            move.reset();
-            remove.reset();
-            setConfirming(true);
-          }}
-        >
-          {draftOnly ? <Trash2 aria-hidden /> : archiveIcon}
-          {draftOnly ? 'Delete' : archiveLabel}
-        </DropdownMenuItem>
+        {/* A draft was never in circulation, so there is nothing to take it out of. */}
+        {isDraft ? null : (
+          <DropdownMenuItem
+            destructive={!isArchived}
+            disabled={act.isPending}
+            onSelect={() => ask(isArchived ? 'UNARCHIVE' : 'ARCHIVE')}
+          >
+            {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
+            {isArchived ? 'Unarchive' : 'Archive'}
+          </DropdownMenuItem>
+        )}
+
+        {/* Both only while nothing points at it — offering either otherwise is offering a refusal. */}
+        {question.inUse || isDraft ? null : (
+          <DropdownMenuItem disabled={act.isPending} onSelect={() => ask('DRAFT')}>
+            <Undo2 aria-hidden />
+            Return to draft
+          </DropdownMenuItem>
+        )}
+
+        {question.inUse ? null : (
+          <DropdownMenuItem destructive disabled={act.isPending} onSelect={() => ask('DELETE')}>
+            <Trash2 aria-hidden />
+            Delete
+          </DropdownMenuItem>
+        )}
       </RowActions>
 
-      {/* Archiving changes what future papers can draw, and nothing on the row
-          shows that having happened — so it is confirmed in both directions. */}
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        loading={busy}
-        title={prompt.title}
-        description={prompt.description}
-        confirmLabel={prompt.confirmLabel}
-        destructive={prompt.destructive}
-        onConfirm={() => (draftOnly ? remove.mutate() : move.mutate())}
-      />
+      {/* Each of these changes what future papers can draw, and nothing on the row shows it. */}
+      {prompt ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setAsking(null)}
+          loading={act.isPending}
+          title={prompt.title}
+          description={prompt.description}
+          confirmLabel={prompt.confirmLabel}
+          destructive={prompt.destructive}
+          onConfirm={() => asking && act.mutate(asking)}
+        />
+      ) : null}
     </>
   );
 }

@@ -170,10 +170,12 @@ function filled(map: LanguageMap): Partial<LanguageMap> {
   return out;
 }
 
-function toDraft(values: QuestionFormValues): QuestionDraftInput {
+function toDraft(values: QuestionFormValues, saved?: QuestionDetail): QuestionDraftInput {
   const isMcq = values.type === QUESTION_TYPE.SINGLE_MCQ;
 
   return {
+    // What this screen was built from, so a save over somebody else's is refused rather than applied.
+    expectedUpdatedAt: saved?.updatedAt,
     type: values.type,
     subjectId: values.subjectId,
     topicId: values.topicId || null,
@@ -248,7 +250,7 @@ export function QuestionFormPage() {
     meta: { success: existing ? 'Question saved.' : 'Question added.' },
     mutationFn: (values: QuestionFormValues) =>
       existing
-        ? api.admin.questions.update(id!, toDraft(values))
+        ? api.admin.questions.update(id!, toDraft(values, loaded))
         : api.admin.questions.create(toDraft(values)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
@@ -260,6 +262,7 @@ export function QuestionFormPage() {
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const type = useWatch({ control: form.control, name: 'type' });
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
+  const taxonomySettled = loaded !== undefined && loaded.status !== QUESTION_STATUS.DRAFT;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   const correctOption = useWatch({ control: form.control, name: 'correctOption' });
   const answerMode = useWatch({ control: form.control, name: 'answerMode' });
@@ -326,6 +329,7 @@ export function QuestionFormPage() {
         </>
       }
     >
+      {/* Taxonomy settles when the question leaves the draft: it is what a paper draws on. */}
       <FormSection title="Where it is filed">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField form={form} name="subjectId" label="Subject">
@@ -333,6 +337,7 @@ export function QuestionFormPage() {
               <SubjectPicker
                 id={control.id}
                 value={subjectId}
+                disabled={taxonomySettled}
                 placeholder="Choose a subject"
                 onChange={(value) => {
                   form.setValue('subjectId', value, { shouldValidate: true });
@@ -349,6 +354,7 @@ export function QuestionFormPage() {
                 id={control.id}
                 subjectId={subjectId}
                 value={topicId}
+                disabled={taxonomySettled}
                 clearable
                 placeholder="Choose a topic"
                 onChange={(value) => form.setValue('topicId', value)}

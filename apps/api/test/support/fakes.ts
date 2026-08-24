@@ -1973,6 +1973,11 @@ export class FakeQuestionBankPrisma {
       topic: topic ? { id: topic.id, name: topic.name } : null,
       // A copy: an in-place revision must not reach back and rewrite a row already read.
       currentVersion: copyOf(this.versions.find((v) => v.id === row.currentVersionId)),
+      _count: {
+        paperQuestions: countRefs(this.paperRefs, { questionId: row.id }),
+        attemptItems: countRefs(this.attemptRefs, { questionId: row.id }),
+        questionStats: countRefs(this.statRefs, { questionId: row.id }),
+      },
     };
   }
 

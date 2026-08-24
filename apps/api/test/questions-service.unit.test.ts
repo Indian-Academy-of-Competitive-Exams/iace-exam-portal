@@ -525,6 +525,59 @@ describe('QuestionsService — a question returns to draft while nothing uses it
   });
 });
 
+describe('QuestionsService — what the screen is told', () => {
+  it('says a question nothing points at can still be undone', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    assert.equal(created.inUse, false);
+    const listed = await questions.list(listQuery());
+    assert.equal(listed.items[0]?.inUse, false);
+  });
+
+  /** The screen offers Delete and Return to draft off this, so it must agree with the rules. */
+  it('says a question a paper has drawn cannot', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    prisma.paperRefs.push({ questionId: created.id, questionVersionId: 'any' });
+
+    const listed = await questions.list(listQuery());
+
+    assert.equal(listed.items[0]?.inUse, true);
+    assert.equal((await questions.detail(created.id)).inUse, true);
+  });
+
+  /** The failure this prevents: a form open since before somebody else's save overwriting it. */
+  it('refuses a save built on a screen somebody has since changed', async () => {
+    const { questions } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+    await questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN);
+
+    await assert.rejects(
+      () =>
+        questions.update(
+          created.id,
+          asDraft({ expectedUpdatedAt: created.updatedAt, questionCode: 'QA-9' }),
+          ADMIN,
+        ),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
+    );
+  });
+
+  it('takes a save that names the screen it was built from', async () => {
+    const { questions } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+
+    const saved = await questions.update(
+      created.id,
+      asDraft({ expectedUpdatedAt: created.updatedAt, questionCode: 'QA-9' }),
+      ADMIN,
+    );
+
+    assert.equal(saved.questionCode, 'QA-9');
+  });
+});
+
 describe('QuestionsService.remove — the one hard delete', () => {
   const refused = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
 

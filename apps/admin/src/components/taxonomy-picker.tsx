@@ -19,6 +19,7 @@ interface PickerProps {
   selectedLabel?: string;
   placeholder?: string;
   clearable?: boolean;
+  disabled?: boolean;
   id?: string;
   'aria-label'?: string;
 }
@@ -65,7 +66,7 @@ export function TopicPicker({
   return (
     <Combobox
       {...props}
-      disabled={subjectId === ''}
+      disabled={props.disabled === true || subjectId === ''}
       placeholder={
         subjectId === '' ? 'Choose a subject first' : (props.placeholder ?? 'All topics')
       }
