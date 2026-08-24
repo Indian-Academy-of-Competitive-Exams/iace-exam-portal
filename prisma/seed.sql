@@ -18,11 +18,11 @@
 -- referenced from documentation, from support conversations and from the next
 -- seed pass, and a generated id would make each of those a lookup.
 --
--- STILL OUTSTANDING: the full catalog is 4 families, 43 exams and 122 stages,
--- from Exam_Pattern_Base_Configurations.xlsx. Neither the workbook nor the
--- coverage pass that assigns each stage its disposition is in this repo yet, so
--- this seeds only SSC CGL — the exam the default config below belongs to.
--- Adding the rest is more rows in the same shape.
+-- The full catalog (4 families, 43 exams, 122 stages, 30 default configs) lives in
+-- prisma/seed.catalog.sql — generated from Exam_Pattern_Base_Configurations.xlsx and run
+-- right after this file by `pnpm db:seed`. This file keeps the hand-curated rows: the
+-- super admin, the branches, and the SSC CGL default config the app was first built on.
+-- See docs/seed-exam-catalog.md for the mapping decisions.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------

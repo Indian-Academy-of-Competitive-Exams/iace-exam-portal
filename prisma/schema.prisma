@@ -421,7 +421,7 @@ model Question {
   difficulty       DifficultyLevel
   status           QuestionStatus  @default(DRAFT)
   currentVersionId String?
-  // Namespaced `key:value` convention — paper:, set:, pyq:, src:, topic:.
+  // Free-text tags — plain strings, no naming convention. GIN-indexed for containment search.
   tags             String[]        @default([])
   stemHash         String?
   // Times used in a FIXED paper; incremented atomically at finalize.
