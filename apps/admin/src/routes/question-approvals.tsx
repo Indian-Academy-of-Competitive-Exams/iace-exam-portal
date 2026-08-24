@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -244,25 +244,61 @@ function BulkApproval({
   );
 }
 
+/** The two answers a review has. Delete is the reject: a draft nobody drew leaves nothing behind. */
+const PROMPTS = {
+  APPROVE: {
+    title: 'Approve this question?',
+    description: 'It joins the bank and can be drawn into any paper built from now on.',
+    confirmLabel: 'Approve',
+    destructive: false,
+  },
+  DELETE: {
+    title: 'Delete this draft?',
+    description:
+      'It is removed from the bank for good, along with everything written on it. This cannot be undone, and only a draft nothing has drawn can be deleted.',
+    confirmLabel: 'Delete',
+    destructive: true,
+  },
+} as const;
+
+type Decision = keyof typeof PROMPTS;
+
 function ApprovalActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<Decision | null>(null);
   const queryClient = useQueryClient();
+
+  const settle = () => {
+    setAsking(null);
+    return queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
+  };
 
   const approve = useMutation({
     meta: { success: 'Question approved.' },
     mutationFn: () =>
       api.admin.questions.setStatus(question.id, { status: QUESTION_STATUS.ACTIVE }),
-    onSuccess: () => {
-      setAsking(false);
-      return queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
-    },
+    onSuccess: settle,
     // On failure, drop the confirm — the row must not keep asking an answered question.
-    onError: () => setAsking(false),
+    onError: () => setAsking(null),
+  });
+
+  const remove = useMutation({
+    meta: { success: 'Draft deleted.' },
+    mutationFn: () => api.admin.questions.remove(question.id),
+    onSuccess: settle,
+    onError: () => setAsking(null),
   });
 
   if (!canWrite) return null;
+
+  const busy = approve.isPending || remove.isPending;
+  const ask = (decision: Decision) => {
+    approve.reset();
+    remove.reset();
+    setAsking(decision);
+  };
+  const prompt = asking ? PROMPTS[asking] : null;
 
   return (
     <>
@@ -273,28 +309,29 @@ function ApprovalActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          disabled={approve.isPending}
-          onSelect={() => {
-            approve.reset();
-            setAsking(true);
-          }}
-        >
+        <DropdownMenuItem disabled={busy} onSelect={() => ask('APPROVE')}>
           <Check aria-hidden />
           Approve
         </DropdownMenuItem>
+        <DropdownMenuItem destructive disabled={busy} onSelect={() => ask('DELETE')}>
+          <Trash2 aria-hidden />
+          Delete
+        </DropdownMenuItem>
       </RowActions>
 
-      {/* Approving puts it in front of students, and nothing on the row shows that having happened. */}
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={setAsking}
-        loading={approve.isPending}
-        title="Approve this question?"
-        description="It joins the bank and can be drawn into any paper built from now on."
-        confirmLabel="Approve"
-        onConfirm={() => approve.mutate()}
-      />
+      {/* Approving puts it in front of students, and deleting takes it away for good. */}
+      {prompt ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setAsking(null)}
+          loading={busy}
+          title={prompt.title}
+          description={prompt.description}
+          confirmLabel={prompt.confirmLabel}
+          destructive={prompt.destructive}
+          onConfirm={() => (asking === 'APPROVE' ? approve.mutate() : remove.mutate())}
+        />
+      ) : null}
     </>
   );
 }

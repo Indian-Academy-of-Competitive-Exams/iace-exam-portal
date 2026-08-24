@@ -131,6 +131,7 @@ export class QuestionsService {
   }
 
   async create(draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
+    assertIntakeStatus(draft.status);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, null);
 
@@ -280,6 +281,43 @@ export class QuestionsService {
     return this.setStatus(id, { status: QUESTION_STATUS.ACTIVE });
   }
 
+  /** The one hard delete: a draft nobody drew, nobody sat and nothing measured. */
+  async remove(id: string): Promise<void> {
+    const before = await this.require(id);
+    assertDeletable(before.status);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Conditional: it takes the row's lock, re-asserts DRAFT, and clears the RESTRICTing pointer.
+      const claimed = await tx.question.updateMany({
+        where: { id, status: QUESTION_STATUS.DRAFT },
+        data: { currentVersionId: null },
+      });
+      if (claimed.count !== 1) assertDeletable((await this.require(id)).status);
+
+      if (await this.isUsed(tx, id)) {
+        throw refused(
+          'This question is already part of a paper or an attempt, so it cannot be deleted.',
+          'Something already uses this question',
+        );
+      }
+
+      await tx.questionVersion.deleteMany({ where: { questionId: id } });
+      await tx.question.delete({ where: { id } });
+    });
+
+    this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
+  }
+
+  /** Every table that keys on the question, so the rule refuses before a foreign key does. */
+  private async isUsed(tx: Prisma.TransactionClient, questionId: string): Promise<boolean> {
+    const [papers, attempts, stats] = await Promise.all([
+      tx.paperQuestion.count({ where: { questionId } }),
+      tx.attemptQuestion.count({ where: { questionId } }),
+      tx.testQuestionStat.count({ where: { questionId } }),
+    ]);
+    return papers + attempts + stats > 0;
+  }
+
   /** One decision over many rows: one statement, so a half-applied batch is not a state. */
   async bulkSetStatus(body: BulkQuestionStatusBody): Promise<BulkQuestionStatusResult> {
     const ids = [...new Set(body.ids)];
@@ -397,6 +435,21 @@ export function fieldErrorsOf(issues: ValidationIssue[]): Record<string, string[
     fieldErrors[key].push(issue.message);
   }
   return fieldErrors;
+}
+
+/** ARCHIVED is a retirement, so nothing arrives in it — the one status a question cannot start in. */
+function assertIntakeStatus(status: QuestionStatus | undefined): void {
+  if (status !== QUESTION_STATUS.ARCHIVED) return;
+  throw refused('A question cannot be created as archived.', 'Create it as a draft or as active');
+}
+
+/** Only a draft: anything that was ever in circulation is archived, so a paper can still read it. */
+function assertDeletable(status: QuestionStatus): void {
+  if (status === QUESTION_STATUS.DRAFT) return;
+  throw refused(
+    'Only a draft can be deleted. Archive this question instead.',
+    'This question is no longer a draft',
+  );
 }
 
 /** The status a row may NOT already be in, for each status a batch can move it to. */

@@ -1659,10 +1659,11 @@ export interface FakeVersionRef {
 const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
   row ? { ...row } : null;
 
-const countRefs = (rows: FakeVersionRef[], where: FakeVersionRef): number =>
+const countRefs = (rows: FakeVersionRef[], where: Partial<FakeVersionRef>): number =>
   rows.filter(
     (row) =>
-      row.questionId === where.questionId && row.questionVersionId === where.questionVersionId,
+      row.questionId === where.questionId &&
+      (where.questionVersionId === undefined || row.questionVersionId === where.questionVersionId),
   ).length;
 
 export class FakeQuestionBankPrisma {
@@ -1675,6 +1676,7 @@ export class FakeQuestionBankPrisma {
     readonly versions: FakeQuestionVersionRow[] = [],
     readonly paperRefs: FakeVersionRef[] = [],
     readonly attemptRefs: FakeVersionRef[] = [],
+    readonly statRefs: { questionId: string }[] = [],
   ) {}
 
   private id(prefix: string): string {
@@ -1783,6 +1785,13 @@ export class FakeQuestionBankPrisma {
       return Promise.resolve(this.hydrate(row));
     },
 
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.questions.findIndex((question) => question.id === where.id);
+      if (index === -1) throw new Error(`no question ${where.id}`);
+      const [row] = this.questions.splice(index, 1);
+      return Promise.resolve(row!);
+    },
+
     /** Counts what it changed, as Prisma does — an id that matches nothing is simply not counted. */
     updateMany: ({
       where,
@@ -1818,17 +1827,29 @@ export class FakeQuestionBankPrisma {
       Object.assign(row, data);
       return Promise.resolve(row);
     },
+
+    deleteMany: ({ where }: { where: { questionId: string } }) => {
+      const doomed = this.versions.filter((row) => row.questionId === where.questionId);
+      for (const row of doomed) this.versions.splice(this.versions.indexOf(row), 1);
+      return Promise.resolve({ count: doomed.length });
+    },
   };
 
   /** What pins a version: the service refuses to rewrite one a paper or an attempt is holding. */
   readonly paperQuestion = {
-    count: ({ where }: { where: FakeVersionRef }) =>
+    count: ({ where }: { where: Partial<FakeVersionRef> }) =>
       Promise.resolve(countRefs(this.paperRefs, where)),
   };
 
   readonly attemptQuestion = {
-    count: ({ where }: { where: FakeVersionRef }) =>
+    count: ({ where }: { where: Partial<FakeVersionRef> }) =>
       Promise.resolve(countRefs(this.attemptRefs, where)),
+  };
+
+  /** Keyed on the question alone, so it outlives a version and blocks a delete of its own. */
+  readonly testQuestionStat = {
+    count: ({ where }: { where: { questionId: string } }) =>
+      Promise.resolve(this.statRefs.filter((row) => row.questionId === where.questionId).length),
   };
 
   readonly subject = {

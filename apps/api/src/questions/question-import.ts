@@ -423,7 +423,7 @@ function readAnswerKey(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['a
   return { mode, answers, tolerance };
 }
 
-/** First in the list, so the cap below can only ever drop one the sheet asked for. */
+/** The mark takes one of the ten, so a sheet naming all ten is over the cap and the row is refused. */
 function readTags(row: CsvRow, issues: ValidationIssue[]): string[] {
   const tags: string[] = [QUESTION_IMPORT_TAG];
 

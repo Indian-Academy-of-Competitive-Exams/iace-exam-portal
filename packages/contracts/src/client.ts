@@ -866,6 +866,13 @@ export function createApiClient(options: ApiClientOptions) {
             schema: questionDetailSchema,
           }),
 
+        /** Only a draft nothing has drawn. Everything else is archived, never removed. */
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_QUESTION_ROUTES.remove(id), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
+
         /** One decision over a page of drafts — one request, so nothing is half-approved. */
         bulkSetStatus: (input: BulkQuestionStatusInput): Promise<BulkQuestionStatusResult> =>
           request(ADMIN_QUESTION_ROUTES.bulkStatus, {

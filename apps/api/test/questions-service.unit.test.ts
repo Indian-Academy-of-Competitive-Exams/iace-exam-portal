@@ -525,6 +525,67 @@ describe('QuestionsService — publishing is one way', () => {
   });
 });
 
+describe('QuestionsService.remove — the one hard delete', () => {
+  const refused = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  it('deletes a draft nobody has used, and its versions with it', async () => {
+    const { questions, prisma, audit } = build();
+    const created = await questions.create(asDraft(), ADMIN);
+    assert.equal(prisma.versions.length, 1);
+
+    const { changed } = await recording(audit, () => questions.remove(created.id));
+
+    assert.equal(prisma.questions.length, 0);
+    assert.equal(prisma.versions.length, 0);
+    assert.deepEqual(changed?.status, { from: QUESTION_STATUS.DRAFT, to: 'DELETED' });
+  });
+
+  /** Everything published is archived instead: a paper that pinned a version must keep reading it. */
+  for (const status of [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ARCHIVED] as const) {
+    it(`refuses to delete a question that is ${status}`, async () => {
+      const { questions, prisma } = build();
+      const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+      if (status === QUESTION_STATUS.ARCHIVED) await questions.archive(created.id);
+
+      await assert.rejects(() => questions.remove(created.id), refused);
+      assert.equal(prisma.questions.length, 1);
+    });
+  }
+
+  /** Deleting what a paper keys on would leave a scored result reading a question that is gone. */
+  for (const holder of ['paperRefs', 'attemptRefs', 'statRefs'] as const) {
+    it(`refuses a draft that ${holder.replace('Refs', '')} already keys on`, async () => {
+      const { questions, prisma } = build();
+      const created = await questions.create(asDraft(), ADMIN);
+      const questionVersionId = prisma.questions[0]?.currentVersionId ?? '';
+      prisma[holder].push({ questionId: created.id, questionVersionId });
+
+      await assert.rejects(() => questions.remove(created.id), refused);
+      assert.equal(prisma.questions.length, 1);
+      assert.equal(prisma.versions.length, 1);
+    });
+  }
+
+  it('answers NOT_FOUND for a question that is not there', async () => {
+    const { questions } = build();
+
+    await assert.rejects(
+      () => questions.remove('nope'),
+      (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  /** Every other path refuses ARCHIVED as a destination; creating straight into it is the last door. */
+  it('refuses to create a question that is already archived', async () => {
+    const { questions } = build();
+
+    await assert.rejects(
+      () => questions.create(draft({ status: QUESTION_STATUS.ARCHIVED }), ADMIN),
+      refused,
+    );
+  });
+});
+
 describe('TaxonomyService', () => {
   it('refuses a second subject with the same name', async () => {
     const { taxonomy } = build();

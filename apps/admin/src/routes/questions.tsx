@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Pencil, Plus, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import {
   DIFFICULTY_LEVELS,
   FEATURE_KEYS,
@@ -123,7 +123,7 @@ export function QuestionsPage() {
       kind: 'multi',
       label: 'Filter by status',
       primary: true,
-      placeholder: 'Any status',
+      placeholder: 'In circulation',
       items: QUESTION_STATUSES.map((value) => ({ value, label: value })),
     },
     {
@@ -221,6 +221,30 @@ export function QuestionsPage() {
   );
 }
 
+const ARCHIVE_PROMPTS = {
+  OUT: {
+    title: 'Archive this question?',
+    description:
+      'It stops being drawn into new papers and disappears from the bank. Papers that already pinned a version of it are untouched, and it can be brought back.',
+    confirmLabel: 'Archive',
+    destructive: true,
+  },
+  BACK: {
+    title: 'Put this question back?',
+    description: 'It becomes available to new papers again.',
+    confirmLabel: 'Unarchive',
+    destructive: false,
+  },
+} as const;
+
+const DELETE_PROMPT = {
+  title: 'Delete this draft?',
+  description:
+    'It is removed from the bank for good, along with everything written on it. This cannot be undone, and only a draft nothing has drawn can be deleted.',
+  confirmLabel: 'Delete',
+  destructive: true,
+} as const;
+
 function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -228,6 +252,16 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   const queryClient = useQueryClient();
 
   const isArchived = question.status === QUESTION_STATUS.ARCHIVED;
+
+  const remove = useMutation({
+    meta: { success: 'Draft deleted.' },
+    mutationFn: () => api.admin.questions.remove(question.id),
+    onSuccess: () => {
+      setConfirming(false);
+      return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+    },
+    onError: () => setConfirming(false),
+  });
 
   const move = useMutation({
     meta: { success: isArchived ? 'Question back in circulation.' : 'Question archived.' },
@@ -247,6 +281,11 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
   if (!canWrite) return null;
 
   const draftOnly = question.status === QUESTION_STATUS.DRAFT;
+  const busy = move.isPending || remove.isPending;
+  const archiveLabel = isArchived ? 'Unarchive' : 'Archive';
+  const archiveIcon = isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />;
+  const archivePrompt = ARCHIVE_PROMPTS[isArchived ? 'BACK' : 'OUT'];
+  const prompt = draftOnly ? DELETE_PROMPT : archivePrompt;
 
   return (
     <>
@@ -258,20 +297,19 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
           </Link>
         </DropdownMenuItem>
 
-        {/* A draft was never in circulation, so there is nothing to take it out of. */}
-        {draftOnly ? null : (
-          <DropdownMenuItem
-            destructive={!isArchived}
-            disabled={move.isPending}
-            onSelect={() => {
-              move.reset();
-              setConfirming(true);
-            }}
-          >
-            {isArchived ? <ArchiveRestore aria-hidden /> : <Archive aria-hidden />}
-            {isArchived ? 'Unarchive' : 'Archive'}
-          </DropdownMenuItem>
-        )}
+        {/* A draft was never in circulation, so it is deleted rather than taken out of it. */}
+        <DropdownMenuItem
+          destructive={draftOnly || !isArchived}
+          disabled={busy}
+          onSelect={() => {
+            move.reset();
+            remove.reset();
+            setConfirming(true);
+          }}
+        >
+          {draftOnly ? <Trash2 aria-hidden /> : archiveIcon}
+          {draftOnly ? 'Delete' : archiveLabel}
+        </DropdownMenuItem>
       </RowActions>
 
       {/* Archiving changes what future papers can draw, and nothing on the row
@@ -279,15 +317,12 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        loading={move.isPending}
-        title={isArchived ? 'Put this question back?' : 'Archive this question?'}
-        description={
-          isArchived
-            ? 'It becomes available to new papers again.'
-            : 'It stops being drawn into new papers and disappears from the bank. Papers that already pinned a version of it are untouched, and it can be brought back.'
-        }
-        confirmLabel={isArchived ? 'Unarchive' : 'Archive'}
-        onConfirm={() => move.mutate()}
+        loading={busy}
+        title={prompt.title}
+        description={prompt.description}
+        confirmLabel={prompt.confirmLabel}
+        destructive={prompt.destructive}
+        onConfirm={() => (draftOnly ? remove.mutate() : move.mutate())}
       />
     </>
   );

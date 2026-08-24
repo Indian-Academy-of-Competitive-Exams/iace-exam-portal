@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -134,5 +135,14 @@ export class QuestionsController {
   @Post(':id/unarchive')
   unarchive(@Param('id') id: string): Promise<QuestionDetail> {
     return this.questions.unarchive(id);
+  }
+
+  /** The reviewer's other answer: approve it, or take a draft nobody drew off the list for good. */
+  @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.DELETE)
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @HttpCode(HttpStatus.OK)
+  @Delete(':id')
+  remove(@Param('id') id: string): Promise<void> {
+    return this.questions.remove(id);
   }
 }

@@ -690,6 +690,7 @@ export const ADMIN_QUESTION_ROUTES = {
   setStatus: (id: string) => `/admin/questions/${id}/status`,
   archive: (id: string) => `/admin/questions/${id}/archive`,
   unarchive: (id: string) => `/admin/questions/${id}/unarchive`,
+  remove: (id: string) => `/admin/questions/${id}`,
   bulkStatus: '/admin/questions/status',
   uploadImage: '/admin/questions/images',
 } as const;
