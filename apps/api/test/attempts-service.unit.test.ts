@@ -307,3 +307,26 @@ describe('AttemptsService — what cannot be sat', () => {
     assert.equal(prisma.attemptRows.length, 0);
   });
 });
+
+describe('AttemptsService — resuming what is already running', () => {
+  it('resumes a sitting the window has since closed under', async () => {
+    const live = makeAttempt({ id: 'att_live', status: ATTEMPT_STATUS.IN_PROGRESS });
+    const { service } = serviceWith(sittable(), [live], undefined, false);
+
+    const resumed = await service.start(STUDENT, 'tst_1', {});
+
+    // The failure this prevents: a reload after the window closes, locking a student out mid-paper.
+    assert.equal(resumed.id, 'att_live');
+    assert.equal(resumed.startedByThisCall, false);
+  });
+
+  it('resumes a sitting on a test that has since been retired', async () => {
+    const live = makeAttempt({ id: 'att_live', status: ATTEMPT_STATUS.IN_PROGRESS });
+    const { service } = serviceWith(sittable({ status: TEST_STATUS.INACTIVE }), [live]);
+
+    const resumed = await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(resumed.id, 'att_live');
+    assert.equal(resumed.endsAt, live.endsAt.toISOString());
+  });
+});

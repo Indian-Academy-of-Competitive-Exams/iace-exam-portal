@@ -53,12 +53,13 @@ export class AttemptsService {
   ) {}
 
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
+    // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
+    const live = await this.liveAttempt(studentId, testId);
+    if (live) return toLiveAttempt(live, await this.requireTest(testId), false);
+
     await this.access.assertCanStart(studentId, testId);
 
-    const test = await this.requireSittable(testId);
-
-    const live = await this.liveAttempt(studentId, testId);
-    if (live) return toLiveAttempt(live, test, false);
+    const test = this.assertSittable(await this.requireTest(testId));
 
     const finished = await this.prisma.attempt.count({
       where: { testId, studentId, status: { not: LIVE } },
@@ -143,13 +144,16 @@ export class AttemptsService {
     }
   }
 
-  private async requireSittable(testId: string): Promise<SittableTest> {
+  private async requireTest(testId: string): Promise<SittableTest> {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },
       include: SITTABLE_INCLUDE,
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    return test;
+  }
 
+  private assertSittable(test: SittableTest): SittableTest {
     const blocker = testStartBlocker(test);
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
     return test;
