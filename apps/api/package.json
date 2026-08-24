@@ -6,6 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "backfill:stem-hashes": "node --env-file-if-exists=../../.env --import tsx src/backfill-stem-hashes.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf dist .turbo",

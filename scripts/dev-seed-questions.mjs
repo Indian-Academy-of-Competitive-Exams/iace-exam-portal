@@ -72,7 +72,8 @@ function build(subject, difficulty, i) {
       // Set in a second pass: the currentVersion FK is immediate, so the version must exist first.
       currentVersionId: null,
       tags: ['dummy', tagText],
-      stemHash: id,
+      // Null, not a stand-in: only canonicalStemKey can say what this is. Rehash after seeding.
+      stemHash: null,
       fixedUseCount: 0,
     },
     version: { id: versionId, questionId: id, version: 1, content, options },
