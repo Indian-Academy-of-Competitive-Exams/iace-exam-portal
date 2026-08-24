@@ -85,7 +85,7 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
       className: 'max-w-[18rem] font-medium',
       cell: (test) => (
         <Link to={ROUTES.TEST(test.id)} className={linkVariants()}>
-          <TruncatedText>{test.title}</TruncatedText>
+          <TruncatedText>{test.title ?? 'Untitled test'}</TruncatedText>
         </Link>
       ),
     },

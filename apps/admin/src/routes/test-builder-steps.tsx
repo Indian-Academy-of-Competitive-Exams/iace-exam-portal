@@ -265,7 +265,9 @@ export function OfferingStep({ detail }: Readonly<{ detail: TestDetail }>) {
             type="button"
             variant={offered ? 'outline' : 'default'}
             loading={setStatus.isPending}
-            onClick={() => setStatus.mutate(offered ? TEST_STATUS.INACTIVE : TEST_STATUS.ACTIVE)}
+            onClick={() =>
+              offered ? setAsking(OFFERING_CONFIRMS.RETIRE) : setStatus.mutate(TEST_STATUS.ACTIVE)
+            }
           >
             <Power aria-hidden />
             {offered ? 'Retire' : 'Offer to students'}

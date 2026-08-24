@@ -93,10 +93,17 @@ function valuesOf(detail: TestDetail | null): TestFormValues {
   };
 }
 
+/** An empty reference is sent as none, so the server answers with the prompt naming what is missing. */
 function scopeRefOf(values: TestFormValues): TestScopeRef | null {
-  if (values.scope === TEST_SCOPE.MODULE) return { moduleId: values.moduleId };
-  if (values.scope === TEST_SCOPE.SECTIONAL) return { sectionId: values.sectionId };
-  if (values.scope === TEST_SCOPE.TOPIC) return { topicIds: values.topicIds };
+  if (values.scope === TEST_SCOPE.MODULE) {
+    return values.moduleId ? { moduleId: values.moduleId } : null;
+  }
+  if (values.scope === TEST_SCOPE.SECTIONAL) {
+    return values.sectionId ? { sectionId: values.sectionId } : null;
+  }
+  if (values.scope === TEST_SCOPE.TOPIC) {
+    return values.topicIds.length > 0 ? { topicIds: values.topicIds } : null;
+  }
   return null;
 }
 
