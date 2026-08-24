@@ -10,6 +10,7 @@ import {
   previewTextOf,
   questionDraftSchema,
   questionListQuerySchema,
+  type LocalizedContent,
   type QuestionDraftInput,
   type QuestionListQueryInput,
 } from '@iace/contracts';
@@ -170,7 +171,7 @@ describe('QuestionsService — retiring and status', () => {
     assert.equal(back.status, QUESTION_STATUS.ACTIVE);
   });
 
-  /** A draft was never in circulation, so archiving it would be a second way to publish it. */
+  /** Retire then restore would put an unreviewed draft in circulation; delete is its way out. */
   it('refuses to archive a draft', async () => {
     const { questions } = build();
     const created = await questions.create(asDraft(), ADMIN);
@@ -430,13 +431,26 @@ describe('QuestionsService.update — a draft is still being written', () => {
   });
 });
 
-describe('QuestionsService — publishing is one way', () => {
+describe('QuestionsService — a question returns to draft while nothing uses it', () => {
   const refused = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
 
-  /** Back to draft would make an approved version a working copy the next edit overwrites. */
-  it('refuses to send a published question back to draft', async () => {
+  const used = (prisma: ReturnType<typeof build>['prisma'], id: string) =>
+    prisma.paperRefs.push({ questionId: id, questionVersionId: 'any' });
+
+  it('sends a published question nothing has drawn back to draft', async () => {
     const { questions } = build();
     const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT });
+
+    assert.equal(back.status, QUESTION_STATUS.DRAFT);
+  });
+
+  /** The failure this prevents: rewriting version 3 in place under a paper that pinned it. */
+  it('refuses once a paper has drawn it', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    used(prisma, created.id);
 
     await assert.rejects(
       () => questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT }),
@@ -444,9 +458,10 @@ describe('QuestionsService — publishing is one way', () => {
     );
   });
 
-  it('refuses the same thing through a save', async () => {
+  it('refuses through a save as well as a status change', async () => {
     const { questions, prisma } = build();
     const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    used(prisma, created.id);
 
     await assert.rejects(
       () => questions.update(created.id, draft({ status: QUESTION_STATUS.DRAFT }), ADMIN),
@@ -455,73 +470,58 @@ describe('QuestionsService — publishing is one way', () => {
     assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
   });
 
-  it('refuses to un-retire a question into draft', async () => {
+  it('brings a retired question back to draft when nothing uses it', async () => {
     const { questions } = build();
     const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
-    await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
+    await questions.archive(created.id);
 
-    await assert.rejects(
-      () => questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT }),
-      refused,
-    );
+    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.DRAFT });
+
+    assert.equal(back.status, QUESTION_STATUS.DRAFT);
   });
 
-  /** A batch is one decision, so one published row in it refuses the batch rather than half-applying. */
-  it('refuses a batch that would send a published question back to draft', async () => {
-    const { questions, prisma } = build();
-    const stillDraft = await questions.create(asDraft({ questionCode: 'QA-D' }), ADMIN);
-    const published = await questions.create(
-      draft({
-        status: QUESTION_STATUS.ACTIVE,
-        questionCode: 'QA-A',
-        stem: { en: 'Another one?', hi: 'एक और?' },
-      }),
-      ADMIN,
-    );
-
-    await assert.rejects(
-      () => questions.bulkSetStatus({ ids: [stillDraft.id, published.id], status: 'DRAFT' }),
-      refused,
-    );
-    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.DRAFT);
-  });
-
-  /** The review screen approves a page of drafts at once, which must stay possible. */
-  it('lets a batch of drafts be approved together', async () => {
-    const { questions } = build([
-      makeQuestion({ id: 'q_a', status: QUESTION_STATUS.DRAFT }),
-      makeQuestion({ id: 'q_b', status: QUESTION_STATUS.DRAFT, stemHash: 'hash_2' }),
+  /** A batch is one decision, so one row that cannot make the move refuses all of it. */
+  it('refuses a batch holding one question something uses', async () => {
+    const { questions, prisma } = build([
+      makeQuestion({ id: 'q_free', status: QUESTION_STATUS.ACTIVE }),
+      makeQuestion({ id: 'q_drawn', status: QUESTION_STATUS.ACTIVE, stemHash: 'hash_2' }),
     ]);
-
-    const result = await questions.bulkSetStatus({
-      ids: ['q_a', 'q_b'],
-      status: QUESTION_STATUS.ACTIVE,
-    });
-
-    assert.equal(result.updated, 2);
-  });
-
-  it('refuses a batch that would archive a draft', async () => {
-    const { questions } = build([makeQuestion({ id: 'q_a', status: QUESTION_STATUS.DRAFT })]);
+    used(prisma, 'q_drawn');
 
     await assert.rejects(
-      () => questions.bulkSetStatus({ ids: ['q_a'], status: QUESTION_STATUS.ARCHIVED }),
+      () => questions.bulkSetStatus({ ids: ['q_free', 'q_drawn'], status: 'DRAFT' }),
+      refused,
+    );
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
+  });
+
+  /** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
+  it('refuses to move a published question to another subject', async () => {
+    const { questions } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+
+    await assert.rejects(
+      () =>
+        questions.update(
+          created.id,
+          draft({ status: QUESTION_STATUS.ACTIVE, subjectId: 'sub_2', topicId: 'top_3' }),
+          ADMIN,
+        ),
       refused,
     );
   });
 
-  it('still lets a draft be published, retired and put back', async () => {
+  it('lets a draft be moved to another subject', async () => {
     const { questions } = build();
     const created = await questions.create(asDraft(), ADMIN);
 
-    const live = await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
-    assert.equal(live.status, QUESTION_STATUS.ACTIVE);
+    const moved = await questions.update(
+      created.id,
+      asDraft({ subjectId: 'sub_2', topicId: 'top_3' }),
+      ADMIN,
+    );
 
-    const retired = await questions.setStatus(created.id, { status: QUESTION_STATUS.ARCHIVED });
-    assert.equal(retired.status, QUESTION_STATUS.ARCHIVED);
-
-    const back = await questions.setStatus(created.id, { status: QUESTION_STATUS.ACTIVE });
-    assert.equal(back.status, QUESTION_STATUS.ACTIVE);
+    assert.equal(moved.subject.id, 'sub_2');
   });
 });
 
@@ -540,15 +540,17 @@ describe('QuestionsService.remove — the one hard delete', () => {
     assert.deepEqual(changed?.status, { from: QUESTION_STATUS.DRAFT, to: 'DELETED' });
   });
 
-  /** Everything published is archived instead: a paper that pinned a version must keep reading it. */
+  /** Status is not what makes a question safe to remove — having nothing depend on it is. */
   for (const status of [QUESTION_STATUS.ACTIVE, QUESTION_STATUS.ARCHIVED] as const) {
-    it(`refuses to delete a question that is ${status}`, async () => {
+    it(`deletes an unreferenced question that is ${status}`, async () => {
       const { questions, prisma } = build();
       const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
       if (status === QUESTION_STATUS.ARCHIVED) await questions.archive(created.id);
 
-      await assert.rejects(() => questions.remove(created.id), refused);
-      assert.equal(prisma.questions.length, 1);
+      await questions.remove(created.id);
+
+      assert.equal(prisma.questions.length, 0);
+      assert.equal(prisma.versions.length, 0);
     });
   }
 
@@ -589,18 +591,27 @@ describe('QuestionsService.remove — the one hard delete', () => {
 describe('QuestionsService.update — a save that changes nothing', () => {
   /** The bug: opening a question and pressing Save wrote version 2 of identical content. */
   /** The failure: one admin's save reverting another's approval, and rewriting the version under it. */
-  it('refuses a save whose question moved under it', async () => {
+  it('refuses a save whose question moved between the read and the write', async () => {
     const { questions, prisma } = build();
     const created = await questions.create(asDraft(), ADMIN);
 
-    // What a concurrent approval leaves behind between this save's read and its write.
-    prisma.questions[0]!.status = QUESTION_STATUS.ACTIVE;
+    // This save reads the row, then another admin's save lands, then this one tries to write.
+    const read = prisma.question.findUnique;
+    let reads = 0;
+    prisma.question.findUnique = (args: { where: { id: string } }) => {
+      const row = read(args);
+      reads += 1;
+      if (reads === 2) prisma.questions[0]!.updatedAt = new Date(Date.now() + 1000);
+      return row;
+    };
 
     await assert.rejects(
       () => questions.update(created.id, asDraft({ stem: REWORDED }), ADMIN),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT,
     );
-    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
+    assert.equal(prisma.versions.length, 1);
+    const stored = prisma.versions[0]?.content as LocalizedContent;
+    assert.equal(previewTextOf(plainTextOf(stored.en?.stem)), 'What is 20% of 150?');
   });
 
   it('writes no version when the content is byte for byte what is stored', async () => {

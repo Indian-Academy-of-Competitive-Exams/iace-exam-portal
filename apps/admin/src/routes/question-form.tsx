@@ -90,19 +90,17 @@ const IMAGE_LIMITS = {
   maxBytes: QUESTION_IMAGE_MAX_BYTES,
 } as const;
 
-/** Only the moves the server will take: publishing is one-way, and a draft has nothing to retire. */
+/** ARCHIVED is a retirement, so it is only on offer once there is something to retire. */
 function statusChoices(saved: QuestionDetail | undefined) {
   const intake = QUESTION_INTAKE_STATUSES.map((value) => ({
     value,
     label: value,
     hint: QUESTION_INTAKE_HINTS[value],
   }));
+  // A draft has nothing to retire, so ARCHIVED appears once the question is in circulation.
   if (!saved || saved.status === QUESTION_STATUS.DRAFT) return intake;
 
-  return [
-    ...intake.filter((option) => option.value !== QUESTION_STATUS.DRAFT),
-    { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED },
-  ];
+  return [...intake, { value: QUESTION_STATUS.ARCHIVED, label: QUESTION_STATUS.ARCHIVED }];
 }
 
 function emptyValues(): QuestionFormValues {

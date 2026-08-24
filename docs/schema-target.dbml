@@ -495,7 +495,7 @@ Table QuestionVersion {  // immutable snapshot — stem + options + answerKey + 
     (questionId, version) [unique]
     (questionId, id) [unique]  // composite-FK target: lets Question / PaperQuestion / AttemptQuestion pin a version that provably belongs to the same question
   }
-  Note: 'IMMUTABLE ONCE PUBLISHED — editing a DRAFT rewrites its row; any other edit inserts a version and repoints Question.currentVersionId. A version a paper or attempt holds is never rewritten. Options live inside the `options` JSON, so one row is the whole question incl. options with no join on the exam path. AttemptQuestion.selectedOptionId keys into this JSON (app-validated), not a DB FK.'
+  Note: 'IMMUTABLE ONCE REFERENCED — editing a DRAFT rewrites its row; any other edit inserts a version and repoints Question.currentVersionId. Anything a paper, attempt or stat references can neither return to DRAFT nor be deleted. Options live inside the `options` JSON, so one row is the whole question incl. options with no join on the exam path. AttemptQuestion.selectedOptionId keys into this JSON (app-validated), not a DB FK.'
 }
 
 

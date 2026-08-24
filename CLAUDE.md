@@ -70,11 +70,13 @@ Do not break these — they are why the live test holds at 4–5K:
   CATALOG_ONLY stage is listed so the journey reads whole; nothing is built on it.
 - **Question bank:** `Question` is IDENTITY — type, taxonomy, status, tags, `stemHash`,
   `currentVersionId`. Editing a DRAFT rewrites its one `QuestionVersion` in place; editing anything
-  published inserts an immutable one (content, options as JSON, answer key) and repoints
-  `currentVersionId`, so a paper or an attempt that pinned a version never moves. A version any
-  paper or attempt already holds is never rewritten, whatever the status says. Option ids carry
-  over by position. Localized content is JSON keyed by language, rich (text, `$LaTeX$`, S3 image
-  URLs). English default.
+  past the draft inserts an immutable one (content, options as JSON, answer key) and repoints
+  `currentVersionId`, so a paper or an attempt that pinned a version never moves. **Nothing a
+  `PaperQuestion`, `AttemptQuestion` or `TestQuestionStat` references can be returned to DRAFT or
+  deleted** — being depended on is what freezes a question, not being published. A save that
+  changes nothing writes no version. Subject and topic settle when the question leaves the draft.
+  Option ids carry over by position. Localized content is JSON keyed by language, rich (text,
+  `$LaTeX$`, S3 image URLs). English default.
 - **Question taxonomy: `Subject` → `Topic`.** Two levels only. Anything finer is a free-text tag on
   the question. A `Question` carries `subjectId` + optional `topicId`; **the service must check the
   topic belongs to the subject** — no FK can.

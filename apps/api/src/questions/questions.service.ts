@@ -161,7 +161,7 @@ export class QuestionsService {
   /** A draft still being written is revised in place; anything published gains a version instead. */
   async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
     const question = await this.require(id);
-    assertStatusMove(question.status, draft.status);
+    assertTaxonomySettled(question, draft);
     const built = await this.validated(draft);
     await this.assertNotDuplicate(built.stemHash, id);
 
@@ -186,11 +186,12 @@ export class QuestionsService {
   ): Promise<QuestionRow> {
     const question = await tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE });
     if (!question) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-    assertStatusMove(question.status, draft.status);
+    assertTaxonomySettled(question, draft);
+    await this.assertStatusReachable(tx, id, question.status, draft.status);
 
-    // Conditional, so it takes the row's lock — an approval landing mid-save must not be overwritten.
+    // Pinned to the row as read, so the version and content this rests on cannot be out of date.
     const claimed = await tx.question.updateMany({
-      where: { id, status: question.status },
+      where: { id, updatedAt: question.updatedAt },
       data: this.columnsOf(draft, built),
     });
     if (claimed.count !== 1) throw editedElsewhere();
@@ -285,11 +286,17 @@ export class QuestionsService {
 
   async setStatus(id: string, body: SetQuestionStatusBody): Promise<QuestionDetail> {
     const question = await this.require(id);
-    assertStatusMove(question.status, body.status);
-    const updated = await this.prisma.question.update({
-      where: { id },
-      data: { status: body.status },
-      include: QUESTION_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.assertStatusReachable(tx, id, question.status, body.status);
+
+      // Pinned, so a decision made against a status somebody has since changed is refused.
+      const claimed = await tx.question.updateMany({
+        where: { id, updatedAt: question.updatedAt },
+        data: { status: body.status },
+      });
+      if (claimed.count !== 1) throw editedElsewhere();
+
+      return tx.question.findUniqueOrThrow({ where: { id }, include: QUESTION_INCLUDE });
     });
 
     this.auditContext.setChanged(
@@ -309,31 +316,19 @@ export class QuestionsService {
     return this.setStatus(id, { status: QUESTION_STATUS.ACTIVE });
   }
 
-  /** The one hard delete: a draft nobody drew, nobody sat and nothing measured. */
+  /** The one hard delete: a question nobody drew, nobody sat and nothing measured, at any status. */
   async remove(id: string): Promise<void> {
     const before = await this.require(id);
-    assertDeletable(before.status);
 
     await this.prisma.$transaction(async (tx) => {
-      // Conditional: it takes the row's lock, re-asserts DRAFT, and clears the RESTRICTing pointer.
+      // Conditional: it takes the row's lock and clears the pointer that RESTRICTS the version.
       const claimed = await tx.question.updateMany({
-        where: { id, status: QUESTION_STATUS.DRAFT },
+        where: { id, updatedAt: before.updatedAt },
         data: { currentVersionId: null },
       });
-      if (claimed.count !== 1) {
-        // Through `tx`: the pool client would want a second connection while this one holds the lock.
-        const current = await tx.question.findUnique({ where: { id } });
-        if (!current) throw new AppException(ErrorCodes.NOT_FOUND, 'No such question');
-        assertDeletable(current.status);
-        throw editedElsewhere();
-      }
+      if (claimed.count !== 1) throw editedElsewhere();
 
-      if (await this.isUsed(tx, id)) {
-        throw refused(
-          'This question is already part of a paper or an attempt, so it cannot be deleted.',
-          'Something already uses this question',
-        );
-      }
+      if (await this.isUsed(tx, id)) throw stillInUse('deleted');
 
       await tx.questionVersion.deleteMany({ where: { questionId: id } });
       await tx.question.delete({ where: { id } });
@@ -342,14 +337,33 @@ export class QuestionsService {
     this.auditContext.setChanged({ status: { from: before.status, to: 'DELETED' } });
   }
 
+  /** Where a question may go: back to a working copy only while nothing has come to depend on it. */
+  private async assertStatusReachable(
+    tx: Prisma.TransactionClient,
+    id: string,
+    from: QuestionStatus,
+    to: QuestionStatus | undefined,
+  ): Promise<void> {
+    assertWasInCirculation(from, to);
+    if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
+    if (await this.isUsed(tx, id)) throw stillInUse('returned to draft');
+  }
+
   /** Every table that keys on the question, so the rule refuses before a foreign key does. */
-  private async isUsed(tx: Prisma.TransactionClient, questionId: string): Promise<boolean> {
+  private async anyUsed(tx: Prisma.TransactionClient, ids: string[]): Promise<boolean> {
+    if (ids.length === 0) return false;
+
+    const questionId = { in: ids };
     const [papers, attempts, stats] = await Promise.all([
       tx.paperQuestion.count({ where: { questionId } }),
       tx.attemptQuestion.count({ where: { questionId } }),
       tx.testQuestionStat.count({ where: { questionId } }),
     ]);
     return papers + attempts + stats > 0;
+  }
+
+  private isUsed(tx: Prisma.TransactionClient, questionId: string): Promise<boolean> {
+    return this.anyUsed(tx, [questionId]);
   }
 
   /** One decision over many rows: one statement, so a half-applied batch is not a state. */
@@ -376,14 +390,26 @@ export class QuestionsService {
     ids: string[],
     status: QuestionStatus,
   ): Promise<void> {
-    const blocked = BLOCKED_BEFORE[status];
-    if (!blocked) return;
+    if (status === QUESTION_STATUS.ARCHIVED) {
+      const drafts = await tx.question.findMany({
+        where: { id: { in: ids }, status: QUESTION_STATUS.DRAFT },
+        select: { id: true },
+      });
+      if (drafts[0]) assertWasInCirculation(QUESTION_STATUS.DRAFT, status);
+    }
+    if (status !== QUESTION_STATUS.DRAFT) return;
 
-    const rows = await tx.question.findMany({
-      where: { id: { in: ids }, status: blocked },
-      take: 1,
+    const leaving = await tx.question.findMany({
+      where: { id: { in: ids }, status: { not: QUESTION_STATUS.DRAFT } },
+      select: { id: true },
     });
-    if (rows[0]) assertStatusMove(rows[0].status, status);
+    if (
+      await this.anyUsed(
+        tx,
+        leaving.map((row) => row.id),
+      )
+    )
+      throw stillInUse('returned to draft');
   }
 
   /** The columns a draft decides — identity and taxonomy only; content lives in the version. */
@@ -477,37 +503,32 @@ function assertIntakeStatus(status: QuestionStatus | undefined): void {
   throw refused('A question cannot be created as archived.', 'Create it as a draft or as active');
 }
 
-/** Only a draft: anything that was ever in circulation is archived, so a paper can still read it. */
-function assertDeletable(status: QuestionStatus): void {
-  if (status === QUESTION_STATUS.DRAFT) return;
+/** A draft was never in circulation, so retiring it would only be a way to publish it unreviewed. */
+function assertWasInCirculation(from: QuestionStatus, to: QuestionStatus | undefined): void {
+  if (to !== QUESTION_STATUS.ARCHIVED || from !== QUESTION_STATUS.DRAFT) return;
   throw refused(
-    'Only a draft can be deleted. Archive this question instead.',
-    'This question is no longer a draft',
+    'A draft was never in circulation. Delete it instead, or publish it first.',
+    'This question is still a draft',
   );
 }
 
-/** The status a row may NOT already be in, for each status a batch can move it to. */
-const BLOCKED_BEFORE: Partial<Record<QuestionStatus, Prisma.QuestionWhereInput['status']>> = {
-  [QUESTION_STATUS.DRAFT]: { not: QUESTION_STATUS.DRAFT },
-  [QUESTION_STATUS.ARCHIVED]: QUESTION_STATUS.DRAFT,
-};
+/** Back to a working copy only while it is nobody's question but its author's. */
+const stillInUse = (what: string) =>
+  refused(
+    `A paper or an attempt already uses this question, so it cannot be ${what}.`,
+    'Something already uses this question',
+  );
 
-/** Publishing is one-way, and only what was in circulation can be taken out of it. */
-function assertStatusMove(from: QuestionStatus, to: QuestionStatus | undefined): void {
-  if (to === undefined || to === from) return;
+/** Taxonomy is what a paper draws on, so it settles when the question leaves the draft. */
+function assertTaxonomySettled(before: QuestionRow, draft: QuestionDraft): void {
+  if (before.status === QUESTION_STATUS.DRAFT) return;
+  if (draft.subjectId === before.subjectId && (draft.topicId ?? null) === before.topicId) return;
 
-  if (to === QUESTION_STATUS.DRAFT) {
-    throw refused(
-      'A question that has been published cannot go back to draft. Archive it instead.',
-      'This question has already been published',
-    );
-  }
-  if (to === QUESTION_STATUS.ARCHIVED && from === QUESTION_STATUS.DRAFT) {
-    throw refused(
-      'A draft was never in circulation, so there is nothing to archive.',
-      'This question is still a draft',
-    );
-  }
+  throw refused(
+    'A question that has left the draft keeps its subject and topic. Return it to draft to move it.',
+    'Settled when the question left the draft',
+    'subjectId',
+  );
 }
 
 /** Someone else moved the row between reading it and writing it; the save is not silently applied. */
@@ -517,8 +538,8 @@ const editedElsewhere = () =>
     'This question changed while you were editing it',
   );
 
-const refused = (message: string, field: string) =>
-  new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { status: [field] } });
+const refused = (message: string, note: string, field = 'status') =>
+  new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [note] } });
 
 /** An attempt stores the option id it was shown, so a position that had one keeps it. */
 function optionsWithIds(built: BuiltQuestion, previous: QuestionOption[]) {

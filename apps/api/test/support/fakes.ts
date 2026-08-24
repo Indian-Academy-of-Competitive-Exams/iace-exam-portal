@@ -1648,6 +1648,8 @@ interface FakeQuestionWhere {
   stemHash?: string | { not?: null };
   tags?: { has?: string };
   currentVersion?: unknown;
+  /** What an optimistic claim pins itself to: the row as the caller last read it. */
+  updatedAt?: Date;
 }
 
 /** A paper or an attempt holding one version of one question. */
@@ -1665,13 +1667,32 @@ const jsonNulled = <T extends object>(data: T): T =>
     ]),
   ) as T;
 
+/** Prisma moves `@updatedAt` on every write, and an optimistic claim pins itself to exactly that. */
+let writes = 0;
+const touched = () => {
+  writes += 1;
+  return { updatedAt: new Date(FIXED_NOW.getTime() + writes) };
+};
+
 const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
   row ? { ...row } : null;
 
-const countRefs = (rows: FakeVersionRef[], where: Partial<FakeVersionRef>): number =>
+/** A reference is looked up by one question or by a batch of them, and sometimes by version too. */
+interface FakeRefWhere {
+  questionId: string | { in: string[] };
+  questionVersionId?: string;
+}
+
+const wants = (id: string, filter: FakeRefWhere['questionId']): boolean =>
+  typeof filter === 'string' ? id === filter : filter.in.includes(id);
+
+const countRefs = (
+  rows: { questionId: string; questionVersionId?: string }[],
+  where: FakeRefWhere,
+) =>
   rows.filter(
     (row) =>
-      row.questionId === where.questionId &&
+      wants(row.questionId, where.questionId) &&
       (where.questionVersionId === undefined || row.questionVersionId === where.questionVersionId),
   ).length;
 
@@ -1747,6 +1768,12 @@ export class FakeQuestionBankPrisma {
   }
 
   readonly question = {
+    findUniqueOrThrow: ({ where }: { where: { id: string } }) => {
+      const row = this.questions.find((question) => question.id === where.id);
+      if (!row) throw new Error(`no question ${where.id}`);
+      return Promise.resolve(this.hydrate(row));
+    },
+
     findMany: ({
       where,
       skip = 0,
@@ -1788,7 +1815,7 @@ export class FakeQuestionBankPrisma {
       const row = this.questions.find((question) => question.id === where.id);
       if (!row) throw new Error(`no question ${where.id}`);
       const { subject, topic, ...rest } = data;
-      Object.assign(row, rest);
+      Object.assign(row, rest, touched());
       if (subject) row.subjectId = subjectIdOf(data);
       if (topic !== undefined) row.topicId = relationIdOf(data, 'topic');
       return Promise.resolve(this.hydrate(row));
@@ -1804,7 +1831,7 @@ export class FakeQuestionBankPrisma {
     /** The same matcher `findMany` uses: a conditional write is a where, not just a list of ids. */
     updateMany: ({ where, data }: { where?: FakeQuestionWhere; data: Record<string, unknown> }) => {
       const rows = this.matching(where);
-      for (const row of rows) Object.assign(row, data);
+      for (const row of rows) Object.assign(row, data, touched());
       return Promise.resolve({ count: rows.length });
     },
   };
@@ -1839,19 +1866,18 @@ export class FakeQuestionBankPrisma {
 
   /** What pins a version: the service refuses to rewrite one a paper or an attempt is holding. */
   readonly paperQuestion = {
-    count: ({ where }: { where: Partial<FakeVersionRef> }) =>
+    count: ({ where }: { where: FakeRefWhere }) =>
       Promise.resolve(countRefs(this.paperRefs, where)),
   };
 
   readonly attemptQuestion = {
-    count: ({ where }: { where: Partial<FakeVersionRef> }) =>
+    count: ({ where }: { where: FakeRefWhere }) =>
       Promise.resolve(countRefs(this.attemptRefs, where)),
   };
 
   /** Keyed on the question alone, so it outlives a version and blocks a delete of its own. */
   readonly testQuestionStat = {
-    count: ({ where }: { where: { questionId: string } }) =>
-      Promise.resolve(this.statRefs.filter((row) => row.questionId === where.questionId).length),
+    count: ({ where }: { where: FakeRefWhere }) => Promise.resolve(countRefs(this.statRefs, where)),
   };
 
   readonly subject = {
@@ -1994,6 +2020,7 @@ const QUESTION_WHERE_KEYS = [
   'stemHash',
   'tags',
   'currentVersion',
+  'updatedAt',
 ] as const;
 
 function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
@@ -2003,6 +2030,7 @@ function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): bo
     return (
       idMatches(row, clause.id) &&
       stemHashMatches(row, clause.stemHash) &&
+      (clause.updatedAt === undefined || row.updatedAt.getTime() === clause.updatedAt.getTime()) &&
       QUESTION_FIELD_CHECKS.every((check) => check(row, clause))
     );
   });
