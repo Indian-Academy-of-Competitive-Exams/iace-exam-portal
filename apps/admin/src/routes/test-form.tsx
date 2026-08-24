@@ -56,6 +56,7 @@ import { durationLabel } from '../lib/duration';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { TopicMultiPicker } from '../components/taxonomy-picker';
+import { OfferingStep, PaperStep } from './test-builder-steps';
 
 /** Step 1 of the builder: which blueprint a test is built on, plus the few fields it owns. */
 
@@ -412,6 +413,13 @@ function TestEditor({ detail }: Readonly<{ detail: TestDetail | null }>) {
           </FormField>
         </div>
       </FormSection>
+
+      {detail ? (
+        <>
+          <PaperStep detail={detail} />
+          <OfferingStep detail={detail} />
+        </>
+      ) : null}
     </FormPanel>
   );
 }

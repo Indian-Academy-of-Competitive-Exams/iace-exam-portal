@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
-import { Combobox } from '@iace/ui';
+import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
 
 /**
@@ -89,6 +89,54 @@ export function TestSeriesPicker({
       placeholder={props.placeholder ?? 'No series'}
       items={items}
       onChange={(value) => onChange(value, items.find((item) => item.value === value)?.label ?? '')}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search series"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No series matches that"
+    />
+  );
+}
+
+/** The same catalog, choosing several — a test is offered through every series that carries it. */
+export function TestSeriesMultiPicker({
+  value,
+  onChange,
+  disabled,
+  ...control
+}: Readonly<{
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
+}>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: ['admin', 'test-series', 'picker', search],
+    fetchPage: (page) => api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  });
+
+  return (
+    <MultiCombobox
+      {...control}
+      chips={false}
+      disabled={disabled}
+      value={value}
+      onChange={onChange}
+      placeholder="No series yet"
+      items={pages.items.map((series) => ({
+        value: series.id,
+        label: series.name,
+        hint: series.examStage
+          ? `${series.examStage.examCode} / ${series.examStage.name}`
+          : undefined,
+      }))}
       search={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search series"
