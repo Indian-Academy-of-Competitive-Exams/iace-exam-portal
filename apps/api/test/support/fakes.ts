@@ -10,6 +10,8 @@ import {
   NAVIGATION_POLICY,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
+  ANSWER_STATE,
+  ATTEMPT_STATUS,
   DRAW_STRATEGY,
   EVALUATION_MODE,
   PAPER_BINDING,
@@ -34,6 +36,8 @@ import {
   type UnlockMode,
   type UnlockRequestStatus,
   type NotificationType,
+  type AnswerState,
+  type AttemptStatus,
   type DrawStrategy,
   type EvaluationMode,
   type PaperBinding,
@@ -1084,20 +1088,30 @@ export class FakeConfigPrisma {
     return [this.configs, this.sections, this.modules];
   }
 
+  /** Callbacks run one at a time: two that interleave are not transactions, whatever they roll back. */
+  private serialized: Promise<unknown> = Promise.resolve();
+
   /** Both forms, and a throwing callback puts every table back — services rely on that. */
   $transaction<T>(work: Promise<T>[] | ((tx: FakeConfigPrisma) => Promise<T>)): Promise<T[] | T> {
     if (typeof work !== 'function') return Promise.all(work);
 
-    const tables = this.tables();
-    const snapshot = tables.map((rows) => rows.map((row) => structuredClone(row)));
+    const run = async (): Promise<T> => {
+      const tables = this.tables();
+      const snapshot = tables.map((rows) => rows.map((row) => structuredClone(row)));
+      try {
+        return await work(this);
+      } catch (error) {
+        tables.forEach((rows, index) => {
+          rows.length = 0;
+          rows.push(...snapshot[index]!);
+        });
+        throw error;
+      }
+    };
 
-    return Promise.resolve(work(this)).catch((error: unknown) => {
-      tables.forEach((rows, index) => {
-        rows.length = 0;
-        rows.push(...snapshot[index]!);
-      });
-      throw error;
-    });
+    const next = this.serialized.then(run, run);
+    this.serialized = next.catch(() => undefined);
+    return next;
   }
 
   readonly examStage = {
@@ -1306,6 +1320,71 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
   };
 }
 
+const ONE_HOUR_MS = 3_600_000;
+
+/** A live sitting. The clock columns are the server's, never a request's. */
+export interface FakeAttemptRow {
+  id: string;
+  testId: string;
+  studentId: string;
+  attemptNo: number;
+  isGraded: boolean;
+  status: AttemptStatus;
+  startedAt: Date;
+  endsAt: Date;
+  submittedAt: Date | null;
+  evaluatedAt: Date | null;
+  shuffleSeed: number;
+  languages: LanguageCode[];
+  score: number | null;
+  correctCount: number | null;
+  wrongCount: number | null;
+  unattemptedCount: number | null;
+  lastRank: number | null;
+  lastPercentile: number | null;
+  createdAt: Date;
+}
+
+export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
+  const startedAt = overrides.startedAt ?? new Date('2026-08-24T04:00:00.000Z');
+  return {
+    id: 'att_1',
+    testId: 'tst_1',
+    studentId: 'stu_1',
+    attemptNo: 1,
+    isGraded: true,
+    status: ATTEMPT_STATUS.IN_PROGRESS,
+    startedAt,
+    endsAt: new Date(startedAt.getTime() + ONE_HOUR_MS),
+    submittedAt: null,
+    evaluatedAt: null,
+    shuffleSeed: 7,
+    languages: [LANGUAGE_CODE.EN],
+    score: null,
+    correctCount: null,
+    wrongCount: null,
+    unattemptedCount: null,
+    lastRank: null,
+    lastPercentile: null,
+    createdAt: startedAt,
+    ...overrides,
+  };
+}
+
+/** One question served in a sitting, before anyone has answered it. */
+export interface FakeAttemptQuestionRow {
+  attemptId: string;
+  questionId: string;
+  paperQuestionId: string | null;
+  questionVersionId: string;
+  baseConfigSectionId: string;
+  order: number;
+  selectedOptionId: string | null;
+  typedAnswer: string | null;
+  state: AnswerState;
+  timeSpentSec: number;
+}
+
 /** A row of an assembled paper, before finalize freezes it. */
 export interface FakePaperRow {
   id: string;
@@ -1333,9 +1412,42 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     readonly questions: FakeQuestionRow[] = [],
     readonly paperQuestions: FakePaperRow[] = [],
     readonly series: FakeSeriesRow[] = [],
+    readonly attemptRows: FakeAttemptRow[] = [],
+    readonly attemptQuestions: FakeAttemptQuestionRow[] = [],
   ) {
     super(configs, sections);
   }
+
+  private attemptSeq = 0;
+
+  readonly attemptQuestion = {
+    createMany: ({
+      data,
+    }: {
+      data: Omit<
+        FakeAttemptQuestionRow,
+        'selectedOptionId' | 'typedAnswer' | 'state' | 'timeSpentSec'
+      >[];
+    }) => {
+      for (const row of data) {
+        this.attemptQuestions.push({
+          ...row,
+          selectedOptionId: null,
+          typedAnswer: null,
+          state: ANSWER_STATE.NOT_VISITED,
+          timeSpentSec: 0,
+        });
+      }
+      return Promise.resolve({ count: data.length });
+    },
+
+    findMany: ({ where }: { where: { attemptId: string } }) =>
+      Promise.resolve(
+        this.attemptQuestions
+          .filter((row) => row.attemptId === where.attemptId)
+          .sort((a, b) => a.order - b.order),
+      ),
+  };
 
   protected override tables(): object[][] {
     return [
@@ -1345,8 +1457,66 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       this.paperQuestions,
       this.seriesTests,
       this.series,
+      this.attemptRows,
+      this.attemptQuestions,
     ];
   }
+
+  readonly attempt = {
+    count: ({
+      where,
+    }: {
+      where: { testId: string; studentId?: string; status?: { not: AttemptStatus } };
+    }) =>
+      Promise.resolve(
+        this.attemptRows.filter(
+          (row) =>
+            row.testId === where.testId &&
+            (where.studentId === undefined || row.studentId === where.studentId) &&
+            where.status?.not !== row.status,
+        ).length + this.attempts.filter((row) => row.testId === where.testId).length,
+      ),
+
+    findFirst: ({
+      where,
+    }: {
+      where: { testId: string; studentId: string; status: AttemptStatus };
+    }) => {
+      const found = this.attemptRows
+        .filter(
+          (row) =>
+            row.testId === where.testId &&
+            row.studentId === where.studentId &&
+            row.status === where.status,
+        )
+        .sort((a, b) => b.attemptNo - a.attemptNo);
+      return Promise.resolve(found[0] ?? null);
+    },
+
+    /** The unique on (testId, studentId, attemptNo) is what makes two racing starts one sitting. */
+    create: ({
+      data,
+    }: {
+      data: Partial<FakeAttemptRow> & { testId: string; studentId: string };
+    }) => {
+      const clash = this.attemptRows.some(
+        (row) =>
+          row.testId === data.testId &&
+          row.studentId === data.studentId &&
+          row.attemptNo === (data.attemptNo ?? 1),
+      );
+      if (clash) {
+        throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'fake',
+        });
+      }
+      this.attemptSeq += 1;
+      const created = makeAttempt({ ...data, id: `att_new_${this.attemptSeq}` });
+      this.attemptRows.push(created);
+      return Promise.resolve(created);
+    },
+  };
 
   readonly testSeries = {
     findMany: ({ where }: { where: { id: { in: string[] } } }) =>
@@ -1524,7 +1694,12 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,
         durationSec: config?.durationSec ?? 0,
+        languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
+        languages: config?.languages ?? [],
       },
+      paperQuestions: this.paperQuestions
+        .filter((paper) => paper.testId === row.id)
+        .sort((a, b) => a.order - b.order),
       examStage: {
         id: stage?.id ?? row.examStageId,
         stageKey: stage?.stageKey ?? '',

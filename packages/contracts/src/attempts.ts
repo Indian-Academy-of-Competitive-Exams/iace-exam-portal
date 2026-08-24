@@ -79,3 +79,30 @@ export const attemptQuestionSchema = z.object({
   answeredAt: z.string().nullable(),
 });
 export type AttemptQuestion = z.infer<typeof attemptQuestionSchema>;
+
+// ============================================================================
+// Starting one. Nothing about TIMING comes off the request — the server sets
+// `startedAt` and `endsAt` from the config, and the client only counts down.
+// ============================================================================
+
+/** Which languages this student sits in. Must be ones the config offers. */
+export const startAttemptSchema = z.object({
+  languages: z.array(languageCodeSchema).min(1).optional(),
+});
+export type StartAttemptInput = z.input<typeof startAttemptSchema>;
+export type StartAttemptBody = z.infer<typeof startAttemptSchema>;
+
+/** The attempt plus what the exam screen needs to draw its frame before the paper arrives. */
+export const liveAttemptSchema = attemptSchema.extend({
+  /** True when this call started it, false when it resumed one already running. */
+  startedByThisCall: z.boolean(),
+  testTitle: z.string().nullable(),
+  durationSec: z.number().int(),
+  totalQuestions: z.number().int(),
+});
+export type LiveAttempt = z.infer<typeof liveAttemptSchema>;
+
+export const ME_ATTEMPT_ROUTES = {
+  start: (testId: string) => `/me/tests/${testId}/attempt`,
+  paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
+} as const;

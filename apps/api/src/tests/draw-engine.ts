@@ -4,6 +4,7 @@ import {
   type DrawStrategy,
   type QuestionPoolFilter,
 } from '@iace/contracts';
+import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
 /** The ONE draw. Pure: it is handed a pool and returns a paper, so it needs no database. */
 
@@ -210,27 +211,4 @@ function rankOf(
     default:
       return null;
   }
-}
-
-function shuffle(items: readonly DrawCandidate[], random: () => number): DrawCandidate[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-}
-
-const PRNG_INCREMENT = 0x6d2b79f5;
-const UINT32 = 4294967296;
-
-/** mulberry32. A paper draw is reproducible, not secret — nothing here guards anything. */
-function seededRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + PRNG_INCREMENT) >>> 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / UINT32;
-  };
 }

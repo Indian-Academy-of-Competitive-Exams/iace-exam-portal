@@ -103,6 +103,12 @@ import {
   type UpdateBaseConfigInput,
 } from './configs';
 import {
+  ME_ATTEMPT_ROUTES,
+  liveAttemptSchema,
+  type LiveAttempt,
+  type StartAttemptInput,
+} from './attempts';
+import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
   finalizeResultSchema,
@@ -509,6 +515,14 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           body: input,
           schema: authSessionResponseSchema,
+        }),
+
+      /** Idempotent: a second start while one is running resumes it, clock and all. */
+      startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<LiveAttempt> =>
+        request(ME_ATTEMPT_ROUTES.start(testId), {
+          method: 'POST',
+          body: input,
+          schema: liveAttemptSchema,
         }),
     },
 
