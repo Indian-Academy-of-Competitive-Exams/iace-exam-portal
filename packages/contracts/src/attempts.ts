@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { languageCodeSchema } from './exams';
+import { languageModeSchema, navigationPolicySchema, timerTemplateSchema } from './configs';
+import { localizedContentSchema, localizedRichSchema, questionTypeSchema } from './questions';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
@@ -106,3 +108,54 @@ export const ME_ATTEMPT_ROUTES = {
   start: (testId: string) => `/me/tests/${testId}/attempt`,
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
 } as const;
+
+// ============================================================================
+// The paper a student sits. Everything here crosses to a browser, so nothing
+// here may carry an answer: no `isCorrect`, no answer key, no marks awarded.
+// ============================================================================
+
+/** An option as a candidate sees it. `questionOptionSchema` carries `isCorrect`; this cannot. */
+export const examOptionSchema = z.object({
+  id: z.string(),
+  position: z.number().int(),
+  text: localizedRichSchema,
+});
+export type ExamOption = z.infer<typeof examOptionSchema>;
+
+export const examQuestionSchema = z.object({
+  questionId: z.string(),
+  /** This student's display order, stored at start — not the paper's. */
+  order: z.number().int(),
+  baseConfigSectionId: z.string(),
+  type: questionTypeSchema,
+  marks: z.number(),
+  negativeMarks: z.number(),
+  /** Only the languages this sitting is in, and only the ones the question actually has. */
+  content: localizedContentSchema,
+  options: z.array(examOptionSchema),
+});
+export type ExamQuestion = z.infer<typeof examQuestionSchema>;
+
+/** A section tab, and the clock it carries when the paper is sectional. */
+export const examSectionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  order: z.number().int(),
+  questionCount: z.number().int(),
+  durationSec: z.number().int().nullable(),
+});
+export type ExamSection = z.infer<typeof examSectionSchema>;
+
+export const examPaperSchema = z.object({
+  attemptId: z.string(),
+  /** The deadline the countdown counts to. The client never computes one. */
+  endsAt: z.string(),
+  languages: z.array(languageCodeSchema),
+  languageMode: languageModeSchema,
+  timerTemplate: timerTemplateSchema,
+  navigation: navigationPolicySchema,
+  calculatorEnabled: z.boolean(),
+  sections: z.array(examSectionSchema),
+  questions: z.array(examQuestionSchema),
+});
+export type ExamPaper = z.infer<typeof examPaperSchema>;

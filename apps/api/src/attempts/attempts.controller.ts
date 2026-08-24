@@ -1,19 +1,24 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import {
   ActorTypes,
   startAttemptSchema,
+  type ExamPaper,
   type LiveAttempt,
   type StartAttemptBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
+import { AttemptPaperService } from './attempt-paper.service';
 
 /** The student's own sittings. The subject is always the token's, never a path parameter. */
 @Controller('me')
 @Actors(ActorTypes.STUDENT)
 export class AttemptsController {
-  constructor(private readonly attempts: AttemptsService) {}
+  constructor(
+    private readonly attempts: AttemptsService,
+    private readonly papers: AttemptPaperService,
+  ) {}
 
   /** Idempotent: a second start while one is running resumes it, clock and all. */
   @Post('tests/:testId/attempt')
@@ -24,5 +29,11 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<LiveAttempt> {
     return this.attempts.start(user.id, testId, body);
+  }
+
+  /** The student's OWN paper. Another student's id reads as missing, not as refused. */
+  @Get('attempts/:id/paper')
+  paper(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ExamPaper> {
+    return this.papers.paper(user.id, id);
   }
 }

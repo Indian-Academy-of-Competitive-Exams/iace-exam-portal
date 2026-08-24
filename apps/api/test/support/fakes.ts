@@ -1322,6 +1322,13 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
 
 const ONE_HOUR_MS = 3_600_000;
 
+/** The version a served question pins — content and options exactly as the column holds them. */
+export interface FakeServedVersion {
+  id: string;
+  content: unknown;
+  options: unknown;
+}
+
 /** A live sitting. The clock columns are the server's, never a request's. */
 export interface FakeAttemptRow {
   id: string;
@@ -1414,6 +1421,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     readonly series: FakeSeriesRow[] = [],
     readonly attemptRows: FakeAttemptRow[] = [],
     readonly attemptQuestions: FakeAttemptQuestionRow[] = [],
+    readonly questionVersions: FakeServedVersion[] = [],
   ) {
     super(configs, sections);
   }
@@ -1480,17 +1488,18 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     findFirst: ({
       where,
     }: {
-      where: { testId: string; studentId: string; status: AttemptStatus };
+      where: { id?: string; testId?: string; studentId: string; status?: AttemptStatus };
     }) => {
       const found = this.attemptRows
         .filter(
           (row) =>
-            row.testId === where.testId &&
+            (where.id === undefined || row.id === where.id) &&
+            (where.testId === undefined || row.testId === where.testId) &&
             row.studentId === where.studentId &&
-            row.status === where.status,
+            (where.status === undefined || row.status === where.status),
         )
         .sort((a, b) => b.attemptNo - a.attemptNo);
-      return Promise.resolve(found[0] ?? null);
+      return Promise.resolve(found[0] ? this.hydrateAttempt(found[0]) : null);
     },
 
     /** The unique on (testId, studentId, attemptNo) is what makes two racing starts one sitting. */
@@ -1590,6 +1599,50 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: data.length });
     },
   };
+
+  /** The attempt as the paper service reads it: its test's config, its sections, its questions. */
+  private hydrateAttempt(row: FakeAttemptRow) {
+    const test = this.tests.find((candidate) => candidate.id === row.testId);
+    const config = this.configs.find((candidate) => candidate.id === test?.baseConfigId);
+    return {
+      ...row,
+      test: {
+        baseConfig: {
+          languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
+          timerTemplate: config?.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE,
+          navigation: config?.navigation ?? NAVIGATION_POLICY.FREE,
+          calculatorEnabled: config?.calculatorEnabled ?? false,
+          shuffleOptions: config?.shuffleOptions ?? false,
+          sections: this.sections
+            .filter((section) => section.baseConfigId === config?.id)
+            .sort((a, b) => a.order - b.order),
+        },
+      },
+      questions: this.attemptQuestions
+        .filter((served) => served.attemptId === row.id)
+        .sort((a, b) => a.order - b.order)
+        .map((served) => {
+          const question = this.questions.find((candidate) => candidate.id === served.questionId);
+          const version = this.questionVersions.find(
+            (candidate) => candidate.id === served.questionVersionId,
+          );
+          const paper = this.paperQuestions.find(
+            (candidate) => candidate.id === served.paperQuestionId,
+          );
+          return {
+            questionId: served.questionId,
+            order: served.order,
+            baseConfigSectionId: served.baseConfigSectionId,
+            question: { type: question?.type ?? 'SINGLE_MCQ' },
+            questionVersion: {
+              content: version?.content ?? null,
+              options: version?.options ?? null,
+            },
+            paperItem: paper ? { marks: paper.marks, negativeMarks: paper.negativeMarks } : null,
+          };
+        }),
+    };
+  }
 
   private questionRef(questionId: string) {
     const question = this.questions.find((row) => row.id === questionId);

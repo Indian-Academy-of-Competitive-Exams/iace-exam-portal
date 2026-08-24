@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
+import { type LanguageCode } from './exams';
 
 // ============================================================================
 // The question bank: the taxonomy a question hangs off, the ONE input shape both
@@ -22,6 +23,15 @@ export const SUPPORTED_LANGUAGES = {
 } as const;
 export const languageSchema = z.enum(SUPPORTED_LANGUAGES);
 export type QuestionLanguage = z.infer<typeof languageSchema>;
+
+/** `LanguageCode` (EN) is what a row stores, `QuestionLanguage` (en) keys the content JSON. */
+const CONTENT_LANGUAGE: Readonly<Record<LanguageCode, QuestionLanguage>> = {
+  EN: SUPPORTED_LANGUAGES.EN,
+  HI: SUPPORTED_LANGUAGES.HI,
+  TE: SUPPORTED_LANGUAGES.TE,
+};
+
+export const contentLanguageOf = (code: LanguageCode): QuestionLanguage => CONTENT_LANGUAGE[code];
 
 /** English is mandatory on every question: it is what the bank is searched and deduped by. */
 export const DEFAULT_LANGUAGE: QuestionLanguage = SUPPORTED_LANGUAGES.EN;

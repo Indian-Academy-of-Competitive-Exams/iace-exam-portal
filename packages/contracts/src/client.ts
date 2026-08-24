@@ -84,6 +84,8 @@ import {
   type GrantSeriesInput,
   type Program,
   type ProgramListQueryInput,
+  studentCatalogSchema,
+  type StudentCatalog,
   type StudentGrantRow,
   type TestSeriesListQueryInput,
   type TestSeriesSummary,
@@ -104,7 +106,9 @@ import {
 } from './configs';
 import {
   ME_ATTEMPT_ROUTES,
+  examPaperSchema,
   liveAttemptSchema,
+  type ExamPaper,
   type LiveAttempt,
   type StartAttemptInput,
 } from './attempts';
@@ -517,6 +521,10 @@ export function createApiClient(options: ApiClientOptions) {
           schema: authSessionResponseSchema,
         }),
 
+      /** Every series this student reaches, with what is open right now. */
+      catalog: (): Promise<StudentCatalog> =>
+        request(ME_ROUTES.catalog, { schema: studentCatalogSchema }),
+
       /** Idempotent: a second start while one is running resumes it, clock and all. */
       startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<LiveAttempt> =>
         request(ME_ATTEMPT_ROUTES.start(testId), {
@@ -524,6 +532,10 @@ export function createApiClient(options: ApiClientOptions) {
           body: input,
           schema: liveAttemptSchema,
         }),
+
+      /** The paper as a candidate sees it — it carries no answer. */
+      attemptPaper: (attemptId: string): Promise<ExamPaper> =>
+        request(ME_ATTEMPT_ROUTES.paper(attemptId), { schema: examPaperSchema }),
     },
 
     admin: {
