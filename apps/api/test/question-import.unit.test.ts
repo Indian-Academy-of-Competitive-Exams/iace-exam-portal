@@ -7,7 +7,7 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { type CsvTable, normaliseHeader } from '../src/common/importing';
-import { emptyTaxonomy } from '../src/questions/question-core';
+import { computeStemHash, emptyTaxonomy } from '../src/questions/question-core';
 import {
   planQuestionImport,
   type ImportDedupContext,
@@ -129,8 +129,8 @@ describe('the question sheet', () => {
 
     assert.equal(row.action, 'create');
     assert.deepEqual(row.languages, ['en', 'hi', 'te']);
-    assert.equal(row.draft?.stem.te, '150లో 20% ఎంత?');
-    assert.equal(row.draft?.solution?.te, 'కూడండి');
+    assert.equal(row.draft?.stem.te, '<p>150లో 20% ఎంత?</p>');
+    assert.equal(row.draft?.solution?.te, '<p>కూడండి</p>');
   });
 
   it('reports the row rather than the file when a name is not in the bank', () => {
@@ -194,6 +194,48 @@ describe('the question sheet', () => {
       row.issues.map((issue) => issue.code),
       [QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID],
     );
+  });
+});
+
+describe('the question sheet — a cell is text', () => {
+  /** The bug: the cell was stored raw, and every reader of content treats it as html. */
+  it('escapes a comparison rather than losing the half that looks like a tag', () => {
+    const row = plan([{ ...MCQ_ROW, stem_en: 'If a<b and c>d, what is x?' }]).rows[0]!;
+
+    assert.equal(row.action, 'create');
+    assert.equal(row.draft?.stem.en, '<p>If a&lt;b and c&gt;d, what is x?</p>');
+    assert.equal(row.stemPreview, 'If a<b and c>d, what is x?');
+  });
+
+  it('shows a tag typed into a cell rather than obeying it', () => {
+    const row = plan([{ ...MCQ_ROW, option1_en: '<b>25</b>' }]).rows[0]!;
+
+    assert.equal(row.draft?.options[0]?.text.en, '<p>&lt;b&gt;25&lt;/b&gt;</p>');
+  });
+
+  /** Escaping must not hide a question behind its markup: the bank holds this one already. */
+  it('recognises the question the form wrote as the one the sheet repeats', () => {
+    const authored = computeStemHash({
+      type: QUESTION_TYPE.SINGLE_MCQ,
+      subjectId: SUBJECT,
+      difficulty: 'MEDIUM',
+      stem: { en: '<div><p>What is <em>20%</em> of 150?</p></div>' },
+      options: [25, 30, 35, 40].map((text, index) => ({
+        position: index + 1,
+        isCorrect: index === 1,
+        text: { en: `<div><p>${text}</p></div>` },
+      })),
+      answerKey: null,
+      tags: [],
+    });
+
+    const row = plan([MCQ_ROW], {
+      questionIdByHash: new Map([[authored, 'q_from_the_form']]),
+      questionIdByCode: new Map(),
+    }).rows[0]!;
+
+    assert.equal(row.action, 'duplicate');
+    assert.equal(row.duplicateOf, 'q_from_the_form');
   });
 });
 

@@ -235,8 +235,8 @@ describe('buildContent', () => {
     );
 
     assert.deepEqual(Object.keys(built.content), ['en', 'hi']);
-    assert.equal(plainTextOf(built.content.en?.stem), 'What is 20% of 150?');
-    assert.equal(plainTextOf(built.content.en?.solution), '150 × 0.2 = 30.');
+    assert.equal(plainTextOf(built.content.en?.stem), '<div>What is 20% of 150?</div>');
+    assert.equal(plainTextOf(built.content.en?.solution), '<div>150 × 0.2 = 30.</div>');
     assert.equal(built.content.hi?.solution, undefined);
     assert.deepEqual(built.languages, ['en', 'hi']);
   });
@@ -276,6 +276,37 @@ describe('buildContent', () => {
   });
 });
 
+describe('validateQuestion — empty markup', () => {
+  /** The bug: an emptied editor box posts `<p></p>`, and a question with no text was accepted. */
+  it('refuses a stem that is markup with nothing in it', () => {
+    assert.deepEqual(codes(mcq({ stem: { en: '<div><p></p></div>' } })), [
+      QUESTION_VALIDATION_CODE.ENGLISH_STEM_REQUIRED,
+      QUESTION_VALIDATION_CODE.TRANSLATION_WITHOUT_STEM,
+    ]);
+  });
+
+  it('refuses an option that is markup with nothing in it', () => {
+    const emptied = mcq({
+      options: mcq().options.map((option) =>
+        option.position === 3 ? { ...option, text: { en: '<p><br></p>' } } : option,
+      ),
+    });
+
+    assert.deepEqual(codes(emptied), [QUESTION_VALIDATION_CODE.OPTION_TEXT_REQUIRED]);
+  });
+
+  /** A figure is the whole question in a reasoning paper — markup with no words is still content. */
+  it('accepts a stem that is only a figure', () => {
+    const figure = mcq({ stem: { en: '<div><img data-key="questions/images/a.png"></div>' } });
+
+    assert.deepEqual(codes(figure), []);
+  });
+
+  it('leaves a language out that was opened and never filled in', () => {
+    assert.deepEqual(languagesIn({ en: '<p>Two</p>', hi: '<p></p>' }), ['en']);
+  });
+});
+
 describe('languagesIn', () => {
   it('counts a language only when it has a stem, and keeps the authoring order', () => {
     assert.deepEqual(languagesIn({ te: 'ఏమిటి?', en: 'What?' }), ['en', 'te']);
@@ -284,6 +315,41 @@ describe('languagesIn', () => {
 });
 
 describe('computeStemHash', () => {
+  /** The rule the backfill rests on: rehashing a stored question must not move it. */
+  it('is the same question typed into the form as imported from a sheet', () => {
+    const sheet = computeStemHash(mcq());
+    const form = computeStemHash(
+      mcq({
+        stem: { en: '<div><p>What is <strong>20%</strong> of 150?</p></div>' },
+        options: [
+          { position: 1, isCorrect: false, text: { en: '<div><p>25</p></div>' } },
+          { position: 2, isCorrect: true, text: { en: '<div><p>30</p></div>' } },
+          { position: 3, isCorrect: false, text: { en: '<div><p>35</p></div>' } },
+          { position: 4, isCorrect: false, text: { en: '<div><p>40</p></div>' } },
+        ],
+      }),
+    );
+
+    assert.equal(form, sheet);
+  });
+
+  /** A reasoning paper's four options are four figures and not one word, but they differ. */
+  it('separates two questions whose options are different figures', () => {
+    const figures = (keys: string[]) =>
+      mcq({
+        options: keys.map((key, index) => ({
+          position: index + 1,
+          isCorrect: index === 1,
+          text: { en: `<div><img data-key="questions/images/${key}.png"></div>` },
+        })),
+      });
+
+    assert.notEqual(
+      computeStemHash(figures(['a', 'b', 'c', 'd'])),
+      computeStemHash(figures(['a', 'b', 'c', 'e'])),
+    );
+  });
+
   it('ignores case, spacing and punctuation', () => {
     const a = computeStemHash(mcq());
     const b = computeStemHash(mcq({ stem: { en: '  what is 20% of 150 ' } }));

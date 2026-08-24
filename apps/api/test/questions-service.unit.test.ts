@@ -7,6 +7,7 @@ import {
   QUESTION_STATUS,
   QUESTION_TYPE,
   plainTextOf,
+  previewTextOf,
   questionDraftSchema,
   questionListQuerySchema,
   type QuestionDraftInput,
@@ -75,7 +76,7 @@ describe('QuestionsService.create', () => {
 
     assert.equal(created.subject.name, 'QUANTITATIVE APTITUDE');
     assert.deepEqual(created.languages, ['en', 'hi']);
-    assert.equal(plainTextOf(created.content.en?.stem), 'What is 20% of 150?');
+    assert.equal(previewTextOf(plainTextOf(created.content.en?.stem)), 'What is 20% of 150?');
     assert.equal(created.options.length, 4);
     assert.equal(created.options[1]?.isCorrect, true);
     assert.equal(created.version, 1);
@@ -201,7 +202,7 @@ describe('QuestionsService.update', () => {
 
     assert.equal(updated.options.length, 4);
     assert.deepEqual(
-      updated.options.map((option) => plainTextOf(option.text.en)),
+      updated.options.map((option) => previewTextOf(plainTextOf(option.text.en))),
       ['20', '30', '45', '50'],
     );
   });

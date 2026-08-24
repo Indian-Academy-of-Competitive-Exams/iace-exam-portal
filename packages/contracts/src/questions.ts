@@ -131,6 +131,42 @@ export function plainTextOf(content: RichContent | undefined): string {
     .trim();
 }
 
+// `[^<>]`, not `[^>]`: a run of `<` makes the looser one rescan from every one of them.
+const ANY_TAG = /<[^<>]*>/g;
+const LATEX_ATTR = /\sdata-latex="([^"]*)"/i;
+const IMAGE_TAG = /^<img\b/i;
+const BLOCK_END = /^<\/(?:p|li|div|tr|h[1-6]|blockquote|td|th)>$/i;
+const ENTITY: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&nbsp;': ' ',
+  '&amp;': '&',
+};
+
+/** One pass over the tags, so nothing has two negated classes to backtrack between. */
+function textFor(tag: string): string {
+  const latex = LATEX_ATTR.exec(tag)?.[1];
+  if (latex) return ` ${latex} `;
+  if (IMAGE_TAG.test(tag)) return ' [image] ';
+  return BLOCK_END.test(tag) ? ' ' : '';
+}
+
+/** A reader wants the question, not its markup: LaTeX survives, an image becomes a word. */
+export function previewTextOf(html: string): string {
+  return html
+    .replaceAll(ANY_TAG, textFor)
+    .replaceAll(/&[a-z#0-9]+;/gi, (entity) => ENTITY[entity.toLowerCase()] ?? entity)
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
+
+/** Whether html says anything at all — the `<p></p>` an emptied editor box posts does not. */
+export function hasText(html: string | undefined): boolean {
+  return html !== undefined && previewTextOf(html) !== '';
+}
+
 export const questionContentSchema = z.object({
   stem: richContentSchema,
   solution: richContentSchema.optional(),

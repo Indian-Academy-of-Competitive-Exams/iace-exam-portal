@@ -7,7 +7,9 @@ import {
   MCQ_OPTION_COUNT,
   QUESTION_TYPE,
   QUESTION_VALIDATION_CODE,
+  hasText,
   plainTextOf,
+  previewTextOf,
   type AnswerKeyDraft,
   type LocalizedContent,
   type LocalizedRich,
@@ -17,9 +19,9 @@ import {
   type RichContent,
   type ValidationIssue,
 } from '@iace/contracts';
-import { stripImageSrc } from './question-images';
+import { imageKeysIn, stripImageSrc } from './question-images';
 import { firstMathError } from './question-math';
-import { previewTextOf } from './question-content';
+import { asContentHtml } from './question-content';
 
 /**
  * The rules a question is judged by, and the shape it is stored in. Both ways a
@@ -50,11 +52,12 @@ export interface BuiltQuestion {
   stemHash: string;
 }
 
-const blank = (value: string | undefined): boolean => !value || value.trim() === '';
+/** Markup is not content: the `<p></p>` an emptied editor box posts is an unanswered field. */
+const blank = (value: string | undefined): boolean => !hasText(value);
 
-/** The one place content is written, so the transient image src is stripped here and only here. */
+/** The one place content is written, so the div root and the src stripping happen here only. */
 const textNode = (value: string | undefined): RichContent =>
-  blank(value) ? [] : [{ type: 'TEXT', text: stripImageSrc(value!.trim()) }];
+  blank(value) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(value!)) }];
 
 /** The languages a stem was written in — the only thing that makes a language present. */
 export function languagesIn(stem: LocalizedText): QuestionLanguage[] {
@@ -140,14 +143,11 @@ export function computeStemHash(draft: QuestionDraft): string {
   return createHash('sha256').update(canonicalStemKey(draft)).digest('hex');
 }
 
-/**
- * Case, spacing and punctuation are not what makes a question different. Unicode
- * classes, not [a-z0-9]: folding Hindi or Telugu to nothing would hash every
- * translated question to the same value.
- */
+/** Case, spacing, punctuation and markup do not make a question different — but its figures do. */
 function fold(value: string | undefined): string {
   if (!value) return '';
-  return value
+  return [previewTextOf(value), ...imageKeysIn(value)]
+    .join(' ')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, '')
     .replace(/\s+/g, ' ')
@@ -191,7 +191,7 @@ export function validateQuestion(
   return issues;
 }
 
-/** Both intake paths meet here: the importer writes formulas no dialog ever previewed. */
+/** The dialog can be bypassed: a draft posted straight at the API carries whatever LaTeX it likes. */
 function checkMath(draft: QuestionDraft, issues: ValidationIssue[]): void {
   const fields: readonly (readonly [string, string | undefined])[] = [
     ...Object.entries(draft.stem).map(([language, text]) => [`stem.${language}`, text] as const),

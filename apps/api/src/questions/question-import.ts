@@ -3,6 +3,7 @@ import {
   DEFAULT_LANGUAGE,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
+  previewTextOf,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_IMPORT_MAX_ROWS,
   QUESTION_TYPE,
@@ -22,6 +23,7 @@ import {
   type ValidationIssue,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable, normaliseHeader } from '../common/importing';
+import { htmlFromPlainText } from './question-content';
 import { computeStemHash, languagesIn, validateQuestion } from './question-core';
 import { lookupName, topicKey, type TaxonomyCatalog } from './taxonomy-context';
 
@@ -156,7 +158,7 @@ function planRow(
   issues.push(...validateQuestion(draft, catalog.context));
 
   const languages = languagesIn(draft.stem);
-  const stemHash = blank(draft.stem[DEFAULT_LANGUAGE] ?? '') ? null : computeStemHash(draft);
+  const stemHash = languages.includes(DEFAULT_LANGUAGE) ? computeStemHash(draft) : null;
   const duplicateOf = stemHash ? duplicateFor(stemHash, dedup, lineByHash) : null;
 
   // Only a row that would be written can clash: a row that is already in the
@@ -248,8 +250,8 @@ function buildDraft(
     topicId: ids.topicId,
     difficulty: readDifficulty(row, issues),
     questionCode: readCode(row, issues),
-    stem: localized(row, 'stem'),
-    solution: localized(row, 'solution'),
+    stem: localized(row, 'stem', htmlFromPlainText),
+    solution: localized(row, 'solution', htmlFromPlainText),
     options: type === QUESTION_TYPE.SINGLE_MCQ ? readOptions(row, issues) : [],
     answerKey: type === QUESTION_TYPE.TEXT_FIELD ? readAnswerKey(row, issues) : null,
     tags: readTags(row, issues),
@@ -334,12 +336,16 @@ function readCode(row: CsvRow, issues: ValidationIssue[]): string | null {
   return null;
 }
 
-/** One field across every supported language: stem_en, stem_hi, stem_te. */
-function localized(row: CsvRow, field: string): LocalizedText {
+/** One field across every language, through `as` — a cell is text, so html is escaped into it. */
+function localized(
+  row: CsvRow,
+  field: string,
+  as: (value: string) => string = (value) => value,
+): LocalizedText {
   const values: LocalizedText = {};
   for (const language of LANGUAGE_ORDER) {
     const value = cellOf(row, `${field}_${language}`);
-    if (!blank(value)) values[language] = value;
+    if (!blank(value)) values[language] = as(value);
   }
   return values;
 }
@@ -352,7 +358,7 @@ function readOptions(row: CsvRow, issues: ValidationIssue[]): QuestionDraft['opt
     const text: LocalizedText = {};
     for (const language of LANGUAGE_ORDER) {
       const value = cellOf(row, `option${position}_${language}`);
-      if (!blank(value)) text[language] = value;
+      if (!blank(value)) text[language] = htmlFromPlainText(value);
     }
 
     // An empty slot is not an option: reporting "option 4 has no text" for a row
@@ -472,7 +478,8 @@ function dedupeIssues(issues: ValidationIssue[]): ValidationIssue[] {
 const PREVIEW_LIMIT = 120;
 
 function preview(stem: string): string {
-  const text = stem.replace(/\s+/g, ' ').trim();
+  // Stripped BEFORE slicing: cutting html at 120 characters can land inside a tag.
+  const text = previewTextOf(stem);
   return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT - 1)}…` : text;
 }
 

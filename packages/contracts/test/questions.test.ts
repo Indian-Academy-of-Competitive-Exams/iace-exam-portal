@@ -8,7 +8,9 @@ import {
   QUESTION_INTAKE_STATUSES,
   QUESTION_TYPE,
   SUPPORTED_LANGUAGES,
+  hasText,
   localizedTextSchema,
+  previewTextOf,
   questionDraftSchema,
   questionImportCommitSchema,
   questionIntakeStatusSchema,
@@ -197,5 +199,66 @@ describe('what a question may be created as', () => {
     const parsed = questionImportCommitSchema.parse({ importLogId: 'imp_1', status: 'ACTIVE' });
 
     assert.equal(parsed.status, 'ACTIVE');
+  });
+});
+
+describe('previewTextOf', () => {
+  /** The bug: a list cell rendered `<p>Solve <span data-latex=...` at the reader, verbatim. */
+  it('gives back the question, not its markup', () => {
+    assert.equal(
+      previewTextOf('<p><strong>Bold</strong> and <em>italic</em></p>'),
+      'Bold and italic',
+    );
+  });
+
+  /** An author recognises their own LaTeX; they would not recognise an empty span. */
+  it('keeps a formula as the LaTeX it was written as', () => {
+    const html = '<p>Solve <span data-type="inline-math" data-latex="x^2"></span> for x</p>';
+
+    assert.equal(previewTextOf(html), 'Solve x^2 for x');
+  });
+
+  /** A cell cannot show a picture, and an image tag says less than the word does. */
+  it('says an image is there rather than printing its tag', () => {
+    const html = '<p>Study the figure</p><img data-key="questions/images/a.png">';
+
+    assert.equal(previewTextOf(html), 'Study the figure [image]');
+  });
+
+  it('keeps list items apart rather than running them together', () => {
+    assert.equal(previewTextOf('<ul><li>One</li><li>Two</li></ul>'), 'One Two');
+  });
+
+  /** A comparison is ordinary in a maths question, and `&lt;` is not what was typed. */
+  it('reads entities back as the characters they stand for', () => {
+    assert.equal(previewTextOf('<p>If a &lt; b and b &gt; c</p>'), 'If a < b and b > c');
+  });
+
+  it('leaves plain text exactly as it is', () => {
+    assert.equal(previewTextOf('What is 20% of 150?'), 'What is 20% of 150?');
+  });
+
+  it('collapses the whitespace tags leave behind', () => {
+    assert.equal(previewTextOf('<div><p>a</p>\n\n<p>b</p></div>'), 'a b');
+  });
+});
+
+describe('hasText', () => {
+  /** The bug: an emptied editor box posts `<p></p>`, and the bank took it as an answered field. */
+  it('reads an emptied editor box as nothing at all', () => {
+    assert.equal(hasText('<div><p></p></div>'), false);
+    assert.equal(hasText('<p><br></p>'), false);
+    assert.equal(hasText('   '), false);
+    assert.equal(hasText(undefined), false);
+  });
+
+  /** A figure is a whole question in reasoning papers, with not one word beside it. */
+  it('counts a lone image as something the reader can see', () => {
+    assert.equal(hasText('<div><img data-key="questions/images/a.png"></div>'), true);
+  });
+
+  it('counts text and formulas', () => {
+    assert.equal(hasText('<div><p>Two</p></div>'), true);
+    assert.equal(hasText('<p><span data-latex="x^2"></span></p>'), true);
   });
 });

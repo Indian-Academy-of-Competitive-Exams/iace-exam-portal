@@ -47,33 +47,25 @@ export function rewriteQuestionHtml(detail: QuestionDetail, visit: Html): Questi
   } as QuestionDetail;
 }
 
-// `[^<>]`, not `[^>]`: a run of `<` makes the looser one rescan from every one of them.
-const ANY_TAG = /<[^<>]*>/g;
-const LATEX_ATTR = /\sdata-latex="([^"]*)"/i;
-const IMAGE_TAG = /^<img\b/i;
-const BLOCK_END = /^<\/(?:p|li|div|tr|h[1-6]|blockquote|td|th)>$/i;
-const ENTITY: Record<string, string> = {
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&nbsp;': ' ',
-  '&amp;': '&',
-};
+const ESCAPED: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 
-/** One pass over the tags, so nothing has two negated classes to backtrack between. */
-function textFor(tag: string): string {
-  const latex = LATEX_ATTR.exec(tag)?.[1];
-  if (latex) return ` ${latex} `;
-  if (IMAGE_TAG.test(tag)) return ' [image] ';
-  return BLOCK_END.test(tag) ? ' ' : '';
+const DIV_ROOT = /^<div[\s>]/i;
+
+/** A cell as the editor would have written it: one paragraph a line, and nothing interpreted. */
+export function htmlFromPlainText(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed === '') return '';
+
+  return trimmed
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .map((line) => `<p>${line.replaceAll(/[&<>]/g, (char) => ESCAPED[char]!)}</p>`)
+    .join('');
 }
 
-/** A list cell wants the question, not its markup: LaTeX survives, an image becomes a word. */
-export function previewTextOf(html: string): string {
-  return html
-    .replaceAll(ANY_TAG, textFor)
-    .replaceAll(/&[a-z#0-9]+;/gi, (entity) => ENTITY[entity.toLowerCase()] ?? entity)
-    .replaceAll(/\s+/g, ' ')
-    .trim();
+/** One root per stored field, so a reader styles the block it was given rather than guessing. */
+export function asContentHtml(html: string): string {
+  const trimmed = html.trim();
+  if (trimmed === '') return '';
+  return DIV_ROOT.test(trimmed) ? trimmed : `<div>${trimmed}</div>`;
 }

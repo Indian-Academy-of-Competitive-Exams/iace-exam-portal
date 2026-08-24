@@ -18,6 +18,7 @@ import {
   QUESTION_TYPE,
   QUESTION_TYPES,
   TAG_SEPARATOR,
+  hasText,
   plainTextOf,
   type QuestionDetail,
   type QuestionDraftInput,
@@ -158,11 +159,11 @@ function valuesOf(question: QuestionDetail): QuestionFormValues {
   };
 }
 
-/** Blank boxes are absent, never empty strings the validator would have to judge. */
+/** Blank boxes are absent: an emptied editor still holds `<p></p>`, which says nothing. */
 function filled(map: LanguageMap): Partial<LanguageMap> {
   const out: Partial<LanguageMap> = {};
   for (const language of LANGUAGE_ORDER) {
-    if (map[language].trim() !== '') out[language] = map[language].trim();
+    if (hasText(map[language])) out[language] = map[language].trim();
   }
   return out;
 }
