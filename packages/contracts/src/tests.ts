@@ -56,6 +56,11 @@ export function isPaperBindingAllowed(
   return evaluationMode !== EVALUATION_MODE.RANKED || paperBinding === PAPER_BINDING.FIXED;
 }
 
+/** What a picker may offer, so a form cannot present a pair the server is going to refuse. */
+export function allowedPaperBindings(evaluationMode: EvaluationMode): PaperBinding[] {
+  return PAPER_BINDINGS.filter((binding) => isPaperBindingAllowed(evaluationMode, binding));
+}
+
 export const DRAW_STRATEGY = {
   RANDOM: 'RANDOM',
   NEWEST_FIRST: 'NEWEST_FIRST',
@@ -117,6 +122,9 @@ export const testSchema = z.object({
   /** Optimistic lock: finalize is a conditional update against it. */
   version: z.number().int(),
   finalizedAt: z.string().nullable(),
+  /** What depends on it, so a confirm names the consequence instead of guessing at it. */
+  attemptCount: z.number().int(),
+  seriesCount: z.number().int(),
   createdAt: z.string(),
 });
 export type Test = z.infer<typeof testSchema>;

@@ -23,12 +23,17 @@ import {
   type AuditActorType,
   type AuditFeature,
   type BranchType,
+  type DrawStrategy,
+  type EvaluationMode,
   type ImportSource,
   type LanguageCode,
   type LanguageMode,
   type MeritType,
   type NavigationPolicy,
+  type PaperBinding,
   type StudentType,
+  type TestScope,
+  type TestStatus,
   type TestUi,
   type TimerTemplate,
   type UnlockMode,
@@ -61,6 +66,11 @@ export const ROUTES = {
   BASE_CONFIG_NEW: '/tests/configs/new',
   BASE_CONFIG: (id: string) => `/tests/configs/${id}`,
   BASE_CONFIG_PATTERN: '/tests/configs/:id',
+  /** The tests themselves. `configs` and `series` are static, so they outrank the `:id` route. */
+  TESTS: '/tests',
+  TEST_NEW: '/tests/new',
+  TEST: (id: string) => `/tests/${id}`,
+  TEST_PATTERN: '/tests/:id',
   /** The unit of offering: a test reaches a student only through a series. */
   TEST_SERIES: '/tests/series',
   TEST_SERIES_NEW: '/tests/series/new',
@@ -195,6 +205,54 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
   TE: 'Telugu',
 };
 
+/** What a test covers. Everything else about its shape comes from its base configuration. */
+export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
+  FULL: 'Full paper',
+  MODULE: 'Module',
+  SECTIONAL: 'Sectional',
+  TOPIC: 'Topic',
+};
+
+export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = {
+  RANKED: 'Ranked',
+  PRACTICE: 'Practice',
+};
+
+export const EVALUATION_MODE_HINTS: Readonly<Record<EvaluationMode, string>> = {
+  RANKED: 'Scored against the cohort, with a rank and percentile',
+  PRACTICE: 'Scored, never ranked',
+};
+
+export const PAPER_BINDING_LABELS: Readonly<Record<PaperBinding, string>> = {
+  FIXED: 'Fixed',
+  GENERATED: 'Generated',
+};
+
+export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
+  FIXED: 'Drawn once when the test is finalized; every student sits it',
+  GENERATED: 'Drawn again for each student when their attempt starts',
+};
+
+export const DRAW_STRATEGY_LABELS: Readonly<Record<DrawStrategy, string>> = {
+  RANDOM: 'Random',
+  NEWEST_FIRST: 'Newest first',
+  LEAST_SERVED: 'Least served',
+  UNSEEN_FIRST: 'Unseen first',
+};
+
+export const DRAW_STRATEGY_HINTS: Readonly<Record<DrawStrategy, string>> = {
+  RANDOM: 'Any question in the pool, with equal chance',
+  NEWEST_FIRST: 'The most recently added questions',
+  LEAST_SERVED: 'The questions used in the fewest papers so far',
+  UNSEEN_FIRST: 'Questions the student has not met before',
+};
+
+export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
+  DRAFT: 'Draft',
+  ACTIVE: 'Active',
+  INACTIVE: 'Retired',
+};
+
 /** How a series opens for a student who can reach it. */
 export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
   AUTO: 'Automatic',
@@ -247,6 +305,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     icon: ClipboardList,
     featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
     children: [
+      { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
     ],

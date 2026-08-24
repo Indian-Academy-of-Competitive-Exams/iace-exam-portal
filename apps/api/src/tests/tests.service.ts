@@ -37,6 +37,7 @@ const TEST_INCLUDE = {
       exam: { select: { id: true, code: true, name: true, family: true } },
     },
   },
+  _count: { select: { attempts: true, series: true } },
 } as const satisfies Prisma.TestInclude;
 
 type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
@@ -163,12 +164,11 @@ export class TestsService {
   async remove(id: string): Promise<void> {
     const test = await this.requireTest(id);
 
-    const [attemptCount, seriesCount] = await this.prisma.$transaction([
-      this.prisma.attempt.count({ where: { testId: id } }),
-      this.prisma.testSeriesTest.count({ where: { testId: id } }),
-    ]);
-
-    const blocker = testDeletionBlocker({ isLocked: test.isLocked, attemptCount, seriesCount });
+    const blocker = testDeletionBlocker({
+      isLocked: test.isLocked,
+      attemptCount: test._count.attempts,
+      seriesCount: test._count.series,
+    });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.test.delete({ where: { id } });
@@ -252,6 +252,8 @@ function toTest(row: TestRow): Test {
     isLocked: row.isLocked,
     version: row.version,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
+    attemptCount: row._count.attempts,
+    seriesCount: row._count.series,
     createdAt: row.createdAt.toISOString(),
   };
 }

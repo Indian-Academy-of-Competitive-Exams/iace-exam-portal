@@ -1339,22 +1339,16 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     },
   };
 
-  readonly attempt = {
-    count: ({ where }: { where: { testId: string } }) =>
-      Promise.resolve(this.attempts.filter((row) => row.testId === where.testId).length),
-  };
-
-  readonly testSeriesTest = {
-    count: ({ where }: { where: { testId: string } }) =>
-      Promise.resolve(this.seriesTests.filter((row) => row.testId === where.testId).length),
-  };
-
   private hydrateTest(row: FakeTestModelRow) {
     const config = this.configs.find((candidate) => candidate.id === row.baseConfigId);
     const stage = this.stages.find((candidate) => candidate.id === row.examStageId);
     const exam = this.exams.find((candidate) => candidate.id === stage?.examId);
     return {
       ...row,
+      _count: {
+        attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
+        series: this.seriesTests.filter((link) => link.testId === row.id).length,
+      },
       baseConfig: {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,

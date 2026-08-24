@@ -1,0 +1,254 @@
+import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  TEST_STATUS,
+  TEST_STATUSES,
+  type Test,
+} from '@iace/contracts';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  DropdownMenuItem,
+  ListView,
+  PageHeader,
+  RowActions,
+  TableFrame,
+  TruncatedText,
+  linkVariants,
+  plural,
+  type DataTableColumn,
+  type ListFilterMultiControl,
+} from '@iace/ui';
+import { api } from '../lib/api';
+import {
+  EVALUATION_MODE_LABELS,
+  NAV_ITEMS,
+  ROUTES,
+  TEST_SCOPE_LABELS,
+  TEST_STATUS_LABELS,
+} from '../lib/constants';
+import { durationLabel } from '../lib/duration';
+import { useAuth } from '../providers/auth';
+import { ExamMultiPicker } from '../components/exam-picker';
+
+const TEST_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search tests',
+    placeholder: 'Search tests by name',
+    primary: true,
+  },
+  {
+    key: 'examId',
+    kind: 'customMulti',
+    label: 'Filter by exam',
+    primary: true,
+    render: (control: ListFilterMultiControl) => <ExamMultiPicker {...control} />,
+  },
+  {
+    key: 'status',
+    kind: 'choice',
+    label: 'Filter by status',
+    primary: true,
+    items: [
+      { value: '', label: 'Any status' },
+      ...TEST_STATUSES.map((status) => ({ value: status, label: TEST_STATUS_LABELS[status] })),
+    ],
+  },
+] as const;
+
+const TESTS_KEY = ['admin', 'tests'] as const;
+
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
+function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Test>[] {
+  return [
+    {
+      key: 'stage',
+      header: 'Stage',
+      cell: (test) => (
+        <span className="flex flex-col">
+          <span className="font-mono text-sm">{test.examStage.exam.code}</span>
+          <span className="text-xs text-muted-foreground">{test.examStage.name}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'title',
+      header: 'Test',
+      className: 'max-w-[18rem] font-medium',
+      cell: (test) => (
+        <Link to={ROUTES.TEST(test.id)} className={linkVariants()}>
+          <TruncatedText>{test.title}</TruncatedText>
+        </Link>
+      ),
+    },
+    {
+      key: 'config',
+      header: 'Base configuration',
+      className: 'max-w-[16rem] text-muted-foreground',
+      cell: (test) => <TruncatedText>{test.baseConfigName}</TruncatedText>,
+    },
+    {
+      key: 'coverage',
+      header: 'Coverage',
+      cell: (test) => (
+        <span className="flex flex-col">
+          <span className="text-sm">{TEST_SCOPE_LABELS[test.scope]}</span>
+          <span className="text-xs text-muted-foreground">
+            {EVALUATION_MODE_LABELS[test.evaluationMode]}
+          </span>
+        </span>
+      ),
+    },
+    { key: 'questions', header: 'Questions', numeric: true, cell: (test) => test.totalQuestions },
+    {
+      key: 'duration',
+      header: 'Duration',
+      numeric: true,
+      cell: (test) => durationLabel(test.durationSec),
+    },
+    { key: 'status', header: 'Status', cell: (test) => <TestStatusBadges test={test} /> },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (test) => <TestRowActions test={test} canWrite={canWrite} onChanged={refresh} />,
+    },
+  ];
+}
+
+/** Every test built from a stage's blueprints, whatever step of the build it has reached. */
+export function TestsPage() {
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const queryClient = useQueryClient();
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: TESTS_KEY });
+  }, [queryClient]);
+
+  const columns = useMemo(() => testColumns(canWrite, refresh), [canWrite, refresh]);
+
+  const tests = useListScreen({
+    queryKey: TESTS_KEY,
+    filters: TEST_FILTERS,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      examId: values.examId,
+      status: values.status || undefined,
+    }),
+    fetchPage: (params) => api.admin.tests.list(params),
+  });
+
+  const header = (
+    <PageHeader
+      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+      title="Tests"
+      action={
+        canWrite ? (
+          <Button size="sm" asChild>
+            <Link to={ROUTES.TEST_NEW}>
+              <Plus aria-hidden />
+              New test
+            </Link>
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+
+  return (
+    <TableFrame header={header}>
+      <ListView
+        list={tests}
+        filters={TEST_FILTERS}
+        columns={columns}
+        rowKey={(test) => test.id}
+        empty="No tests yet. Build the first one on a base configuration."
+        emptyFiltered="No tests match those filters."
+      />
+    </TableFrame>
+  );
+}
+
+function TestStatusBadges({ test }: Readonly<{ test: Test }>) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {test.isLocked ? <Badge variant="warning">Finalized</Badge> : null}
+      <Badge variant={test.status === TEST_STATUS.ACTIVE ? 'success' : 'neutral'}>
+        {TEST_STATUS_LABELS[test.status]}
+      </Badge>
+    </span>
+  );
+}
+
+const UNTITLED = 'this test';
+
+/** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
+function deleteDescription(test: Test): string {
+  const name = test.title ?? UNTITLED;
+  if (test.attemptCount > 0) {
+    return `${plural(test.attemptCount, 'attempt')} were sat on ${name}, and deleting it will be refused. Retire it instead — it keeps its results and is simply no longer offered.`;
+  }
+  if (test.isLocked) {
+    return `${name} is finalized, so its paper is frozen and deleting it will be refused. Retire it instead — it keeps everything it has and is simply no longer offered.`;
+  }
+  if (test.seriesCount > 0) {
+    return `${plural(test.seriesCount, 'series', 'series')} still offer ${name}, and deleting it will be refused. Take it out of them first.`;
+  }
+  return `Nothing has been built on ${name} yet. Deleting it cannot be undone.`;
+}
+
+function TestRowActions({
+  test,
+  canWrite,
+  onChanged,
+}: Readonly<{ test: Test; canWrite: boolean; onChanged: () => void }>) {
+  const [asking, setAsking] = useState(false);
+  const close = () => setAsking(false);
+
+  const remove = useMutation({
+    meta: { success: 'Test deleted.' },
+    mutationFn: () => api.admin.tests.remove(test.id),
+    onSuccess: () => {
+      close();
+      onChanged();
+    },
+    onError: close,
+  });
+
+  if (!canWrite) return null;
+
+  return (
+    <>
+      <RowActions label={`Actions for ${test.title ?? UNTITLED}`}>
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.TEST(test.id)}>
+            <Pencil aria-hidden />
+            Edit
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem destructive disabled={remove.isPending} onSelect={() => setAsking(true)}>
+          <Trash2 aria-hidden />
+          Delete
+        </DropdownMenuItem>
+      </RowActions>
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={(open) => !open && close()}
+        destructive
+        title={`Delete ${test.title ?? UNTITLED}?`}
+        description={deleteDescription(test)}
+        confirmLabel="Delete test"
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
+  );
+}

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   EVALUATION_MODE,
   PAPER_BINDING,
+  allowedPaperBindings,
   isPaperBindingAllowed,
   paperQuestionSchema,
 } from '../src/index';
@@ -28,6 +29,20 @@ describe('isPaperBindingAllowed', () => {
       assert.equal(isPaperBindingAllowed(EVALUATION_MODE.PRACTICE, binding), true);
     });
   }
+});
+
+describe('allowedPaperBindings', () => {
+  /** The failure this prevents: a picker offering a choice, then the save refusing it. */
+  it('leaves a ranked test only the frozen paper', () => {
+    assert.deepEqual(allowedPaperBindings(EVALUATION_MODE.RANKED), [PAPER_BINDING.FIXED]);
+  });
+
+  it('leaves a practice test both', () => {
+    assert.deepEqual(allowedPaperBindings(EVALUATION_MODE.PRACTICE), [
+      PAPER_BINDING.FIXED,
+      PAPER_BINDING.GENERATED,
+    ]);
+  });
 });
 
 describe('paperQuestionSchema', () => {
