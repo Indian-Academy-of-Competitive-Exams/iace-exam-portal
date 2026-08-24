@@ -131,6 +131,26 @@ describe('PaperService — manual picks', () => {
     assert.equal(paper.totalQuestions, 5);
   });
 
+  it('keeps every pick when one section was chosen for twice', async () => {
+    const { service } = serviceWith();
+
+    const paper = await service.assemble('tst_1', {
+      seed: SEED,
+      manual: [
+        { baseConfigSectionId: 'sec_1', questionIds: ['r5'] },
+        { baseConfigSectionId: 'sec_1', questionIds: ['r6'] },
+      ],
+    });
+
+    // The failure this prevents: the second entry keying over the first, dropping r5 silently.
+    const reasoning = paper.sections.find((section) => section.name === 'Reasoning')!;
+    assert.deepEqual(
+      reasoning.questions.slice(0, 2).map((row) => row.questionId),
+      ['r5', 'r6'],
+    );
+    assert.equal(reasoning.questions.length, 3);
+  });
+
   it('refuses more hand-picked questions than the section holds', async () => {
     const { service, prisma } = serviceWith();
 

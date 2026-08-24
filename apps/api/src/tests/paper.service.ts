@@ -156,9 +156,14 @@ export class PaperService {
       });
     }
 
-    return new Map(
-      picks.map((pick) => [pick.baseConfigSectionId, pick.questionIds.map((id) => byId.get(id)!)]),
-    );
+    // Accumulated, not keyed: two picks for one section are the admin's, not a row to drop.
+    const chosen = new Map<string, DrawCandidate[]>();
+    for (const pick of picks) {
+      const held = chosen.get(pick.baseConfigSectionId) ?? [];
+      held.push(...pick.questionIds.map((id) => byId.get(id)!));
+      chosen.set(pick.baseConfigSectionId, held);
+    }
+    return chosen;
   }
 
   private assertPicksFit(
