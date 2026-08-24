@@ -150,6 +150,8 @@ export const examPaperSchema = z.object({
   attemptId: z.string(),
   /** The deadline the countdown counts to. The client never computes one. */
   endsAt: z.string(),
+  /** What the server's clock read as it answered: a skewed device must not lengthen a sitting. */
+  serverNow: z.string(),
   languages: z.array(languageCodeSchema),
   languageMode: languageModeSchema,
   timerTemplate: timerTemplateSchema,

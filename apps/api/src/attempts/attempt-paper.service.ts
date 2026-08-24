@@ -76,6 +76,7 @@ export class AttemptPaperService {
     return {
       attemptId: attempt.id,
       endsAt: attempt.endsAt.toISOString(),
+      serverNow: new Date().toISOString(),
       languages,
       languageMode: config.languageMode,
       timerTemplate: config.timerTemplate,

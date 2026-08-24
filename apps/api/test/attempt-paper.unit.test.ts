@@ -189,6 +189,20 @@ describe('AttemptPaperService — the shape the screen draws from', () => {
   });
 });
 
+describe('AttemptPaperService — the clock the countdown reads', () => {
+  it('sends the server’s own now beside the deadline', async () => {
+    const { service } = serviceWith();
+
+    const before = Date.now();
+    const paper = await service.paper(STUDENT, 'att_1');
+
+    // The failure this prevents: a device clock ten minutes out sitting ten minutes more.
+    const stamped = Date.parse(paper.serverNow);
+    assert.ok(stamped >= before);
+    assert.ok(stamped <= Date.now());
+  });
+});
+
 describe('AttemptPaperService — language', () => {
   it('narrows to the one language a SINGLE sitting chose', async () => {
     const { service } = serviceWith([LANGUAGE_CODE.HI]);
@@ -241,5 +255,34 @@ describe('AttemptPaperService — whose sitting it is', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+});
+
+describe('AttemptPaperService — a paper read twice', () => {
+  const optionIds = (paper: { questions: { options: { id: string }[] }[] }) =>
+    paper.questions.map((question) => question.options.map((option) => option.id));
+
+  it('serves the same shuffled order every time, because a reload is not a new paper', async () => {
+    const { service } = serviceWith();
+
+    const first = await service.paper(STUDENT, 'att_1');
+    const again = await service.paper(STUDENT, 'att_1');
+
+    // The failure this prevents: a student reloads mid-paper and the options move under them.
+    assert.deepEqual(optionIds(again), optionIds(first));
+  });
+
+  it('shuffles the options it was given rather than losing or inventing one', async () => {
+    const { service } = serviceWith();
+
+    const paper = await service.paper(STUDENT, 'att_1');
+
+    assert.deepEqual(
+      optionIds(paper).map((ids) => [...ids].sort()),
+      [
+        ['q1_v1_a', 'q1_v1_b', 'q1_v1_c', 'q1_v1_d'],
+        ['q2_v1_a', 'q2_v1_b', 'q2_v1_c', 'q2_v1_d'],
+      ],
+    );
   });
 });
