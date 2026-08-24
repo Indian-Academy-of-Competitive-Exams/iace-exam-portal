@@ -10,6 +10,10 @@ import {
   NAVIGATION_POLICY,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
+  DRAW_STRATEGY,
+  EVALUATION_MODE,
+  PAPER_BINDING,
+  TEST_SCOPE,
   UNLOCK_MODE,
   UNLOCK_REQUEST_STATUS,
   TEST_STATUS,
@@ -30,6 +34,12 @@ import {
   type UnlockMode,
   type UnlockRequestStatus,
   type NotificationType,
+  type DrawStrategy,
+  type EvaluationMode,
+  type PaperBinding,
+  type QuestionPoolFilter,
+  type TestScope,
+  type TestScopeRef,
   type TestStatus,
   type TestUi,
   type TimerTemplate,
@@ -1214,6 +1224,159 @@ export class FakeConfigPrisma {
         .sort((a, b) => a.order - b.order),
     };
   }
+}
+
+/** A `Test` row as the tests module reads it — its shape stays on the config it points at. */
+export interface FakeTestModelRow {
+  id: string;
+  title: string | null;
+  baseConfigId: string;
+  examStageId: string;
+  scope: TestScope;
+  scopeRef: TestScopeRef | null;
+  evaluationMode: EvaluationMode;
+  paperBinding: PaperBinding;
+  maxRetakes: number | null;
+  drawStrategy: DrawStrategy;
+  questionPoolFilter: QuestionPoolFilter | null;
+  status: TestStatus;
+  isLocked: boolean;
+  version: number;
+  finalizedAt: Date | null;
+  createdById: string | null;
+  createdAt: Date;
+}
+
+export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestModelRow {
+  return {
+    id: 'tst_1',
+    title: 'SSC CGL Tier 1 — Mock 1',
+    baseConfigId: 'cfg_1',
+    examStageId: 'stage_1',
+    scope: TEST_SCOPE.FULL,
+    scopeRef: null,
+    evaluationMode: EVALUATION_MODE.RANKED,
+    paperBinding: PAPER_BINDING.FIXED,
+    maxRetakes: null,
+    drawStrategy: DRAW_STRATEGY.RANDOM,
+    questionPoolFilter: null,
+    status: TEST_STATUS.DRAFT,
+    isLocked: false,
+    version: 0,
+    finalizedAt: null,
+    createdById: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+/** The configs fake plus the `Test` table, because a test is only ever read through its config. */
+export class FakeTestsPrisma extends FakeConfigPrisma {
+  private testSeq = 0;
+
+  constructor(
+    readonly tests: FakeTestModelRow[] = [],
+    configs: FakeBaseConfigRow[] = [makeBaseConfig()],
+    sections: FakeSectionRow[] = [makeSection()],
+    readonly attempts: { testId: string }[] = [],
+    readonly seriesTests: { testId: string }[] = [],
+  ) {
+    super(configs, sections);
+  }
+
+  readonly test = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.tests.find((test) => test.id === where.id);
+      return Promise.resolve(row ? this.hydrateTest(row) : null);
+    },
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: {
+      where?: { baseConfigId?: string; examStageId?: string; status?: { in: TestStatus[] } };
+      skip?: number;
+      take?: number;
+    } = {}) => {
+      const matched = this.tests.filter(
+        (test) =>
+          (where.baseConfigId === undefined || test.baseConfigId === where.baseConfigId) &&
+          (where.examStageId === undefined || test.examStageId === where.examStageId) &&
+          (where.status === undefined || where.status.in.includes(test.status)),
+      );
+      return Promise.resolve(
+        matched
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((test) => this.hydrateTest(test)),
+      );
+    },
+
+    count: () => Promise.resolve(this.tests.length),
+
+    create: ({ data }: { data: Partial<FakeTestModelRow> & { baseConfigId: string } }) => {
+      this.testSeq += 1;
+      const created = makeTest({
+        ...data,
+        ...jsonColumns(data),
+        id: `tst_new_${this.testSeq}`,
+      });
+      this.tests.push(created);
+      return Promise.resolve(this.hydrateTest(created));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const test = this.tests.find((candidate) => candidate.id === where.id);
+      if (!test) throw new Error(`no test ${where.id}`);
+      Object.assign(test, data, jsonColumns(data));
+      return Promise.resolve(this.hydrateTest(test));
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.tests.findIndex((test) => test.id === where.id);
+      const [removed] = this.tests.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  readonly attempt = {
+    count: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(this.attempts.filter((row) => row.testId === where.testId).length),
+  };
+
+  readonly testSeriesTest = {
+    count: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(this.seriesTests.filter((row) => row.testId === where.testId).length),
+  };
+
+  private hydrateTest(row: FakeTestModelRow) {
+    const config = this.configs.find((candidate) => candidate.id === row.baseConfigId);
+    const stage = this.stages.find((candidate) => candidate.id === row.examStageId);
+    const exam = this.exams.find((candidate) => candidate.id === stage?.examId);
+    return {
+      ...row,
+      baseConfig: {
+        name: config?.name ?? '',
+        totalQuestions: config?.totalQuestions ?? 0,
+        durationSec: config?.durationSec ?? 0,
+      },
+      examStage: {
+        id: stage?.id ?? row.examStageId,
+        stageKey: stage?.stageKey ?? '',
+        name: stage?.name ?? '',
+        exam: exam
+          ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
+          : { id: '', code: '', name: '', family: EXAM_FAMILY.SSC },
+      },
+    };
+  }
+}
+
+/** `Prisma.DbNull` is how the service says "clear it"; the row just holds null. */
+function jsonColumns(data: Record<string, unknown>) {
+  const cleared = (key: 'scopeRef' | 'questionPoolFilter') =>
+    data[key] === Prisma.DbNull ? { [key]: null } : {};
+  return { ...cleared('scopeRef'), ...cleared('questionPoolFilter') };
 }
 
 export interface FakeBranch {

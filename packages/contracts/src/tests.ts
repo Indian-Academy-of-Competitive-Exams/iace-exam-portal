@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { csvIdQuery, csvQuery, searchQuery } from './common';
+import { paginationQuerySchema } from './envelope';
+import { baseConfigDetailSchema, stageRefSchema } from './configs';
+import { difficultyLevelSchema, tagSchema } from './questions';
 
 // ============================================================================
 // Tests and papers. A test is minimal: it inherits marks, duration, timing,
@@ -72,17 +76,41 @@ export const paperQuestionStatusSchema = z.enum(PAPER_QUESTION_STATUS);
 export type PaperQuestionStatus = z.infer<typeof paperQuestionStatusSchema>;
 export const PAPER_QUESTION_STATUSES = paperQuestionStatusSchema.options;
 
+/** Which slice of the config a scoped test covers. FULL carries none of it. */
+export const testScopeRefSchema = z.object({
+  moduleId: z.string().min(1).optional(),
+  sectionId: z.string().min(1).optional(),
+  topicIds: z.array(z.string().min(1)).min(1).optional(),
+});
+export type TestScopeRef = z.infer<typeof testScopeRefSchema>;
+
+/** Narrows the bank the draw engine reads. The section's own subject narrows it further. */
+export const questionPoolFilterSchema = z.object({
+  subjectIds: z.array(z.string().min(1)).min(1).optional(),
+  topicIds: z.array(z.string().min(1)).min(1).optional(),
+  difficulties: z.array(difficultyLevelSchema).min(1).optional(),
+  tags: z.array(tagSchema).min(1).optional(),
+});
+export type QuestionPoolFilter = z.infer<typeof questionPoolFilterSchema>;
+
 export const testSchema = z.object({
   id: z.string(),
   title: z.string().nullable(),
   baseConfigId: z.string(),
+  /** Read through the config, never stored on the test — the shape has one home. */
+  baseConfigName: z.string(),
+  totalQuestions: z.number().int(),
+  durationSec: z.number().int(),
   examStageId: z.string(),
+  examStage: stageRefSchema,
   scope: testScopeSchema,
+  scopeRef: testScopeRefSchema.nullable(),
   evaluationMode: evaluationModeSchema,
   paperBinding: paperBindingSchema,
   /** Null means unlimited. A ranked graded attempt is always one. */
   maxRetakes: z.number().int().nullable(),
   drawStrategy: drawStrategySchema,
+  questionPoolFilter: questionPoolFilterSchema.nullable(),
   status: testStatusSchema,
   /** True once the paper is frozen. */
   isLocked: z.boolean(),
@@ -92,6 +120,12 @@ export const testSchema = z.object({
   createdAt: z.string(),
 });
 export type Test = z.infer<typeof testSchema>;
+
+/** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
+export const testDetailSchema = testSchema.extend({
+  baseConfig: baseConfigDetailSchema,
+});
+export type TestDetail = z.infer<typeof testDetailSchema>;
 
 /** The frozen shared paper. Only a FIXED test has these. */
 export const paperQuestionSchema = z.object({
@@ -109,3 +143,61 @@ export const paperQuestionSchema = z.object({
   status: paperQuestionStatusSchema,
 });
 export type PaperQuestion = z.infer<typeof paperQuestionSchema>;
+
+// ============================================================================
+// Writing. A test owns only what it covers, how it is judged and where its
+// questions come from — every shape field is read through its config.
+// ============================================================================
+
+export const TEST_TITLE_MAX = 140;
+
+export const testTitleSchema = z
+  .string()
+  .trim()
+  .min(2, 'Give the test a name')
+  .max(TEST_TITLE_MAX, `A name cannot be longer than ${TEST_TITLE_MAX} characters`);
+
+/** Retakes are a small number by design; unlimited is null, not a large one. */
+export const MAX_RETAKES_CEILING = 20;
+
+/** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
+const testOwnFieldsSchema = z.object({
+  title: testTitleSchema.nullish(),
+  scope: testScopeSchema.optional(),
+  scopeRef: testScopeRefSchema.nullish(),
+  evaluationMode: evaluationModeSchema.optional(),
+  paperBinding: paperBindingSchema.optional(),
+  maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
+  drawStrategy: drawStrategySchema.optional(),
+  questionPoolFilter: questionPoolFilterSchema.nullish(),
+});
+
+/** `examStageId` is absent on purpose: it is the config's, and the composite FK enforces it. */
+export const createTestSchema = testOwnFieldsSchema.extend({
+  baseConfigId: z.string().min(1, 'Choose a config'),
+});
+export type CreateTestInput = z.input<typeof createTestSchema>;
+export type CreateTestBody = z.infer<typeof createTestSchema>;
+
+/** A test never changes config — that would change its whole shape. Clone the test instead. */
+export const updateTestSchema = testOwnFieldsSchema;
+export type UpdateTestInput = z.input<typeof updateTestSchema>;
+export type UpdateTestBody = z.infer<typeof updateTestSchema>;
+
+export const testListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  examId: csvIdQuery(),
+  examStageId: z.string().optional(),
+  baseConfigId: z.string().optional(),
+  status: csvQuery(testStatusSchema),
+});
+export type TestListQuery = z.infer<typeof testListQuerySchema>;
+export type TestListQueryInput = z.input<typeof testListQuerySchema>;
+
+export const ADMIN_TEST_ROUTES = {
+  list: '/admin/tests',
+  create: '/admin/tests',
+  detail: (id: string) => `/admin/tests/${id}`,
+  update: (id: string) => `/admin/tests/${id}`,
+  remove: (id: string) => `/admin/tests/${id}`,
+} as const;

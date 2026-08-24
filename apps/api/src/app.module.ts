@@ -19,6 +19,7 @@ import { AccessModule } from './access';
 import { NotificationsModule } from './notifications';
 import { ImportsModule } from './imports/imports.module';
 import { QuestionsModule } from './questions';
+import { TestsModule } from './tests';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ActorGuard } from './auth/guards/actor.guard';
 import { FeaturePermissionGuard } from './auth/guards/feature-permission.guard';
@@ -51,6 +52,7 @@ import { RequestIdMiddleware } from './common/request-id';
     NotificationsModule,
     ImportsModule,
     QuestionsModule,
+    TestsModule,
     HealthModule,
   ],
   providers: [

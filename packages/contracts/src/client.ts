@@ -103,6 +103,16 @@ import {
   type UpdateBaseConfigInput,
 } from './configs';
 import {
+  ADMIN_TEST_ROUTES,
+  testDetailSchema,
+  testSchema,
+  type CreateTestInput,
+  type Test,
+  type TestDetail,
+  type TestListQueryInput,
+  type UpdateTestInput,
+} from './tests';
+import {
   ADMIN_EXAM_ROUTES,
   ADMIN_EXAM_STAGE_ROUTES,
   examSchema,
@@ -779,6 +789,34 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'DELETE',
             schema: noContentSchema,
           }),
+      },
+
+      /** The tests built from a config. Every shape field is read through it, never copied. */
+      tests: {
+        list: (query: TestListQueryInput = {}): Promise<Paginated<Test>> =>
+          requestPaginated(`${ADMIN_TEST_ROUTES.list}${queryString({ ...query })}`, {
+            schema: testSchema.array(),
+          }),
+
+        detail: (id: string): Promise<TestDetail> =>
+          request(ADMIN_TEST_ROUTES.detail(id), { schema: testDetailSchema }),
+
+        create: (input: CreateTestInput): Promise<TestDetail> =>
+          request(ADMIN_TEST_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: testDetailSchema,
+          }),
+
+        update: (id: string, input: UpdateTestInput): Promise<TestDetail> =>
+          request(ADMIN_TEST_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: testDetailSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
       },
 
       /** Subject -> Topic. Anything finer than a topic is a `topic:` tag on the question. */

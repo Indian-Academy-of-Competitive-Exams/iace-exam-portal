@@ -1,0 +1,245 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import {
+  AppException,
+  DRAW_STRATEGY,
+  ErrorCodes,
+  EVALUATION_MODE,
+  PAPER_BINDING,
+  TEST_SCOPE,
+  TEST_STATUS,
+} from '@iace/contracts';
+import { TestsService } from '../src/tests/tests.service';
+import { BaseConfigsService } from '../src/configs/base-configs.service';
+import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { AuditContext } from '../src/audit';
+import {
+  type FakeBaseConfigRow,
+  type FakeSectionRow,
+  type FakeTestModelRow,
+  FakeTestsPrisma,
+  makeBaseConfig,
+  makeSection,
+  makeTest,
+} from './support/fakes';
+
+const ADMIN = 'adm_1';
+
+/** The SSC CGL Tier 1 pattern: two sections, 50 questions, an hour. */
+const SECTIONS: FakeSectionRow[] = [
+  makeSection({ id: 'sec_1', name: 'General Intelligence', order: 1 }),
+  makeSection({ id: 'sec_2', name: 'Quantitative Aptitude', order: 2 }),
+];
+
+function serviceWith(
+  tests: FakeTestModelRow[] = [],
+  configs: FakeBaseConfigRow[] = [makeBaseConfig({ totalQuestions: 50, durationSec: 3600 })],
+  usage: { attempts?: { testId: string }[]; seriesTests?: { testId: string }[] } = {},
+) {
+  const prisma = new FakeTestsPrisma(
+    tests,
+    configs,
+    SECTIONS,
+    usage.attempts ?? [],
+    usage.seriesTests ?? [],
+  );
+  const stages = new ExamStagesService(prisma.asService(), new AuditContext());
+  const configsService = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
+  return {
+    prisma,
+    service: new TestsService(prisma.asService(), configsService, new AuditContext()),
+  };
+}
+
+describe('TestsService — creating a draft from a config', () => {
+  it('writes a draft whose shape is the config it points at', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+
+    assert.equal(created.status, TEST_STATUS.DRAFT);
+    assert.equal(created.totalQuestions, 50);
+    assert.equal(created.durationSec, 3600);
+    assert.equal(created.baseConfig.sections.length, 2);
+  });
+
+  it('follows the config when it changes, because it never copied it', async () => {
+    const config = makeBaseConfig({ totalQuestions: 50, durationSec: 3600 });
+    const { service } = serviceWith([], [config]);
+
+    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    config.durationSec = 4800;
+    config.totalQuestions = 60;
+
+    // The failure this prevents: an hour still served after the pattern moved to 80 minutes.
+    const reread = await service.detail(created.id);
+    assert.equal(reread.durationSec, 4800);
+    assert.equal(reread.totalQuestions, 60);
+  });
+
+  it('takes the stage off the config, never off the body', async () => {
+    const { service, prisma } = serviceWith(
+      [],
+      [makeBaseConfig({ id: 'cfg_1', examStageId: 'stage_2' })],
+    );
+
+    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+
+    // The composite FK is what keeps a test and its blueprint on one stage; the body has no say.
+    assert.equal(created.examStageId, 'stage_2');
+    assert.equal(prisma.tests[0]!.examStageId, 'stage_2');
+  });
+
+  it('defaults to a full, ranked, fixed, randomly drawn paper', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+
+    assert.equal(created.scope, TEST_SCOPE.FULL);
+    assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
+    assert.equal(created.paperBinding, PAPER_BINDING.FIXED);
+    assert.equal(created.drawStrategy, DRAW_STRATEGY.RANDOM);
+    assert.equal(created.maxRetakes, null);
+  });
+
+  it('refuses a ranked test on a generated paper', async () => {
+    const { service, prisma } = serviceWith();
+
+    // The failure this prevents: a leaderboard built from students who each sat a different paper.
+    const error = await service
+      .create(
+        {
+          baseConfigId: 'cfg_1',
+          evaluationMode: EVALUATION_MODE.RANKED,
+          paperBinding: PAPER_BINDING.GENERATED,
+        },
+        ADMIN,
+      )
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.paperBinding?.[0]);
+    assert.equal(prisma.tests.length, 0);
+  });
+
+  it('accepts a generated paper once the test is practice', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create(
+      {
+        baseConfigId: 'cfg_1',
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+        paperBinding: PAPER_BINDING.GENERATED,
+      },
+      ADMIN,
+    );
+
+    assert.equal(created.paperBinding, PAPER_BINDING.GENERATED);
+  });
+
+  it('refuses a retired config', async () => {
+    const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', isActive: false })]);
+
+    const error = await service.create({ baseConfigId: 'cfg_1' }, ADMIN).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.baseConfigId?.[0]);
+  });
+
+  it('still builds on a locked config — the lock freezes its shape, not its use', async () => {
+    const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', locked: true })]);
+
+    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+
+    assert.equal(created.baseConfigId, 'cfg_1');
+  });
+});
+
+describe('TestsService — the scope has to name a part of the config', () => {
+  it('refuses a sectional test that names no section', async () => {
+    const { service } = serviceWith();
+
+    const error = await service
+      .create({ baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL }, ADMIN)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.scopeRef?.[0]);
+  });
+
+  it('refuses a section that belongs to another config', async () => {
+    const { service } = serviceWith();
+
+    const error = await service
+      .create(
+        { baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_9' } },
+        ADMIN,
+      )
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  it('accepts a section of its own config', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_2' } },
+      ADMIN,
+    );
+
+    assert.deepEqual(created.scopeRef, { sectionId: 'sec_2' });
+  });
+});
+
+describe('TestsService — editing and removing', () => {
+  it('re-checks the pair when only one half of it moves', async () => {
+    const { service } = serviceWith([
+      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.RANKED }),
+    ]);
+
+    const error = await service
+      .update('tst_1', { paperBinding: PAPER_BINDING.GENERATED })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  it('refuses every change but the title once the paper is frozen', async () => {
+    const { service } = serviceWith([makeTest({ id: 'tst_1', isLocked: true })]);
+
+    const error = await service
+      .update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST })
+      .catch((e: unknown) => e);
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+
+    const renamed = await service.update('tst_1', { title: 'Mock 1 (revised)' });
+    assert.equal(renamed.title, 'Mock 1 (revised)');
+  });
+
+  it('refuses to delete a test students have sat', async () => {
+    const { service } = serviceWith([makeTest({ id: 'tst_1' })], undefined, {
+      attempts: [{ testId: 'tst_1' }],
+    });
+
+    const error = await service.remove('tst_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+  });
+
+  it('deletes a draft nothing depends on', async () => {
+    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+
+    await service.remove('tst_1');
+
+    assert.equal(prisma.tests.length, 0);
+  });
+});

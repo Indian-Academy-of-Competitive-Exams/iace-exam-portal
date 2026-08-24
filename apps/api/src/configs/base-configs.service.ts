@@ -24,6 +24,7 @@ import { ExamStagesService } from './exam-stages.service';
 import {
   configDeletionBlocker,
   configShapeIssues,
+  INACTIVE_CONFIG_MESSAGE,
   locksOutEdit,
   LOCKED_CONFIG_MESSAGE,
 } from './base-config-rules';
@@ -272,6 +273,25 @@ export class BaseConfigsService {
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
     await this.prisma.baseConfig.delete({ where: { id } });
+  }
+
+  /** A test's way in: a LOCKED config still takes tests — only a retired one refuses. */
+  async assertUsable(id: string, fieldKey = 'baseConfigId'): Promise<BaseConfigDetail> {
+    const config = await this.prisma.baseConfig.findUnique({
+      where: { id },
+      include: DETAIL_INCLUDE,
+    });
+    if (!config) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'No such config', {
+        fieldErrors: { [fieldKey]: ['Pick a config'] },
+      });
+    }
+    if (!config.isActive) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, INACTIVE_CONFIG_MESSAGE, {
+        fieldErrors: { [fieldKey]: [INACTIVE_CONFIG_MESSAGE] },
+      });
+    }
+    return toDetail(config);
   }
 
   private assertShape(
