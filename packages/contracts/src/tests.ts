@@ -263,7 +263,17 @@ export const assemblePaperSchema = z.object({
 export type AssemblePaperInput = z.input<typeof assemblePaperSchema>;
 export type AssemblePaperBody = z.infer<typeof assemblePaperSchema>;
 
+/** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
+export const finalizeResultSchema = z.object({
+  testId: z.string(),
+  finalizedAt: z.string(),
+  finalizedByThisCall: z.boolean(),
+  frozenQuestions: z.number().int(),
+});
+export type FinalizeResult = z.infer<typeof finalizeResultSchema>;
+
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   assemble: (id: string) => `/admin/tests/${id}/paper`,
+  finalize: (id: string) => `/admin/tests/${id}/finalize`,
 } as const;

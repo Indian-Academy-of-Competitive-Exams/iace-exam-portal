@@ -66,6 +66,37 @@ export function locksOutTestEdit(input: UpdateTestBody): boolean {
   return Object.keys(input).some((key) => !unfrozen.has(key));
 }
 
+export const ALREADY_FINALIZED_MESSAGE =
+  'This test is already finalized. Its paper is frozen and cannot be drawn again.';
+
+export const NO_PAPER_MESSAGE =
+  'This test has no paper yet. Draw or choose its questions before finalizing it.';
+
+/** Every section at its exact count, or the paper is not the one the config describes. */
+export function paperCompletenessIssues(
+  sections: readonly { id: string; name: string; questionCount: number }[],
+  drawnSectionIds: readonly string[],
+): string[] {
+  if (drawnSectionIds.length === 0) return [NO_PAPER_MESSAGE];
+
+  const held = new Map<string, number>();
+  for (const id of drawnSectionIds) held.set(id, (held.get(id) ?? 0) + 1);
+
+  const issues = sections.flatMap((section) => {
+    const count = held.get(section.id) ?? 0;
+    if (count === section.questionCount) return [];
+    return [`${section.name} holds ${count} of the ${section.questionCount} it needs.`];
+  });
+
+  // A row pointing at a section the config no longer has would freeze a paper nothing can score.
+  const orphaned = [...held.keys()].filter((id) => !sections.some((section) => section.id === id));
+  if (orphaned.length > 0) {
+    issues.push('The paper holds questions for a section this configuration no longer has.');
+  }
+
+  return issues;
+}
+
 /** A test that has been sat, offered or frozen is history — deleting it would take that with it. */
 export function testDeletionBlocker(usage: {
   isLocked: boolean;

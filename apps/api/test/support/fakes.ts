@@ -1079,9 +1079,25 @@ export class FakeConfigPrisma {
     return this as unknown as PrismaService;
   }
 
-  /** Both forms: the list reads through an array, every write through a callback. */
+  /** The tables a rollback has to put back. A subclass adding one overrides this. */
+  protected tables(): object[][] {
+    return [this.configs, this.sections, this.modules];
+  }
+
+  /** Both forms, and a throwing callback puts every table back — services rely on that. */
   $transaction<T>(work: Promise<T>[] | ((tx: FakeConfigPrisma) => Promise<T>)): Promise<T[] | T> {
-    return typeof work === 'function' ? work(this) : Promise.all(work);
+    if (typeof work !== 'function') return Promise.all(work);
+
+    const tables = this.tables();
+    const snapshot = tables.map((rows) => rows.map((row) => structuredClone(row)));
+
+    return Promise.resolve(work(this)).catch((error: unknown) => {
+      tables.forEach((rows, index) => {
+        rows.length = 0;
+        rows.push(...snapshot[index]!);
+      });
+      throw error;
+    });
   }
 
   readonly examStage = {
@@ -1141,16 +1157,28 @@ export class FakeConfigPrisma {
       where,
       data,
     }: {
-      where: { examStageId: string; isDefault: boolean; id?: { not: string } };
-      data: { isDefault: boolean };
+      where: {
+        examStageId?: string;
+        isDefault?: boolean;
+        locked?: boolean;
+        id?: string | { not: string };
+      };
+      data: { isDefault?: boolean; locked?: boolean };
     }) => {
+      const only = typeof where.id === 'string' ? where.id : undefined;
+      const except = typeof where.id === 'object' ? where.id.not : undefined;
       const matched = this.configs.filter(
         (config) =>
-          config.examStageId === where.examStageId &&
-          config.isDefault === where.isDefault &&
-          (where.id?.not === undefined || config.id !== where.id.not),
+          (where.examStageId === undefined || config.examStageId === where.examStageId) &&
+          (where.isDefault === undefined || config.isDefault === where.isDefault) &&
+          (where.locked === undefined || config.locked === where.locked) &&
+          (only === undefined || config.id === only) &&
+          (except === undefined || config.id !== except),
       );
-      for (const config of matched) config.isDefault = data.isDefault;
+      for (const config of matched) {
+        if (data.isDefault !== undefined) config.isDefault = data.isDefault;
+        if (data.locked !== undefined) config.locked = data.locked;
+      }
       return Promise.resolve({ count: matched.length });
     },
 
@@ -1162,6 +1190,13 @@ export class FakeConfigPrisma {
   };
 
   readonly baseConfigSection = {
+    findMany: ({ where }: { where: { baseConfigId: string } }) =>
+      Promise.resolve(
+        this.sections
+          .filter((row) => row.baseConfigId === where.baseConfigId)
+          .sort((a, b) => a.order - b.order),
+      ),
+
     create: ({ data }: { data: Partial<FakeSectionRow> & { baseConfigId: string } }) => {
       const created = makeSection({ ...data, id: this.id('sec') });
       this.sections.push(created);
@@ -1294,16 +1329,32 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     configs: FakeBaseConfigRow[] = [makeBaseConfig()],
     sections: FakeSectionRow[] = [makeSection()],
     readonly attempts: { testId: string }[] = [],
-    readonly seriesTests: { testId: string }[] = [],
+    readonly seriesTests: FakeSeriesTestRow[] = [],
     readonly questions: FakeQuestionRow[] = [],
     readonly paperQuestions: FakePaperRow[] = [],
   ) {
     super(configs, sections);
   }
 
+  protected override tables(): object[][] {
+    return [...super.tables(), this.tests, this.questions, this.paperQuestions, this.seriesTests];
+  }
+
   readonly question = {
     findMany: ({ where = {} }: { where?: DrawPoolWhere; select?: unknown } = {}) =>
       Promise.resolve(this.questions.filter((row) => matchesPoolWhere(row, where))),
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: { in: string[] } };
+      data: { fixedUseCount: { increment: number } };
+    }) => {
+      const matched = this.questions.filter((row) => where.id.in.includes(row.id));
+      for (const row of matched) row.fixedUseCount += data.fixedUseCount.increment;
+      return Promise.resolve({ count: matched.length });
+    },
   };
 
   readonly paperQuestion = {
@@ -1390,6 +1441,28 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve(this.hydrateTest(test));
     },
 
+    /** The conditional UPDATE finalize races on: it matches, or it does not and writes nothing. */
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; version?: number; isLocked?: boolean };
+      data: { isLocked?: boolean; finalizedAt?: Date; version?: { increment: number } };
+    }) => {
+      const matched = this.tests.filter(
+        (test) =>
+          test.id === where.id &&
+          (where.version === undefined || test.version === where.version) &&
+          (where.isLocked === undefined || test.isLocked === where.isLocked),
+      );
+      for (const test of matched) {
+        if (data.isLocked !== undefined) test.isLocked = data.isLocked;
+        if (data.finalizedAt !== undefined) test.finalizedAt = data.finalizedAt;
+        if (data.version) test.version += data.version.increment;
+      }
+      return Promise.resolve({ count: matched.length });
+    },
+
     delete: ({ where }: { where: { id: string } }) => {
       const index = this.tests.findIndex((test) => test.id === where.id);
       const [removed] = this.tests.splice(index, 1);
@@ -1406,6 +1479,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       _count: {
         attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
         series: this.seriesTests.filter((link) => link.testId === row.id).length,
+        paperQuestions: this.paperQuestions.filter((paper) => paper.testId === row.id).length,
       },
       baseConfig: {
         name: config?.name ?? '',

@@ -17,6 +17,7 @@ import { AuditContext } from '../src/audit';
 import {
   type FakeBaseConfigRow,
   type FakeSectionRow,
+  type FakeSeriesTestRow,
   type FakeTestModelRow,
   FakeTestsPrisma,
   makeBaseConfig,
@@ -35,7 +36,7 @@ const SECTIONS: FakeSectionRow[] = [
 function serviceWith(
   tests: FakeTestModelRow[] = [],
   configs: FakeBaseConfigRow[] = [makeBaseConfig({ totalQuestions: 50, durationSec: 3600 })],
-  usage: { attempts?: { testId: string }[]; seriesTests?: { testId: string }[] } = {},
+  usage: { attempts?: { testId: string }[]; seriesTests?: FakeSeriesTestRow[] } = {},
 ) {
   const prisma = new FakeTestsPrisma(
     tests,
@@ -222,6 +223,30 @@ describe('TestsService — editing and removing', () => {
 
     const renamed = await service.update('tst_1', { title: 'Mock 1 (revised)' });
     assert.equal(renamed.title, 'Mock 1 (revised)');
+  });
+
+  it('drops the paper when the test stops having one', async () => {
+    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+    prisma.paperQuestions.push({
+      id: 'pq_1',
+      testId: 'tst_1',
+      baseConfigId: 'cfg_1',
+      baseConfigSectionId: 'sec_1',
+      questionId: 'qst_1',
+      questionVersionId: 'qst_1_v1',
+      order: 1,
+      marks: 2,
+      negativeMarks: 0.5,
+      status: 'ACTIVE',
+    });
+
+    // A paper belongs to a FIXED test; per-attempt draws would leave these rows unread forever.
+    await service.update('tst_1', {
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+      paperBinding: PAPER_BINDING.GENERATED,
+    });
+
+    assert.equal(prisma.paperQuestions.length, 0);
   });
 
   it('refuses to delete a test students have sat', async () => {

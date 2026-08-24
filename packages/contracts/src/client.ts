@@ -105,11 +105,13 @@ import {
 import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
+  finalizeResultSchema,
   testDetailSchema,
   testPaperSchema,
   testSchema,
   type AssemblePaperInput,
   type CreateTestInput,
+  type FinalizeResult,
   type Test,
   type TestDetail,
   type TestListQueryInput,
@@ -831,6 +833,13 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: input,
             schema: testPaperSchema,
+          }),
+
+        /** Idempotent: a second call reports the first one's outcome rather than freezing twice. */
+        finalize: (id: string): Promise<FinalizeResult> =>
+          request(ADMIN_TEST_PAPER_ROUTES.finalize(id), {
+            method: 'POST',
+            schema: finalizeResultSchema,
           }),
       },
 

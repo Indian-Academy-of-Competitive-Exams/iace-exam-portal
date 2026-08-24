@@ -4,6 +4,7 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  PAPER_BINDING,
   fieldDiff,
   type BaseConfigDetail,
   type CreateTestBody,
@@ -138,6 +139,14 @@ export class TestsService {
       input.paperBinding ?? test.paperBinding,
     );
     this.assertCovers(config, scope, scopeRef);
+
+    // A paper belongs to a FIXED test. Switching to per-attempt leaves rows nothing will ever read.
+    if (
+      input.paperBinding === PAPER_BINDING.GENERATED &&
+      test.paperBinding !== input.paperBinding
+    ) {
+      await this.prisma.paperQuestion.deleteMany({ where: { testId: id } });
+    }
 
     const updated = await this.prisma.test.update({
       where: { id },

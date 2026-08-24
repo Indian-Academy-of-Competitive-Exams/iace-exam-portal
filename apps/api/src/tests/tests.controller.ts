@@ -22,6 +22,7 @@ import {
   updateTestSchema,
   type AssemblePaperBody,
   type CreateTestBody,
+  type FinalizeResult,
   type Paginated,
   type Test,
   type TestDetail,
@@ -34,6 +35,7 @@ import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TestsService } from './tests.service';
 import { PaperService } from './paper.service';
+import { FinalizeService } from './finalize.service';
 
 /** The tests built from a stage's blueprints. Gated on TEST_MANAGEMENT, like the configs are. */
 @Controller('admin/tests')
@@ -42,6 +44,7 @@ export class TestsController {
   constructor(
     private readonly tests: TestsService,
     private readonly paper: PaperService,
+    private readonly finalizer: FinalizeService,
   ) {}
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -93,6 +96,15 @@ export class TestsController {
     @Body(new ZodBody(assemblePaperSchema)) body: AssemblePaperBody,
   ): Promise<TestPaper> {
     return this.paper.assemble(id, body);
+  }
+
+  /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/finalize')
+  @HttpCode(HttpStatus.OK)
+  finalize(@Param('id') id: string): Promise<FinalizeResult> {
+    return this.finalizer.finalize(id);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.DELETE)
