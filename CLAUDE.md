@@ -73,7 +73,7 @@ Do not break these — they are why the live test holds at 4–5K:
   answer key) and repoints `currentVersionId`, so a paper or an attempt that pinned a version never
   moves. Option ids carry over by position. Localized content is JSON keyed by language, rich (text,
   `$LaTeX$`, S3 image URLs). English default.
-- **Question taxonomy: `Subject` → `Topic`.** Two levels only. Anything finer is a `topic:` tag on
+- **Question taxonomy: `Subject` → `Topic`.** Two levels only. Anything finer is a free-text tag on
   the question. A `Question` carries `subjectId` + optional `topicId`; **the service must check the
   topic belongs to the subject** — no FK can.
 - **Base configs** (`BaseConfig` + `BaseConfigModule` + `BaseConfigSection`) are a stage's blueprint,

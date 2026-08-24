@@ -466,7 +466,7 @@ Table Question {  // IDENTITY only — taxonomy, type, draw metadata. Content li
   difficulty           DifficultyLevel [not null]  // draw filter — stable across versions
   status               QuestionStatus [not null, default: 'ACTIVE']
   currentVersionId     text  // pointer to the latest QuestionVersion (what new papers draw)
-  tags                 text[]  // GIN. NAMESPACED convention `key:value` (lowercase, hyphenated): paper:<slug> (earmark "framed for this test" — SOFT hint, not a binding), set:<slug> (a reusable standard set), pyq:<year>, src:<exam-code>, topic:<slug>. Soft-validated at import (warn, don't reject). Drives tag-based search + the FIXED draw's pool filter.
+  tags                 text[]  // GIN. Free-text tags — plain strings, no naming convention. Drives tag-based search + the FIXED draw's pool filter.
   stemHash             text  // canonical dedup hash of the CURRENT version (see notes)
   fixedUseCount        int [not null, default: 0]  // times used in a FIXED paper. UNSEEN_FIRST(fixed)=0; LEAST_SERVED order. Increment ATOMICALLY at finalize.
   createdById          text
@@ -522,7 +522,7 @@ Table Test {
   maxRetakes     int  // null = unlimited (practice); ranked graded attempt is always 1
 
   // draw source — used by the ONE draw engine (at finalize for FIXED, per attempt for GENERATED)
-  questionPoolFilter jsonb  // { tags, subjects, topics, sourceYears, excludeSeen }. tags (e.g. ["paper:ssc-cgl-t1-mock-05"]) narrow the CANDIDATE pool; the config's per-section counts + timing stay authoritative — the engine fills each section to its count from the filtered pool and flags any shortfall (never silently under/over-fills). Manual pick can complete/override.
+  questionPoolFilter jsonb  // { tags, subjects, topics, sourceYears, excludeSeen }. tags (e.g. ["ssc cgl mock 05"]) narrow the CANDIDATE pool; the config's per-section counts + timing stay authoritative — the engine fills each section to its count from the filtered pool and flags any shortfall (never silently under/over-fills). Manual pick can complete/override.
   drawStrategy   DrawStrategy [not null, default: 'RANDOM']
 
   status         TestStatus [not null, default: 'DRAFT']
@@ -661,7 +661,7 @@ Table Student {
   currentBranchId   text  // active branch — access/scheduling uses THIS
 
   // login / profile
-  pinHash           text  // 6-digit login PIN (hashed)
+  pinHash           text  // 4-digit login PIN (hashed)
   pinIsDefault      boolean [not null, default: true]  // seeded default PIN not yet changed
   fullName          text
   preferredLanguage SupportedLanguage [not null, default: 'EN']  // EN | HI | TE
