@@ -10,6 +10,7 @@ import {
   type CreateTestBody,
   type Paginated,
   type DrawSpec,
+  type PaperBinding,
   type Test,
   type TestDetail,
   type TestListQuery,
@@ -27,6 +28,8 @@ import {
   scopeRefIssue,
   TEST_DEFAULTS,
   testDeletionBlocker,
+  variantCountFor,
+  variantCountIssue,
 } from './test-rules';
 import { thaw } from './thaw';
 
@@ -105,6 +108,8 @@ export class TestsService {
     const scopeRef = input.scopeRef ?? null;
     this.assertJudgeable(evaluationMode, paperBinding);
     this.assertCovers(config, scope, scopeRef);
+    const variantCount = variantCountFor(paperBinding, input.variantCount);
+    this.assertDrawable(paperBinding, variantCount);
 
     const created = await this.prisma.test.create({
       data: {
@@ -116,6 +121,7 @@ export class TestsService {
         evaluationMode,
         paperBinding,
         maxRetakes: input.maxRetakes ?? null,
+        variantCount,
         drawStrategy: input.drawStrategy ?? TEST_DEFAULTS.drawStrategy,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
@@ -139,11 +145,14 @@ export class TestsService {
     // Judged against what the test WILL hold: either half of the pair may be the one moving.
     const scope = input.scope ?? test.scope;
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
-    this.assertJudgeable(
-      input.evaluationMode ?? test.evaluationMode,
-      input.paperBinding ?? test.paperBinding,
-    );
+    const paperBinding = input.paperBinding ?? test.paperBinding;
+    this.assertJudgeable(input.evaluationMode ?? test.evaluationMode, paperBinding);
     this.assertCovers(config, scope, scopeRef);
+
+    // A test only now becoming generated carries a count of 1 it never chose, so it starts fresh.
+    const held = paperBinding === test.paperBinding ? test.variantCount : undefined;
+    const variantCount = variantCountFor(paperBinding, input.variantCount ?? held);
+    this.assertDrawable(paperBinding, variantCount);
 
     const droppingThePaper =
       input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
@@ -165,6 +174,7 @@ export class TestsService {
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
           ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
           ...(input.drawStrategy === undefined ? {} : { drawStrategy: input.drawStrategy }),
+          ...(variantCount === test.variantCount ? {} : { variantCount }),
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
@@ -194,6 +204,16 @@ export class TestsService {
 
     for (const link of links) {
       this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    }
+  }
+
+  /** A generated test with one paper is a fixed test wearing the wrong name. */
+  private assertDrawable(paperBinding: PaperBinding, variantCount: number): void {
+    const issue = variantCountIssue(paperBinding, variantCount);
+    if (issue) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
+        fieldErrors: { variantCount: [issue] },
+      });
     }
   }
 

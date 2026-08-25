@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PAPER_VARIANTS,
   DRAW_STRATEGY,
   EVALUATION_MODE,
   isPaperBindingAllowed,
@@ -31,6 +32,21 @@ export function paperBindingIssue(
   paperBinding: PaperBinding,
 ): string | null {
   return isPaperBindingAllowed(evaluationMode, paperBinding) ? null : RANKED_NEEDS_FIXED_MESSAGE;
+}
+
+export const ONE_VARIANT_IS_FIXED_MESSAGE =
+  'A test that draws a paper per student needs more than one to draw from. Give it at least two, or make it a fixed paper.';
+
+/** A generated test with one paper IS a fixed test, and every student would sit the same one. */
+export function variantCountIssue(paperBinding: PaperBinding, variantCount: number): string | null {
+  const fixed = paperBinding === PAPER_BINDING.FIXED;
+  return !fixed && variantCount < 2 ? ONE_VARIANT_IS_FIXED_MESSAGE : null;
+}
+
+/** A fixed paper is one paper. Held rather than refused: no screen can ask for anything else. */
+export function variantCountFor(paperBinding: PaperBinding, wanted: number | undefined): number {
+  if (paperBinding === PAPER_BINDING.FIXED) return 1;
+  return wanted ?? DEFAULT_PAPER_VARIANTS;
 }
 
 const SCOPE_REFERENCE_REQUIRED: Record<TestScope, keyof TestScopeRef | null> = {

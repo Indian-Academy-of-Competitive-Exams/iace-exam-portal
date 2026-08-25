@@ -122,6 +122,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         evaluationMode: values.evaluationMode,
         paperBinding: values.paperBinding,
         maxRetakes: optionalNumber(values.maxRetakes),
+        variantCount: optionalNumber(values.variantCount),
         drawStrategy: values.drawStrategy,
       };
       return detail

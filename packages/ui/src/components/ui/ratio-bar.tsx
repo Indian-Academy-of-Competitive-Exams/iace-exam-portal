@@ -42,6 +42,16 @@ const STEP_KEYS: Readonly<Record<string, number>> = {
   ArrowUp: 1,
 };
 
+/** jsdom and older engines throw rather than ignore a capture they cannot take. */
+function capture(element: Element, pointerId: number, take: boolean): void {
+  try {
+    if (take) element.setPointerCapture?.(pointerId);
+    else element.releasePointerCapture?.(pointerId);
+  } catch {
+    // A drag that cannot be captured still works; it just stops if the pointer leaves.
+  }
+}
+
 export function RatioBar({
   parts,
   values,
@@ -50,7 +60,22 @@ export function RatioBar({
   disabled,
   className,
 }: Readonly<RatioBarProps>) {
+  const track = React.useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = React.useState<0 | 1 | null>(null);
   const share = (value: number) => (total === 0 ? 0 : (value / total) * 100);
+
+  /** Where the pointer is, in questions rather than pixels — a split is whole numbers. */
+  const boundaryAt = (clientX: number): number => {
+    const rect = track.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 0;
+    const along = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return Math.round(along * total);
+  };
+
+  const dragTo = (handle: 0 | 1, clientX: number) => {
+    const boundary = boundaryAt(clientX);
+    onChange(moved(values, handle, handle === 0 ? boundary : boundary - values[0]));
+  };
 
   const fills = [
     { part: parts[0], value: values[0] },
@@ -85,7 +110,10 @@ export function RatioBar({
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
-      <div className="relative flex h-8 w-full overflow-hidden rounded-md border border-border">
+      <div
+        ref={track}
+        className="relative flex h-8 w-full overflow-hidden rounded-md border border-border"
+      >
         {fills.map((fill) => (
           <div
             key={fill.part.key}
@@ -106,13 +134,31 @@ export function RatioBar({
             aria-valuetext={grip.text}
             aria-disabled={disabled || undefined}
             onKeyDown={disabled ? undefined : press(grip.handle)}
+            onPointerDown={(event) => {
+              if (disabled) return;
+              event.preventDefault();
+              capture(event.currentTarget, event.pointerId, true);
+              setDragging(grip.handle);
+            }}
+            onPointerMove={(event) => {
+              if (dragging !== grip.handle) return;
+              dragTo(grip.handle, event.clientX);
+            }}
+            onPointerUp={(event) => {
+              capture(event.currentTarget, event.pointerId, false);
+              setDragging(null);
+            }}
+            onPointerCancel={() => setDragging(null)}
             style={{ left: `${share(grip.at)}%` }}
             className={cn(
-              'absolute top-0 h-full w-1 -translate-x-1/2 cursor-col-resize bg-foreground/40',
-              'focus-visible:shadow-focus focus-visible:outline-none',
+              // `touch-none`, or a drag on a phone scrolls the page instead of moving the handle.
+              'absolute top-0 h-full w-3 -translate-x-1/2 touch-none cursor-col-resize',
+              'flex items-center justify-center focus-visible:shadow-focus focus-visible:outline-none',
               disabled && 'cursor-not-allowed',
             )}
-          />
+          >
+            <span className="h-full w-1 rounded-full bg-foreground/50" aria-hidden />
+          </div>
         ))}
       </div>
 

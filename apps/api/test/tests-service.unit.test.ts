@@ -256,6 +256,44 @@ describe('TestsService — editing and removing', () => {
     assert.equal(prisma.tests[0]!.isLocked, true);
   });
 
+  /** A generated test with one paper IS a fixed test, and every student would sit the same one. */
+  it('refuses a paper per student with only one paper to draw from', async () => {
+    const { service } = serviceWith([makeTest({ id: 'tst_1' })]);
+
+    const error = await service
+      .update('tst_1', {
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+        paperBinding: PAPER_BINDING.GENERATED,
+        variantCount: 1,
+      })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.variantCount?.[0]);
+  });
+
+  /** Switching over carries a count of 1 it never chose, so it starts from the default instead. */
+  it('gives a test only now drawing per student a bank to draw from', async () => {
+    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+
+    await service.update('tst_1', {
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+      paperBinding: PAPER_BINDING.GENERATED,
+    });
+
+    assert.ok(prisma.tests[0]!.variantCount > 1);
+  });
+
+  /** One paper is what fixed MEANS, so the count is held there rather than argued about. */
+  it('holds a fixed paper at one, whatever it is sent', async () => {
+    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+
+    await service.update('tst_1', { variantCount: 12 });
+
+    assert.equal(prisma.tests[0]!.variantCount, 1);
+  });
+
   /** The failure this prevents: a frozen paper left pointing at a scope it no longer covers. */
   it('thaws a frozen test nobody has sat when its shape changes', async () => {
     const { service, prisma } = serviceWith([

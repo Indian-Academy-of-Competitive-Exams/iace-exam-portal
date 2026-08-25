@@ -309,6 +309,11 @@ export const testTitleSchema = z
 /** Retakes are a small number by design; unlimited is null, not a large one. */
 export const MAX_RETAKES_CEILING = 20;
 
+/** Each variant is a whole paper on file, so the ceiling is rows in the table, not a preference. */
+export const MAX_PAPER_VARIANTS = 50;
+/** Enough that two students rarely share a paper, few enough that every one can be looked at. */
+export const DEFAULT_PAPER_VARIANTS = 10;
+
 /** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
 const testOwnFieldsSchema = z.object({
   scope: testScopeSchema.optional(),
@@ -316,6 +321,8 @@ const testOwnFieldsSchema = z.object({
   evaluationMode: evaluationModeSchema.optional(),
   paperBinding: paperBindingSchema.optional(),
   maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
+  /** How many papers to draw. A fixed test is one, and the server holds it there. */
+  variantCount: z.coerce.number().int().min(1).max(MAX_PAPER_VARIANTS).optional(),
   drawStrategy: drawStrategySchema.optional(),
   questionPoolFilter: drawSpecSchema.nullish(),
 });

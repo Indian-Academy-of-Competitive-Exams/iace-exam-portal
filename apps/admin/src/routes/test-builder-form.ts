@@ -1,6 +1,7 @@
 import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
+  DEFAULT_PAPER_VARIANTS,
   DRAW_STRATEGY,
   EVALUATION_MODE,
   PAPER_BINDING,
@@ -28,6 +29,7 @@ export interface TestFormValues {
   evaluationMode: EvaluationMode;
   paperBinding: PaperBinding;
   maxRetakes: string;
+  variantCount: string;
   drawStrategy: DrawStrategy;
 }
 
@@ -47,6 +49,7 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
+    variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
     drawStrategy: detail?.drawStrategy ?? DRAW_STRATEGY.RANDOM,
   };
 }
@@ -74,6 +77,7 @@ export const SERVER_FIELDS = [
   'title',
   'paperBinding',
   'maxRetakes',
+  'variantCount',
   'scopeRef',
 ] as const;
 
@@ -86,7 +90,13 @@ const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
 };
 
 export function applyServerErrors(error: unknown, form: TestForm, scope: TestScope): void {
-  applyFieldErrors(error, form.setError, ['baseConfigId', 'title', 'paperBinding', 'maxRetakes']);
+  applyFieldErrors(error, form.setError, [
+    'baseConfigId',
+    'title',
+    'paperBinding',
+    'maxRetakes',
+    'variantCount',
+  ]);
   const field = SCOPE_FIELDS[scope];
   if (!field || !AppException.is(error)) return;
   const message = error.fieldErrors?.scopeRef?.[0];

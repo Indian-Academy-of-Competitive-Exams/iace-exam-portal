@@ -3,6 +3,7 @@ import {
   DRAW_STRATEGIES,
   EVALUATION_MODE,
   EVALUATION_MODES,
+  MAX_PAPER_VARIANTS,
   MAX_RETAKES_CEILING,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -264,6 +265,17 @@ function Rules({
           />
         )}
       </FormField>
+
+      {paperBinding === PAPER_BINDING.GENERATED ? (
+        <FormField
+          form={form}
+          name="variantCount"
+          label="Papers"
+          hint={`How many to draw, up to ${MAX_PAPER_VARIANTS}`}
+        >
+          {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
+        </FormField>
+      ) : null}
 
       <FormField form={form} name="drawStrategy" label="Draw">
         {(control) => (

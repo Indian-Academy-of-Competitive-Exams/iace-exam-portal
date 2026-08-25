@@ -88,6 +88,43 @@ describe('RatioBar', () => {
     assert.equal(first?.getAttribute('aria-valuemax'), '25');
   });
 
+  /** The failure this prevents: a handle that looks draggable and only answers the keyboard. */
+  it('follows a pointer drag, in whole questions', () => {
+    const onChange = mount();
+    const handle = handles()[0]!;
+    // jsdom measures nothing, so the track is given a width to resolve the drag against.
+    const track = handle.parentElement!;
+    track.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 70 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100 });
+
+    // 100 of 250 is two fifths of 25 questions, so the boundary lands on 10.
+    assert.deepEqual(onChange.mock.calls[0]?.arguments, [[10, 8, 7]]);
+  });
+
+  it('ignores a pointer that never pressed it', () => {
+    const onChange = mount();
+    const handle = handles()[0]!;
+    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100 });
+
+    assert.equal(onChange.mock.callCount(), 0);
+  });
+
+  it('stops following once the pointer is let go', () => {
+    const onChange = mount();
+    const handle = handles()[0]!;
+    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 70 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 200 });
+
+    assert.equal(onChange.mock.callCount(), 0);
+  });
+
   it('is out of the tab order and deaf to keys when disabled', () => {
     const onChange = mock.fn();
     render(<RatioBar parts={PARTS} values={[7, 11, 7]} total={25} onChange={onChange} disabled />);
