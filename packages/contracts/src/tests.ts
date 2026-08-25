@@ -125,6 +125,8 @@ export const testSchema = z.object({
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
   seriesCount: z.number().int(),
+  /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
+  paperQuestionCount: z.number().int(),
   createdAt: z.string(),
 });
 export type Test = z.infer<typeof testSchema>;
@@ -134,6 +136,28 @@ export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;
+
+/** The phases of building a test, in the order an admin walks them. */
+export const TEST_BUILDER_STEP = {
+  BLUEPRINT: 'BLUEPRINT',
+  RULES: 'RULES',
+  PAPER: 'PAPER',
+  SERIES: 'SERIES',
+  PUBLISH: 'PUBLISH',
+} as const;
+export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
+export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
+export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
+
+/** How far a test has got, so reopening it lands on the step still owing work. */
+export function testBuilderStepOf(
+  test: Pick<Test, 'isLocked' | 'paperBinding' | 'paperQuestionCount'>,
+): TestBuilderStep {
+  if (test.isLocked || test.paperQuestionCount > 0) return TEST_BUILDER_STEP.PUBLISH;
+  return test.paperBinding === PAPER_BINDING.GENERATED
+    ? TEST_BUILDER_STEP.SERIES
+    : TEST_BUILDER_STEP.PAPER;
+}
 
 /** The frozen shared paper. Only a FIXED test has these. */
 export const paperQuestionSchema = z.object({
@@ -170,7 +194,6 @@ export const MAX_RETAKES_CEILING = 20;
 
 /** Everything a test owns, shared by create and update. `baseConfigId` is only ever set once. */
 const testOwnFieldsSchema = z.object({
-  title: testTitleSchema.nullish(),
   scope: testScopeSchema.optional(),
   scopeRef: testScopeRefSchema.nullish(),
   evaluationMode: evaluationModeSchema.optional(),
@@ -182,13 +205,16 @@ const testOwnFieldsSchema = z.object({
 
 /** `examStageId` is absent on purpose: it is the config's, and the composite FK enforces it. */
 export const createTestSchema = testOwnFieldsSchema.extend({
+  title: testTitleSchema,
   baseConfigId: z.string().min(1, 'Choose a config'),
 });
 export type CreateTestInput = z.input<typeof createTestSchema>;
 export type CreateTestBody = z.infer<typeof createTestSchema>;
 
 /** A test never changes config — that would change its whole shape. Clone the test instead. */
-export const updateTestSchema = testOwnFieldsSchema;
+export const updateTestSchema = testOwnFieldsSchema.extend({
+  title: testTitleSchema.optional(),
+});
 export type UpdateTestInput = z.input<typeof updateTestSchema>;
 export type UpdateTestBody = z.infer<typeof updateTestSchema>;
 

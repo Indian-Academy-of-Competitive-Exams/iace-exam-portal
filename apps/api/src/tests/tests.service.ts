@@ -38,7 +38,7 @@ const TEST_INCLUDE = {
       exam: { select: { id: true, code: true, name: true, family: true } },
     },
   },
-  _count: { select: { attempts: true, series: true } },
+  _count: { select: { attempts: true, series: true, paperQuestions: true } },
 } as const satisfies Prisma.TestInclude;
 
 type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
@@ -106,7 +106,7 @@ export class TestsService {
       data: {
         baseConfigId: config.id,
         examStageId: config.examStageId,
-        title: input.title ?? null,
+        title: input.title,
         scope,
         scopeRef: toJson(scopeRef),
         evaluationMode,
@@ -151,7 +151,7 @@ export class TestsService {
     const updated = await this.prisma.test.update({
       where: { id },
       data: {
-        ...(input.title === undefined ? {} : { title: input.title ?? null }),
+        ...(input.title === undefined ? {} : { title: input.title }),
         ...(input.scope === undefined ? {} : { scope: input.scope }),
         ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
         ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
@@ -263,6 +263,7 @@ function toTest(row: TestRow): Test {
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     attemptCount: row._count.attempts,
     seriesCount: row._count.series,
+    paperQuestionCount: row._count.paperQuestions,
     createdAt: row.createdAt.toISOString(),
   };
 }

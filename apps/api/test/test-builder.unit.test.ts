@@ -130,6 +130,7 @@ describe('the invariants Phase 2 must not have broken', () => {
       .create(
         {
           baseConfigId: 'cfg_1',
+          title: 'Mock 1',
           evaluationMode: EVALUATION_MODE.RANKED,
           paperBinding: PAPER_BINDING.GENERATED,
         },
@@ -139,7 +140,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.ok(AppException.is(atCreate));
     assert.equal(atCreate.code, ErrorCodes.VALIDATION_ERROR);
 
-    const ranked = await tests.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const ranked = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     const atEdit = await tests
       .update(ranked.id, { paperBinding: PAPER_BINDING.GENERATED })
       .catch((e: unknown) => e);
@@ -148,7 +149,7 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   it('one frozen paper: it cannot be redrawn, and a second finalize changes nothing', async () => {
     const { tests, paper, finalizer, prisma } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     await paper.assemble(draft.id, { seed: SEED });
     await finalizer.finalize(draft.id);
 
@@ -171,7 +172,7 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   it('a bank too thin stops the milestone at the draw, having written nothing', async () => {
     const { tests, paper, prisma } = builder([...bank(8, 'sub_r', 'r'), ...bank(1, 'sub_q', 'q')]);
-    const draft = await tests.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     const error = await paper.assemble(draft.id, { seed: SEED }).catch((e: unknown) => e);
 

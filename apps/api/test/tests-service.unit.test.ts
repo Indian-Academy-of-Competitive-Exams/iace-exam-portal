@@ -69,7 +69,7 @@ describe('TestsService — creating a draft from a config', () => {
     const config = makeBaseConfig({ totalQuestions: 50, durationSec: 3600 });
     const { service } = serviceWith([], [config]);
 
-    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     config.durationSec = 4800;
     config.totalQuestions = 60;
 
@@ -85,7 +85,7 @@ describe('TestsService — creating a draft from a config', () => {
       [makeBaseConfig({ id: 'cfg_1', examStageId: 'stage_2' })],
     );
 
-    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     // The composite FK is what keeps a test and its blueprint on one stage; the body has no say.
     assert.equal(created.examStageId, 'stage_2');
@@ -95,7 +95,7 @@ describe('TestsService — creating a draft from a config', () => {
   it('defaults to a full, ranked, fixed, randomly drawn paper', async () => {
     const { service } = serviceWith();
 
-    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     assert.equal(created.scope, TEST_SCOPE.FULL);
     assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
@@ -112,6 +112,7 @@ describe('TestsService — creating a draft from a config', () => {
       .create(
         {
           baseConfigId: 'cfg_1',
+          title: 'Mock 1',
           evaluationMode: EVALUATION_MODE.RANKED,
           paperBinding: PAPER_BINDING.GENERATED,
         },
@@ -131,6 +132,7 @@ describe('TestsService — creating a draft from a config', () => {
     const created = await service.create(
       {
         baseConfigId: 'cfg_1',
+        title: 'Mock 1',
         evaluationMode: EVALUATION_MODE.PRACTICE,
         paperBinding: PAPER_BINDING.GENERATED,
       },
@@ -143,7 +145,9 @@ describe('TestsService — creating a draft from a config', () => {
   it('refuses a retired config', async () => {
     const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', isActive: false })]);
 
-    const error = await service.create({ baseConfigId: 'cfg_1' }, ADMIN).catch((e: unknown) => e);
+    const error = await service
+      .create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN)
+      .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -153,7 +157,7 @@ describe('TestsService — creating a draft from a config', () => {
   it('still builds on a locked config — the lock freezes its shape, not its use', async () => {
     const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', locked: true })]);
 
-    const created = await service.create({ baseConfigId: 'cfg_1' }, ADMIN);
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     assert.equal(created.baseConfigId, 'cfg_1');
   });
@@ -164,7 +168,7 @@ describe('TestsService — the scope has to name a part of the config', () => {
     const { service } = serviceWith();
 
     const error = await service
-      .create({ baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL }, ADMIN)
+      .create({ baseConfigId: 'cfg_1', title: 'Mock 1', scope: TEST_SCOPE.SECTIONAL }, ADMIN)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -177,7 +181,12 @@ describe('TestsService — the scope has to name a part of the config', () => {
 
     const error = await service
       .create(
-        { baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_9' } },
+        {
+          baseConfigId: 'cfg_1',
+          title: 'Mock 1',
+          scope: TEST_SCOPE.SECTIONAL,
+          scopeRef: { sectionId: 'sec_9' },
+        },
         ADMIN,
       )
       .catch((e: unknown) => e);
@@ -190,7 +199,12 @@ describe('TestsService — the scope has to name a part of the config', () => {
     const { service } = serviceWith();
 
     const created = await service.create(
-      { baseConfigId: 'cfg_1', scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_2' } },
+      {
+        baseConfigId: 'cfg_1',
+        title: 'Mock 1',
+        scope: TEST_SCOPE.SECTIONAL,
+        scopeRef: { sectionId: 'sec_2' },
+      },
       ADMIN,
     );
 

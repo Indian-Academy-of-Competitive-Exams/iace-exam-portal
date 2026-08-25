@@ -186,7 +186,7 @@ function TestEditor({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const save = useMutation({
     meta: { success: existing ? 'Test saved.' : 'Draft test created.' },
     mutationFn: (values: TestFormValues) => {
-      const title = values.title.trim() || null;
+      const title = values.title.trim();
       // A frozen test refuses everything else, so a rename must not carry the rest along with it.
       if (detail && frozen) return api.admin.tests.update(detail.id, { title });
 
