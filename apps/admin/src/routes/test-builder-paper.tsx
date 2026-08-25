@@ -108,7 +108,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
   return (
     <div className="flex flex-col gap-6">
       {/* Bled to the card's edges and pinned: the count and the draw stay put past twelve sections. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-6 pb-3 pt-6">
+      <div className="sticky -top-[41px] z-10 -mx-6 -mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-6 pb-3 pt-6">
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
           {' drawn'}
