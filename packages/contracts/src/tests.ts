@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { csvIdQuery, csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, stageRefSchema } from './configs';
-import { difficultyLevelSchema, tagSchema } from './questions';
+import {
+  DIFFICULTY_LEVEL,
+  DIFFICULTY_LEVELS,
+  difficultyLevelSchema,
+  tagSchema,
+  type DifficultyLevel,
+} from './questions';
 
 // ============================================================================
 // Tests and papers. A test is minimal: it inherits marks, duration, timing,
@@ -108,6 +114,129 @@ export const questionPoolFilterSchema = z.object({
   tags: z.array(tagSchema).min(1).optional(),
 });
 export type QuestionPoolFilter = z.infer<typeof questionPoolFilterSchema>;
+
+// ============================================================================
+// What a section is drawn FROM. Per section, because marks, timing and counts
+// already are. An absent `mix` is not "no mix" — it is the section drawing
+// across every difficulty, so one optional field carries both modes and there
+// is no toggle to keep in step with it. Absent `topicIds` is the whole subject.
+// ============================================================================
+
+export const difficultyMixSchema = z
+  .object({
+    LOW: z.number().int().min(0).max(100),
+    MEDIUM: z.number().int().min(0).max(100),
+    HIGH: z.number().int().min(0).max(100),
+  })
+  .refine(
+    (mix) => mix.LOW + mix.MEDIUM + mix.HIGH === 100,
+    'The three difficulties have to add up to 100%',
+  );
+export type DifficultyMix = z.infer<typeof difficultyMixSchema>;
+
+/** What the form proposes. Code-owned: the blueprint's would be a second place to look, and locked. */
+export const DEFAULT_DIFFICULTY_MIX: DifficultyMix = { LOW: 30, MEDIUM: 40, HIGH: 30 };
+
+export const sectionDrawSpecSchema = z.object({
+  topicIds: z.array(z.string().min(1)).min(1).optional(),
+  mix: difficultyMixSchema.optional(),
+});
+export type SectionDrawSpec = z.infer<typeof sectionDrawSpecSchema>;
+
+export const drawSpecSchema = z.object({
+  sections: z.record(z.string(), sectionDrawSpecSchema),
+});
+export type DrawSpec = z.infer<typeof drawSpecSchema>;
+
+/** The middle absorbs the odd one, then largest remainder: 30/40/30 of 25 is 7/11/7, not 8/10/7. */
+export function bucketCounts(
+  mix: DifficultyMix,
+  questionCount: number,
+): Record<DifficultyLevel, number> {
+  const parts = DIFFICULTY_LEVELS.map((level) => {
+    const exact = (mix[level] * questionCount) / 100;
+    return { level, whole: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+
+  let spare = questionCount - parts.reduce((sum, part) => sum + part.whole, 0);
+  const middle = parts.find((part) => part.level === DIFFICULTY_LEVEL.MEDIUM);
+  // Never into a bucket the mix asked nothing of: 50/0/50 must not draw a medium question.
+  if (spare > 0 && middle && mix.MEDIUM > 0) {
+    middle.whole += 1;
+    spare -= 1;
+  }
+
+  const queue = [...parts]
+    .filter((part) => mix[part.level] > 0)
+    .sort((a, b) => b.remainder - a.remainder);
+  for (const part of queue.slice(0, Math.max(0, spare))) part.whole += 1;
+
+  return Object.fromEntries(parts.map((part) => [part.level, part.whole])) as Record<
+    DifficultyLevel,
+    number
+  >;
+}
+
+/** What the bank holds for one section once its own subject and its chosen topics are applied. */
+export interface SectionAvailability {
+  total: number;
+  byDifficulty: Partial<Record<DifficultyLevel, number>>;
+}
+
+/** `difficulty` is null when the section draws across all of them: the shortfall is its own. */
+export interface DrawShortfall {
+  baseConfigSectionId: string;
+  sectionName: string;
+  difficulty: DifficultyLevel | null;
+  needed: number;
+  available: number;
+}
+
+export interface FeasibilitySection {
+  id: string;
+  name: string;
+  questionCount: number;
+}
+
+/** Whether the bank can fill this paper. Here, not the server: the form shows the same numbers. */
+export function paperFeasibility(
+  sections: readonly FeasibilitySection[],
+  spec: DrawSpec | null | undefined,
+  available: Readonly<Record<string, SectionAvailability>>,
+): DrawShortfall[] {
+  return sections.flatMap((section) => {
+    const held = available[section.id] ?? { total: 0, byDifficulty: {} };
+    const mix = spec?.sections?.[section.id]?.mix;
+
+    if (!mix) {
+      return held.total >= section.questionCount
+        ? []
+        : [shortfallOf(section, null, section.questionCount, held.total)];
+    }
+
+    const needed = bucketCounts(mix, section.questionCount);
+    return DIFFICULTY_LEVELS.flatMap((level) => {
+      const want = needed[level];
+      const has = held.byDifficulty[level] ?? 0;
+      return want === 0 || has >= want ? [] : [shortfallOf(section, level, want, has)];
+    });
+  });
+}
+
+function shortfallOf(
+  section: FeasibilitySection,
+  difficulty: DifficultyLevel | null,
+  needed: number,
+  available: number,
+): DrawShortfall {
+  return {
+    baseConfigSectionId: section.id,
+    sectionName: section.name,
+    difficulty,
+    needed,
+    available,
+  };
+}
 
 export const testSchema = z.object({
   id: z.string(),

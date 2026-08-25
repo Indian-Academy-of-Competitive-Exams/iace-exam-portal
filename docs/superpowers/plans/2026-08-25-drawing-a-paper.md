@@ -36,9 +36,12 @@ blueprint's, which would be a second place to look and a locked one.
 <rounding>
 
 A mix is percentages and a section is a whole number, so 30/40/30 of 25 is 7.5 / 10 / 7.5 and
-something has to give. **Largest remainder, and MEDIUM takes any tie** — the middle absorbs the odd
-one. Written down here because two draws from one spec must produce papers of the same length, and
-because a tie is the case a hand-rolled rounding gets wrong.
+something has to give. **The middle absorbs the odd one, then largest remainder takes what is
+left** — 7/11/7, not 8/10/7, because a mix with equal ends has to draw equal ends. Plain largest
+remainder does NOT do this: MEDIUM's remainder there is zero, so the spare falls to LOW.
+
+**Never into a bucket the mix asked nothing of.** 50/0/50 of 3 must be 2/0/1 and never 1/1/1 —
+that is the case "give the spare to the middle" gets wrong on its own.
 
 </rounding>
 
