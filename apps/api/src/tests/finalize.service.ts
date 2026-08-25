@@ -56,12 +56,6 @@ export class FinalizeService {
       // Throwing here rolls the claim back, so a paper that is not whole leaves the test unlocked.
       if (fixed(test.paperBinding)) await this.assertPaperIsWhole(tx, test, paper);
 
-      // Trips on the first finalize: after it the config is read-only and clone is the way on.
-      await tx.baseConfig.updateMany({
-        where: { id: test.baseConfigId, locked: false },
-        data: { locked: true },
-      });
-
       if (paper.length > 0) {
         await tx.question.updateMany({
           where: { id: { in: paper.map((row) => row.questionId) } },

@@ -1749,6 +1749,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         durationSec: config?.durationSec ?? 0,
         languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
         languages: config?.languages ?? [],
+        locked: config?.locked ?? false,
       },
       paperQuestions: this.paperQuestions
         .filter((paper) => paper.testId === row.id)

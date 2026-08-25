@@ -29,6 +29,7 @@ const SITTABLE_INCLUDE = {
       languages: true,
       totalQuestions: true,
       shuffleQuestions: true,
+      locked: true,
     },
   },
   paperQuestions: {
@@ -124,7 +125,18 @@ export class AttemptsService {
         })),
       });
 
+      await this.lockTheBlueprint(tx, test);
+
       return attempt;
+    });
+  }
+
+  /** A blueprint stops moving once somebody is sitting a paper drawn from it, and not before. */
+  private async lockTheBlueprint(tx: Prisma.TransactionClient, test: SittableTest): Promise<void> {
+    if (test.baseConfig.locked) return;
+    await tx.baseConfig.updateMany({
+      where: { id: test.baseConfigId, locked: false },
+      data: { locked: true },
     });
   }
 

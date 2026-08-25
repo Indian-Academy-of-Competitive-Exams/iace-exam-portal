@@ -64,12 +64,13 @@ describe('FinalizeService — freezing a fixed paper', () => {
     assert.equal(test.version, 1);
   });
 
-  it('locks the config, because a paper somebody sits cannot change shape underneath them', async () => {
+  /** The failure this prevents: a blueprint stranded locked by a test nobody ever sat. */
+  it('leaves the config alone, because nobody is sitting anything yet', async () => {
     const { service, prisma } = serviceWith();
 
     await service.finalize('tst_1');
 
-    assert.equal(prisma.configs[0]!.locked, true);
+    assert.equal(prisma.configs[0]!.locked, false);
   });
 
   it('counts each frozen question once against the bank', async () => {
@@ -201,7 +202,7 @@ describe('FinalizeService — a test drawn per attempt', () => {
     // No rows to freeze and none to count, but the spec that decides every attempt's paper stops moving.
     assert.equal(result.frozenQuestions, 0);
     assert.equal(prisma.tests[0]!.isLocked, true);
-    assert.equal(prisma.configs[0]!.locked, true);
+    assert.equal(prisma.configs[0]!.locked, false);
     assert.deepEqual(
       prisma.questions.map((question) => question.fixedUseCount),
       [0, 0, 0, 0, 0],

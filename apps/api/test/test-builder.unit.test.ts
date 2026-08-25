@@ -96,7 +96,8 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     const test = prisma.tests[0]!;
     assert.equal(test.isLocked, true);
     assert.equal(prisma.paperQuestions.length, 5);
-    assert.equal(prisma.configs[0]!.locked, true);
+    // Finalizing freezes the PAPER. Its blueprint stops moving when somebody sits one, not here.
+    assert.equal(prisma.configs[0]!.locked, false);
   });
 
   it('will not offer a test until every step before it is done', async () => {

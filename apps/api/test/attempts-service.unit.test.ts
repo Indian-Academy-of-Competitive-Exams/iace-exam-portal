@@ -330,3 +330,42 @@ describe('AttemptsService — resuming what is already running', () => {
     assert.equal(resumed.endsAt, live.endsAt.toISOString());
   });
 });
+
+describe('AttemptsService — the blueprint stops moving', () => {
+  /** The failure this prevents: a config edited to a different shape under a paper being sat. */
+  it('locks the config when the first student starts', async () => {
+    const { service, prisma } = serviceWith();
+    assert.equal(prisma.configs[0]!.locked, false);
+
+    await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(prisma.configs[0]!.locked, true);
+  });
+
+  /** Every student on one test shares one config row, so a write per start would serialise them. */
+  it('writes nothing once the config is already locked', async () => {
+    const locked = makeBaseConfig({ id: 'cfg_1', durationSec: 3600, locked: true });
+    const { service, prisma } = serviceWith(sittable(), [], locked);
+    let writes = 0;
+    const real = prisma.baseConfig.updateMany;
+    prisma.baseConfig.updateMany = ((args: Parameters<typeof real>[0]) => {
+      writes += 1;
+      return real.call(prisma.baseConfig, args);
+    }) as typeof real;
+
+    await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(writes, 0);
+    assert.equal(prisma.configs[0]!.locked, true);
+  });
+
+  /** A resume is not a start, and a sitting already under way has locked it long since. */
+  it('leaves the config alone when the sitting is only being resumed', async () => {
+    const running = makeAttempt({ id: 'att_1', testId: 'tst_1', studentId: STUDENT });
+    const { service, prisma } = serviceWith(sittable(), [running]);
+
+    await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(prisma.configs[0]!.locked, false);
+  });
+});
