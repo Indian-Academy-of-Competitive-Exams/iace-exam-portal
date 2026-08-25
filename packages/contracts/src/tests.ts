@@ -332,9 +332,18 @@ export const setTestSeriesSchema = z.object({
 export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
 export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;
 
+/** Swapping ONE question, so a paper that is right but for a single row is not redrawn whole. */
+export const replacePaperQuestionSchema = z.object({
+  questionId: z.string().min(1, 'Choose a question'),
+});
+export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchema>;
+export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
+
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   assemble: (id: string) => `/admin/tests/${id}/paper`,
+  replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
+  removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,

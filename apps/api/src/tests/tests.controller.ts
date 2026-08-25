@@ -13,6 +13,7 @@ import {
 import {
   ActorTypes,
   assemblePaperSchema,
+  replacePaperQuestionSchema,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   createTestSchema,
@@ -23,6 +24,7 @@ import {
   testListQuerySchema,
   updateTestSchema,
   type AssemblePaperBody,
+  type ReplacePaperQuestionBody,
   type CreateTestBody,
   type FinalizeResult,
   type Paginated,
@@ -104,6 +106,25 @@ export class TestsController {
     @Body(new ZodBody(assemblePaperSchema)) body: AssemblePaperBody,
   ): Promise<TestPaper> {
     return this.paper.assemble(id, body);
+  }
+
+  /** One row of the paper, so a paper right but for a single question is not redrawn whole. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/paper/:rowId')
+  replacePaperQuestion(
+    @Param('id') id: string,
+    @Param('rowId') rowId: string,
+    @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
+  ): Promise<TestPaper> {
+    return this.paper.replaceQuestion(id, rowId, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Delete(':id/paper/:rowId')
+  removePaperQuestion(@Param('id') id: string, @Param('rowId') rowId: string): Promise<TestPaper> {
+    return this.paper.removeQuestion(id, rowId);
   }
 
   /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */

@@ -122,6 +122,7 @@ import {
   testSeriesLinkSchema,
   testStatusSchema,
   type AssemblePaperInput,
+  type ReplacePaperQuestionInput,
   type CreateTestInput,
   type FinalizeResult,
   type SetTestSeriesInput,
@@ -864,6 +865,24 @@ export function createApiClient(options: ApiClientOptions) {
           request(ADMIN_TEST_PAPER_ROUTES.assemble(id), {
             method: 'POST',
             body: input,
+            schema: testPaperSchema,
+          }),
+
+        /** One row of it, so a paper right but for a single question is not redrawn whole. */
+        replacePaperQuestion: (
+          id: string,
+          rowId: string,
+          input: ReplacePaperQuestionInput,
+        ): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.replaceQuestion(id, rowId), {
+            method: 'PATCH',
+            body: input,
+            schema: testPaperSchema,
+          }),
+
+        removePaperQuestion: (id: string, rowId: string): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.removeQuestion(id, rowId), {
+            method: 'DELETE',
             schema: testPaperSchema,
           }),
 

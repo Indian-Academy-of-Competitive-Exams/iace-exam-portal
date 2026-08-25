@@ -234,3 +234,100 @@ describe('PaperService — what it refuses to assemble', () => {
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
 });
+
+describe('PaperService — one row at a time', () => {
+  /** Draws a whole paper, then hands back the row that holds a Quant question. */
+  async function drawn() {
+    const kit = serviceWith();
+    await kit.service.assemble('tst_1', { seed: SEED });
+    const row = kit.prisma.paperQuestions.find((candidate) =>
+      candidate.questionId.startsWith('q'),
+    )!;
+    return { ...kit, row };
+  }
+
+  it('swaps the question and keeps the row where it was', async () => {
+    const { service, prisma, row } = await drawn();
+    const spare = prisma.questions.find(
+      (question) =>
+        question.subjectId === 'sub_q' &&
+        !prisma.paperQuestions.some((held) => held.questionId === question.id),
+    )!;
+    const length = prisma.paperQuestions.length;
+
+    await service.replaceQuestion('tst_1', row.id, { questionId: spare.id });
+
+    const after = prisma.paperQuestions.find((candidate) => candidate.id === row.id)!;
+    assert.equal(after.questionId, spare.id);
+    assert.equal(after.questionVersionId, spare.currentVersionId);
+    assert.equal(after.order, row.order);
+    assert.equal(prisma.paperQuestions.length, length);
+  });
+
+  /** The failure this prevents: a Quant slot serving a Reasoning question. */
+  it('refuses a question from another subject than the section draws', async () => {
+    const { service, row } = await drawn();
+
+    const error = await service
+      .replaceQuestion('tst_1', row.id, { questionId: 'r1' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.questionId?.[0]);
+  });
+
+  /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */
+  it('refuses a question the paper already holds, by name', async () => {
+    const { service, prisma, row } = await drawn();
+    const other = prisma.paperQuestions.find(
+      (candidate) => candidate.questionId.startsWith('q') && candidate.id !== row.id,
+    )!;
+
+    const error = await service
+      .replaceQuestion('tst_1', row.id, { questionId: other.questionId })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.message, /already on this paper/);
+  });
+
+  it('refuses a row that belongs to another test', async () => {
+    const { service } = await drawn();
+
+    const error = await service
+      .replaceQuestion('tst_other', 'pq_tst_1_1', { questionId: 'q1' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('drops a row and leaves its section short', async () => {
+    const { service, prisma, row } = await drawn();
+    const length = prisma.paperQuestions.length;
+
+    await service.removeQuestion('tst_1', row.id);
+
+    assert.equal(prisma.paperQuestions.length, length - 1);
+    assert.equal(
+      prisma.paperQuestions.some((candidate) => candidate.id === row.id),
+      false,
+    );
+  });
+
+  it('refuses both once a student has sat the test', async () => {
+    const { service, prisma, row } = await drawn();
+    prisma.attempts.push({ testId: 'tst_1' });
+
+    const replaced = await service
+      .replaceQuestion('tst_1', row.id, { questionId: 'q6' })
+      .catch((e: unknown) => e);
+    const removed = await service.removeQuestion('tst_1', row.id).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(replaced));
+    assert.equal(replaced.code, ErrorCodes.CONFLICT);
+    assert.ok(AppException.is(removed));
+    assert.equal(removed.code, ErrorCodes.CONFLICT);
+  });
+});

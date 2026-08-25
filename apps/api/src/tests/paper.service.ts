@@ -11,6 +11,7 @@ import {
   type BaseConfigDetail,
   type ManualSectionPick,
   type QuestionPoolFilter,
+  type ReplacePaperQuestionBody,
   type TestPaper,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,6 +24,10 @@ import {
   type DrawnQuestion,
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
+
+const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
+const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
+const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 import { thaw } from './thaw';
 
 const CANDIDATE_SELECT = {
@@ -99,6 +104,96 @@ export class PaperService {
     await this.replacePaper(test, result.questions);
 
     return this.paperOf(test.id, config);
+  }
+
+  /** One row swapped for another question, keeping its place in the paper. */
+  async replaceQuestion(
+    testId: string,
+    rowId: string,
+    input: ReplacePaperQuestionBody,
+  ): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+
+    const row = await this.requireRow(testId, rowId);
+    const question = await this.requireDrawable(input.questionId, row.baseConfigSectionId);
+    await this.assertNotAlreadyOnThePaper(testId, rowId, question.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await thaw(tx, test);
+      await tx.paperQuestion.update({
+        where: { id: rowId },
+        data: { questionId: question.id, questionVersionId: question.currentVersionId! },
+      });
+    });
+
+    return this.paperOf(testId, await this.configs.detail(test.baseConfigId));
+  }
+
+  /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
+  async removeQuestion(testId: string, rowId: string): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+    await this.requireRow(testId, rowId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await thaw(tx, test);
+      await tx.paperQuestion.delete({ where: { id: rowId } });
+    });
+
+    return this.paperOf(testId, await this.configs.detail(test.baseConfigId));
+  }
+
+  private async requireRow(testId: string, rowId: string) {
+    const row = await this.prisma.paperQuestion.findUnique({
+      where: { id: rowId },
+      select: { id: true, testId: true, baseConfigSectionId: true },
+    });
+    if (row?.testId !== testId) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'That question is not on this paper');
+    }
+    return row;
+  }
+
+  /** The replacement has to be drawable for the same section, or the paper stops matching itself. */
+  private async requireDrawable(questionId: string, baseConfigSectionId: string) {
+    const section = await this.prisma.baseConfigSection.findUnique({
+      where: { id: baseConfigSectionId },
+      select: { subjectId: true },
+    });
+    const question = await this.prisma.question.findUnique({
+      where: { id: questionId },
+      select: { id: true, status: true, subjectId: true, currentVersionId: true },
+    });
+
+    if (question?.status !== QUESTION_STATUS.ACTIVE || !question.currentVersionId) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, NOT_DRAWABLE_MESSAGE, {
+        fieldErrors: { questionId: [NOT_DRAWABLE_MESSAGE] },
+      });
+    }
+    if (section?.subjectId && question.subjectId !== section.subjectId) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, WRONG_SUBJECT_MESSAGE, {
+        fieldErrors: { questionId: [WRONG_SUBJECT_MESSAGE] },
+      });
+    }
+    return question;
+  }
+
+  /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */
+  private async assertNotAlreadyOnThePaper(
+    testId: string,
+    rowId: string,
+    questionId: string,
+  ): Promise<void> {
+    const held = await this.prisma.paperQuestion.findFirst({
+      where: { testId, questionId, id: { not: rowId } },
+      select: { id: true },
+    });
+    if (held) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_ON_THE_PAPER_MESSAGE, {
+        fieldErrors: { questionId: [ALREADY_ON_THE_PAPER_MESSAGE] },
+      });
+    }
   }
 
   /** Replaced wholesale: a re-draw is a new paper, not a merge into rows nobody can see. */

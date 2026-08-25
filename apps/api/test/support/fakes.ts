@@ -1204,6 +1204,9 @@ export class FakeConfigPrisma {
   };
 
   readonly baseConfigSection = {
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.sections.find((row) => row.id === where.id) ?? null),
+
     findMany: ({ where }: { where: { baseConfigId: string } }) =>
       Promise.resolve(
         this.sections
@@ -1562,6 +1565,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     findMany: ({ where = {} }: { where?: DrawPoolWhere; select?: unknown } = {}) =>
       Promise.resolve(this.questions.filter((row) => matchesPoolWhere(row, where))),
 
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.questions.find((row) => row.id === where.id) ?? null),
+
     updateMany: ({
       where,
       data,
@@ -1601,6 +1607,36 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         this.paperQuestions.push({ ...row, id: `pq_${row.testId}_${row.order}`, status: 'ACTIVE' });
       }
       return Promise.resolve({ count: data.length });
+    },
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.paperQuestions.find((row) => row.id === where.id) ?? null),
+
+    findFirst: ({
+      where,
+    }: {
+      where: { testId: string; questionId: string; id?: { not: string } };
+    }) =>
+      Promise.resolve(
+        this.paperQuestions.find(
+          (row) =>
+            row.testId === where.testId &&
+            row.questionId === where.questionId &&
+            row.id !== where.id?.not,
+        ) ?? null,
+      ),
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakePaperRow> }) => {
+      const row = this.paperQuestions.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no paper row ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve({ ...row });
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.paperQuestions.findIndex((row) => row.id === where.id);
+      const [removed] = this.paperQuestions.splice(index, 1);
+      return Promise.resolve(removed);
     },
   };
 
