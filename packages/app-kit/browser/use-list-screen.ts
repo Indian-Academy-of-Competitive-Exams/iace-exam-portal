@@ -9,6 +9,7 @@ import {
 } from '@iace/ui';
 import { useListQuery } from '../src';
 import { useFilters } from './use-filters';
+import { type FilterStore } from './use-local-filters';
 
 /** A set-valued filter reads as a set, every other kind as a string. Keyed off the spec's `kind`. */
 type ListValues<TSpec extends readonly ListFilter[]> = {
@@ -33,6 +34,8 @@ export function useListScreen<
     params: TFilters & { page: number; pageSize: number; match?: MatchMode },
   ) => Promise<Paginated<TItem>>;
   enabled?: boolean;
+  /** Where the values live. Defaults to the URL; a dialog passes `useLocalFilters()` instead. */
+  store?: FilterStore;
 }): Omit<ListState<TItem>, 'values'> & {
   /** Precise per key, so a screen reading a set back gets a set rather than the union. */
   values: ListValues<TSpec>;
@@ -40,7 +43,8 @@ export function useListScreen<
   pagination: PaginationProps;
 } {
   const { queryKey, filters, toQuery, fetchPage, enabled } = options;
-  const urlFilters = useFilters<string>();
+  const url = useFilters<string>();
+  const urlFilters = options.store ?? url;
 
   // The one place the wire format lives on this side: a set is CSV in the URL and on the query.
   const readValue = (filter: ListFilter): string | string[] => {

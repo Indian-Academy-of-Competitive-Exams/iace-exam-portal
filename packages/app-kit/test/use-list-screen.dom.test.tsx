@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { type ListFilter } from '@iace/ui';
 import { useListScreen } from '../browser/use-list-screen';
+import { useLocalFilters } from '../browser/use-local-filters';
 
 /** gcTime 0 and an explicit clear: react-query's default 5-minute timer outlives the run. */
 const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
@@ -155,5 +156,56 @@ describe('useListScreen — matching all or any', () => {
     list().clearFilters();
 
     await waitFor(() => assert.equal(url(), 'level=topics'));
+  });
+});
+
+function LocalProbe({
+  onReady,
+}: Readonly<{ onReady: (list: ReturnType<typeof useListScreen>) => void }>) {
+  const [params] = useSearchParams();
+  const list = useListScreen({
+    queryKey: ['topics'],
+    filters: FILTERS,
+    toQuery: (values) => ({ q: values.q || undefined }),
+    fetchPage: () => Promise.resolve(page),
+    store: useLocalFilters(),
+  });
+
+  onReady(list);
+  return <p data-testid="url">{params.toString()}</p>;
+}
+
+describe('useListScreen — filters that are nobody\u2019s link', () => {
+  function mountLocal() {
+    let list: ReturnType<typeof useListScreen> | undefined;
+    render(
+      <MemoryRouter initialEntries={['/pick']}>
+        <QueryClientProvider client={client}>
+          <LocalProbe onReady={(next) => (list = next)} />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    return () => list!;
+  }
+
+  /** The failure this prevents: one section's topic filter surviving into the next section's. */
+  it('narrows and clears without touching the address bar', () => {
+    const list = mountLocal();
+
+    act(() => list().setFilter('q', 'percentages'));
+    assert.equal(list().values.q, 'percentages');
+    assert.equal(url(), '');
+
+    act(() => list().clearFilters());
+    assert.equal(list().values.q, '');
+    assert.equal(url(), '');
+  });
+
+  it('reads a set back as a set, exactly as the URL one does', () => {
+    const list = mountLocal();
+
+    act(() => list().setFilter('difficulty', ['EASY', 'HARD']));
+
+    assert.deepEqual(list().values.difficulty, ['EASY', 'HARD']);
   });
 });
