@@ -105,15 +105,6 @@ export const testScopeRefSchema = z.object({
 });
 export type TestScopeRef = z.infer<typeof testScopeRefSchema>;
 
-/** Narrows the bank the draw engine reads. The section's own subject narrows it further. */
-export const questionPoolFilterSchema = z.object({
-  subjectIds: z.array(z.string().min(1)).min(1).optional(),
-  topicIds: z.array(z.string().min(1)).min(1).optional(),
-  difficulties: z.array(difficultyLevelSchema).min(1).optional(),
-  tags: z.array(tagSchema).min(1).optional(),
-});
-export type QuestionPoolFilter = z.infer<typeof questionPoolFilterSchema>;
-
 // ============================================================================
 // What a section is drawn FROM. Per section, because marks, timing and counts
 // already are. An absent `mix` is not "no mix" — it is the section drawing
@@ -144,6 +135,8 @@ export function defaultMixFor(questionCount: number): DifficultyMix {
 
 export const sectionDrawSpecSchema = z.object({
   topicIds: z.array(z.string().min(1)).min(1).optional(),
+  /** Finer than a topic, which is what a tag is for. ANY of them is enough to be eligible. */
+  tags: z.array(tagSchema).min(1).optional(),
   mix: difficultyMixSchema.optional(),
 });
 export type SectionDrawSpec = z.infer<typeof sectionDrawSpecSchema>;
@@ -237,7 +230,8 @@ export const testSchema = z.object({
   /** Null means unlimited. A ranked graded attempt is always one. */
   maxRetakes: z.number().int().nullable(),
   drawStrategy: drawStrategySchema,
-  questionPoolFilter: questionPoolFilterSchema.nullable(),
+  /** What each section is drawn from. Named for the column it has always lived in. */
+  questionPoolFilter: drawSpecSchema.nullable(),
   status: testStatusSchema,
   /** True once the paper is frozen. */
   isLocked: z.boolean(),
@@ -323,7 +317,7 @@ const testOwnFieldsSchema = z.object({
   paperBinding: paperBindingSchema.optional(),
   maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
   drawStrategy: drawStrategySchema.optional(),
-  questionPoolFilter: questionPoolFilterSchema.nullish(),
+  questionPoolFilter: drawSpecSchema.nullish(),
 });
 
 /** `examStageId` is absent on purpose: it is the config's, and the composite FK enforces it. */

@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, PAPER_BINDING } from '@iace/contracts';
+import { AppException, DIFFICULTY_LEVEL, ErrorCodes, PAPER_BINDING } from '@iace/contracts';
 import { PaperService } from '../src/tests/paper.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
@@ -198,7 +198,32 @@ describe('PaperService — what it refuses to assemble', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
-    assert.match(error.fieldErrors?.sec_2?.[0] ?? '', /Quant needs 2, and only 1 are available/);
+    assert.match(error.fieldErrors?.sec_2?.[0] ?? '', /Quant needs 2, and the bank holds 1/);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  /** The failure this prevents: "Quant is short" when what is short is its seven hard questions. */
+  it('names the difficulty when a split cannot be filled', async () => {
+    const thin = [
+      ...bank(6, 'sub_r', 'r'),
+      ...bank(6, 'sub_q', 'q').map((question, index) => ({
+        ...question,
+        difficulty: index === 0 ? DIFFICULTY_LEVEL.HIGH : DIFFICULTY_LEVEL.LOW,
+      })),
+    ];
+    const { service, prisma } = serviceWith(
+      thin,
+      makeTest({
+        id: 'tst_1',
+        questionPoolFilter: { sections: { sec_2: { mix: { LOW: 0, MEDIUM: 0, HIGH: 2 } } } },
+      }),
+    );
+
+    const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.match(error.fieldErrors?.sec_2?.[0] ?? '', /needs 2 high, and the bank holds 1/);
     assert.equal(prisma.paperQuestions.length, 0);
   });
 

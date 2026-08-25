@@ -227,24 +227,7 @@ describe('drawPaper — what narrows a section’s pool', () => {
     assert.ok(bySection('sec_2').every((id) => id.startsWith('reas')));
   });
 
-  it('honours a difficulty filter across the whole test', () => {
-    const bank = [
-      ...pool(5, { difficulty: DIFFICULTY_LEVEL.LOW }, 'low'),
-      ...pool(5, { difficulty: DIFFICULTY_LEVEL.HIGH }, 'high'),
-    ];
-
-    const questions = questionsOf(
-      draw({
-        sections: [section({ questionCount: 5 })],
-        pool: bank,
-        filter: { difficulties: [DIFFICULTY_LEVEL.HIGH] },
-      }),
-    );
-
-    assert.ok(questions.every((row) => row.questionId.startsWith('high')));
-  });
-
-  it('takes a question carrying ANY of the filter’s tags', () => {
+  it('takes a question carrying ANY of the section’s tags', () => {
     const bank = [
       ...pool(3, { tags: ['ssc cgl'] }, 'cgl'),
       ...pool(3, { tags: ['previous paper'] }, 'pyq'),
@@ -255,7 +238,7 @@ describe('drawPaper — what narrows a section’s pool', () => {
       draw({
         sections: [section({ questionCount: 6 })],
         pool: bank,
-        filter: { tags: ['ssc cgl', 'previous paper'] },
+        spec: { sections: { sec_1: { tags: ['ssc cgl', 'previous paper'] } } },
       }),
     );
 
@@ -264,7 +247,7 @@ describe('drawPaper — what narrows a section’s pool', () => {
     assert.ok(questions.every((row) => !row.questionId.startsWith('bank')));
   });
 
-  it('drops a question with no topic when the filter names topics', () => {
+  it('drops a question with no topic when the section names topics', () => {
     const bank = [
       ...pool(4, { topicId: 'topic_percentages' }, 'pct'),
       ...pool(4, { topicId: null }, 'untagged'),
@@ -274,31 +257,53 @@ describe('drawPaper — what narrows a section’s pool', () => {
       draw({
         sections: [section({ questionCount: 4 })],
         pool: bank,
-        filter: { topicIds: ['topic_percentages'] },
+        spec: { sections: { sec_1: { topicIds: ['topic_percentages'] } } },
       }),
     );
 
     assert.ok(questions.every((row) => row.questionId.startsWith('pct')));
   });
 
-  it('reads a filter that chose nothing as all of them, not none', () => {
+  /** One section's topics must not narrow another's — that is the point of it being per section. */
+  it('narrows only the section it was written for', () => {
+    const bank = [
+      ...pool(3, { subjectId: 'sub_a', topicId: 'topic_pct' }, 'pct'),
+      ...pool(3, { subjectId: 'sub_b', topicId: 'topic_syllo' }, 'syllo'),
+    ];
+
+    const questions = questionsOf(
+      draw({
+        sections: [
+          section({ id: 'sec_1', subjectId: 'sub_a', questionCount: 2, order: 1 }),
+          section({ id: 'sec_2', subjectId: 'sub_b', questionCount: 2, order: 2 }),
+        ],
+        pool: bank,
+        spec: { sections: { sec_1: { topicIds: ['topic_pct'] } } },
+      }),
+    );
+
+    assert.equal(questions.length, 4);
+    assert.equal(questions.filter((row) => row.questionId.startsWith('syllo')).length, 2);
+  });
+
+  it('reads a section that chose nothing as all of them, not none', () => {
     // The Prisma `in: []` trap, one layer up: an empty set must not blank the pool.
     const questions = questionsOf(
       draw({
         sections: [section({ questionCount: 3 })],
         pool: pool(10),
-        filter: { subjectIds: [], difficulties: [], tags: [], topicIds: [] },
+        spec: { sections: { sec_1: { tags: [], topicIds: [] } } },
       }),
     );
 
     assert.equal(questions.length, 3);
   });
 
-  it('lets a section subject and a test filter that disagree empty the pool', () => {
+  it('lets a section subject and its own topics that disagree empty the pool', () => {
     const result = draw({
       sections: [section({ subjectId: 'subject_quant', questionCount: 3 })],
-      pool: pool(10, { subjectId: 'subject_quant' }),
-      filter: { subjectIds: ['subject_reasoning'] },
+      pool: pool(10, { subjectId: 'subject_quant', topicId: 'topic_pct' }),
+      spec: { sections: { sec_1: { topicIds: ['topic_ratios'] } } },
     });
 
     assert.ok(!result.ok);
@@ -524,5 +529,86 @@ describe('manualPickIssues', () => {
 
   it('refuses a section this configuration does not have', () => {
     assert.match(manualPickIssues(sections, new Map([['sec_gone', pool(1)]]))[0]!, /does not have/);
+  });
+});
+
+describe('drawPaper — a section drawn to a difficulty split', () => {
+  const mixedBank = [
+    ...pool(20, { difficulty: DIFFICULTY_LEVEL.LOW }, 'low'),
+    ...pool(20, { difficulty: DIFFICULTY_LEVEL.MEDIUM }, 'med'),
+    ...pool(20, { difficulty: DIFFICULTY_LEVEL.HIGH }, 'high'),
+  ];
+
+  const countsOf = (rows: readonly { questionId: string }[]) => ({
+    low: rows.filter((row) => row.questionId.startsWith('low')).length,
+    med: rows.filter((row) => row.questionId.startsWith('med')).length,
+    high: rows.filter((row) => row.questionId.startsWith('high')).length,
+  });
+
+  it('draws exactly the split it was given', () => {
+    const questions = questionsOf(
+      draw({
+        sections: [section({ questionCount: 25 })],
+        pool: mixedBank,
+        spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
+      }),
+    );
+
+    assert.deepEqual(countsOf(questions), { low: 7, med: 11, high: 7 });
+  });
+
+  it('draws none of a difficulty the split asked nothing of', () => {
+    const questions = questionsOf(
+      draw({
+        sections: [section({ questionCount: 10 })],
+        pool: mixedBank,
+        spec: { sections: { sec_1: { mix: { LOW: 5, MEDIUM: 0, HIGH: 5 } } } },
+      }),
+    );
+
+    assert.deepEqual(countsOf(questions), { low: 5, med: 0, high: 5 });
+  });
+
+  /** The failure this prevents: three hard pins leaving a section with ten hard questions on it. */
+  it('counts a hand-picked question against its OWN bucket', () => {
+    const pins = new Map([
+      ['sec_1', mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 3)],
+    ]);
+
+    const questions = questionsOf(
+      draw({
+        sections: [section({ questionCount: 25 })],
+        pool: mixedBank,
+        spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
+        pinned: pins,
+      }),
+    );
+
+    assert.deepEqual(countsOf(questions), { low: 7, med: 11, high: 7 });
+  });
+
+  it('is short by the bucket, not by the section, when one difficulty runs out', () => {
+    const thin = [
+      ...pool(20, { difficulty: DIFFICULTY_LEVEL.LOW }, 'low'),
+      ...pool(20, { difficulty: DIFFICULTY_LEVEL.MEDIUM }, 'med'),
+      ...pool(3, { difficulty: DIFFICULTY_LEVEL.HIGH }, 'high'),
+    ];
+
+    const result = draw({
+      sections: [section({ questionCount: 25 })],
+      pool: thin,
+      spec: { sections: { sec_1: { mix: { LOW: 7, MEDIUM: 11, HIGH: 7 } } } },
+    });
+
+    assert.ok(!result.ok);
+    assert.equal(result.shortfalls[0]?.available, 21);
+  });
+
+  it('draws as it always did when the section has no split', () => {
+    const questions = questionsOf(
+      draw({ sections: [section({ questionCount: 12 })], pool: mixedBank }),
+    );
+
+    assert.equal(questions.length, 12);
   });
 });

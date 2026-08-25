@@ -10,7 +10,11 @@ import {
   type AssemblePaperBody,
   type BaseConfigDetail,
   type ManualSectionPick,
-  type QuestionPoolFilter,
+  paperFeasibility,
+  type DrawShortfall,
+  type DrawSpec,
+  type FeasibilitySection,
+  type SectionAvailability,
   type ReplacePaperQuestionBody,
   type TestPaper,
 } from '@iace/contracts';
@@ -75,16 +79,20 @@ export class PaperService {
 
     const config = await this.configs.detail(test.baseConfigId);
     const sections = config.sections.map(toDrawSection);
-    const filter = (test.questionPoolFilter as QuestionPoolFilter | null) ?? null;
+    const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
 
     const pinned = await this.resolvePicks(input.manual ?? []);
     this.assertPicksFit(sections, pinned);
 
+    const pool = await this.poolFor(sections, spec);
+    // Judged before the draw, so a refusal names the difficulty rather than only the section.
+    this.assertBankCanFill(config.sections, spec, pool);
+
     const result = drawPaper({
       sections,
-      pool: await this.poolFor(sections, filter),
+      pool,
       strategy: test.drawStrategy,
-      filter,
+      spec,
       seed: input.seed ?? freshSeed(),
       pinned,
     });
@@ -218,18 +226,38 @@ export class PaperService {
   /** Only ACTIVE questions carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
     sections: readonly DrawSection[],
-    filter: QuestionPoolFilter | null,
+    spec: DrawSpec | null,
   ): Promise<DrawCandidate[]> {
     const rows = await this.prisma.question.findMany({
       where: {
         status: QUESTION_STATUS.ACTIVE,
         currentVersionId: { not: null },
         ...subjectWhere(sections),
-        ...poolWhere(filter),
+        ...topicWhere(spec),
       },
       select: CANDIDATE_SELECT,
     });
     return rows.filter(hasVersion).map(toCandidate);
+  }
+
+  /** The same rule the form shows live, so a draw never refuses something the screen called ready. */
+  private assertBankCanFill(
+    sections: BaseConfigDetail['sections'],
+    spec: DrawSpec | null,
+    pool: readonly DrawCandidate[],
+  ): void {
+    const gaps = paperFeasibility(
+      sections.map(toFeasibilitySection),
+      spec,
+      availabilityOf(sections, spec, pool),
+    );
+    if (gaps.length === 0) return;
+
+    throw new AppException(
+      ErrorCodes.DRAW_SHORTFALL,
+      'The bank does not hold enough questions to fill every section of this paper.',
+      { fieldErrors: shortfallErrors(gaps) },
+    );
   }
 
   /** A hand-pick overrides the pool filter: the admin chose this question, not a description of one. */
@@ -357,14 +385,53 @@ function subjectWhere(sections: readonly DrawSection[]): Prisma.QuestionWhereInp
 }
 
 /** The narrowing SQL can do. The section's own subject is the engine's, per section. */
-function poolWhere(filter: QuestionPoolFilter | null): Prisma.QuestionWhereInput {
-  if (!filter) return {};
-  return {
-    ...(filter.subjectIds?.length ? { subjectId: { in: filter.subjectIds } } : {}),
-    ...(filter.topicIds?.length ? { topicId: { in: filter.topicIds } } : {}),
-    ...(filter.difficulties?.length ? { difficulty: { in: filter.difficulties } } : {}),
-    ...(filter.tags?.length ? { tags: { hasSome: filter.tags } } : {}),
-  };
+/** Every topic any section names. A section that names none is narrowed by its subject alone. */
+function topicWhere(spec: DrawSpec | null): Prisma.QuestionWhereInput {
+  const sections = Object.values(spec?.sections ?? {});
+  if (sections.length === 0 || sections.some((section) => !section.topicIds?.length)) return {};
+
+  const topicIds = [...new Set(sections.flatMap((section) => section.topicIds ?? []))];
+  return { topicId: { in: topicIds } };
+}
+
+function toFeasibilitySection(section: BaseConfigDetail['sections'][number]): FeasibilitySection {
+  return { id: section.id, name: section.name, questionCount: section.questionCount };
+}
+
+/** What the pool actually holds per section, once that section's own subject and topics apply. */
+function availabilityOf(
+  sections: BaseConfigDetail['sections'],
+  spec: DrawSpec | null,
+  pool: readonly DrawCandidate[],
+): Record<string, SectionAvailability> {
+  return Object.fromEntries(
+    sections.map((section) => {
+      const topicIds = spec?.sections?.[section.id]?.topicIds;
+      const held = pool.filter(
+        (candidate) =>
+          (section.subjectId === null || candidate.subjectId === section.subjectId) &&
+          (!topicIds?.length ||
+            (candidate.topicId !== null && topicIds.includes(candidate.topicId))),
+      );
+
+      const byDifficulty: SectionAvailability['byDifficulty'] = {};
+      for (const candidate of held) {
+        byDifficulty[candidate.difficulty] = (byDifficulty[candidate.difficulty] ?? 0) + 1;
+      }
+      return [section.id, { total: held.length, byDifficulty }];
+    }),
+  );
+}
+
+/** One message per short bucket, keyed by section so the form puts it beside the right one. */
+function shortfallErrors(gaps: readonly DrawShortfall[]): Record<string, string[]> {
+  const errors: Record<string, string[]> = {};
+  for (const gap of gaps) {
+    const what = gap.difficulty ? `${gap.needed} ${gap.difficulty.toLowerCase()}` : `${gap.needed}`;
+    const held = (errors[gap.baseConfigSectionId] ??= []);
+    held.push(`${gap.sectionName} needs ${what}, and the bank holds ${gap.available}.`);
+  }
+  return errors;
 }
 
 function hasVersion(row: CandidateRow): row is CandidateRow & { currentVersionId: string } {

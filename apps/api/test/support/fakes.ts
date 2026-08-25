@@ -42,7 +42,7 @@ import {
   type EvaluationMode,
   type PaperBinding,
   type PaperQuestionStatus,
-  type QuestionPoolFilter,
+  type DrawSpec,
   type TestScope,
   type TestScopeRef,
   type TestStatus,
@@ -1291,7 +1291,7 @@ export interface FakeTestModelRow {
   paperBinding: PaperBinding;
   maxRetakes: number | null;
   drawStrategy: DrawStrategy;
-  questionPoolFilter: QuestionPoolFilter | null;
+  questionPoolFilter: DrawSpec | null;
   status: TestStatus;
   isLocked: boolean;
   version: number;

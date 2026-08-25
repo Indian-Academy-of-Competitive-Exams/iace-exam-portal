@@ -1,8 +1,10 @@
 import {
+  DIFFICULTY_LEVELS,
   DRAW_STRATEGY,
   type DifficultyLevel,
+  type DrawSpec,
   type DrawStrategy,
-  type QuestionPoolFilter,
+  type SectionDrawSpec,
 } from '@iace/contracts';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
@@ -56,7 +58,8 @@ export interface DrawRequest {
   sections: readonly DrawSection[];
   pool: readonly DrawCandidate[];
   strategy: DrawStrategy;
-  filter?: QuestionPoolFilter | null;
+  /** What each section draws from: its topics, and how many of each difficulty. */
+  spec?: DrawSpec | null;
   /** Same seed, same pool, same paper — which is what makes a re-draw a decision, not a dice roll. */
   seed: number;
   /** What this student has already been served. Empty at finalize, real per attempt in Phase 3. */
@@ -77,11 +80,11 @@ export function drawPaper(request: DrawRequest): DrawResult {
 
   for (const section of [...request.sections].sort(byOrder)) {
     const chosen = request.pinned?.get(section.id) ?? [];
-    const room = Math.max(0, section.questionCount - chosen.length);
+    const sectionSpec = request.spec?.sections?.[section.id];
     const eligible = ordered.filter(
-      (candidate) => !used.has(candidate.id) && matches(candidate, section, request.filter),
+      (candidate) => !used.has(candidate.id) && matches(candidate, section, sectionSpec),
     );
-    const taken = [...chosen, ...eligible.slice(0, room)];
+    const taken = [...chosen, ...fill(section, sectionSpec, chosen, eligible)];
 
     for (const candidate of taken) {
       used.add(candidate.id);
@@ -154,28 +157,40 @@ export function manualPickIssues(
 
 const byOrder = (a: DrawSection, b: DrawSection) => a.order - b.order;
 
-/** A section's own subject narrows it further than the test-wide filter ever could. */
+/** Each difficulty to its own count, and a pin is counted against the bucket it belongs to. */
+function fill(
+  section: DrawSection,
+  spec: SectionDrawSpec | undefined,
+  chosen: readonly DrawCandidate[],
+  eligible: readonly DrawCandidate[],
+): DrawCandidate[] {
+  if (!spec?.mix) {
+    return eligible.slice(0, Math.max(0, section.questionCount - chosen.length));
+  }
+
+  const mix = spec.mix;
+  return DIFFICULTY_LEVELS.flatMap((level) => {
+    const pinned = chosen.filter((candidate) => candidate.difficulty === level).length;
+    const room = Math.max(0, mix[level] - pinned);
+    return eligible.filter((candidate) => candidate.difficulty === level).slice(0, room);
+  });
+}
+
+/** A section's own subject narrows it further than its chosen topics ever could. */
 function matches(
   candidate: DrawCandidate,
   section: DrawSection,
-  filter: QuestionPoolFilter | null | undefined,
+  spec: SectionDrawSpec | undefined,
 ): boolean {
   if (section.subjectId !== null && candidate.subjectId !== section.subjectId) return false;
-  if (!filter) return true;
-  if (narrows(filter.subjectIds) && !filter.subjectIds.includes(candidate.subjectId)) return false;
   if (
-    narrows(filter.topicIds) &&
-    (candidate.topicId === null || !filter.topicIds.includes(candidate.topicId))
+    narrows(spec?.topicIds) &&
+    (candidate.topicId === null || !spec.topicIds.includes(candidate.topicId))
   ) {
     return false;
   }
-  if (narrows(filter.difficulties) && !filter.difficulties.includes(candidate.difficulty)) {
-    return false;
-  }
-  // Any one of the tags is enough: they name facets of a pool, not a set every question must carry.
-  if (narrows(filter.tags) && !filter.tags.some((tag) => candidate.tags.includes(tag)))
-    return false;
-  return true;
+  // Any one tag is enough: they name facets of a pool, not a set every question must carry.
+  return !narrows(spec?.tags) || spec.tags.some((tag) => candidate.tags.includes(tag));
 }
 
 /** Choosing nothing means ALL of them — an empty set narrows to none, which is never the ask. */

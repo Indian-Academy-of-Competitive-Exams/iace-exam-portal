@@ -9,7 +9,7 @@ import {
   type BaseConfigDetail,
   type CreateTestBody,
   type Paginated,
-  type QuestionPoolFilter,
+  type DrawSpec,
   type Test,
   type TestDetail,
   type TestListQuery,
@@ -245,7 +245,7 @@ function unknownReference(config: BaseConfigDetail, scopeRef: TestScopeRef | nul
 
 /** `DbNull` is the column's own NULL; a bare `null` on a Json field means "leave it alone". */
 function toJson(
-  value: TestScopeRef | QuestionPoolFilter | null,
+  value: TestScopeRef | DrawSpec | null,
 ): Prisma.InputJsonValue | typeof Prisma.DbNull {
   return value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue);
 }
@@ -271,7 +271,7 @@ function toTest(row: TestRow): Test {
     maxRetakes: row.maxRetakes,
     drawStrategy: row.drawStrategy,
     variantCount: row.variantCount,
-    questionPoolFilter: (row.questionPoolFilter as QuestionPoolFilter | null) ?? null,
+    questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,
     isLocked: row.isLocked,
     version: row.version,

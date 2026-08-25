@@ -119,11 +119,11 @@ across them would not mean anything.
 **Files:** modify `apps/api/src/tests/draw-engine.ts`, `apps/api/src/tests/paper.service.ts`;
 extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.unit.test.ts`.
 
-- [ ] A section with a mix draws each bucket to its own count; without one it draws as it does
+- [x] A section with a mix draws each bucket to its own count; without one it draws as it does
       today. Topics narrow the eligible pool per section rather than test-wide.
-- [ ] Hand-picked questions count against their OWN bucket first — pinning three hard ones into a
+- [x] Hand-picked questions count against their OWN bucket first — pinning three hard ones into a
       seven-hard bucket leaves four to draw, not seven.
-- [ ] Feasibility runs before the draw, so a refusal names buckets rather than sections.
+- [x] Feasibility runs before the draw, so a refusal names buckets rather than sections.
       **Acceptance:** a 30/40/30 section draws exactly that split; pins are counted in their
       bucket; a section without a mix is unchanged from today; a thin bucket refuses and writes
       nothing.
