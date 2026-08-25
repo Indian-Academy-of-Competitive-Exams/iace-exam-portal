@@ -56,7 +56,8 @@ import { durationLabel } from '../lib/duration';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { TopicMultiPicker } from '../components/taxonomy-picker';
-import { OfferingStep, PaperStep } from './test-builder-steps';
+import { PaperStep } from './test-builder-paper';
+import { OfferingStep } from './test-builder-offering';
 
 /** Step 1 of the builder: which blueprint a test is built on, plus the few fields it owns. */
 
