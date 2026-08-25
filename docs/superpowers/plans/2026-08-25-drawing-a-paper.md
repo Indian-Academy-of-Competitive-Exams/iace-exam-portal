@@ -169,12 +169,12 @@ extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.un
 `apps/admin/src/components/question-picker.tsx`; create
 `apps/admin/src/components/draw-spec.tsx`.
 
-- [ ] Inside each section's accordion, above the bank: the topics it draws from, a switch for
+- [x] Inside each section's accordion, above the bank: the topics it draws from, a switch for
       grouping by difficulty, and the `RatioBar` when it is on.
-- [ ] The bar splits the section's own question count, so its three parts ARE the counts and the
+- [x] The bar splits the section's own question count, so its three parts ARE the counts and the
       total cannot drift. What the bank holds sits beside each, so a short bucket is visible while
       it is being set rather than after a draw refuses.
-- [ ] The refusal alert's two actions work on the section they name.
+- [x] The refusal alert's two actions work on the section they name.
       **Acceptance:** an admin sets a section to draw from three topics at 30/40/30, sees the
       counts and the availability, and knows the paper will fill before pressing Draw.
 

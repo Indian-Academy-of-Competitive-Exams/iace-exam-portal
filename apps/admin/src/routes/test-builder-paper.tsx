@@ -7,7 +7,9 @@ import {
   PAPER_BINDING,
   type BaseConfigSection,
   type PaperRow,
+  type DrawSpec,
   type PaperSection,
+  type SectionDrawSpec,
   type TestDetail,
   type TestPaper,
 } from '@iace/contracts';
@@ -27,6 +29,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { QuestionChooser } from '../components/question-picker';
+import { DrawSpecEditor } from '../components/draw-spec';
 import { QuestionLink } from '../components/question-viewer';
 
 /** What the paper holds: the questions on it, the ones pinned by hand, and the draw. */
@@ -76,6 +79,13 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
     queryClient.setQueryData(PAPER_KEY(detail.id), next);
     await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
   };
+
+  const spec = detail.questionPoolFilter ?? { sections: {} };
+  const setSpec = useMutation({
+    meta: { success: 'Draw settings saved.' },
+    mutationFn: (next: DrawSpec) => api.admin.tests.update(detail.id, { questionPoolFilter: next }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] }),
+  });
 
   const draw = useMutation({
     meta: { success: 'Paper drawn.' },
@@ -146,6 +156,10 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
                 held={held.get(section.id)}
                 pinned={manual[section.id] ?? []}
                 sat={sat}
+                spec={spec.sections[section.id] ?? {}}
+                onSpec={(next) =>
+                  setSpec.mutate({ sections: { ...spec.sections, [section.id]: next } })
+                }
                 onPin={(next) => setManual((chosen) => ({ ...chosen, [section.id]: next }))}
                 onChanged={refresh}
               />
@@ -214,6 +228,8 @@ function SectionPaper({
   held,
   pinned,
   sat,
+  spec,
+  onSpec,
   onPin,
   onChanged,
 }: Readonly<{
@@ -222,6 +238,8 @@ function SectionPaper({
   held: PaperSection | undefined;
   pinned: readonly string[];
   sat: boolean;
+  spec: SectionDrawSpec;
+  onSpec: (next: SectionDrawSpec) => void;
   onPin: (next: string[]) => void;
   onChanged: (next: TestPaper) => Promise<void>;
 }>) {
@@ -264,6 +282,11 @@ function SectionPaper({
               Nothing drawn for this section yet. Choose what you want kept below, then draw.
             </p>
           )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">Drawn from</h3>
+          <DrawSpecEditor section={section} spec={spec} onChange={onSpec} disabled={sat} />
         </section>
 
         <section className="flex flex-col gap-3">
