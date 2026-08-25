@@ -1,8 +1,8 @@
 /**
- * DEV-ONLY: a throwaway question pool, so the test builder and draw engine have something to
- * draw in the shape the app really writes. Every row is tagged `dummy` and its id prefixed
- * `qd_`, so `--reset` purges the pool and nothing else. Refuses a DATABASE_URL that does not
- * look local. Run: node scripts/dev-seed-questions.mjs [--reset]
+ * DEV-ONLY: a throwaway question pool for the builder and the draw engine. Every row is tagged
+ * `dummy` and prefixed `qd_`, so `--reset` purges the pool and nothing else. Every subject gets
+ * one, configured or not; re-running tops up. Refuses a DATABASE_URL that is not local.
+ * Run: node scripts/dev-seed-questions.mjs [--reset]
  */
 import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
@@ -86,10 +86,8 @@ async function main() {
   try {
     const existing = await prisma.question.count({ where: { tags: { has: 'dummy' } } });
     if (existing > 0 && !reset) {
-      console.log(
-        `A dummy pool already exists (${existing} questions). Pass --reset to rebuild. Nothing changed.`,
-      );
-      return;
+      // Tops up rather than refusing: skipDuplicates means a re-run only fills the gaps.
+      console.log(`A dummy pool exists (${existing} questions). Filling any gaps in it.`);
     }
     if (reset && existing > 0) {
       // Break the circular restrict (Question.currentVersionId <-> QuestionVersion) before deleting.
@@ -103,22 +101,26 @@ async function main() {
       console.log(`Purged ${existing} old dummy questions.`);
     }
 
-    // Demand = questions each subject's config sections ask for; generate ~2x, split by difficulty.
-    const demand = await prisma.baseConfigSection.groupBy({
-      by: ['subjectId'],
-      _sum: { questionCount: true },
-      _max: { questionCount: true },
-      where: { subjectId: { not: null } },
-    });
-    const subjects = await prisma.subject.findMany();
-    const byId = new Map(subjects.map((s) => [s.id, s]));
+    // Keyed, not iterated: EVERY subject gets a pool, including one no config asks for yet.
+    const demand = new Map(
+      (
+        await prisma.baseConfigSection.groupBy({
+          by: ['subjectId'],
+          _sum: { questionCount: true },
+          _max: { questionCount: true },
+          where: { subjectId: { not: null } },
+        })
+      ).map((row) => [row.subjectId, row]),
+    );
+    const subjects = await prisma.subject.findMany({ orderBy: { name: 'asc' } });
 
     let total = 0;
-    for (const d of demand) {
-      const subject = byId.get(d.subjectId);
-      if (!subject) continue;
-      const need = Math.max((d._sum.questionCount ?? 0) * 2, (d._max.questionCount ?? 0) * 3, 300);
-      const per = Math.max(Math.ceil(need / DIFFICULTIES.length), d._max.questionCount ?? 0, 100);
+    for (const subject of subjects) {
+      const asked = demand.get(subject.id);
+      const sum = asked?._sum.questionCount ?? 0;
+      const most = asked?._max.questionCount ?? 0;
+      const need = Math.max(sum * 2, most * 3, 300);
+      const per = Math.max(Math.ceil(need / DIFFICULTIES.length), most, 100);
       for (const difficulty of DIFFICULTIES) {
         const rows = Array.from({ length: per }, (_, k) => build(subject, difficulty, k + 1));
         for (let start = 0; start < rows.length; start += CHUNK) {
@@ -136,7 +138,8 @@ async function main() {
           total += chunk.length;
         }
       }
-      console.log(`  ${subject.name}: ${per * DIFFICULTIES.length} questions (${per}/difficulty)`);
+      const where = asked ? '' : ' — no config asks for it yet';
+      console.log(`  ${subject.name}: ${per * DIFFICULTIES.length} (${per}/difficulty)${where}`);
     }
     // Second pass: point each question at its version, now that every version exists.
     const linked = await prisma.$executeRawUnsafe(
@@ -144,7 +147,7 @@ async function main() {
     );
 
     console.log(
-      `\nDone. ${total} dummy questions across ${demand.length} subjects (${linked} linked to versions).`,
+      `\nDone. ${total} dummy questions across ${subjects.length} subjects (${linked} linked to versions).`,
     );
     console.log(
       `Purge later with: node scripts/dev-seed-questions.mjs --reset  (or delete tag 'dummy').`,
