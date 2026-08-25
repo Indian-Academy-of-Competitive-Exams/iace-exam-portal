@@ -20,7 +20,7 @@ import {
   type TestScope,
   type TestScopeRef,
 } from '@iace/contracts';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage, isNotNumeric, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -106,6 +106,8 @@ function scopeRefOf(values: TestFormValues): TestScopeRef | null {
   }
   return null;
 }
+
+const RETAKES_NOT_A_NUMBER = 'Give a whole number of retakes, or leave it blank for unlimited';
 
 /** The keys the server answers with. `scopeRef` has no control of its own — see `SCOPE_FIELDS`. */
 const SERVER_FIELDS = ['baseConfigId', 'title', 'paperBinding', 'maxRetakes', 'scopeRef'] as const;
@@ -194,7 +196,7 @@ function TestEditor({ detail }: Readonly<{ detail: TestDetail | null }>) {
         scopeRef: scopeRefOf(values),
         evaluationMode: values.evaluationMode,
         paperBinding: values.paperBinding,
-        maxRetakes: values.maxRetakes.trim() === '' ? null : Number(values.maxRetakes),
+        maxRetakes: optionalNumber(values.maxRetakes),
         drawStrategy: values.drawStrategy,
       };
       return detail
@@ -228,11 +230,20 @@ function TestEditor({ detail }: Readonly<{ detail: TestDetail | null }>) {
     }
   };
 
+  /** Blank is unlimited, so text that is not a number would save AS unlimited without this. */
+  const submit = (values: TestFormValues) => {
+    if (isNotNumeric(values.maxRetakes)) {
+      form.setError('maxRetakes', { type: 'validate', message: RETAKES_NOT_A_NUMBER });
+      return;
+    }
+    save.mutate(values);
+  };
+
   const banner = bannerMessage(save.error, [...SERVER_FIELDS]);
 
   return (
     <FormPanel
-      onSubmit={form.handleSubmit((values) => save.mutate(values))}
+      onSubmit={form.handleSubmit(submit)}
       footer={
         <>
           <Button type="button" variant="outline" asChild>

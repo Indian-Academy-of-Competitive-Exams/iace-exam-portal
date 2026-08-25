@@ -28,7 +28,7 @@ import {
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
-import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
+import { applyFieldErrors, bannerMessage, numberOr, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -192,18 +192,6 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
       qualifyingCutoff: section.qualifyingCutoff === null ? '' : String(section.qualifyingCutoff),
     })),
   };
-}
-
-function numberOr(raw: string, fallback: number): number {
-  const trimmed = raw.trim();
-  const value = Number(trimmed);
-  return trimmed === '' || Number.isNaN(value) ? fallback : value;
-}
-
-function optionalNumber(raw: string): number | null {
-  const trimmed = raw.trim();
-  const value = Number(trimmed);
-  return trimmed === '' || Number.isNaN(value) ? null : value;
 }
 
 function toSectionDraft(section: SectionValues, index: number): BaseConfigSectionDraft {
