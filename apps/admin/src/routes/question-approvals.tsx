@@ -105,7 +105,7 @@ export function QuestionApprovalsPage() {
       key: 'q',
       kind: 'search',
       label: 'Search draft questions',
-      placeholder: 'Search the question text or a code',
+      placeholder: 'Search the text, a code or a tag',
       primary: true,
     },
     {

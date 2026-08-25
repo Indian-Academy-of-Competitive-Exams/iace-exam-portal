@@ -115,7 +115,7 @@ export function QuestionsPage() {
       key: 'q',
       kind: 'search',
       label: 'Search questions',
-      placeholder: 'Search the question text or a code',
+      placeholder: 'Search the text, a code or a tag',
       primary: true,
     },
     {

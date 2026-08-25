@@ -484,10 +484,14 @@ export class QuestionsService {
   private async searchIds(term: string): Promise<string[]> {
     // Content is stored as html, so "Ram & Shyam" sits in it as "Ram &amp; Shyam".
     const like = `%${escapeForContent(term)}%`;
+    // A tag is stored as the admin typed it, so the escaping the html content needs would miss it.
+    const tagLike = `%${term}%`;
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT q."id" FROM "Question" q
       LEFT JOIN "QuestionVersion" v ON v."id" = q."currentVersionId" AND v."questionId" = q."id"
-      WHERE v."content"::text ILIKE ${like} OR q."questionCode" ILIKE ${like}
+      WHERE v."content"::text ILIKE ${like}
+         OR q."questionCode" ILIKE ${like}
+         OR EXISTS (SELECT 1 FROM unnest(q."tags") AS tag WHERE tag ILIKE ${tagLike})
     `;
     return rows.map((row) => row.id);
   }

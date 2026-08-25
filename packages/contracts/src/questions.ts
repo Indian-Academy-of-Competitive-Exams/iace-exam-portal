@@ -490,7 +490,7 @@ export const QUESTION_SORT_VALUES = Object.values(QUESTION_SORTS) as [
 ];
 
 export const questionListQuerySchema = paginationQuerySchema.extend({
-  /** Matches the stem in any language, and the question code. */
+  /** Matches the stem in any language, the question code, and any tag. */
   q: searchQuery(),
   subjectId: csvIdQuery(),
   topicId: csvIdQuery(),
