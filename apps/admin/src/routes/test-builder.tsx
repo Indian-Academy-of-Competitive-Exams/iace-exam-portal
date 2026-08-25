@@ -8,6 +8,7 @@ import {
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
   type BaseConfigDetail,
+  type DrawSpec,
   type TestBuilderStep,
   type TestDetail,
 } from '@iace/contracts';
@@ -43,6 +44,12 @@ import { PublishStep, SeriesStep } from './test-builder-offering';
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
 const TEST_KEY = (testId: string) => ['admin', 'test', testId] as const;
+
+/** The steps the form itself owns — the only ones whose Next has anything to save. */
+const FIELD_STEPS: ReadonlySet<TestBuilderStep> = new Set([
+  TEST_BUILDER_STEP.SETUP,
+  TEST_BUILDER_STEP.PAPER,
+]);
 
 /** Each step is done when the thing it exists to produce is there, not when it has been walked past. */
 function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
@@ -95,6 +102,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
+  const drawSpec = useWatch({ control: form.control, name: 'drawSpec' });
 
   const arrivedAt = (location.state as { step?: TestBuilderStep } | null)?.step;
   const [step, setStep] = useState<TestBuilderStep>(
@@ -124,6 +132,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         maxRetakes: optionalNumber(values.maxRetakes),
         variantCount: optionalNumber(values.variantCount),
         drawStrategy: values.drawStrategy,
+        questionPoolFilter: values.drawSpec,
       };
       return detail
         ? api.admin.tests.update(detail.id, owned)
@@ -156,7 +165,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const open = (target: TestBuilderStep) => {
     if (target === step) return;
     const pending = !existing || form.formState.isDirty;
-    if (step === TEST_BUILDER_STEP.SETUP && pending) {
+    if (FIELD_STEPS.has(step) && pending) {
       saveThenOpen(target);
       return;
     }
@@ -214,7 +223,15 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         </>
       }
     >
-      <StepBody step={step} form={form} detail={detail} config={config} sat={sat} />
+      <StepBody
+        step={step}
+        form={form}
+        detail={detail}
+        config={config}
+        sat={sat}
+        spec={drawSpec}
+        onSpec={(next) => form.setValue('drawSpec', next, { shouldDirty: true })}
+      />
     </FormPanel>
   );
 }
@@ -267,12 +284,16 @@ function StepBody({
   detail,
   config,
   sat,
+  spec,
+  onSpec,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
   detail: TestDetail | null;
   config: BaseConfigDetail | null;
   sat: boolean;
+  spec: DrawSpec;
+  onSpec: (next: DrawSpec) => void;
 }>) {
   return (
     <>
@@ -286,7 +307,9 @@ function StepBody({
       {step === TEST_BUILDER_STEP.SETUP ? (
         <SetupStep form={form} detail={detail} config={config} sat={sat} />
       ) : null}
-      {detail && step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} /> : null}
+      {detail && step === TEST_BUILDER_STEP.PAPER ? (
+        <PaperStep detail={detail} spec={spec} onSpec={onSpec} />
+      ) : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <>
           <SeriesStep detail={detail} />

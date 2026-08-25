@@ -409,6 +409,8 @@ export const assemblePaperSchema = z.object({
   /** Same seed, same pool, same paper. Omitted means a fresh draw. */
   seed: z.coerce.number().int().min(0).optional(),
   manual: z.array(manualSectionPickSchema).optional(),
+  /** What to draw FROM. Given here it is also stored: drawing is what commits a spec. */
+  spec: drawSpecSchema.optional(),
 });
 export type AssemblePaperInput = z.input<typeof assemblePaperSchema>;
 export type AssemblePaperBody = z.infer<typeof assemblePaperSchema>;

@@ -227,6 +227,31 @@ describe('PaperService — what it refuses to assemble', () => {
     assert.equal(prisma.paperQuestions.length, 0);
   });
 
+  /** The failure this prevents: a draw using the stored spec while the screen shows another. */
+  it('draws from the spec it was handed rather than the one on file', async () => {
+    const { service } = serviceWith();
+
+    // The bank holds no low-difficulty questions, so a spec asking for two must refuse.
+    const error = await service
+      .assemble('tst_1', {
+        seed: SEED,
+        spec: { sections: { sec_2: { mix: { LOW: 2, MEDIUM: 0, HIGH: 0 } } } },
+      })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+  });
+
+  it('stores the spec with the paper it produced, so the two cannot disagree', async () => {
+    const { service, prisma } = serviceWith();
+    const spec = { sections: { sec_2: { mix: { LOW: 0, MEDIUM: 2, HIGH: 0 } } } };
+
+    await service.assemble('tst_1', { seed: SEED, spec });
+
+    assert.deepEqual(prisma.tests[0]!.questionPoolFilter, spec);
+  });
+
   it('refuses a test a student has already sat', async () => {
     const { service, prisma } = serviceWith(undefined, makeTest({ id: 'tst_1', isLocked: true }));
     prisma.attempts.push({ testId: 'tst_1' });

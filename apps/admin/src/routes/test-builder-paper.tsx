@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dices, Trash2 } from 'lucide-react';
 import {
@@ -23,7 +23,6 @@ import {
   DropdownMenuItem,
   RowActions,
   SkeletonParagraph,
-  createDebouncer,
   TruncatedText,
   plural,
   type DataTableColumn,
@@ -36,9 +35,6 @@ import { QuestionLink } from '../components/question-viewer';
 /** What the paper holds: the questions on it, the ones pinned by hand, and the draw. */
 
 const PAPER_KEY = (testId: string) => ['admin', 'test-paper', testId] as const;
-
-/** Long enough that a drag is one save, short enough that leaving the section is not a race. */
-const SPEC_SAVE_DELAY_MS = 600;
 
 /** A draw that could not fill a section answers with one message per section id. */
 function shortfallsOf(error: unknown): string[] {
@@ -58,7 +54,11 @@ function drawDescription(detail: TestDetail, drawn: number): string {
   return `${replaced}${thaw}Every student sits whatever this draw produces.`;
 }
 
-export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
+export function PaperStep({
+  detail,
+  spec,
+  onSpec,
+}: Readonly<{ detail: TestDetail; spec: DrawSpec; onSpec: (next: DrawSpec) => void }>) {
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string[]>>({});
   const [asking, setAsking] = useState(false);
@@ -84,28 +84,11 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
     await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
   };
 
-  // Saved on a pause: a drag moves the bar a question at a time, and none of those is a decision.
-  const [spec, setSpec] = useState<DrawSpec>(detail.questionPoolFilter ?? { sections: {} });
-  const settle = useMemo(() => createDebouncer(SPEC_SAVE_DELAY_MS), []);
-
-  const saveSpec = useMutation({
-    mutationFn: (next: DrawSpec) => api.admin.tests.update(detail.id, { questionPoolFilter: next }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] }),
-  });
-
-  /** Whatever is still waiting goes on the way out, or leaving the step drops the last change. */
-  useEffect(() => () => settle.flush(), [settle]);
-
-  const editSection = (sectionId: string, next: SectionDrawSpec) => {
-    const updated: DrawSpec = { sections: { ...spec.sections, [sectionId]: next } };
-    setSpec(updated);
-    settle.schedule(() => saveSpec.mutate(updated));
-  };
-
   const draw = useMutation({
     meta: { success: 'Paper drawn.' },
     mutationFn: () =>
       api.admin.tests.assemblePaper(detail.id, {
+        spec,
         manual: Object.entries(manual)
           .filter(([, questionIds]) => questionIds.length > 0)
           .map(([baseConfigSectionId, questionIds]) => ({ baseConfigSectionId, questionIds })),
@@ -182,7 +165,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
                 pinned={manual[section.id] ?? []}
                 sat={sat}
                 spec={spec.sections[section.id] ?? {}}
-                onSpec={(next) => editSection(section.id, next)}
+                onSpec={(next) => onSpec({ sections: { ...spec.sections, [section.id]: next } })}
                 onPin={(next) => setManual((chosen) => ({ ...chosen, [section.id]: next }))}
                 onChanged={refresh}
               />

@@ -79,7 +79,8 @@ export class PaperService {
 
     const config = await this.configs.detail(test.baseConfigId);
     const sections = config.sections.map(toDrawSection);
-    const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
+    // What is on screen wins over what was stored, so a draw never uses a spec being edited.
+    const spec = input.spec ?? (test.questionPoolFilter as DrawSpec | null) ?? null;
 
     const pinned = await this.resolvePicks(input.manual ?? []);
     this.assertPicksFit(sections, pinned);
@@ -112,7 +113,7 @@ export class PaperService {
       );
     }
 
-    await this.replacePaper(test, result.questions);
+    await this.replacePaper(test, result.questions, input.spec);
 
     return this.paperOf(test.id, config);
   }
@@ -250,6 +251,7 @@ export class PaperService {
   private async replacePaper(
     test: { id: string; baseConfigId: string; isLocked: boolean },
     questions: readonly DrawnQuestion[],
+    spec?: DrawSpec,
   ): Promise<void> {
     const { id: testId, baseConfigId } = test;
     await this.prisma.$transaction(async (tx) => {
@@ -259,6 +261,8 @@ export class PaperService {
       await tx.paperQuestion.createMany({
         data: questions.map((row) => ({ ...row, testId, baseConfigId })),
       });
+      // Stored with the paper it produced, or the two would disagree about what was drawn from.
+      if (spec) await tx.test.update({ where: { id: testId }, data: { questionPoolFilter: spec } });
     });
   }
 

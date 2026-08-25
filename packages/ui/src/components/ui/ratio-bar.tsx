@@ -42,16 +42,6 @@ const STEP_KEYS: Readonly<Record<string, number>> = {
   ArrowUp: 1,
 };
 
-/** jsdom and older engines throw rather than ignore a capture they cannot take. */
-function capture(element: Element, pointerId: number, take: boolean): void {
-  try {
-    if (take) element.setPointerCapture?.(pointerId);
-    else element.releasePointerCapture?.(pointerId);
-  } catch {
-    // A drag that cannot be captured still works; it just stops if the pointer leaves.
-  }
-}
-
 export function RatioBar({
   parts,
   values,
@@ -76,6 +66,22 @@ export function RatioBar({
     const boundary = boundaryAt(clientX);
     onChange(moved(values, handle, handle === 0 ? boundary : boundary - values[0]));
   };
+
+  /** On the WINDOW: a pointer leaves a few-pixel handle long before the drag is over. */
+  React.useEffect(() => {
+    if (dragging === null) return undefined;
+    const move = (event: PointerEvent) => dragTo(dragging, event.clientX);
+    const stop = () => setDragging(null);
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+  });
 
   const fills = [
     { part: parts[0], value: values[0] },
@@ -118,7 +124,7 @@ export function RatioBar({
           <div
             key={fill.part.key}
             style={{ width: `${share(fill.value)}%` }}
-            className={cn('h-full transition-[width]', fill.part.className)}
+            className={cn('h-full', fill.part.className)}
           />
         ))}
 
@@ -137,22 +143,12 @@ export function RatioBar({
             onPointerDown={(event) => {
               if (disabled) return;
               event.preventDefault();
-              capture(event.currentTarget, event.pointerId, true);
               setDragging(grip.handle);
             }}
-            onPointerMove={(event) => {
-              if (dragging !== grip.handle) return;
-              dragTo(grip.handle, event.clientX);
-            }}
-            onPointerUp={(event) => {
-              capture(event.currentTarget, event.pointerId, false);
-              setDragging(null);
-            }}
-            onPointerCancel={() => setDragging(null)}
             style={{ left: `${share(grip.at)}%` }}
             className={cn(
               // `touch-none`, or a drag on a phone scrolls the page instead of moving the handle.
-              'absolute top-0 h-full w-3 -translate-x-1/2 touch-none cursor-col-resize',
+              'absolute top-0 h-full w-4 -translate-x-1/2 touch-none cursor-col-resize',
               'flex items-center justify-center focus-visible:shadow-focus focus-visible:outline-none',
               disabled && 'cursor-not-allowed',
             )}

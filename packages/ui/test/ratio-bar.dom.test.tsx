@@ -88,39 +88,44 @@ describe('RatioBar', () => {
     assert.equal(first?.getAttribute('aria-valuemax'), '25');
   });
 
-  /** The failure this prevents: a handle that looks draggable and only answers the keyboard. */
-  it('follows a pointer drag, in whole questions', () => {
-    const onChange = mount();
+  /** jsdom measures nothing, so the track is given a width for the drag to resolve against. */
+  function measured() {
     const handle = handles()[0]!;
-    // jsdom measures nothing, so the track is given a width to resolve the drag against.
-    const track = handle.parentElement!;
-    track.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+    return handle;
+  }
+
+  /** The failure this prevents: a drag ending the moment the pointer leaves the handle's pixels. */
+  it('keeps following a pointer that has left the handle', () => {
+    const onChange = mount();
+    const handle = measured();
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: 70 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 100 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 200 });
 
     // 100 of 250 is two fifths of 25 questions, so the boundary lands on 10.
     assert.deepEqual(onChange.mock.calls[0]?.arguments, [[10, 8, 7]]);
+    // 200 asks for 20, and low plus medium is 18 — the third part is not this handle's to take.
+    assert.deepEqual(onChange.mock.calls[1]?.arguments, [[18, 0, 7]]);
   });
 
   it('ignores a pointer that never pressed it', () => {
     const onChange = mount();
-    const handle = handles()[0]!;
-    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+    measured();
 
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 100 });
 
     assert.equal(onChange.mock.callCount(), 0);
   });
 
   it('stops following once the pointer is let go', () => {
     const onChange = mount();
-    const handle = handles()[0]!;
-    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+    const handle = measured();
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: 70 });
-    fireEvent.pointerUp(handle, { pointerId: 1 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 200 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 200 });
 
     assert.equal(onChange.mock.callCount(), 0);
   });
