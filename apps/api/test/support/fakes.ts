@@ -1894,20 +1894,34 @@ export function makeExamStage(overrides: Partial<FakeExamStage> = {}): FakeExamS
   };
 }
 
+type Contains = { contains: string; mode?: 'insensitive' };
+
 interface StageWhere {
-  name?: { contains: string; mode?: 'insensitive' };
+  AND?: StageWhere[];
+  OR?: StageWhere[];
+  name?: Contains;
+  stageKey?: Contains;
   examId?: KeyFilter;
-  exam?: { family: ExamFamily };
+  exam?: { family?: ExamFamily; code?: Contains };
   disposition?: StageDisposition;
   isActive?: boolean;
+}
+
+function holds(value: string | undefined, filter: Contains | undefined): boolean {
+  if (!filter) return true;
+  return (value ?? '').toLowerCase().includes(filter.contains.toLowerCase());
 }
 
 function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]): boolean {
   const exam = exams.find((candidate) => candidate.id === stage.examId);
   return (
-    (where.name ? stage.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
+    (where.AND ?? []).every((clause) => matchesStage(stage, clause, exams)) &&
+    (where.OR === undefined || where.OR.some((clause) => matchesStage(stage, clause, exams))) &&
+    holds(stage.name, where.name) &&
+    holds(stage.stageKey, where.stageKey) &&
     matchesKey(stage.examId, where.examId) &&
-    (where.exam === undefined || exam?.family === where.exam.family) &&
+    (where.exam?.family === undefined || exam?.family === where.exam.family) &&
+    holds(exam?.code, where.exam?.code) &&
     (where.disposition === undefined || stage.disposition === where.disposition) &&
     (where.isActive === undefined || stage.isActive === where.isActive)
   );

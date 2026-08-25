@@ -327,3 +327,40 @@ describe('ExamStagesController — who may write', () => {
     assert.equal(gatedOn('list'), false);
   });
 });
+
+describe('ExamStagesService — searching', () => {
+  const exams = [
+    makeExam({ id: 'exam_1', code: 'SSC CGL', name: 'SSC CGL' }),
+    makeExam({ id: 'exam_2', code: 'SSC CHSL', name: 'SSC CHSL' }),
+  ];
+  const stages = [
+    makeExamStage({ id: 'stage_1', examId: 'exam_1', stageKey: 'SSC_CGL_T1', name: 'Tier 1' }),
+    makeExamStage({ id: 'stage_2', examId: 'exam_1', stageKey: 'SSC_CGL_T2', name: 'Tier 2' }),
+    makeExamStage({ id: 'stage_3', examId: 'exam_2', stageKey: 'SSC_CHSL_T1', name: 'Tier 1' }),
+  ];
+
+  const found = async (q: string) => {
+    const { service } = serviceWith(stages, exams);
+    const page = await service.list(listQuery({ q }));
+    return page.items.map((stage) => stage.id);
+  };
+
+  /** The picker labels a row by its exam's code, so the code has to be a thing you can type. */
+  it('finds a stage by the exam code it is listed under', async () => {
+    assert.deepEqual(await found('CHSL'), ['stage_3']);
+  });
+
+  /** The failure this prevents: the phrase an admin actually types matching nothing at all. */
+  it('finds a stage by the exam and the tier together', async () => {
+    assert.deepEqual(await found('SSC CGL Tier 2'), ['stage_2']);
+  });
+
+  it('finds a stage by the key seeds and the workbook address it by', async () => {
+    assert.deepEqual(await found('SSC_CHSL_T1'), ['stage_3']);
+  });
+
+  /** Every word has to land somewhere, or the search is not narrowing anything. */
+  it('finds nothing when one word matches no column', async () => {
+    assert.deepEqual(await found('SSC CGL Tier 9'), []);
+  });
+});

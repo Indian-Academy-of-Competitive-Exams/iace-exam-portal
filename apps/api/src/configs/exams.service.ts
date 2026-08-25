@@ -12,6 +12,7 @@ import {
   type UpdateExamBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { everyTermMatches } from '../common/search-terms';
 import { type StudentsService } from '../students';
 import { AuditContext } from '../audit';
 import {
@@ -59,7 +60,10 @@ export class ExamsService {
 
   async list(query: ExamListQuery): Promise<Paginated<Exam>> {
     const where: Prisma.ExamWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.ExamWhereInput>(query.q, (term) => [
+        { code: { contains: term, mode: 'insensitive' } },
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.family ? { family: { in: query.family } } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
     };

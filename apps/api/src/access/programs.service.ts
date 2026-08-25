@@ -11,6 +11,7 @@ import {
   type UpdateProgramBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { everyTermMatches } from '../common/search-terms';
 import { AuditContext } from '../audit';
 
 interface ProgramRow {
@@ -40,7 +41,10 @@ export class ProgramsService {
 
   async list(query: ProgramListQuery): Promise<Paginated<Program>> {
     const where: Prisma.ProgramWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.ProgramWhereInput>(query.q, (term) => [
+        { code: { contains: term, mode: 'insensitive' } },
+        { name: { contains: term, mode: 'insensitive' } },
+      ]),
       ...(query.activeOnly ? { isActive: true } : {}),
     };
 

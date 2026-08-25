@@ -14,6 +14,7 @@ import {
   type UpdateExamStageBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { everyTermMatches } from '../common/search-terms';
 import { AuditContext } from '../audit';
 import {
   CATALOG_ONLY_STAGE_MESSAGE,
@@ -50,7 +51,11 @@ export class ExamStagesService {
 
   async list(query: ExamStageListQuery): Promise<Paginated<ExamStage>> {
     const where: Prisma.ExamStageWhereInput = {
-      ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+      ...everyTermMatches<Prisma.ExamStageWhereInput>(query.q, (term) => [
+        { name: { contains: term, mode: 'insensitive' } },
+        { stageKey: { contains: term, mode: 'insensitive' } },
+        { exam: { code: { contains: term, mode: 'insensitive' } } },
+      ]),
       ...(query.examId ? { examId: { in: query.examId } } : {}),
       ...(query.family ? { exam: { family: query.family } } : {}),
       ...(query.disposition ? { disposition: query.disposition } : {}),
