@@ -15,6 +15,7 @@ import {
   type DrawSpec,
   type FeasibilitySection,
   type SectionAvailability,
+  type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
   type TestPaper,
 } from '@iace/contracts';
@@ -155,6 +156,48 @@ export class PaperService {
     });
 
     return papers.flat().length;
+  }
+
+  /** One more question, in the next free place its section has. Refused once the section is full. */
+  async addQuestion(testId: string, input: AddPaperQuestionBody): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+
+    const config = await this.configs.detail(test.baseConfigId);
+    const section = config.sections.find((row) => row.id === input.baseConfigSectionId);
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section on this paper');
+
+    const question = await this.requireDrawable(input.questionId, section.id);
+    await this.assertNotAlreadyOnThePaper(testId, '', question.id);
+
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { testId, variant: FIXED_VARIANT },
+      select: { order: true, baseConfigSectionId: true },
+    });
+    const inSection = rows.filter((row) => row.baseConfigSectionId === section.id).length;
+    if (inSection >= section.questionCount) {
+      const full = `${section.name} already holds the ${section.questionCount} it needs. Take one off first.`;
+      throw new AppException(ErrorCodes.CONFLICT, full, { fieldErrors: { questionId: [full] } });
+    }
+
+    const order = rows.reduce((highest, row) => Math.max(highest, row.order), 0) + 1;
+    await this.prisma.$transaction(async (tx) => {
+      await thaw(tx, test);
+      await tx.paperQuestion.create({
+        data: {
+          testId,
+          baseConfigId: test.baseConfigId,
+          baseConfigSectionId: section.id,
+          questionId: question.id,
+          questionVersionId: question.currentVersionId!,
+          order,
+          marks: section.marksPerQuestion,
+          negativeMarks: section.negativeMarks,
+        },
+      });
+    });
+
+    return this.paperOf(testId, config);
   }
 
   /** One row swapped for another question, keeping its place in the paper. */

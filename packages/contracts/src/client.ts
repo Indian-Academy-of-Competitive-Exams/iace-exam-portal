@@ -121,6 +121,7 @@ import {
   testSchema,
   testSeriesLinkSchema,
   testStatusSchema,
+  type AddPaperQuestionInput,
   type AssemblePaperInput,
   type ReplacePaperQuestionInput,
   type CreateTestInput,
@@ -866,6 +867,14 @@ export function createApiClient(options: ApiClientOptions) {
 
         assemblePaper: (id: string, input: AssemblePaperInput = {}): Promise<TestPaper> =>
           request(ADMIN_TEST_PAPER_ROUTES.assemble(id), {
+            method: 'POST',
+            body: input,
+            schema: testPaperSchema,
+          }),
+
+        /** One more, in the next free place its section has. */
+        addPaperQuestion: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.addQuestion(id), {
             method: 'POST',
             body: input,
             schema: testPaperSchema,

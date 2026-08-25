@@ -457,9 +457,18 @@ export const replacePaperQuestionSchema = z.object({
 export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchema>;
 export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
 
+/** Putting one on the paper, in the next free place its section has. */
+export const addPaperQuestionSchema = z.object({
+  baseConfigSectionId: z.string().min(1),
+  questionId: z.string().min(1, 'Choose a question'),
+});
+export type AddPaperQuestionInput = z.input<typeof addPaperQuestionSchema>;
+export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;
+
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   assemble: (id: string) => `/admin/tests/${id}/paper`,
+  addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,

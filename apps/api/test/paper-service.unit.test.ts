@@ -252,6 +252,39 @@ describe('PaperService — what it refuses to assemble', () => {
     assert.deepEqual(prisma.tests[0]!.questionPoolFilter, spec);
   });
 
+  it('puts one on the paper in the next free place', async () => {
+    const kit = serviceWith();
+    const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q')!;
+
+    await kit.service.addQuestion('tst_1', {
+      baseConfigSectionId: 'sec_2',
+      questionId: spare.id,
+    });
+
+    const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id)!;
+    assert.equal(added.baseConfigSectionId, 'sec_2');
+    assert.equal(added.marks, 2);
+  });
+
+  /** The failure this prevents: a section quietly holding more questions than its config asks for. */
+  it('refuses one more than the section holds', async () => {
+    const kit = serviceWith();
+    await kit.service.assemble('tst_1', { seed: SEED });
+    const spare = kit.prisma.questions.find(
+      (row) =>
+        row.subjectId === 'sub_q' &&
+        !kit.prisma.paperQuestions.some((held) => held.questionId === row.id),
+    )!;
+
+    const error = await kit.service
+      .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId: spare.id })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /already holds/);
+  });
+
   it('refuses a test a student has already sat', async () => {
     const { service, prisma } = serviceWith(undefined, makeTest({ id: 'tst_1', isLocked: true }));
     prisma.attempts.push({ testId: 'tst_1' });

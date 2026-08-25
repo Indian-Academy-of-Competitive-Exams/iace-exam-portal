@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  addPaperQuestionSchema,
   assemblePaperSchema,
   replacePaperQuestionSchema,
   AUDIT_ACTION,
@@ -23,6 +24,7 @@ import {
   setTestStatusSchema,
   testListQuerySchema,
   updateTestSchema,
+  type AddPaperQuestionBody,
   type AssemblePaperBody,
   type ReplacePaperQuestionBody,
   type CreateTestBody,
@@ -106,6 +108,17 @@ export class TestsController {
     @Body(new ZodBody(assemblePaperSchema)) body: AssemblePaperBody,
   ): Promise<TestPaper> {
     return this.paper.assemble(id, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/paper/questions')
+  @HttpCode(HttpStatus.OK)
+  addPaperQuestion(
+    @Param('id') id: string,
+    @Body(new ZodBody(addPaperQuestionSchema)) body: AddPaperQuestionBody,
+  ): Promise<TestPaper> {
+    return this.paper.addQuestion(id, body);
   }
 
   /** One row of the paper, so a paper right but for a single question is not redrawn whole. */

@@ -47,7 +47,7 @@ function shortfallsOf(error: unknown): string[] {
 function drawDescription(detail: TestDetail, drawn: number): string {
   const replaced =
     drawn > 0
-      ? `The ${plural(drawn, 'question')} already on this paper are replaced, keeping only what you have chosen by hand. `
+      ? `The ${plural(drawn, 'question')} already on this paper are kept, and the draw fills what is short. `
       : '';
   const thaw = detail.isLocked
     ? 'This test is finalized, so drawing unfreezes its paper and stops it being offered until you offer it again. '
@@ -67,7 +67,6 @@ export function PaperStep({
   paperBinding: PaperBinding;
 }>) {
   const queryClient = useQueryClient();
-  const [manual, setManual] = useState<Record<string, string[]>>({});
   const [asking, setAsking] = useState(false);
   const sat = detail.attemptCount > 0;
   const generated = paperBinding === PAPER_BINDING.GENERATED;
@@ -94,11 +93,13 @@ export function PaperStep({
   const draw = useMutation({
     meta: { success: 'Paper drawn.' },
     mutationFn: () =>
+      // Everything already on the paper is kept: a draw fills what is short, it does not undo work.
       api.admin.tests.assemblePaper(detail.id, {
         spec,
-        manual: Object.entries(manual)
-          .filter(([, questionIds]) => questionIds.length > 0)
-          .map(([baseConfigSectionId, questionIds]) => ({ baseConfigSectionId, questionIds })),
+        manual: [...held.values()].map((section) => ({
+          baseConfigSectionId: section.baseConfigSectionId,
+          questionIds: section.questions.map((row) => row.questionId),
+        })),
       }),
     onSuccess: async (next) => {
       setAsking(false);
@@ -131,7 +132,7 @@ export function PaperStep({
         {sat || generated ? null : (
           <Button type="button" size="sm" onClick={() => setAsking(true)} loading={draw.isPending}>
             <Dices aria-hidden />
-            {drawn > 0 ? 'Draw again' : 'Draw the paper'}
+            {drawn > 0 ? 'Fill the rest' : 'Draw the paper'}
           </Button>
         )}
       </div>
@@ -169,11 +170,9 @@ export function PaperStep({
                 open={index === 0}
                 generated={generated}
                 held={held.get(section.id)}
-                pinned={manual[section.id] ?? []}
                 sat={sat}
                 spec={spec.sections[section.id] ?? {}}
                 onSpec={(next) => onSpec({ sections: { ...spec.sections, [section.id]: next } })}
-                onPin={(next) => setManual((chosen) => ({ ...chosen, [section.id]: next }))}
                 onChanged={refresh}
               />
             ))}
@@ -182,9 +181,9 @@ export function PaperStep({
       <ConfirmDialog
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
-        title={drawn > 0 ? 'Draw this paper again?' : 'Draw the paper?'}
+        title={drawn > 0 ? 'Fill the rest of this paper?' : 'Draw the paper?'}
         description={drawDescription(detail, drawn)}
-        confirmLabel={drawn > 0 ? 'Draw again' : 'Draw the paper'}
+        confirmLabel={drawn > 0 ? 'Fill the rest' : 'Draw the paper'}
         loading={draw.isPending}
         onConfirm={() => draw.mutate()}
       />
@@ -241,11 +240,9 @@ function SectionPaper({
   open,
   generated,
   held,
-  pinned,
   sat,
   spec,
   onSpec,
-  onPin,
   onChanged,
 }: Readonly<{
   testId: string;
@@ -255,16 +252,26 @@ function SectionPaper({
   /** A generated test has a paper per student, so there is no one paper to show or pin against. */
   generated: boolean;
   held: PaperSection | undefined;
-  pinned: readonly string[];
   sat: boolean;
   spec: SectionDrawSpec;
   onSpec: (next: SectionDrawSpec) => void;
-  onPin: (next: string[]) => void;
   onChanged: (next: TestPaper) => Promise<void>;
 }>) {
   const [removing, setRemoving] = useState<PaperRow | null>(null);
   const rows = held?.questions ?? [];
   const short = rows.length < section.questionCount;
+  const full = !short;
+  const onThePaper = new Set(rows.map((row) => row.questionId));
+
+  const add = useMutation({
+    meta: { success: 'Question added.' },
+    mutationFn: (questionId: string) =>
+      api.admin.tests.addPaperQuestion(testId, {
+        baseConfigSectionId: section.id,
+        questionId,
+      }),
+    onSuccess: onChanged,
+  });
 
   const remove = useMutation({
     meta: { success: 'Question removed.' },
@@ -293,9 +300,27 @@ function SectionPaper({
         </section>
 
         {generated ? null : (
-          <>
-            <section className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">On the paper</h3>
+          // Side by side: choosing from and building are one job, and stacking them means scrolling.
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="flex min-w-0 flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">The bank</h3>
+              <QuestionChooser
+                subjectId={section.subjectId}
+                held={onThePaper}
+                onAdd={(question) => add.mutate(question.id)}
+                disabled={sat || full}
+              />
+              {full ? (
+                <p className="text-sm text-muted-foreground">
+                  {`${section.name} is full. Take one off to put another on.`}
+                </p>
+              ) : null}
+            </section>
+
+            <section className="flex min-w-0 flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                {`On the paper — ${rows.length} of ${section.questionCount}`}
+              </h3>
               {rows.length > 0 ? (
                 <DataTable
                   columns={paperColumns(setRemoving, sat)}
@@ -306,24 +331,11 @@ function SectionPaper({
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Nothing drawn for this section yet. Choose what you want kept below, then draw.
+                  Nothing here yet. Draw the paper, or add questions from the bank.
                 </p>
               )}
             </section>
-
-            <section className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                Choose by hand
-              </h3>
-              <QuestionChooser
-                subjectId={section.subjectId}
-                chosen={pinned}
-                onChosen={onPin}
-                needed={section.questionCount}
-                disabled={sat}
-              />
-            </section>
-          </>
+          </div>
         )}
       </div>
 

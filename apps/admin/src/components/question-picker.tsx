@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { DIFFICULTY_LEVELS, QUESTION_STATUS, type QuestionSummary } from '@iace/contracts';
 import { useListScreen, useLocalFilters } from '@iace/app-kit/browser';
+import { Plus } from 'lucide-react';
 import {
   Badge,
   BadgeList,
+  Button,
   ListView,
   TruncatedText,
-  plural,
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
@@ -24,7 +25,32 @@ const DIFFICULTY_VARIANT: Readonly<
   HIGH: 'danger',
 };
 
-function questionColumns(): DataTableColumn<QuestionSummary>[] {
+function questionColumns(
+  onAdd: ((question: QuestionSummary) => void) | undefined,
+  held: ReadonlySet<string>,
+): DataTableColumn<QuestionSummary>[] {
+  const add: DataTableColumn<QuestionSummary>[] = onAdd
+    ? [
+        {
+          key: 'add',
+          className: 'text-right',
+          cell: (question) =>
+            held.has(question.id) ? (
+              <span className="text-xs text-muted-foreground">On the paper</span>
+            ) : (
+              <Button type="button" size="sm" variant="outline" onClick={() => onAdd(question)}>
+                <Plus aria-hidden />
+                Add
+              </Button>
+            ),
+        },
+      ]
+    : [];
+
+  return [...baseColumns(), ...add];
+}
+
+function baseColumns(): DataTableColumn<QuestionSummary>[] {
   return [
     {
       key: 'code',
@@ -67,21 +93,22 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
 /** The bank for one section, ticked. Inline: a section is already open, so nothing needs opening. */
 export function QuestionChooser({
   subjectId,
-  chosen,
-  onChosen,
-  needed,
+  held,
+  onAdd,
   disabled,
 }: Readonly<{
   /** The section's own subject: the draw uses it, so the chooser must not offer past it. */
   subjectId: string | null;
-  chosen: readonly string[];
-  onChosen: (next: string[]) => void;
-  /** How many the section holds, so the count can say what is still owed. */
-  needed: number;
+  /** What the paper already holds, so a question on it is not offered twice. */
+  held: ReadonlySet<string>;
+  onAdd: (question: QuestionSummary) => void;
   disabled?: boolean;
 }>) {
   const store = useLocalFilters();
-  const columns = useMemo(() => questionColumns(), []);
+  const columns = useMemo(
+    () => questionColumns(disabled ? undefined : onAdd, held),
+    [disabled, onAdd, held],
+  );
 
   const filterSpec = [
     {
@@ -123,42 +150,14 @@ export function QuestionChooser({
     fetchPage: (params) => api.admin.questions.list(params),
   });
 
-  const picked = questions.rows.filter((question) => chosen.includes(question.id));
-
   return (
-    <div className="flex flex-col gap-3">
-      <ListView
-        list={questions}
-        filters={filterSpec}
-        columns={columns}
-        rowKey={(question) => question.id}
-        selection={
-          disabled
-            ? undefined
-            : {
-                selected: new Set(chosen),
-                onChange: (next) => onChosen([...next]),
-                label: 'Choose this question',
-              }
-        }
-        empty="The bank holds no live question for this section yet."
-        emptyFiltered="No question matches those filters."
-      />
-
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-border pt-3">
-        <span className="text-sm font-medium text-foreground">
-          {`${chosen.length} of ${plural(needed, 'question')} chosen by hand`}
-        </span>
-        <span className="text-sm text-muted-foreground">the draw fills the rest</span>
-      </div>
-
-      {picked.length > 0 ? (
-        <BadgeList
-          items={picked}
-          max={6}
-          label={(question) => question.questionCode ?? question.stemPreview}
-        />
-      ) : null}
-    </div>
+    <ListView
+      list={questions}
+      filters={filterSpec}
+      columns={columns}
+      rowKey={(question) => question.id}
+      empty="The bank holds no live question for this section yet."
+      emptyFiltered="No question matches those filters."
+    />
   );
 }

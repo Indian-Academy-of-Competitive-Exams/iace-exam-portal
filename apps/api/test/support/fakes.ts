@@ -1627,6 +1627,17 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: data.length });
     },
 
+    create: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status' | 'variant'> }) => {
+      const created: FakePaperRow = {
+        ...data,
+        variant: 0,
+        id: `pq_${data.testId}_0_${data.order}`,
+        status: 'ACTIVE',
+      };
+      this.paperQuestions.push(created);
+      return Promise.resolve(created);
+    },
+
     findUnique: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.paperQuestions.find((row) => row.id === where.id) ?? null),
 
