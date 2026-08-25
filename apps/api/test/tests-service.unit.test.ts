@@ -11,6 +11,7 @@ import {
   TEST_STATUS,
 } from '@iace/contracts';
 import { TestsService } from '../src/tests/tests.service';
+import { DOMAIN_EVENTS } from '../src/common/events';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
@@ -19,6 +20,7 @@ import {
   type FakeSectionRow,
   type FakeSeriesTestRow,
   type FakeTestModelRow,
+  FakeEventBus,
   FakeTestsPrisma,
   makeBaseConfig,
   makeSection,
@@ -47,9 +49,16 @@ function serviceWith(
   );
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configsService = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
+  const events = new FakeEventBus();
   return {
     prisma,
-    service: new TestsService(prisma.asService(), configsService, new AuditContext()),
+    events,
+    service: new TestsService(
+      prisma.asService(),
+      configsService,
+      new AuditContext(),
+      events.asService(),
+    ),
   };
 }
 
@@ -226,8 +235,14 @@ describe('TestsService — editing and removing', () => {
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
 
-  it('refuses every change but the title once the paper is frozen', async () => {
-    const { service } = serviceWith([makeTest({ id: 'tst_1', isLocked: true })]);
+  it('refuses every change but the title once a student has sat it', async () => {
+    const { service, prisma } = serviceWith(
+      [makeTest({ id: 'tst_1', isLocked: true })],
+      undefined,
+      {
+        attempts: [{ testId: 'tst_1' }],
+      },
+    );
 
     const error = await service
       .update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST })
@@ -237,6 +252,23 @@ describe('TestsService — editing and removing', () => {
 
     const renamed = await service.update('tst_1', { title: 'Mock 1 (revised)' });
     assert.equal(renamed.title, 'Mock 1 (revised)');
+    // A rename moves no question, so it must not thaw the paper it was allowed to leave alone.
+    assert.equal(prisma.tests[0]!.isLocked, true);
+  });
+
+  /** The failure this prevents: a frozen paper left pointing at a scope it no longer covers. */
+  it('thaws a frozen test nobody has sat when its shape changes', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE }),
+    ]);
+
+    await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
+
+    const test = prisma.tests[0]!;
+    assert.equal(test.isLocked, false);
+    assert.equal(test.finalizedAt, null);
+    // An unfrozen test cannot be offered, so it stops being offered rather than going incoherent.
+    assert.equal(test.status, TEST_STATUS.DRAFT);
   });
 
   it('drops the paper when the test stops having one', async () => {
@@ -280,5 +312,40 @@ describe('TestsService — editing and removing', () => {
     await service.remove('tst_1');
 
     assert.equal(prisma.tests.length, 0);
+  });
+
+  /** Being frozen and being offered are states a test can be talked out of; being sat is not. */
+  it('deletes a finalized test that two series still offer, because nobody sat it', async () => {
+    const { service, prisma } = serviceWith(
+      [makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE })],
+      undefined,
+      {
+        seriesTests: [
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+          { testSeriesId: 'srs_2', testId: 'tst_1', order: 1 },
+        ],
+      },
+    );
+
+    await service.remove('tst_1');
+
+    assert.equal(prisma.tests.length, 0);
+  });
+
+  /** The failure this prevents: a deleted test still reachable in a student's cached catalog. */
+  it('tells every series that carried it that the catalog has moved', async () => {
+    const { service, events } = serviceWith([makeTest({ id: 'tst_1' })], undefined, {
+      seriesTests: [
+        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+        { testSeriesId: 'srs_2', testId: 'tst_1', order: 2 },
+      ],
+    });
+
+    await service.remove('tst_1');
+
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
+      ['srs_1', 'srs_2'],
+    );
   });
 });

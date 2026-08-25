@@ -17,15 +17,17 @@ import {
   type UpdateTestBody,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
-  FROZEN_TEST_MESSAGE,
+  SAT_TEST_MESSAGE,
   locksOutTestEdit,
   paperBindingIssue,
   scopeRefIssue,
   TEST_DEFAULTS,
   testDeletionBlocker,
+  unfreezing,
 } from './test-rules';
 
 const TEST_INCLUDE = {
@@ -46,6 +48,7 @@ type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
 /** What a test's audit diff covers. Its shape lives on the config and is diffed there. */
 export const AUDITED_TEST_FIELDS = [
   'title',
+  'isLocked',
   'scope',
   'evaluationMode',
   'paperBinding',
@@ -61,6 +64,7 @@ export class TestsService {
     private readonly prisma: PrismaService,
     private readonly configs: BaseConfigsService,
     private readonly auditContext: AuditContext,
+    private readonly events: DomainEventBus,
   ) {}
 
   async list(query: TestListQuery): Promise<Paginated<Test>> {
@@ -124,9 +128,10 @@ export class TestsService {
   async update(id: string, input: UpdateTestBody): Promise<TestDetail> {
     const test = await this.requireTest(id);
 
-    if (test.isLocked && locksOutTestEdit(input)) {
-      throw new AppException(ErrorCodes.CONFLICT, FROZEN_TEST_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [FROZEN_TEST_MESSAGE] },
+    const shapeChange = locksOutTestEdit(input);
+    if (test._count.attempts > 0 && shapeChange) {
+      throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
       });
     }
 
@@ -161,6 +166,7 @@ export class TestsService {
         ...(input.questionPoolFilter === undefined
           ? {}
           : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
+        ...(shapeChange ? unfreezing(test) : {}),
       },
       include: TEST_INCLUDE,
     });
@@ -173,14 +179,20 @@ export class TestsService {
   async remove(id: string): Promise<void> {
     const test = await this.requireTest(id);
 
-    const blocker = testDeletionBlocker({
-      isLocked: test.isLocked,
-      attemptCount: test._count.attempts,
-      seriesCount: test._count.series,
-    });
+    const blocker = testDeletionBlocker({ attemptCount: test._count.attempts });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
+    // Read before the delete cascades them, or nothing is left to tell the catalog about.
+    const links = await this.prisma.testSeriesTest.findMany({
+      where: { testId: id },
+      select: { testSeriesId: true },
+    });
+
     await this.prisma.test.delete({ where: { id } });
+
+    for (const link of links) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    }
   }
 
   private assertJudgeable(

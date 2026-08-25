@@ -202,8 +202,9 @@ describe('PaperService — what it refuses to assemble', () => {
     assert.equal(prisma.paperQuestions.length, 0);
   });
 
-  it('refuses a test whose paper is already frozen', async () => {
-    const { service } = serviceWith(undefined, makeTest({ id: 'tst_1', isLocked: true }));
+  it('refuses a test a student has already sat', async () => {
+    const { service, prisma } = serviceWith(undefined, makeTest({ id: 'tst_1', isLocked: true }));
+    prisma.attempts.push({ testId: 'tst_1' });
 
     const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
 

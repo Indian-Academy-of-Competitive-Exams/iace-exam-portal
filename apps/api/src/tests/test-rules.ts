@@ -4,6 +4,7 @@ import {
   isPaperBindingAllowed,
   PAPER_BINDING,
   TEST_SCOPE,
+  TEST_STATUS,
   type EvaluationMode,
   type PaperBinding,
   type TestScope,
@@ -55,15 +56,27 @@ export function scopeRefIssue(scope: TestScope, scopeRef: TestScopeRef | null): 
   return scopeRef?.[required] === undefined ? SCOPE_REFERENCE_PROMPT[scope] : null;
 }
 
-/** The one field a frozen test may still change: renaming it moves no question. */
+/** The one field a sat test may still change: renaming it moves no question. */
 export const TEST_UNFROZEN_FIELDS = ['title'] as const;
 
-export const FROZEN_TEST_MESSAGE =
-  'This test is finalized — its paper is frozen and students may already have sat it. Only its name still changes.';
+export const SAT_TEST_MESSAGE =
+  'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';
 
 export function locksOutTestEdit(input: UpdateTestBody): boolean {
   const unfrozen = new Set<string>(TEST_UNFROZEN_FIELDS);
   return Object.keys(input).some((key) => !unfrozen.has(key));
+}
+
+/** A frozen paper that no longer matches its own scope is worse than either state, so it thaws. */
+export function unfreezing(test: { isLocked: boolean }) {
+  if (!test.isLocked) return {};
+  return {
+    isLocked: false,
+    finalizedAt: null,
+    status: TEST_STATUS.DRAFT,
+    // Or a finalize still holding the version it read could re-freeze behind this edit.
+    version: { increment: 1 },
+  };
 }
 
 export const ALREADY_FINALIZED_MESSAGE =
@@ -108,22 +121,9 @@ export function activationBlocker(test: { isLocked: boolean; seriesCount: number
   return null;
 }
 
-/** A test that has been sat, offered or frozen is history — deleting it would take that with it. */
-export function testDeletionBlocker(usage: {
-  isLocked: boolean;
-  attemptCount: number;
-  seriesCount: number;
-}): string | null {
-  if (usage.attemptCount > 0) {
-    const attempts = `${usage.attemptCount} attempt${usage.attemptCount === 1 ? '' : 's'}`;
-    return `${attempts} were sat on this test. Retire it instead — it keeps its results and is simply no longer offered.`;
-  }
-  if (usage.isLocked) {
-    return 'This test is finalized, so its paper is frozen. Retire it instead — it keeps everything it has and is simply no longer offered.';
-  }
-  if (usage.seriesCount > 0) {
-    const series = `${usage.seriesCount} series`;
-    return `${series} still offer this test. Take it out of them first.`;
-  }
-  return null;
+/** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */
+export function testDeletionBlocker(usage: { attemptCount: number }): string | null {
+  if (usage.attemptCount === 0) return null;
+  const attempts = `${usage.attemptCount} attempt${usage.attemptCount === 1 ? '' : 's'}`;
+  return `${attempts} were sat on this test. Retire it instead — it keeps its results and is simply no longer offered.`;
 }

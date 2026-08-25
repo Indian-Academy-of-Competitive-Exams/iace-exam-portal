@@ -64,7 +64,7 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
   return {
     prisma,
     events,
-    tests: new TestsService(prisma.asService(), configs, new AuditContext()),
+    tests: new TestsService(prisma.asService(), configs, new AuditContext(), events.asService()),
     paper: new PaperService(prisma.asService(), configs),
     finalizer: new FinalizeService(prisma.asService()),
     offering: new OfferingService(prisma.asService(), events.asService()),
@@ -148,27 +148,44 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.ok(AppException.is(atEdit));
   });
 
-  it('one frozen paper: it cannot be redrawn, and a second finalize changes nothing', async () => {
+  it('one paper per sitting: once it is sat it cannot be redrawn, and a second finalize does nothing', async () => {
     const { tests, paper, finalizer, prisma } = builder();
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     await paper.assemble(draft.id, { seed: SEED });
     await finalizer.finalize(draft.id);
 
+    const second = await finalizer.finalize(draft.id);
+    assert.equal(second.finalizedByThisCall, false);
+
     const before = prisma.paperQuestions.map((row) => row.questionId).sort();
+    prisma.attempts.push({ testId: draft.id });
 
     const redraw = await paper.assemble(draft.id, { seed: SEED + 1 }).catch((e: unknown) => e);
     assert.ok(AppException.is(redraw));
     assert.equal(redraw.code, ErrorCodes.CONFLICT);
 
-    const second = await finalizer.finalize(draft.id);
-    assert.equal(second.finalizedByThisCall, false);
-
-    // Every student shares one paper, and it is the one that was frozen.
+    // Every student shares one paper, and it is the one they started sitting.
     assert.deepEqual(prisma.paperQuestions.map((row) => row.questionId).sort(), before);
     assert.deepEqual(
       prisma.questions.filter((row) => before.includes(row.id)).map((row) => row.fixedUseCount),
       before.map(() => 1),
     );
+  });
+
+  /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the redraw. */
+  it('lets a frozen paper nobody has sat be redrawn, and thaws it in doing so', async () => {
+    const { tests, paper, finalizer, prisma } = builder();
+    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    await paper.assemble(draft.id, { seed: SEED });
+    await finalizer.finalize(draft.id);
+    assert.equal(prisma.tests[0]!.isLocked, true);
+
+    await paper.assemble(draft.id, { seed: SEED + 1 });
+
+    const test = prisma.tests[0]!;
+    assert.equal(test.isLocked, false);
+    assert.equal(test.finalizedAt, null);
+    assert.equal(test.status, TEST_STATUS.DRAFT);
   });
 
   it('a bank too thin stops the milestone at the draw, having written nothing', async () => {

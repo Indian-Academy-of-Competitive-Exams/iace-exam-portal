@@ -22,7 +22,7 @@ import {
   type DrawSection,
   type DrawnQuestion,
 } from './draw-engine';
-import { FROZEN_TEST_MESSAGE } from './test-rules';
+import { SAT_TEST_MESSAGE, unfreezing } from './test-rules';
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -62,7 +62,7 @@ export class PaperService {
 
   async assemble(testId: string, input: AssemblePaperBody): Promise<TestPaper> {
     const test = await this.requireTest(testId);
-    this.assertAssemblable(test);
+    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const config = await this.configs.detail(test.baseConfigId);
     const sections = config.sections.map(toDrawSection);
@@ -95,22 +95,26 @@ export class PaperService {
       );
     }
 
-    await this.replacePaper(test.id, test.baseConfigId, result.questions);
+    await this.replacePaper(test, result.questions);
 
     return this.paperOf(test.id, config);
   }
 
   /** Replaced wholesale: a re-draw is a new paper, not a merge into rows nobody can see. */
   private async replacePaper(
-    testId: string,
-    baseConfigId: string,
+    test: { id: string; baseConfigId: string; isLocked: boolean },
     questions: readonly DrawnQuestion[],
   ): Promise<void> {
+    const { id: testId, baseConfigId } = test;
     await this.prisma.$transaction(async (tx) => {
       await tx.paperQuestion.deleteMany({ where: { testId } });
       await tx.paperQuestion.createMany({
         data: questions.map((row) => ({ ...row, testId, baseConfigId })),
       });
+      const thaw = unfreezing(test);
+      if (Object.keys(thaw).length > 0) {
+        await tx.test.update({ where: { id: testId }, data: thaw });
+      }
     });
   }
 
@@ -177,10 +181,10 @@ export class PaperService {
     });
   }
 
-  private assertAssemblable(test: { isLocked: boolean; paperBinding: string }): void {
-    if (test.isLocked) {
-      throw new AppException(ErrorCodes.CONFLICT, FROZEN_TEST_MESSAGE, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [FROZEN_TEST_MESSAGE] },
+  private assertAssemblable(test: { attemptCount: number; paperBinding: string }): void {
+    if (test.attemptCount > 0) {
+      throw new AppException(ErrorCodes.CONFLICT, SAT_TEST_MESSAGE, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [SAT_TEST_MESSAGE] },
       });
     }
     if (test.paperBinding === PAPER_BINDING.GENERATED) {
@@ -234,6 +238,7 @@ export class PaperService {
         paperBinding: true,
         drawStrategy: true,
         questionPoolFilter: true,
+        _count: { select: { attempts: true } },
       },
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
