@@ -150,13 +150,13 @@ extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.un
 **Files:** create `packages/ui/src/components/ui/ratio-bar.tsx`,
 `packages/ui/test/ratio-bar.dom.test.tsx`; modify `packages/ui/src/index.ts`.
 
-- [ ] One stacked bar, two handles, three labelled parts that always total the section's question
+- [x] One stacked bar, two handles, three labelled parts that always total the section's question
       count. Dragging a handle re-splits between the two parts it sits between and never touches
       the third, so the total cannot drift.
-- [ ] Each handle is a real `role="slider"` with `aria-valuenow`, `aria-valuetext` and arrow-key
+- [x] Each handle is a real `role="slider"` with `aria-valuenow`, `aria-valuetext` and arrow-key
       steps. **A control only a mouse can drive is not finished** — this is the whole risk in the
       task.
-- [ ] Design-system tokens only; the three parts are distinguishable without relying on colour
+- [x] Design-system tokens only; the three parts are distinguishable without relying on colour
       alone.
       **Acceptance:** dragging and arrow keys produce the same values; the three always total the
       count they were given; a screen reader is told which part a handle governs and what it now

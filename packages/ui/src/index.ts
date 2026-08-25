@@ -140,6 +140,7 @@ export { RowActions, type RowActionsProps } from './components/ui/row-actions';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination, type PaginationProps } from './components/ui/pagination';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
+export { RatioBar, type RatioBarProps, type RatioPart } from './components/ui/ratio-bar';
 export { PageHeader } from './components/ui/page-header';
 export {
   DataTable,
