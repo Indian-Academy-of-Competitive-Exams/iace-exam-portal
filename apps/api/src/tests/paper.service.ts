@@ -22,7 +22,8 @@ import {
   type DrawSection,
   type DrawnQuestion,
 } from './draw-engine';
-import { SAT_TEST_MESSAGE, unfreezing } from './test-rules';
+import { SAT_TEST_MESSAGE } from './test-rules';
+import { thaw } from './thaw';
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -107,14 +108,12 @@ export class PaperService {
   ): Promise<void> {
     const { id: testId, baseConfigId } = test;
     await this.prisma.$transaction(async (tx) => {
+      // First: it reads the paper it is giving the counts back for, and this replaces that paper.
+      await thaw(tx, test);
       await tx.paperQuestion.deleteMany({ where: { testId } });
       await tx.paperQuestion.createMany({
         data: questions.map((row) => ({ ...row, testId, baseConfigId })),
       });
-      const thaw = unfreezing(test);
-      if (Object.keys(thaw).length > 0) {
-        await tx.test.update({ where: { id: testId }, data: thaw });
-      }
     });
   }
 

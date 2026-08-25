@@ -172,6 +172,48 @@ describe('the invariants Phase 2 must not have broken', () => {
     );
   });
 
+  /** The failure this prevents: LEAST_SERVED biased for good against questions that never moved. */
+  it('gives back the use it counted, so a refreeze does not count the same question twice', async () => {
+    const { tests, paper, finalizer, prisma } = builder();
+    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    await paper.assemble(draft.id, { seed: SEED });
+    await finalizer.finalize(draft.id);
+
+    const drawn = prisma.paperQuestions.map((row) => row.questionId);
+    const counted = () =>
+      prisma.questions.filter((row) => drawn.includes(row.id)).map((row) => row.fixedUseCount);
+    assert.deepEqual(
+      counted(),
+      drawn.map(() => 1),
+    );
+
+    // The same seed draws the same paper, so every question here is one that survived the thaw.
+    await paper.assemble(draft.id, { seed: SEED });
+    assert.deepEqual(
+      counted(),
+      drawn.map(() => 0),
+    );
+
+    await finalizer.finalize(draft.id);
+    assert.deepEqual(
+      counted(),
+      drawn.map(() => 1),
+    );
+  });
+
+  it('gives nothing back for a draft that was never frozen', async () => {
+    const { tests, paper, prisma } = builder();
+    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+
+    await paper.assemble(draft.id, { seed: SEED });
+    await paper.assemble(draft.id, { seed: SEED });
+
+    assert.deepEqual(
+      prisma.questions.map((row) => row.fixedUseCount),
+      prisma.questions.map(() => 0),
+    );
+  });
+
   /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the redraw. */
   it('lets a frozen paper nobody has sat be redrawn, and thaws it in doing so', async () => {
     const { tests, paper, finalizer, prisma } = builder();

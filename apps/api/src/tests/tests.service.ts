@@ -27,8 +27,8 @@ import {
   scopeRefIssue,
   TEST_DEFAULTS,
   testDeletionBlocker,
-  unfreezing,
 } from './test-rules';
+import { thaw } from './thaw';
 
 const TEST_INCLUDE = {
   baseConfig: { select: { name: true, totalQuestions: true, durationSec: true } },
@@ -145,30 +145,32 @@ export class TestsService {
     );
     this.assertCovers(config, scope, scopeRef);
 
-    // A paper belongs to a FIXED test. Switching to per-attempt leaves rows nothing will ever read.
-    if (
-      input.paperBinding === PAPER_BINDING.GENERATED &&
-      test.paperBinding !== input.paperBinding
-    ) {
-      await this.prisma.paperQuestion.deleteMany({ where: { testId: id } });
-    }
+    const droppingThePaper =
+      input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
 
-    const updated = await this.prisma.test.update({
-      where: { id },
-      data: {
-        ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.scope === undefined ? {} : { scope: input.scope }),
-        ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
-        ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
-        ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
-        ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
-        ...(input.drawStrategy === undefined ? {} : { drawStrategy: input.drawStrategy }),
-        ...(input.questionPoolFilter === undefined
-          ? {}
-          : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
-        ...(shapeChange ? unfreezing(test) : {}),
-      },
-      include: TEST_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Before the paper goes: the thaw reads it to give back what finalizing counted.
+      if (shapeChange) await thaw(tx, test);
+
+      // A paper belongs to a FIXED test. Per-attempt leaves rows nothing will ever read.
+      if (droppingThePaper) await tx.paperQuestion.deleteMany({ where: { testId: id } });
+
+      return tx.test.update({
+        where: { id },
+        data: {
+          ...(input.title === undefined ? {} : { title: input.title }),
+          ...(input.scope === undefined ? {} : { scope: input.scope }),
+          ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
+          ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
+          ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
+          ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
+          ...(input.drawStrategy === undefined ? {} : { drawStrategy: input.drawStrategy }),
+          ...(input.questionPoolFilter === undefined
+            ? {}
+            : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
+        },
+        include: TEST_INCLUDE,
+      });
     });
 
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));

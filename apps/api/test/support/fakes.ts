@@ -1566,11 +1566,15 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       where,
       data,
     }: {
-      where: { id: { in: string[] } };
-      data: { fixedUseCount: { increment: number } };
+      where: { id: { in: string[] }; fixedUseCount?: { gt: number } };
+      data: { fixedUseCount: { increment?: number; decrement?: number } };
     }) => {
-      const matched = this.questions.filter((row) => where.id.in.includes(row.id));
-      for (const row of matched) row.fixedUseCount += data.fixedUseCount.increment;
+      const floor = where.fixedUseCount?.gt;
+      const matched = this.questions.filter(
+        (row) => where.id.in.includes(row.id) && (floor === undefined || row.fixedUseCount > floor),
+      );
+      const by = (data.fixedUseCount.increment ?? 0) - (data.fixedUseCount.decrement ?? 0);
+      for (const row of matched) row.fixedUseCount += by;
       return Promise.resolve({ count: matched.length });
     },
   };
