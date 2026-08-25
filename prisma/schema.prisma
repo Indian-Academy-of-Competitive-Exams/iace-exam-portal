@@ -484,6 +484,8 @@ model Test {
   maxRetakes         Int?
   questionPoolFilter Json?
   drawStrategy       DrawStrategy   @default(RANDOM)
+  // How many papers were drawn. One for FIXED; a GENERATED test hands out one per attempt by seed.
+  variantCount       Int            @default(1)
   status             TestStatus     @default(DRAFT)
   isLocked           Boolean        @default(false)
   // Optimistic lock — finalize is a conditional UPDATE ... WHERE version = $n.
@@ -509,7 +511,10 @@ model Test {
   @@index([status])
 }
 
-// FIXED papers only: drawn once at finalize, frozen, shared by every student.
+// One paper. A FIXED test has exactly one, at variant 0; a GENERATED test has
+// Test.variantCount of them, drawn when it is offered, and each attempt reads
+// the one its seed lands on. The same question at the same position in two
+// different variants is correct, which is why both uniques carry the variant.
 model PaperQuestion {
   id                  String              @id @default(cuid())
   testId              String
@@ -517,6 +522,7 @@ model PaperQuestion {
   baseConfigSectionId String
   questionId          String
   questionVersionId   String
+  variant             Int                 @default(0)
   order               Int
   marks               Decimal             @db.Decimal(6, 2)
   negativeMarks       Decimal             @db.Decimal(6, 2)
@@ -530,8 +536,9 @@ model PaperQuestion {
   attemptSections   AttemptQuestion[]  @relation("AttemptItemPaperSection")
   questionStats     TestQuestionStat[]
 
-  @@unique([testId, questionId])
-  @@unique([testId, order])
+  @@unique([testId, variant, questionId])
+  @@unique([testId, variant, order])
+  // These two target a ROW, which is still unique on its own — the variant does not belong in them.
   @@unique([id, questionId, questionVersionId])
   @@unique([id, baseConfigSectionId])
   @@index([questionId])

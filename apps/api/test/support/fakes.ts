@@ -1403,6 +1403,7 @@ export interface FakePaperRow {
   baseConfigSectionId: string;
   questionId: string;
   questionVersionId: string;
+  variant: number;
   order: number;
   marks: number;
   negativeMarks: number;
@@ -1586,10 +1587,14 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   };
 
   readonly paperQuestion = {
-    findMany: ({ where }: { where: { testId: string } }) =>
+    findMany: ({ where }: { where: { testId: string; variant?: number } }) =>
       Promise.resolve(
         this.paperQuestions
-          .filter((row) => row.testId === where.testId)
+          .filter(
+            (row) =>
+              row.testId === where.testId &&
+              (where.variant === undefined || row.variant === where.variant),
+          )
           .sort((a, b) => a.order - b.order)
           .map((row) => ({ ...row, question: this.questionRef(row.questionId) })),
       ),
@@ -1602,9 +1607,14 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: removed });
     },
 
-    createMany: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status'>[] }) => {
+    createMany: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status' | 'variant'>[] }) => {
       for (const row of data) {
-        this.paperQuestions.push({ ...row, id: `pq_${row.testId}_${row.order}`, status: 'ACTIVE' });
+        this.paperQuestions.push({
+          ...row,
+          id: `pq_${row.testId}_${row.order}`,
+          variant: 0,
+          status: 'ACTIVE',
+        });
       }
       return Promise.resolve({ count: data.length });
     },

@@ -38,6 +38,7 @@ function paper(): FakePaperRow[] {
     baseConfigSectionId: 'sec_1',
     questionId: `q${n}`,
     questionVersionId: `q${n}_v1`,
+    variant: 0,
     order: n,
     marks: 2,
     negativeMarks: 0.5,
@@ -127,6 +128,7 @@ describe('AttemptsService — starting a sitting', () => {
         baseConfigSectionId: 'sec_2',
         questionId: `q${n}`,
         questionVersionId: `q${n}_v1`,
+        variant: 0,
         order: n,
       })),
     ];

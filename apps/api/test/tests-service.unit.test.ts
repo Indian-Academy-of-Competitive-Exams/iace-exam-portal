@@ -280,6 +280,7 @@ describe('TestsService — editing and removing', () => {
       baseConfigSectionId: 'sec_1',
       questionId: 'qst_1',
       questionVersionId: 'qst_1_v1',
+      variant: 0,
       order: 1,
       marks: 2,
       negativeMarks: 0.5,

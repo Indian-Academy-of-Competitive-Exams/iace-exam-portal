@@ -270,6 +270,7 @@ function toTest(row: TestRow): Test {
     paperBinding: row.paperBinding,
     maxRetakes: row.maxRetakes,
     drawStrategy: row.drawStrategy,
+    variantCount: row.variantCount,
     questionPoolFilter: (row.questionPoolFilter as QuestionPoolFilter | null) ?? null,
     status: row.status,
     isLocked: row.isLocked,

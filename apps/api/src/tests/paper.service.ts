@@ -25,6 +25,9 @@ import {
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 
+/** The one a FIXED test has, and the first a GENERATED test draws. */
+const FIXED_VARIANT = 0;
+
 const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
@@ -288,9 +291,14 @@ export class PaperService {
     }
   }
 
-  private async paperOf(testId: string, config: BaseConfigDetail): Promise<TestPaper> {
+  /** One paper at a time. A FIXED test has only variant 0; a GENERATED one is read a variant at a time. */
+  private async paperOf(
+    testId: string,
+    config: BaseConfigDetail,
+    variant = FIXED_VARIANT,
+  ): Promise<TestPaper> {
     const rows = await this.prisma.paperQuestion.findMany({
-      where: { testId },
+      where: { testId, variant },
       include: PAPER_INCLUDE,
       orderBy: { order: 'asc' },
     });
@@ -312,6 +320,7 @@ export class PaperService {
             baseConfigSectionId: row.baseConfigSectionId,
             questionId: row.questionId,
             questionVersionId: row.questionVersionId,
+            variant: row.variant,
             order: row.order,
             marks: Number(row.marks),
             negativeMarks: Number(row.negativeMarks),

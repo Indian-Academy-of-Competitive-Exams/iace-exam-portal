@@ -244,6 +244,8 @@ export const testSchema = z.object({
   /** Optimistic lock: finalize is a conditional update against it. */
   version: z.number().int(),
   finalizedAt: z.string().nullable(),
+  /** How many papers were drawn. One for FIXED; a GENERATED test hands one out per attempt. */
+  variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
   seriesCount: z.number().int(),
@@ -288,6 +290,8 @@ export const paperQuestionSchema = z.object({
   questionId: z.string(),
   /** The version this paper serves, so a result reproduces after the question is edited. */
   questionVersionId: z.string(),
+  /** Which of the test's papers this row belongs to. A FIXED test has one, at 0. */
+  variant: z.number().int(),
   order: z.number().int(),
   marks: z.number(),
   negativeMarks: z.number(),

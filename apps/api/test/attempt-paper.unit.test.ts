@@ -71,6 +71,7 @@ function serviceWith(
     baseConfigSectionId: 'sec_1',
     questionId: `q${n}`,
     questionVersionId: `q${n}_v1`,
+    variant: 0,
     order: n,
     marks: 2,
     negativeMarks: 0.5,

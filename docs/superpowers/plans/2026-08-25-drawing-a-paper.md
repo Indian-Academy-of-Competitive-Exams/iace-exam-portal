@@ -102,13 +102,13 @@ across them would not mean anything.
 **Files:** modify `prisma/schema.prisma`; create the migration by hand; modify
 `packages/contracts/src/tests.ts`.
 
-- [ ] `PaperQuestion.variant Int @default(0)`. A FIXED paper is variant 0 and always will be.
-- [ ] `@@unique([testId, questionId])` becomes `@@unique([testId, variant, questionId])`, and
+- [x] `PaperQuestion.variant Int @default(0)`. A FIXED paper is variant 0 and always will be.
+- [x] `@@unique([testId, questionId])` becomes `@@unique([testId, variant, questionId])`, and
       `@@unique([testId, order])` becomes `@@unique([testId, variant, order])` — the same question
       at the same position in two different variants is correct, not a duplicate.
-- [ ] The two composite-FK uniques (`[id, questionId, questionVersionId]`,
+- [x] The two composite-FK uniques (`[id, questionId, questionVersionId]`,
       `[id, baseConfigSectionId]`) are untouched: they target a ROW, which is still unique.
-- [ ] `Test.variantCount Int @default(1)`, so picking a variant needs no aggregate on the hot path.
+- [x] `Test.variantCount Int @default(1)`, so picking a variant needs no aggregate on the hot path.
       **Acceptance:** `pnpm db:migrate:deploy` from scratch and `pnpm db:check` both pass; an
       existing FIXED paper keeps every row at variant 0 and its uniques still refuse a duplicate
       question within that variant.

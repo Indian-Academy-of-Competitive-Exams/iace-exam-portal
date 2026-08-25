@@ -58,6 +58,7 @@ describe('paperQuestionSchema', () => {
       baseConfigSectionId: 'sec1',
       baseConfigId: 'c1',
       questionId: 'q1',
+      variant: 0,
       order: 1,
       marks: 2,
       negativeMarks: 0.5,

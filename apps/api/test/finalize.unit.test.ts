@@ -31,6 +31,7 @@ function wholePaper(testId = 'tst_1'): FakePaperRow[] {
     baseConfigSectionId,
     questionId,
     questionVersionId: `${questionId}_v1`,
+    variant: 0,
     order: index + 1,
     marks: 2,
     negativeMarks: 0.5,
