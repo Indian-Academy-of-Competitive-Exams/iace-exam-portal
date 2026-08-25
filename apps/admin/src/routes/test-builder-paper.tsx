@@ -215,21 +215,21 @@ function paperColumns(
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
     {
-      key: 'code',
-      header: 'Code',
-      className: 'max-w-[10rem] font-mono text-sm',
+      key: 'question',
+      header: 'Question',
+      // Beside the bank in half a screen: what it is and how hard, on one line each.
+      className: 'w-full max-w-0',
       cell: (row) => (
-        <QuestionLink questionId={row.questionId}>
-          <TruncatedText>{row.question.questionCode}</TruncatedText>
-        </QuestionLink>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <QuestionLink questionId={row.questionId}>
+            <TruncatedText className="font-mono">{row.question.questionCode}</TruncatedText>
+          </QuestionLink>
+          <span className="text-xs text-muted-foreground">
+            {`${row.question.difficulty.toLowerCase()} · ${row.marks} marks`}
+          </span>
+        </span>
       ),
     },
-    {
-      key: 'difficulty',
-      header: 'Difficulty',
-      cell: (row) => <Badge variant="neutral">{row.question.difficulty}</Badge>,
-    },
-    { key: 'marks', header: 'Marks', numeric: true, cell: (row) => row.marks },
     ...actions,
   ];
 }

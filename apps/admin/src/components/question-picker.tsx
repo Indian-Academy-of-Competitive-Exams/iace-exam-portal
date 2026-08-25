@@ -4,7 +4,6 @@ import { useListScreen, useLocalFilters } from '@iace/app-kit/browser';
 import { Plus } from 'lucide-react';
 import {
   Badge,
-  BadgeList,
   Button,
   ListView,
   TruncatedText,
@@ -50,47 +49,31 @@ function questionColumns(
   return [...baseColumns(), ...add];
 }
 
+/** Two columns, not six: this list lives in half a screen and a row read across is unread. */
 function baseColumns(): DataTableColumn<QuestionSummary>[] {
   return [
     {
-      key: 'code',
-      header: 'Code',
-      className: 'max-w-[10rem] font-mono text-sm',
-      cell: (question) => <TruncatedText>{question.questionCode}</TruncatedText>,
-    },
-    {
-      key: 'stem',
+      key: 'question',
       header: 'Question',
-      className: 'max-w-[24rem] font-medium',
+      // `w-full max-w-0` is what lets a cell take the rest of the row AND still cut its text.
+      className: 'w-full max-w-0',
       cell: (question) => (
-        <QuestionLink questionId={question.id}>
-          <TruncatedText>{question.stemPreview}</TruncatedText>
-        </QuestionLink>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <QuestionLink questionId={question.id}>
+            <TruncatedText>{question.stemPreview}</TruncatedText>
+          </QuestionLink>
+          <span className="flex min-w-0 items-center gap-2">
+            <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
+            <TruncatedText className="text-xs text-muted-foreground">
+              {[question.questionCode, question.topic?.name].filter(Boolean).join(' · ') || null}
+            </TruncatedText>
+          </span>
+        </span>
       ),
-    },
-    {
-      key: 'topic',
-      header: 'Topic',
-      className: 'max-w-[12rem] text-muted-foreground',
-      cell: (question) => <TruncatedText>{question.topic?.name ?? null}</TruncatedText>,
-    },
-    {
-      key: 'difficulty',
-      header: 'Difficulty',
-      cell: (question) => (
-        <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
-      ),
-    },
-    {
-      key: 'tags',
-      header: 'Tags',
-      className: 'max-w-[10rem]',
-      cell: (question) => <BadgeList items={question.tags} label={(tag) => tag} />,
     },
   ];
 }
 
-/** The bank for one section, ticked. Inline: a section is already open, so nothing needs opening. */
 export function QuestionChooser({
   subjectId,
   held,
