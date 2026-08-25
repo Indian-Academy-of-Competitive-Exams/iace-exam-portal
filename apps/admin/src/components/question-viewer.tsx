@@ -5,8 +5,10 @@ import {
   LANGUAGE_LABELS,
   QUESTION_TYPE,
   plainTextOf,
+  previewTextOf,
   type QuestionDetail,
   type QuestionLanguage,
+  type RichContent,
 } from '@iace/contracts';
 import {
   Alert,
@@ -28,25 +30,31 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  cn,
   linkVariants,
 } from '@iace/ui';
 import { api } from '../lib/api';
 
 /** Reading one question without leaving the screen that referred to it. */
 
+/** The same pair the list preview uses: a node's text is html, and a reader wants neither tag. */
+function readable(content: RichContent | undefined): string {
+  return previewTextOf(plainTextOf(content));
+}
+
 function OneLanguage({
   question,
   language,
 }: Readonly<{ question: QuestionDetail; language: QuestionLanguage }>) {
   const content = question.content[language];
-  const solution = plainTextOf(content?.solution);
+  const solution = readable(content?.solution);
 
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold tracking-tight text-foreground">Question</h3>
         <p className="whitespace-pre-wrap text-sm text-foreground">
-          {plainTextOf(content?.stem) || '—'}
+          {readable(content?.stem) || '—'}
         </p>
       </section>
 
@@ -60,7 +68,7 @@ function OneLanguage({
                   {String.fromCodePoint(65 + index)}
                 </span>
                 <span className="flex-1 whitespace-pre-wrap text-foreground">
-                  {plainTextOf(option.text[language]) || '—'}
+                  {readable(option.text[language]) || '—'}
                 </span>
                 {option.isCorrect ? <Badge variant="success">Correct</Badge> : null}
               </li>
@@ -182,7 +190,11 @@ export function QuestionLink({
 
   return (
     <>
-      <button type="button" className={linkVariants()} onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className={cn(linkVariants(), 'block w-full min-w-0 text-left')}
+        onClick={() => setOpen(true)}
+      >
         {children}
       </button>
       {open ? <QuestionViewer questionId={questionId} onOpenChange={setOpen} /> : null}
