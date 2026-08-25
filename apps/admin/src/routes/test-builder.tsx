@@ -27,7 +27,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, TEST_BUILDER_STEP_LABELS, TEST_STATUS_LABELS } from '../lib/constants';
-import { ConfigSummary } from '../components/config-summary';
+import { ConfigSummaryButton } from '../components/config-summary';
 import {
   applyServerErrors,
   RETAKES_NOT_A_NUMBER,
@@ -196,6 +196,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
             title={detail?.title ?? (existing ? 'Untitled test' : 'New test')}
             meta={metaOf(detail)}
+            action={config ? <ConfigSummaryButton config={config} /> : undefined}
           />
 
           <Stepper
@@ -204,8 +205,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
             steps={steps}
             onValueChange={(value) => open(value as TestBuilderStep)}
           />
-
-          {config ? <ConfigSummary config={config} /> : null}
 
           {banner ? (
             <Alert variant="danger" className="mb-4">
@@ -283,13 +282,6 @@ function StepBody({
         <Alert variant="warning">
           Students have sat this test, so its paper cannot move under their results. Only its name
           can still be changed.
-        </Alert>
-      ) : null}
-
-      {!sat && detail?.isLocked ? (
-        <Alert variant="info">
-          This test is finalized. Changing anything but its name unfreezes the paper and stops it
-          being offered, so it goes back to being a draft you finalize again.
         </Alert>
       ) : null}
 

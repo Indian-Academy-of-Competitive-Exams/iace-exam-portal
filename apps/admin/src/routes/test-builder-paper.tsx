@@ -1,18 +1,34 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Dices } from 'lucide-react';
+import { Dices, Repeat, Trash2 } from 'lucide-react';
 import {
   AppException,
   ErrorCodes,
   PAPER_BINDING,
   type BaseConfigSection,
+  type PaperRow,
+  type PaperSection,
   type TestDetail,
+  type TestPaper,
 } from '@iace/contracts';
-import { Alert, Badge, Button, Field, SkeletonParagraph, StatRow } from '@iace/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  ConfirmDialog,
+  DataTable,
+  DropdownMenuItem,
+  RowActions,
+  SkeletonParagraph,
+  StatRow,
+  TruncatedText,
+  plural,
+  type DataTableColumn,
+} from '@iace/ui';
 import { api } from '../lib/api';
-import { QuestionMultiPicker } from '../components/question-picker';
+import { QuestionPicker, QuestionPickerButton } from '../components/question-picker';
 
-/** What the paper holds: the count each section owes, the hand-picks, and the draw. */
+/** What the paper holds: the questions on it, the ones pinned by hand, and the draw. */
 
 const PAPER_KEY = (testId: string) => ['admin', 'test-paper', testId] as const;
 
@@ -22,10 +38,23 @@ function shortfallsOf(error: unknown): string[] {
   return Object.values(error.fieldErrors ?? {}).flat();
 }
 
+/** Says what a draw costs, so the two standing alerts that used to say it can go. */
+function drawDescription(detail: TestDetail, drawn: number): string {
+  const replaced =
+    drawn > 0
+      ? `The ${plural(drawn, 'question')} already on this paper are replaced, keeping only what you have chosen by hand. `
+      : '';
+  const thaw = detail.isLocked
+    ? 'This test is finalized, so drawing unfreezes its paper and stops it being offered until you finalize it again. '
+    : '';
+  return `${replaced}${thaw}Every student sits whatever this draw produces.`;
+}
+
 export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
-  const sat = detail.attemptCount > 0;
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string[]>>({});
+  const [asking, setAsking] = useState(false);
+  const sat = detail.attemptCount > 0;
   const generated = detail.paperBinding === PAPER_BINDING.GENERATED;
 
   const paper = useQuery({
@@ -33,6 +62,19 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
     queryFn: () => api.admin.tests.readPaper(detail.id),
     enabled: !generated,
   });
+
+  const held = useMemo(() => {
+    const sections = new Map<string, PaperSection>();
+    for (const section of paper.data?.sections ?? []) {
+      sections.set(section.baseConfigSectionId, section);
+    }
+    return sections;
+  }, [paper.data]);
+
+  const refresh = async (next: TestPaper) => {
+    queryClient.setQueryData(PAPER_KEY(detail.id), next);
+    await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
+  };
 
   const draw = useMutation({
     meta: { success: 'Paper drawn.' },
@@ -43,31 +85,24 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
           .map(([baseConfigSectionId, questionIds]) => ({ baseConfigSectionId, questionIds })),
       }),
     onSuccess: async (next) => {
-      queryClient.setQueryData(PAPER_KEY(detail.id), next);
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
+      setAsking(false);
+      await refresh(next);
     },
+    onError: () => setAsking(false),
   });
-
-  const held = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const section of paper.data?.sections ?? []) {
-      counts.set(section.baseConfigSectionId, section.questions.length);
-    }
-    return counts;
-  }, [paper.data]);
 
   if (generated) {
     return (
       <Alert variant="info">
         This test draws a fresh paper for each student when their attempt starts, so there is no one
-        paper to build here. Switch it back to a fixed paper on Rules if every student should sit
+        paper to build here. Switch it back to a fixed paper on Setup if every student should sit
         the same questions.
       </Alert>
     );
   }
 
   const gaps = shortfallsOf(draw.error);
-  const drawn = [...held.values()].reduce((sum, count) => sum + count, 0);
+  const drawn = [...held.values()].reduce((sum, section) => sum + section.questions.length, 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,83 +119,193 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
         </Alert>
       ) : null}
 
-      {detail.isLocked ? (
-        <Alert variant="info">
-          This paper is frozen — every student sits exactly these questions, in this order. Drawing
-          again unfreezes it and stops the test being offered until it is finalized once more.
-        </Alert>
-      ) : null}
-
       {paper.isLoading ? <SkeletonParagraph lines={detail.baseConfig.sections.length} /> : null}
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {paper.isLoading
           ? null
           : detail.baseConfig.sections.map((section) => (
-              <SectionRow
+              <SectionPaper
                 key={section.id}
+                testId={detail.id}
                 section={section}
-                held={held.get(section.id) ?? 0}
+                held={held.get(section.id)}
                 pinned={manual[section.id] ?? []}
                 sat={sat}
-                onPin={(next) => setManual((held) => ({ ...held, [section.id]: next }))}
+                onPin={(next) => setManual((chosen) => ({ ...chosen, [section.id]: next }))}
+                onChanged={refresh}
               />
             ))}
       </div>
 
-      {drawn > 0 && !sat ? (
-        <Alert variant="info">
-          Drawing again replaces every question below, keeping only what you have chosen by hand.
-        </Alert>
-      ) : null}
-
       {sat ? null : (
-        <Button type="button" onClick={() => draw.mutate()} loading={draw.isPending}>
-          <Dices aria-hidden />
-          {drawn > 0 ? 'Draw again' : 'Draw the paper'}
-        </Button>
+        <div>
+          <Button type="button" onClick={() => setAsking(true)} loading={draw.isPending}>
+            <Dices aria-hidden />
+            {drawn > 0 ? 'Draw again' : 'Draw the paper'}
+          </Button>
+        </div>
       )}
+
+      <ConfirmDialog
+        open={asking}
+        onOpenChange={(open) => !open && setAsking(false)}
+        title={drawn > 0 ? 'Draw this paper again?' : 'Draw the paper?'}
+        description={drawDescription(detail, drawn)}
+        confirmLabel={drawn > 0 ? 'Draw again' : 'Draw the paper'}
+        loading={draw.isPending}
+        onConfirm={() => draw.mutate()}
+      />
     </div>
   );
 }
 
-function SectionRow({
+function paperColumns(
+  onReplace: (row: PaperRow) => void,
+  onRemove: (row: PaperRow) => void,
+  sat: boolean,
+): DataTableColumn<PaperRow>[] {
+  const actions: DataTableColumn<PaperRow>[] = sat
+    ? []
+    : [
+        {
+          key: 'actions',
+          className: 'text-right',
+          cell: (row) => (
+            <RowActions label={`Actions for question ${row.order}`}>
+              <DropdownMenuItem onSelect={() => onReplace(row)}>
+                <Repeat aria-hidden />
+                Replace
+              </DropdownMenuItem>
+              <DropdownMenuItem destructive onSelect={() => onRemove(row)}>
+                <Trash2 aria-hidden />
+                Remove
+              </DropdownMenuItem>
+            </RowActions>
+          ),
+        },
+      ];
+
+  return [
+    { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
+    {
+      key: 'code',
+      header: 'Code',
+      className: 'max-w-[10rem] font-mono text-sm',
+      cell: (row) => <TruncatedText>{row.question.questionCode}</TruncatedText>,
+    },
+    {
+      key: 'difficulty',
+      header: 'Difficulty',
+      cell: (row) => <Badge variant="neutral">{row.question.difficulty}</Badge>,
+    },
+    { key: 'marks', header: 'Marks', numeric: true, cell: (row) => row.marks },
+    ...actions,
+  ];
+}
+
+function SectionPaper({
+  testId,
   section,
   held,
   pinned,
   sat,
   onPin,
+  onChanged,
 }: Readonly<{
+  testId: string;
   section: BaseConfigSection;
-  held: number;
+  held: PaperSection | undefined;
   pinned: readonly string[];
   sat: boolean;
   onPin: (next: string[]) => void;
+  onChanged: (next: TestPaper) => Promise<void>;
 }>) {
-  const short = held < section.questionCount;
+  const [replacing, setReplacing] = useState<PaperRow | null>(null);
+  const [removing, setRemoving] = useState<PaperRow | null>(null);
+  const rows = held?.questions ?? [];
+  const short = rows.length < section.questionCount;
+
+  const replace = useMutation({
+    meta: { success: 'Question replaced.' },
+    mutationFn: ({ rowId, questionId }: { rowId: string; questionId: string }) =>
+      api.admin.tests.replacePaperQuestion(testId, rowId, { questionId }),
+    onSuccess: async (next) => {
+      setReplacing(null);
+      await onChanged(next);
+    },
+  });
+
+  const remove = useMutation({
+    meta: { success: 'Question removed.' },
+    mutationFn: (rowId: string) => api.admin.tests.removePaperQuestion(testId, rowId),
+    onSuccess: async (next) => {
+      setRemoving(null);
+      await onChanged(next);
+    },
+  });
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <StatRow
-        label={section.name}
-        value={
-          <span className="inline-flex items-center gap-2">
-            <span>{`${held} of ${section.questionCount}`}</span>
-            {short ? <Badge variant="warning">Short</Badge> : <Badge variant="success">Full</Badge>}
-          </span>
-        }
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatRow
+          className="flex-1"
+          label={section.name}
+          value={
+            <span className="inline-flex items-center gap-2">
+              <span>{`${rows.length} of ${section.questionCount}`}</span>
+              {short ? (
+                <Badge variant="warning">Short</Badge>
+              ) : (
+                <Badge variant="success">Full</Badge>
+              )}
+            </span>
+          }
+        />
+        <QuestionPickerButton
+          label={`Choose questions for ${section.name}`}
+          subjectId={section.subjectId}
+          chosen={pinned}
+          onChosen={onPin}
+          needed={section.questionCount}
+          disabled={sat}
+        />
+      </div>
+
+      {rows.length > 0 ? (
+        <DataTable
+          columns={paperColumns(setReplacing, setRemoving, sat)}
+          rows={rows}
+          rowKey={(row) => row.id}
+          isLoading={false}
+          empty="Nothing drawn for this section yet."
+        />
+      ) : null}
+
+      {replacing ? (
+        <QuestionPicker
+          single
+          open
+          onOpenChange={(open) => !open && setReplacing(null)}
+          title={`Replace question ${replacing.order} in ${section.name}`}
+          subjectId={section.subjectId}
+          chosen={[replacing.questionId]}
+          onChosen={([questionId]) =>
+            questionId && replace.mutate({ rowId: replacing.id, questionId })
+          }
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        destructive
+        title={`Remove question ${removing?.order ?? ''} from ${section.name}?`}
+        description={`${section.name} drops to ${rows.length - 1} of the ${section.questionCount} it needs, so this test cannot be finalized until one is drawn in its place.`}
+        confirmLabel="Remove question"
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing.id)}
       />
-      <Field htmlFor={`pin-${section.id}`} label="Choose by hand" hint="The draw fills the rest">
-        {(control) => (
-          <QuestionMultiPicker
-            {...control}
-            subjectId={section.subjectId}
-            value={pinned}
-            disabled={sat}
-            onChange={onPin}
-          />
-        )}
-      </Field>
     </div>
   );
 }

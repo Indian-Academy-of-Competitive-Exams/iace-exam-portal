@@ -45,11 +45,6 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Alert variant="info">
-        A test reaches a student only through a series. One that carries no series can still be
-        finalized, but nobody will be offered it.
-      </Alert>
-
       <Field htmlFor="test-series" label="Series">
         {(control) => (
           <TestSeriesMultiPicker
@@ -126,7 +121,7 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
         open={asking === OFFERING_CONFIRMS.FINALIZE}
         onOpenChange={(open) => !open && setAsking(null)}
         title={`Finalize ${detail.title ?? 'this test'}?`}
-        description={`The ${plural(detail.totalQuestions, 'question')} drawn for this test freeze, and ${detail.baseConfigName} locks with them — after this the way to change its shape is to clone it. This cannot be undone.`}
+        description={`The ${plural(detail.totalQuestions, 'question')} drawn for this test freeze, and every student sits exactly them. You can still unfreeze it by changing its shape, until the first student sits it.`}
         confirmLabel="Finalize test"
         loading={finalize.isPending}
         onConfirm={() => finalize.mutate()}
@@ -157,14 +152,7 @@ function PublishNotice({ detail }: Readonly<{ detail: TestDetail }>) {
     detail.seriesCount === 0 ? 'It is in no series, so no student can reach it.' : null,
   ].filter((gap): gap is string => gap !== null);
 
-  if (gaps.length === 0) {
-    return (
-      <Alert variant="info">
-        Finalizing freezes the paper and locks the base configuration it inherits. A test can only
-        be offered once it is frozen, because until then there is nothing for a student to sit.
-      </Alert>
-    );
-  }
+  if (gaps.length === 0) return null;
 
   return (
     <Alert variant="warning">
