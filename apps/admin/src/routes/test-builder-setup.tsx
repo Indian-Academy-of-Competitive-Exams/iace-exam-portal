@@ -28,7 +28,8 @@ import {
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { TopicMultiPicker } from '../components/taxonomy-picker';
-import { type TestForm } from './test-builder-form';
+import { useSuggestedTestName } from '../lib/use-suggested-name';
+import { type TestForm, type TestFormValues } from './test-builder-form';
 
 /** Everything a test writes itself: the blueprint it is built on, and how it is judged. */
 
@@ -43,10 +44,25 @@ export function SetupStep({
   config: BaseConfigDetail | null;
   frozen: boolean;
 }>) {
+  const values = useWatch({ control: form.control }) as TestFormValues;
+  const suggested = useSuggestedTestName({
+    examCode: config?.examStage.exam.code,
+    stageName: config?.examStage.name,
+    configName: config?.name,
+    examStageId: config?.examStageId,
+    scope: values.scope,
+    evaluationMode: values.evaluationMode,
+    scopeName: scopeNameOf(values, config),
+  });
+
   return (
     <>
       <FormSection title="Which paper this is">
-        <Blueprint form={form} detail={detail} />
+        <Blueprint
+          form={form}
+          detail={detail}
+          suggestion={values.title?.trim() === '' ? suggested : undefined}
+        />
       </FormSection>
 
       <FormSection title="How it is judged">
@@ -56,7 +72,23 @@ export function SetupStep({
   );
 }
 
-function Blueprint({ form, detail }: Readonly<{ form: TestForm; detail: TestDetail | null }>) {
+/** A topic's name lives on the taxonomy rather than the config, so a topic test keeps the fallback. */
+function scopeNameOf(values: TestFormValues, config: BaseConfigDetail | null): string | null {
+  if (!config) return null;
+  if (values.scope === TEST_SCOPE.SECTIONAL) {
+    return config.sections.find((section) => section.id === values.sectionId)?.name ?? null;
+  }
+  if (values.scope === TEST_SCOPE.MODULE) {
+    return config.modules.find((module) => module.id === values.moduleId)?.name ?? null;
+  }
+  return null;
+}
+
+function Blueprint({
+  form,
+  detail,
+  suggestion,
+}: Readonly<{ form: TestForm; detail: TestDetail | null; suggestion?: string }>) {
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
@@ -128,7 +160,16 @@ function Blueprint({ form, detail }: Readonly<{ form: TestForm; detail: TestDeta
       )}
 
       <FormField form={form} name="title" label="Name">
-        {(control) => <Input {...control} placeholder="SSC CGL Tier 1 — Mock 1" />}
+        {(control) => (
+          <Input
+            {...control}
+            placeholder="SSC CGL Tier 1 Standard — Mock 01"
+            suggestion={suggestion}
+            onAcceptSuggestion={(name) =>
+              form.setValue('title', name, { shouldDirty: true, shouldValidate: true })
+            }
+          />
+        )}
       </FormField>
     </div>
   );

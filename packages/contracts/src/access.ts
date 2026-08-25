@@ -149,6 +149,13 @@ export const seriesNameSchema = z
   .min(2, 'Give the series a name')
   .max(SERIES_NAME_MAX, `A name cannot be longer than ${SERIES_NAME_MAX} characters`);
 
+/** A series is named by who reaches it: a program, the free tier, or nothing in particular. */
+export function seriesNameKind(input: { programCode?: string | null; isFree?: boolean }): string {
+  const program = input.programCode?.trim();
+  if (program) return program;
+  return input.isFree ? 'Free Mocks' : 'Mock Test Series';
+}
+
 export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   examStageId: csvIdQuery(),

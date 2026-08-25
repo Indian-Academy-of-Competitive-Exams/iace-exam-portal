@@ -38,9 +38,10 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
-import { ExamStagePicker } from '../components/exam-picker';
+import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
 
 /**
@@ -159,6 +160,22 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const unlockMode = useWatch({ control: form.control, name: 'unlockMode' }) ?? UNLOCK_MODE.AUTO;
   const programCode = useWatch({ control: form.control, name: 'programCode' });
   const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
+  const name = useWatch({ control: form.control, name: 'name' });
+  const isFree = useWatch({ control: form.control, name: 'isFree' });
+
+  // The picker hands back only an id, so what the stage is CALLED has to be kept as it is chosen.
+  const [stage, setStage] = useState<StageChoice | null>(
+    detail?.examStage
+      ? { examCode: detail.examStage.examCode, stageName: detail.examStage.name }
+      : null,
+  );
+  const suggested = useSuggestedSeriesName({
+    examCode: stage?.examCode,
+    stageName: stage?.stageName,
+    examStageId: examStageId || undefined,
+    programCode,
+    isFree,
+  });
   const banner = bannerMessage(save.error, SERVER_FIELDS);
 
   /** A new series has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
@@ -220,7 +237,16 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       <FormSection title="Who it is for">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField form={form} name="name" label="Name">
-            {(control) => <Input {...control} placeholder="SSC CGL 2026 — Tier 1 mocks" />}
+            {(control) => (
+              <Input
+                {...control}
+                placeholder="SSC CGL Tier 1 — Mock Test Series"
+                suggestion={name?.trim() === '' ? suggested : undefined}
+                onAcceptSuggestion={(next) =>
+                  form.setValue('name', next, { shouldDirty: true, shouldValidate: true })
+                }
+              />
+            )}
           </FormField>
 
           <FormField form={form} name="examStageId" label="Stage" hint="Optional">
@@ -235,6 +261,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
                     : undefined
                 }
                 placeholder="Any stage"
+                onPick={setStage}
                 onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
               />
             )}

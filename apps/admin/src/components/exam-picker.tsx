@@ -50,8 +50,19 @@ export function ExamPicker(props: Readonly<PickerProps>) {
   );
 }
 
+/** What a chosen stage is called, for a caller that has to name something after it. */
+export interface StageChoice {
+  examCode: string;
+  stageName: string;
+}
+
 /** Only active stages: a retired one takes no new config, and the save would be refused. */
-export function ExamStagePicker({ examId, ...props }: Readonly<PickerProps & { examId?: string }>) {
+export function ExamStagePicker({
+  examId,
+  onChange,
+  onPick,
+  ...props
+}: Readonly<PickerProps & { examId?: string; onPick?: (chosen: StageChoice | null) => void }>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
@@ -75,6 +86,11 @@ export function ExamStagePicker({ examId, ...props }: Readonly<PickerProps & { e
         label: `${stage.exam.code} / ${stage.name}`,
         hint: stage.stageKey,
       }))}
+      onChange={(value) => {
+        const stage = pages.items.find((candidate) => candidate.id === value);
+        onPick?.(stage ? { examCode: stage.exam.code, stageName: stage.name } : null);
+        onChange(value);
+      }}
       search={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search stages"

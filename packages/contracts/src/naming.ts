@@ -37,3 +37,48 @@ export const BRANCH_NAME_MAX = 60;
 
 /** e.g. AMEERPET, RTC X ROADS, ONLINE. */
 export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, label: 'branch' });
+
+// ============================================================================
+// Suggested names for tests and series. A name here is NOT a canonical name:
+// it is mixed case and carries punctuation, so none of the rules above apply.
+// The shape is `Lead words — Kind NN`, and the number is what keeps one family
+// of names apart. Offered to the admin only; nothing on the server enforces it.
+// ============================================================================
+
+const NAME_PART_SEPARATOR = ' — ';
+const NAME_NUMBER_PAD = 2;
+
+/** `SSC CGL Tier 1 Standard — Mock`: everything a name says before its number. */
+export function nameStem(lead: readonly (string | null | undefined)[], kind: string): string {
+  const head = lead
+    .map((part) => part?.trim() ?? '')
+    .filter((part) => part !== '')
+    .join(' ');
+  return head === '' ? kind : head + NAME_PART_SEPARATOR + kind;
+}
+
+function numbered(stem: string, position: number): string {
+  return `${stem} ${String(position).padStart(NAME_NUMBER_PAD, '0')}`;
+}
+
+/** The highest number already used under this stem, or 0 when nothing sits under it yet. */
+function highestUnder(stem: string, taken: readonly string[]): number {
+  let highest = 0;
+  for (const name of taken) {
+    const rest = name.trim().startsWith(stem) ? name.trim().slice(stem.length).trim() : '';
+    const position = /^\d+$/.test(rest) ? Number(rest) : 0;
+    if (position > highest) highest = position;
+  }
+  return highest;
+}
+
+/** A test is one of a run, so it is numbered from the very first one. */
+export function suggestedTestName(stem: string, taken: readonly string[]): string {
+  return numbered(stem, highestUnder(stem, taken) + 1);
+}
+
+/** A series is usually alone under its stem, so it takes a number only once it needs one. */
+export function suggestedSeriesName(stem: string, taken: readonly string[]): string {
+  if (!taken.some((name) => name.trim() === stem)) return stem;
+  return numbered(stem, Math.max(highestUnder(stem, taken), 1) + 1);
+}

@@ -48,6 +48,17 @@ export const paperBindingSchema = z.enum(PAPER_BINDING);
 export type PaperBinding = z.infer<typeof paperBindingSchema>;
 export const PAPER_BINDINGS = paperBindingSchema.options;
 
+/** What a test is called by: the part of the paper it covers, or failing that how it is judged. */
+export function testNameKind(input: {
+  scope: TestScope;
+  evaluationMode: EvaluationMode;
+  scopeName?: string | null;
+}): string {
+  const named = input.scopeName?.trim();
+  if (input.scope !== TEST_SCOPE.FULL && named) return named;
+  return input.evaluationMode === EVALUATION_MODE.PRACTICE ? 'Practice' : 'Mock';
+}
+
 /** A rank only means something if everyone sat the same paper. */
 export function isPaperBindingAllowed(
   evaluationMode: EvaluationMode,
