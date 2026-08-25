@@ -8,6 +8,7 @@ import {
   type BaseConfigSection,
   type PaperRow,
   type DrawSpec,
+  type PaperBinding,
   type PaperSection,
   type SectionDrawSpec,
   type TestDetail,
@@ -58,12 +59,18 @@ export function PaperStep({
   detail,
   spec,
   onSpec,
-}: Readonly<{ detail: TestDetail; spec: DrawSpec; onSpec: (next: DrawSpec) => void }>) {
+  paperBinding,
+}: Readonly<{
+  detail: TestDetail;
+  spec: DrawSpec;
+  onSpec: (next: DrawSpec) => void;
+  paperBinding: PaperBinding;
+}>) {
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string[]>>({});
   const [asking, setAsking] = useState(false);
   const sat = detail.attemptCount > 0;
-  const generated = detail.paperBinding === PAPER_BINDING.GENERATED;
+  const generated = paperBinding === PAPER_BINDING.GENERATED;
 
   const paper = useQuery({
     queryKey: PAPER_KEY(detail.id),

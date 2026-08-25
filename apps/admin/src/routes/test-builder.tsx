@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
   PAPER_BINDING,
+  type PaperBinding,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
@@ -103,6 +104,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
   const drawSpec = useWatch({ control: form.control, name: 'drawSpec' });
+  const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
 
   const arrivedAt = (location.state as { step?: TestBuilderStep } | null)?.step;
   const [step, setStep] = useState<TestBuilderStep>(
@@ -231,6 +233,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         sat={sat}
         spec={drawSpec}
         onSpec={(next) => form.setValue('drawSpec', next, { shouldDirty: true })}
+        paperBinding={paperBinding}
       />
     </FormPanel>
   );
@@ -286,6 +289,7 @@ function StepBody({
   sat,
   spec,
   onSpec,
+  paperBinding,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
@@ -294,6 +298,8 @@ function StepBody({
   sat: boolean;
   spec: DrawSpec;
   onSpec: (next: DrawSpec) => void;
+  /** From the FORM, not the record: the step shows what was chosen, not what was last saved. */
+  paperBinding: PaperBinding;
 }>) {
   return (
     <>
@@ -308,7 +314,7 @@ function StepBody({
         <SetupStep form={form} detail={detail} config={config} sat={sat} />
       ) : null}
       {detail && step === TEST_BUILDER_STEP.PAPER ? (
-        <PaperStep detail={detail} spec={spec} onSpec={onSpec} />
+        <PaperStep detail={detail} spec={spec} onSpec={onSpec} paperBinding={paperBinding} />
       ) : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <>
