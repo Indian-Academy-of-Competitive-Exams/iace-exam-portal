@@ -10,6 +10,8 @@ import {
   plainTextOf,
   type LocalizedContent,
   type Paginated,
+  type QuestionAvailability,
+  type QuestionAvailabilityQuery,
   type QuestionDetail,
   type QuestionDraft,
   type QuestionLanguage,
@@ -126,6 +128,21 @@ export class QuestionsService {
       pageSize: query.pageSize,
       total,
     };
+  }
+
+  /** Counted in the database, because a page of a hundred is not what a section can draw from. */
+  async availability(query: QuestionAvailabilityQuery): Promise<QuestionAvailability> {
+    const where: Prisma.QuestionWhereInput = {
+      status: QUESTION_STATUS.ACTIVE,
+      currentVersionId: { not: null },
+      ...(query.subjectId ? { subjectId: { in: query.subjectId } } : {}),
+      ...(query.topicId ? { topicId: { in: query.topicId } } : {}),
+    };
+
+    const rows = await this.prisma.question.groupBy({ by: ['difficulty'], where, _count: true });
+    const byDifficulty = Object.fromEntries(rows.map((row) => [row.difficulty, row._count]));
+    const total = rows.reduce((sum, row) => sum + row._count, 0);
+    return { total, byDifficulty };
   }
 
   async detail(id: string): Promise<QuestionDetail> {

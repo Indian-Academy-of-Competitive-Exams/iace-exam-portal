@@ -696,8 +696,23 @@ export const ADMIN_TAXONOMY_ROUTES = {
   topic: (id: string) => `/admin/topics/${id}`,
 } as const;
 
+/** What the bank holds for a slice of it, counted rather than paged: a page is not a total. */
+export const questionAvailabilitySchema = z.object({
+  total: z.number().int(),
+  byDifficulty: z.partialRecord(difficultyLevelSchema, z.number().int()),
+});
+export type QuestionAvailability = z.infer<typeof questionAvailabilitySchema>;
+
+export const questionAvailabilityQuerySchema = z.object({
+  subjectId: csvIdQuery(),
+  topicId: csvIdQuery(),
+});
+export type QuestionAvailabilityQuery = z.infer<typeof questionAvailabilityQuerySchema>;
+export type QuestionAvailabilityQueryInput = z.input<typeof questionAvailabilityQuerySchema>;
+
 export const ADMIN_QUESTION_ROUTES = {
   list: '/admin/questions',
+  availability: '/admin/questions/availability',
   create: '/admin/questions',
   get: (id: string) => `/admin/questions/${id}`,
   update: (id: string) => `/admin/questions/${id}`,

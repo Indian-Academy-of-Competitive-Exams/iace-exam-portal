@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   DIFFICULTY_LEVELS,
-  PAGE_SIZE_MAX,
-  QUESTION_STATUS,
   defaultMixFor,
   mixIssue,
   type BaseConfigSection,
@@ -37,26 +35,18 @@ export function DrawSpecEditor({
 }>) {
   const topicIds = spec.topicIds ?? [];
 
-  /** What the bank actually holds for this section, so a thin bucket shows while it is being set. */
+  /** Counted by the database. A page of a hundred is only ever the newest hundred. */
   const available = useQuery({
     queryKey: ['admin', 'questions', 'available', section.subjectId, topicIds.join(',')],
     queryFn: () =>
-      api.admin.questions.list({
-        page: 1,
-        pageSize: PAGE_SIZE_MAX,
-        status: [QUESTION_STATUS.ACTIVE],
+      api.admin.questions.availability({
         subjectId: section.subjectId ? [section.subjectId] : undefined,
         topicId: topicIds.length > 0 ? topicIds : undefined,
       }),
     enabled: section.subjectId !== null,
   });
 
-  const held = new Map(
-    DIFFICULTY_LEVELS.map((level) => [
-      level,
-      (available.data?.items ?? []).filter((question) => question.difficulty === level).length,
-    ]),
-  );
+  const held = available.data?.byDifficulty ?? {};
 
   const issue = spec.mix ? mixIssue(spec.mix, { ...section, id: section.id }) : null;
 
@@ -100,9 +90,9 @@ export function DrawSpecEditor({
           />
 
           <p className="text-sm text-muted-foreground">
-            {DIFFICULTY_LEVELS.map(
-              (level) => `${held.get(level) ?? 0} ${level.toLowerCase()}`,
-            ).join(' · ')}
+            {DIFFICULTY_LEVELS.map((level) => `${held[level] ?? 0} ${level.toLowerCase()}`).join(
+              ' · ',
+            )}
             {' in the bank'}
           </p>
 

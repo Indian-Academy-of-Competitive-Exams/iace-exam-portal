@@ -179,6 +179,7 @@ import {
   questionDetailSchema,
   questionImportPlanSchema,
   questionImportResultSchema,
+  questionAvailabilitySchema,
   questionSummarySchema,
   subjectSchema,
   topicSchema,
@@ -192,6 +193,8 @@ import {
   type QuestionImportPlan,
   type QuestionImportResult,
   type QuestionIntakeStatus,
+  type QuestionAvailability,
+  type QuestionAvailabilityQueryInput,
   type QuestionListQueryInput,
   type QuestionSummary,
   type SetQuestionStatusInput,
@@ -960,6 +963,12 @@ export function createApiClient(options: ApiClientOptions) {
 
         detail: (id: string): Promise<QuestionDetail> =>
           request(ADMIN_QUESTION_ROUTES.get(id), { schema: questionDetailSchema }),
+
+        /** Counts, not a page: what a section can actually be drawn from. */
+        availability: (query: QuestionAvailabilityQueryInput = {}): Promise<QuestionAvailability> =>
+          request(`${ADMIN_QUESTION_ROUTES.availability}${queryString({ ...query })}`, {
+            schema: questionAvailabilitySchema,
+          }),
 
         create: (input: QuestionDraftInput): Promise<QuestionDetail> =>
           request(ADMIN_QUESTION_ROUTES.create, {

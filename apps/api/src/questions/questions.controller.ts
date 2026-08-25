@@ -22,6 +22,7 @@ import {
   questionDraftSchema,
   QUESTION_IMAGE_FILE_FIELD,
   bulkQuestionStatusSchema,
+  questionAvailabilityQuerySchema,
   questionListQuerySchema,
   setQuestionStatusSchema,
   type Paginated,
@@ -30,6 +31,8 @@ import {
   type BulkQuestionStatusBody,
   type BulkQuestionStatusResult,
   type QuestionImage,
+  type QuestionAvailability,
+  type QuestionAvailabilityQuery,
   type QuestionListQuery,
   type QuestionSummary,
   type SetQuestionStatusBody,
@@ -78,6 +81,15 @@ export class QuestionsController {
     @Body(new ZodBody(bulkQuestionStatusSchema)) body: BulkQuestionStatusBody,
   ): Promise<BulkQuestionStatusResult> {
     return this.questions.bulkSetStatus(body);
+  }
+
+  /** Before `:id`, or the word "availability" is read as a question's id. */
+  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get('availability')
+  availability(
+    @Query(new ZodQuery(questionAvailabilityQuerySchema)) query: QuestionAvailabilityQuery,
+  ): Promise<QuestionAvailability> {
+    return this.questions.availability(query);
   }
 
   @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
