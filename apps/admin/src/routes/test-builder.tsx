@@ -90,7 +90,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const existing = detail !== null;
-  const frozen = detail?.isLocked ?? false;
+  const sat = (detail?.attemptCount ?? 0) > 0;
 
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
@@ -112,8 +112,8 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
     meta: { success: existing ? 'Test saved.' : 'Draft test created.' },
     mutationFn: ({ values }: { values: TestFormValues; target: TestBuilderStep }) => {
       const title = values.title.trim();
-      // A frozen test refuses everything else, so a rename must not carry the rest along with it.
-      if (detail && frozen) return api.admin.tests.update(detail.id, { title });
+      // A sat test refuses everything else, so a rename must not carry the rest along with it.
+      if (detail && sat) return api.admin.tests.update(detail.id, { title });
 
       const owned = {
         title,
@@ -215,7 +215,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         </>
       }
     >
-      <StepBody step={step} form={form} detail={detail} config={config} frozen={frozen} />
+      <StepBody step={step} form={form} detail={detail} config={config} sat={sat} />
     </FormPanel>
   );
 }
@@ -269,25 +269,32 @@ function StepBody({
   form,
   detail,
   config,
-  frozen,
+  sat,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
   detail: TestDetail | null;
   config: BaseConfigDetail | null;
-  frozen: boolean;
+  sat: boolean;
 }>) {
   return (
     <>
-      {frozen ? (
+      {sat ? (
         <Alert variant="warning">
-          This test is finalized — its paper is frozen and students may already have sat it. Only
-          its name can still be changed.
+          Students have sat this test, so its paper cannot move under their results. Only its name
+          can still be changed.
+        </Alert>
+      ) : null}
+
+      {!sat && detail?.isLocked ? (
+        <Alert variant="info">
+          This test is finalized. Changing anything but its name unfreezes the paper and stops it
+          being offered, so it goes back to being a draft you finalize again.
         </Alert>
       ) : null}
 
       {step === TEST_BUILDER_STEP.SETUP ? (
-        <SetupStep form={form} detail={detail} config={config} frozen={frozen} />
+        <SetupStep form={form} detail={detail} config={config} sat={sat} />
       ) : null}
       {detail && step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} /> : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (

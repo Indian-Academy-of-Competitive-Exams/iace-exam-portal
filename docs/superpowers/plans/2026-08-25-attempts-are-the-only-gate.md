@@ -96,11 +96,11 @@ needs. Model: opus throughout.
 `apps/api/src/attempts/attempts.service.ts`; extend `apps/api/test/test-builder.unit.test.ts`
 and `apps/api/test/attempts-service.unit.test.ts`.
 
-- [ ] Drop the `baseConfig.updateMany` from `finalize`. Finalizing freezes the PAPER; it no
+- [x] Drop the `baseConfig.updateMany` from `finalize`. Finalizing freezes the PAPER; it no
       longer touches the blueprint.
-- [ ] Add `locked: true` to `SITTABLE_INCLUDE.baseConfig`'s select — one column on a join that
+- [x] Add `locked: true` to `SITTABLE_INCLUDE.baseConfig`'s select — one column on a join that
       already happens.
-- [ ] Trip the lock inside `create()`'s existing transaction, guarded by the loaded `locked` so a
+- [x] Trip the lock inside `create()`'s existing transaction, guarded by the loaded `locked` so a
       test already under way issues no statement.
       **Acceptance:** finalizing a test leaves its config editable; the first student to start an
       attempt locks it; the second student's start writes nothing; a config already locked is
@@ -113,14 +113,14 @@ and `apps/api/test/attempts-service.unit.test.ts`.
 **Files:** modify `apps/api/src/tests/test-rules.ts`, `apps/api/src/tests/tests.service.ts`,
 `apps/api/src/tests/tests.module.ts`; extend `apps/api/test/tests-service.unit.test.ts`.
 
-- [ ] `testDeletionBlocker` takes `{ attemptCount }` alone. Being locked or offered stops
+- [x] `testDeletionBlocker` takes `{ attemptCount }` alone. Being locked or offered stops
       refusing a delete.
-- [ ] `update` judges `locksOutTestEdit` against `_count.attempts`. Rename `FROZEN_TEST_MESSAGE`
+- [x] `update` judges `locksOutTestEdit` against `_count.attempts`. Rename `FROZEN_TEST_MESSAGE`
       to say what now refuses it: students have SAT this, not the paper is frozen.
-- [ ] A shape edit on a locked, unattempted test unfreezes it in the same update: `isLocked`
+- [x] A shape edit on a locked, unattempted test unfreezes it in the same update: `isLocked`
       false, `finalizedAt` null, `ACTIVE` back to `DRAFT`, `version` incremented. Add `isLocked`
       to `AUDITED_TEST_FIELDS` so the unfreeze is on the record.
-- [ ] `remove` reads the series links before deleting and emits `ACCESS_CATALOG_CHANGED` for
+- [x] `remove` reads the series links before deleting and emits `ACCESS_CATALOG_CHANGED` for
       each. `TestsService` takes `DomainEventBus`.
       **Acceptance:** a finalized test in two series with no attempts deletes, and both series
       are announced as changed; one attempt refuses both the delete and every edit but the title;
@@ -134,18 +134,29 @@ and `apps/api/test/attempts-service.unit.test.ts`.
 `apps/admin/src/routes/test-builder.tsx`, `apps/admin/src/routes/test-builder-setup.tsx`,
 `apps/admin/src/routes/test-builder-paper.tsx`, `apps/admin/src/routes/test-builder-offering.tsx`.
 
-- [ ] `deleteDescription` stops naming finalized and in-a-series as refusals. It names the
+- [x] `deleteDescription` stops naming finalized and in-a-series as refusals. It names the
       consequence instead: the questions discarded, the series it leaves, and whether students
       are being offered it right now.
-- [ ] The builder gates on having been sat rather than on being frozen: `disabled={frozen}`
+- [x] The builder gates on having been sat rather than on being frozen: `disabled={frozen}`
       becomes `disabled={attempted}`, and the warning alert says students have sat it.
-- [ ] A shape edit on a finalized test warns that saving unfreezes the paper and stops offering
+- [x] A shape edit on a finalized test warns that saving unfreezes the paper and stops offering
       it, before the save rather than after.
       **Acceptance:** a finalized, offered test with no attempts offers Delete and the confirm
       names what it costs; an attempted one still refuses; the builder's controls open up on a
       finalized test and close again once a student has sat it.
 
 ---
+
+### Deviations
+
+- Task 2 also took in `paper.service.ts`. Redrawing was gated on `isLocked` too, so leaving it
+  would have allowed editing a finalized test but not redrawing its paper. Both now gate on
+  attempts and both thaw, through one shared `unfreezing()`.
+- One assertion changed inside `test-builder.unit.test.ts`'s "the invariants Phase 2 must not have
+  broken": a frozen paper could not be redrawn. The guarantee behind it is restated rather than
+  dropped — every student shares one paper and it is the one they started sitting. The golden
+  suite, `migration-invariants.unit.test.ts`, is untouched and still asserts the trigger refuses
+  to unlock a config.
 
 ## Verify on screen
 

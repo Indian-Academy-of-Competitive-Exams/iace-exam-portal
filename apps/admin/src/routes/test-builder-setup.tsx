@@ -37,12 +37,12 @@ export function SetupStep({
   form,
   detail,
   config,
-  frozen,
+  sat,
 }: Readonly<{
   form: TestForm;
   detail: TestDetail | null;
   config: BaseConfigDetail | null;
-  frozen: boolean;
+  sat: boolean;
 }>) {
   const values = useWatch({ control: form.control }) as TestFormValues;
   const suggested = useSuggestedTestName({
@@ -66,7 +66,7 @@ export function SetupStep({
       </FormSection>
 
       <FormSection title="How it is judged">
-        <Rules form={form} config={config} frozen={frozen} />
+        <Rules form={form} config={config} sat={sat} />
       </FormSection>
     </>
   );
@@ -178,8 +178,8 @@ function Blueprint({
 function Rules({
   form,
   config,
-  frozen,
-}: Readonly<{ form: TestForm; config: BaseConfigDetail | null; frozen: boolean }>) {
+  sat,
+}: Readonly<{ form: TestForm; config: BaseConfigDetail | null; sat: boolean }>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
   const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
@@ -202,14 +202,14 @@ function Rules({
             id={control.id}
             value={scope}
             clearable={false}
-            disabled={frozen}
+            disabled={sat}
             onChange={(value) => form.setValue('scope', value as TestScope)}
             items={TEST_SCOPES.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] }))}
           />
         )}
       </FormField>
 
-      <ScopeReference form={form} scope={scope} config={config} disabled={frozen} />
+      <ScopeReference form={form} scope={scope} config={config} disabled={sat} />
 
       <FormField form={form} name="evaluationMode" label="Evaluation">
         {(control) => (
@@ -217,7 +217,7 @@ function Rules({
             id={control.id}
             value={evaluationMode}
             clearable={false}
-            disabled={frozen}
+            disabled={sat}
             onChange={pickEvaluationMode}
             items={EVALUATION_MODES.map((value) => ({
               value,
@@ -243,7 +243,7 @@ function Rules({
             id={control.id}
             value={paperBinding}
             clearable={false}
-            disabled={frozen}
+            disabled={sat}
             onChange={(value) => form.setValue('paperBinding', value as PaperBinding)}
             items={allowedPaperBindings(evaluationMode).map((value) => ({
               value,
@@ -258,7 +258,7 @@ function Rules({
         {(control) => (
           <Input
             {...control}
-            disabled={frozen}
+            disabled={sat}
             inputMode="numeric"
             placeholder={String(MAX_RETAKES_CEILING)}
           />
@@ -271,7 +271,7 @@ function Rules({
             id={control.id}
             value={drawStrategy}
             clearable={false}
-            disabled={frozen}
+            disabled={sat}
             onChange={(value) => form.setValue('drawStrategy', value as DrawStrategy)}
             items={DRAW_STRATEGIES.map((value) => ({
               value,

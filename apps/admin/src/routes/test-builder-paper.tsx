@@ -23,6 +23,7 @@ function shortfallsOf(error: unknown): string[] {
 }
 
 export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
+  const sat = detail.attemptCount > 0;
   const queryClient = useQueryClient();
   const [manual, setManual] = useState<Record<string, string[]>>({});
   const generated = detail.paperBinding === PAPER_BINDING.GENERATED;
@@ -85,7 +86,8 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
       {detail.isLocked ? (
         <Alert variant="info">
-          This paper is frozen. Every student sits exactly these questions, in this order.
+          This paper is frozen — every student sits exactly these questions, in this order. Drawing
+          again unfreezes it and stops the test being offered until it is finalized once more.
         </Alert>
       ) : null}
 
@@ -100,19 +102,19 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
                 section={section}
                 held={held.get(section.id) ?? 0}
                 pinned={manual[section.id] ?? []}
-                frozen={detail.isLocked}
+                sat={sat}
                 onPin={(next) => setManual((held) => ({ ...held, [section.id]: next }))}
               />
             ))}
       </div>
 
-      {drawn > 0 && !detail.isLocked ? (
+      {drawn > 0 && !sat ? (
         <Alert variant="info">
           Drawing again replaces every question below, keeping only what you have chosen by hand.
         </Alert>
       ) : null}
 
-      {detail.isLocked ? null : (
+      {sat ? null : (
         <Button type="button" onClick={() => draw.mutate()} loading={draw.isPending}>
           <Dices aria-hidden />
           {drawn > 0 ? 'Draw again' : 'Draw the paper'}
@@ -126,13 +128,13 @@ function SectionRow({
   section,
   held,
   pinned,
-  frozen,
+  sat,
   onPin,
 }: Readonly<{
   section: BaseConfigSection;
   held: number;
   pinned: readonly string[];
-  frozen: boolean;
+  sat: boolean;
   onPin: (next: string[]) => void;
 }>) {
   const short = held < section.questionCount;
@@ -154,7 +156,7 @@ function SectionRow({
             {...control}
             subjectId={section.subjectId}
             value={pinned}
-            disabled={frozen}
+            disabled={sat}
             onChange={onPin}
           />
         )}

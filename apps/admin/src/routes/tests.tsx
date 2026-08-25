@@ -189,19 +189,31 @@ function TestStatusBadges({ test }: Readonly<{ test: Test }>) {
 
 const UNTITLED = 'this test';
 
-/** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
+/** Names what deleting costs. Only having been SAT refuses it, and that one is said outright. */
 function deleteDescription(test: Test): string {
   const name = test.title ?? UNTITLED;
   if (test.attemptCount > 0) {
     return `${plural(test.attemptCount, 'attempt')} were sat on ${name}, and deleting it will be refused. Retire it instead — it keeps its results and is simply no longer offered.`;
   }
-  if (test.isLocked) {
-    return `${name} is finalized, so its paper is frozen and deleting it will be refused. Retire it instead — it keeps everything it has and is simply no longer offered.`;
-  }
-  if (test.seriesCount > 0) {
-    return `${plural(test.seriesCount, 'series', 'series')} still offer ${name}, and deleting it will be refused. Take it out of them first.`;
-  }
-  return `Nothing has been built on ${name} yet. Deleting it cannot be undone.`;
+
+  const costs = [
+    test.paperQuestionCount > 0
+      ? `the ${plural(test.paperQuestionCount, 'question')} drawn for it are discarded`
+      : null,
+    test.seriesCount > 0 ? `it leaves ${plural(test.seriesCount, 'series', 'series')}` : null,
+    test.status === TEST_STATUS.ACTIVE ? 'students stop being offered it' : null,
+  ].filter((cost): cost is string => cost !== null);
+
+  const consequence = costs.length > 0 ? `${sentenceOf(costs)}. ` : '';
+  return `No student has sat ${name}. ${consequence}This cannot be undone.`;
+}
+
+/** `a, b and c` — a list read as a sentence, because that is what the dialog is. */
+function sentenceOf(parts: readonly string[]): string {
+  const lead = parts.slice(0, -1).join(', ');
+  const last = parts.at(-1)!;
+  const joined = lead === '' ? last : `${lead} and ${last}`;
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 function TestRowActions({
