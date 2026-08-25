@@ -148,11 +148,12 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
       <div className="flex flex-col gap-3">
         {paper.isLoading
           ? null
-          : detail.baseConfig.sections.map((section) => (
+          : detail.baseConfig.sections.map((section, index) => (
               <SectionPaper
                 key={section.id}
                 testId={detail.id}
                 section={section}
+                open={index === 0}
                 held={held.get(section.id)}
                 pinned={manual[section.id] ?? []}
                 sat={sat}
@@ -225,6 +226,7 @@ function paperColumns(
 function SectionPaper({
   testId,
   section,
+  open,
   held,
   pinned,
   sat,
@@ -235,6 +237,8 @@ function SectionPaper({
 }: Readonly<{
   testId: string;
   section: BaseConfigSection;
+  /** The first one, so the step does not read as a stack of empty rows. */
+  open: boolean;
   held: PaperSection | undefined;
   pinned: readonly string[];
   sat: boolean;
@@ -258,6 +262,7 @@ function SectionPaper({
 
   return (
     <Accordion
+      defaultOpen={open}
       title={<span className="font-medium text-foreground">{section.name}</span>}
       meta={
         <span className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">

@@ -185,7 +185,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         <BuilderFooter
           previous={existing ? previous : null}
           next={next}
-          existing={existing}
           saving={save.isPending}
           onOpen={open}
         />
@@ -228,13 +227,11 @@ function metaOf(detail: TestDetail | null) {
 function BuilderFooter({
   previous,
   next,
-  existing,
   saving,
   onOpen,
 }: Readonly<{
   previous: TestBuilderStep | null;
   next: TestBuilderStep | null;
-  existing: boolean;
   saving: boolean;
   onOpen: (target: TestBuilderStep) => void;
 }>) {
@@ -252,7 +249,7 @@ function BuilderFooter({
 
       {next ? (
         <Button type="button" loading={saving} onClick={() => onOpen(next)}>
-          {existing ? 'Next' : 'Create draft test'}
+          Next
         </Button>
       ) : (
         <Button type="button" asChild>
