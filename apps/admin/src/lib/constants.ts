@@ -250,11 +250,9 @@ export const DRAW_STRATEGY_HINTS: Readonly<Record<DrawStrategy, string>> = {
 
 /** The phases of building a test. The order is the contract's; these are only the words. */
 export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>> = {
-  BLUEPRINT: 'Blueprint',
-  RULES: 'Rules',
+  SETUP: 'Setup',
   PAPER: 'Paper',
-  SERIES: 'Series',
-  PUBLISH: 'Publish',
+  OFFER: 'Offer',
 };
 
 export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {

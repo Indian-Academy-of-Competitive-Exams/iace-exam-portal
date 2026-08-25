@@ -15,7 +15,7 @@ import {
   type TestDetail,
   type TestScope,
 } from '@iace/contracts';
-import { Combobox, FormField, Input, plural } from '@iace/ui';
+import { Combobox, FormField, FormSection, Input, plural } from '@iace/ui';
 import {
   DRAW_STRATEGY_HINTS,
   DRAW_STRATEGY_LABELS,
@@ -30,12 +30,33 @@ import { BaseConfigPicker } from '../components/config-picker';
 import { TopicMultiPicker } from '../components/taxonomy-picker';
 import { type TestForm } from './test-builder-form';
 
-/** The two steps a test writes itself: the blueprint it is built on, and how it is judged. */
+/** Everything a test writes itself: the blueprint it is built on, and how it is judged. */
 
-export function BlueprintStep({
+export function SetupStep({
   form,
   detail,
-}: Readonly<{ form: TestForm; detail: TestDetail | null }>) {
+  config,
+  frozen,
+}: Readonly<{
+  form: TestForm;
+  detail: TestDetail | null;
+  config: BaseConfigDetail | null;
+  frozen: boolean;
+}>) {
+  return (
+    <>
+      <FormSection title="Which paper this is">
+        <Blueprint form={form} detail={detail} />
+      </FormSection>
+
+      <FormSection title="How it is judged">
+        <Rules form={form} config={config} frozen={frozen} />
+      </FormSection>
+    </>
+  );
+}
+
+function Blueprint({ form, detail }: Readonly<{ form: TestForm; detail: TestDetail | null }>) {
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
@@ -113,7 +134,7 @@ export function BlueprintStep({
   );
 }
 
-export function RulesStep({
+function Rules({
   form,
   config,
   frozen,

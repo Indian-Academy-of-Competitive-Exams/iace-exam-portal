@@ -36,7 +36,7 @@ import {
   valuesOf,
   type TestFormValues,
 } from './test-builder-form';
-import { BlueprintStep, RulesStep } from './test-builder-setup';
+import { SetupStep } from './test-builder-setup';
 import { PaperStep } from './test-builder-paper';
 import { PublishStep, SeriesStep } from './test-builder-offering';
 
@@ -44,23 +44,15 @@ import { PublishStep, SeriesStep } from './test-builder-offering';
 
 const TEST_KEY = (testId: string) => ['admin', 'test', testId] as const;
 
-/** The two steps the form itself owns — the only ones whose Next has anything to save. */
-const FIELD_STEPS: ReadonlySet<TestBuilderStep> = new Set([
-  TEST_BUILDER_STEP.BLUEPRINT,
-  TEST_BUILDER_STEP.RULES,
-]);
-
 /** Each step is done when the thing it exists to produce is there, not when it has been walked past. */
 function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   const done = new Set<TestBuilderStep>();
   if (!detail) return done;
-  done.add(TEST_BUILDER_STEP.BLUEPRINT);
-  done.add(TEST_BUILDER_STEP.RULES);
+  done.add(TEST_BUILDER_STEP.SETUP);
   if (detail.paperBinding === PAPER_BINDING.GENERATED || detail.paperQuestionCount > 0) {
     done.add(TEST_BUILDER_STEP.PAPER);
   }
-  if (detail.seriesCount > 0) done.add(TEST_BUILDER_STEP.SERIES);
-  if (detail.isLocked) done.add(TEST_BUILDER_STEP.PUBLISH);
+  if (detail.isLocked) done.add(TEST_BUILDER_STEP.OFFER);
   return done;
 }
 
@@ -106,7 +98,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
 
   const arrivedAt = (location.state as { step?: TestBuilderStep } | null)?.step;
   const [step, setStep] = useState<TestBuilderStep>(
-    arrivedAt ?? (detail ? testBuilderStepOf(detail) : TEST_BUILDER_STEP.BLUEPRINT),
+    arrivedAt ?? (detail ? testBuilderStepOf(detail) : TEST_BUILDER_STEP.SETUP),
   );
 
   const chosenConfig = useQuery({
@@ -154,8 +146,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
     form.handleSubmit((values) => {
       if (isNotNumeric(values.maxRetakes)) {
         form.setError('maxRetakes', { type: 'validate', message: RETAKES_NOT_A_NUMBER });
-        // The field is on Rules, so refusing from anywhere else has to open the step holding it.
-        setStep(TEST_BUILDER_STEP.RULES);
         return;
       }
       save.mutate({ values, target });
@@ -165,7 +155,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const open = (target: TestBuilderStep) => {
     if (target === step) return;
     const pending = !existing || form.formState.isDirty;
-    if (FIELD_STEPS.has(step) && pending) {
+    if (step === TEST_BUILDER_STEP.SETUP && pending) {
       saveThenOpen(target);
       return;
     }
@@ -177,7 +167,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
     value,
     label: TEST_BUILDER_STEP_LABELS[value],
     state: stateOf(value, step, done),
-    disabled: !existing && value !== TEST_BUILDER_STEP.BLUEPRINT,
+    disabled: !existing && value !== TEST_BUILDER_STEP.SETUP,
   }));
 
   const index = TEST_BUILDER_STEPS.indexOf(step);
@@ -296,13 +286,16 @@ function StepBody({
         </Alert>
       ) : null}
 
-      {step === TEST_BUILDER_STEP.BLUEPRINT ? <BlueprintStep form={form} detail={detail} /> : null}
-      {step === TEST_BUILDER_STEP.RULES ? (
-        <RulesStep form={form} config={config} frozen={frozen} />
+      {step === TEST_BUILDER_STEP.SETUP ? (
+        <SetupStep form={form} detail={detail} config={config} frozen={frozen} />
       ) : null}
       {detail && step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} /> : null}
-      {detail && step === TEST_BUILDER_STEP.SERIES ? <SeriesStep detail={detail} /> : null}
-      {detail && step === TEST_BUILDER_STEP.PUBLISH ? <PublishStep detail={detail} /> : null}
+      {detail && step === TEST_BUILDER_STEP.OFFER ? (
+        <>
+          <SeriesStep detail={detail} />
+          <PublishStep detail={detail} />
+        </>
+      ) : null}
     </>
   );
 }

@@ -37,8 +37,8 @@ there — pinned above the scrolling body, and never disabled by a frozen test.
 | SSC CGL Tier 1 - Mock 1                     <- PageHeader|
 | SSC CGL / Tier 1                               meta      |
 |                                                          |
-|  (1)-----(2)-----(3)-----(4)-----(5)        <- Stepper    |
-|  Blueprint Rules Paper Series Publish                    |
+|  (1)---------(2)---------(3)                <- Stepper    |
+|  Setup       Paper       Offer                           |
 |                                                          |
 |  Standard . 12 sections . 240 questions . 200 marks      |
 |  2h . Sectional . English, Hindi                      v  |  <- strip
@@ -53,40 +53,39 @@ there — pinned above the scrolling body, and never disabled by a frozen test.
 
 **The five steps**
 
-| #   | Step      | Owns                                                                  |
-| --- | --------- | --------------------------------------------------------------------- |
-| 1   | Blueprint | Exam → Stage → Base configuration (read-only once created) + **Name** |
-| 2   | Rules     | Covers, scope reference, Evaluation, Paper, Retakes, Draw             |
-| 3   | Paper     | Per-section counts, hand-picks, **Draw the paper**                    |
-| 4   | Series    | Which series carry this test                                          |
-| 5   | Publish   | Finalize → Offer to students / Retire                                 |
+| #   | Step  | Owns                                                                                                                                 |
+| --- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Setup | Exam → Stage → Base configuration (read-only once created), **Name**; then Covers, scope reference, Evaluation, Paper, Retakes, Draw |
+| 2   | Paper | Per-section counts, hand-picks, **Draw the paper**                                                                                   |
+| 3   | Offer | Which series carry this test; Finalize → Offer to students / Retire                                                                  |
+
+Setup holds two `FormSection`s — "Which paper this is" and "How it is judged" — because the
+stepper no longer names those halves separately and two grids of different widths need the
+headings to stop reading as one block.
 
 **Gating.** Before the draft exists only step 1 is live — there is no id for the others to write
-against. Once it exists every step is clickable in any order; step 5 opened early says in an
+against. Once it exists every step is clickable in any order; step 3 opened early says in an
 `Alert` what is still missing rather than hiding its buttons.
 
 **Resume point**, derived on mount, local state and not a URL param:
 
 ```
-isLocked                -> (5) Publish
-paperQuestionCount > 0  -> (5) Publish
-FIXED, nothing drawn    -> (3) Paper
-GENERATED               -> (4) Series
+FIXED, nothing drawn, not locked -> (2) Paper
+everything else                  -> (3) Offer
 ```
 
 **Next is the save.** No Save button anywhere. Step 1 Next creates the draft (`POST`) or patches
-the name; step 2 Next patches the rules; steps 3 and 4 have nothing pending, so Next only moves.
-One `useForm` in the shell spans steps 1 and 2 because they are one record, and jumping via the
-stepper away from a dirty step 1 or 2 runs the same save Next would. Validation stays the
+it; steps 2 and 3 have nothing pending, so Next only moves. The one `useForm` lives in the shell,
+and jumping via the stepper away from a dirty step 1 runs the same save Next would. Validation stays the
 server's, as it is everywhere else in this app: a 422 lands on the field through
 `applyFieldErrors` and the step does not advance. No `rules` prop, no second copy of the message.
 
-**A frozen test** keeps all five steps browsable and opens on Publish. Its per-control
+**A frozen test** keeps all three steps browsable and opens on Offer. Its per-control
 `disabled={frozen}` flags stay — `FormPanel`'s `disabled` prop cannot be used, because
 `fieldset[disabled]` is all-or-nothing and the Name field has to stay live.
 
-**Deliberate judgement calls.** Draw stays a body button on step 3 rather than moving to the
-footer: it is repeatable and acts on what is on screen, unlike Next. Step 5 reached early is
+**Deliberate judgement calls.** Draw stays a body button on step 2 rather than moving to the
+footer: it is repeatable and acts on what is on screen, unlike Next. Step 3 reached early is
 reachable-but-explained rather than blocked.
 
 ## Binding / workflow
@@ -213,6 +212,10 @@ question; `packages/ui/src/components/ui/pagination.tsx` for a numbered control.
 - `FormPanel` keeps an `onSubmit`, so Enter in a field still advances and saves as it used to.
 - The draw and the series picker now invalidate the test detail. Without it `paperQuestionCount`
   and `seriesCount` go stale and the stepper keeps claiming work is still owed after it is done.
+- **Built as five steps, merged to three after seeing it.** Blueprint and Rules were always saved
+  by one form and one request, so splitting them made a step out of a boundary the code does not
+  have; Series and Publish were two halves of one question, and a step you cannot finish without
+  visiting the next one is not a phase. The step rule fell out of it: one condition, not four.
 
 ---
 

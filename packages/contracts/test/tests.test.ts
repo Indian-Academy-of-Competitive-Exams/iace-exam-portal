@@ -103,22 +103,19 @@ describe('testBuilderStepOf', () => {
     assert.equal(testBuilderStepOf(draft), TEST_BUILDER_STEP.PAPER);
   });
 
-  it('sends a drawn test to publishing', () => {
-    assert.equal(
-      testBuilderStepOf({ ...draft, paperQuestionCount: 50 }),
-      TEST_BUILDER_STEP.PUBLISH,
-    );
+  it('sends a drawn test on to offering it', () => {
+    assert.equal(testBuilderStepOf({ ...draft, paperQuestionCount: 50 }), TEST_BUILDER_STEP.OFFER);
   });
 
-  it('sends a finalized test to publishing', () => {
-    assert.equal(testBuilderStepOf({ ...draft, isLocked: true }), TEST_BUILDER_STEP.PUBLISH);
+  it('sends a finalized test on to offering it', () => {
+    assert.equal(testBuilderStepOf({ ...draft, isLocked: true }), TEST_BUILDER_STEP.OFFER);
   });
 
   /** A generated test draws per attempt, so it has no paper step to owe work to. */
-  it('sends a generated test past the paper to its series', () => {
+  it('sends a generated test past the paper', () => {
     assert.equal(
       testBuilderStepOf({ ...draft, paperBinding: PAPER_BINDING.GENERATED }),
-      TEST_BUILDER_STEP.SERIES,
+      TEST_BUILDER_STEP.OFFER,
     );
   });
 });

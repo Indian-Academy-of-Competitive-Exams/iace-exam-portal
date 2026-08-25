@@ -139,11 +139,9 @@ export type TestDetail = z.infer<typeof testDetailSchema>;
 
 /** The phases of building a test, in the order an admin walks them. */
 export const TEST_BUILDER_STEP = {
-  BLUEPRINT: 'BLUEPRINT',
-  RULES: 'RULES',
+  SETUP: 'SETUP',
   PAPER: 'PAPER',
-  SERIES: 'SERIES',
-  PUBLISH: 'PUBLISH',
+  OFFER: 'OFFER',
 } as const;
 export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
@@ -153,10 +151,9 @@ export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 export function testBuilderStepOf(
   test: Pick<Test, 'isLocked' | 'paperBinding' | 'paperQuestionCount'>,
 ): TestBuilderStep {
-  if (test.isLocked || test.paperQuestionCount > 0) return TEST_BUILDER_STEP.PUBLISH;
-  return test.paperBinding === PAPER_BINDING.GENERATED
-    ? TEST_BUILDER_STEP.SERIES
-    : TEST_BUILDER_STEP.PAPER;
+  const owesAPaper =
+    test.paperBinding === PAPER_BINDING.FIXED && test.paperQuestionCount === 0 && !test.isLocked;
+  return owesAPaper ? TEST_BUILDER_STEP.PAPER : TEST_BUILDER_STEP.OFFER;
 }
 
 /** The frozen shared paper. Only a FIXED test has these. */
