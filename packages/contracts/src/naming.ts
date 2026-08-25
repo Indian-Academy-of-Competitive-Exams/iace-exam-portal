@@ -48,12 +48,16 @@ export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, labe
 const NAME_PART_SEPARATOR = ' — ';
 const NAME_NUMBER_PAD = 2;
 
-/** `SSC CGL Tier 1 Standard — Mock`: everything a name says before its number. */
+/** Everything a name says before its number, saying nothing twice: a config may carry the stage. */
 export function nameStem(lead: readonly (string | null | undefined)[], kind: string): string {
-  const head = lead
-    .map((part) => part?.trim() ?? '')
-    .filter((part) => part !== '')
-    .join(' ');
+  const head = lead.reduce<string>((said, part) => {
+    const next = part?.trim() ?? '';
+    if (next === '') return said;
+    if (said === '' || said.toLowerCase().includes(next.toLowerCase())) return said || next;
+    // A config named after its own exam and stage swallows them rather than repeating them.
+    if (next.toLowerCase().includes(said.toLowerCase())) return next;
+    return `${said} ${next}`;
+  }, '');
   return head === '' ? kind : head + NAME_PART_SEPARATOR + kind;
 }
 

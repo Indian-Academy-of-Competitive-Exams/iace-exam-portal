@@ -102,16 +102,6 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
     onError: () => setAsking(false),
   });
 
-  if (generated) {
-    return (
-      <Alert variant="info">
-        This test draws a fresh paper for each student when their attempt starts, so there is no one
-        paper to build here. Switch it back to a fixed paper on Setup if every student should sit
-        the same questions.
-      </Alert>
-    );
-  }
-
   const gaps = shortfallsOf(draw.error);
   const drawn = [...held.values()].reduce((sum, section) => sum + section.questions.length, 0);
 
@@ -119,12 +109,21 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
     <div className="flex flex-col gap-6">
       {/* Bled to the card's edges and pinned: the count and the draw stay put past twelve sections. */}
       <div className="sticky -top-[41px] z-10 -mx-6 -mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-6 pb-3 pt-6">
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
-          {' drawn'}
-        </p>
+        {generated ? (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {plural(detail.variantCount, 'paper')}
+            </span>
+            {', drawn from this when the test is offered'}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
+            {' drawn'}
+          </p>
+        )}
 
-        {sat ? null : (
+        {sat || generated ? null : (
           <Button type="button" size="sm" onClick={() => setAsking(true)} loading={draw.isPending}>
             <Dices aria-hidden />
             {drawn > 0 ? 'Draw again' : 'Draw the paper'}
@@ -143,10 +142,19 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
         </Alert>
       ) : null}
 
-      {paper.isLoading ? <SkeletonParagraph lines={detail.baseConfig.sections.length} /> : null}
+      {generated ? (
+        <Alert variant="info">
+          Every student gets one of these papers, drawn when the test is offered rather than while
+          you watch. What each section is drawn FROM is set here, and it shapes all of them.
+        </Alert>
+      ) : null}
+
+      {paper.isLoading && !generated ? (
+        <SkeletonParagraph lines={detail.baseConfig.sections.length} />
+      ) : null}
 
       <div className="flex flex-col gap-3">
-        {paper.isLoading
+        {paper.isLoading && !generated
           ? null
           : detail.baseConfig.sections.map((section, index) => (
               <SectionPaper
@@ -154,6 +162,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
                 testId={detail.id}
                 section={section}
                 open={index === 0}
+                generated={generated}
                 held={held.get(section.id)}
                 pinned={manual[section.id] ?? []}
                 sat={sat}
@@ -227,6 +236,7 @@ function SectionPaper({
   testId,
   section,
   open,
+  generated,
   held,
   pinned,
   sat,
@@ -239,6 +249,8 @@ function SectionPaper({
   section: BaseConfigSection;
   /** The first one, so the step does not read as a stack of empty rows. */
   open: boolean;
+  /** A generated test has a paper per student, so there is no one paper to show or pin against. */
+  generated: boolean;
   held: PaperSection | undefined;
   pinned: readonly string[];
   sat: boolean;
@@ -273,37 +285,43 @@ function SectionPaper({
     >
       <div className="flex flex-col gap-6">
         <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">On the paper</h3>
-          {rows.length > 0 ? (
-            <DataTable
-              columns={paperColumns(setRemoving, sat)}
-              rows={rows}
-              rowKey={(row) => row.id}
-              isLoading={false}
-              empty="Nothing drawn for this section yet."
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Nothing drawn for this section yet. Choose what you want kept below, then draw.
-            </p>
-          )}
-        </section>
-
-        <section className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold tracking-tight text-foreground">Drawn from</h3>
           <DrawSpecEditor section={section} spec={spec} onChange={onSpec} disabled={sat} />
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">Choose by hand</h3>
-          <QuestionChooser
-            subjectId={section.subjectId}
-            chosen={pinned}
-            onChosen={onPin}
-            needed={section.questionCount}
-            disabled={sat}
-          />
-        </section>
+        {generated ? null : (
+          <>
+            <section className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">On the paper</h3>
+              {rows.length > 0 ? (
+                <DataTable
+                  columns={paperColumns(setRemoving, sat)}
+                  rows={rows}
+                  rowKey={(row) => row.id}
+                  isLoading={false}
+                  empty="Nothing drawn for this section yet."
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nothing drawn for this section yet. Choose what you want kept below, then draw.
+                </p>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                Choose by hand
+              </h3>
+              <QuestionChooser
+                subjectId={section.subjectId}
+                chosen={pinned}
+                onChosen={onPin}
+                needed={section.questionCount}
+                disabled={sat}
+              />
+            </section>
+          </>
+        )}
       </div>
 
       <ConfirmDialog

@@ -17,6 +17,21 @@ describe('nameStem', () => {
     assert.equal(nameStem(['SSC CGL', 'Tier 1', 'Standard'], 'Mock'), MOCK_STEM);
   });
 
+  /** The failure this prevents: "SSC CGL Tier 1 SSC CGL Tier 1 — official pattern — Mock 01". */
+  it('drops a part the name has already said', () => {
+    assert.equal(
+      nameStem(['SSC CGL', 'Tier 1', 'SSC CGL Tier 1 — official pattern'], 'Mock'),
+      'SSC CGL Tier 1 — official pattern — Mock',
+    );
+  });
+
+  it('keeps a config that names something the stage did not', () => {
+    assert.equal(
+      nameStem(['SSC CGL', 'Tier 1', 'Revised 2026'], 'Mock'),
+      'SSC CGL Tier 1 Revised 2026 — Mock',
+    );
+  });
+
   /** A form is filled in one field at a time, so the stem has to read while half of it is missing. */
   it('leaves out the parts that are not chosen yet', () => {
     assert.equal(nameStem(['SSC CGL', '', null], 'Mock'), 'SSC CGL — Mock');
