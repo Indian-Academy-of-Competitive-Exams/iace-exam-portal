@@ -24,6 +24,7 @@ import {
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
+import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
@@ -53,16 +54,6 @@ const CONFIGS_KEY = ['admin', 'base-configs'] as const;
 function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<BaseConfig>[] {
   return [
     {
-      key: 'stage',
-      header: 'Stage',
-      cell: (config) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-sm">{config.examStage.exam.code}</span>
-          <span className="text-xs text-muted-foreground">{config.examStage.name}</span>
-        </span>
-      ),
-    },
-    {
       key: 'name',
       header: 'Configuration',
       className: 'max-w-[20rem] font-medium',
@@ -70,6 +61,13 @@ function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<
         <Link to={ROUTES.BASE_CONFIG(config.id)} className={linkVariants()}>
           <TruncatedText>{config.name}</TruncatedText>
         </Link>
+      ),
+    },
+    {
+      key: 'stage',
+      header: 'Stage',
+      cell: (config) => (
+        <StageCell stage={{ examCode: config.examStage.exam.code, name: config.examStage.name }} />
       ),
     },
     {

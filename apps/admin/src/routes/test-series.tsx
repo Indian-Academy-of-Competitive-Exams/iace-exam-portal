@@ -19,6 +19,7 @@ import {
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
+import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
@@ -44,7 +45,7 @@ function seriesColumns(
         </Link>
       ),
     },
-    { key: 'stage', header: 'Stage', cell: (series) => <SeriesStage series={series} /> },
+    { key: 'stage', header: 'Stage', cell: (series) => <StageCell stage={series.examStage} /> },
     {
       key: 'program',
       header: 'Program',
@@ -175,17 +176,6 @@ export function TestSeriesPage() {
 }
 
 /** A series with no stage spans a family rather than one paper, which is a fact, not a gap. */
-function SeriesStage({ series }: Readonly<{ series: TestSeriesSummary }>) {
-  if (!series.examStage) return <span className="text-muted-foreground">Any stage</span>;
-
-  return (
-    <span className="flex flex-col">
-      <span className="font-mono text-sm">{series.examStage.examCode}</span>
-      <span className="text-xs text-muted-foreground">{series.examStage.name}</span>
-    </span>
-  );
-}
-
 /**
  * How far the series actually reaches. Every branch has a row from the moment the series was
  * created, so the denominator is every centre and "0 of 12" means nobody can sit it yet.

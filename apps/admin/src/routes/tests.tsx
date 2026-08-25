@@ -25,6 +25,7 @@ import {
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
+import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
 import {
   EVALUATION_MODE_LABELS,
@@ -70,16 +71,6 @@ const TESTS_KEY = ['admin', 'tests'] as const;
 function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Test>[] {
   return [
     {
-      key: 'stage',
-      header: 'Stage',
-      cell: (test) => (
-        <span className="flex flex-col">
-          <span className="font-mono text-sm">{test.examStage.exam.code}</span>
-          <span className="text-xs text-muted-foreground">{test.examStage.name}</span>
-        </span>
-      ),
-    },
-    {
       key: 'title',
       header: 'Test',
       className: 'max-w-[18rem] font-medium',
@@ -87,6 +78,13 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
         <Link to={ROUTES.TEST(test.id)} className={linkVariants()}>
           <TruncatedText>{test.title ?? 'Untitled test'}</TruncatedText>
         </Link>
+      ),
+    },
+    {
+      key: 'stage',
+      header: 'Stage',
+      cell: (test) => (
+        <StageCell stage={{ examCode: test.examStage.exam.code, name: test.examStage.name }} />
       ),
     },
     {
