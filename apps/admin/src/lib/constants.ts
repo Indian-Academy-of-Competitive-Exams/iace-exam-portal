@@ -32,6 +32,7 @@ import {
   type NavigationPolicy,
   type PaperBinding,
   type StudentType,
+  type TestBuilderStep,
   type TestScope,
   type TestStatus,
   type TestUi,
@@ -245,6 +246,15 @@ export const DRAW_STRATEGY_HINTS: Readonly<Record<DrawStrategy, string>> = {
   NEWEST_FIRST: 'The most recently added questions',
   LEAST_SERVED: 'The questions used in the fewest papers so far',
   UNSEEN_FIRST: 'Questions the student has not met before',
+};
+
+/** The phases of building a test. The order is the contract's; these are only the words. */
+export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>> = {
+  BLUEPRINT: 'Blueprint',
+  RULES: 'Rules',
+  PAPER: 'Paper',
+  SERIES: 'Series',
+  PUBLISH: 'Publish',
 };
 
 export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {

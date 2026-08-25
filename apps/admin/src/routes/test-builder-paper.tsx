@@ -8,7 +8,7 @@ import {
   type BaseConfigSection,
   type TestDetail,
 } from '@iace/contracts';
-import { Alert, Badge, Button, Field, FormSection, SkeletonParagraph, StatRow } from '@iace/ui';
+import { Alert, Badge, Button, Field, SkeletonParagraph, StatRow } from '@iace/ui';
 import { api } from '../lib/api';
 import { QuestionMultiPicker } from '../components/question-picker';
 
@@ -41,7 +41,10 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
           .filter(([, questionIds]) => questionIds.length > 0)
           .map(([baseConfigSectionId, questionIds]) => ({ baseConfigSectionId, questionIds })),
       }),
-    onSuccess: (next) => queryClient.setQueryData(PAPER_KEY(detail.id), next),
+    onSuccess: async (next) => {
+      queryClient.setQueryData(PAPER_KEY(detail.id), next);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
+    },
   });
 
   const held = useMemo(() => {
@@ -54,13 +57,11 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   if (generated) {
     return (
-      <FormSection title="The paper">
-        <Alert variant="info">
-          This test draws a fresh paper for each student when their attempt starts, so there is no
-          one paper to build here. Switch it to a fixed paper above if every student should sit the
-          same questions.
-        </Alert>
-      </FormSection>
+      <Alert variant="info">
+        This test draws a fresh paper for each student when their attempt starts, so there is no one
+        paper to build here. Switch it back to a fixed paper on Rules if every student should sit
+        the same questions.
+      </Alert>
     );
   }
 
@@ -68,7 +69,9 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const drawn = [...held.values()].reduce((sum, count) => sum + count, 0);
 
   return (
-    <FormSection title="The paper" meta={`${drawn} of ${detail.totalQuestions} drawn`}>
+    <div className="flex flex-col gap-4">
+      <StatRow label="Drawn" value={`${drawn} of ${detail.totalQuestions}`} />
+
       {gaps.length > 0 ? (
         <Alert variant="warning">
           <span className="flex flex-col gap-1">
@@ -115,7 +118,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
           {drawn > 0 ? 'Draw again' : 'Draw the paper'}
         </Button>
       )}
-    </FormSection>
+    </div>
   );
 }
 

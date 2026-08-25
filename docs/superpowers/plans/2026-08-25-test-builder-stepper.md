@@ -108,17 +108,17 @@ ships to both SPAs); `apps/api/src/tests/tests.service.ts:41` for the `_count` s
 **Files:** modify `packages/contracts/src/tests.ts`, `apps/api/src/tests/tests.service.ts`;
 extend `packages/contracts/test/tests.test.ts`.
 
-- [ ] Lift `title` out of `testOwnFieldsSchema`: `createTestSchema` takes `testTitleSchema`
+- [x] Lift `title` out of `testOwnFieldsSchema`: `createTestSchema` takes `testTitleSchema`
       (required), `updateTestSchema` takes `testTitleSchema.optional()` — omitting a name on an
       edit is fine, clearing one is not.
-- [ ] Add `paperQuestionCount` to `testSchema`, fed by adding `paperQuestions: true` to the
+- [x] Add `paperQuestionCount` to `testSchema`, fed by adding `paperQuestions: true` to the
       existing `_count` select. No extra query; it serves both the resume point and step 3's
       "N of M drawn".
-- [ ] Add `TEST_BUILDER_STEPS` (`BLUEPRINT`, `RULES`, `PAPER`, `SERIES`, `PUBLISH`) and
+- [x] Add `TEST_BUILDER_STEP` (`BLUEPRINT`, `RULES`, `PAPER`, `SERIES`, `PUBLISH`) and
       `testBuilderStepOf(test)` beside `allowedPaperBindings`. The rule is domain and belongs in
       contracts; the labels are UI and stay in `apps/admin/src/lib/constants.ts`. It lives here
       rather than in the route because `apps/admin` has no test runner.
-- [ ] Check every caller of `api.admin.tests.create` still compiles with a required title.
+- [x] Check every caller of `api.admin.tests.create` still compiles with a required title.
       **Acceptance:** the API refuses a create with a missing or blank name and accepts one with
       a name; an update that omits the name succeeds; a test detail carries how many paper
       questions are drawn; the step rule returns Publish for a locked test and for a drawn draft,
@@ -132,12 +132,12 @@ question; `packages/ui/src/components/ui/pagination.tsx` for a numbered control.
 **Files:** create `packages/ui/src/components/ui/stepper.tsx`,
 `packages/ui/test/stepper.dom.test.tsx`; modify `packages/ui/src/index.ts`.
 
-- [ ] `steps: { value, label, state: 'done' | 'current' | 'todo' }[]` plus `value` and
+- [x] `steps: { value, label, state: 'done' | 'current' | 'todo' }[]` plus `value` and
       `onValueChange`. Describable with no domain noun, so it belongs in `packages/ui`.
-- [ ] A step the reader may open is a `<button>`; one they may not is a `<span>` — the same
+- [x] A step the reader may open is a `<button>`; one they may not is a `<span>` — the same
       reasoning that made a tab trigger stop being a button, so a disabled fieldset can never
       swallow the navigation.
-- [ ] Connectors drop and the steps wrap below `sm`. Tokens only, no raw hex, no
+- [x] Connectors drop and the steps wrap below `sm`. Tokens only, no raw hex, no
       `overflow-x-auto` (a second scrollport).
       **Acceptance:** the open step is visibly the current one and the ones behind it read as
       done; a `todo` step cannot be activated by click or keyboard; the strip stays usable at
@@ -151,10 +151,10 @@ question; `packages/ui/src/components/ui/pagination.tsx` for a numbered control.
 `apps/admin/src/routes/test-builder-steps.tsx`; modify
 `apps/admin/src/routes/test-form.tsx` imports.
 
-- [ ] Move `PaperStep` to `test-builder-paper.tsx` unchanged.
-- [ ] Split `OfferingStep` into `SeriesStep` (the series picker) and `PublishStep` (finalize,
+- [x] Move `PaperStep` to `test-builder-paper.tsx` unchanged.
+- [x] Split `OfferingStep` into `SeriesStep` (the series picker) and `PublishStep` (finalize,
       offer, retire, both confirm dialogs) in `test-builder-offering.tsx`.
-- [ ] `test-form.tsx` renders all three in sequence, so the screen looks and behaves exactly as
+- [x] `test-form.tsx` renders all three in sequence, so the screen looks and behaves exactly as
       it does today. This task is a pure move — it exists so Task 4's diff is the new shell
       rather than the shell plus a file split.
       **Acceptance:** the test screen is unchanged on screen; gates green.
@@ -171,23 +171,25 @@ question; `packages/ui/src/components/ui/pagination.tsx` for a numbered control.
 `apps/admin/src/App.tsx`, `apps/admin/src/routes/test-builder-paper.tsx`,
 `apps/admin/src/routes/test-builder-offering.tsx`.
 
-- [ ] `test-builder.tsx` is the shell: the detail query, the one `useForm` spanning steps 1 and
+- [x] `test-builder.tsx` is the shell: the detail query, the one `useForm` spanning steps 1 and
       2, the step state seeded from `testBuilderStepOf`, the `Stepper` and the configuration
       strip in `FormPanel`'s `header`, and the `Back`/`Next` footer. Step 5's footer carries
       Finalize, or Offer to students, or Retire — whichever applies.
-- [ ] `test-builder-setup.tsx` holds the Blueprint and Rules bodies, carried over from
+- [x] `test-builder-setup.tsx` holds the Blueprint and Rules bodies, carried over from
       `test-form.tsx` including `ScopeReference`, `pickExam`/`pickStage`,
       `pickEvaluationMode`, the `maxRetakes` numeric guard and `applyServerErrors`.
-- [ ] `config-summary.tsx` replaces `InheritedShape`: one dense `text-xs` line of the values,
+- [x] `config-summary.tsx` replaces `InheritedShape`: one dense `text-xs` line of the values,
       expanding via `Accordion` to the per-section breakdown. Domain-named, so it stays in the
       app rather than `packages/ui`. The info Alert about the config owning marks and timing
       moves inside the expansion.
-- [ ] Move Finalize/Offer/Retire out of `PublishStep`'s body and into the shell footer; the step
-      body keeps the series-and-paper readiness Alert.
-- [ ] Drop the `FormSection` title from each step body — the stepper already names the step, and a
+- [x] Finalize/Offer/Retire STAY in `PublishStep`'s body, against what this plan first said.
+      Draw, the series picker and finalize are all operations on the record, and the footer is
+      navigation plus the form's save — one rule beats two. It is also what the approved mockup
+      showed. The last step's footer is `Back` and `Done`.
+- [x] Drop the `FormSection` title from each step body — the stepper already names the step, and a
       heading repeating it is the screen explaining itself. `meta` that carries a value
       (`"N of M drawn"`, the status) moves to the step body's Alert or the strip.
-- [ ] `TEST_BUILDER_STEP_LABELS` in `apps/admin/src/lib/constants.ts`, mirroring how
+- [x] `TEST_BUILDER_STEP_LABELS` in `apps/admin/src/lib/constants.ts`, mirroring how
       `TEST_SCOPE_LABELS` sits beside its constant. Write words out: "Base configuration".
       **Acceptance:** a new test opens on Blueprint with the other four steps inert, and Next
       creates the draft and moves to Rules; a nameless Next stays on Blueprint with the message
@@ -195,6 +197,22 @@ question; `packages/ui/src/components/ui/pagination.tsx` for a numbered control.
       lands on Publish; every step is clickable once the draft exists; a finalized test opens on
       Publish with all five steps browsable, every control inert except Name; the header,
       stepper and strip stay put while the body scrolls.
+
+### Deviations
+
+- `TEST_BUILDER_STEP` is the object and `TEST_BUILDER_STEPS` the ordered array, matching how
+  `TEST_SCOPE`/`TEST_SCOPES` already read. `testBuilderStepOf` sits after `TestDetail` rather than
+  beside `allowedPaperBindings`, so it reads after the type it takes.
+- `Stepper` carries reachability as its own `disabled` prop rather than a fourth state: a draft has
+  every step reachable while most still read as todo, so one enum could not say both.
+- Task 3 moved `OfferingStep` whole instead of splitting it. Two `FormSection`s would have put two
+  headings where there is one, which is not "no behaviour change"; the split landed in Task 4.
+- The shared form values, `scopeRefOf` and `applyServerErrors` live in `test-builder-form.ts`, not
+  in the setup component file — mixing them cost four `react-refresh/only-export-components`
+  warnings.
+- `FormPanel` keeps an `onSubmit`, so Enter in a field still advances and saves as it used to.
+- The draw and the series picker now invalidate the test detail. Without it `paperQuestionCount`
+  and `seriesCount` go stale and the stepper keeps claiming work is still owed after it is done.
 
 ---
 
