@@ -3,7 +3,6 @@ import { csvIdQuery, csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { baseConfigDetailSchema, stageRefSchema } from './configs';
 import {
-  DIFFICULTY_LEVEL,
   DIFFICULTY_LEVELS,
   difficultyLevelSchema,
   tagSchema,
@@ -122,20 +121,26 @@ export type QuestionPoolFilter = z.infer<typeof questionPoolFilterSchema>;
 // is no toggle to keep in step with it. Absent `topicIds` is the whole subject.
 // ============================================================================
 
-export const difficultyMixSchema = z
-  .object({
-    LOW: z.number().int().min(0).max(100),
-    MEDIUM: z.number().int().min(0).max(100),
-    HIGH: z.number().int().min(0).max(100),
-  })
-  .refine(
-    (mix) => mix.LOW + mix.MEDIUM + mix.HIGH === 100,
-    'The three difficulties have to add up to 100%',
-  );
+export const difficultyMixSchema = z.object({
+  LOW: z.number().int().min(0),
+  MEDIUM: z.number().int().min(0),
+  HIGH: z.number().int().min(0),
+});
 export type DifficultyMix = z.infer<typeof difficultyMixSchema>;
 
-/** What the form proposes. Code-owned: the blueprint's would be a second place to look, and locked. */
-export const DEFAULT_DIFFICULTY_MIX: DifficultyMix = { LOW: 30, MEDIUM: 40, HIGH: 30 };
+/** The shares the default is built from. Never stored: what a section keeps is the counts. */
+const DEFAULT_SHARES: Readonly<Record<DifficultyLevel, number>> = { LOW: 30, MEDIUM: 40, HIGH: 30 };
+
+/** A split to start from, near 30/40/30, with the middle taking whatever does not divide. */
+export function defaultMixFor(questionCount: number): DifficultyMix {
+  const parts = DIFFICULTY_LEVELS.map((level) => ({
+    level,
+    whole: Math.floor((DEFAULT_SHARES[level] * questionCount) / 100),
+  }));
+  const mix = Object.fromEntries(parts.map((part) => [part.level, part.whole])) as DifficultyMix;
+  mix.MEDIUM += questionCount - (mix.LOW + mix.MEDIUM + mix.HIGH);
+  return mix;
+}
 
 export const sectionDrawSpecSchema = z.object({
   topicIds: z.array(z.string().min(1)).min(1).optional(),
@@ -148,33 +153,17 @@ export const drawSpecSchema = z.object({
 });
 export type DrawSpec = z.infer<typeof drawSpecSchema>;
 
-/** The middle absorbs the odd one, then largest remainder: 30/40/30 of 25 is 7/11/7, not 8/10/7. */
-export function bucketCounts(
-  mix: DifficultyMix,
-  questionCount: number,
-): Record<DifficultyLevel, number> {
-  const parts = DIFFICULTY_LEVELS.map((level) => {
-    const exact = (mix[level] * questionCount) / 100;
-    return { level, whole: Math.floor(exact), remainder: exact - Math.floor(exact) };
-  });
+export interface FeasibilitySection {
+  id: string;
+  name: string;
+  questionCount: number;
+}
 
-  let spare = questionCount - parts.reduce((sum, part) => sum + part.whole, 0);
-  const middle = parts.find((part) => part.level === DIFFICULTY_LEVEL.MEDIUM);
-  // Never into a bucket the mix asked nothing of: 50/0/50 must not draw a medium question.
-  if (spare > 0 && middle && mix.MEDIUM > 0) {
-    middle.whole += 1;
-    spare -= 1;
-  }
-
-  const queue = [...parts]
-    .filter((part) => mix[part.level] > 0)
-    .sort((a, b) => b.remainder - a.remainder);
-  for (const part of queue.slice(0, Math.max(0, spare))) part.whole += 1;
-
-  return Object.fromEntries(parts.map((part) => [part.level, part.whole])) as Record<
-    DifficultyLevel,
-    number
-  >;
+/** The one rule the schema cannot hold: it never sees the section, so it never sees the count. */
+export function mixIssue(mix: DifficultyMix, section: FeasibilitySection): string | null {
+  const total = mix.LOW + mix.MEDIUM + mix.HIGH;
+  if (total === section.questionCount) return null;
+  return `${section.name} holds ${section.questionCount}, and its difficulty split adds up to ${total}.`;
 }
 
 /** What the bank holds for one section once its own subject and its chosen topics are applied. */
@@ -190,12 +179,6 @@ export interface DrawShortfall {
   difficulty: DifficultyLevel | null;
   needed: number;
   available: number;
-}
-
-export interface FeasibilitySection {
-  id: string;
-  name: string;
-  questionCount: number;
 }
 
 /** Whether the bank can fill this paper. Here, not the server: the form shows the same numbers. */
@@ -214,9 +197,8 @@ export function paperFeasibility(
         : [shortfallOf(section, null, section.questionCount, held.total)];
     }
 
-    const needed = bucketCounts(mix, section.questionCount);
     return DIFFICULTY_LEVELS.flatMap((level) => {
-      const want = needed[level];
+      const want = mix[level];
       const has = held.byDifficulty[level] ?? 0;
       return want === 0 || has >= want ? [] : [shortfallOf(section, level, want, has)];
     });

@@ -33,17 +33,26 @@ that has to be kept in step with it. Blank `topicIds` is the whole subject, the 
 The default the UI proposes is a code-owned `DEFAULT_DIFFICULTY_MIX` of 30/40/30 — not the
 blueprint's, which would be a second place to look and a locked one.
 
-<rounding>
+<counts-not-shares>
 
-A mix is percentages and a section is a whole number, so 30/40/30 of 25 is 7.5 / 10 / 7.5 and
-something has to give. **The middle absorbs the odd one, then largest remainder takes what is
-left** — 7/11/7, not 8/10/7, because a mix with equal ends has to draw equal ends. Plain largest
-remainder does NOT do this: MEDIUM's remainder there is zero, so the spare falls to LOW.
+**A mix is COUNTS, not percentages.** The section already knows how many questions it holds, so a
+split says `7 low, 11 medium, 7 high` of 25 and adds up by construction. There is no rounding
+rule, no tiebreak, and no way for two draws from one spec to produce papers of different lengths.
 
-**Never into a bucket the mix asked nothing of.** 50/0/50 of 3 must be 2/0/1 and never 1/1/1 —
-that is the case "give the spare to the middle" gets wrong on its own.
+Percentages were tried and dropped: 30/40/30 of 25 is 7.5/10/7.5, and every way of resolving that
+was either wrong or surprising — plain largest remainder gives 8/10/7 because MEDIUM's remainder is
+zero, and "give the spare to the middle" draws a medium question for a 50/0/50 paper that asked for
+none. The rule that survived both was correct and nobody would have been able to predict it.
 
-</rounding>
+The 30/40/30 shares survive in ONE place: `defaultMixFor(questionCount)`, which produces the split
+the form starts from. It is never stored and never read back, so a default that lands a question
+either side of the ideal costs nothing.
+
+The one rule the schema cannot hold is that the three add up to the section's count — the schema
+never sees the section. `mixIssue(mix, section)` is that rule, beside the topic-belongs-to-subject
+check no FK can make either.
+
+</counts-not-shares>
 
 **One feasibility rule, three places.** `paperFeasibility(spec, sections, poolCounts)` is pure, so
 it needs no database:
@@ -74,15 +83,18 @@ across them would not mean anything.
 `apps/api/src/tests/paper-feasibility.ts`; extend `packages/contracts/test/tests.test.ts`; create
 `apps/api/test/paper-feasibility.unit.test.ts`.
 
-- [ ] Reshape `questionPoolFilterSchema` into the per-section map. `mix` optional; its three
-      values must total 100 when present.
-- [ ] `bucketCounts(mix, questionCount)` — largest remainder, MEDIUM takes ties, always sums to
-      the count exactly.
-- [ ] `paperFeasibility(...)` returns one issue per short bucket, naming the section, the
-      difficulty, what is needed and what is available.
-      **Acceptance:** 30/40/30 of 25 is 7/11/7 and of 10 is 3/4/3; a mix that does not total 100
-      is refused by the schema; a section with no mix is judged on its total alone; a thin bucket
-      is reported with both numbers.
+- [x] Reshape `questionPoolFilterSchema` into the per-section map. `mix` optional; its three
+      values are whole counts, never shares.
+- [x] `defaultMixFor(questionCount)` — the split the form starts from, near 30/40/30, always
+      adding up to the count.
+- [x] `mixIssue(mix, section)` — the three add up to what the section holds.
+- [x] `paperFeasibility(...)` returns one issue per short bucket, naming the section, the
+      difficulty, what is needed and what is available. Lives in contracts, not the server: the
+      form shows the same numbers live and the two must not disagree.
+      **Acceptance:** a default for 25 is 7/11/7 and for 10 is 3/4/3, and every count from 0 to
+      60 adds up; a split that does not add up to its section is named with both numbers; a
+      section with no mix is judged on its total alone; a thin bucket is reported with both
+      numbers.
 
 ### Task 2: A paper row knows which variant it belongs to
 
@@ -138,15 +150,17 @@ extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.un
 **Files:** create `packages/ui/src/components/ui/ratio-bar.tsx`,
 `packages/ui/test/ratio-bar.dom.test.tsx`; modify `packages/ui/src/index.ts`.
 
-- [ ] One stacked bar, two handles, three labelled parts that always total 100. Dragging a handle
-      re-splits between the two parts it sits between and never touches the third.
+- [ ] One stacked bar, two handles, three labelled parts that always total the section's question
+      count. Dragging a handle re-splits between the two parts it sits between and never touches
+      the third, so the total cannot drift.
 - [ ] Each handle is a real `role="slider"` with `aria-valuenow`, `aria-valuetext` and arrow-key
       steps. **A control only a mouse can drive is not finished** — this is the whole risk in the
       task.
 - [ ] Design-system tokens only; the three parts are distinguishable without relying on colour
       alone.
-      **Acceptance:** dragging and arrow keys produce the same values; the three always total 100;
-      a screen reader is told which part a handle governs and what it now reads.
+      **Acceptance:** dragging and arrow keys produce the same values; the three always total the
+      count they were given; a screen reader is told which part a handle governs and what it now
+      reads.
 
 ### Task 6: The section says what it draws from
 
@@ -157,8 +171,9 @@ extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.un
 
 - [ ] Inside each section's accordion, above the bank: the topics it draws from, a switch for
       grouping by difficulty, and the `RatioBar` when it is on.
-- [ ] The counts each bucket resolves to sit under the bar beside what the bank actually holds,
-      so a short bucket is visible while it is being set rather than after a draw refuses.
+- [ ] The bar splits the section's own question count, so its three parts ARE the counts and the
+      total cannot drift. What the bank holds sits beside each, so a short bucket is visible while
+      it is being set rather than after a draw refuses.
 - [ ] The refusal alert's two actions work on the section they name.
       **Acceptance:** an admin sets a section to draw from three topics at 30/40/30, sees the
       counts and the availability, and knows the paper will fill before pressing Draw.
