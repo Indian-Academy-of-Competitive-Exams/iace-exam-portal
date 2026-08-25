@@ -27,6 +27,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { QuestionChooser } from '../components/question-picker';
+import { QuestionLink } from '../components/question-viewer';
 
 /** What the paper holds: the questions on it, the ones pinned by hand, and the draw. */
 
@@ -106,14 +107,15 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Bled to the card's edges and pinned: the count and the draw stay put past twelve sections. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-6 pb-3 pt-6">
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
           {' drawn'}
         </p>
 
         {sat ? null : (
-          <Button type="button" onClick={() => setAsking(true)} loading={draw.isPending}>
+          <Button type="button" size="sm" onClick={() => setAsking(true)} loading={draw.isPending}>
             <Dices aria-hidden />
             {drawn > 0 ? 'Draw again' : 'Draw the paper'}
           </Button>
@@ -190,7 +192,11 @@ function paperColumns(
       key: 'code',
       header: 'Code',
       className: 'max-w-[10rem] font-mono text-sm',
-      cell: (row) => <TruncatedText>{row.question.questionCode}</TruncatedText>,
+      cell: (row) => (
+        <QuestionLink questionId={row.questionId}>
+          <TruncatedText>{row.question.questionCode}</TruncatedText>
+        </QuestionLink>
+      ),
     },
     {
       key: 'difficulty',

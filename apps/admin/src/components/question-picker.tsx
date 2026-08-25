@@ -12,6 +12,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { TopicMultiPicker } from './taxonomy-picker';
+import { QuestionLink } from './question-viewer';
 
 /** Choosing questions for one section: the bank, filtered the way its own screen filters it. */
 
@@ -35,7 +36,11 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
       key: 'stem',
       header: 'Question',
       className: 'max-w-[24rem] font-medium',
-      cell: (question) => <TruncatedText>{question.stemPreview}</TruncatedText>,
+      cell: (question) => (
+        <QuestionLink questionId={question.id}>
+          <TruncatedText>{question.stemPreview}</TruncatedText>
+        </QuestionLink>
+      ),
     },
     {
       key: 'topic',
