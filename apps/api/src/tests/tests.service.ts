@@ -149,8 +149,8 @@ export class TestsService {
     this.assertJudgeable(input.evaluationMode ?? test.evaluationMode, paperBinding);
     this.assertCovers(config, scope, scopeRef);
 
-    // A test only now becoming generated carries a count of 1 it never chose, so it starts fresh.
-    const held = paperBinding === test.paperBinding ? test.variantCount : undefined;
+    // A stored 1 was never chosen, so it defaults: the rule judges the ask, not what history left.
+    const held = test.variantCount > 1 ? test.variantCount : undefined;
     const variantCount = variantCountFor(paperBinding, input.variantCount ?? held);
     this.assertDrawable(paperBinding, variantCount);
 

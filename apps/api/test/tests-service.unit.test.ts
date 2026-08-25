@@ -285,6 +285,22 @@ describe('TestsService — editing and removing', () => {
     assert.ok(prisma.tests[0]!.variantCount > 1);
   });
 
+  /** The failure this prevents: a generated test built before the count refusing every edit. */
+  it('lets a generated test that predates the count be edited at all', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({
+        id: 'tst_1',
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+        paperBinding: PAPER_BINDING.GENERATED,
+        variantCount: 1,
+      }),
+    ]);
+
+    await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
+
+    assert.ok(prisma.tests[0]!.variantCount > 1);
+  });
+
   /** One paper is what fixed MEANS, so the count is held there rather than argued about. */
   it('holds a fixed paper at one, whatever it is sent', async () => {
     const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
