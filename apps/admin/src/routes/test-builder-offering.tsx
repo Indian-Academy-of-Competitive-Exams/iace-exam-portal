@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, Power } from 'lucide-react';
+import { Power } from 'lucide-react';
 import { PAPER_BINDING, TEST_STATUS, type TestDetail } from '@iace/contracts';
 import { Alert, Button, ConfirmDialog, Field, plural } from '@iace/ui';
 import { api } from '../lib/api';
@@ -10,7 +10,7 @@ import { TestSeriesMultiPicker } from '../components/access-picker';
 
 const SERIES_KEY = (testId: string) => ['admin', 'test-series-links', testId] as const;
 
-const OFFERING_CONFIRMS = { FINALIZE: 'finalize', RETIRE: 'retire' } as const;
+const OFFERING_CONFIRMS = { OFFER: 'offer', RETIRE: 'retire' } as const;
 type OfferingConfirm = (typeof OFFERING_CONFIRMS)[keyof typeof OFFERING_CONFIRMS];
 
 function useOfferingRefresh(testId: string) {
@@ -63,9 +63,13 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const [asking, setAsking] = useState<OfferingConfirm | null>(null);
   const refresh = useOfferingRefresh(detail.id);
 
-  const finalize = useMutation({
-    meta: { success: 'Test finalized. Its paper is frozen.' },
-    mutationFn: () => api.admin.tests.finalize(detail.id),
+  const offer = useMutation({
+    meta: { success: 'Test offered to students.' },
+    // Freezing is what offering NEEDS, not a step an admin came here to take on its own.
+    mutationFn: async () => {
+      if (!detail.isLocked) await api.admin.tests.finalize(detail.id);
+      return api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.ACTIVE });
+    },
     onSuccess: async () => {
       setAsking(null);
       await refresh();
@@ -73,10 +77,9 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
     onError: () => setAsking(null),
   });
 
-  const setStatus = useMutation({
-    meta: { success: 'Test updated.' },
-    mutationFn: (status: typeof TEST_STATUS.ACTIVE | typeof TEST_STATUS.INACTIVE) =>
-      api.admin.tests.setStatus(detail.id, { status }),
+  const retire = useMutation({
+    meta: { success: 'Test retired.' },
+    mutationFn: () => api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.INACTIVE }),
     onSuccess: async () => {
       setAsking(null);
       await refresh();
@@ -91,40 +94,25 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
       <PublishNotice detail={detail} />
 
       <div className="flex flex-wrap items-center gap-2">
-        {detail.isLocked ? null : (
-          <Button
-            type="button"
-            onClick={() => setAsking(OFFERING_CONFIRMS.FINALIZE)}
-            loading={finalize.isPending}
-          >
-            <Lock aria-hidden />
-            Finalize
-          </Button>
-        )}
-
-        {detail.isLocked ? (
-          <Button
-            type="button"
-            variant={offered ? 'outline' : 'default'}
-            loading={setStatus.isPending}
-            onClick={() =>
-              offered ? setAsking(OFFERING_CONFIRMS.RETIRE) : setStatus.mutate(TEST_STATUS.ACTIVE)
-            }
-          >
-            <Power aria-hidden />
-            {offered ? 'Retire' : 'Offer to students'}
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          variant={offered ? 'outline' : 'default'}
+          loading={offer.isPending || retire.isPending}
+          onClick={() => setAsking(offered ? OFFERING_CONFIRMS.RETIRE : OFFERING_CONFIRMS.OFFER)}
+        >
+          <Power aria-hidden />
+          {offered ? 'Retire' : 'Offer to students'}
+        </Button>
       </div>
 
       <ConfirmDialog
-        open={asking === OFFERING_CONFIRMS.FINALIZE}
+        open={asking === OFFERING_CONFIRMS.OFFER}
         onOpenChange={(open) => !open && setAsking(null)}
-        title={`Finalize ${detail.title ?? 'this test'}?`}
-        description={`The ${plural(detail.totalQuestions, 'question')} drawn for this test freeze, and every student sits exactly them. You can still unfreeze it by changing its shape, until the first student sits it.`}
-        confirmLabel="Finalize test"
-        loading={finalize.isPending}
-        onConfirm={() => finalize.mutate()}
+        title={`Offer ${detail.title ?? 'this test'} to students?`}
+        description={offerDescription(detail)}
+        confirmLabel="Offer to students"
+        loading={offer.isPending}
+        onConfirm={() => offer.mutate()}
       />
 
       <ConfirmDialog
@@ -134,14 +122,22 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
         title={`Retire ${detail.title ?? 'this test'}?`}
         description={`Every student reached through ${plural(detail.seriesCount, 'series', 'series')} stops being offered this test. Attempts already sat keep their results, and you can offer it again later.`}
         confirmLabel="Retire test"
-        loading={setStatus.isPending}
-        onConfirm={() => setStatus.mutate(TEST_STATUS.INACTIVE)}
+        loading={retire.isPending}
+        onConfirm={() => retire.mutate()}
       />
     </div>
   );
 }
 
-/** What is still owed before a student can sit this, or what finalizing is about to cost. */
+/** Offering is what freezes the paper, so the confirm has to say both things happen. */
+function offerDescription(detail: TestDetail): string {
+  const freeze = detail.isLocked
+    ? ''
+    : `Its ${plural(detail.totalQuestions, 'question')} freeze first, and every student sits exactly them. `;
+  return `${freeze}Every student reached through ${plural(detail.seriesCount, 'series', 'series')} is offered it from now on.`;
+}
+
+/** What is still owed before a student can sit this. */
 function PublishNotice({ detail }: Readonly<{ detail: TestDetail }>) {
   if (detail.isLocked) return null;
 

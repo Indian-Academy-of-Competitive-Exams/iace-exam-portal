@@ -7,9 +7,13 @@ import {
   DataTable,
   Dialog,
   DialogBody,
+  DialogClose,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  Separator,
   StatRow,
   type DataTableColumn,
 } from '@iace/ui';
@@ -74,32 +78,56 @@ export function ConfigSummaryButton({ config }: Readonly<{ config: BaseConfigDet
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="lg">
-          <DialogHeader>
+          <DialogHeader className="flex-col gap-1">
             <DialogTitle>{config.name}</DialogTitle>
+            <DialogDescription>
+              {`${config.examStage.exam.code} / ${config.examStage.name}`}
+            </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="flex flex-col gap-6">
-            <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-              <StatRow label="Sections" value={config.sections.length} />
-              <StatRow label="Questions" value={config.totalQuestions} />
-              <StatRow label="Marks" value={config.totalMarks} />
-              <StatRow label="Duration" value={durationLabel(config.durationSec)} />
-              <StatRow label="Timing pattern" value={TIMER_TEMPLATE_LABELS[config.timerTemplate]} />
-              <StatRow label="Navigation" value={NAVIGATION_POLICY_LABELS[config.navigation]} />
-              <StatRow
-                label="Languages"
-                value={config.languages.map((code) => LANGUAGE_CODE_LABELS[code]).join(', ') || '—'}
-              />
-            </div>
+          <Separator />
 
-            <DataTable
-              columns={sectionColumns()}
-              rows={config.sections}
-              rowKey={(section) => section.id}
-              isLoading={false}
-              empty="This configuration has no sections."
-            />
+          <DialogBody className="flex min-h-0 flex-1 flex-col gap-6 py-5">
+            <section className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">The paper</h3>
+              <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+                <StatRow label="Sections" value={config.sections.length} />
+                <StatRow label="Questions" value={config.totalQuestions} />
+                <StatRow label="Marks" value={config.totalMarks} />
+                <StatRow label="Duration" value={durationLabel(config.durationSec)} />
+                <StatRow
+                  label="Timing pattern"
+                  value={TIMER_TEMPLATE_LABELS[config.timerTemplate]}
+                />
+                <StatRow label="Navigation" value={NAVIGATION_POLICY_LABELS[config.navigation]} />
+                <StatRow
+                  label="Languages"
+                  value={
+                    config.languages.map((code) => LANGUAGE_CODE_LABELS[code]).join(', ') || '—'
+                  }
+                />
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">Each section</h3>
+              <DataTable
+                columns={sectionColumns()}
+                rows={config.sections}
+                rowKey={(section) => section.id}
+                isLoading={false}
+                empty="This configuration has no sections."
+              />
+            </section>
           </DialogBody>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Close
+              </Button>
+            </DialogClose>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

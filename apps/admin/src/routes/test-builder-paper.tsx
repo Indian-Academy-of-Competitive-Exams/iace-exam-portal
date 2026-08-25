@@ -20,7 +20,6 @@ import {
   DropdownMenuItem,
   RowActions,
   SkeletonParagraph,
-  StatRow,
   TruncatedText,
   plural,
   type DataTableColumn,
@@ -105,8 +104,11 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const drawn = [...held.values()].reduce((sum, section) => sum + section.questions.length, 0);
 
   return (
-    <div className="flex flex-col gap-4">
-      <StatRow label="Drawn" value={`${drawn} of ${detail.totalQuestions}`} />
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
+        {' drawn'}
+      </p>
 
       {gaps.length > 0 ? (
         <Alert variant="warning">
@@ -121,7 +123,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
       {paper.isLoading ? <SkeletonParagraph lines={detail.baseConfig.sections.length} /> : null}
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
         {paper.isLoading
           ? null
           : detail.baseConfig.sections.map((section) => (
@@ -246,22 +248,15 @@ function SectionPaper({
   });
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <StatRow
-          className="flex-1"
-          label={section.name}
-          value={
-            <span className="inline-flex items-center gap-2">
-              <span>{`${rows.length} of ${section.questionCount}`}</span>
-              {short ? (
-                <Badge variant="warning">Short</Badge>
-              ) : (
-                <Badge variant="success">Full</Badge>
-              )}
-            </span>
-          }
-        />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">{section.name}</h3>
+          <span className="text-sm text-muted-foreground">
+            {`${rows.length} of ${section.questionCount}`}
+          </span>
+          {short ? <Badge variant="warning">Short</Badge> : <Badge variant="success">Full</Badge>}
+        </div>
         <QuestionPickerButton
           label={`Choose questions for ${section.name}`}
           subjectId={section.subjectId}
