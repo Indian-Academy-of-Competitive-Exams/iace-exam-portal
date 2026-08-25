@@ -66,7 +66,12 @@ function resolver(permitted = true): AccessResolverService {
 function serviceWith(
   test = sittable(),
   attempts: FakeAttemptRow[] = [],
-  config = makeBaseConfig({ id: 'cfg_1', durationSec: 3600, languages: [LANGUAGE_CODE.EN] }),
+  config = makeBaseConfig({
+    id: 'cfg_1',
+    durationSec: 3600,
+    totalQuestions: 3,
+    languages: [LANGUAGE_CODE.EN],
+  }),
   permitted = true,
 ) {
   const prisma = new FakeTestsPrisma(
@@ -290,15 +295,6 @@ describe('AttemptsService — what cannot be sat', () => {
     assert.match(error.message, /not been finalized/);
   });
 
-  it('refuses a test drawn per attempt, which this version cannot serve', async () => {
-    const { service } = serviceWith(sittable({ paperBinding: PAPER_BINDING.GENERATED }));
-
-    const error = await service.start(STUDENT, 'tst_1', {}).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.match(error.message, /fresh paper for each student/);
-  });
-
   it('lets the resolver refuse a student who cannot reach it, and writes nothing', async () => {
     const { service, prisma } = serviceWith(sittable(), [], undefined, false);
 
@@ -369,5 +365,52 @@ describe('AttemptsService — the blueprint stops moving', () => {
     await service.start(STUDENT, 'tst_1', {});
 
     assert.equal(prisma.configs[0]!.locked, false);
+  });
+});
+
+describe('AttemptsService — a test with a paper per student', () => {
+  /** Two whole papers on file, drawn when the test was frozen. */
+  function variants(): FakePaperRow[] {
+    return [0, 1].flatMap((variant) =>
+      [1, 2, 3].map((n) => ({
+        id: `pq_${variant}_${n}`,
+        testId: 'tst_1',
+        baseConfigId: 'cfg_1',
+        baseConfigSectionId: 'sec_1',
+        questionId: `v${variant}q${n}`,
+        questionVersionId: `v${variant}q${n}_v1`,
+        variant,
+        order: n,
+        marks: 2,
+        negativeMarks: 0.5,
+        status: 'ACTIVE' as const,
+      })),
+    );
+  }
+
+  /** The failure this prevents: a generated test a student can be offered but never open. */
+  it('serves one of the papers, whole, rather than refusing to serve any', async () => {
+    const prisma = new FakeTestsPrisma(
+      [sittable({ paperBinding: PAPER_BINDING.GENERATED, variantCount: 2 })],
+      [makeBaseConfig({ id: 'cfg_1', durationSec: 3600, totalQuestions: 3 })],
+      SECTIONS,
+      [],
+      [],
+      [],
+      variants(),
+      [],
+      [],
+      [],
+    );
+    const service = new AttemptsService(prisma.asService(), resolver());
+
+    const attempt = await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(attempt.startedByThisCall, true);
+    const served = prisma.attemptQuestions.map((row) => row.questionId);
+    assert.equal(served.length, 3);
+    // Every question came from ONE of the two papers, never a blend of both.
+    const from = new Set(served.map((id) => id.slice(0, 2)));
+    assert.equal(from.size, 1);
   });
 });

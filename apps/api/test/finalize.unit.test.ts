@@ -1,8 +1,12 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, PAPER_BINDING } from '@iace/contracts';
+import { AppException, ErrorCodes, EVALUATION_MODE, PAPER_BINDING } from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
+import { PaperService } from '../src/tests/paper.service';
+import { BaseConfigsService } from '../src/configs/base-configs.service';
+import { ExamStagesService } from '../src/configs/exam-stages.service';
+import { AuditContext } from '../src/audit';
 import {
   type FakePaperRow,
   type FakeSectionRow,
@@ -48,7 +52,10 @@ function serviceWith(
     makeQuestion({ id, currentVersionId: `${id}_v1` }),
   );
   const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], [], questions, paper);
-  return { prisma, service: new FinalizeService(prisma.asService()) };
+  const stages = new ExamStagesService(prisma.asService(), new AuditContext());
+  const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
+  const paperService = new PaperService(prisma.asService(), configs);
+  return { prisma, service: new FinalizeService(prisma.asService(), paperService) };
 }
 
 describe('FinalizeService — freezing a fixed paper', () => {
@@ -191,22 +198,68 @@ describe('FinalizeService — what it refuses to freeze', () => {
   });
 });
 
-describe('FinalizeService — a test drawn per attempt', () => {
-  it('freezes its draw spec and no paper', async () => {
-    const { service, prisma } = serviceWith(
+describe('FinalizeService — a test drawn per student', () => {
+  /** Enough of each subject that three variants can be drawn without repeating within one. */
+  function generated(variantCount: number) {
+    const bank = [
+      ...Array.from({ length: 9 }, (_, index) =>
+        makeQuestion({
+          id: `r${index + 1}`,
+          subjectId: 'sub_r',
+          currentVersionId: `r${index + 1}_v1`,
+        }),
+      ),
+      ...Array.from({ length: 6 }, (_, index) =>
+        makeQuestion({
+          id: `q${index + 1}`,
+          subjectId: 'sub_q',
+          currentVersionId: `q${index + 1}_v1`,
+        }),
+      ),
+    ];
+    const test = makeTest({
+      id: 'tst_1',
+      paperBinding: PAPER_BINDING.GENERATED,
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+      variantCount,
+    });
+    const prisma = new FakeTestsPrisma(
+      [test],
+      [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5 })],
+      SECTIONS,
       [],
-      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED }),
+      [],
+      bank,
+      [],
     );
+    const stages = new ExamStagesService(prisma.asService(), new AuditContext());
+    const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
+    const paper = new PaperService(prisma.asService(), configs);
+    return { prisma, service: new FinalizeService(prisma.asService(), paper) };
+  }
+
+  /** The failure this prevents: a generated test frozen with nothing for a student to open. */
+  it('draws one whole paper per variant before it freezes', async () => {
+    const { service, prisma } = generated(3);
 
     const result = await service.finalize('tst_1');
 
-    // No rows to freeze and none to count, but the spec that decides every attempt's paper stops moving.
-    assert.equal(result.frozenQuestions, 0);
     assert.equal(prisma.tests[0]!.isLocked, true);
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(result.frozenQuestions, 15);
     assert.deepEqual(
-      prisma.questions.map((question) => question.fixedUseCount),
-      [0, 0, 0, 0, 0],
+      [0, 1, 2].map(
+        (variant) => prisma.paperQuestions.filter((row) => row.variant === variant).length,
+      ),
+      [5, 5, 5],
     );
+  });
+
+  /** The lock is the first ATTEMPT, and freezing twenty papers is not somebody sitting one. */
+  it('leaves the config unlocked, the same as a fixed paper does', async () => {
+    const { service, prisma } = generated(2);
+
+    await service.finalize('tst_1');
+
+    assert.equal(prisma.configs[0]!.locked, false);
   });
 });

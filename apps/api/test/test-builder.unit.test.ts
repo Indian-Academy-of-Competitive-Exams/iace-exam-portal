@@ -66,7 +66,10 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
     events,
     tests: new TestsService(prisma.asService(), configs, new AuditContext(), events.asService()),
     paper: new PaperService(prisma.asService(), configs),
-    finalizer: new FinalizeService(prisma.asService()),
+    finalizer: new FinalizeService(
+      prisma.asService(),
+      new PaperService(prisma.asService(), configs),
+    ),
     offering: new OfferingService(prisma.asService(), events.asService()),
   };
 }

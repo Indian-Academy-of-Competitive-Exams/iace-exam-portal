@@ -9,11 +9,13 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { ALREADY_FINALIZED_MESSAGE, paperCompletenessIssues } from './test-rules';
+import { PaperService } from './paper.service';
 
 const FINALIZE_SELECT = {
   id: true,
   baseConfigId: true,
   paperBinding: true,
+  variantCount: true,
   isLocked: true,
   version: true,
 } as const satisfies Prisma.TestSelect;
@@ -36,11 +38,17 @@ export interface FinalizeResult {
 /** Freezes a test: the draft rows already exist, so this locks them rather than writing them. */
 @Injectable()
 export class FinalizeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paper: PaperService,
+  ) {}
 
   async finalize(testId: string): Promise<FinalizeResult> {
     const test = await this.requireTest(testId);
     if (test.isLocked) return this.alreadyFinalized(test);
+
+    // Drawn BEFORE the freeze, not per attempt: a pool query per student is the thing to avoid.
+    if (!fixed(test.paperBinding)) await this.paper.drawVariants(test.id, test.variantCount);
 
     const finalizedAt = new Date();
     const frozen = await this.prisma.$transaction(async (tx) => {
@@ -75,9 +83,8 @@ export class FinalizeService {
     };
   }
 
-  /** A GENERATED test freezes its draw spec, not a paper: there are no rows to count. */
+  /** Every row the test holds. A GENERATED test has one paper per variant by the time this runs. */
   private async paperOf(tx: Prisma.TransactionClient, test: FinalizeRow): Promise<PaperRowRef[]> {
-    if (!fixed(test.paperBinding)) return [];
     return tx.paperQuestion.findMany({
       where: { testId: test.id },
       select: { questionId: true, baseConfigSectionId: true },

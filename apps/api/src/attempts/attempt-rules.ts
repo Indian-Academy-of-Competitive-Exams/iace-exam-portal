@@ -1,10 +1,8 @@
 import {
   LANGUAGE_MODE,
-  PAPER_BINDING,
   TEST_STATUS,
   type LanguageCode,
   type LanguageMode,
-  type PaperBinding,
   type TestStatus,
 } from '@iace/contracts';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
@@ -17,18 +15,11 @@ export const TEST_NOT_OFFERED_MESSAGE =
 export const PAPER_NOT_READY_MESSAGE =
   'This test has not been finalized yet, so it has no paper to sit.';
 
-export const GENERATED_NOT_SITTABLE_MESSAGE =
-  'This test draws a fresh paper for each student, which this version cannot serve yet.';
-
 /** What stops a test being sat at all, whatever the student's access says. */
-export function testStartBlocker(test: {
-  status: TestStatus;
-  isLocked: boolean;
-  paperBinding: PaperBinding;
-}): string | null {
+export function testStartBlocker(test: { status: TestStatus; isLocked: boolean }): string | null {
   if (test.status !== TEST_STATUS.ACTIVE) return TEST_NOT_OFFERED_MESSAGE;
+  // The freeze is what wrote the papers, one for a fixed test and one per variant for a generated one.
   if (!test.isLocked) return PAPER_NOT_READY_MESSAGE;
-  if (test.paperBinding === PAPER_BINDING.GENERATED) return GENERATED_NOT_SITTABLE_MESSAGE;
   return null;
 }
 

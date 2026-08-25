@@ -117,6 +117,45 @@ export class PaperService {
     return this.paperOf(test.id, config);
   }
 
+  /** The papers a GENERATED test hands out, drawn once at the freeze rather than per attempt. */
+  async drawVariants(testId: string, count: number): Promise<number> {
+    const test = await this.requireTest(testId);
+    const config = await this.configs.detail(test.baseConfigId);
+    const sections = config.sections.map(toDrawSection);
+    const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
+
+    const pool = await this.poolFor(sections, spec);
+    this.assertBankCanFill(config.sections, spec, pool);
+
+    const papers = Array.from({ length: count }, (_, variant) => {
+      const result = drawPaper({
+        sections,
+        pool,
+        strategy: test.drawStrategy,
+        spec,
+        // A seed per variant, so the same test drawn twice gives the same set of papers.
+        seed: freshSeed() + variant,
+      });
+      if (!result.ok) {
+        throw new AppException(
+          ErrorCodes.DRAW_SHORTFALL,
+          'The bank does not hold enough questions to fill every section of this paper.',
+          { fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)) },
+        );
+      }
+      return result.questions.map((row) => ({ ...row, variant }));
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.paperQuestion.deleteMany({ where: { testId } });
+      await tx.paperQuestion.createMany({
+        data: papers.flat().map((row) => ({ ...row, testId, baseConfigId: test.baseConfigId })),
+      });
+    });
+
+    return papers.flat().length;
+  }
+
   /** One row swapped for another question, keeping its place in the paper. */
   async replaceQuestion(
     testId: string,
@@ -421,6 +460,18 @@ function availabilityOf(
       return [section.id, { total: held.length, byDifficulty }];
     }),
   );
+}
+
+/** The engine's own shortfall, in the shape the shared message builder reads. */
+function sectionShortfalls(
+  gaps: readonly {
+    baseConfigSectionId: string;
+    sectionName: string;
+    needed: number;
+    available: number;
+  }[],
+): DrawShortfall[] {
+  return gaps.map((gap) => ({ ...gap, difficulty: null }));
 }
 
 /** One message per short bucket, keyed by section so the form puts it beside the right one. */

@@ -32,15 +32,16 @@ const SITTABLE_INCLUDE = {
       locked: true,
     },
   },
-  paperQuestions: {
-    select: { id: true, questionId: true, questionVersionId: true, baseConfigSectionId: true },
-    orderBy: { order: 'asc' },
-  },
 } as const satisfies Prisma.TestInclude;
 
 type SittableTest = Prisma.TestGetPayload<{ include: typeof SITTABLE_INCLUDE }>;
 
 const LIVE = ATTEMPT_STATUS.IN_PROGRESS;
+
+/** Which of the test's papers this sitting gets. A fixed test has one, so this is always 0. */
+function variantFor(seed: number, variantCount: number): number {
+  return variantCount > 1 ? seed % variantCount : 0;
+}
 
 /** Seeds are an Int on the row, and nothing here guards anything — it only has to be unpredictable. */
 const SEED_CEILING = 2 ** 31;
@@ -108,11 +109,13 @@ export class AttemptsService {
         },
       });
 
-      const served = displayOrder(
-        test.paperQuestions,
-        attempt.shuffleSeed,
-        test.baseConfig.shuffleQuestions,
-      );
+      // Read AFTER the seed exists, because the seed is what says which of the papers this is.
+      const paper = await tx.paperQuestion.findMany({
+        where: { testId: test.id, variant: variantFor(attempt.shuffleSeed, test.variantCount) },
+        select: { id: true, questionId: true, questionVersionId: true, baseConfigSectionId: true },
+        orderBy: { order: 'asc' },
+      });
+      const served = displayOrder(paper, attempt.shuffleSeed, test.baseConfig.shuffleQuestions);
 
       await tx.attemptQuestion.createMany({
         data: served.map((row, index) => ({
@@ -202,6 +205,6 @@ function toLiveAttempt(
     startedByThisCall,
     testTitle: test.title,
     durationSec: test.baseConfig.durationSec,
-    totalQuestions: test.paperQuestions.length,
+    totalQuestions: test.baseConfig.totalQuestions,
   };
 }

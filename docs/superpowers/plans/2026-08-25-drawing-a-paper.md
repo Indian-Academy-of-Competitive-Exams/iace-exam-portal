@@ -135,11 +135,11 @@ extend `apps/api/test/draw-engine.unit.test.ts`, `apps/api/test/paper-service.un
 `apps/api/src/tests/offering.service.ts`, `apps/api/src/attempts/attempts.service.ts`,
 `apps/api/src/attempts/attempt-rules.ts`; extend the matching tests.
 
-- [ ] Offering a GENERATED test runs feasibility, then draws `Test.variantCount` papers, each with
+- [x] Offering a GENERATED test runs feasibility, then draws `Test.variantCount` papers, each with
       its own seed, into `PaperQuestion` under its variant number.
-- [ ] Attempt start picks `shuffleSeed % variantCount` and reads that variant's rows. No pool
+- [x] Attempt start picks `shuffleSeed % variantCount` and reads that variant's rows. No pool
       query, no draw, nothing new on the hot path.
-- [ ] `testStartBlocker` stops refusing GENERATED and starts refusing a test with no variants.
+- [x] `testStartBlocker` stops refusing GENERATED and starts refusing a test with no variants.
       **Acceptance:** two students starting the same generated test can get different papers and
       both can sit them; a generated test whose bank cannot fill a bucket is refused at the offer,
       not at the start; the leaderboard and item analysis still resolve per variant.

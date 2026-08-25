@@ -1292,6 +1292,7 @@ export interface FakeTestModelRow {
   maxRetakes: number | null;
   drawStrategy: DrawStrategy;
   questionPoolFilter: DrawSpec | null;
+  variantCount: number;
   status: TestStatus;
   isLocked: boolean;
   version: number;
@@ -1312,6 +1313,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     paperBinding: PAPER_BINDING.FIXED,
     maxRetakes: null,
     drawStrategy: DRAW_STRATEGY.RANDOM,
+    variantCount: 1,
     questionPoolFilter: null,
     status: TEST_STATUS.DRAFT,
     isLocked: false,
@@ -1607,12 +1609,18 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: removed });
     },
 
-    createMany: ({ data }: { data: Omit<FakePaperRow, 'id' | 'status' | 'variant'>[] }) => {
+    createMany: ({
+      data,
+    }: {
+      data: (Omit<FakePaperRow, 'id' | 'status' | 'variant'> & { variant?: number })[];
+    }) => {
       for (const row of data) {
+        const variant = row.variant ?? 0;
+        // The id carries the variant, or two variants' first questions would be the same row.
         this.paperQuestions.push({
           ...row,
-          id: `pq_${row.testId}_${row.order}`,
-          variant: 0,
+          variant,
+          id: `pq_${row.testId}_${variant}_${row.order}`,
           status: 'ACTIVE',
         });
       }
