@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Dices, Repeat, Trash2 } from 'lucide-react';
+import { Dices, Trash2 } from 'lucide-react';
 import {
   AppException,
   ErrorCodes,
@@ -12,6 +12,7 @@ import {
   type TestPaper,
 } from '@iace/contracts';
 import {
+  Accordion,
   Alert,
   Badge,
   Button,
@@ -25,7 +26,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { QuestionPicker, QuestionPickerButton } from '../components/question-picker';
+import { QuestionChooser } from '../components/question-picker';
 
 /** What the paper holds: the questions on it, the ones pinned by hand, and the draw. */
 
@@ -37,14 +38,14 @@ function shortfallsOf(error: unknown): string[] {
   return Object.values(error.fieldErrors ?? {}).flat();
 }
 
-/** Says what a draw costs, so the two standing alerts that used to say it can go. */
+/** Says what a draw costs, so the standing alerts that used to say it can go. */
 function drawDescription(detail: TestDetail, drawn: number): string {
   const replaced =
     drawn > 0
       ? `The ${plural(drawn, 'question')} already on this paper are replaced, keeping only what you have chosen by hand. `
       : '';
   const thaw = detail.isLocked
-    ? 'This test is finalized, so drawing unfreezes its paper and stops it being offered until you finalize it again. '
+    ? 'This test is finalized, so drawing unfreezes its paper and stops it being offered until you offer it again. '
     : '';
   return `${replaced}${thaw}Every student sits whatever this draw produces.`;
 }
@@ -105,10 +106,19 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
-        {' drawn'}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{`${drawn} of ${detail.totalQuestions}`}</span>
+          {' drawn'}
+        </p>
+
+        {sat ? null : (
+          <Button type="button" onClick={() => setAsking(true)} loading={draw.isPending}>
+            <Dices aria-hidden />
+            {drawn > 0 ? 'Draw again' : 'Draw the paper'}
+          </Button>
+        )}
+      </div>
 
       {gaps.length > 0 ? (
         <Alert variant="warning">
@@ -123,7 +133,7 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
       {paper.isLoading ? <SkeletonParagraph lines={detail.baseConfig.sections.length} /> : null}
 
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         {paper.isLoading
           ? null
           : detail.baseConfig.sections.map((section) => (
@@ -140,15 +150,6 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
             ))}
       </div>
 
-      {sat ? null : (
-        <div>
-          <Button type="button" onClick={() => setAsking(true)} loading={draw.isPending}>
-            <Dices aria-hidden />
-            {drawn > 0 ? 'Draw again' : 'Draw the paper'}
-          </Button>
-        </div>
-      )}
-
       <ConfirmDialog
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
@@ -163,7 +164,6 @@ export function PaperStep({ detail }: Readonly<{ detail: TestDetail }>) {
 }
 
 function paperColumns(
-  onReplace: (row: PaperRow) => void,
   onRemove: (row: PaperRow) => void,
   sat: boolean,
 ): DataTableColumn<PaperRow>[] {
@@ -175,10 +175,6 @@ function paperColumns(
           className: 'text-right',
           cell: (row) => (
             <RowActions label={`Actions for question ${row.order}`}>
-              <DropdownMenuItem onSelect={() => onReplace(row)}>
-                <Repeat aria-hidden />
-                Replace
-              </DropdownMenuItem>
               <DropdownMenuItem destructive onSelect={() => onRemove(row)}>
                 <Trash2 aria-hidden />
                 Remove
@@ -223,20 +219,9 @@ function SectionPaper({
   onPin: (next: string[]) => void;
   onChanged: (next: TestPaper) => Promise<void>;
 }>) {
-  const [replacing, setReplacing] = useState<PaperRow | null>(null);
   const [removing, setRemoving] = useState<PaperRow | null>(null);
   const rows = held?.questions ?? [];
   const short = rows.length < section.questionCount;
-
-  const replace = useMutation({
-    meta: { success: 'Question replaced.' },
-    mutationFn: ({ rowId, questionId }: { rowId: string; questionId: string }) =>
-      api.admin.tests.replacePaperQuestion(testId, rowId, { questionId }),
-    onSuccess: async (next) => {
-      setReplacing(null);
-      await onChanged(next);
-    },
-  });
 
   const remove = useMutation({
     meta: { success: 'Question removed.' },
@@ -248,59 +233,55 @@ function SectionPaper({
   });
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground">{section.name}</h3>
-          <span className="text-sm text-muted-foreground">
-            {`${rows.length} of ${section.questionCount}`}
-          </span>
+    <Accordion
+      title={<span className="font-medium text-foreground">{section.name}</span>}
+      meta={
+        <span className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+          <span>{`${rows.length} of ${section.questionCount}`}</span>
           {short ? <Badge variant="warning">Short</Badge> : <Badge variant="success">Full</Badge>}
-        </div>
-        <QuestionPickerButton
-          label={`Choose questions for ${section.name}`}
-          subjectId={section.subjectId}
-          chosen={pinned}
-          onChosen={onPin}
-          needed={section.questionCount}
-          disabled={sat}
-        />
+        </span>
+      }
+    >
+      <div className="flex flex-col gap-6">
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">On the paper</h3>
+          {rows.length > 0 ? (
+            <DataTable
+              columns={paperColumns(setRemoving, sat)}
+              rows={rows}
+              rowKey={(row) => row.id}
+              isLoading={false}
+              empty="Nothing drawn for this section yet."
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Nothing drawn for this section yet. Choose what you want kept below, then draw.
+            </p>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">Choose by hand</h3>
+          <QuestionChooser
+            subjectId={section.subjectId}
+            chosen={pinned}
+            onChosen={onPin}
+            needed={section.questionCount}
+            disabled={sat}
+          />
+        </section>
       </div>
-
-      {rows.length > 0 ? (
-        <DataTable
-          columns={paperColumns(setReplacing, setRemoving, sat)}
-          rows={rows}
-          rowKey={(row) => row.id}
-          isLoading={false}
-          empty="Nothing drawn for this section yet."
-        />
-      ) : null}
-
-      {replacing ? (
-        <QuestionPicker
-          single
-          open
-          onOpenChange={(open) => !open && setReplacing(null)}
-          title={`Replace question ${replacing.order} in ${section.name}`}
-          subjectId={section.subjectId}
-          chosen={[replacing.questionId]}
-          onChosen={([questionId]) =>
-            questionId && replace.mutate({ rowId: replacing.id, questionId })
-          }
-        />
-      ) : null}
 
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
         destructive
         title={`Remove question ${removing?.order ?? ''} from ${section.name}?`}
-        description={`${section.name} drops to ${rows.length - 1} of the ${section.questionCount} it needs, so this test cannot be finalized until one is drawn in its place.`}
+        description={`${section.name} drops to ${rows.length - 1} of the ${section.questionCount} it needs, so this test cannot be offered until one is drawn in its place.`}
         confirmLabel="Remove question"
         loading={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing.id)}
       />
-    </div>
+    </Accordion>
   );
 }

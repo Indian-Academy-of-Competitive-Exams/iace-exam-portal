@@ -1,16 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { DIFFICULTY_LEVELS, QUESTION_STATUS, type QuestionSummary } from '@iace/contracts';
 import { useListScreen, useLocalFilters } from '@iace/app-kit/browser';
 import {
   Badge,
   BadgeList,
-  Button,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   ListView,
   TruncatedText,
   plural,
@@ -35,13 +28,13 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
     {
       key: 'code',
       header: 'Code',
-      className: 'max-w-[8rem] font-mono text-sm',
+      className: 'max-w-[10rem] font-mono text-sm',
       cell: (question) => <TruncatedText>{question.questionCode}</TruncatedText>,
     },
     {
       key: 'stem',
       header: 'Question',
-      className: 'max-w-[26rem] font-medium',
+      className: 'max-w-[24rem] font-medium',
       cell: (question) => <TruncatedText>{question.stemPreview}</TruncatedText>,
     },
     {
@@ -60,36 +53,28 @@ function questionColumns(): DataTableColumn<QuestionSummary>[] {
     {
       key: 'tags',
       header: 'Tags',
-      className: 'max-w-[12rem]',
+      className: 'max-w-[10rem]',
       cell: (question) => <BadgeList items={question.tags} label={(tag) => tag} />,
     },
   ];
 }
 
-export interface QuestionPickerProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  /** The section's own subject: the draw uses it, so the picker must not offer past it. */
-  subjectId: string | null;
-  chosen: readonly string[];
-  onChosen: (next: string[]) => void;
-  /** How many the section holds, so the footer can say what is still owed. */
-  needed?: number;
-  /** One question replaces one row, so the dialog closes on the first pick. */
-  single?: boolean;
-}
-
-export function QuestionPicker({
-  open,
-  onOpenChange,
-  title,
+/** The bank for one section, ticked. Inline: a section is already open, so nothing needs opening. */
+export function QuestionChooser({
   subjectId,
   chosen,
   onChosen,
   needed,
-  single,
-}: Readonly<QuestionPickerProps>) {
+  disabled,
+}: Readonly<{
+  /** The section's own subject: the draw uses it, so the chooser must not offer past it. */
+  subjectId: string | null;
+  chosen: readonly string[];
+  onChosen: (next: string[]) => void;
+  /** How many the section holds, so the count can say what is still owed. */
+  needed: number;
+  disabled?: boolean;
+}>) {
   const store = useLocalFilters();
   const columns = useMemo(() => questionColumns(), []);
 
@@ -131,94 +116,44 @@ export function QuestionPicker({
       subjectId: subjectId ? [subjectId] : undefined,
     }),
     fetchPage: (params) => api.admin.questions.list(params),
-    enabled: open,
   });
 
-  const pick = (next: ReadonlySet<string>) => {
-    if (!single) {
-      onChosen([...next]);
-      return;
-    }
-    const added = [...next].find((id) => !chosen.includes(id));
-    if (added) {
-      onChosen([added]);
-      onOpenChange(false);
-    }
-  };
+  const picked = questions.rows.filter((question) => chosen.includes(question.id));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
+    <div className="flex flex-col gap-3">
+      <ListView
+        list={questions}
+        filters={filterSpec}
+        columns={columns}
+        rowKey={(question) => question.id}
+        selection={
+          disabled
+            ? undefined
+            : {
+                selected: new Set(chosen),
+                onChange: (next) => onChosen([...next]),
+                label: 'Choose this question',
+              }
+        }
+        empty="The bank holds no live question for this section yet."
+        emptyFiltered="No question matches those filters."
+      />
 
-        <DialogBody>
-          <ListView
-            list={questions}
-            filters={filterSpec}
-            columns={columns}
-            rowKey={(question) => question.id}
-            selection={{
-              selected: new Set(chosen),
-              onChange: pick,
-              label: 'Choose this question',
-            }}
-            empty="The bank holds no live question for this section yet."
-            emptyFiltered="No question matches those filters."
-          />
-        </DialogBody>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-border pt-3">
+        <span className="text-sm font-medium text-foreground">
+          {`${chosen.length} of ${plural(needed, 'question')} chosen by hand`}
+        </span>
+        <span className="text-sm text-muted-foreground">the draw fills the rest</span>
+      </div>
 
-        <DialogFooter>
-          <span className="mr-auto text-sm text-muted-foreground">
-            {needed === undefined
-              ? `${chosen.length} chosen`
-              : `${chosen.length} of ${plural(needed, 'question')} chosen — the draw fills the rest`}
-          </span>
-          <Button type="button" onClick={() => onOpenChange(false)}>
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** A button that says how many are chosen and opens the picker for one section. */
-export function QuestionPickerButton({
-  label,
-  subjectId,
-  chosen,
-  onChosen,
-  needed,
-  disabled,
-}: Readonly<{
-  label: string;
-  subjectId: string | null;
-  chosen: readonly string[];
-  onChosen: (next: string[]) => void;
-  needed: number;
-  disabled?: boolean;
-}>) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Button type="button" variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
-        {chosen.length === 0 ? 'Choose by hand' : `${chosen.length} chosen by hand`}
-      </Button>
-
-      {open ? (
-        <QuestionPicker
-          open={open}
-          onOpenChange={setOpen}
-          title={label}
-          subjectId={subjectId}
-          chosen={chosen}
-          onChosen={onChosen}
-          needed={needed}
+      {picked.length > 0 ? (
+        <BadgeList
+          items={picked}
+          max={6}
+          label={(question) => question.questionCode ?? question.stemPreview}
         />
       ) : null}
-    </>
+    </div>
   );
 }
