@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Power } from 'lucide-react';
 import {
-  PAPER_BINDING,
   TEST_STATUS,
+  offerRequirements,
   type BranchTestScheduleRow,
   type TestDetail,
 } from '@iace/contracts';
 import {
   Alert,
   Button,
+  Checkbox,
   ConfirmDialog,
   Field,
   NumericInput,
@@ -23,9 +24,6 @@ import { TestSeriesMultiPicker } from '../components/access-picker';
 /** Who is offered the test: the series that carry it, and the freeze that lets students sit it. */
 
 const SERIES_KEY = (testId: string) => ['admin', 'test-series-links', testId] as const;
-
-const OFFERING_CONFIRMS = { OFFER: 'offer', RETIRE: 'retire' } as const;
-type OfferingConfirm = (typeof OFFERING_CONFIRMS)[keyof typeof OFFERING_CONFIRMS];
 
 function useOfferingRefresh(testId: string) {
   const queryClient = useQueryClient();
@@ -210,7 +208,7 @@ export function BranchTimingStep({ detail }: Readonly<{ detail: TestDetail }>) {
 }
 
 export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
-  const [asking, setAsking] = useState<OfferingConfirm | null>(null);
+  const [retiring, setRetiring] = useState(false);
   const refresh = useOfferingRefresh(detail.id);
 
   const offer = useMutation({
@@ -220,94 +218,97 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
       if (!detail.isLocked) await api.admin.tests.finalize(detail.id);
       return api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.ACTIVE });
     },
-    onSuccess: async () => {
-      setAsking(null);
-      await refresh();
-    },
-    onError: () => setAsking(null),
+    onSuccess: refresh,
   });
 
   const retire = useMutation({
     meta: { success: 'Test retired.' },
     mutationFn: () => api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.INACTIVE }),
     onSuccess: async () => {
-      setAsking(null);
+      setRetiring(false);
       await refresh();
     },
-    onError: () => setAsking(null),
+    onError: () => setRetiring(false),
   });
 
   const offered = detail.status === TEST_STATUS.ACTIVE;
+  const requirements = offerRequirements(detail);
+  const ready = requirements.every((requirement) => requirement.met);
+
+  if (offered) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Alert variant="success">
+          {`Students reached through ${plural(detail.seriesCount, 'series', 'series')} are being offered this test. Its paper is frozen — editing it takes the test back out until it is offered again.`}
+        </Alert>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            loading={retire.isPending}
+            onClick={() => setRetiring(true)}
+          >
+            <Power aria-hidden />
+            Retire
+          </Button>
+        </div>
+
+        <ConfirmDialog
+          open={retiring}
+          onOpenChange={(open) => !open && setRetiring(false)}
+          destructive
+          title={`Retire ${detail.title ?? 'this test'}?`}
+          description={`Every student reached through ${plural(detail.seriesCount, 'series', 'series')} stops being offered this test. Attempts already sat keep their results, and you can offer it again later.`}
+          confirmLabel="Retire test"
+          loading={retire.isPending}
+          onConfirm={() => retire.mutate()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <PublishNotice detail={detail} />
+      <Alert variant={ready ? 'info' : 'warning'}>
+        {ready
+          ? offerEffect(detail)
+          : 'This test cannot be offered yet. What it still owes is ticked off below.'}
+      </Alert>
+
+      <ul className="flex flex-col gap-1">
+        {requirements.map((requirement) => (
+          <li key={requirement.key}>
+            <Checkbox
+              checked={requirement.met}
+              readOnly
+              tabIndex={-1}
+              label={requirement.label}
+              hint={requirement.owed ?? undefined}
+            />
+          </li>
+        ))}
+      </ul>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          variant={offered ? 'outline' : 'default'}
-          loading={offer.isPending || retire.isPending}
-          onClick={() => setAsking(offered ? OFFERING_CONFIRMS.RETIRE : OFFERING_CONFIRMS.OFFER)}
+          disabled={!ready}
+          loading={offer.isPending}
+          onClick={() => offer.mutate()}
         >
           <Power aria-hidden />
-          {offered ? 'Retire' : 'Offer to students'}
+          Freeze and offer
         </Button>
       </div>
-
-      <ConfirmDialog
-        open={asking === OFFERING_CONFIRMS.OFFER}
-        onOpenChange={(open) => !open && setAsking(null)}
-        title={`Offer ${detail.title ?? 'this test'} to students?`}
-        description={offerDescription(detail)}
-        confirmLabel="Offer to students"
-        loading={offer.isPending}
-        onConfirm={() => offer.mutate()}
-      />
-
-      <ConfirmDialog
-        open={asking === OFFERING_CONFIRMS.RETIRE}
-        onOpenChange={(open) => !open && setAsking(null)}
-        destructive
-        title={`Retire ${detail.title ?? 'this test'}?`}
-        description={`Every student reached through ${plural(detail.seriesCount, 'series', 'series')} stops being offered this test. Attempts already sat keep their results, and you can offer it again later.`}
-        confirmLabel="Retire test"
-        loading={retire.isPending}
-        onConfirm={() => retire.mutate()}
-      />
     </div>
   );
 }
 
-/** Offering is what freezes the paper, so the confirm has to say both things happen. */
-function offerDescription(detail: TestDetail): string {
+/** The button is the last step, so what it will do is said on the page rather than in a dialog. */
+function offerEffect(detail: TestDetail): string {
   const freeze = detail.isLocked
     ? ''
-    : `Its ${plural(detail.totalQuestions, 'question')} freeze first, and every student sits exactly them. `;
-  return `${freeze}Every student reached through ${plural(detail.seriesCount, 'series', 'series')} is offered it from now on.`;
-}
-
-/** What is still owed before a student can sit this. */
-function PublishNotice({ detail }: Readonly<{ detail: TestDetail }>) {
-  if (detail.isLocked) return null;
-
-  const gaps = [
-    detail.paperBinding === PAPER_BINDING.FIXED && detail.paperQuestionCount === 0
-      ? 'Its paper has not been drawn yet.'
-      : null,
-    detail.seriesCount === 0 ? 'It is in no series, so no student can reach it.' : null,
-  ].filter((gap): gap is string => gap !== null);
-
-  if (gaps.length === 0) return null;
-
-  return (
-    <Alert variant="warning">
-      <span className="flex flex-col gap-1">
-        <span>This test is not ready to be offered.</span>
-        {gaps.map((gap) => (
-          <span key={gap}>{gap}</span>
-        ))}
-      </span>
-    </Alert>
-  );
+    : `Its ${plural(detail.totalQuestions, 'question')} freeze, and every student sits exactly them. `;
+  return `${freeze}Every student reached through ${plural(detail.seriesCount, 'series', 'series')} is offered it from now on. Editing the paper afterwards takes the test back out until it is offered again.`;
 }

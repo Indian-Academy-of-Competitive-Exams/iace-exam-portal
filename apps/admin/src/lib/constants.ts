@@ -231,7 +231,7 @@ export const PAPER_BINDING_LABELS: Readonly<Record<PaperBinding, string>> = {
 };
 
 export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
-  FIXED: 'Drawn once when the test is finalized; every student sits it',
+  FIXED: 'Picked by hand and frozen when it is offered; every student sits it',
   GENERATED: 'Drawn again for each student when their attempt starts',
 };
 

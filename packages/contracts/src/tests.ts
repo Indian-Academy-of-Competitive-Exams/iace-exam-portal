@@ -357,6 +357,68 @@ export function testBuilderStepOf(
   return owesAPaper ? TEST_BUILDER_STEP.PAPER : TEST_BUILDER_STEP.OFFER;
 }
 
+/** The two things a test owes before students can be given it. Both are shown, ticked or not. */
+export const OFFER_REQUIREMENT = {
+  PAPER: 'PAPER',
+  SERIES: 'SERIES',
+} as const;
+export type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
+
+export interface OfferRequirement {
+  key: OfferRequirementKey;
+  met: boolean;
+  /** What has to be true, in the words the checklist shows whether it is or not. */
+  label: string;
+  /** How far off it is, when it is not. */
+  owed: string | null;
+}
+
+/** A full TOTAL is every section full: nothing may exceed a section's own count, so it cannot hide. */
+export function offerRequirements(
+  test: Pick<
+    Test,
+    | 'isLocked'
+    | 'paperBinding'
+    | 'paperQuestionCount'
+    | 'totalQuestions'
+    | 'seriesCount'
+    | 'variantCount'
+  >,
+): OfferRequirement[] {
+  return [paperRequirement(test), seriesRequirement(test)];
+}
+
+function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
+  if (test.paperBinding !== PAPER_BINDING.FIXED) {
+    return {
+      key: OFFER_REQUIREMENT.PAPER,
+      met: true,
+      label: `Its ${test.variantCount} papers are drawn the moment it is offered`,
+      owed: null,
+    };
+  }
+
+  const met = test.isLocked || test.paperQuestionCount === test.totalQuestions;
+  return {
+    key: OFFER_REQUIREMENT.PAPER,
+    met,
+    label: `All ${test.totalQuestions} questions are on the paper`,
+    owed: met ? null : `${test.paperQuestionCount} chosen so far`,
+  };
+}
+
+function seriesRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
+  const met = test.seriesCount > 0;
+  return {
+    key: OFFER_REQUIREMENT.SERIES,
+    met,
+    label: met
+      ? `It is in ${test.seriesCount} test series`
+      : 'It is in a test series, which is the only way a student reaches it',
+    owed: met ? null : 'In none yet',
+  };
+}
+
 /** The frozen shared paper. Only a FIXED test has these. */
 export const paperQuestionSchema = z.object({
   id: z.string(),

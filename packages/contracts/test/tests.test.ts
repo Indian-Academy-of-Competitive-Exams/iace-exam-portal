@@ -7,6 +7,7 @@ import {
   allowedPaperBindings,
   createTestSchema,
   isPaperBindingAllowed,
+  offerRequirements,
   paperQuestionSchema,
   testBuilderStepOf,
   updateTestSchema,
@@ -118,5 +119,47 @@ describe('testBuilderStepOf', () => {
       testBuilderStepOf({ ...draft, paperBinding: PAPER_BINDING.GENERATED }),
       TEST_BUILDER_STEP.OFFER,
     );
+  });
+});
+
+describe('offerRequirements', () => {
+  const fixed = {
+    isLocked: false,
+    paperBinding: PAPER_BINDING.FIXED,
+    paperQuestionCount: 100,
+    totalQuestions: 100,
+    seriesCount: 1,
+    variantCount: 1,
+  };
+  const met = (test: Parameters<typeof offerRequirements>[0]) =>
+    offerRequirements(test).map((requirement) => requirement.met);
+
+  it('is ready when the paper is whole and a series carries it', () => {
+    assert.deepEqual(met(fixed), [true, true]);
+  });
+
+  /** The failure this prevents: offering a half-picked paper and finding out at the freeze. */
+  it('is not ready while the paper is short, and says how far', () => {
+    const [paper] = offerRequirements({ ...fixed, paperQuestionCount: 64 });
+
+    assert.equal(paper?.met, false);
+    assert.equal(paper?.owed, '64 chosen so far');
+  });
+
+  it('is not ready while no series carries it', () => {
+    assert.deepEqual(met({ ...fixed, seriesCount: 0 }), [true, false]);
+  });
+
+  /** A frozen paper is whole by definition — a retired test must be offerable again. */
+  it('takes a frozen paper as whole however its rows are counted', () => {
+    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true, true]);
+  });
+
+  /** A generated test has no paper to check: the draw happens at the freeze, not before it. */
+  it('asks a generated test for nothing but a series', () => {
+    const generated = { ...fixed, paperBinding: PAPER_BINDING.GENERATED, paperQuestionCount: 0 };
+
+    assert.deepEqual(met(generated), [true, true]);
+    assert.deepEqual(met({ ...generated, seriesCount: 0 }), [true, false]);
   });
 });
