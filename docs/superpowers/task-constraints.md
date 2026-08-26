@@ -12,6 +12,12 @@ Green before commit:
 
 Schema tasks also: `pnpm db:migrate:deploy` from scratch + `pnpm db:check`.
 
+**A migration that MOVES data is not proved by either.** From scratch the table is empty, so the
+statement matches no rows and never runs — it passes on a migration that cannot work. Seed a
+scratch database at the PREVIOUS revision, reproduce what makes the move hard (a locked row, a
+trigger, a constraint the real data trips), apply it there, and check what moved AND that whatever
+you stood down came back.
+
 Never `--no-verify`, never `git commit -n`, never `SKIP_SONAR=1`. Sonar pre-commit is real; fix the
 cause. The procedure is the `sonar-gate` skill — invoke it before every commit. No `// NOSONAR`
 without asking, and never mark an issue false-positive or won't-fix without asking.
