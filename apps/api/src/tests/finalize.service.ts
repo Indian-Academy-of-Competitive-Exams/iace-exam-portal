@@ -5,10 +5,18 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   PAPER_BINDING,
+  TEST_STATUS,
+  type OfferResult,
   type PaperBinding,
+  type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { ALREADY_FINALIZED_MESSAGE, paperCompletenessIssues } from './test-rules';
+import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import {
+  ALREADY_FINALIZED_MESSAGE,
+  activationBlocker,
+  paperCompletenessIssues,
+} from './test-rules';
 import { PaperService } from './paper.service';
 
 const FINALIZE_SELECT = {
@@ -17,7 +25,9 @@ const FINALIZE_SELECT = {
   paperBinding: true,
   variantCount: true,
   isLocked: true,
+  status: true,
   version: true,
+  _count: { select: { series: true } },
 } as const satisfies Prisma.TestSelect;
 
 type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
@@ -41,9 +51,48 @@ export class FinalizeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paper: PaperService,
+    private readonly events: DomainEventBus,
   ) {}
 
-  async finalize(testId: string): Promise<FinalizeResult> {
+  /** One transaction: as two calls, a failure between them froze a test and offered it to nobody. */
+  async offer(testId: string): Promise<OfferResult> {
+    const test = await this.requireTest(testId);
+    this.assertOfferable(test);
+
+    const frozen = test.isLocked
+      ? await this.openAlreadyFrozen(test)
+      : { ...(await this.finalize(testId, TEST_STATUS.ACTIVE)), status: TEST_STATUS.ACTIVE };
+
+    // Every series carrying it: the catalog a student reads is cached against them.
+    for (const link of await this.prisma.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true },
+    })) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    }
+    return frozen;
+  }
+
+  /** Offering a retired test again: the paper never moved, so only its status does. */
+  private async openAlreadyFrozen(test: FinalizeRow): Promise<OfferResult> {
+    if (test.status !== TEST_STATUS.ACTIVE) {
+      await this.prisma.test.update({
+        where: { id: test.id },
+        data: { status: TEST_STATUS.ACTIVE },
+      });
+    }
+    return { ...(await this.alreadyFinalized(test)), status: TEST_STATUS.ACTIVE };
+  }
+
+  private assertOfferable(test: FinalizeRow): void {
+    const blocker = activationBlocker({ isLocked: true, seriesCount: test._count.series });
+    if (!blocker) return;
+    throw new AppException(ErrorCodes.CONFLICT, blocker, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },
+    });
+  }
+
+  async finalize(testId: string, opening?: TestStatus): Promise<FinalizeResult> {
     const test = await this.requireTest(testId);
     if (test.isLocked) return this.alreadyFinalized(test);
 
@@ -55,7 +104,13 @@ export class FinalizeService {
       // The one gate: the request whose `version` still matches wins, the other writes nothing.
       const claimed = await tx.test.updateMany({
         where: { id: test.id, version: test.version, isLocked: false },
-        data: { isLocked: true, finalizedAt, version: { increment: 1 } },
+        // The status rides the SAME claim, so the two can never land apart.
+        data: {
+          isLocked: true,
+          finalizedAt,
+          version: { increment: 1 },
+          ...(opening ? { status: opening } : {}),
+        },
       });
       if (claimed.count === 0) return null;
 

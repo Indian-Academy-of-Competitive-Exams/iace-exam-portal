@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, EVALUATION_MODE, PAPER_BINDING } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  EVALUATION_MODE,
+  PAPER_BINDING,
+  TEST_STATUS,
+} from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { PaperService } from '../src/tests/paper.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
@@ -15,6 +21,8 @@ import {
   makeQuestion,
   makeSection,
   makeTest,
+  FakeEventBus,
+  type FakeTestModelRow,
 } from './support/fakes';
 
 const SECTIONS: FakeSectionRow[] = [
@@ -55,7 +63,10 @@ function serviceWith(
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
   const paperService = new PaperService(prisma.asService(), configs);
-  return { prisma, service: new FinalizeService(prisma.asService(), paperService) };
+  return {
+    prisma,
+    service: new FinalizeService(prisma.asService(), paperService, new FakeEventBus().asService()),
+  };
 }
 
 describe('FinalizeService — freezing a fixed paper', () => {
@@ -235,7 +246,10 @@ describe('FinalizeService — a test drawn per student', () => {
     const stages = new ExamStagesService(prisma.asService(), new AuditContext());
     const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
     const paper = new PaperService(prisma.asService(), configs);
-    return { prisma, service: new FinalizeService(prisma.asService(), paper) };
+    return {
+      prisma,
+      service: new FinalizeService(prisma.asService(), paper, new FakeEventBus().asService()),
+    };
   }
 
   /** The failure this prevents: a generated test frozen with nothing for a student to open. */
@@ -261,5 +275,53 @@ describe('FinalizeService — a test drawn per student', () => {
     await service.finalize('tst_1');
 
     assert.equal(prisma.configs[0]!.locked, false);
+  });
+});
+
+describe('FinalizeService — offering', () => {
+  const build = (over: Partial<FakeTestModelRow> = {}, series = 1) => {
+    const held = serviceWith(wholePaper(), makeTest({ id: 'tst_1', ...over }));
+    for (let index = 0; index < series; index += 1) {
+      held.prisma.seriesTests.push({ testSeriesId: `srs_${index}`, testId: 'tst_1', order: null });
+    }
+    return held;
+  };
+
+  it('freezes and opens in one write, so neither can land without the other', async () => {
+    const { service, prisma } = build();
+
+    const result = await service.offer('tst_1');
+
+    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(result.finalizedByThisCall, true);
+    assert.equal(prisma.tests[0]?.isLocked, true);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
+  });
+
+  /** The failure this prevents: a paper frozen for a test no series carries, offered to nobody. */
+  it('refuses before it writes anything when no series carries it', async () => {
+    const { service, prisma } = build({}, 0);
+
+    const error = await service.offer('tst_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(prisma.tests[0]?.isLocked, false);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.DRAFT);
+  });
+
+  it('opens a retired test again without re-freezing its paper', async () => {
+    // Locked ALWAYS carries a finalizedAt — one without the other is a state no write produces.
+    const { service, prisma } = build({
+      isLocked: true,
+      status: TEST_STATUS.INACTIVE,
+      finalizedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    const result = await service.offer('tst_1');
+
+    assert.equal(result.status, TEST_STATUS.ACTIVE);
+    assert.equal(result.finalizedByThisCall, false);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
   });
 });

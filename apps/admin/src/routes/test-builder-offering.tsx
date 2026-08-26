@@ -213,11 +213,8 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   const offer = useMutation({
     meta: { success: 'Test offered to students.' },
-    // Freezing is what offering NEEDS, not a step an admin came here to take on its own.
-    mutationFn: async () => {
-      if (!detail.isLocked) await api.admin.tests.finalize(detail.id);
-      return api.admin.tests.setStatus(detail.id, { status: TEST_STATUS.ACTIVE });
-    },
+    // One call: the freeze and the opening are one transaction, so neither lands without the other.
+    mutationFn: () => api.admin.tests.offer(detail.id),
     onSuccess: refresh,
   });
 

@@ -40,6 +40,7 @@ import {
   type TestPaper,
   type TestSeriesLink,
   type BranchTestScheduleRow,
+  type OfferResult,
   type SeriesTestRow,
   type SetBranchTestSchedulesBody,
   type SetSeriesTestUnlockBody,
@@ -171,6 +172,15 @@ export class TestsController {
     @Body(new ZodBody(setBranchTestSchedulesSchema)) body: SetBranchTestSchedulesBody,
   ): Promise<BranchTestScheduleRow[]> {
     return this.offering.setBranchTiming(id, body);
+  }
+
+  /** The last step of the builder: freeze the paper and open it, or neither. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/offer')
+  @HttpCode(HttpStatus.OK)
+  offer(@Param('id') id: string): Promise<OfferResult> {
+    return this.finalizer.offer(id);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

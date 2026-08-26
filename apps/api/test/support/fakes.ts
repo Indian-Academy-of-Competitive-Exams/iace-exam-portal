@@ -1876,7 +1876,12 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       data,
     }: {
       where: { id: string; version?: number; isLocked?: boolean };
-      data: { isLocked?: boolean; finalizedAt?: Date; version?: { increment: number } };
+      data: {
+        isLocked?: boolean;
+        finalizedAt?: Date;
+        status?: TestStatus;
+        version?: { increment: number };
+      };
     }) => {
       const matched = this.tests.filter(
         (test) =>
@@ -1887,6 +1892,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       for (const test of matched) {
         if (data.isLocked !== undefined) test.isLocked = data.isLocked;
         if (data.finalizedAt !== undefined) test.finalizedAt = data.finalizedAt;
+        if (data.status !== undefined) test.status = data.status;
         if (data.version) test.version += data.version.increment;
       }
       return Promise.resolve({ count: matched.length });

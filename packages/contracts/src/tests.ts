@@ -626,6 +626,10 @@ export const addPaperQuestionSchema = z.object({
 export type AddPaperQuestionInput = z.input<typeof addPaperQuestionSchema>;
 export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;
 
+/** Freezing and opening are ONE action, so they answer with one result. */
+export const offerResultSchema = finalizeResultSchema.extend({ status: testStatusSchema });
+export type OfferResult = z.infer<typeof offerResultSchema>;
+
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   assemble: (id: string) => `/admin/tests/${id}/paper`,
@@ -633,6 +637,7 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,
+  offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,
   branchTiming: (id: string) => `/admin/tests/${id}/branch-timing`,

@@ -122,6 +122,7 @@ import {
   testDetailSchema,
   testPaperSchema,
   testSchema,
+  offerResultSchema,
   seriesTestRowSchema,
   testSeriesLinkSchema,
   testStatusSchema,
@@ -136,6 +137,7 @@ import {
   type TestDetail,
   type TestListQueryInput,
   type TestPaper,
+  type OfferResult,
   type SeriesTestRow,
   type SetSeriesTestUnlockInput,
   type TestSeriesLink,
@@ -933,6 +935,9 @@ export function createApiClient(options: ApiClientOptions) {
 
         series: (id: string): Promise<TestSeriesLink[]> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema.array() }),
+
+        offer: (id: string): Promise<OfferResult> =>
+          request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
 
         branchTiming: (id: string): Promise<BranchTestScheduleRow[]> =>
           request(ADMIN_TEST_PAPER_ROUTES.branchTiming(id), {
