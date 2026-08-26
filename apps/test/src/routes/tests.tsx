@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, LockKeyhole } from 'lucide-react';
+import { useFilters } from '@iace/app-kit/browser';
+import { CalendarClock, CircleCheck, LockKeyhole } from 'lucide-react';
 import {
   INSTITUTE_TIME_ZONE,
   TEST_BUCKET,
@@ -30,6 +30,9 @@ import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
 
 /** The student's tests, in the four states one can be in. Cards, because §5 asks for cards. */
+
+/** The URL key the open tab rides on, so a link can point at one. */
+export const TAB_KEY = 'tab';
 
 const TAB_LABELS: Readonly<Record<TestBucket, string>> = {
   [TEST_BUCKET.OPEN]: 'Open now',
@@ -67,7 +70,11 @@ interface Sittable {
 const SKELETON_KEYS = ['a', 'b', 'c'];
 
 export function TestsPage() {
-  const [tab, setTab] = useState<TestBucket>(TEST_BUCKET.OPEN);
+  // The open tab rides the URL, so submitting can land a student on the one holding their test.
+  const params = useFilters<typeof TAB_KEY>();
+  const asked = params.get(TAB_KEY) as TestBucket | '';
+  const tab = TAB_ORDER.includes(asked as TestBucket) ? (asked as TestBucket) : TEST_BUCKET.OPEN;
+
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
 
   const now = new Date();
@@ -84,7 +91,7 @@ export function TestsPage() {
         </Alert>
       ) : null}
 
-      <Tabs value={tab} onValueChange={(next) => setTab(next as TestBucket)}>
+      <Tabs value={tab} onValueChange={(next) => params.set({ [TAB_KEY]: next })}>
         <TabsList>
           {TAB_ORDER.map((bucket) => (
             <TabsTrigger key={bucket} value={bucket}>
@@ -133,6 +140,7 @@ function TestCards({
 function TestCard({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
   const { test } = row;
   const action = testAction(test);
+  const done = testBucket(test, now) === TEST_BUCKET.DONE;
 
   return (
     <Card>
@@ -144,16 +152,21 @@ function TestCard({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
           <p className="truncate text-xs text-muted-foreground">{row.seriesName}</p>
         </div>
 
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CalendarClock aria-hidden className="size-3.5 shrink-0" />
-          {whenLine(test, now)}
-        </p>
+        {done ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CircleCheck aria-hidden className="size-3.5 shrink-0 text-success" />
+            You have sat this test. Your result comes once it is marked.
+          </p>
+        ) : (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <CalendarClock aria-hidden className="size-3.5 shrink-0" />
+            {whenLine(test, now)}
+          </p>
+        )}
 
         {action ? (
           <Button asChild size="sm" className="self-start">
-            <Link to={ROUTES.TEST_INSTRUCTIONS(test.id)}>
-              {action === 'RESUME' ? 'Resume test' : 'Start test'}
-            </Link>
+            <Link to={ROUTES.TEST_INSTRUCTIONS(test.id)}>{resumeOrStart(action, done)}</Link>
           </Button>
         ) : (
           <p className="flex items-center gap-1.5 self-start text-xs text-muted-foreground">
@@ -187,4 +200,10 @@ function shutReason(test: StudentCatalogTest, now: Date): string {
 
 function flatten(series: readonly StudentCatalogSeries[]): Sittable[] {
   return series.flatMap((one) => one.tests.map((test) => ({ test, seriesName: one.name })));
+}
+
+/** A sat test with a retake left says so: "Start test" would read as though it never happened. */
+function resumeOrStart(action: 'START' | 'RESUME', done: boolean): string {
+  if (action === 'RESUME') return 'Resume test';
+  return done ? 'Sit it again' : 'Start test';
 }

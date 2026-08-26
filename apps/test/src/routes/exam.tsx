@@ -10,6 +10,7 @@ import { Flag, Eraser, Send } from 'lucide-react';
 import {
   ANSWER_STATE,
   openSections,
+  TEST_BUCKET,
   paletteCounts,
   TIMER_TEMPLATE,
   type ExamClock,
@@ -34,6 +35,7 @@ import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
+import { TAB_KEY } from './tests';
 import { useAttemptState, type AnswerIntent } from '../lib/use-attempt-state';
 import { ExamTimer } from '../components/exam/exam-timer';
 import { QuestionBody } from '../components/exam/question-body';
@@ -89,7 +91,8 @@ export function ExamPage() {
       title={attempt.data.testTitle}
       // The one thing on the paper that leads back to a person: there is no enrolment number.
       watermark={student?.mobile ?? ''}
-      onEnded={() => navigate(ROUTES.TESTS, { replace: true })}
+      // Onto the tab now holding it: landing on Open now would look like the test had vanished.
+      onEnded={() => navigate(`${ROUTES.TESTS}?${TAB_KEY}=${TEST_BUCKET.DONE}`, { replace: true })}
     />
   );
 }
