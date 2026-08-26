@@ -140,6 +140,7 @@ export {
 export { RowActions, type RowActionsProps } from './components/ui/row-actions';
 export { linkVariants, type LinkVariants } from './components/ui/link';
 export { Pagination, type PaginationProps } from './components/ui/pagination';
+export { Watermark, type WatermarkProps } from './components/ui/watermark';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
 export {
   RatioBar,

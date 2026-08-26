@@ -15,6 +15,7 @@ import {
   StatRow,
   plural,
 } from '@iace/ui';
+import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { LANGUAGE_LABELS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
 import { SystemCheck } from '../components/system-check';
@@ -26,6 +27,7 @@ const minutes = (seconds: number) => `${Math.round(seconds / 60)} minutes`;
 export function TestInstructionsPage() {
   const { testId = '' } = useParams();
   const navigate = useNavigate();
+  const fullscreen = useFullscreen();
   const [declared, setDeclared] = useState(false);
   const [language, setLanguage] = useState<LanguageCode | ''>('');
 
@@ -103,6 +105,13 @@ export function TestInstructionsPage() {
           </Field>
         )}
 
+        {fullscreen.isSupported ? (
+          <Alert variant="info">
+            The paper opens full screen, and leaving it is recorded. Your mobile number is printed
+            faintly across every question, so a photograph of one leads back to you.
+          </Alert>
+        ) : null}
+
         <Checkbox
           checked={declared}
           onChange={(event) => setDeclared(event.target.checked)}
@@ -114,11 +123,13 @@ export function TestInstructionsPage() {
           type="button"
           disabled={!ready}
           className="self-start"
-          onClick={() =>
+          onClick={() => {
+            // Asked for HERE because entering needs a gesture, and this click is the only one.
+            void fullscreen.enter();
             navigate(ROUTES.EXAM(testId), {
               state: { languages: dual ? paper.languages : [language] },
-            })
-          }
+            });
+          }}
         >
           I am ready to begin
         </Button>

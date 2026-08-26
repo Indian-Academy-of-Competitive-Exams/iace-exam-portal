@@ -26,11 +26,14 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  Watermark,
   cn,
   plural,
 } from '@iace/ui';
+import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
+import { useAuth } from '../providers/auth';
 import { useAttemptState, type AnswerIntent } from '../lib/use-attempt-state';
 import { ExamTimer } from '../components/exam/exam-timer';
 import { QuestionBody } from '../components/exam/question-body';
@@ -44,6 +47,7 @@ interface BeganWith {
 export function ExamPage() {
   const { testId = '' } = useParams();
   const navigate = useNavigate();
+  const { identity: student } = useAuth();
   const began = (useLocation().state ?? {}) as BeganWith;
 
   const attempt = useQuery({
@@ -83,6 +87,8 @@ export function ExamPage() {
       paper={paper.data.paper}
       arrivedAt={paper.data.arrivedAt}
       title={attempt.data.testTitle}
+      // The one thing on the paper that leads back to a person: there is no enrolment number.
+      watermark={student?.mobile ?? ''}
       onEnded={() => navigate(ROUTES.TESTS, { replace: true })}
     />
   );
@@ -92,14 +98,18 @@ function ExamHall({
   paper,
   arrivedAt,
   title,
+  watermark,
   onEnded,
 }: Readonly<{
   paper: ExamPaper;
   arrivedAt: number;
   title: string | null;
+  watermark: string;
   onEnded: () => void;
 }>) {
   const queryClient = useQueryClient();
+  const fullscreen = useFullscreen();
+  const [ignoringFullscreen, setIgnoringFullscreen] = useState(0);
   const state = useAttemptState(paper.attemptId);
   const [sectionId, setSectionId] = useState(paper.sections[0]?.id ?? '');
   const [questionId, setQuestionId] = useState<string | null>(null);
@@ -164,9 +174,15 @@ function ExamHall({
   };
 
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
+  // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
+  const nagging =
+    fullscreen.isSupported &&
+    !fullscreen.isFullscreen &&
+    fullscreen.exits > 0 &&
+    fullscreen.exits > ignoringFullscreen;
 
   return (
-    <div className="flex h-dvh flex-col bg-surface">
+    <div className="relative flex h-dvh flex-col bg-surface">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <h1 className="min-w-0 truncate text-sm font-semibold text-foreground">
           {title ?? 'Your test'}
@@ -203,6 +219,7 @@ function ExamHall({
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
+            {watermark ? <Watermark text={watermark} /> : null}
             {current ? (
               <QuestionBody
                 question={current}
@@ -268,6 +285,28 @@ function ExamHall({
         </Button>
       </footer>
 
+      {nagging ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/95 p-6">
+          <div className="flex max-w-md flex-col gap-4">
+            <Alert variant="danger">
+              {`${leftFullScreen(fullscreen.exits)} Your paper is still running and the clock has not stopped. Leaving full screen is recorded on this sitting.`}
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void fullscreen.enter()}>
+                Return to full screen
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIgnoringFullscreen(fullscreen.exits)}
+              >
+                Carry on without it
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
@@ -282,4 +321,9 @@ function ExamHall({
       />
     </div>
   );
+}
+
+/** Said once without a count, because "1 times" is how a screen tells a student it is a machine. */
+function leftFullScreen(exits: number): string {
+  return exits > 1 ? `You left full screen ${exits} times.` : 'You left full screen.';
 }
