@@ -91,7 +91,7 @@ The people reading these screens ran exam centres before they saw them. Write fo
 ## Cards, confirms and controls
 
 - **A card marks a boundary. No boundary, no card.** It earns its border in two places: between SIBLING RECORDS, each card one of many of the same thing (`permissions.tsx`, one per admin), and between a SURFACE and the page (`TableFrame`). Elsewhere it is decoration costing a rule and `p-4`.
-  - **A page that is one continuous form is ONE section, not a stack of cards.** Headings and spacing group it. `base-config-form.tsx` (10 cards), `student-detail.tsx` (7) and `test-series-form.tsx` (5) are the shape to stop copying — a card inside a card communicates nothing.
+  - **A page that is one continuous form is ONE section, not a stack of cards.** Headings and spacing group it. A card inside a card communicates nothing. The three screens this rule was written against — `base-config-form.tsx`, `student-detail.tsx`, `test-series-form.tsx` — have since been rebuilt on `FormSection`, so the shape to copy is theirs and the rule is what stopped it spreading.
   - **The section scrolls and its actions stay inside it.** Save and Cancel belong to the form, never floated into the page header or left below a scrollport. `FormDialog` is the worked example.
   - **Name the boundary in a sentence before reaching for a card.** If the sentence is "it groups the fields", spacing already did that.
 - **Confirm anything that destroys, revokes, grants, or changes what somebody can do** — `ConfirmDialog`, never a chip in a row. Name the consequence and the count. **A toggle confirms both ways.** Confirm even when reversible if the effect is invisible from where it happens (retiring a branch).

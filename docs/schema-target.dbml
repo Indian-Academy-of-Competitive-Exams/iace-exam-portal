@@ -817,20 +817,32 @@ Table SeriesUnlockRequest {  // the "request access to next tier" layer (V1 tabl
   }
 }
 
-Table BranchTestConfig {  // access-enable + default schedule, per (branch, series)
+Table BranchTestConfig {  // access-enable per (branch, series) — a switch, no window
   id           text [pk]
   branchId     text [not null]
   testSeriesId text [not null]
   enabled      boolean [not null, default: true]  // this branch's students get this series
-  startAt      timestamp  // default availability window (series-level)
-  endAt        timestamp
   createdAt    timestamp [not null, default: `now()`]
   updatedAt    timestamp [not null]
   indexes {
     (branchId, testSeriesId) [unique]
-    testSeriesId  // reverse: "which branches schedule series X"
+    testSeriesId  // reverse: "which branches offer series X"
   }
-  Note: 'Access granted at series level. Per-test window override is a FUTURE additive seam (BranchTestSchedule) — no access change.'
+  Note: 'Access granted at series level, indefinitely. WHEN a test may be started is the test\'s own — TestSeriesTest.unlockAt and BranchTestSchedule.'
+}
+
+Table BranchTestSchedule {  // what ONE branch does differently for ONE test
+  branchId     text [not null]
+  testId       text [not null]
+  lateEntrySec int  // how long AFTER unlockAt a student may still begin; null = any time it is open
+  extraTimeSec int  // added to the config's duration for this branch; null = the plain duration
+  createdAt    timestamp [not null, default: `now()`]
+  updatedAt    timestamp [not null]
+  indexes {
+    (branchId, testId) [pk]
+    testId
+  }
+  Note: 'Created ONLY when a branch sets something — absence is the plain rules, never a row of nulls. Both durations are CHECKed non-negative; the window arithmetic in @iace/contracts trusts them.'
 }
 
 
@@ -871,6 +883,7 @@ Table TestSeriesTest {  // TestSeries <-> Test — MANDATORY membership: every T
   testSeriesId text [not null]
   testId       text [not null]
   order        int  // position within the series (drives sequentialTests unlock)
+  unlockAt     timestamp  // when this test opens inside this series — one instant for EVERY branch
   createdAt    timestamp [not null, default: `now()`]
   createdById  text
   indexes {
