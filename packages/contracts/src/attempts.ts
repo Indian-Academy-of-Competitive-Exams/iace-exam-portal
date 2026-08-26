@@ -185,6 +185,63 @@ export const examBriefSchema = z.object({
 });
 export type ExamBrief = z.infer<typeof examBriefSchema>;
 
+// ============================================================================
+// The exam screen's arithmetic. Pure, and here rather than in the SPA, because
+// the countdown and the palette are the two things a sitting cannot get wrong.
+// ============================================================================
+
+/** The clock the screen counts down. Anchored to the SERVER's now, never the device's. */
+export interface ExamClock {
+  endsAt: string;
+  serverNow: string;
+  /** `Date.now()` when the paper arrived, so device skew cancels out of the subtraction. */
+  arrivedAt: number;
+}
+
+/** The device clock measures only how long the PAGE has been open, so a fast machine gains nothing. */
+export function secondsLeft(clock: ExamClock, deviceNow: number): number {
+  const grantedMs = Date.parse(clock.endsAt) - Date.parse(clock.serverNow);
+  const elapsedMs = deviceNow - clock.arrivedAt;
+  return Math.max(0, Math.round((grantedMs - elapsedMs) / MILLISECONDS_PER_SECOND));
+}
+
+/** `1:59:03`, and `09:58` under an hour — a clock nobody has to parse. */
+export function clockText(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
+
+export type PaletteCounts = Record<AnswerState, number>;
+
+/** What the right rail counts. Every question is in exactly one state, so these sum to the paper. */
+export function paletteCounts(
+  questionIds: readonly string[],
+  answers: Readonly<Record<string, { state: AnswerState }>>,
+): PaletteCounts {
+  const counts = Object.fromEntries(ANSWER_STATES.map((state) => [state, 0])) as PaletteCounts;
+  for (const id of questionIds) {
+    counts[answers[id]?.state ?? ANSWER_STATE.NOT_VISITED] += 1;
+  }
+  return counts;
+}
+
+/** Which sections a student may open. A sectional clock shuts the ones behind and ahead of it. */
+export function openSections(
+  sections: readonly { id: string }[],
+  sectional: boolean,
+  closed: Readonly<Record<string, { closed: boolean }>>,
+): string[] {
+  if (!sectional) return sections.map((section) => section.id);
+
+  const current = sections.find((section) => !closed[section.id]?.closed);
+  return current ? [current.id] : [];
+}
+
+const MILLISECONDS_PER_SECOND = 1000;
+
 export const ME_ATTEMPT_ROUTES = {
   brief: (testId: string) => `/me/tests/${testId}/brief`,
   start: (testId: string) => `/me/tests/${testId}/attempt`,

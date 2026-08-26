@@ -10,8 +10,9 @@ export const ROUTES = {
   TESTS: '/tests',
   TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
   TEST_INSTRUCTIONS_PATTERN: '/tests/:testId/instructions',
-  /** T7 builds this; the instructions screen sends the student here to begin. */
+  /** Full screen, outside the shell: an exam hall has no navigation out of it. */
   EXAM: (testId: string) => `/tests/${testId}/exam`,
+  EXAM_PATTERN: '/tests/:testId/exam',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */

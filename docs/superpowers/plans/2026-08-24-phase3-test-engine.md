@@ -276,23 +276,23 @@ section tabs, question body, bottom bar, timer), `apps/test/src/lib/use-attempt-
 possibly `packages/ui` if a piece is genuinely design and not domain.
 **Read first:** the `ui-conventions` skill. This screen is the one students judge us on.
 
-- [ ] Full-screen, replicating the government CBT layout: section tabs, countdown, per-question
+- [x] Full-screen, replicating the government CBT layout: section tabs, countdown, per-question
       type and marks, the question body (text, images, `$LaTeX$`), radio options, the right rail
       with status counters and the **questions palette**, and the bottom bar — **Mark for Review &
       Next / Clear Response / Save & Next** — plus Submit.
-- [ ] The countdown counts to the server's `endsAt` and NEVER to a duration the client computed.
+- [x] The countdown counts to the server's `endsAt` and NEVER to a duration the client computed.
       Reloading the page recovers the same remaining time, because it comes off the attempt.
-- [ ] Per-question **"View In"** language, from the languages that question actually has; a DUAL
+- [x] Per-question **"View In"** language, from the languages that question actually has; a DUAL
       config renders both with no toggle.
-- [ ] Local state is the source of truth for the screen; a batch autosaves every ~25s and on
+- [x] Local state is the source of truth for the screen; a batch autosaves every ~25s and on
       section change. A failed save retries and warns without losing what is on screen.
-- [ ] `SECTIONAL_LOCKED` closes a section when its clock ends and moves on; `COMPOSITE_FREE` is one
+- [x] `SECTIONAL_LOCKED` closes a section when its clock ends and moves on; `COMPOSITE_FREE` is one
       clock with free navigation. The difference is read from the config — **one screen, not two.**
-- [ ] Submit confirms, naming what is unanswered and marked. Auto-submit at zero needs no confirm.
-- [ ] **Entry can close while the student is still sitting.** `closesAt` bounds STARTING, never
+- [x] Submit confirms, naming what is unanswered and marked. Auto-submit at zero needs no confirm.
+- [x] **Entry can close while the student is still sitting.** `closesAt` bounds STARTING, never
       finishing: a sitting already running is untouched by it, and the screen must not warn about
       it mid-exam.
-- [ ] Tests: the pure parts earn them — remaining-time from `endsAt`, palette counters from the
+- [x] Tests: the pure parts earn them — remaining-time from `endsAt`, palette counters from the
       state map, which section is open under a sectional clock. The screen itself is a manual check;
       say exactly what to click.
       **Acceptance:** a student sits a full sectional-timed bilingual test start to finish without

@@ -7,3 +7,5 @@
 export { QuestionsModule } from './questions.module';
 export { QuestionsService } from './questions.service';
 export { TaxonomyService } from './taxonomy.service';
+/** Content that carries images is the bank's shape, so signing one is the bank's rule to lend. */
+export { applyImageUrls, imageKeysIn } from './question-images';

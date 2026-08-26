@@ -9,6 +9,7 @@ import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
 import { TestsPage } from './routes/tests';
 import { TestInstructionsPage } from './routes/test-instructions';
+import { ExamPage } from './routes/exam';
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
           />
         }
       >
+        <Route path={ROUTES.EXAM_PATTERN} element={<ExamPage />} />
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />

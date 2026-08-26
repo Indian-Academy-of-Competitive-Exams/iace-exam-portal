@@ -15,6 +15,8 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
+import { applyImageUrls, imageKeysIn } from '../questions';
+import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
 const PAPER_INCLUDE = {
@@ -63,6 +65,7 @@ export class AttemptPaperService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessResolverService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Gated on REACH, not on the window: a test they cannot sit yet is one they may read about. */
@@ -144,10 +147,28 @@ export class AttemptPaperService {
         questionCount: section.questionCount,
         durationSec: section.durationSec,
       })),
-      questions: attempt.questions.map((row) =>
-        toExamQuestion(row, languages, config.shuffleOptions, random),
+      questions: await this.withImages(
+        attempt.questions.map((row) =>
+          toExamQuestion(row, languages, config.shuffleOptions, random),
+        ),
       ),
     };
+  }
+
+  /** Content on disk holds only the image KEY, so the sitting signs its own, long enough to last. */
+  private async withImages(questions: ExamQuestion[]): Promise<ExamQuestion[]> {
+    const keys = new Set(questions.flatMap(htmlOf).flatMap(imageKeysIn));
+    if (keys.size === 0) return questions;
+
+    const urls = new Map(
+      await Promise.all(
+        [...keys].map(
+          async (key) =>
+            [key, await this.storage.createDownloadUrl(key, EXAM_IMAGE_URL_TTL_SEC)] as const,
+        ),
+      ),
+    );
+    return questions.map((question) => signed(question, urls));
   }
 }
 
@@ -203,4 +224,39 @@ function narrowRich(text: LocalizedRich, languages: readonly LanguageCode[]): Lo
     if (held) kept[key] = held;
   }
   return kept;
+}
+
+/** Longer than the longest sitting: an image that expires mid-exam is a question nobody can read. */
+const EXAM_IMAGE_URL_TTL_SEC = 6 * 60 * 60;
+
+/** Every piece of HTML one served question carries — its stem and every option, in every language. */
+function htmlOf(question: ExamQuestion): string[] {
+  const stems = Object.values(question.content).flatMap((content) =>
+    (content?.stem ?? []).map((node) => node.text),
+  );
+  const options = question.options.flatMap((option) =>
+    Object.values(option.text).flatMap((nodes) => (nodes ?? []).map((node) => node.text)),
+  );
+  return [...stems, ...options];
+}
+
+function signed(question: ExamQuestion, urls: ReadonlyMap<string, string>): ExamQuestion {
+  const rich = (nodes: { type: 'TEXT'; text: string }[] | undefined) =>
+    (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
+
+  return {
+    ...question,
+    content: Object.fromEntries(
+      Object.entries(question.content).map(([language, content]) => [
+        language,
+        content ? { ...content, stem: rich(content.stem) } : content,
+      ]),
+    ),
+    options: question.options.map((option) => ({
+      ...option,
+      text: Object.fromEntries(
+        Object.entries(option.text).map(([language, nodes]) => [language, rich(nodes)]),
+      ),
+    })),
+  };
 }
