@@ -487,6 +487,22 @@ export const manualSectionPickSchema = z.object({
 });
 export type ManualSectionPick = z.infer<typeof manualSectionPickSchema>;
 
+/** One test as the SERIES reads it: what it is called, when it opens there, and whether it is sat. */
+export const seriesTestRowSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  order: z.number().int().nullable(),
+  unlockAt: z.string().nullable(),
+  /** Nothing that has been sat may be taken out of a series, so the row says whether it has. */
+  attemptCount: z.number().int(),
+});
+export type SeriesTestRow = z.infer<typeof seriesTestRowSchema>;
+
+/** Null opens it with the series. The instant is the same for every branch. */
+export const setSeriesTestUnlockSchema = z.object({ unlockAt: z.iso.datetime().nullish() });
+export type SetSeriesTestUnlockInput = z.input<typeof setSeriesTestUnlockSchema>;
+export type SetSeriesTestUnlockBody = z.infer<typeof setSeriesTestUnlockSchema>;
+
 /** Assembling REPLACES the draft paper — a merge over rows the admin cannot see is nobody's ask. */
 export const assemblePaperSchema = z.object({
   /** Same seed, same pool, same paper. Omitted means a fresh draw. */

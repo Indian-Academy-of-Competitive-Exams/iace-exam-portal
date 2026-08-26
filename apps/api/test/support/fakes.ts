@@ -1539,16 +1539,60 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   };
 
   readonly testSeriesTest = {
-    findMany: ({ where }: { where: { testId: string } }) =>
+    findMany: ({ where }: { where: { testId?: string; testSeriesId?: string } }) =>
       Promise.resolve(
         this.seriesTests
-          .filter((row) => row.testId === where.testId)
+          .filter(
+            (row) =>
+              (where.testId === undefined || row.testId === where.testId) &&
+              (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId),
+          )
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
           .map((row) => ({
             ...row,
+            unlockAt: row.unlockAt ?? null,
             testSeries: { name: this.series.find((s) => s.id === row.testSeriesId)?.name ?? '' },
+            test: {
+              title: this.tests.find((it) => it.id === row.testId)?.title ?? null,
+              _count: { attempts: this.attempts.filter((it) => it.testId === row.testId).length },
+            },
           })),
       ),
+
+    findUnique: ({ where }: { where: { testSeriesId_testId: FakeSeriesTestKey } }) => {
+      const { testSeriesId, testId } = where.testSeriesId_testId;
+      const row = this.seriesTests.find(
+        (it) => it.testSeriesId === testSeriesId && it.testId === testId,
+      );
+      return Promise.resolve(row ?? null);
+    },
+
+    update: ({
+      where,
+      data,
+    }: {
+      where: { testSeriesId_testId: FakeSeriesTestKey };
+      data: { unlockAt: Date | null };
+    }) => {
+      const { testSeriesId, testId } = where.testSeriesId_testId;
+      const row = this.seriesTests.find(
+        (it) => it.testSeriesId === testSeriesId && it.testId === testId,
+      );
+      if (!row) throw new Error(`no link ${testSeriesId}/${testId}`);
+      row.unlockAt = data.unlockAt;
+      return Promise.resolve(row);
+    },
+
+    delete: ({ where }: { where: { testSeriesId_testId: FakeSeriesTestKey } }) => {
+      const { testSeriesId, testId } = where.testSeriesId_testId;
+      const kept = this.seriesTests.filter(
+        (it) => !(it.testSeriesId === testSeriesId && it.testId === testId),
+      );
+      if (kept.length === this.seriesTests.length) throw new Error('no such link');
+      this.seriesTests.length = 0;
+      this.seriesTests.push(...kept);
+      return Promise.resolve({ testSeriesId, testId });
+    },
 
     deleteMany: ({ where }: { where: { testId: string } }) => {
       const kept = this.seriesTests.filter((row) => row.testId !== where.testId);
@@ -3084,6 +3128,11 @@ export interface FakeSeriesTestRow {
   testId: string;
   order: number | null;
   unlockAt?: Date | null;
+}
+
+export interface FakeSeriesTestKey {
+  testSeriesId: string;
+  testId: string;
 }
 
 export interface FakeUnlockRow {

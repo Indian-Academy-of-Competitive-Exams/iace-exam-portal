@@ -5,6 +5,8 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
+  type SeriesTestRow,
+  type SetSeriesTestUnlockBody,
   type SetTestSeriesBody,
   type TestSeriesLink,
   type TestStatus,
@@ -17,8 +19,13 @@ const OFFERING_SELECT = {
   id: true,
   status: true,
   isLocked: true,
-  _count: { select: { series: true } },
+  _count: { select: { series: true, attempts: true } },
 } as const satisfies Prisma.TestSelect;
+
+const dateOrNull = (value: string | null | undefined): Date | null =>
+  value === null || value === undefined ? null : new Date(value);
+
+const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
@@ -41,6 +48,7 @@ export class OfferingService {
     const wanted = [...new Map(input.series.map((row) => [row.testSeriesId, row])).values()];
     this.assertStillReachable(test, wanted.length);
     await this.assertSeriesExist(wanted.map((row) => row.testSeriesId));
+    await this.assertNoneDropped(test, new Set(wanted.map((row) => row.testSeriesId)));
 
     const touched = await this.prisma.$transaction(async (tx) => {
       const before = await tx.testSeriesTest.findMany({
@@ -131,6 +139,90 @@ export class OfferingService {
     const message = 'One of the chosen series no longer exists.';
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
       fieldErrors: { series: [message] },
+    });
+  }
+
+  /** The tests one series holds, in the order it holds them. */
+  async testsIn(testSeriesId: string): Promise<SeriesTestRow[]> {
+    const rows = await this.prisma.testSeriesTest.findMany({
+      where: { testSeriesId },
+      select: {
+        testId: true,
+        order: true,
+        unlockAt: true,
+        test: { select: { title: true, _count: { select: { attempts: true } } } },
+      },
+      orderBy: [{ order: 'asc' }, { testId: 'asc' }],
+    });
+
+    return rows.map((row) => ({
+      testId: row.testId,
+      title: row.test.title,
+      order: row.order,
+      unlockAt: row.unlockAt?.toISOString() ?? null,
+      attemptCount: row.test._count.attempts,
+    }));
+  }
+
+  /** When a test opens inside one series. Every branch sits it at that instant. */
+  async setUnlock(
+    testSeriesId: string,
+    testId: string,
+    input: SetSeriesTestUnlockBody,
+  ): Promise<SeriesTestRow[]> {
+    await this.requireLink(testSeriesId, testId);
+
+    await this.prisma.testSeriesTest.update({
+      where: { testSeriesId_testId: { testSeriesId, testId } },
+      data: { unlockAt: dateOrNull(input.unlockAt) },
+    });
+
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    return this.testsIn(testSeriesId);
+  }
+
+  /** One link dropped, from the series' side. Refused once anyone has sat the test. */
+  async removeFromSeries(testSeriesId: string, testId: string): Promise<SeriesTestRow[]> {
+    await this.requireLink(testSeriesId, testId);
+    const test = await this.requireTest(testId);
+    this.assertNotSat(test);
+
+    await this.prisma.testSeriesTest.delete({
+      where: { testSeriesId_testId: { testSeriesId, testId } },
+    });
+
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    return this.testsIn(testSeriesId);
+  }
+
+  private async requireLink(testSeriesId: string, testId: string): Promise<void> {
+    const link = await this.prisma.testSeriesTest.findUnique({
+      where: { testSeriesId_testId: { testSeriesId, testId } },
+      select: { testId: true },
+    });
+    if (!link) throw new AppException(ErrorCodes.NOT_FOUND, 'That test is not in this series');
+  }
+
+  /** Unticking a series is a removal like any other, so it answers to the same rule. */
+  private async assertNoneDropped(test: OfferingRow, wanted: ReadonlySet<string>): Promise<void> {
+    if (test._count.attempts === 0) return;
+
+    const held = await this.prisma.testSeriesTest.findMany({
+      where: { testId: test.id },
+      select: { testSeriesId: true },
+    });
+    if (held.every((row) => wanted.has(row.testSeriesId))) return;
+
+    this.assertNotSat(test);
+  }
+
+  private assertNotSat(test: OfferingRow): void {
+    if (test._count.attempts === 0) return;
+
+    // A test students have sat is part of their record wherever it was offered.
+    const message = `This test has ${attempts(test._count.attempts)} on it, so it cannot be taken out of a series.`;
+    throw new AppException(ErrorCodes.CONFLICT, message, {
+      fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
     });
   }
 

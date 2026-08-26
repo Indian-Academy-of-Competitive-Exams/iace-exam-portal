@@ -381,6 +381,9 @@ export const ADMIN_SERIES_ROUTES = {
   /** Every branch has a row from the moment the series exists — see the fan-out. */
   branches: (id: string) => `/admin/test-series/${id}/branches`,
   branch: (id: string, branchId: string) => `/admin/test-series/${id}/branches/${branchId}`,
+  /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
+  tests: (id: string) => `/admin/test-series/${id}/tests`,
+  test: (id: string, testId: string) => `/admin/test-series/${id}/tests/${testId}`,
 } as const;
 
 /**

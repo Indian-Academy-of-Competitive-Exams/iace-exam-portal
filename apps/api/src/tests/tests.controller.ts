@@ -21,6 +21,7 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   setTestSeriesSchema,
+  setSeriesTestUnlockSchema,
   setTestStatusSchema,
   testListQuerySchema,
   updateTestSchema,
@@ -37,6 +38,8 @@ import {
   type TestListQuery,
   type TestPaper,
   type TestSeriesLink,
+  type SeriesTestRow,
+  type SetSeriesTestUnlockBody,
   type TestStatus,
   type UpdateTestBody,
 } from '@iace/contracts';
@@ -182,5 +185,40 @@ export class TestsController {
   @HttpCode(HttpStatus.OK)
   remove(@Param('id') id: string): Promise<void> {
     return this.tests.remove(id);
+  }
+}
+
+/** The link from the SERIES' side. It lives here because the tests module owns `TestSeriesTest`. */
+@Controller('admin/test-series/:seriesId/tests')
+@Actors(ActorTypes.ADMIN)
+export class SeriesTestsController {
+  constructor(private readonly offering: OfferingService) {}
+
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get()
+  list(@Param('seriesId') seriesId: string): Promise<SeriesTestRow[]> {
+    return this.offering.testsIn(seriesId);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':testId')
+  setUnlock(
+    @Param('seriesId') seriesId: string,
+    @Param('testId') testId: string,
+    @Body(new ZodBody(setSeriesTestUnlockSchema)) body: SetSeriesTestUnlockBody,
+  ): Promise<SeriesTestRow[]> {
+    return this.offering.setUnlock(seriesId, testId, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Delete(':testId')
+  @HttpCode(HttpStatus.OK)
+  remove(
+    @Param('seriesId') seriesId: string,
+    @Param('testId') testId: string,
+  ): Promise<SeriesTestRow[]> {
+    return this.offering.removeFromSeries(seriesId, testId);
   }
 }

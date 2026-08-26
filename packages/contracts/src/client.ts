@@ -119,6 +119,7 @@ import {
   testDetailSchema,
   testPaperSchema,
   testSchema,
+  seriesTestRowSchema,
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
@@ -132,6 +133,8 @@ import {
   type TestDetail,
   type TestListQueryInput,
   type TestPaper,
+  type SeriesTestRow,
+  type SetSeriesTestUnlockInput,
   type TestSeriesLink,
   type TestStatus,
   type UpdateTestInput,
@@ -774,6 +777,26 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: branchTestConfigRowSchema,
+          }),
+
+        tests: (id: string): Promise<SeriesTestRow[]> =>
+          request(ADMIN_SERIES_ROUTES.tests(id), { schema: seriesTestRowSchema.array() }),
+
+        setTestUnlock: (
+          id: string,
+          testId: string,
+          input: SetSeriesTestUnlockInput,
+        ): Promise<SeriesTestRow[]> =>
+          request(ADMIN_SERIES_ROUTES.test(id, testId), {
+            method: 'PATCH',
+            body: input,
+            schema: seriesTestRowSchema.array(),
+          }),
+
+        removeTest: (id: string, testId: string): Promise<SeriesTestRow[]> =>
+          request(ADMIN_SERIES_ROUTES.test(id, testId), {
+            method: 'DELETE',
+            schema: seriesTestRowSchema.array(),
           }),
       },
 
