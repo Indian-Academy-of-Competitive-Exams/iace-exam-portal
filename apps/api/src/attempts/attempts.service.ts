@@ -12,6 +12,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
+import { AttemptStateService } from './attempt-state.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import {
   deadlineFrom,
@@ -52,12 +53,17 @@ export class AttemptsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessResolverService,
+    private readonly state: AttemptStateService,
   ) {}
 
   async start(studentId: string, testId: string, input: StartAttemptBody): Promise<LiveAttempt> {
     // Resume is not a start: the gate asks whether a sitting may BEGIN, and this one already has.
     const live = await this.liveAttempt(studentId, testId);
-    if (live) return toLiveAttempt(live, await this.requireTest(testId), false);
+    if (live) {
+      // A resume after the key expired rebuilds it, so answering never falls back to Postgres.
+      await this.state.open(live);
+      return toLiveAttempt(live, await this.requireTest(testId), false);
+    }
 
     await this.access.assertCanStart(studentId, testId);
 
@@ -70,11 +76,9 @@ export class AttemptsService {
     const extraTimeSec = await this.access.extraTimeSecFor(studentId, testId);
 
     try {
-      return toLiveAttempt(
-        await this.create(studentId, test, finished, input.languages, extraTimeSec),
-        test,
-        true,
-      );
+      const started = await this.create(studentId, test, finished, input.languages, extraTimeSec);
+      await this.state.open(started);
+      return toLiveAttempt(started, test, true);
     } catch (error) {
       // Two starts raced; the unique picked one. Read it back — they asked to sit, not to win.
       if (!isUniqueViolation(error)) throw error;
@@ -82,6 +86,7 @@ export class AttemptsService {
       if (!won) {
         throw new AppException(ErrorCodes.CONFLICT, 'That sitting has just ended. Open it again.');
       }
+      await this.state.open(won);
       return toLiveAttempt(won, test, false);
     }
   }

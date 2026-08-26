@@ -162,19 +162,19 @@ this student's own order, and no answer key, `isCorrect` or `marksAwarded` appea
 `apps/api/src/attempts/attempt-state.service.ts` (Redis), `apps/api/test/attempt-state.unit.test.ts`;
 modify `apps/api/src/redis/redis.keys.ts`, `packages/contracts/src/attempts.ts`.
 
-- [ ] Add the keys to `redisKeys`: the attempt's live state, and the set of attempts with unflushed
+- [x] Add the keys to `redisKeys`: the attempt's live state, and the set of attempts with unflushed
       writes. **No key string is built at a call site.**
-- [ ] `PATCH /me/attempts/:id/state` takes a BATCH — answers changed since the last save, per
+- [x] `PATCH /me/attempts/:id/state` takes a BATCH — answers changed since the last save, per
       question `state`, `selectedOptionId`/`typedAnswer` and `timeSpentSec`, plus the section
       state. It writes Redis and nothing else.
-- [ ] The merge rules are a pure module: which `AnswerState` a change produces (a cleared response
+- [x] The merge rules are a pure module: which `AnswerState` a change produces (a cleared response
       returns to NOT_ANSWERED, marking keeps the answer, ANSWERED_MARKED is a real state),
       `timeSpentSec` accumulates and never decreases, and a stale batch never overwrites a newer one.
-- [ ] The server decides whether a write is still in time: past `endsAt` plus a small grace it is
+- [x] The server decides whether a write is still in time: past `endsAt` plus a small grace it is
       refused, because a request in flight as the clock expires is not cheating. The grace is a
       named constant, not a number in a branch.
-- [ ] Refuse a batch for an attempt that is not IN_PROGRESS, and another student's attempt.
-- [ ] Tests (truth-table): every state transition the bottom bar can produce; time only ever
+- [x] Refuse a batch for an attempt that is not IN_PROGRESS, and another student's attempt.
+- [x] Tests (truth-table): every state transition the bottom bar can produce; time only ever
       accumulates; a late batch is refused; a batch out of order does not move the state backwards.
       **Acceptance:** a full sitting's answering never touches Postgres, and the state Redis holds
       is exactly what the palette should draw.
@@ -188,15 +188,15 @@ modify `apps/api/src/redis/redis.keys.ts`, `packages/contracts/src/attempts.ts`.
 `apps/api/test/attempt-flush.unit.test.ts`; modify `apps/api/src/queue/queues.ts`,
 `apps/api/src/queue/queue.module.ts`.
 
-- [ ] A BullMQ **repeatable** job, every ~60s: take the attempts marked dirty, read their Redis
+- [x] A BullMQ **repeatable** job, every ~60s: take the attempts marked dirty, read their Redis
       state, and UPSERT `AttemptQuestion` rows for what changed. One writer, so two flushes cannot
       interleave into a half-written attempt.
-- [ ] **Idempotent.** Running it twice over the same state writes the same rows and changes
+- [x] **Idempotent.** Running it twice over the same state writes the same rows and changes
       nothing the second time — it is a repeatable job, so it WILL run over unchanged state.
-- [ ] It never writes an attempt that has been submitted; submit has already flushed it.
-- [ ] A failure logs and leaves the attempt dirty; the live sitting is unaffected, because the
+- [x] It never writes an attempt that has been submitted; submit has already flushed it.
+- [x] A failure logs and leaves the attempt dirty; the live sitting is unaffected, because the
       screen reads Redis.
-- [ ] Tests: an upsert twice leaves one row with the later values; an attempt with no changes
+- [x] Tests: an upsert twice leaves one row with the later values; an attempt with no changes
       writes nothing; a submitted attempt is skipped.
       **Acceptance:** killing Redis mid-sitting costs at most a minute of answers, not the sitting.
 
@@ -324,7 +324,10 @@ T1 and T2 shipped. Before S2, clear the data blocker: the dev database has no AC
 test, so nothing is sittable. Walk one test through Setup → Paper → Offer and press
 **Freeze and offer**.
 
-### P3-S2
+### P3-S2 — **done**
+
+T3 and T4 shipped as one commit: the flusher reads the shape the state service writes, so they are
+one mechanism and could not be proved apart.
 
 ```
 Run Phase-3 Session S2 — live state. Execute T3, T4. Binding + lean loop + opus. HIGH STAKES on T3 — 2 reviews.

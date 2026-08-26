@@ -1,15 +1,19 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
 import {
   ActorTypes,
+  saveAttemptStateSchema,
   startAttemptSchema,
   type ExamPaper,
   type LiveAttempt,
+  type LiveAttemptState,
+  type SaveAttemptStateBody,
   type StartAttemptBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
+import { AttemptStateService } from './attempt-state.service';
 
 /** The student's own sittings. The subject is always the token's, never a path parameter. */
 @Controller('me')
@@ -18,6 +22,7 @@ export class AttemptsController {
   constructor(
     private readonly attempts: AttemptsService,
     private readonly papers: AttemptPaperService,
+    private readonly state: AttemptStateService,
   ) {}
 
   /** Idempotent: a second start while one is running resumes it, clock and all. */
@@ -35,5 +40,15 @@ export class AttemptsController {
   @Get('attempts/:id/paper')
   paper(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ExamPaper> {
     return this.papers.paper(user.id, id);
+  }
+
+  /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */
+  @Patch('attempts/:id/state')
+  saveState(
+    @Param('id') id: string,
+    @Body(new ZodBody(saveAttemptStateSchema)) body: SaveAttemptStateBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LiveAttemptState> {
+    return this.state.save(user.id, id, body);
   }
 }

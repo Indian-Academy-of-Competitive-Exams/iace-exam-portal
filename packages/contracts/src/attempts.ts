@@ -104,9 +104,69 @@ export const liveAttemptSchema = attemptSchema.extend({
 });
 export type LiveAttempt = z.infer<typeof liveAttemptSchema>;
 
+// ============================================================================
+// The live sitting. Everything here lives in Redis until the flusher or submit
+// moves it, so a student answering a hundred questions writes Postgres never.
+// ============================================================================
+
+/** One question's change since the last save. A batch is a DELTA, not the whole paper. */
+export const answerChangeSchema = z.object({
+  questionId: z.string().min(1),
+  /** What the screen believes. The server derives the truth from the answer and the mark. */
+  state: answerStateSchema,
+  selectedOptionId: z.string().min(1).nullish(),
+  typedAnswer: z.string().nullish(),
+  /** Total seconds on this question so far, as the screen has counted them. */
+  timeSpentSec: z.number().int().min(0),
+});
+export type AnswerChange = z.infer<typeof answerChangeSchema>;
+
+/** Where a sectional clock has got to. Absent for a composite paper, which has one clock. */
+export const sectionProgressSchema = z.object({
+  remainingSec: z.number().int().min(0),
+  closed: z.boolean(),
+});
+export type SectionProgress = z.infer<typeof sectionProgressSchema>;
+
+/** A screenful of answers is one save; a paper is 100, so a batch never needs to be larger. */
+export const SAVE_BATCH_MAX = 200;
+
+export const saveAttemptStateSchema = z.object({
+  /** The screen's own counter. A batch that arrives after a newer one is dropped, not applied. */
+  revision: z.number().int().min(0),
+  answers: z.array(answerChangeSchema).max(SAVE_BATCH_MAX),
+  sections: z.record(z.string(), sectionProgressSchema).optional(),
+});
+export type SaveAttemptStateInput = z.input<typeof saveAttemptStateSchema>;
+export type SaveAttemptStateBody = z.infer<typeof saveAttemptStateSchema>;
+
+/** One question as the live state holds it — the palette is drawn from exactly this. */
+export const liveAnswerSchema = z.object({
+  state: answerStateSchema,
+  selectedOptionId: z.string().nullable(),
+  typedAnswer: z.string().nullable(),
+  timeSpentSec: z.number().int(),
+  /** When the answer was GIVEN. Held here so a flush writes the same row however often it runs. */
+  answeredAt: z.string().nullable(),
+});
+export type LiveAnswer = z.infer<typeof liveAnswerSchema>;
+
+/** What Redis holds for one sitting. Returned on every save, so the screen can reconcile. */
+export const liveAttemptStateSchema = z.object({
+  attemptId: z.string(),
+  revision: z.number().int(),
+  answers: z.record(z.string(), liveAnswerSchema),
+  sections: z.record(z.string(), sectionProgressSchema),
+  /** The server's deadline again, so a save is also a clock check. */
+  endsAt: z.string(),
+  serverNow: z.string(),
+});
+export type LiveAttemptState = z.infer<typeof liveAttemptStateSchema>;
+
 export const ME_ATTEMPT_ROUTES = {
   start: (testId: string) => `/me/tests/${testId}/attempt`,
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
+  state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
 } as const;
 
 // ============================================================================

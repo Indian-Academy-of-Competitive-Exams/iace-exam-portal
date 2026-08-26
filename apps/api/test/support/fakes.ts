@@ -1395,6 +1395,7 @@ export interface FakeAttemptQuestionRow {
   typedAnswer: string | null;
   state: AnswerState;
   timeSpentSec: number;
+  answeredAt?: Date | null;
 }
 
 /** A row of an assembled paper, before finalize freezes it. */
@@ -1515,6 +1516,20 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
           .filter((row) => row.attemptId === where.attemptId)
           .sort((a, b) => a.order - b.order),
       ),
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { attemptId: string; questionId: string };
+      data: Partial<FakeAttemptQuestionRow>;
+    }) => {
+      const matched = this.attemptQuestions.filter(
+        (row) => row.attemptId === where.attemptId && row.questionId === where.questionId,
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
   };
 
   protected override tables(): object[][] {
@@ -1531,6 +1546,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   }
 
   readonly attempt = {
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.attemptRows.find((row) => row.id === where.id) ?? null),
+
     count: ({
       where,
     }: {

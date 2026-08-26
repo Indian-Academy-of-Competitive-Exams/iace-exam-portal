@@ -11,6 +11,7 @@ import {
   TEST_STATUS,
 } from '@iace/contracts';
 import { AttemptsService } from '../src/attempts/attempts.service';
+import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { type AccessResolverService } from '../src/access';
 import {
   type FakeAttemptRow,
@@ -21,6 +22,7 @@ import {
   makeBaseConfig,
   makeSection,
   makeTest,
+  FakeRedis,
 } from './support/fakes';
 
 const STUDENT = 'stu_1';
@@ -87,7 +89,14 @@ function serviceWith(
     attempts,
     [],
   );
-  return { prisma, service: new AttemptsService(prisma.asService(), resolver(permitted)) };
+  const redis = new FakeRedis();
+  const state = new AttemptStateService(prisma.asService(), redis.asService());
+  return {
+    prisma,
+    redis,
+    state,
+    service: new AttemptsService(prisma.asService(), resolver(permitted), state),
+  };
 }
 
 describe('AttemptsService — starting a sitting', () => {
@@ -150,7 +159,11 @@ describe('AttemptsService — starting a sitting', () => {
       [],
       [],
     );
-    const service = new AttemptsService(prisma.asService(), resolver());
+    const service = new AttemptsService(
+      prisma.asService(),
+      resolver(),
+      new AttemptStateService(prisma.asService(), new FakeRedis().asService()),
+    );
 
     const attempt = await service.start(STUDENT, 'tst_1', {});
 
@@ -403,7 +416,11 @@ describe('AttemptsService — a test with a paper per student', () => {
       [],
       [],
     );
-    const service = new AttemptsService(prisma.asService(), resolver());
+    const service = new AttemptsService(
+      prisma.asService(),
+      resolver(),
+      new AttemptStateService(prisma.asService(), new FakeRedis().asService()),
+    );
 
     const attempt = await service.start(STUDENT, 'tst_1', {});
 

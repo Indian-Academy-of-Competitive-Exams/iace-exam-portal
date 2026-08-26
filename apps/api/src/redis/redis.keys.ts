@@ -50,6 +50,12 @@ export const redisKeys = {
    */
   catalogStudentEpoch: (studentId: string) => `access:catalog:${studentId}:epoch`,
 
+  /** One live sitting: answers, section clocks and the facts a save is judged against. */
+  attemptState: (attemptId: string) => `attempt:state:${attemptId}`,
+
+  /** Attempts holding writes Postgres has not seen. A SET, so draining needs no SCAN. */
+  attemptsDirty: 'attempt:dirty',
+
   /** One student's resolved catalog, at one payload shape and both epochs. */
   studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
     `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,
