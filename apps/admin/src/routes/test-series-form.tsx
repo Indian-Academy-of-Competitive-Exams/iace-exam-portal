@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Clock, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -8,8 +8,11 @@ import {
   PERMISSION_LEVELS,
   UNLOCK_MODE,
   UNLOCK_MODES,
+  fromInstituteWallTime,
+  instituteWallTime,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
+  type SeriesTestRow,
   type TestSeriesSummary,
   type UnlockMode,
 } from '@iace/contracts';
@@ -22,20 +25,28 @@ import {
   Checkbox,
   Combobox,
   ConfirmDialog,
+  DataTable,
+  DateTimePicker,
+  DropdownMenuItem,
+  FormDialog,
   FormField,
   FormPanel,
   FormSection,
   Input,
   PageHeader,
   plural,
+  RowActions,
   Skeleton,
   SkeletonParagraph,
   StatRow,
   Textarea,
+  TruncatedText,
+  type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
+import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
@@ -330,8 +341,180 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </div>
       </FormSection>
 
+      {existing ? <SeriesTests series={detail} /> : null}
       {existing ? <BranchSchedule series={detail} /> : null}
     </FormPanel>
+  );
+}
+
+const testsKey = (seriesId: string) => ['admin', 'test-series', seriesId, 'tests'] as const;
+
+/** The instant an exam starts, said in the institute's clock wherever the admin is sitting. */
+const opensLabel = (unlockAt: string | null): string =>
+  unlockAt ? WHEN_FORMATTER.format(new Date(unlockAt)) : 'With the series';
+
+interface UnlockFormValues {
+  unlockAt: string;
+}
+
+function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
+  const queryClient = useQueryClient();
+  const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [opening, setOpening] = useState<SeriesTestRow | null>(null);
+  const [removing, setRemoving] = useState<SeriesTestRow | null>(null);
+
+  const tests = useQuery({
+    queryKey: testsKey(series.id),
+    queryFn: () => api.admin.testSeries.tests(series.id),
+  });
+
+  const held = (next: SeriesTestRow[]) => {
+    queryClient.setQueryData(testsKey(series.id), next);
+    void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
+  };
+
+  const remove = useMutation({
+    meta: { success: 'Test removed from this series.' },
+    mutationFn: (row: SeriesTestRow) => api.admin.testSeries.removeTest(series.id, row.testId),
+    onSuccess: (next) => {
+      setRemoving(null);
+      held(next);
+    },
+    onError: () => setRemoving(null),
+  });
+
+  return (
+    <FormSection title="The tests it holds">
+      <DataTable
+        columns={testColumns({ canWrite, onOpening: setOpening, onRemove: setRemoving })}
+        rows={tests.data ?? []}
+        rowKey={(row) => row.testId}
+        isLoading={tests.isLoading}
+        empty="No test is in this series yet. A test joins a series from its own Offer step."
+      />
+
+      {opening ? (
+        <UnlockDialog
+          key={opening.testId}
+          series={series}
+          row={opening}
+          onClose={() => setOpening(null)}
+          onSaved={held}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        destructive
+        title={`Remove ${removing?.title ?? 'this test'} from ${series.name}?`}
+        description={`Students reach it through this series and would stop being able to. The test itself, its paper and every other series it is in are untouched, and it can be put back at any time.`}
+        confirmLabel="Remove it"
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing)}
+      />
+    </FormSection>
+  );
+}
+
+function testColumns(
+  options: Readonly<{
+    canWrite: boolean;
+    onOpening: (row: SeriesTestRow) => void;
+    onRemove: (row: SeriesTestRow) => void;
+  }>,
+): DataTableColumn<SeriesTestRow>[] {
+  const { canWrite, onOpening, onRemove } = options;
+
+  return [
+    { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
+    {
+      key: 'title',
+      header: 'Test',
+      className: 'w-full max-w-0',
+      cell: (row) => <TruncatedText>{row.title}</TruncatedText>,
+    },
+    {
+      key: 'opens',
+      header: 'Opens',
+      className: 'max-w-56',
+      cell: (row) => <TruncatedText>{opensLabel(row.unlockAt)}</TruncatedText>,
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (row) =>
+        canWrite ? (
+          <RowActions label={`Actions for ${row.title ?? 'this test'}`}>
+            <DropdownMenuItem onSelect={() => onOpening(row)}>
+              <Clock aria-hidden />
+              Set when it opens
+            </DropdownMenuItem>
+            {row.attemptCount === 0 ? (
+              <DropdownMenuItem destructive onSelect={() => onRemove(row)}>
+                <Trash2 aria-hidden />
+                Remove from this series
+              </DropdownMenuItem>
+            ) : null}
+          </RowActions>
+        ) : null,
+    },
+  ];
+}
+
+/** Wall time in, an instant out: `packages/ui` holds no zone, so the conversion is the app's. */
+function UnlockDialog({
+  series,
+  row,
+  onClose,
+  onSaved,
+}: Readonly<{
+  series: TestSeriesSummary;
+  row: SeriesTestRow;
+  onClose: () => void;
+  onSaved: (next: SeriesTestRow[]) => void;
+}>) {
+  const form = useForm<UnlockFormValues>({
+    defaultValues: { unlockAt: row.unlockAt ? instituteWallTime(new Date(row.unlockAt)) : '' },
+  });
+  const unlockAt = useWatch({ control: form.control, name: 'unlockAt' });
+
+  const save = useMutation({
+    meta: { success: 'Opening time saved.' },
+    mutationFn: (wall: string) =>
+      api.admin.testSeries.setTestUnlock(series.id, row.testId, {
+        unlockAt: wall ? fromInstituteWallTime(wall).toISOString() : null,
+      }),
+    onSuccess: (next) => {
+      onClose();
+      onSaved(next);
+    },
+    onError: (error) => applyFieldErrors(error, form.setError, ['unlockAt']),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      form={form}
+      onSubmit={(values) => save.mutate(values.unlockAt)}
+      title={`When does ${row.title ?? 'this test'} open?`}
+      description={`Every branch running ${series.name} sits it from that instant. Leave it empty and it opens as soon as a student reaches the series.`}
+      submitLabel="Save the time"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="unlockAt" label="Opens (IST)">
+        {(control) => (
+          <DateTimePicker
+            id={control.id}
+            aria-label="Opens"
+            aria-describedby={control['aria-describedby']}
+            value={unlockAt}
+            onChange={(next) => form.setValue('unlockAt', next, { shouldDirty: true })}
+          />
+        )}
+      </FormField>
+    </FormDialog>
   );
 }
 

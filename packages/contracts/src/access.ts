@@ -223,6 +223,30 @@ export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().opti
 export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;
 export type UpdateBranchTestConfigBody = z.infer<typeof updateBranchTestConfigSchema>;
 
+/** What one branch does differently for one test. No row is the plain rules, not a row of nulls. */
+export const branchTestScheduleRowSchema = z.object({
+  branchId: z.string(),
+  branch: z.object({ id: z.string(), name: z.string() }),
+  /** Seconds after the test opens that a student may still begin. Null is any time it is open. */
+  lateEntrySec: z.number().int().nullable(),
+  /** Seconds added to this branch's clock. Null is the duration the configuration gives everyone. */
+  extraTimeSec: z.number().int().nullable(),
+});
+export type BranchTestScheduleRow = z.infer<typeof branchTestScheduleRowSchema>;
+
+/** The whole set, not a delta: the screen holds every branch this test reaches. */
+export const setBranchTestSchedulesSchema = z.object({
+  branches: z.array(
+    z.object({
+      branchId: z.string().min(1),
+      lateEntrySec: z.number().int().min(0).nullable(),
+      extraTimeSec: z.number().int().min(0).nullable(),
+    }),
+  ),
+});
+export type SetBranchTestSchedulesInput = z.input<typeof setBranchTestSchedulesSchema>;
+export type SetBranchTestSchedulesBody = z.infer<typeof setBranchTestSchedulesSchema>;
+
 export const studentSeriesUnlockSchema = z.object({
   id: z.string(),
   studentId: z.string(),

@@ -21,6 +21,7 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   setTestSeriesSchema,
+  setBranchTestSchedulesSchema,
   setSeriesTestUnlockSchema,
   setTestStatusSchema,
   testListQuerySchema,
@@ -38,7 +39,9 @@ import {
   type TestListQuery,
   type TestPaper,
   type TestSeriesLink,
+  type BranchTestScheduleRow,
   type SeriesTestRow,
+  type SetBranchTestSchedulesBody,
   type SetSeriesTestUnlockBody,
   type TestStatus,
   type UpdateTestBody,
@@ -150,6 +153,24 @@ export class TestsController {
   @HttpCode(HttpStatus.OK)
   finalize(@Param('id') id: string): Promise<FinalizeResult> {
     return this.finalizer.finalize(id);
+  }
+
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get(':id/branch-timing')
+  branchTiming(@Param('id') id: string): Promise<BranchTestScheduleRow[]> {
+    return this.offering.branchTiming(id);
+  }
+
+  /** Late entry and extra time are a branch's, so they answer to the branch key, not the test's. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/branch-timing')
+  @HttpCode(HttpStatus.OK)
+  setBranchTiming(
+    @Param('id') id: string,
+    @Body(new ZodBody(setBranchTestSchedulesSchema)) body: SetBranchTestSchedulesBody,
+  ): Promise<BranchTestScheduleRow[]> {
+    return this.offering.setBranchTiming(id, body);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)

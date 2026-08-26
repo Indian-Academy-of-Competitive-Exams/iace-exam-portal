@@ -75,10 +75,13 @@ import {
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
   branchTestConfigRowSchema,
+  branchTestScheduleRowSchema,
   programCatalogSchema,
   studentGrantRowSchema,
   testSeriesSummarySchema,
   type BranchTestConfigRow,
+  type BranchTestScheduleRow,
+  type SetBranchTestSchedulesInput,
   type CreateProgramInput,
   type CreateTestSeriesInput,
   type GrantSeriesInput,
@@ -930,6 +933,21 @@ export function createApiClient(options: ApiClientOptions) {
 
         series: (id: string): Promise<TestSeriesLink[]> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema.array() }),
+
+        branchTiming: (id: string): Promise<BranchTestScheduleRow[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.branchTiming(id), {
+            schema: branchTestScheduleRowSchema.array(),
+          }),
+
+        setBranchTiming: (
+          id: string,
+          input: SetBranchTestSchedulesInput,
+        ): Promise<BranchTestScheduleRow[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.branchTiming(id), {
+            method: 'POST',
+            body: input,
+            schema: branchTestScheduleRowSchema.array(),
+          }),
 
         setSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink[]> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), {

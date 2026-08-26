@@ -9,6 +9,7 @@ import {
   FakeEventBus,
   FakeTestsPrisma,
   makeBaseConfig,
+  makeBranch,
   makeSection,
   makeSeries,
   makeTest,
@@ -304,5 +305,101 @@ describe('OfferingService — a series and the tests it holds', () => {
     const { service } = serviceWith();
 
     await assert.rejects(() => service.removeFromSeries('srs_1', 'tst_1'), AppException.is);
+  });
+});
+
+describe('OfferingService — what a branch does differently for one test', () => {
+  const timingService = (
+    branchSchedules: {
+      branchId: string;
+      testId: string;
+      lateEntrySec: number | null;
+      extraTimeSec: number | null;
+    }[] = [],
+  ) => {
+    const prisma = new FakeTestsPrisma(
+      [makeTest({ id: 'tst_1' })],
+      [makeBaseConfig({ id: 'cfg_1' })],
+      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
+      [],
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      [],
+      [],
+      [makeSeries({ id: 'srs_1' })],
+      [],
+      [],
+      [],
+      [
+        {
+          id: 'btc_1',
+          branchId: 'br_1',
+          testSeriesId: 'srs_1',
+          enabled: true,
+          createdAt: new Date(),
+        },
+        {
+          id: 'btc_2',
+          branchId: 'br_2',
+          testSeriesId: 'srs_1',
+          enabled: false,
+          createdAt: new Date(),
+        },
+      ],
+      branchSchedules,
+      [makeBranch({ id: 'br_1', name: 'AMEERPET' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
+    );
+    return {
+      prisma,
+      service: new OfferingService(prisma.asService(), new FakeEventBus().asService()),
+    };
+  };
+
+  it('lists only the branches that actually reach the test', async () => {
+    const { service } = timingService();
+
+    const rows = await service.branchTiming('tst_1');
+
+    assert.deepEqual(
+      rows.map((row) => row.branch.name),
+      ['AMEERPET'],
+    );
+    assert.deepEqual([rows[0]?.lateEntrySec, rows[0]?.extraTimeSec], [null, null]);
+  });
+
+  it('stores what a branch sets, in seconds', async () => {
+    const { service, prisma } = timingService();
+
+    const rows = await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: 600 }],
+    });
+
+    assert.deepEqual([rows[0]?.lateEntrySec, rows[0]?.extraTimeSec], [1800, 600]);
+    assert.equal(prisma.branchSchedules.length, 1);
+  });
+
+  /** The failure this prevents: a table of rows full of nulls, each of which means nothing. */
+  it('keeps no row for a branch that sets neither', async () => {
+    const { service, prisma } = timingService([
+      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: null },
+    ]);
+
+    await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: null, extraTimeSec: null }],
+    });
+
+    assert.equal(prisma.branchSchedules.length, 0);
+  });
+
+  it('overwrites what a branch had rather than adding beside it', async () => {
+    const { service, prisma } = timingService([
+      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: null },
+    ]);
+
+    await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: 600, extraTimeSec: 300 }],
+    });
+
+    assert.equal(prisma.branchSchedules.length, 1);
+    assert.equal(prisma.branchSchedules[0]?.lateEntrySec, 600);
   });
 });

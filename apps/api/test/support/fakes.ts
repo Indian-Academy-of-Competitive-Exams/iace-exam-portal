@@ -1428,9 +1428,63 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     readonly attemptRows: FakeAttemptRow[] = [],
     readonly attemptQuestions: FakeAttemptQuestionRow[] = [],
     readonly questionVersions: FakeServedVersion[] = [],
+    readonly branchConfigRows: FakeBranchConfigRow[] = [],
+    readonly branchSchedules: FakeBranchScheduleRow[] = [],
+    readonly branchNames: FakeBranch[] = [],
   ) {
     super(configs, sections);
   }
+
+  readonly branchTestConfig = {
+    findMany: ({ where }: { where: { enabled: boolean; testSeriesId: { in: string[] } } }) =>
+      Promise.resolve(
+        this.branchConfigRows
+          .filter(
+            (row) =>
+              row.enabled === where.enabled && where.testSeriesId.in.includes(row.testSeriesId),
+          )
+          .map((row) => ({
+            branch: {
+              id: row.branchId,
+              name: this.branchNames.find((it) => it.id === row.branchId)?.name ?? row.branchId,
+            },
+          }))
+          .sort((a, b) => a.branch.name.localeCompare(b.branch.name)),
+      ),
+  };
+
+  readonly branchTestSchedule = {
+    findMany: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(this.branchSchedules.filter((row) => row.testId === where.testId)),
+
+    deleteMany: ({ where }: { where: { testId: string; branchId: { in: string[] } } }) => {
+      const kept = this.branchSchedules.filter(
+        (row) => !(row.testId === where.testId && where.branchId.in.includes(row.branchId)),
+      );
+      const count = this.branchSchedules.length - kept.length;
+      this.branchSchedules.length = 0;
+      this.branchSchedules.push(...kept);
+      return Promise.resolve({ count });
+    },
+
+    upsert: ({
+      where,
+      update,
+      create,
+    }: {
+      where: { branchId_testId: { branchId: string; testId: string } };
+      update: { lateEntrySec: number | null; extraTimeSec: number | null };
+      create: FakeBranchScheduleRow;
+    }) => {
+      const { branchId, testId } = where.branchId_testId;
+      const row = this.branchSchedules.find(
+        (it) => it.branchId === branchId && it.testId === testId,
+      );
+      if (row) Object.assign(row, update);
+      else this.branchSchedules.push(create);
+      return Promise.resolve(row ?? create);
+    },
+  };
 
   private attemptSeq = 0;
 

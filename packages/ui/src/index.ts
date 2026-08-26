@@ -117,6 +117,7 @@ export {
   type DatePickerProps,
   type CalendarDay,
 } from './components/ui/date-picker';
+export { DateTimePicker, type DateTimePickerProps } from './components/ui/date-time-picker';
 export { Combobox, type ComboboxItem, type ComboboxProps } from './components/ui/combobox';
 export { MultiCombobox, type MultiComboboxProps } from './components/ui/multi-combobox';
 export {

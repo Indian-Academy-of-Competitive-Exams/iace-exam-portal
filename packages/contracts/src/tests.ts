@@ -573,4 +573,5 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   finalize: (id: string) => `/admin/tests/${id}/finalize`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,
+  branchTiming: (id: string) => `/admin/tests/${id}/branch-timing`,
 } as const;

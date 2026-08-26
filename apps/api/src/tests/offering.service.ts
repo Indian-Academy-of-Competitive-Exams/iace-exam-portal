@@ -5,6 +5,8 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
+  type BranchTestScheduleRow,
+  type SetBranchTestSchedulesBody,
   type SeriesTestRow,
   type SetSeriesTestUnlockBody,
   type SetTestSeriesBody,
@@ -24,6 +26,17 @@ const OFFERING_SELECT = {
 
 const dateOrNull = (value: string | null | undefined): Date | null =>
   value === null || value === undefined ? null : new Date(value);
+
+/** A branch that sets neither is a branch with nothing to store — its row goes. */
+function partitionBySet(
+  rows: SetBranchTestSchedulesBody['branches'],
+): [SetBranchTestSchedulesBody['branches'], string[]] {
+  const set = rows.filter((row) => row.lateEntrySec !== null || row.extraTimeSec !== null);
+  const cleared = rows
+    .filter((row) => row.lateEntrySec === null && row.extraTimeSec === null)
+    .map((row) => row.branchId);
+  return [set, cleared];
+}
 
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
@@ -193,6 +206,76 @@ export class OfferingService {
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
+  }
+
+  /** Every branch this test reaches, with whatever that branch does differently for it. */
+  async branchTiming(testId: string): Promise<BranchTestScheduleRow[]> {
+    await this.requireTest(testId);
+
+    const links = await this.prisma.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true },
+    });
+    const configs = await this.prisma.branchTestConfig.findMany({
+      where: { enabled: true, testSeriesId: { in: links.map((row) => row.testSeriesId) } },
+      select: { branch: { select: { id: true, name: true } } },
+      orderBy: { branch: { name: 'asc' } },
+    });
+    const held = await this.prisma.branchTestSchedule.findMany({ where: { testId } });
+    const byBranch = new Map(held.map((row) => [row.branchId, row]));
+
+    // A branch reached through two of this test's series is still one branch, and one row.
+    const seen = new Set<string>();
+    return configs.flatMap(({ branch }) => {
+      if (seen.has(branch.id)) return [];
+      seen.add(branch.id);
+      const schedule = byBranch.get(branch.id);
+      return [
+        {
+          branchId: branch.id,
+          branch,
+          lateEntrySec: schedule?.lateEntrySec ?? null,
+          extraTimeSec: schedule?.extraTimeSec ?? null,
+        },
+      ];
+    });
+  }
+
+  /** Nothing set is no row: the plain rules are the absence of one, never a row full of nulls. */
+  async setBranchTiming(
+    testId: string,
+    input: SetBranchTestSchedulesBody,
+  ): Promise<BranchTestScheduleRow[]> {
+    await this.requireTest(testId);
+    const [set, cleared] = partitionBySet(input.branches);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (cleared.length > 0) {
+        await tx.branchTestSchedule.deleteMany({ where: { testId, branchId: { in: cleared } } });
+      }
+      for (const row of set) {
+        const where = { branchId_testId: { branchId: row.branchId, testId } };
+        const values = { lateEntrySec: row.lateEntrySec, extraTimeSec: row.extraTimeSec };
+        await tx.branchTestSchedule.upsert({
+          where,
+          update: values,
+          create: { ...values, testId, branchId: row.branchId },
+        });
+      }
+    });
+
+    for (const testSeriesId of await this.seriesIdsOf(testId)) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    }
+    return this.branchTiming(testId);
+  }
+
+  private async seriesIdsOf(testId: string): Promise<string[]> {
+    const links = await this.prisma.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true },
+    });
+    return links.map((row) => row.testSeriesId);
   }
 
   private async requireLink(testSeriesId: string, testId: string): Promise<void> {
