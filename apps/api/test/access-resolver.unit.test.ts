@@ -675,3 +675,81 @@ describe('AccessCacheListener', () => {
     await assert.doesNotReject(() => listener.onCatalogChanged({ testSeriesId: null }));
   });
 });
+
+describe('AccessResolverService — a series that unlocks in order', () => {
+  const inOrder = (attempts: { studentId: string; testId: string; status: string }[] = []) =>
+    build(
+      reachable({
+        series: [makeSeries({ id: 'srs_1', sequentialTests: true })],
+        seriesTests: [
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+          { testSeriesId: 'srs_1', testId: 'tst_2', order: 2 },
+          { testSeriesId: 'srs_1', testId: 'tst_3', order: 3 },
+        ],
+        tests: [
+          makeTestRow({ id: 'tst_1' }),
+          makeTestRow({ id: 'tst_2' }),
+          makeTestRow({ id: 'tst_3' }),
+        ],
+        attempts,
+      }),
+    ).resolver;
+
+  const startable = async (attempts: Parameters<typeof inOrder>[0] = []) =>
+    (await inOrder(attempts).catalog('stu_1', NOW)).series[0]?.tests.map((test) => test.canStart);
+
+  /** The failure this prevents: a flag on screen saying "in order" while every test is open. */
+  it('opens the first and holds the rest', async () => {
+    assert.deepEqual(await startable(), [true, false, false]);
+  });
+
+  it('opens the next one once its predecessor has been sat', async () => {
+    const sat = [{ studentId: 'stu_1', testId: 'tst_1', status: 'SUBMITTED' }];
+
+    assert.deepEqual(await startable(sat), [true, true, false]);
+  });
+
+  it('counts an evaluated sitting as sat, and leaves nothing shut once all are', async () => {
+    const all = ['tst_1', 'tst_2', 'tst_3'].map((testId) => ({
+      studentId: 'stu_1',
+      testId,
+      status: 'EVALUATED',
+    }));
+
+    assert.deepEqual(await startable(all), [true, true, true]);
+  });
+
+  it('does not count a sitting still in progress', async () => {
+    const live = [{ studentId: 'stu_1', testId: 'tst_1', status: 'IN_PROGRESS' }];
+
+    assert.deepEqual(await startable(live), [true, false, false]);
+  });
+
+  it('holds nothing back when the series does not unlock in order', async () => {
+    const open = build(
+      reachable({
+        seriesTests: [
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+          { testSeriesId: 'srs_1', testId: 'tst_2', order: 2 },
+        ],
+        tests: [makeTestRow({ id: 'tst_1' }), makeTestRow({ id: 'tst_2' })],
+      }),
+    ).resolver;
+
+    const series = (await open.catalog('stu_1', NOW)).series[0];
+
+    assert.deepEqual(
+      series?.tests.map((test) => test.canStart),
+      [true, true],
+    );
+  });
+
+  it('refuses one still waiting its turn at the start guard', async () => {
+    const error = await inOrder()
+      .assertCanStart('stu_1', 'tst_2', NOW)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.FORBIDDEN);
+  });
+});

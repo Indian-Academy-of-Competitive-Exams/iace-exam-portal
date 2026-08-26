@@ -160,6 +160,9 @@ Reaching a series is not the same as being able to start it. `unlockMode` decide
 opens once its prerequisite series is satisfied, `REQUEST` goes through a queue an admin decides,
 `ADMIN` opens for nobody on its own. A locked series is still listed, so the student can see what
 is coming and ask for it. `isTestBlocked` leaves the whole catalog readable and starts nothing.
+`sequentialTests` gates the tests INSIDE a series: the first one not yet sat is open and everything
+after it waits, counted from submitted and evaluated attempts and read fresh on every catalog read,
+so submitting one opens the next with nothing having to bust a cache.
 
 One function answers all of it (`AccessResolverService`), and both callers read that one answer:
 the student's catalog and the attempt-start guard. In-app `Notification` on assignment, carrying

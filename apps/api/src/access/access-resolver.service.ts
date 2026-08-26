@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  ATTEMPT_STATUS,
   ErrorCodes,
   TEST_STATUS,
   UNLOCK_MODE,
@@ -19,6 +20,9 @@ import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { DomainEventBus } from '../common/events';
 import { applyAutoUnlocks, needsUnlock } from './auto-unlock';
+
+/** A sitting that counts as done for the series that unlocks its tests in order. */
+const FINISHED = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
 
 /** A safety net under the event-driven busts, never the mechanism that keeps the catalog right. */
 const CATALOG_TTL_SEC = 15 * 60;
@@ -109,11 +113,28 @@ export class AccessResolverService {
   /** The catalog as of `now` — availability and `canStart` are derived here on every read. */
   async catalog(studentId: string, now: Date = new Date()): Promise<StudentCatalog> {
     const resolved = await this.resolved(studentId);
+    const finished = await this.finishedTestIds(studentId, resolved);
 
     return {
       testBlocked: resolved.testBlocked,
-      series: resolved.series.map((series) => project(series, resolved.testBlocked, now)),
+      series: resolved.series.map((series) => project(series, resolved.testBlocked, now, finished)),
     };
+  }
+
+  /** Fresh, like the clock: submitting a test opens the next, and a cached answer would not. */
+  private async finishedTestIds(
+    studentId: string,
+    resolved: ResolvedCatalog,
+  ): Promise<ReadonlySet<string>> {
+    const gated = resolved.series.filter((series) => series.sequentialTests);
+    const testIds = gated.flatMap((series) => series.tests.map((test) => test.id));
+    if (testIds.length === 0) return EMPTY_SET;
+
+    const attempts = await this.prisma.attempt.findMany({
+      where: { studentId, testId: { in: testIds }, status: { in: FINISHED } },
+      select: { testId: true },
+    });
+    return new Set(attempts.map((row) => row.testId));
   }
 
   /**
@@ -294,16 +315,32 @@ function toResolvedTest(link: CatalogRow['tests'][number]): ResolvedTest {
   };
 }
 
-function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
+const EMPTY_SET: ReadonlySet<string> = new Set<string>();
+
+function project(
+  series: ResolvedSeries,
+  testBlocked: boolean,
+  now: Date,
+  finished: ReadonlySet<string>,
+): StudentCatalogSeries {
   const reachable = series.unlockState === UNLOCK_STATE.UNLOCKED && !testBlocked;
+  // In order means: the first one not yet sat is open, and everything past it waits its turn.
+  const waiting = series.sequentialTests
+    ? series.tests.findIndex((test) => !finished.has(test.id))
+    : NONE_WAITING;
 
   return {
     ...series,
     canRequestUnlock:
       series.unlockState === UNLOCK_STATE.LOCKED && series.unlockMode === UNLOCK_MODE.REQUEST,
-    tests: series.tests.map((test) => projectTest(test, reachable, now)),
+    tests: series.tests.map((test, index) =>
+      projectTest(test, reachable && (waiting === NONE_WAITING || index <= waiting), now),
+    ),
   };
 }
+
+/** `findIndex` returns -1 when every test is sat, which is also "nothing is waiting its turn". */
+const NONE_WAITING = -1;
 
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {

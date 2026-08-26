@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { normaliseHeader, readCsvTable, type CsvTable } from './csv';
+import { toIsoDate } from './date-cell';
 
 /** Reading the roster an admin actually has. */
 
@@ -111,7 +112,7 @@ function cellText(cell: ExcelJS.Cell): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return numberText(value);
   if (typeof value === 'boolean') return String(value);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) return toIsoDate(value);
   if (typeof value === 'object') return objectCellText(value);
 
   return scalarText(value);

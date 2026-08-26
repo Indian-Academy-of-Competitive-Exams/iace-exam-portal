@@ -169,3 +169,15 @@ describe('a date typed into the template', () => {
     assert.equal(result.success && result.data, '2003-04-11');
   });
 });
+
+describe('toIsoDate — a cell that arrived as a Date', () => {
+  /** The failure this prevents: a zone ahead of UTC landing every date of birth a day early. */
+  it('reads the civil date off the cell, not off an instant', () => {
+    assert.equal(toIsoDate(new Date(Date.UTC(2004, 8, 1))), '2004-09-01');
+    assert.equal(toIsoDate(new Date(Date.UTC(2004, 0, 31, 23, 59, 59))), '2004-01-31');
+  });
+
+  it('agrees with the same date written out as text', () => {
+    assert.equal(toIsoDate(new Date(Date.UTC(1999, 11, 31))), toIsoDate('31/12/1999'));
+  });
+});

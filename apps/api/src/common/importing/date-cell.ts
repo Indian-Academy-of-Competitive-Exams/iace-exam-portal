@@ -31,8 +31,12 @@ function fromSerial(value: string): string | null {
   const serial = Math.floor(Number(value));
   if (serial < EARLIEST_SERIAL) return null;
   const date = new Date(SERIAL_EPOCH_UTC + serial * MS_PER_DAY);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  return Number.isNaN(date.getTime()) ? null : fromDate(date);
+}
+
+/** A spreadsheet date IS a civil date at UTC midnight — the convention `@db.Date` stores, not a zone. */
+function fromDate(value: Date): string {
+  return assemble(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
 }
 
 function fromIsoLike(value: string): string | null {
@@ -70,7 +74,9 @@ function fromNumericParts(value: string): string | null {
   return assemble(year, second, first);
 }
 
-export function toIsoDate(raw: string): string {
+export function toIsoDate(raw: string | Date): string {
+  if (raw instanceof Date) return fromDate(raw);
+
   const value = raw.trim();
   if (value === '') return value;
   return (

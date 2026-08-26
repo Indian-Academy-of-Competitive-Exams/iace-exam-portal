@@ -3214,6 +3214,8 @@ export interface FakeCatalogData {
   unlockRequests?: FakeUnlockRequestRow[];
   seriesTests?: FakeSeriesTestRow[];
   branchSchedules?: FakeBranchScheduleRow[];
+  /** What the student has already sat — what a series unlocking in order reads. */
+  attempts?: { studentId: string; testId: string; status: string }[];
   tests?: FakeTestRow[];
   stages?: FakeExamStage[];
   exams?: FakeExam[];
@@ -3269,6 +3271,7 @@ export class FakeCatalogPrisma {
       unlocks: data.unlocks ?? [],
       seriesTests: data.seriesTests ?? [],
       branchSchedules: data.branchSchedules ?? [],
+      attempts: data.attempts ?? [],
       tests: data.tests ?? [],
       stages: data.stages ?? [makeExamStage()],
       exams: data.exams ?? [makeExam()],
@@ -3299,6 +3302,22 @@ export class FakeCatalogPrisma {
       await this.record('student.findUnique');
       const row = this.data.students.find((student) => student.id === where.id);
       return row ? { ...row } : null;
+    },
+  };
+
+  readonly attempt = {
+    findMany: async ({
+      where,
+    }: {
+      where: { studentId: string; testId: { in: string[] }; status: { in: string[] } };
+    }) => {
+      await this.record('attempt.findMany');
+      return this.data.attempts.filter(
+        (row) =>
+          row.studentId === where.studentId &&
+          where.testId.in.includes(row.testId) &&
+          where.status.in.includes(row.status),
+      );
     },
   };
 
