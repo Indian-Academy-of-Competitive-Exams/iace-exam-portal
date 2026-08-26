@@ -63,10 +63,11 @@ export class AttemptStateService {
     return shown(next, now);
   }
 
-  /** Submit calls this once it has flushed: the sitting is over, so its live state is gone. */
-  async close(attemptId: string): Promise<void> {
-    await this.redis.del(redisKeys.attemptState(attemptId));
+  /** The last read, which also shuts the door — one command, so a race has no in-between to lose. */
+  async take(attemptId: string): Promise<HeldState | null> {
+    const held = await this.redis.takeJson<HeldState>(redisKeys.attemptState(attemptId));
     await this.clearDirty(attemptId);
+    return held;
   }
 
   async read(attemptId: string): Promise<HeldState | null> {

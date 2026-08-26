@@ -148,6 +148,12 @@ export class FakeRedis {
 
     exists: (key: string): Promise<number> => Promise.resolve(this.live(key) ? 1 : 0),
 
+    getdel: (key: string): Promise<string | null> => {
+      const value = this.text(key) ?? null;
+      this.store.delete(key);
+      return Promise.resolve(value);
+    },
+
     del: (...keys: string[]): Promise<number> => {
       let removed = 0;
       for (const key of keys) if (this.store.delete(key)) removed += 1;
@@ -186,6 +192,11 @@ export class FakeRedis {
 
   setJson(key: string, value: unknown, ttlSec: number): Promise<void> {
     return this.client.set(key, JSON.stringify(value), 'EX', ttlSec).then(() => undefined);
+  }
+
+  async takeJson<T>(key: string): Promise<T | null> {
+    const raw = await this.client.getdel(key);
+    return raw === null ? null : (JSON.parse(raw) as T);
   }
 
   getJson<T>(key: string): Promise<T | null> {
@@ -1517,6 +1528,13 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
           .sort((a, b) => a.order - b.order),
       ),
 
+    count: ({ where }: { where: { attemptId: string; state: { in: AnswerState[] } } }) =>
+      Promise.resolve(
+        this.attemptQuestions.filter(
+          (row) => row.attemptId === where.attemptId && where.state.in.includes(row.state),
+        ).length,
+      ),
+
     updateMany: ({
       where,
       data,
@@ -1548,6 +1566,29 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   readonly attempt = {
     findUnique: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.attemptRows.find((row) => row.id === where.id) ?? null),
+
+    findMany: ({ where }: { where: { status: AttemptStatus; endsAt?: { lt: Date } } }) =>
+      Promise.resolve(
+        this.attemptRows.filter(
+          (row) =>
+            row.status === where.status &&
+            (where.endsAt === undefined || row.endsAt < where.endsAt.lt),
+        ),
+      ),
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; status: AttemptStatus };
+      data: { status: AttemptStatus; submittedAt: Date };
+    }) => {
+      const matched = this.attemptRows.filter(
+        (row) => row.id === where.id && row.status === where.status,
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
 
     count: ({
       where,

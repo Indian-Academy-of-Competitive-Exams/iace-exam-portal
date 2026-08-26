@@ -111,9 +111,14 @@ import {
   ME_ATTEMPT_ROUTES,
   examPaperSchema,
   liveAttemptSchema,
+  liveAttemptStateSchema,
+  submittedAttemptSchema,
   type ExamPaper,
   type LiveAttempt,
+  type SaveAttemptStateInput,
   type StartAttemptInput,
+  type SubmittedAttempt,
+  type LiveAttemptState,
 } from './attempts';
 import {
   ADMIN_TEST_PAPER_ROUTES,
@@ -549,6 +554,24 @@ export function createApiClient(options: ApiClientOptions) {
       /** The paper as a candidate sees it — it carries no answer. */
       attemptPaper: (attemptId: string): Promise<ExamPaper> =>
         request(ME_ATTEMPT_ROUTES.paper(attemptId), { schema: examPaperSchema }),
+
+      /** The autosave. Batches what changed since the last one; the server merges and decides. */
+      saveAttemptState: (
+        attemptId: string,
+        input: SaveAttemptStateInput,
+      ): Promise<LiveAttemptState> =>
+        request(ME_ATTEMPT_ROUTES.state(attemptId), {
+          method: 'PATCH',
+          body: input,
+          schema: liveAttemptStateSchema,
+        }),
+
+      /** Ends it. A second call reports the first one's outcome rather than refusing. */
+      submitAttempt: (attemptId: string): Promise<SubmittedAttempt> =>
+        request(ME_ATTEMPT_ROUTES.submit(attemptId), {
+          method: 'POST',
+          schema: submittedAttemptSchema,
+        }),
     },
 
     admin: {

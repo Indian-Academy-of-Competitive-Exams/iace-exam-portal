@@ -213,19 +213,19 @@ modify `apps/api/src/redis/redis.keys.ts`, `packages/contracts/src/attempts.ts`.
 `apps/api/src/attempts/attempt-sweeper.processor.ts`, `apps/api/test/submit.unit.test.ts`;
 modify `apps/api/src/queue/queues.ts`, `packages/contracts/src/attempts.ts`.
 
-- [ ] `POST /me/attempts/:id/submit`: flush Redis to Postgres, then flip
+- [x] `POST /me/attempts/:id/submit`: flush Redis to Postgres, then flip
       `IN_PROGRESS → SUBMITTED` with `submittedAt` via a conditional `updateMany` — one winner.
       A second submit is a NO-OP that reports the first one's outcome, exactly like finalize.
-- [ ] Everything is read BEHIND the gate, so a write landing between the flush and the flip cannot
+- [x] Everything is read BEHIND the gate, so a write landing between the flush and the flip cannot
       be lost or double-counted. Phase 2's finalize made this mistake once; do not repeat it.
-- [ ] Enqueue the scoring job (`QUEUE_NAMES.SCORING`, `{ attemptId, testId }`). The request does
+- [x] Enqueue the scoring job (`QUEUE_NAMES.SCORING`, `{ attemptId, testId }`). The request does
       no evaluating; the worker is a no-op until Phase 4 and that is fine.
-- [ ] A **repeatable sweeper** finds `IN_PROGRESS` attempts past `endsAt` and submits them through
+- [x] A **repeatable sweeper** finds `IN_PROGRESS` attempts past `endsAt` and submits them through
       the same path — a closed tab must not leave an attempt open forever. It submits what Redis
       holds; a student who never answered submits an empty paper, which is a real result.
-- [ ] The sweeper is idempotent and safe to run concurrently with a student's own submit: the
+- [x] The sweeper is idempotent and safe to run concurrently with a student's own submit: the
       conditional update means one of them wins and the other reports it.
-- [ ] Tests: a second submit changes nothing and returns the first `submittedAt`; a sweep submits
+- [x] Tests: a second submit changes nothing and returns the first `submittedAt`; a sweep submits
       an expired attempt and leaves an in-time one alone; a sweep racing a manual submit produces
       one submission; the scoring job is enqueued exactly once.
       **Acceptance:** every attempt ends exactly once, whoever ends it.
@@ -336,7 +336,7 @@ Run Phase-3 Session S2 — live state. Execute T3, T4. Binding + lean loop + opu
 Intent check before each. One commit per task.
 ```
 
-### P3-S3
+### P3-S3 — T5 done, T6 open
 
 ```
 Run Phase-3 Session S3 — ending an attempt. Execute T5, T6. Binding + lean loop + opus. HIGH STAKES on T5 — 2 reviews.

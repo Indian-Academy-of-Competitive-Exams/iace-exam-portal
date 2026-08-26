@@ -8,12 +8,14 @@ import {
   type LiveAttemptState,
   type SaveAttemptStateBody,
   type StartAttemptBody,
+  type SubmittedAttempt,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptStateService } from './attempt-state.service';
+import { SubmitService } from './submit.service';
 
 /** The student's own sittings. The subject is always the token's, never a path parameter. */
 @Controller('me')
@@ -23,6 +25,7 @@ export class AttemptsController {
     private readonly attempts: AttemptsService,
     private readonly papers: AttemptPaperService,
     private readonly state: AttemptStateService,
+    private readonly submitter: SubmitService,
   ) {}
 
   /** Idempotent: a second start while one is running resumes it, clock and all. */
@@ -40,6 +43,16 @@ export class AttemptsController {
   @Get('attempts/:id/paper')
   paper(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ExamPaper> {
     return this.papers.paper(user.id, id);
+  }
+
+  /** Ends the sitting. A second call reports the first one's outcome rather than refusing. */
+  @Post('attempts/:id/submit')
+  @HttpCode(HttpStatus.OK)
+  submit(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SubmittedAttempt> {
+    return this.submitter.submit(user.id, id);
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */

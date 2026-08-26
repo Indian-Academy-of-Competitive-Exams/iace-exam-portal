@@ -164,7 +164,7 @@ describe('AttemptFlushProcessor', () => {
     const { processor, state } = build();
     await state.open({ id: 'att_1', studentId: 'stu_1', endsAt: ENDS_AT });
     await state.save('stu_1', 'att_1', { revision: 1, answers: [change()] }, NOW);
-    await state.close('att_1');
+    await state.take('att_1');
     await state.dirtyIds();
 
     await processor.process();

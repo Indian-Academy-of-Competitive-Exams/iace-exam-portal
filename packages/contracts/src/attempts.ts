@@ -167,7 +167,20 @@ export const ME_ATTEMPT_ROUTES = {
   start: (testId: string) => `/me/tests/${testId}/attempt`,
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
+  submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
 } as const;
+
+/** How a sitting ended. A second submit reports the first one's outcome rather than refusing. */
+export const submittedAttemptSchema = z.object({
+  attemptId: z.string(),
+  status: attemptStatusSchema,
+  submittedAt: z.string(),
+  /** False when the sweeper or an earlier call had already ended it — the same answer, not an error. */
+  submittedByThisCall: z.boolean(),
+  /** What was written durably as it ended, so the screen can say what it submitted. */
+  answeredCount: z.number().int(),
+});
+export type SubmittedAttempt = z.infer<typeof submittedAttemptSchema>;
 
 // ============================================================================
 // The paper a student sits. Everything here crosses to a browser, so nothing

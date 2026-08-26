@@ -239,13 +239,13 @@ describe('AttemptStateService', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
   });
 
-  /** Closing is what ends a sitting: with the key gone, Postgres refuses anything not in progress. */
-  it('refuses a save once the sitting has been closed', async () => {
+  /** Taking the state is what ends a sitting: with the key gone, Postgres refuses what is not live. */
+  it('refuses a save once the sitting has been taken', async () => {
     const { service } = build();
     await service.open({ id: 'att_1', studentId: 'stu_1', endsAt: new Date(ENDS_AT) });
     await service.save('stu_1', 'att_1', { revision: 1, answers: [change()] }, now);
 
-    await service.close('att_1');
+    await service.take('att_1');
 
     assert.deepEqual(await service.dirtyIds(), []);
     const rebuilt = await service.save('stu_1', 'att_1', { revision: 2, answers: [] }, now);

@@ -54,6 +54,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Reads and removes in ONE command: whatever arrives after it finds nothing, which is the point. */
+  async takeJson<T>(key: string): Promise<T | null> {
+    const raw = await this.client.getdel(key);
+    if (raw === null) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  }
+
   async del(...keys: string[]): Promise<void> {
     if (keys.length > 0) await this.client.del(...keys);
   }
