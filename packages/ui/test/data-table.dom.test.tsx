@@ -293,3 +293,43 @@ describe('where the footer sits', () => {
     assert.equal(column?.lastElementChild?.getAttribute('data-testid'), 'pager');
   });
 });
+
+describe('DataTable that scrolls instead of paging', () => {
+  const viewport = () => screen.getByRole('table').parentElement as HTMLElement;
+
+  const scrollTo = (top: number, scrollHeight: number, clientHeight: number) => {
+    const element = viewport();
+    for (const [key, value] of Object.entries({ scrollTop: top, scrollHeight, clientHeight })) {
+      Object.defineProperty(element, key, { value, configurable: true });
+    }
+    fireEvent.scroll(element);
+  };
+
+  /** The failure this prevents: a pool that silently ends at its first page. */
+  it('asks for the next page as the reader nears the end', () => {
+    const calls: number[] = [];
+    render(table({ scroll: { hasMore: true, onLoadMore: () => calls.push(1) } }));
+
+    scrollTo(900, 1000, 100);
+
+    assert.equal(calls.length, 1);
+  });
+
+  it('asks for nothing while the end is still a screen away', () => {
+    const calls: number[] = [];
+    render(table({ scroll: { hasMore: true, onLoadMore: () => calls.push(1) } }));
+
+    scrollTo(0, 1000, 100);
+
+    assert.equal(calls.length, 0);
+  });
+
+  it('asks for nothing once every page has arrived', () => {
+    const calls: number[] = [];
+    render(table({ scroll: { hasMore: false, onLoadMore: () => calls.push(1) } }));
+
+    scrollTo(900, 1000, 100);
+
+    assert.equal(calls.length, 0);
+  });
+});

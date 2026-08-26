@@ -3,19 +3,26 @@ import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
 import { useInTableFrame } from './table-frame';
 
+export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /** Given, the rows scroll under the pinned heading at a cap instead of growing the page. */
+  scroll?: { onScroll?: React.UIEventHandler<HTMLDivElement> };
+}
+
+/** Tall enough to read a pool in, short enough that what sits below it stays reachable. */
+const CAPPED_VIEWPORT = 'max-h-[26rem] overflow-auto';
+
 /**
  * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar.
  * `border-separate`: a collapsed table drops a sticky heading's borders.
  */
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => {
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, scroll, ...props }, ref) => {
     const fills = useInTableFrame();
+    const viewport = fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto';
     return (
       <div
-        className={cn(
-          'relative w-full',
-          fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto',
-        )}
+        onScroll={scroll?.onScroll}
+        className={cn('relative w-full', scroll ? CAPPED_VIEWPORT : viewport)}
       >
         <table
           ref={ref}

@@ -4,6 +4,7 @@ import {
   DataTable,
   type DataTableColumn,
   type DataTableExpand,
+  type DataTableScroll,
   type DataTableSelection,
 } from './data-table';
 import { DatePicker } from './date-picker';
@@ -77,6 +78,8 @@ export interface ListState<TRow> {
   clearFilters: () => void;
   /** Absent for a list that loads in full. */
   pagination?: PaginationProps;
+  /** The other way a long list ends: it scrolls and pages itself, so there is no pager. */
+  scroll?: DataTableScroll;
   /** Both present offers the reader the choice; omit them and the filters narrow, as always. */
   matchAny?: boolean;
   setMatchAny?: (matchAny: boolean) => void;
@@ -256,6 +259,7 @@ export function ListView<TRow>({
       skeletonRows={skeletonRows}
       selection={selection}
       expand={expand}
+      scroll={list.scroll}
       empty={activeCount > 0 && emptyFiltered ? emptyFiltered : empty}
       footer={list.hasLoaded && list.pagination ? <Pagination {...list.pagination} /> : null}
     />

@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { nearTheEnd } from '../../lib/scroll';
 import { Checkbox } from './checkbox';
 import { useInTableFrame } from './table-frame';
+import { Spinner } from './spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableState } from './table';
 
 export interface DataTableColumn<TRow> {
@@ -33,6 +35,15 @@ export interface DataTableProps<TRow> {
   selection?: DataTableSelection;
   /** Given this, every row grows a chevron and opens a panel beneath itself. */
   expand?: DataTableExpand<TRow>;
+  /** Given this, the rows scroll in a capped panel that pages as the reader nears its end. */
+  scroll?: DataTableScroll;
+}
+
+/** A capped, scrolling panel. Omit the paging pair for a list already holding everything. */
+export interface DataTableScroll {
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
 }
 
 export interface DataTableExpand<TRow> {
@@ -64,6 +75,7 @@ export function DataTable<TRow>({
   footer,
   selection,
   expand,
+  scroll,
 }: Readonly<DataTableProps<TRow>>) {
   const [open, setOpen] = React.useState<ReadonlySet<string>>(new Set());
 
@@ -95,9 +107,13 @@ export function DataTable<TRow>({
   const span = columns.length + (selection ? 1 : 0) + (expand ? 1 : 0);
   const fills = useInTableFrame();
 
+  const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    if (scroll?.hasMore && nearTheEnd(event.currentTarget)) scroll.onLoadMore?.();
+  };
+
   const body = (
     <>
-      <Table>
+      <Table scroll={scroll ? { onScroll } : undefined}>
         <TableHeader>
           <TableRow>
             {selection ? (
@@ -189,6 +205,11 @@ export function DataTable<TRow>({
         </TableBody>
       </Table>
 
+      {scroll?.isLoadingMore ? (
+        <div className="flex justify-center border-t border-border py-2">
+          <Spinner label="Loading more" />
+        </div>
+      ) : null}
       {footer}
     </>
   );

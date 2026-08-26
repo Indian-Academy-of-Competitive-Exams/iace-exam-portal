@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { nearTheEnd } from '../../lib/scroll';
 import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
 import { Skeleton } from './skeleton';
@@ -14,9 +15,6 @@ export const FIELD_TRIGGER_CLASS = [
   'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
   'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled disabled:text-disabled-foreground',
 ].join(' ');
-
-/** How close to the end counts as "nearly there", in pixels. */
-const LOAD_MORE_THRESHOLD_PX = 160;
 
 /** Stable no-op for the unsearchable case — a new arrow each render would make
  *  the hook look like it had a different consumer every time. */
@@ -106,8 +104,7 @@ export function ComboboxShell({
    */
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
     if (!onLoadMore || !hasMore) return;
-    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
-    if (scrollHeight - scrollTop - clientHeight < LOAD_MORE_THRESHOLD_PX) onLoadMore();
+    if (nearTheEnd(event.currentTarget)) onLoadMore();
   };
 
   const trigger = (

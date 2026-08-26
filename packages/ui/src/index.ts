@@ -152,6 +152,7 @@ export {
   type DataTableColumn,
   type DataTableExpand,
   type DataTableProps,
+  type DataTableScroll,
   type DataTableSelection,
 } from './components/ui/data-table';
 export {
@@ -192,6 +193,7 @@ export {
   TableEmpty,
   TableState,
   type TableCellProps,
+  type TableProps,
 } from './components/ui/table';
 export {
   Card,

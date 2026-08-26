@@ -42,5 +42,7 @@ export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
 export { ProtectedRoute } from './protected-route';
 export { useFilters } from './use-filters';
+export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { useListScreen } from './use-list-screen';
+export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';
