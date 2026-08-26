@@ -3,6 +3,11 @@
 > **For agentic workers:** run the lean loop per `docs/superpowers/WORKFLOW.md`. Steps use
 > checkbox (`- [ ]`) tracking. Acceptance criteria are BEHAVIOURS — the implementer writes the
 > tests, and no test code appears in this file (WORKFLOW's cut list).
+>
+> **Re-cut 2026-08-27.** T1 and T2 SHIPPED — they are marked done below with what to verify rather
+> than what to build. The access model moved underneath the rest of this plan in the meantime: a
+> series no longer has a window, a test carries its own, and `sequentialTests` now gates. T6 and T7
+> are re-specified for that. Read the "What changed under this plan" section before starting.
 
 **Goal:** The live exam. A student opens a test they can reach, sits it with a
 server-authoritative clock, answers with everything held in Redis, and submits — safely, or by
@@ -29,11 +34,32 @@ every table this phase writes. There is no separate design doc — WORKFLOW cuts
 - **The optimistic-lock pattern** in `apps/api/src/tests/finalize.service.ts`: one conditional
   `updateMany` picks a winner, the loser reports the winner's outcome. Submit reuses it exactly.
 
+## What changed under this plan (read first)
+
+Four things moved after this plan was written. None changes its shape; all four change acceptance
+criteria an implementer would otherwise code to.
+
+1. **A series has no window.** `BranchTestConfig.startAt`/`endAt` are dropped and
+   `SeriesAvailability` is deleted. A branch runs a series indefinitely, or not at all.
+2. **A test carries its own.** `TestSeriesTest.unlockAt` is when it opens inside a series, one
+   instant for every branch; `BranchTestSchedule(branchId, testId)` adds that branch's
+   `lateEntrySec` (counted FROM the unlock) and `extraTimeSec` (already folded into the attempt's
+   `endsAt`). The catalog serves `opensAt` and `closesAt` per TEST, and `canStart` is derived from
+   the clock on every read.
+3. **`sequentialTests` gates now.** The first test in a series not yet sat is open and everything
+   after it waits. A waiting test comes back `canStart: false` with NO window reason — the screens
+   need a third state for it, and it is not an error.
+4. **GENERATED tests are servable.** `attempts.service.create()` picks a variant by
+   `variantFor(shuffleSeed, variantCount)` and `testStartBlocker` allows any locked ACTIVE test.
+   T1's original "refuse a GENERATED test" is obsolete; do not re-add it.
+
 ## Prerequisites
 
-- A finalized, ACTIVE test carried by a series, with a `BranchTestConfig` window open for the
-  student's branch. Phase 2's builder produces one; **there are 0 `TestSeries` rows in the dev
-  database today**, so create one on the Test series screen first.
+- **A finalized, ACTIVE test carried by a series, offered to the student's branch.** The dev
+  database has 1 `TestSeries`, 3 enabled `BranchTestConfig` rows, 8,326 ACTIVE questions and a
+  100-row draft paper — but **0 ACTIVE and 0 locked tests**, so `testStartBlocker` refuses every
+  start with "has not been finalized yet". Walk one test through Setup → Paper → Offer and press
+  **Freeze and offer** before starting T3.
 - `pnpm db:seed` run. The schema needs NO migration for this phase — `Attempt`, `AttemptQuestion`,
   `sectionState`, `shuffleSeed` and `AnswerState` are already in `prisma/schema.prisma`.
 
@@ -104,64 +130,28 @@ flusher and the sweeper for the follow-up days.
 
 ## P3-S1 — The attempt, server-side
 
-### Task 1: Attempt lifecycle — start and resume
+### Task 1: Attempt lifecycle — start and resume — **SHIPPED**
 
-**Risk:** HIGH · **Reviews:** 2 · **Model:** opus · **Est:** 0.75–1.25 d
-**Exemplar:** `apps/api/src/tests/finalize.service.ts` (the conditional-update winner);
-`apps/api/src/tests/tests.service.ts` (module shape); `apps/api/src/me/me.controller.ts` (a
-STUDENT-actor controller).
-**Files:** create `apps/api/src/attempts/{attempts.module,attempts.controller,attempts.service,attempt-rules}.ts`,
-`apps/api/src/attempts/index.ts`, `apps/api/test/attempts-service.unit.test.ts`;
-`packages/contracts/src/attempts.ts` (exists — extend it); register in `apps/api/src/app.module.ts`.
+Built in `apps/api/src/attempts/{attempts.module,attempts.controller,attempts.service,attempt-rules}.ts`.
+`POST /me/tests/:testId/attempt` starts or resumes behind `assertCanStart`, the server owns
+`startedAt`/`endsAt` (now `durationSec` **+ the branch's `extraTimeSec`**), one `AttemptQuestion` is
+seeded per paper row, `maxRetakes` is enforced, `isGraded` is the first sitting only, and two
+concurrent starts resolve to one attempt.
 
-- [ ] `POST /me/tests/:testId/attempt` starts one, gated by `AccessResolverService.assertCanStart`
-      — the catalog's own resolution, so the two can never disagree.
-- [ ] The server computes `endsAt` from the config's `durationSec`, and `startedAt` is its own
-      clock. **Nothing about timing comes off the request.** Set `shuffleSeed`, `languages`
-      (from the config's `languages`, narrowed by what the student picked), `status: IN_PROGRESS`.
-- [ ] Seed one `AttemptQuestion` per `PaperQuestion`, carrying `paperQuestionId`, the pinned
-      `questionVersionId`, `baseConfigSectionId` and `order`, at `state: NOT_VISITED`.
-- [ ] **Idempotent.** A second start while one is IN_PROGRESS RESUMES it and returns the same
-      attempt — never a second row, never a fresh clock. Two concurrent starts resolve to one
-      attempt (the `@@unique([testId, studentId, attemptNo])` is the backstop; do not rely on it
-      for the message).
-- [ ] `maxRetakes` is enforced across finished attempts; `isGraded` is true for the FIRST attempt
-      only, because the cohort rollup fires on it alone.
-- [ ] Refuse: a test that is not ACTIVE, one whose paper is not frozen, a GENERATED test (not this
-      phase — say so plainly), and a student the resolver refuses.
-      **Acceptance:** a student starts a test once and gets a clock the server set; starting again
-      returns the same attempt with the same deadline; a student who cannot reach the test is
-      refused with the resolver's own reason.
+- [x] Verify only: start a test twice and get one attempt with one deadline; a student the resolver
+      refuses is refused with the resolver's own words — which now say whether the test has not
+      opened yet, entry has closed, or it is simply not theirs.
 
-### Task 2: The student catalog, and delivering the paper
+### Task 2: The student catalog, and delivering the paper — **SHIPPED**
 
-**Risk:** HIGH · **Reviews:** 2 · **Est:** 0.75 d
-**Exemplar:** `apps/api/src/me/me.controller.ts`; `apps/api/src/tests/paper.service.ts` (how a
-paper is read and shaped).
-**Files:** create `apps/api/src/attempts/attempt-paper.service.ts`,
-`apps/api/test/attempt-paper.unit.test.ts`; modify `apps/api/src/access/access.controller.ts`
-(add a STUDENT-actor controller), `packages/contracts/src/attempts.ts`,
-`packages/contracts/src/client.ts`.
+`GET /me/catalog` in `apps/api/src/me/me.controller.ts` over the existing resolver, and
+`GET /me/attempts/:id/paper` in `apps/api/src/attempts/attempt-paper.service.ts`. `ExamPaper`
+carries `endsAt` and `serverNow` so a skewed device cannot lengthen a sitting, the questions are in
+this student's own order, and no answer key, `isCorrect` or `marksAwarded` appears in the payload.
 
-- [ ] `GET /me/catalog` exposes `AccessResolverService.catalog(studentId)`. The resolver already
-      does the work — this is a route, not a re-implementation.
-- [ ] `GET /me/attempts/:id/paper` serves the questions of the student's OWN attempt: stem and
-      options from the pinned `QuestionVersion`, localized to the attempt's `languages`, ordered
-      by `order`, shuffled per `shuffleSeed` where the config says to shuffle.
-- [ ] **The answer key never appears in the payload.** Neither does `isCorrect` or `marksAwarded`.
-      A student holding the response must not be able to read the answer out of it.
-- [ ] Per-question the payload carries what the screen shows: marks, negative marks, section,
-      type, and the languages that question actually has.
-- [ ] Refuse another student's attempt with NOT_FOUND, never FORBIDDEN — an id is not a thing to
-      confirm the existence of.
-- [ ] Tests: the shape a student receives holds no answer key under any config; the same
-      `shuffleSeed` gives the same order twice; two seeds differ.
-      **Acceptance:** the exam screen can be built from this one response, and nothing in it tells
-      a student what the answers are.
-
----
-
-## P3-S2 — Live state
+- [x] Verify only: another student's attempt id reads as NOT_FOUND, never FORBIDDEN; the payload
+      holds no answer key under any config; each catalog test now carries `opensAt`, `closesAt` and
+      `canStart`.
 
 ### Task 3: Redis attempt state + autosave
 
@@ -249,9 +239,16 @@ and `apps/test/src/components/pre-test-prompt.tsx` (this SPA's shell and its Ale
 modify `apps/test/src/App.tsx`, `apps/test/src/lib/constants.ts`.
 **Read first:** the `ui-conventions` skill, and `docs/02` §5.
 
-- [ ] The student's tests, from `GET /me/catalog`: card-based, tabs for **Active / Upcoming /
-      Missed / Completed**, each card carrying name, window, duration and what to do next
-      (Start test / Resume / Expired).
+- [ ] The student's tests, from `GET /me/catalog`: card-based, tabs for **Open now / Later /
+      Missed / Done**, each card carrying name, duration, when it opens or closed, and what to do
+      next (Start test / Resume / Waiting its turn / Missed).
+- [ ] **The buckets come off the TEST, not the series** — `opensAt`, `closesAt` and `canStart`.
+      A test is _Later_ when `opensAt` is in the future OR it is waiting its turn in a sequential
+      series; _Missed_ when `closesAt` has passed and nothing was sat; _Open now_ when `canStart`.
+      "Waiting its turn" is not an error and must not read like one: the card says which test has
+      to be sat first.
+- [ ] The bucketing helper is pure and lives in `packages/contracts`, taking a `StudentCatalogTest`
+      and the institute clock. It is what earns the one test this task owes.
 - [ ] A **slim system check** before the instructions (`docs/02` §5 keeps a cut-down version of
       ThinkExam's four-step check): the browser is supported, the session is live, and the API is
       reachable. Three checks with a plain outcome, not a wizard — it exists so a student learns
@@ -261,8 +258,7 @@ modify `apps/test/src/App.tsx`, `apps/test/src/lib/constants.ts`.
       attempt. `preTestReady` is prompted here if it is missing (`PreTestPrompt` exists).
 - [ ] Anything the student cannot infer goes in an `Alert`, never muted prose.
 - [ ] Tests: none beyond what the pure helpers earn — `apps/test` has no DOM harness, so say what
-      to verify on screen. A tab-bucketing helper (which bucket a catalog row falls in, by the
-      institute clock) is pure and DOES earn one, in `packages/contracts`.
+      to verify on screen. The bucketing helper above is the exception and DOES earn one.
       **Acceptance:** a student finds the test they can sit, reads what they are about to do, picks
       a language, and begins.
 
@@ -293,6 +289,9 @@ possibly `packages/ui` if a piece is genuinely design and not domain.
 - [ ] `SECTIONAL_LOCKED` closes a section when its clock ends and moves on; `COMPOSITE_FREE` is one
       clock with free navigation. The difference is read from the config — **one screen, not two.**
 - [ ] Submit confirms, naming what is unanswered and marked. Auto-submit at zero needs no confirm.
+- [ ] **Entry can close while the student is still sitting.** `closesAt` bounds STARTING, never
+      finishing: a sitting already running is untouched by it, and the screen must not warn about
+      it mid-exam.
 - [ ] Tests: the pure parts earn them — remaining-time from `endsAt`, palette counters from the
       state map, which section is open under a sectional clock. The screen itself is a manual check;
       say exactly what to click.
@@ -319,16 +318,11 @@ possibly `packages/ui` if a piece is genuinely design and not domain.
 
 ## Session prompts
 
-### P3-S1
+### P3-S1 — **done**
 
-```
-Run Phase-3 Session S1 — the attempt, server-side. Execute T1, T2 from docs/superpowers/plans/2026-08-24-phase3-test-engine.md.
-Binding: CLAUDE.md, task-constraints.md, WORKFLOW.md, prisma/schema.prisma. Model: opus. Lean loop.
-Exemplar: apps/api/src/tests/finalize.service.ts (conditional-update winner), apps/api/src/me/me.controller.ts (STUDENT actor).
-- T1 (HIGH,2): attempt lifecycle — start/resume, server-computed endsAt, seed AttemptQuestion from the frozen paper, maxRetakes, idempotent second start.
-- T2 (HIGH,2): GET /me/catalog over the existing resolver, and the attempt's paper — shuffled per shuffleSeed, localized, and carrying NO answer key.
-Intent check before each. One commit per task.
-```
+T1 and T2 shipped. Before S2, clear the data blocker: the dev database has no ACTIVE or locked
+test, so nothing is sittable. Walk one test through Setup → Paper → Offer and press
+**Freeze and offer**.
 
 ### P3-S2
 
@@ -344,7 +338,7 @@ Intent check before each. One commit per task.
 ```
 Run Phase-3 Session S3 — ending an attempt. Execute T5, T6. Binding + lean loop + opus. HIGH STAKES on T5 — 2 reviews.
 - T5 (HIGH,2): safe submit via a conditional updateMany (one winner, second call reports the first), everything read behind the gate, scoring job enqueued once; plus the repeatable sweeper for attempts past endsAt.
-- T6 (normal,1): the student's test list (Active/Upcoming/Missed/Completed) and the instructions screen. Invoke ui-conventions first.
+- T6 (normal,1): the student's test list (Open now / Later / Missed / Done, bucketed from the TEST's own opensAt/closesAt/canStart, with "waiting its turn" for a sequential series) and the instructions screen. Invoke ui-conventions first.
 Intent check before each. One commit per task.
 ```
 
