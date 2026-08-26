@@ -7,8 +7,7 @@ readable without blocking the gate.
 
 ## Content nodes are text-only
 
-**Where:** `packages/contracts/src/questions.ts:98` (in the comment above
-`CONTENT_NODE_TYPE`)
+**Where:** `packages/contracts/src/questions.ts` (the rich-content shapes)
 
 > TODO(phase-2): IMAGE (S3 key) and MATH (LaTeX) node types; today text only.
 
@@ -17,7 +16,7 @@ or LaTeX node type yet.
 
 ## Import is bounded rather than queued
 
-**Where:** `packages/contracts/src/questions.ts:628` (in the comment above
+**Where:** `packages/contracts/src/questions.ts` (above
 `QUESTION_IMPORT_MAX_ROWS`)
 
 > Bounded so one upload stays a single synchronous request. TODO: BullMQ above
@@ -29,7 +28,7 @@ comment at its own call site, so it is listed separately here too.
 
 ## Question search is a full-table `ILIKE` scan
 
-**Where:** `apps/api/src/questions/questions.service.ts:196` (in the
+**Where:** `apps/api/src/questions/questions.service.ts` (in the
 `searchIds` doc comment)
 
 > TODO: a generated tsvector column once the bank outgrows a scan.
@@ -39,7 +38,7 @@ ILIKE` with `$queryRaw`, no `tsvector` column or index behind it.
 
 ## Import commit is synchronous
 
-**Where:** `apps/api/src/questions/question-import.service.ts:35` (in the
+**Where:** `apps/api/src/questions/question-import.service.ts` (in the
 `QuestionImportService` class doc comment)
 
 > TODO: synchronous today. Move the commit onto BullMQ if files outgrow one
@@ -50,7 +49,7 @@ request; nothing enqueues it onto BullMQ yet.
 
 ## Question form is text-only, no preview
 
-**Where:** `apps/admin/src/routes/question-form.tsx:57` (in the route's doc
+**Where:** `apps/admin/src/routes/question-form.tsx` (in the route's doc
 comment)
 
 > TODO(phase-2): images, equations and a rendered preview. Text only here.

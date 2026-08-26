@@ -162,8 +162,8 @@ opens once its prerequisite series is satisfied, `REQUEST` goes through a queue 
 is coming and ask for it. `isTestBlocked` leaves the whole catalog readable and starts nothing.
 
 One function answers all of it (`AccessResolverService`), and both callers read that one answer:
-the student's catalog and the attempt-start guard. A `shareSlug` link exists for edge cases
-(public / one-off). In-app `Notification` on assignment, carrying `testSeriesId` as the deep link.
+the student's catalog and the attempt-start guard. In-app `Notification` on assignment, carrying
+`testSeriesId` as the deep link.
 
 This scales to the general-public rollout unchanged: access is managed at the **series** level,
 never per test, and the only per-student row in the model is the grant.
@@ -172,7 +172,7 @@ never per test, and the only per-student row in the model is the grant.
 
 ## 8. Data-model additions (beyond the base architecture doc)
 
-> **`prisma/schema.prisma` is the authoritative model (36 models).** The bullets below summarize
+> **`prisma/schema.prisma` is the authoritative model (37 models).** The bullets below summarize
 > it. Where this file and the schema disagree, the schema is right and this list is stale.
 
 - **Student / Admin** — separate tables. Student: `mobile` and `studentType` are mandatory, and
@@ -198,7 +198,7 @@ never per test, and the only per-student row in the model is the grant.
   finer is a `topic:` tag on the question. A question's `topicId` must belong to its `subjectId` —
   enforced in the service, since no foreign key can express it.
 - **Test** — links a BaseConfig (and, denormalised, its stage, so a composite FK enforces the
-  pair); scope, evaluation mode, paper binding, status, lock state, `shareSlug`.
+  pair); scope, evaluation mode, paper binding, draw strategy, `variantCount`, status, lock state.
 - **PaperQuestion (frozen paper)** — one paper per `variant`; a FIXED test has variant 0 alone,
   hand-picked and frozen at finalize, and a GENERATED test has `Test.variantCount` of them drawn
   at finalize. Per-question marks/negative; status (**active / dropped / bonus**). Per-student
@@ -227,7 +227,7 @@ never per test, and the only per-student row in the model is the grant.
 - Central question bank with one forgiving import screen; text + image + equation.
 - Students: mobile + OTP **at signup**, then a **4-digit PIN** for later logins (OTP resets it; rate-limit in Redis). Admins: email + OTP. OTP/sessions/devices in Redis. **Pre-test gate is minimal** — mother's name + father's name + DOB; the full profile is optional and gently prompted.
 - No certificates in V1; trimmed settings.
-- Access = **Student → TestSeries → Test**, by exam match, program match or an explicit `StudentGrant`, every one of them gated by the student's branch (`BranchTestConfig`). **No groups.** A shareSlug link for edge cases. No products/access-codes.
+- Access = **Student → TestSeries → Test**, by exam match, program match or an explicit `StudentGrant`, every one of them gated by the student's branch (`BranchTestConfig`). **No groups.** No products/access-codes.
 - **Three portals:** Student (future broad platform), **Test** (this build, `apps/test`), Admin. V1 = Test + Admin. Internal IACE students first, general public later.
 - Student portal is **enhanced, not copied**: snappy, uncluttered, icon-driven, with a replayable tour; **Report is the post-login landing dashboard**; Test and Report tabs get the most UX care. The in-exam screen still mirrors the real exam.
 - All analytics data points captured from day one; per-test analytics screen built this phase if quick, else fast-follow.

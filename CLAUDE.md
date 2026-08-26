@@ -95,7 +95,7 @@ Do not break these — they are why the live test holds at 4–5K:
   only questions the student interacted with, plus analytics points.
 - **Access has no groups.** A student reaches a `TestSeries` by an exam match, a program match, or
   an explicit `StudentGrant`, gated by the `BranchTestConfig` row for their branch — a switch with
-  no window, so a branch runs a series indefinitely. `shareSlug` exists for edge cases.
+  no window, so a branch runs a series indefinitely.
 - **Scheduling belongs to the TEST.** `TestSeriesTest.unlockAt` is when it opens inside a series,
   one instant for every branch; `BranchTestSchedule(branchId, testId)` carries `lateEntrySec`
   (counted FROM the unlock) and `extraTimeSec`, both null, no row meaning the plain rules. A series

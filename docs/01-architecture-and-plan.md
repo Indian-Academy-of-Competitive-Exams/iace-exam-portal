@@ -63,7 +63,7 @@ Everything is **TypeScript, end to end**, in a single monorepo so types are shar
 - **Test builder** in the admin panel (base config → auto-draw or manual questions → schedule; timing, marks, negative marking). Series assignment is a separate flow.
 - **The live test engine**: client-side timer, server-authoritative start/end, periodic autosave, safe submit under load.
 - **Instant results**: score, correct/wrong/unattempted breakdown, **full solutions per question**, and **cohort rank + percentile**.
-- **Access control**: Student → Group → Test Series → Test. Students belong to groups; groups link to series; series contain tests. No direct student/test grants (a share link covers edge cases). Payments live in a **separate portal** — not in V1.
+- **Access control**: Student → Test Series → Test. **There are no groups.** A student reaches a series by an exam match, a program match or an explicit `StudentGrant`, and every one of those is gated by the `BranchTestConfig` row for their branch. Payments live in a **separate portal** — not in V1.
 - **Admin panel**: manage questions, tests, series, students, access grants, and view basic operational overview.
 
 ### Explicitly out of V1 (planned later)
@@ -122,13 +122,13 @@ The API is stateless, so we can run 1→N identical containers behind a load bal
 ### The shape (schema is authoritative)
 
 - **Student** and **Admin** are separate tables (student = mobile OTP at signup + 4-digit PIN login; admin = email OTP; OTP/sessions/devices in Redis, not the DB). **StudentProfile** (1:1) holds personal data; the **pre-test gate is minimal** (mother's name + father's name + DOB), full profile optional and gently prompted.
-- **Question / QuestionOption** — options carry a stable `id` + `isCorrect` (shuffle-safe answer key); localized content is **JSON** per language (text / `$LaTeX$` / inline S3 image URLs), tagged by subject, topic, sub-topic, difficulty.
-- **Subject → Topic → SubTopic** — the taxonomy. A topic belongs to one subject; a **sub-topic is shared many-to-many across topics** (and so across subjects, only ever _through_ a topic — it has no Subject relation). Names are unique table-wide so the same sub-topic is one row everywhere it is taught.
-- **ExamType → BaseConfig (+ sections)** is the reusable blueprint; a **Test** copies + overrides it and carries `languageMode` (SINGLE/DUAL), status, and schedule. Finalizing draws a fixed **PaperQuestion** paper shared by all students; per-student order/option shuffle via `Attempt.shuffleSeed`; `PaperQuestion.status` handles drop/bonus.
-- **Attempt** holds live state **and** the scored fields (no separate Result table). **AttemptAnswer** stores only interacted questions (composite PK) with the analytics data points.
-- **Access** = **Student → Group → TestSeries → Test** (groups link to series; no direct student/test grants); `shareSlug` for edge cases. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
+- **Question / QuestionVersion** — `Question` is identity; every edit past the draft inserts an **immutable** `QuestionVersion` carrying content, **options as JSON** (stable option ids so the answer key survives shuffling) and the answer key, then repoints `currentVersionId`. **There is no `QuestionOption` table.** Localized content is JSON per language (text / `$LaTeX$` / S3 image URLs).
+- **Subject → Topic** — two levels only. A topic belongs to one subject, the service checks that a question's topic belongs to its subject, and **anything finer is a free-text tag**. There is no SubTopic table.
+- **ExamFamily (enum) → Exam → ExamStage → BaseConfig (+ modules, sections)** — the STAGE is what everything hangs off, and a BaseConfig is its blueprint. A **Test inherits** that shape rather than copying it: there is no per-test duration, marks or timing, and the way to change the shape is to clone the config. `languageMode` and the shuffle rules are the CONFIG's. A FIXED test's paper is picked by hand and frozen at finalize; a GENERATED test draws `variantCount` papers at finalize. Per-student order/option shuffle via `Attempt.shuffleSeed`; `PaperQuestion.status` handles drop/bonus.
+- **Attempt** holds live state **and** the scored fields (no separate Result table). **AttemptQuestion** stores only interacted questions (composite PK) with the analytics data points.
+- **Access** = **Student → TestSeries → Test** by exam match, program match or `StudentGrant`, each gated by the branch's `BranchTestConfig` — a switch with no window. **No groups, and no student↔test link.** WHEN a test may be started is the test's own: `TestSeriesTest.unlockAt`, plus `BranchTestSchedule` for late entry and extra time. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
 
-Two choices worth calling out: **localized content as JSON** keeps the bank multilingual with zero migration to add a language, while option identity stays relational (stable id + `isCorrect`) so the answer key survives shuffling; and **access is a plain group/individual grant** — no paywall entity, since payments live in a separate portal.
+Two choices worth calling out: **localized content as JSON** keeps the bank multilingual with zero migration to add a language, while option identity stays stable (an id + `isCorrect` inside the version) so the answer key survives shuffling; and **access is a series-level grant** — no paywall entity, since payments live in a separate portal.
 
 ---
 
