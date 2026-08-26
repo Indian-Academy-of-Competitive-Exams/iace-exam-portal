@@ -370,7 +370,8 @@ model BaseConfigSection {
   mandatory         Boolean   @default(true)
   meritOrQualifying MeritType @default(MERIT)
   qualifyingCutoff  Decimal?  @db.Decimal(6, 2)
-  difficultyMix     Json?
+  // The exam-pattern workbook's own words ("Moderate-Difficult"). Reference only; no draw reads it.
+  patternNote       String?
 
   baseConfig     BaseConfig        @relation(fields: [baseConfigId], references: [id], onDelete: Cascade)
   module         BaseConfigModule? @relation(fields: [baseConfigId, moduleId], references: [baseConfigId, id], onDelete: Restrict, onUpdate: NoAction)
