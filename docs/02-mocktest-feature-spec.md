@@ -41,29 +41,56 @@ Everything below serves those four fixes.
 
 ## 3. The simplified test-creation flow (our design)
 
-ThinkExam's flow is Create → Setting → Add Question → Publish → Assign → Certificate. Ours compresses to **three phases plus scheduling**, with a reusable config doing the heavy lifting.
+ThinkExam's flow is Create → Setting → Add Question → Publish → Assign → Certificate. Ours
+compresses to **three steps plus a reusable blueprint**, and the blueprint does the heavy lifting.
 
 **Phase 0 — Exam-type base configs (set up once, reused forever).**
-A library of base configs keyed by exam type (SSC CGL, IBPS PO Prelims, RRB JE, SI/Constable…). Each base config holds the blueprint: sections/subjects, per-section time, marks per question, negative marking, total questions, default difficulty mix, and shuffle rules. Admins rarely touch these after setup.
+A library of base configs keyed by exam stage (SSC CGL Tier 1, IBPS PO Prelims, RRB JE…). Each
+holds the blueprint: sections and their subjects, per-section time, marks per question, negative
+marking, total questions, timer template, navigation policy and shuffle rules. Admins rarely touch
+these after setup. `BaseConfigSection.difficultyMix` is **not** a mix the draw reads — it holds the
+exam-pattern workbook's note ("Moderate-Difficult") and nothing in the code reads it.
 
-**Step 1 — Create test.** Name it, pick a base config → everything pre-fills. Admin overrides only if this test differs. (Replaces ThinkExam's Step 1 + most of Step 2.)
+**Step 1 — Setup.** Name it, pick a base config, choose scope, evaluation mode and paper binding.
+A test **inherits** its config's shape and does not override it: there is no per-test duration,
+marks or timing. The way to change the shape is to clone the config (`clonedFromId` is the lineage).
 
-**Step 2 — Fill with questions (two modes).**
+**Step 2 — Paper.** What each section is drawn FROM is set here per section: its topics, and
+optionally a count per difficulty. There is no test-wide difficulty default. What happens next
+depends on the paper binding, which is the real fork — not "auto vs manual":
 
-- **Auto (blueprint draw):** from the base config's subjects and the difficulty split (a test-wide default with **per-section override**), the system auto-draws matching questions from the central bank into each section. The draw happens **once at finalize**, producing a **fixed paper every student shares** (fair ranking). Order and options are shuffled **per student** via a stored seed.
-- **Manual:** a fast search/filter UI over the bank; admin cherry-picks questions and assigns them into sections.
+- **FIXED** — the admin **picks every question by hand**, from a pool the section's own
+  configuration describes. Where a section sets counts per difficulty, those counts cap what may be
+  shortlisted into each. Finalize freezes the result; every student sits it, and order and options
+  are shuffled per student from `Attempt.shuffleSeed`.
+- **GENERATED** — nothing is picked. The draw runs at finalize and produces `Test.variantCount`
+  papers, and each attempt reads the one its seed lands on. RANKED forces FIXED, because a rank
+  only means something if the cohort sat the same paper.
 
-**Step 3 — Schedule.** Publish window (start/end date + time), late-entry cutoff, extra time. Creation ends here with a fully **defined** test.
+**Step 3 — Offer.** Which series carry the test, what each branch does differently for it (late
+entry, extra time), and the freeze-and-publish that lets students reach it. Creation ends here.
 
 **No certificate step.**
+
+**Scheduling is the TEST's, not the series'.** `TestSeriesTest.unlockAt` is when a test opens
+inside a series — one instant for every branch. `BranchTestSchedule(branchId, testId)` is what one
+branch does differently: `lateEntrySec`, counted from that unlock, and `extraTimeSec`, added to the
+clock. Both are null by default, and no row at all means the plain rules. A branch's hold on a
+series has no window: it runs it indefinitely, or not at all.
 
 **After creation — management actions (separate from the creation flow):**
 
 - **Activate / Inactivate** the test (status toggle).
-- **Assign access** — to a batch/group, or to individual students (§7).
-- **Assign to test series** — **optional and many-to-many**: a test can be standalone (attempted individually), in one series, or in several. Kept deliberately **out of creation** as its own flow; series membership can be decided anytime, later.
+- **Assign access** — always to a **series**, never to a test: an exam match, a program match or a
+  `StudentGrant`, gated by the branch's row (§7). There are no groups or batches.
+- **Series membership** — many-to-many and optional; a test can be standalone, in one series or in
+  several. It can be **removed from a series only while nobody has sat it**; an `Attempt` records a
+  test and a student and never a series, so the question the data can answer is "has this test been
+  sat at all".
 
-**Locking rule:** once the first student starts, the paper and config **lock**. The only permitted post-start change is **drop / bonus** a question (e.g. a bad key found mid-cycle) — which triggers an **automatic score + rank recompute**.
+**Locking rule:** once the first student starts, the paper and config **lock**. The only permitted
+post-start change is **drop / bonus** a question (e.g. a bad key found mid-cycle) — which triggers
+an **automatic score + rank recompute**.
 
 ---
 
@@ -71,9 +98,9 @@ A library of base configs keyed by exam type (SSC CGL, IBPS PO Prelims, RRB JE, 
 
 From ThinkExam's Step 2 (Shuffle, Test Options, Time Setting, Generate Rank, Attempt & Resume, plus Bio Break / Report / Whitelist), we keep only the settings our exams need:
 
-**Keep (V1):** randomize question order; randomize answer options (needs stable option IDs); grouping/section-specific numbering; sectional timing (per-section minutes, mandatory, flexible vs locked switching, optional-section count); marks + negative marking **per question** (bulk-settable); pause/resume with a resume limit; secure/full-screen mode; enrollment-number watermark; per-question language toggle; response autosave (we'll do ~20–30s vs their 4 min).
+**Keep (V1):** randomize question order; randomize answer options (needs stable option IDs); grouping/section-specific numbering; sectional timing (per-section minutes, mandatory, flexible vs locked switching, optional-section count); marks + negative marking **per question** (bulk-settable); pause/resume with a resume limit; secure/full-screen mode; enrollment-number watermark; per-question language toggle; response autosave (we'll do ~20–30s vs their 4 min); **late entry and extra time, per branch per test** (`BranchTestSchedule`) — extra time is where "for handicapped" folds in, as an allowance rather than a separate flow.
 
-**Drop (V1):** certificates, typing test, OMR, essay/AI subjective evaluation, open-book website whitelisting, bio-break scheduling, "for handicapped" as a separate flow (fold into extra-time), and most niche integration toggles.
+**Drop (V1):** certificates, typing test, OMR, essay/AI subjective evaluation, open-book website whitelisting, bio-break scheduling, and most niche integration toggles.
 
 ---
 
@@ -118,8 +145,16 @@ them is then gated by the `BranchTestConfig` row for their current branch:
 3. **`StudentGrant`** — one explicit row, the escape hatch for access that is not exam-, program-
    or branch-derivable.
 
-A student with no current branch reaches nothing, grants included: the enable flag and the
-availability window both live on the branch's row, so there is nowhere for the answer to come from.
+A student with no current branch reaches nothing, grants included: the enable flag lives on the
+branch's row, so there is nowhere for the answer to come from. That row carries **no window** — a
+branch runs a series indefinitely or not at all, and a series has no availability of its own.
+
+**When a student may start is the TEST's answer, not the series'.** Each test in the catalog
+carries `opensAt` (the series↔test `unlockAt`) and `closesAt` (that plus the student's branch
+`lateEntrySec`, null unless both halves exist), and `canStart` is derived from the clock on **every
+read** rather than cached — so a test opens on time with nothing having to bust a cache key. The
+branch's `extraTimeSec` is added to the configured duration once, where the server computes
+`endsAt`.
 
 Reaching a series is not the same as being able to start it. `unlockMode` decides that — `AUTO`
 opens once its prerequisite series is satisfied, `REQUEST` goes through a queue an admin decides,
@@ -164,17 +199,19 @@ never per test, and the only per-student row in the model is the grant.
   enforced in the service, since no foreign key can express it.
 - **Test** — links a BaseConfig (and, denormalised, its stage, so a composite FK enforces the
   pair); scope, evaluation mode, paper binding, status, lock state, `shareSlug`.
-- **PaperQuestion (frozen paper)** — drawn once at finalize and shared by every student; per-question
-  marks/negative; status (**active / dropped / bonus**). Per-student order comes from
-  `Attempt.shuffleSeed`, not from a second paper.
+- **PaperQuestion (frozen paper)** — one paper per `variant`; a FIXED test has variant 0 alone,
+  hand-picked and frozen at finalize, and a GENERATED test has `Test.variantCount` of them drawn
+  at finalize. Per-question marks/negative; status (**active / dropped / bonus**). Per-student
+  order comes from `Attempt.shuffleSeed`, not from a second paper.
 - **Attempt** — live state (`startedAt`, server `endsAt`, `sectionState`, `status`, `shuffleSeed`,
   `resumeCount`) **and** the scored fields. **No separate Result table.**
 - **AttemptQuestion** — only questions the student **interacted with** (composite PK): option
   chosen, state, time; (post-scoring) isCorrect, marksAwarded. The analytics data points, captured
   day one.
-- **Access** — `Program`, `TestSeries`, `TestSeriesTest`, `StudentGrant`, `BranchTestConfig`, plus
-  `StudentSeriesUnlock` and `SeriesUnlockRequest` for unlocking. See §7 — there is no group table
-  and no student↔test link.
+- **Access** — `Program`, `TestSeries`, `TestSeriesTest` (carrying `unlockAt`), `StudentGrant`,
+  `BranchTestConfig` (a switch, no window), `BranchTestSchedule(branchId, testId)` for late entry
+  and extra time, plus `StudentSeriesUnlock` and `SeriesUnlockRequest` for unlocking. See §7 —
+  there is no group table and no student↔test link.
 - **TestSeries** — many-to-many with Test, optional, **flat** (no nesting). Standalone attempts
   allowed. Marks use `Decimal(6,2)`.
 
