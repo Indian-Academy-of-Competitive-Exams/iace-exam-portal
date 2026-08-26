@@ -5,6 +5,7 @@ import {
   ErrorCodes,
   contentLanguageOf,
   type ExamOption,
+  type ExamBrief,
   type ExamPaper,
   type ExamQuestion,
   type LanguageCode,
@@ -13,6 +14,7 @@ import {
   type QuestionOption,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessResolverService } from '../access';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
 const PAPER_INCLUDE = {
@@ -58,7 +60,60 @@ type ServedQuestion = PaperRow['questions'][number];
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
 @Injectable()
 export class AttemptPaperService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: AccessResolverService,
+  ) {}
+
+  /** Gated on REACH, not on the window: a test they cannot sit yet is one they may read about. */
+  async brief(studentId: string, testId: string): Promise<ExamBrief> {
+    await this.access.assertReachable(studentId, testId);
+
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: {
+        id: true,
+        title: true,
+        baseConfig: {
+          select: {
+            durationSec: true,
+            totalQuestions: true,
+            languageMode: true,
+            languages: true,
+            sections: {
+              select: {
+                id: true,
+                name: true,
+                questionCount: true,
+                durationSec: true,
+                marksPerQuestion: true,
+                negativeMarks: true,
+              },
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
+      },
+    });
+    if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+
+    return {
+      testId: test.id,
+      title: test.title,
+      durationSec: test.baseConfig.durationSec,
+      totalQuestions: test.baseConfig.totalQuestions,
+      languageMode: test.baseConfig.languageMode,
+      languages: test.baseConfig.languages,
+      sections: test.baseConfig.sections.map((section) => ({
+        id: section.id,
+        name: section.name,
+        questionCount: section.questionCount,
+        durationSec: section.durationSec,
+        marksPerQuestion: Number(section.marksPerQuestion),
+        negativeMarks: Number(section.negativeMarks),
+      })),
+    };
+  }
 
   async paper(studentId: string, attemptId: string): Promise<ExamPaper> {
     // The owner is part of the QUERY, so serving someone else's paper is not a check to forget.

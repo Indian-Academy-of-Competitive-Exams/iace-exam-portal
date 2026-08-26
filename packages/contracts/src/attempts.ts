@@ -163,7 +163,30 @@ export const liveAttemptStateSchema = z.object({
 });
 export type LiveAttemptState = z.infer<typeof liveAttemptStateSchema>;
 
+/** What a student reads BEFORE the clock starts. No question and no answer is in here. */
+export const examBriefSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  durationSec: z.number().int(),
+  totalQuestions: z.number().int(),
+  languageMode: languageModeSchema,
+  /** What this paper is offered in. SINGLE lets the student pick one; DUAL shows both. */
+  languages: z.array(languageCodeSchema),
+  sections: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      questionCount: z.number().int(),
+      durationSec: z.number().int().nullable(),
+      marksPerQuestion: z.number(),
+      negativeMarks: z.number(),
+    }),
+  ),
+});
+export type ExamBrief = z.infer<typeof examBriefSchema>;
+
 export const ME_ATTEMPT_ROUTES = {
+  brief: (testId: string) => `/me/tests/${testId}/brief`,
   start: (testId: string) => `/me/tests/${testId}/attempt`,
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,

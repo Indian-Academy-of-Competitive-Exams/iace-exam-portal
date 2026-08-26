@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   decideUnlockRequestSchema,
+  TEST_BUCKET,
+  testAction,
+  testBucket,
+  type StudentCatalogTest,
   studentCatalogSeriesSchema,
   testIsOpen,
   testWindow,
@@ -23,7 +27,15 @@ const SERIES = {
   prerequisiteSeriesName: null,
   canRequestUnlock: false,
   tests: [
-    { id: 'tst_1', title: 'Mock 1', order: 1, opensAt: null, closesAt: null, canStart: true },
+    {
+      id: 'tst_1',
+      title: 'Mock 1',
+      order: 1,
+      opensAt: null,
+      closesAt: null,
+      attemptStatus: null,
+      canStart: true,
+    },
   ],
 };
 
@@ -129,5 +141,64 @@ describe('decideUnlockRequestSchema', () => {
       decideUnlockRequestSchema.safeParse({ status: UNLOCK_REQUEST_STATUS.PENDING }).success,
       false,
     );
+  });
+});
+
+describe('testBucket', () => {
+  const NOW = new Date('2026-09-01T10:00:00.000Z');
+  const test = (over: Partial<StudentCatalogTest> = {}): StudentCatalogTest => ({
+    id: 'tst_1',
+    title: 'Mock 1',
+    order: 1,
+    opensAt: null,
+    closesAt: null,
+    attemptStatus: null,
+    canStart: true,
+    ...over,
+  });
+
+  it('is open when the student may start it now', () => {
+    assert.equal(testBucket(test(), NOW), TEST_BUCKET.OPEN);
+  });
+
+  it('is later when it has not opened yet', () => {
+    const upcoming = test({ canStart: false, opensAt: '2026-09-02T04:30:00.000Z' });
+
+    assert.equal(testBucket(upcoming, NOW), TEST_BUCKET.LATER);
+  });
+
+  /** Waiting its turn in a sequential series has no window at all — it is still Later, not Missed. */
+  it('is later when it is waiting its turn', () => {
+    assert.equal(testBucket(test({ canStart: false }), NOW), TEST_BUCKET.LATER);
+  });
+
+  /** The failure this prevents: a chance that has gone filed under "not yet". */
+  it('is missed once entry has closed and nothing was sat', () => {
+    const gone = test({ canStart: false, closesAt: '2026-09-01T09:00:00.000Z' });
+
+    assert.equal(testBucket(gone, NOW), TEST_BUCKET.MISSED);
+  });
+
+  it('is done once a sitting was submitted, even with a retake left', () => {
+    const sat = test({ attemptStatus: 'SUBMITTED', canStart: true });
+
+    assert.equal(testBucket(sat, NOW), TEST_BUCKET.DONE);
+    assert.equal(testAction(sat), 'START');
+  });
+
+  it('counts an evaluated sitting as done too', () => {
+    assert.equal(testBucket(test({ attemptStatus: 'EVALUATED' }), NOW), TEST_BUCKET.DONE);
+  });
+
+  /** A running sitting is resumed, never started a second time. */
+  it('offers Resume for a sitting still in progress', () => {
+    const live = test({ attemptStatus: 'IN_PROGRESS' });
+
+    assert.equal(testBucket(live, NOW), TEST_BUCKET.OPEN);
+    assert.equal(testAction(live), 'RESUME');
+  });
+
+  it('offers nothing on a test that cannot be started', () => {
+    assert.equal(testAction(test({ canStart: false })), null);
   });
 });

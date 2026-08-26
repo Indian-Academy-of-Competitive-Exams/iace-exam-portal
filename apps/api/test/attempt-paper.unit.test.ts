@@ -91,8 +91,11 @@ function serviceWith(
     [served(1, 'q1'), served(2, 'q2')],
     [version('q1_v1', 'q1_v1_b'), version('q2_v1', 'q2_v1_a')],
   );
-  return { prisma, service: new AttemptPaperService(prisma.asService()) };
+  return { prisma, service: new AttemptPaperService(prisma.asService(), reachAll()) };
 }
+
+/** The paper is served on the ATTEMPT's own ownership; reach is the brief's gate, not this one. */
+const reachAll = () => ({ assertReachable: () => Promise.resolve() }) as never;
 
 describe('AttemptPaperService — what a candidate is allowed to see', () => {
   it('never tells the student which option is correct', async () => {

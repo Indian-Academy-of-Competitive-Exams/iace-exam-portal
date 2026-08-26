@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attempts';
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
@@ -360,6 +361,8 @@ export const studentCatalogTestSchema = z.object({
   opensAt: z.string().nullable(),
   /** The last instant a student may BEGIN it. Null is any time while it is open. */
   closesAt: z.string().nullable(),
+  /** Where this student has got to. Null is never opened; IN_PROGRESS is what Resume reopens. */
+  attemptStatus: attemptStatusSchema.nullable(),
   canStart: z.boolean(),
 });
 export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
@@ -381,6 +384,34 @@ export const studentCatalogSeriesSchema = z.object({
   tests: z.array(studentCatalogTestSchema),
 });
 export type StudentCatalogSeries = z.infer<typeof studentCatalogSeriesSchema>;
+
+/** Which tab a test sits under, read off the TEST: a series has no window and no sitting. */
+export const TEST_BUCKET = {
+  OPEN: 'OPEN',
+  LATER: 'LATER',
+  MISSED: 'MISSED',
+  DONE: 'DONE',
+} as const;
+export type TestBucket = (typeof TEST_BUCKET)[keyof typeof TEST_BUCKET];
+export const TEST_BUCKETS = Object.values(TEST_BUCKET) as TestBucket[];
+
+const SAT = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
+
+export function testBucket(test: StudentCatalogTest, now: Date): TestBucket {
+  // Sat comes first: a test with retakes left is still startable, and Done is where it belongs.
+  if (test.attemptStatus !== null && SAT.has(test.attemptStatus)) return TEST_BUCKET.DONE;
+  if (test.canStart) return TEST_BUCKET.OPEN;
+
+  // Shut and never sat: the chance is gone, which is a different fact from not open YET.
+  const closed = test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime();
+  return closed ? TEST_BUCKET.MISSED : TEST_BUCKET.LATER;
+}
+
+/** What the card's button says. A running sitting is resumed, never started a second time. */
+export function testAction(test: StudentCatalogTest): 'START' | 'RESUME' | null {
+  if (!test.canStart) return null;
+  return test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS ? 'RESUME' : 'START';
+}
 
 /** `testBlocked` leaves everything listed and view-only — nothing is startable. */
 export const studentCatalogSchema = z.object({

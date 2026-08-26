@@ -3374,14 +3374,14 @@ export class FakeCatalogPrisma {
     findMany: async ({
       where,
     }: {
-      where: { studentId: string; testId: { in: string[] }; status: { in: string[] } };
+      where: { studentId: string; testId?: { in: string[] }; status?: { in: string[] } };
     }) => {
       await this.record('attempt.findMany');
       return this.data.attempts.filter(
         (row) =>
           row.studentId === where.studentId &&
-          where.testId.in.includes(row.testId) &&
-          where.status.in.includes(row.status),
+          (where.testId === undefined || where.testId.in.includes(row.testId)) &&
+          (where.status === undefined || where.status.in.includes(row.status)),
       );
     },
   };

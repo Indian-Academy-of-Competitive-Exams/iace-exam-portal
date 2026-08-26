@@ -1,0 +1,190 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarClock, LockKeyhole } from 'lucide-react';
+import {
+  INSTITUTE_TIME_ZONE,
+  TEST_BUCKET,
+  testAction,
+  testBucket,
+  type StudentCatalogSeries,
+  type StudentCatalogTest,
+  type TestBucket,
+} from '@iace/contracts';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  PageFrame,
+  PageHeader,
+  Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  plural,
+} from '@iace/ui';
+import { api } from '../lib/api';
+import { CATALOG_QUERY_KEY, ROUTES } from '../lib/constants';
+
+/** The student's tests, in the four states one can be in. Cards, because §5 asks for cards. */
+
+const TAB_LABELS: Readonly<Record<TestBucket, string>> = {
+  [TEST_BUCKET.OPEN]: 'Open now',
+  [TEST_BUCKET.LATER]: 'Later',
+  [TEST_BUCKET.MISSED]: 'Missed',
+  [TEST_BUCKET.DONE]: 'Done',
+};
+
+const TAB_ORDER: readonly TestBucket[] = [
+  TEST_BUCKET.OPEN,
+  TEST_BUCKET.LATER,
+  TEST_BUCKET.MISSED,
+  TEST_BUCKET.DONE,
+];
+
+const EMPTY: Readonly<Record<TestBucket, string>> = {
+  [TEST_BUCKET.OPEN]: 'Nothing is open right now. What is coming is under Later.',
+  [TEST_BUCKET.LATER]: 'Nothing is waiting. Everything you can reach is open now.',
+  [TEST_BUCKET.MISSED]: 'You have missed nothing.',
+  [TEST_BUCKET.DONE]: 'You have not finished a test yet.',
+};
+
+/** The institute's clock, wherever the student is sitting. */
+const WHEN = new Intl.DateTimeFormat('en-IN', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+interface Sittable {
+  test: StudentCatalogTest;
+  seriesName: string;
+}
+
+const SKELETON_KEYS = ['a', 'b', 'c'];
+
+export function TestsPage() {
+  const [tab, setTab] = useState<TestBucket>(TEST_BUCKET.OPEN);
+  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+
+  const now = new Date();
+  const all = flatten(catalog.data?.series ?? []);
+  const bucketed = (bucket: TestBucket) =>
+    all.filter((row) => testBucket(row.test, now) === bucket);
+
+  return (
+    <PageFrame header={<PageHeader title="Tests" meta={plural(all.length, 'test')} />}>
+      {catalog.data?.testBlocked ? (
+        <Alert variant="danger">
+          Your test access is on hold. Speak to your branch — nothing here can be started until it
+          is lifted.
+        </Alert>
+      ) : null}
+
+      <Tabs value={tab} onValueChange={(next) => setTab(next as TestBucket)}>
+        <TabsList>
+          {TAB_ORDER.map((bucket) => (
+            <TabsTrigger key={bucket} value={bucket}>
+              {TAB_LABELS[bucket]}
+              {bucketed(bucket).length > 0 ? (
+                <Badge variant="neutral">{bucketed(bucket).length}</Badge>
+              ) : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {TAB_ORDER.map((bucket) => (
+          <TabsContent key={bucket} value={bucket}>
+            {catalog.isLoading ? (
+              <div className="flex flex-col gap-3">
+                {SKELETON_KEYS.map((key) => (
+                  <Skeleton key={key} variant="row" className="h-28 rounded-lg" />
+                ))}
+              </div>
+            ) : (
+              <TestCards rows={bucketed(bucket)} empty={EMPTY[bucket]} now={now} />
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
+    </PageFrame>
+  );
+}
+
+function TestCards({
+  rows,
+  empty,
+  now,
+}: Readonly<{ rows: readonly Sittable[]; empty: string; now: Date }>) {
+  if (rows.length === 0) return <Alert variant="info">{empty}</Alert>;
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {rows.map((row) => (
+        <TestCard key={row.test.id} row={row} now={now} />
+      ))}
+    </div>
+  );
+}
+
+function TestCard({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
+  const { test } = row;
+  const action = testAction(test);
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="truncate text-sm font-semibold text-foreground">
+            {test.title ?? 'Untitled test'}
+          </h3>
+          <p className="truncate text-xs text-muted-foreground">{row.seriesName}</p>
+        </div>
+
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarClock aria-hidden className="size-3.5 shrink-0" />
+          {whenLine(test, now)}
+        </p>
+
+        {action ? (
+          <Button asChild size="sm" className="self-start">
+            <Link to={ROUTES.TEST_INSTRUCTIONS(test.id)}>
+              {action === 'RESUME' ? 'Resume test' : 'Start test'}
+            </Link>
+          </Button>
+        ) : (
+          <p className="flex items-center gap-1.5 self-start text-xs text-muted-foreground">
+            <LockKeyhole aria-hidden className="size-3.5 shrink-0" />
+            {shutReason(test, now)}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** What the clock says about this test, in the one line a card has room for. */
+function whenLine(test: StudentCatalogTest, now: Date): string {
+  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
+    return `Opens ${WHEN.format(new Date(test.opensAt))}`;
+  }
+  if (test.closesAt !== null) {
+    const closed = Date.parse(test.closesAt) <= now.getTime();
+    return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
+  }
+  return 'No fixed time — sit it whenever you are ready';
+}
+
+/** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
+function shutReason(test: StudentCatalogTest, now: Date): string {
+  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
+  if (test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime()) return 'Entry closed';
+  return 'Finish the test before it first';
+}
+
+function flatten(series: readonly StudentCatalogSeries[]): Sittable[] {
+  return series.flatMap((one) => one.tests.map((test) => ({ test, seriesName: one.name })));
+}

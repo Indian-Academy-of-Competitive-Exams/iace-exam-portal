@@ -3,6 +3,7 @@ import {
   ActorTypes,
   saveAttemptStateSchema,
   startAttemptSchema,
+  type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
   type LiveAttemptState,
@@ -37,6 +38,15 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<LiveAttempt> {
     return this.attempts.start(user.id, testId, body);
+  }
+
+  /** What the student reads before the clock starts. Carries no question and no answer. */
+  @Get('tests/:testId/brief')
+  brief(
+    @Param('testId') testId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExamBrief> {
+    return this.papers.brief(user.id, testId);
   }
 
   /** The student's OWN paper. Another student's id reads as missing, not as refused. */

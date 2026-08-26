@@ -9,6 +9,7 @@ import {
   UNLOCK_STATE,
   testIsOpen,
   testWindow,
+  type AttemptStatus,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
@@ -21,8 +22,8 @@ import { redisKeys } from '../redis/redis.keys';
 import { DomainEventBus } from '../common/events';
 import { applyAutoUnlocks, needsUnlock } from './auto-unlock';
 
-/** A sitting that counts as done for the series that unlocks its tests in order. */
-const FINISHED = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
+/** A sitting that counts as done — for the series that unlocks in order, and for the test list. */
+const FINISHED = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
 /** A safety net under the event-driven busts, never the mechanism that keeps the catalog right. */
 const CATALOG_TTL_SEC = 15 * 60;
@@ -31,7 +32,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v2';
+const CATALOG_SHAPE = 'v3';
 
 const catalogInclude = (branchId: string) =>
   ({
@@ -67,6 +68,8 @@ interface ResolvedTest {
   /** The window, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
   closesAt: string | null;
+  /** Where this student got to. Cached, and busted when a sitting starts or ends. */
+  attemptStatus: AttemptStatus | null;
   /** This branch's, in seconds, so the deadline is computed from one duration and not two. */
   extraTimeSec: number | null;
 }
@@ -113,28 +116,22 @@ export class AccessResolverService {
   /** The catalog as of `now` — availability and `canStart` are derived here on every read. */
   async catalog(studentId: string, now: Date = new Date()): Promise<StudentCatalog> {
     const resolved = await this.resolved(studentId);
-    const finished = await this.finishedTestIds(studentId, resolved);
 
     return {
       testBlocked: resolved.testBlocked,
-      series: resolved.series.map((series) => project(series, resolved.testBlocked, now, finished)),
+      series: resolved.series.map((series) => project(series, resolved.testBlocked, now)),
     };
   }
 
-  /** Fresh, like the clock: submitting a test opens the next, and a cached answer would not. */
-  private async finishedTestIds(
-    studentId: string,
-    resolved: ResolvedCatalog,
-  ): Promise<ReadonlySet<string>> {
-    const gated = resolved.series.filter((series) => series.sequentialTests);
-    const testIds = gated.flatMap((series) => series.tests.map((test) => test.id));
-    if (testIds.length === 0) return EMPTY_SET;
-
+  /** Cached WITH the catalog, not read per request: starting and submitting are what bust it. */
+  private async sittings(studentId: string): Promise<ReadonlyMap<string, AttemptStatus>> {
     const attempts = await this.prisma.attempt.findMany({
-      where: { studentId, testId: { in: testIds }, status: { in: FINISHED } },
-      select: { testId: true },
+      where: { studentId },
+      select: { testId: true, status: true },
+      orderBy: { attemptNo: 'asc' },
     });
-    return new Set(attempts.map((row) => row.testId));
+    // They arrive in attempt order and the last write wins, so the latest sitting is what shows.
+    return new Map(attempts.map((row) => [row.testId, row.status]));
   }
 
   /**
@@ -153,6 +150,15 @@ export class AccessResolverService {
     if (test?.canStart) return;
 
     throw new AppException(ErrorCodes.FORBIDDEN, refusalFor(test, now));
+  }
+
+  /** Reachable is not startable: a test they cannot sit YET is still one they may read about. */
+  async assertReachable(studentId: string, testId: string): Promise<void> {
+    const resolved = await this.resolved(studentId);
+    const reaches = resolved.series.some((series) =>
+      series.tests.some((test) => test.id === testId),
+    );
+    if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
   }
 
   /** What this student's branch adds to the clock here — from the catalog the gate just read. */
@@ -234,11 +240,12 @@ export class AccessResolverService {
     const opened = await applyAutoUnlocks(this.prisma, this.events, studentId, rows, new Date());
     const unlocked = await this.unlockedIds(studentId, rows);
     for (const id of opened) unlocked.add(id);
+    const sittings = await this.sittings(studentId);
 
     return {
       catalog: {
         testBlocked: student.isTestBlocked,
-        series: rows.map((row) => toResolved(row, unlocked)),
+        series: rows.map((row) => toResolved(row, unlocked, sittings)),
       },
       opened: opened.length > 0,
     };
@@ -278,7 +285,11 @@ function reachedBy(
   ];
 }
 
-function toResolved(row: CatalogRow, unlocked: Set<string>): ResolvedSeries {
+function toResolved(
+  row: CatalogRow,
+  unlocked: Set<string>,
+  sittings: ReadonlyMap<string, AttemptStatus>,
+): ResolvedSeries {
   const locked = needsUnlock(row) && !unlocked.has(row.id);
 
   return {
@@ -295,11 +306,14 @@ function toResolved(row: CatalogRow, unlocked: Set<string>): ResolvedSeries {
     unlockState: locked ? UNLOCK_STATE.LOCKED : UNLOCK_STATE.UNLOCKED,
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     prerequisiteSeriesName: row.prerequisiteSeries?.name ?? null,
-    tests: row.tests.map(toResolvedTest).sort(byOrderThenId),
+    tests: row.tests.map((link) => toResolvedTest(link, sittings)).sort(byOrderThenId),
   };
 }
 
-function toResolvedTest(link: CatalogRow['tests'][number]): ResolvedTest {
+function toResolvedTest(
+  link: CatalogRow['tests'][number],
+  sittings: ReadonlyMap<string, AttemptStatus>,
+): ResolvedTest {
   const branch = link.test.branchSchedules[0];
   const window = testWindow({
     unlockAt: link.unlockAt?.toISOString() ?? null,
@@ -311,22 +325,19 @@ function toResolvedTest(link: CatalogRow['tests'][number]): ResolvedTest {
     title: link.test.title,
     order: link.order,
     ...window,
+    attemptStatus: sittings.get(link.test.id) ?? null,
     extraTimeSec: branch?.extraTimeSec ?? null,
   };
 }
 
-const EMPTY_SET: ReadonlySet<string> = new Set<string>();
+const isFinished = (status: AttemptStatus | null): boolean =>
+  status !== null && FINISHED.has(status);
 
-function project(
-  series: ResolvedSeries,
-  testBlocked: boolean,
-  now: Date,
-  finished: ReadonlySet<string>,
-): StudentCatalogSeries {
+function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
   const reachable = series.unlockState === UNLOCK_STATE.UNLOCKED && !testBlocked;
   // In order means: the first one not yet sat is open, and everything past it waits its turn.
   const waiting = series.sequentialTests
-    ? series.tests.findIndex((test) => !finished.has(test.id))
+    ? series.tests.findIndex((test) => !isFinished(test.attemptStatus))
     : NONE_WAITING;
 
   return {
@@ -345,6 +356,7 @@ const NONE_WAITING = -1;
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   const { extraTimeSec: _extraTimeSec, ...shown } = test;
+  // A sat test stays startable: `maxRetakes` decides whether it may be sat again, not this.
   return { ...shown, canStart: reachable && testIsOpen(test, now) };
 }
 

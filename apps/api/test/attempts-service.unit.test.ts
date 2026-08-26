@@ -63,6 +63,7 @@ function resolver(permitted = true, extraTimeSec = 0): AccessResolverService {
             new AppException(ErrorCodes.FORBIDDEN, 'This test is not open to you right now'),
           ),
     extraTimeSecFor: () => Promise.resolve(extraTimeSec),
+    invalidateStudent: () => Promise.resolve(),
   } as unknown as AccessResolverService;
 }
 

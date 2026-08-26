@@ -1,19 +1,50 @@
-import { KeyRound, User } from 'lucide-react';
+import { ClipboardList, KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
+import { ANSWER_STATE, type AnswerState, type LanguageCode } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
 export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
+  TESTS: '/tests',
+  TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
+  TEST_INSTRUCTIONS_PATTERN: '/tests/:testId/instructions',
+  /** T7 builds this; the instructions screen sends the student here to begin. */
+  EXAM: (testId: string) => `/tests/${testId}/exam`,
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
 
-/** Empty on purpose: the shell draws no sidebar, the mark leads home. */
-export const NAV_ITEMS: readonly NavItem[] = [];
+/** One row while Tests is the only destination; Report and the rest join it as they are built. */
+export const NAV_ITEMS: readonly NavItem[] = [
+  { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
+];
+
+/** The student catalog, cached under one key so a submit can drop it. */
+export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
+
+/** The languages a paper can be sat in, in the words the exam world uses for them. */
+export const LANGUAGE_LABELS: Readonly<Record<LanguageCode, string>> = {
+  EN: 'English',
+  HI: 'Hindi',
+  TE: 'Telugu',
+};
+
+/** The five states a question can be in, and the colour the palette draws each one. */
+export const PALETTE_LEGEND: readonly {
+  state: AnswerState;
+  label: string;
+  variant: 'neutral' | 'warning' | 'success' | 'primary' | 'danger';
+}[] = [
+  { state: ANSWER_STATE.NOT_VISITED, label: 'Not visited', variant: 'neutral' },
+  { state: ANSWER_STATE.NOT_ANSWERED, label: 'Not answered', variant: 'danger' },
+  { state: ANSWER_STATE.ANSWERED, label: 'Answered', variant: 'success' },
+  { state: ANSWER_STATE.MARKED_REVIEW, label: 'Marked for review', variant: 'primary' },
+  { state: ANSWER_STATE.ANSWERED_MARKED, label: 'Answered and marked', variant: 'warning' },
+];
 
 /** The account screens, under the user menu, above Log out. */
 export const USER_MENU_ITEMS: readonly NavItem[] = [

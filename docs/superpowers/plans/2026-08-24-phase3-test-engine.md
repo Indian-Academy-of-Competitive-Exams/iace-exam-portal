@@ -239,25 +239,25 @@ and `apps/test/src/components/pre-test-prompt.tsx` (this SPA's shell and its Ale
 modify `apps/test/src/App.tsx`, `apps/test/src/lib/constants.ts`.
 **Read first:** the `ui-conventions` skill, and `docs/02` §5.
 
-- [ ] The student's tests, from `GET /me/catalog`: card-based, tabs for **Open now / Later /
+- [x] The student's tests, from `GET /me/catalog`: card-based, tabs for **Open now / Later /
       Missed / Done**, each card carrying name, duration, when it opens or closed, and what to do
       next (Start test / Resume / Waiting its turn / Missed).
-- [ ] **The buckets come off the TEST, not the series** — `opensAt`, `closesAt` and `canStart`.
+- [x] **The buckets come off the TEST, not the series** — `opensAt`, `closesAt` and `canStart`.
       A test is _Later_ when `opensAt` is in the future OR it is waiting its turn in a sequential
       series; _Missed_ when `closesAt` has passed and nothing was sat; _Open now_ when `canStart`.
       "Waiting its turn" is not an error and must not read like one: the card says which test has
       to be sat first.
-- [ ] The bucketing helper is pure and lives in `packages/contracts`, taking a `StudentCatalogTest`
+- [x] The bucketing helper is pure and lives in `packages/contracts`, taking a `StudentCatalogTest`
       and the institute clock. It is what earns the one test this task owes.
-- [ ] A **slim system check** before the instructions (`docs/02` §5 keeps a cut-down version of
+- [x] A **slim system check** before the instructions (`docs/02` §5 keeps a cut-down version of
       ThinkExam's four-step check): the browser is supported, the session is live, and the API is
       reachable. Three checks with a plain outcome, not a wizard — it exists so a student learns
       here rather than mid-exam.
-- [ ] The instructions screen: the palette legend, the language selector (from the config's
+- [x] The instructions screen: the palette legend, the language selector (from the config's
       `languages`), a declaration checkbox, and "I am ready to begin" — which is what starts the
       attempt. `preTestReady` is prompted here if it is missing (`PreTestPrompt` exists).
-- [ ] Anything the student cannot infer goes in an `Alert`, never muted prose.
-- [ ] Tests: none beyond what the pure helpers earn — `apps/test` has no DOM harness, so say what
+- [x] Anything the student cannot infer goes in an `Alert`, never muted prose.
+- [x] Tests: none beyond what the pure helpers earn — `apps/test` has no DOM harness, so say what
       to verify on screen. The bucketing helper above is the exception and DOES earn one.
       **Acceptance:** a student finds the test they can sit, reads what they are about to do, picks
       a language, and begins.

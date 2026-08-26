@@ -109,10 +109,12 @@ import {
 } from './configs';
 import {
   ME_ATTEMPT_ROUTES,
+  examBriefSchema,
   examPaperSchema,
   liveAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
+  type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
   type SaveAttemptStateInput,
@@ -542,6 +544,10 @@ export function createApiClient(options: ApiClientOptions) {
       /** Every series this student reaches, with what is open right now. */
       catalog: (): Promise<StudentCatalog> =>
         request(ME_ROUTES.catalog, { schema: studentCatalogSchema }),
+
+      /** What the student reads before the clock starts. */
+      testBrief: (testId: string): Promise<ExamBrief> =>
+        request(ME_ATTEMPT_ROUTES.brief(testId), { schema: examBriefSchema }),
 
       /** Idempotent: a second start while one is running resumes it, clock and all. */
       startAttempt: (testId: string, input: StartAttemptInput = {}): Promise<LiveAttempt> =>

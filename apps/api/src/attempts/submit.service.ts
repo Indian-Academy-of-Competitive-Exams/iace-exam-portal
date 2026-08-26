@@ -16,6 +16,7 @@ import {
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessResolverService } from '../access';
 import { QUEUE_NAMES, type ScoringJobData } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
 import { rowsToFlush } from './attempt-flush';
@@ -32,6 +33,7 @@ export class SubmitService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
+    private readonly access: AccessResolverService,
     @InjectQueue(QUEUE_NAMES.SCORING) private readonly scoring: Queue<ScoringJobData>,
   ) {}
 
@@ -59,6 +61,8 @@ export class SubmitService {
 
     const answeredCount = await this.flushFinalState(attempt.id);
     await this.scoring.add(QUEUE_NAMES.SCORING, { attemptId: attempt.id, testId: attempt.testId });
+    // The catalog caches where this student has got to; ending a sitting is what moves it last.
+    await this.access.invalidateStudent(attempt.studentId);
 
     return {
       attemptId: attempt.id,

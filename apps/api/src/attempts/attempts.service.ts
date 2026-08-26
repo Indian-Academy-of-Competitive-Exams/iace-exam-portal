@@ -78,6 +78,8 @@ export class AttemptsService {
     try {
       const started = await this.create(studentId, test, finished, input.languages, extraTimeSec);
       await this.state.open(started);
+      // The catalog caches where this student has got to, and starting is one of two things that move it.
+      await this.access.invalidateStudent(studentId);
       return toLiveAttempt(started, test, true);
     } catch (error) {
       // Two starts raced; the unique picked one. Read it back — they asked to sit, not to win.

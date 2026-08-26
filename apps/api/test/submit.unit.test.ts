@@ -81,11 +81,19 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma.asService(), redis.asService());
   const queue = new FakeQueue();
-  const submit = new SubmitService(prisma.asService(), state, queue as never);
+  const busts: string[] = [];
+  const access = {
+    invalidateStudent: (studentId: string) => {
+      busts.push(studentId);
+      return Promise.resolve();
+    },
+  } as never;
+  const submit = new SubmitService(prisma.asService(), state, access, queue as never);
   return {
     prisma,
     state,
     queue,
+    busts,
     submit,
     sweeper: new AttemptSweeperProcessor(prisma.asService(), submit),
   };
@@ -111,6 +119,17 @@ describe('SubmitService', () => {
     assert.deepEqual(queue.jobs, [
       { name: QUEUE_NAMES.SCORING, data: { attemptId: 'att_1', testId: 'tst_1' } },
     ]);
+  });
+
+  /** The catalog caches where the student got to, so a submitted test must leave the Open tab. */
+  it('busts the student catalog exactly once', async () => {
+    const { submit, state, busts } = build();
+    await answered(state);
+
+    await submit.submit('stu_1', 'att_1');
+    await submit.submit('stu_1', 'att_1');
+
+    assert.deepEqual(busts, ['stu_1']);
   });
 
   /** The failure this prevents: a double-click scoring one sitting twice. */
