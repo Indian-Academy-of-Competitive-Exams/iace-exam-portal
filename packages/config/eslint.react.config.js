@@ -6,6 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import { iaceConfirmPlugin } from './eslint-rules/confirm-destructive.js';
 
 export default defineConfig([
   { ignores: ['dist/**', 'node_modules/**', '.turbo/**'] },
@@ -21,9 +22,11 @@ export default defineConfig([
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      '@iace': iaceConfirmPlugin,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      '@iace/confirm-destructive': 'error',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -45,6 +48,13 @@ export default defineConfig([
             'JSXOpeningElement[name.name=/^[a-z]/]:has(JSXAttribute[name.name="type"][value.value=/^(date|datetime-local|time|month|week)$/])',
           message:
             'Use DatePicker. Every browser draws its own calendar, and a phone draws a fourth.',
+        },
+        {
+          // The intrinsic ban above is by-passable as <Input type="date">, which renders the same thing.
+          selector:
+            'JSXOpeningElement[name.name="Input"]:has(JSXAttribute[name.name="type"][value.value=/^(date|datetime-local|time|month|week)$/])',
+          message:
+            'Use DatePicker or DateTimePicker. Passing the type through Input draws the browser calendar anyway.',
         },
         {
           selector: 'JSXOpeningElement[name.name=/^[a-z]/]:has(JSXAttribute[name.name="title"])',

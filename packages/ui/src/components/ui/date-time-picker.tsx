@@ -54,7 +54,7 @@ export function DateTimePicker({
         onChange={(next) => onChange(joined(next, next && !time ? MIDNIGHT : time))}
       />
 
-      {/* The rule names `<input type="date">`, whose CALENDAR differs per machine; a time field draws none. */}
+      {/* eslint-disable-next-line no-restricted-syntax -- the ONE sanctioned time field: a clock spinner has no calendar to differ, and this is what DateTimePicker exists to be. */}
       <Input
         type="time"
         aria-label={aria['aria-label'] ? `${aria['aria-label']} time` : 'Time'}
