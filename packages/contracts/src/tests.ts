@@ -159,6 +159,89 @@ export function mixIssue(mix: DifficultyMix, section: FeasibilitySection): strin
   return `${section.name} holds ${section.questionCount}, and its difficulty split adds up to ${total}.`;
 }
 
+// ============================================================================
+// Picking a fixed paper by hand. The split stops being an instruction to the
+// draw and becomes the bound on what may be shortlisted, so one set of numbers
+// governs both. Nothing here removes a question: a section already picked flags
+// what its own settings moved out from under, and the admin decides.
+// ============================================================================
+
+/** A question the section already holds, as the picker judges it. */
+export interface PickedQuestion {
+  questionId: string;
+  difficulty: DifficultyLevel;
+  topicId: string | null;
+}
+
+/** What one difficulty has taken, against what the split allows it. */
+export interface QuotaBucket {
+  chosen: number;
+  /** Null where no split bounds it, and the section's own count is the only ceiling. */
+  allowed: number | null;
+}
+export type SectionQuota = Readonly<Record<DifficultyLevel, QuotaBucket>>;
+
+/** Why a section's own settings turn a question away. The screen writes the words. */
+export const PICK_REFUSAL = {
+  SECTION_FULL: 'SECTION_FULL',
+  QUOTA_MET: 'QUOTA_MET',
+  OFF_TOPIC: 'OFF_TOPIC',
+} as const;
+export type PickRefusal = (typeof PICK_REFUSAL)[keyof typeof PICK_REFUSAL];
+
+export function sectionQuota(
+  mix: DifficultyMix | undefined,
+  chosen: readonly DifficultyLevel[],
+): SectionQuota {
+  return Object.fromEntries(
+    DIFFICULTY_LEVELS.map((level) => [
+      level,
+      { chosen: chosen.filter((held) => held === level).length, allowed: mix?.[level] ?? null },
+    ]),
+  ) as SectionQuota;
+}
+
+/** Why this section will not take another question of this difficulty, or null. */
+export function pickIssue(
+  level: DifficultyLevel,
+  quota: SectionQuota,
+  questionCount: number,
+): PickRefusal | null {
+  const taken = DIFFICULTY_LEVELS.reduce((sum, held) => sum + quota[held].chosen, 0);
+  if (taken >= questionCount) return PICK_REFUSAL.SECTION_FULL;
+
+  const { chosen, allowed } = quota[level];
+  return allowed !== null && chosen >= allowed ? PICK_REFUSAL.QUOTA_MET : null;
+}
+
+/** The ones on the paper this section would no longer offer, keyed by question. */
+export function strandedPicks(
+  chosen: readonly PickedQuestion[],
+  spec: SectionDrawSpec | undefined,
+): Record<string, PickRefusal> {
+  const seen = Object.fromEntries(DIFFICULTY_LEVELS.map((level) => [level, 0])) as Record<
+    DifficultyLevel,
+    number
+  >;
+  const stranded: Record<string, PickRefusal> = {};
+
+  for (const pick of chosen) {
+    seen[pick.difficulty] += 1;
+    // Order decides which of an over-quota bucket is the surplus: the paper's own, so it holds still.
+    if (offTopic(pick, spec)) stranded[pick.questionId] = PICK_REFUSAL.OFF_TOPIC;
+    else if (spec?.mix && seen[pick.difficulty] > spec.mix[pick.difficulty]) {
+      stranded[pick.questionId] = PICK_REFUSAL.QUOTA_MET;
+    }
+  }
+
+  return stranded;
+}
+
+function offTopic(pick: PickedQuestion, spec: SectionDrawSpec | undefined): boolean {
+  if (!spec?.topicIds?.length) return false;
+  return pick.topicId === null || !spec.topicIds.includes(pick.topicId);
+}
+
 /** What the bank holds for one section once its own subject and its chosen topics are applied. */
 export interface SectionAvailability {
   total: number;

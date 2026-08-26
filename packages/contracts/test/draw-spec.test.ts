@@ -5,7 +5,12 @@ import {
   difficultyMixSchema,
   mixIssue,
   paperFeasibility,
+  pickIssue,
+  sectionQuota,
+  strandedPicks,
+  type DifficultyLevel,
   type FeasibilitySection,
+  type PickedQuestion,
   type SectionAvailability,
 } from '../src/index';
 
@@ -116,5 +121,83 @@ describe('paperFeasibility', () => {
       gaps.map((gap) => gap.difficulty),
       ['LOW', 'MEDIUM', 'HIGH'],
     );
+  });
+});
+
+describe('sectionQuota', () => {
+  it('counts what each difficulty has taken against what the split allows it', () => {
+    const quota = sectionQuota({ LOW: 7, MEDIUM: 11, HIGH: 7 }, ['LOW', 'LOW', 'HIGH']);
+
+    assert.deepEqual(quota.LOW, { chosen: 2, allowed: 7 });
+    assert.deepEqual(quota.MEDIUM, { chosen: 0, allowed: 11 });
+    assert.deepEqual(quota.HIGH, { chosen: 1, allowed: 7 });
+  });
+
+  it('leaves every bucket unbounded when the section has no split', () => {
+    const quota = sectionQuota(undefined, ['LOW', 'MEDIUM']);
+
+    assert.deepEqual(quota.LOW, { chosen: 1, allowed: null });
+    assert.deepEqual(quota.HIGH, { chosen: 0, allowed: null });
+  });
+});
+
+describe('pickIssue', () => {
+  /** The failure this prevents: a paper that says 7 low and goes out holding 9. */
+  it('refuses a full bucket while its neighbours still take one', () => {
+    const quota = sectionQuota({ LOW: 2, MEDIUM: 21, HIGH: 2 }, ['LOW', 'LOW']);
+
+    assert.equal(pickIssue('LOW', quota, QUANT.questionCount), 'QUOTA_MET');
+    assert.equal(pickIssue('MEDIUM', quota, QUANT.questionCount), null);
+  });
+
+  it('takes anything of any difficulty while the section has room and no split', () => {
+    const quota = sectionQuota(undefined, ['HIGH', 'HIGH', 'HIGH']);
+
+    assert.equal(pickIssue('HIGH', quota, QUANT.questionCount), null);
+  });
+
+  /** The section's own count is the ceiling even where the split disagrees with it. */
+  it('refuses everything once the section holds what it needs', () => {
+    const full = Array.from({ length: 25 }, () => 'MEDIUM' as const);
+    const quota = sectionQuota({ LOW: 7, MEDIUM: 99, HIGH: 7 }, full);
+
+    assert.equal(pickIssue('MEDIUM', quota, QUANT.questionCount), 'SECTION_FULL');
+    assert.equal(pickIssue('LOW', quota, QUANT.questionCount), 'SECTION_FULL');
+  });
+});
+
+describe('strandedPicks', () => {
+  const picked = (
+    questionId: string,
+    difficulty: DifficultyLevel,
+    topicId: string | null = 'top_1',
+  ): PickedQuestion => ({ questionId, difficulty, topicId });
+
+  it('says nothing while the section still draws from where its questions came', () => {
+    const chosen = [picked('q1', 'LOW'), picked('q2', 'HIGH', 'top_2')];
+
+    assert.deepEqual(strandedPicks(chosen, { topicIds: ['top_1', 'top_2'] }), {});
+    assert.deepEqual(strandedPicks(chosen, undefined), {});
+  });
+
+  /** The failure this prevents: narrowing the topics and never being told what it orphaned. */
+  it('flags a question whose topic the section stopped drawing from', () => {
+    const chosen = [picked('q1', 'LOW'), picked('q2', 'HIGH', 'top_2')];
+
+    assert.deepEqual(strandedPicks(chosen, { topicIds: ['top_1'] }), { q2: 'OFF_TOPIC' });
+  });
+
+  it('counts a question with no topic at all as outside a narrowed pool', () => {
+    const orphan = strandedPicks([picked('q1', 'LOW', null)], { topicIds: ['top_1'] });
+
+    assert.deepEqual(orphan, { q1: 'OFF_TOPIC' });
+  });
+
+  it('flags only what a tightened split leaves over, in the order the paper holds it', () => {
+    const chosen = [picked('q1', 'LOW'), picked('q2', 'LOW'), picked('q3', 'LOW')];
+
+    assert.deepEqual(strandedPicks(chosen, { mix: { LOW: 2, MEDIUM: 0, HIGH: 0 } }), {
+      q3: 'QUOTA_MET',
+    });
   });
 });
