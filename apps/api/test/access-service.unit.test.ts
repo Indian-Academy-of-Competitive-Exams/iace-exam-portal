@@ -112,14 +112,15 @@ describe('TestSeriesService — the branch fan-out', () => {
     assert.equal(after.branchCount, 2);
   });
 
-  /** A window that ends before it starts is a series nobody can ever sit. */
-  it('refuses a window that ends before it starts', () => {
+  /** A branch runs a series indefinitely: the only schedule left belongs to the test. */
+  it('takes nothing but the switch', () => {
     const parsed = updateBranchTestConfigSchema.safeParse({
+      enabled: true,
       startAt: '2026-09-01T00:00:00.000Z',
-      endAt: '2026-08-01T00:00:00.000Z',
     });
 
-    assert.equal(parsed.success, false);
+    assert.equal(parsed.success, true);
+    assert.equal('startAt' in (parsed.data ?? {}), false);
   });
 
   it('refuses to schedule a branch that has no row for the series', async () => {

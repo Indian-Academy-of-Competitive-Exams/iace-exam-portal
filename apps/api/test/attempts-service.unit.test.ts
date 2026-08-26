@@ -52,7 +52,7 @@ function sittable(over: Partial<FakeTestModelRow> = {}): FakeTestModelRow {
 }
 
 /** The resolver is a seam, not this service's job — it either permits or throws. */
-function resolver(permitted = true): AccessResolverService {
+function resolver(permitted = true, extraTimeSec = 0): AccessResolverService {
   return {
     assertCanStart: () =>
       permitted
@@ -60,6 +60,7 @@ function resolver(permitted = true): AccessResolverService {
         : Promise.reject(
             new AppException(ErrorCodes.FORBIDDEN, 'This test is not open to you right now'),
           ),
+    extraTimeSecFor: () => Promise.resolve(extraTimeSec),
   } as unknown as AccessResolverService;
 }
 

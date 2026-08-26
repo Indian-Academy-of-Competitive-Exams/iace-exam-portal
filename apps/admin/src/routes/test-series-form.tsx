@@ -8,8 +8,6 @@ import {
   PERMISSION_LEVELS,
   UNLOCK_MODE,
   UNLOCK_MODES,
-  fromInstituteWallTime,
-  instituteWallTime,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type TestSeriesSummary,
@@ -24,7 +22,6 @@ import {
   Checkbox,
   Combobox,
   ConfirmDialog,
-  Field,
   FormField,
   FormPanel,
   FormSection,
@@ -39,7 +36,6 @@ import {
 import { api } from '../lib/api';
 import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
-import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
@@ -463,74 +459,28 @@ function BranchScheduleList({
   );
 }
 
-interface ScheduleDraft {
-  enabled: boolean;
-  startAt: string;
-  endAt: string;
-}
-
-/** Both ends read the institute's clock, so a window means the same wherever the admin is. */
-const toLocalInput = (iso: string | null): string => (iso ? instituteWallTime(new Date(iso)) : '');
-
-const toIso = (local: string): string | null =>
-  local ? fromInstituteWallTime(local).toISOString() : null;
-
-const draftOf = (row: BranchTestConfigRow): ScheduleDraft => ({
-  enabled: row.enabled,
-  startAt: toLocalInput(row.startAt),
-  endAt: toLocalInput(row.endAt),
-});
-
-const sameDraft = (a: ScheduleDraft, b: ScheduleDraft): boolean =>
-  a.enabled === b.enabled && a.startAt === b.startAt && a.endAt === b.endAt;
-
-/** What the window will mean once saved, said in words rather than left to two inputs. */
-function windowSentence(draft: ScheduleDraft): string {
-  const from = draft.startAt ? WHEN_FORMATTER.format(new Date(draft.startAt)) : '';
-  const until = draft.endAt ? WHEN_FORMATTER.format(new Date(draft.endAt)) : '';
-
-  if (from && until) return `It runs there from ${from} until ${until}.`;
-  if (from) return `It opens there on ${from} and has no end.`;
-  if (until) return `It runs there until ${until}.`;
-  return 'No window is set, so it runs there for as long as it is switched on.';
-}
-
-/** The question this save asks — turning it on and turning it off are not the same one. */
-function scheduleQuestion(
+/** Turning it on and turning it off are not the same question, so they are not the same words. */
+function offerQuestion(
   series: TestSeriesSummary,
   row: BranchTestConfigRow,
-  draft: ScheduleDraft,
+  next: boolean,
 ): { title: string; description: string; confirmLabel: string; destructive: boolean } {
   const tests = plural(series.testCount, 'test');
-  const runs = windowSentence(draft);
 
-  if (draft.enabled && !row.enabled) {
+  if (next) {
     return {
       title: `Offer ${series.name} at ${row.branch.name}?`,
-      description: `Every student whose current branch is ${row.branch.name} and who reaches this series — by enrolment, by program or by a grant — can start its ${tests} from then on. ${runs}`,
+      description: `Every student whose current branch is ${row.branch.name} and who reaches this series — by enrolment, by program or by a grant — can start its ${tests} from then on, for as long as it stays switched on. When each test opens is the test's own, not this switch.`,
       confirmLabel: 'Offer it here',
       destructive: false,
     };
   }
 
-  if (!draft.enabled && row.enabled) {
-    return {
-      title: `Stop offering ${series.name} at ${row.branch.name}?`,
-      description: `Students at ${row.branch.name} lose the route to its ${tests} straight away. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped. The row stays — this is what "not offered here" is — so switching it back on restores everything.`,
-      confirmLabel: 'Stop offering it here',
-      destructive: true,
-    };
-  }
-
-  const effect = row.enabled
-    ? `Students at ${row.branch.name} reach its ${tests} only inside that window.`
-    : `It is switched off at ${row.branch.name}, so the window only takes effect once it is switched on.`;
-
   return {
-    title: `Change when ${series.name} runs at ${row.branch.name}?`,
-    description: `${runs} ${effect}`,
-    confirmLabel: 'Save the window',
-    destructive: false,
+    title: `Stop offering ${series.name} at ${row.branch.name}?`,
+    description: `Students at ${row.branch.name} lose the route to its ${tests} straight away. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped. The row stays — this is what "not offered here" is — so switching it back on restores everything.`,
+    confirmLabel: 'Stop offering it here',
+    destructive: true,
   };
 }
 
@@ -545,94 +495,42 @@ function BranchScheduleRow({
   canWrite: boolean;
   onSaved: () => void;
 }>) {
-  const [draft, setDraft] = useState<ScheduleDraft>(() => draftOf(row));
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<boolean | null>(null);
 
   const save = useMutation({
     meta: { success: `${row.branch.name} saved.` },
-    mutationFn: () =>
-      api.admin.testSeries.updateBranch(series.id, row.branchId, {
-        enabled: draft.enabled,
-        startAt: toIso(draft.startAt),
-        endAt: toIso(draft.endAt),
-      }),
+    mutationFn: (enabled: boolean) =>
+      api.admin.testSeries.updateBranch(series.id, row.branchId, { enabled }),
     onSuccess: () => {
-      setAsking(false);
+      setAsking(null);
       onSaved();
     },
     // Drop out of the confirm on failure, or the row is left asking a question
     // that has already been answered.
-    onError: () => setAsking(false),
+    onError: () => setAsking(null),
   });
 
-  const backwards = draft.startAt !== '' && draft.endAt !== '' && draft.endAt <= draft.startAt;
-  const dirty = !sameDraft(draft, draftOf(row));
-  const question = scheduleQuestion(series, row, draft);
+  const question = offerQuestion(series, row, asking ?? !row.enabled);
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3">
-      <div className="min-w-48 flex-1 pb-2">
-        <Checkbox
-          checked={draft.enabled}
-          disabled={!canWrite}
-          onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })}
-          label={row.branch.name}
-          hint={draft.enabled ? 'Offered here' : 'Not offered here'}
-        />
-      </div>
-
-      <Field htmlFor={`${row.id}-start`} label="Opens" className="w-56">
-        {(control) => (
-          <Input
-            {...control}
-            type="datetime-local"
-            aria-label={`Opens at ${row.branch.name}`}
-            disabled={!canWrite}
-            value={draft.startAt}
-            onChange={(event) => setDraft({ ...draft, startAt: event.target.value })}
-          />
-        )}
-      </Field>
-
-      <Field
-        htmlFor={`${row.id}-end`}
-        label="Closes"
-        error={backwards ? 'The window has to end after it starts' : undefined}
-        className="w-56"
-      >
-        {(control) => (
-          <Input
-            {...control}
-            type="datetime-local"
-            aria-label={`Closes at ${row.branch.name}`}
-            disabled={!canWrite}
-            value={draft.endAt}
-            onChange={(event) => setDraft({ ...draft, endAt: event.target.value })}
-          />
-        )}
-      </Field>
-
-      {canWrite ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!dirty || backwards}
-          onClick={() => setAsking(true)}
-        >
-          Save
-        </Button>
-      ) : null}
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
+      <Checkbox
+        checked={row.enabled}
+        disabled={!canWrite || save.isPending}
+        onChange={(event) => setAsking(event.target.checked)}
+        label={row.branch.name}
+        hint={row.enabled ? 'Offered here' : 'Not offered here'}
+      />
 
       <ConfirmDialog
-        open={asking}
-        onOpenChange={(open) => !open && setAsking(false)}
+        open={asking !== null}
+        onOpenChange={(open) => !open && setAsking(null)}
         destructive={question.destructive}
         loading={save.isPending}
         title={question.title}
         description={question.description}
         confirmLabel={question.confirmLabel}
-        onConfirm={() => save.mutate()}
+        onConfirm={() => asking !== null && save.mutate(asking)}
       />
     </div>
   );

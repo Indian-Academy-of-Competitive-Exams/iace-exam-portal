@@ -495,15 +495,16 @@ model Test {
   createdAt          DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
 
-  baseConfig     BaseConfig         @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
-  examStage      ExamStage          @relation(fields: [examStageId], references: [id])
-  paperQuestions PaperQuestion[]
-  attempts       Attempt[]
-  series         TestSeriesTest[]
-  notifications  Notification[]
-  stat           TestStat?
-  sectionStats   TestSectionStat[]
-  questionStats  TestQuestionStat[]
+  baseConfig      BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage       ExamStage            @relation(fields: [examStageId], references: [id])
+  paperQuestions  PaperQuestion[]
+  attempts        Attempt[]
+  series          TestSeriesTest[]
+  branchSchedules BranchTestSchedule[]
+  notifications   Notification[]
+  stat            TestStat?
+  sectionStats    TestSectionStat[]
+  questionStats   TestQuestionStat[]
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -751,9 +752,10 @@ model Branch {
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
 
-  students    Student[]
-  admins      AdminBranch[]
-  testConfigs BranchTestConfig[]
+  students      Student[]
+  admins        AdminBranch[]
+  testConfigs   BranchTestConfig[]
+  testSchedules BranchTestSchedule[]
 
   @@index([name])
 }
@@ -806,7 +808,9 @@ model TestSeriesTest {
   testSeriesId String
   testId       String
   order        Int?
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  // When this test opens inside this series. One time for every branch; null opens with the series.
+  unlockAt     DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
   createdById  String?
 
   testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
@@ -863,21 +867,38 @@ model SeriesUnlockRequest {
 }
 
 // Access enable plus the default availability window, per (branch, series).
+// A branch runs a series indefinitely or not at all: WHEN an exam happens is the
+// test's own property, on TestSeriesTest.unlockAt and BranchTestSchedule.
 model BranchTestConfig {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   branchId     String
   testSeriesId String
-  enabled      Boolean   @default(true)
-  startAt      DateTime? @db.Timestamptz(3)
-  endAt        DateTime? @db.Timestamptz(3)
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
 
   @@unique([branchId, testSeriesId])
   @@index([testSeriesId])
+}
+
+// What one branch does differently for one test. No row is the plain rules — a row
+// per branch per test would be thousands of nulls. Seconds, like every duration here.
+model BranchTestSchedule {
+  branchId     String
+  testId       String
+  lateEntrySec Int?
+  extraTimeSec Int?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  test   Test   @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@id([branchId, testId])
+  @@index([testId])
 }
 
 // ============================================================================

@@ -200,7 +200,7 @@ export class TestSeriesService {
     return rows.map(toBranchConfig);
   }
 
-  /** Switching a series on for a branch, and when it runs there. The row is never created here. */
+  /** Switching a series on for a branch. The row is never created here, and it has no window. */
   async updateBranchConfig(
     id: string,
     branchId: string,
@@ -208,41 +208,21 @@ export class TestSeriesService {
   ): Promise<BranchTestConfigRow> {
     const existing = await this.prisma.branchTestConfig.findUnique({
       where: { branchId_testSeriesId: { branchId, testSeriesId: id } },
-      select: { id: true, startAt: true, endAt: true },
+      select: { id: true },
     });
     if (!existing) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That branch has no row for this series');
     }
-    // Against what the row WILL hold: the body's refine only sees the halves it carries.
-    this.assertWindowRuns(existing, input);
 
     const row = await this.prisma.branchTestConfig.update({
       where: { id: existing.id },
-      data: {
-        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
-        ...(input.startAt === undefined ? {} : { startAt: dateOrNull(input.startAt) }),
-        ...(input.endAt === undefined ? {} : { endAt: dateOrNull(input.endAt) }),
-      },
+      data: { ...(input.enabled === undefined ? {} : { enabled: input.enabled }) },
       include: { branch: { select: { id: true, name: true } } },
     });
 
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return toBranchConfig(row);
-  }
-
-  private assertWindowRuns(
-    existing: { startAt: Date | null; endAt: Date | null },
-    input: UpdateBranchTestConfigBody,
-  ): void {
-    const startAt = input.startAt === undefined ? existing.startAt : dateOrNull(input.startAt);
-    const endAt = input.endAt === undefined ? existing.endAt : dateOrNull(input.endAt);
-    if (!startAt || !endAt || startAt < endAt) return;
-
-    const message = 'The window has to end after it starts';
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { endAt: [message] },
-    });
   }
 
   private assertNotItsOwnPrerequisite(id: string, prerequisiteSeriesId: string): void {
@@ -306,9 +286,6 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 
-const dateOrNull = (value: string | null | undefined): Date | null =>
-  value === null || value === undefined ? null : new Date(value);
-
 function toSummary(
   row: SeriesRow,
   branches: { enabled: number; total: number } | undefined,
@@ -338,8 +315,6 @@ function toBranchConfig(row: {
   branchId: string;
   testSeriesId: string;
   enabled: boolean;
-  startAt: Date | null;
-  endAt: Date | null;
   createdAt: Date;
   branch: { id: string; name: string };
 }): BranchTestConfigRow {
@@ -348,8 +323,6 @@ function toBranchConfig(row: {
     branchId: row.branchId,
     testSeriesId: row.testSeriesId,
     enabled: row.enabled,
-    startAt: row.startAt?.toISOString() ?? null,
-    endAt: row.endAt?.toISOString() ?? null,
     branch: row.branch,
     createdAt: row.createdAt.toISOString(),
   };

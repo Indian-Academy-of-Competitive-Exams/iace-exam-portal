@@ -2757,9 +2757,15 @@ export interface FakeBranchConfigRow {
   branchId: string;
   testSeriesId: string;
   enabled: boolean;
-  startAt: Date | null;
-  endAt: Date | null;
   createdAt: Date;
+}
+
+/** What one branch does differently for one test. No row is the plain rules. */
+export interface FakeBranchScheduleRow {
+  branchId: string;
+  testId: string;
+  lateEntrySec: number | null;
+  extraTimeSec: number | null;
 }
 
 export interface FakeGrantRowAccess {
@@ -2949,8 +2955,6 @@ export class FakeAccessPrisma {
       for (const row of data) {
         this.branchConfigs.push({
           id: this.id('btc'),
-          startAt: null,
-          endAt: null,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           ...row,
         });
@@ -3059,8 +3063,6 @@ export function makeBranchConfig(
     branchId: 'br_1',
     testSeriesId: 'srs_1',
     enabled: true,
-    startAt: null,
-    endAt: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -3081,6 +3083,7 @@ export interface FakeSeriesTestRow {
   testSeriesId: string;
   testId: string;
   order: number | null;
+  unlockAt?: Date | null;
 }
 
 export interface FakeUnlockRow {
@@ -3107,6 +3110,7 @@ export interface FakeCatalogData {
   unlocks?: FakeUnlockRow[];
   unlockRequests?: FakeUnlockRequestRow[];
   seriesTests?: FakeSeriesTestRow[];
+  branchSchedules?: FakeBranchScheduleRow[];
   tests?: FakeTestRow[];
   stages?: FakeExamStage[];
   exams?: FakeExam[];
@@ -3129,8 +3133,10 @@ interface CatalogSeriesWhere {
 }
 
 interface CatalogInclude {
-  branchConfigs: { where: { branchId: string } };
-  tests: { where: { test: { status: TestStatus } } };
+  tests: {
+    where: { test: { status: TestStatus } };
+    select: { test: { select: { branchSchedules: { where: { branchId: string } } } } };
+  };
 }
 
 type CatalogSortField = 'name' | 'id';
@@ -3159,6 +3165,7 @@ export class FakeCatalogPrisma {
       unlockRequests: data.unlockRequests ?? [],
       unlocks: data.unlocks ?? [],
       seriesTests: data.seriesTests ?? [],
+      branchSchedules: data.branchSchedules ?? [],
       tests: data.tests ?? [],
       stages: data.stages ?? [makeExamStage()],
       exams: data.exams ?? [makeExam()],
@@ -3438,18 +3445,26 @@ export class FakeCatalogPrisma {
       ...row,
       examStage: stage && code !== null ? { id: stage.id, name: stage.name, exam: { code } } : null,
       prerequisiteSeries: prerequisite ? { name: prerequisite.name } : null,
-      branchConfigs: this.data.branchConfigs.filter(
-        (config) =>
-          config.testSeriesId === row.id &&
-          config.branchId === include.branchConfigs.where.branchId,
-      ),
       tests: this.data.seriesTests
         .filter((link) => link.testSeriesId === row.id)
         .flatMap((link) => {
           const test = this.data.tests.find((candidate) => candidate.id === link.testId);
-          return test?.status === include.tests.where.test.status
-            ? [{ order: link.order, test: { id: test.id, title: test.title } }]
-            : [];
+          if (test?.status !== include.tests.where.test.status) return [];
+
+          const branchId = include.tests.select.test.select.branchSchedules.where.branchId;
+          return [
+            {
+              order: link.order,
+              unlockAt: link.unlockAt ?? null,
+              test: {
+                id: test.id,
+                title: test.title,
+                branchSchedules: this.data.branchSchedules.filter(
+                  (schedule) => schedule.testId === test.id && schedule.branchId === branchId,
+                ),
+              },
+            },
+          ];
         }),
     };
   }

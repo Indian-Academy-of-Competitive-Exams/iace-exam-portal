@@ -67,10 +67,11 @@ export class AttemptsService {
       where: { testId, studentId, status: { not: LIVE } },
     });
     this.assertRetakeAllowed(test.maxRetakes, finished);
+    const extraTimeSec = await this.access.extraTimeSecFor(studentId, testId);
 
     try {
       return toLiveAttempt(
-        await this.create(studentId, test, finished, input.languages),
+        await this.create(studentId, test, finished, input.languages, extraTimeSec),
         test,
         true,
       );
@@ -90,6 +91,7 @@ export class AttemptsService {
     test: SittableTest,
     finished: number,
     picked: readonly LanguageCode[] | undefined,
+    extraTimeSec: number,
   ) {
     const startedAt = new Date();
     const attemptNo = finished + 1;
@@ -103,7 +105,7 @@ export class AttemptsService {
           // The cohort rollup fires on one attempt per student, and it is the first.
           isGraded: attemptNo === 1,
           startedAt,
-          endsAt: deadlineFrom(startedAt, test.baseConfig.durationSec),
+          endsAt: deadlineFrom(startedAt, test.baseConfig.durationSec + extraTimeSec),
           shuffleSeed: randomInt(SEED_CEILING),
           languages: languagesFor(test.baseConfig.languageMode, test.baseConfig.languages, picked),
         },

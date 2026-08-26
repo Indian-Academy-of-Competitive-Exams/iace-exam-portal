@@ -30,16 +30,6 @@ export const unlockStateSchema = z.enum(UNLOCK_STATE);
 export type UnlockState = z.infer<typeof unlockStateSchema>;
 export const UNLOCK_STATES = unlockStateSchema.options;
 
-/** Where the branch's window puts a series right now. Derived from the clock on every read. */
-export const SERIES_AVAILABILITY = {
-  UPCOMING: 'UPCOMING',
-  ACTIVE: 'ACTIVE',
-  ENDED: 'ENDED',
-} as const;
-export const seriesAvailabilitySchema = z.enum(SERIES_AVAILABILITY);
-export type SeriesAvailability = z.infer<typeof seriesAvailabilitySchema>;
-export const SERIES_AVAILABILITIES = seriesAvailabilitySchema.options;
-
 export const UNLOCK_REQUEST_STATUS = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
@@ -212,14 +202,12 @@ export const grantSeriesSchema = z.object({ testSeriesId: z.string().min(1, 'Cho
 export type GrantSeriesInput = z.input<typeof grantSeriesSchema>;
 export type GrantSeriesBody = z.infer<typeof grantSeriesSchema>;
 
-/** Whether a branch's students get a series, and when. Admin-only; never shown to a student. */
+/** Whether a branch's students get a series at all. Admin-only; never shown to a student. */
 export const branchTestConfigSchema = z.object({
   id: z.string(),
   branchId: z.string(),
   testSeriesId: z.string(),
   enabled: z.boolean(),
-  startAt: z.string().nullable(),
-  endAt: z.string().nullable(),
   createdAt: z.string(),
 });
 export type BranchTestConfig = z.infer<typeof branchTestConfigSchema>;
@@ -230,21 +218,8 @@ export const branchTestConfigRowSchema = branchTestConfigSchema.extend({
 });
 export type BranchTestConfigRow = z.infer<typeof branchTestConfigRowSchema>;
 
-/**
- * What a branch may change about a series it runs. The row itself is never created or deleted
- * here — every branch gets one when the series is created, so "not offered" is `enabled: false`
- * and not a missing row.
- */
-export const updateBranchTestConfigSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    startAt: z.iso.datetime().nullish(),
-    endAt: z.iso.datetime().nullish(),
-  })
-  .refine((value) => !value.startAt || !value.endAt || value.startAt < value.endAt, {
-    message: 'The window has to end after it starts',
-    path: ['endAt'],
-  });
+/** The switch alone: a branch runs a series indefinitely, and WHEN an exam happens is the test's. */
+export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().optional() });
 export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;
 export type UpdateBranchTestConfigBody = z.infer<typeof updateBranchTestConfigSchema>;
 
@@ -313,8 +288,43 @@ export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;
 
 // ============================================================================
+// When a test opens. `unlockAt` belongs to the series-test link — one time for
+// every branch, because a rank only means something if the cohort sat together.
+// `lateEntrySec` is the branch's own, counted FROM that unlock so it can never
+// contradict it and survives the exam being moved.
+// ============================================================================
+
+const MILLISECONDS_PER_SECOND = 1000;
+
+export interface TestTiming {
+  unlockAt: string | null;
+  lateEntrySec: number | null;
+}
+
+export interface TestWindow {
+  opensAt: string | null;
+  closesAt: string | null;
+}
+
+/** A cutoff with nothing to count from is not a cutoff, so both halves must be there. */
+export function testWindow({ unlockAt, lateEntrySec }: TestTiming): TestWindow {
+  if (unlockAt === null || lateEntrySec === null) return { opensAt: unlockAt, closesAt: null };
+
+  const closes = Date.parse(unlockAt) + lateEntrySec * MILLISECONDS_PER_SECOND;
+  return { opensAt: unlockAt, closesAt: new Date(closes).toISOString() };
+}
+
+/** Whether a sitting may BEGIN: open at the instant it opens, shut at the instant entry closes. */
+export function testIsOpen(window: TestWindow, now: Date): boolean {
+  const at = now.getTime();
+  if (window.opensAt !== null && Date.parse(window.opensAt) > at) return false;
+  return window.closesAt === null || Date.parse(window.closesAt) > at;
+}
+
+// ============================================================================
 // The student's catalog — every series they reach, resolved from exam, program,
-// grant and branch, with the window applied at read time.
+// grant and branch. A series has no window; each TEST carries its own, and
+// `canStart` is derived from the clock on every read rather than cached.
 // ============================================================================
 
 export const studentCatalogTestSchema = z.object({
@@ -322,11 +332,15 @@ export const studentCatalogTestSchema = z.object({
   title: z.string().nullable(),
   /** Position in the series. Ordering only — sequential gating is the series' own flag. */
   order: z.number().int().nullable(),
+  /** When this test opens inside its series. Null is open from the moment the series is reached. */
+  opensAt: z.string().nullable(),
+  /** The last instant a student may BEGIN it. Null is any time while it is open. */
+  closesAt: z.string().nullable(),
   canStart: z.boolean(),
 });
 export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
 
-/** A locked, upcoming or ended series is still LISTED — it is the journey the student is on. */
+/** A locked series is still LISTED — it is the journey the student is on. */
 export const studentCatalogSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -337,10 +351,6 @@ export const studentCatalogSeriesSchema = z.object({
   sequentialTests: z.boolean(),
   unlockMode: unlockModeSchema,
   unlockState: unlockStateSchema,
-  availability: seriesAvailabilitySchema,
-  /** The window the student's own branch runs this series in. Null is open-ended. */
-  startAt: z.string().nullable(),
-  endAt: z.string().nullable(),
   prerequisiteSeriesId: z.string().nullable(),
   prerequisiteSeriesName: z.string().nullable(),
   canRequestUnlock: z.boolean(),

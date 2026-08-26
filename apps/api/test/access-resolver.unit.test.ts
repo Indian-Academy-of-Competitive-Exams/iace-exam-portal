@@ -4,7 +4,6 @@ import {
   AppException,
   ErrorCodes,
   EXAM_FAMILY,
-  SERIES_AVAILABILITY,
   TEST_STATUS,
   UNLOCK_MODE,
   UNLOCK_STATE,
@@ -303,63 +302,63 @@ describe('AccessResolverService — a blocked student', () => {
   });
 });
 
-describe('AccessResolverService — the branch window', () => {
-  const withWindow = (startAt: Date | null, endAt: Date | null) =>
+describe('AccessResolverService — when a test opens', () => {
+  const withTiming = (unlockAt: Date | null, lateEntrySec: number | null) =>
     build(
       reachable({
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, startAt, endAt }),
-        ],
+        seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt }],
+        branchSchedules:
+          lateEntrySec === null
+            ? []
+            : [{ branchId: BRANCH, testId: 'tst_1', lateEntrySec, extraTimeSec: null }],
       }),
     ).resolver;
 
-  const availabilityAt = async (startAt: Date | null, endAt: Date | null) =>
-    (await withWindow(startAt, endAt).catalog('stu_1', NOW)).series[0];
+  const testAt = async (unlockAt: Date | null, lateEntrySec: number | null = null) =>
+    (await withTiming(unlockAt, lateEntrySec).catalog('stu_1', NOW)).series[0]?.tests[0];
 
-  it('is UPCOMING before the window opens, and nothing is startable', async () => {
-    const series = await availabilityAt(new Date('2026-07-01T00:00:00.000Z'), null);
+  it('is listed but not startable before it opens', async () => {
+    const test = await testAt(new Date('2026-07-01T00:00:00.000Z'));
 
-    assert.equal(series?.availability, SERIES_AVAILABILITY.UPCOMING);
-    assert.equal(series?.tests[0]?.canStart, false);
+    assert.equal(test?.canStart, false);
+    assert.equal(test?.opensAt, '2026-07-01T00:00:00.000Z');
   });
 
-  it('is ACTIVE inside the window', async () => {
-    const series = await availabilityAt(
-      new Date('2026-05-01T00:00:00.000Z'),
-      new Date('2026-07-01T00:00:00.000Z'),
-    );
-
-    assert.equal(series?.availability, SERIES_AVAILABILITY.ACTIVE);
-    assert.equal(series?.tests[0]?.canStart, true);
+  it('is startable once it has opened', async () => {
+    assert.equal((await testAt(new Date('2026-05-01T00:00:00.000Z')))?.canStart, true);
   });
 
-  it('is ENDED after the window closes, and nothing is startable', async () => {
-    const series = await availabilityAt(null, new Date('2026-05-01T00:00:00.000Z'));
-
-    assert.equal(series?.availability, SERIES_AVAILABILITY.ENDED);
-    assert.equal(series?.tests[0]?.canStart, false);
+  it('is startable at the exact instant it opens', async () => {
+    assert.equal((await testAt(NOW))?.canStart, true);
   });
 
-  it('is ACTIVE when the branch set no window at all', async () => {
-    const series = await availabilityAt(null, null);
+  /** The failure this prevents: a series with no times set locking every student out of it. */
+  it('is startable at any time when nothing schedules it', async () => {
+    const test = await testAt(null);
 
-    assert.equal(series?.availability, SERIES_AVAILABILITY.ACTIVE);
-    assert.equal(series?.tests[0]?.canStart, true);
+    assert.equal(test?.canStart, true);
+    assert.deepEqual([test?.opensAt, test?.closesAt], [null, null]);
   });
 
-  /** The window is half-open: the instant it opens is inside it, the instant it closes is not. */
-  it('is ACTIVE at the exact instant the window opens', async () => {
-    const series = await availabilityAt(NOW, null);
+  it('shuts again once the branch cutoff has passed', async () => {
+    const test = await testAt(new Date('2026-06-01T09:00:00.000Z'), 30 * 60);
 
-    assert.equal(series?.availability, SERIES_AVAILABILITY.ACTIVE);
-    assert.equal(series?.tests[0]?.canStart, true);
+    assert.equal(test?.closesAt, '2026-06-01T09:30:00.000Z');
+    assert.equal(test?.canStart, false);
   });
 
-  it('is ENDED at the exact instant the window closes', async () => {
-    const series = await availabilityAt(null, NOW);
+  it('is still startable inside the branch cutoff', async () => {
+    const opened = new Date(NOW.getTime() - 60 * 1000);
 
-    assert.equal(series?.availability, SERIES_AVAILABILITY.ENDED);
-    assert.equal(series?.tests[0]?.canStart, false);
+    assert.equal((await testAt(opened, 30 * 60))?.canStart, true);
+  });
+
+  /** A cutoff counted from nothing must not shut a test that was never scheduled. */
+  it('ignores a cutoff on a test with no opening time', async () => {
+    const test = await testAt(null, 30 * 60);
+
+    assert.equal(test?.closesAt, null);
+    assert.equal(test?.canStart, true);
   });
 });
 
@@ -612,21 +611,17 @@ describe('AccessResolverService — the cache', () => {
    * branch's start time and ACTIVE after it, with nothing invalidating it in between. Caching
    * availability would leave a series shut until something happened to bust the key.
    */
-  it('crosses startAt on a cache entry that never changed', async () => {
-    const startAt = new Date('2026-06-15T00:00:00.000Z');
+  it('crosses an opening time on a cache entry that never changed', async () => {
+    const unlockAt = new Date('2026-06-15T00:00:00.000Z');
     const { resolver, prisma } = build(
-      reachable({
-        branchConfigs: [makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, startAt })],
-      }),
+      reachable({ seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt }] }),
     );
 
     const before = await resolver.catalog('stu_1', new Date('2026-06-14T23:59:00.000Z'));
     const afterFirst = prisma.queries.length;
     const after = await resolver.catalog('stu_1', new Date('2026-06-15T00:01:00.000Z'));
 
-    assert.equal(before.series[0]?.availability, SERIES_AVAILABILITY.UPCOMING);
     assert.equal(before.series[0]?.tests[0]?.canStart, false);
-    assert.equal(after.series[0]?.availability, SERIES_AVAILABILITY.ACTIVE);
     assert.equal(after.series[0]?.tests[0]?.canStart, true);
     assert.equal(prisma.queries.length, afterFirst);
   });

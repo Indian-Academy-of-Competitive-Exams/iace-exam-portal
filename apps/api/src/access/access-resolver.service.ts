@@ -3,13 +3,14 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
-  SERIES_AVAILABILITY,
   TEST_STATUS,
   UNLOCK_MODE,
   UNLOCK_STATE,
-  type SeriesAvailability,
+  testIsOpen,
+  testWindow,
   type StudentCatalog,
   type StudentCatalogSeries,
+  type StudentCatalogTest,
   type UnlockMode,
   type UnlockState,
 } from '@iace/contracts';
@@ -26,18 +27,30 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v1';
+const CATALOG_SHAPE = 'v2';
 
 const catalogInclude = (branchId: string) =>
   ({
     examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
     prerequisiteSeries: { select: { name: true } },
-    branchConfigs: { where: { branchId }, select: { startAt: true, endAt: true } },
     // The `access` → `Test` seam docs/03 §4 records: the tests module does not exist yet, so
     // there is no facade to ask and the read is made here.
     tests: {
       where: { test: { status: TEST_STATUS.ACTIVE } },
-      select: { order: true, test: { select: { id: true, title: true } } },
+      select: {
+        order: true,
+        unlockAt: true,
+        test: {
+          select: {
+            id: true,
+            title: true,
+            branchSchedules: {
+              where: { branchId },
+              select: { lateEntrySec: true, extraTimeSec: true },
+            },
+          },
+        },
+      },
     },
   }) as const satisfies Prisma.TestSeriesInclude;
 
@@ -47,6 +60,11 @@ interface ResolvedTest {
   id: string;
   title: string | null;
   order: number | null;
+  /** The window, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
+  opensAt: string | null;
+  closesAt: string | null;
+  /** This branch's, in seconds, so the deadline is computed from one duration and not two. */
+  extraTimeSec: number | null;
 }
 
 /** What is cached: everything the clock does NOT decide. */
@@ -60,8 +78,6 @@ interface ResolvedSeries {
   sequentialTests: boolean;
   unlockMode: UnlockMode;
   unlockState: UnlockState;
-  startAt: string | null;
-  endAt: string | null;
   prerequisiteSeriesId: string | null;
   prerequisiteSeriesName: string | null;
   tests: ResolvedTest[];
@@ -110,12 +126,19 @@ export class AccessResolverService {
       this.catalog(studentId, now),
     ]);
 
-    const startable =
-      permitted &&
-      series.some((row) => row.tests.some((test) => test.id === testId && test.canStart));
-    if (!startable) {
-      throw new AppException(ErrorCodes.FORBIDDEN, 'This test is not open to you right now');
-    }
+    const test = permitted
+      ? series.flatMap((row) => row.tests).find((row) => row.id === testId)
+      : undefined;
+    if (test?.canStart) return;
+
+    throw new AppException(ErrorCodes.FORBIDDEN, refusalFor(test, now));
+  }
+
+  /** What this student's branch adds to the clock here — from the catalog the gate just read. */
+  async extraTimeSecFor(studentId: string, testId: string): Promise<number> {
+    const resolved = await this.resolved(studentId);
+    const test = resolved.series.flatMap((series) => series.tests).find((row) => row.id === testId);
+    return test?.extraTimeSec ?? 0;
   }
 
   async invalidateStudent(studentId: string): Promise<void> {
@@ -235,7 +258,6 @@ function reachedBy(
 }
 
 function toResolved(row: CatalogRow, unlocked: Set<string>): ResolvedSeries {
-  const branchWindow = row.branchConfigs[0];
   const locked = needsUnlock(row) && !unlocked.has(row.id);
 
   return {
@@ -250,44 +272,55 @@ function toResolved(row: CatalogRow, unlocked: Set<string>): ResolvedSeries {
     sequentialTests: row.sequentialTests,
     unlockMode: row.unlockMode,
     unlockState: locked ? UNLOCK_STATE.LOCKED : UNLOCK_STATE.UNLOCKED,
-    startAt: branchWindow?.startAt?.toISOString() ?? null,
-    endAt: branchWindow?.endAt?.toISOString() ?? null,
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     prerequisiteSeriesName: row.prerequisiteSeries?.name ?? null,
-    tests: row.tests
-      .map((link) => ({ id: link.test.id, title: link.test.title, order: link.order }))
-      .sort(byOrderThenId),
+    tests: row.tests.map(toResolvedTest).sort(byOrderThenId),
+  };
+}
+
+function toResolvedTest(link: CatalogRow['tests'][number]): ResolvedTest {
+  const branch = link.test.branchSchedules[0];
+  const window = testWindow({
+    unlockAt: link.unlockAt?.toISOString() ?? null,
+    lateEntrySec: branch?.lateEntrySec ?? null,
+  });
+
+  return {
+    id: link.test.id,
+    title: link.test.title,
+    order: link.order,
+    ...window,
+    extraTimeSec: branch?.extraTimeSec ?? null,
   };
 }
 
 function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
-  const availability = availabilityAt(series, now);
-  const canStart =
-    availability === SERIES_AVAILABILITY.ACTIVE &&
-    series.unlockState === UNLOCK_STATE.UNLOCKED &&
-    !testBlocked;
+  const reachable = series.unlockState === UNLOCK_STATE.UNLOCKED && !testBlocked;
 
   return {
     ...series,
-    availability,
     canRequestUnlock:
       series.unlockState === UNLOCK_STATE.LOCKED && series.unlockMode === UNLOCK_MODE.REQUEST,
-    tests: series.tests.map((test) => ({ ...test, canStart })),
+    tests: series.tests.map((test) => projectTest(test, reachable, now)),
   };
 }
 
-function availabilityAt(
-  series: { startAt: string | null; endAt: string | null },
-  now: Date,
-): SeriesAvailability {
+/** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
+function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
+  const { extraTimeSec: _extraTimeSec, ...shown } = test;
+  return { ...shown, canStart: reachable && testIsOpen(test, now) };
+}
+
+/** Why a sitting may not begin: a shut window is a different fact from having no access at all. */
+function refusalFor(test: StudentCatalogTest | undefined, now: Date): string {
   const at = now.getTime();
-  if (series.startAt !== null && Date.parse(series.startAt) > at) {
-    return SERIES_AVAILABILITY.UPCOMING;
+  if (test && test.opensAt !== null && Date.parse(test.opensAt) > at) {
+    return 'This test has not opened yet';
   }
-  if (series.endAt !== null && Date.parse(series.endAt) <= at) {
-    return SERIES_AVAILABILITY.ENDED;
+  if (test && test.closesAt !== null && Date.parse(test.closesAt) <= at) {
+    return 'Entry to this test has closed';
   }
-  return SERIES_AVAILABILITY.ACTIVE;
+  return 'This test is not open to you right now';
 }
 
 /** An unordered test sorts last, and the id keeps the order stable when two share one. */
