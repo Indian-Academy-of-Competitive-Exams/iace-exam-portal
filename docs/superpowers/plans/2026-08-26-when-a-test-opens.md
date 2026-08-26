@@ -1,5 +1,9 @@
 # When a test opens: timing moves from the series to the test — implementation plan
 
+> **Done** — landed as five commits rather than nine tasks: dropping a column meant contracts,
+> schema, resolver, attempts and the series screen could not each be green alone, so Tasks 1-4
+> shipped together.
+>
 > **For agentic workers:** T2 is a migration that DROPS columns and T3/T4 are the access and
 > attempt paths — all three high-stakes. T6 is an accessibility-sensitive control. Lean loop per
 > `docs/superpowers/WORKFLOW.md`; invoke the `ui-conventions` skill before any screen work.
@@ -84,14 +88,14 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Risk:** normal · **Reviews:** 1 · **Model:** opus
 **Files:** modify `packages/contracts/src/access.ts`; extend `packages/contracts/test/access.test.ts`.
 
-- [ ] `testWindow({ unlockAt, lateEntrySec })` → `{ opensAt, closesAt }`. `closesAt` is null unless
+- [x] `testWindow({ unlockAt, lateEntrySec })` → `{ opensAt, closesAt }`. `closesAt` is null unless
       both halves exist, and is never earlier than `opensAt`.
-- [ ] `testIsOpen(window, now)` — open at exactly `opensAt`, closed at exactly `closesAt`, matching
+- [x] `testIsOpen(window, now)` — open at exactly `opensAt`, closed at exactly `closesAt`, matching
       the `endAt <= now` boundary the series window used.
-- [ ] `studentCatalogTestSchema` gains `opensAt` and `closesAt`.
-- [ ] Delete `SERIES_AVAILABILITY`, `seriesAvailabilitySchema`, `SERIES_AVAILABILITIES`, and
+- [x] `studentCatalogTestSchema` gains `opensAt` and `closesAt`.
+- [x] Delete `SERIES_AVAILABILITY`, `seriesAvailabilitySchema`, `SERIES_AVAILABILITIES`, and
       `availability`/`startAt`/`endAt` from `studentCatalogSeriesSchema`.
-- [ ] `branchTestConfigSchema` and `updateBranchTestConfigSchema` lose both dates and the refine
+- [x] `branchTestConfigSchema` and `updateBranchTestConfigSchema` lose both dates and the refine
       that ordered them; `branchTestScheduleSchema` + its update body arrive, seconds nullable.
       **Acceptance:** a test with no unlock is open at any instant; one with an unlock is shut a
       millisecond before it and open at it; a cutoff with no unlock is no cutoff; at exactly the
@@ -102,11 +106,11 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Risk:** HIGH · **Reviews:** 2 · **Model:** opus
 **Files:** modify `prisma/schema.prisma`; create the migration by hand.
 
-- [ ] `TestSeriesTest.unlockAt DateTime? @db.Timestamptz(3)`.
-- [ ] `model BranchTestSchedule` — `branchId`, `testId`, `lateEntrySec Int?`, `extraTimeSec Int?`,
+- [x] `TestSeriesTest.unlockAt DateTime? @db.Timestamptz(3)`.
+- [x] `model BranchTestSchedule` — `branchId`, `testId`, `lateEntrySec Int?`, `extraTimeSec Int?`,
       timestamps, `@@id([branchId, testId])`, `@@index([testId])`, both FKs `onDelete: Cascade`.
-- [ ] `BranchTestConfig` drops `startAt` and `endAt`.
-- [ ] The migration explains the data move at its top: branch windows are DISCARDED, not migrated,
+- [x] `BranchTestConfig` drops `startAt` and `endAt`.
+- [x] The migration explains the data move at its top: branch windows are DISCARDED, not migrated,
       because timing is now a property of a test and no branch window can be turned into one.
       **Acceptance:** `pnpm db:migrate:deploy` from scratch and `pnpm db:check` both pass; a seeded
       catalog still loads.
@@ -117,12 +121,12 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Files:** modify `apps/api/src/access/access-resolver.service.ts`; extend
 `apps/api/test/access-resolver.unit.test.ts`.
 
-- [ ] `catalogInclude` reads `unlockAt` off the join and the student's own `BranchTestSchedule`
+- [x] `catalogInclude` reads `unlockAt` off the join and the student's own `BranchTestSchedule`
       rows; `ResolvedTest` carries `opensAt`, `closesAt` and `extraTimeSec`.
-- [ ] `canStart` is computed per test — permitted student, unlocked series, and the test's own
+- [x] `canStart` is computed per test — permitted student, unlocked series, and the test's own
       window — instead of one series flag copied across every test.
-- [ ] `availabilityAt` and every series-window field are deleted.
-- [ ] `CATALOG_SHAPE` bumps to `v2`.
+- [x] `availabilityAt` and every series-window field are deleted.
+- [x] `CATALOG_SHAPE` bumps to `v2`.
       **Acceptance:** a test before its unlock is listed and not startable; the same test after it
       is startable; a branch cutoff shuts it again; a series with no unlock times behaves exactly
       as it does today.
@@ -134,10 +138,10 @@ institute would notice: a test that has been sat should not be quietly detached 
 `apps/api/src/access/access-resolver.service.ts`; extend
 `apps/api/test/attempts-service.unit.test.ts`.
 
-- [ ] `assertCanStart` refuses a test outside its window, with a message that says whether it has
+- [x] `assertCanStart` refuses a test outside its window, with a message that says whether it has
       not opened or has closed.
-- [ ] The branch's `extraTimeSec` is added to `durationSec` before `deadlineFrom`, never after it.
-- [ ] Resume is untouched: the gate asks whether a sitting may BEGIN, and a resumed one already has.
+- [x] The branch's `extraTimeSec` is added to `durationSec` before `deadlineFrom`, never after it.
+- [x] Resume is untouched: the gate asks whether a sitting may BEGIN, and a resumed one already has.
       **Acceptance:** a branch with ten minutes extra gets an `endsAt` ten minutes later than a
       branch with none on the same test; a start before the unlock and a start after the cutoff are
       both FORBIDDEN; a live attempt still resumes after the cutoff.
@@ -150,9 +154,9 @@ institute would notice: a test that has been sat should not be quietly detached 
 `packages/contracts/src/access.ts` (`ADMIN_SERIES_ROUTES`); extend
 `apps/api/test/offering.unit.test.ts`.
 
-- [ ] `setSeries` refuses to drop a link whose test has any attempt — `CONFLICT`, naming the series
+- [x] `setSeries` refuses to drop a link whose test has any attempt — `CONFLICT`, naming the series
       and the attempt count, before anything is deleted.
-- [ ] `ADMIN_SERIES_ROUTES.test(id, testId)` — `DELETE /admin/test-series/:id/tests/:testId`
+- [x] `ADMIN_SERIES_ROUTES.test(id, testId)` — `DELETE /admin/test-series/:id/tests/:testId`
       removes one link under the same guard, beside the `branches` pair already there.
       **Acceptance:** a link with attempts refuses and the row survives; a link with none is gone;
       the refusal names the series and the count.
@@ -163,9 +167,9 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Files:** create `packages/ui/src/components/ui/date-time-picker.tsx`; modify
 `packages/ui/src/index.ts`; create `packages/ui/test/date-time-picker.dom.test.tsx`.
 
-- [ ] `DateTimePicker` — `DatePicker` beside a time field, speaking ONE `YYYY-MM-DDTHH:mm` WALL
+- [x] `DateTimePicker` — `DatePicker` beside a time field, speaking ONE `YYYY-MM-DDTHH:mm` WALL
       TIME string, exactly as `DatePicker` speaks `YYYY-MM-DD`.
-- [ ] `packages/ui` holds no zone, so the component never sees an instant: the ADMIN app converts
+- [x] `packages/ui` holds no zone, so the component never sees an instant: the ADMIN app converts
       with `instituteWallTime` on the way in and `fromInstituteWallTime` on the way out, which is
       also the only place a new zone bug could be introduced.
       **Acceptance:** the component round-trips a wall-time string untouched and clears to empty
@@ -178,10 +182,10 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Files:** modify `apps/admin/src/routes/test-series-form.tsx`; modify
 `packages/contracts/src/client.ts`.
 
-- [ ] "How it opens" grows the list the series has never had: its tests in order, an `Opens` column
+- [x] "How it opens" grows the list the series has never had: its tests in order, an `Opens` column
       on `DateTimePicker`, and Remove behind `RowActions` with a confirm naming the test and the
       series.
-- [ ] "Where it runs" loses both date columns and becomes branches and a switch.
+- [x] "Where it runs" loses both date columns and becomes branches and a switch.
       **Acceptance:** setting an opening time and reloading shows the same instant in IST; removing
       a sat test refuses with the server's words; removing an unsat one drops it from the list.
 
@@ -191,9 +195,9 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Files:** modify `apps/admin/src/routes/test-builder-offering.tsx`; modify
 `packages/contracts/src/client.ts`.
 
-- [ ] The Offer step grows "Branch timing": every branch that reaches this test, with late entry
+- [x] The Offer step grows "Branch timing": every branch that reaches this test, with late entry
       and extra time in MINUTES, blank meaning none.
-- [ ] Held as a draft against the server and saved in one confirm listing what changed, the way the
+- [x] Held as a draft against the server and saved in one confirm listing what changed, the way the
       branch schedule already batches — never a write per keystroke.
       **Acceptance:** blank stays blank rather than saving zero; thirty minutes round-trips as
       1800 seconds; the confirm names how many branches changed.
@@ -203,13 +207,13 @@ institute would notice: a test that has been sat should not be quietly detached 
 **Risk:** normal · **Reviews:** 1 · **Model:** opus
 **Files:** modify `docs/02-mocktest-feature-spec.md`, `CLAUDE.md`.
 
-- [ ] §3 rewritten to the flow that exists: no per-test override of a config's shape, no test-wide
+- [x] §3 rewritten to the flow that exists: no per-test override of a config's shape, no test-wide
       difficulty default, no batch/group access, FIXED hand-picked vs GENERATED drawn, Offer rather
       than Schedule, and the base config's `difficultyMix` named for the workbook note it is.
-- [ ] §4 moves extra time out of Drop and into Keep, beside late entry.
-- [ ] §7 rewritten: a branch is given a series indefinitely; timing is the test's; a sat test cannot
+- [x] §4 moves extra time out of Drop and into Keep, beside late entry.
+- [x] §7 rewritten: a branch is given a series indefinitely; timing is the test's; a sat test cannot
       be unlinked.
-- [ ] §8's data-model additions carry `unlockAt` and `BranchTestSchedule`, and CLAUDE.md's access
+- [x] §8's data-model additions carry `unlockAt` and `BranchTestSchedule`, and CLAUDE.md's access
       bullet drops the window.
       **Acceptance:** every claim in the touched sections is true of `prisma/schema.prisma` and the
       services as merged — checked against the file, not against this plan.
