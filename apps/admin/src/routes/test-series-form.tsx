@@ -4,17 +4,20 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
-  FEATURE_KEYS,
-  PERMISSION_LEVELS,
-  UNLOCK_MODE,
-  UNLOCK_MODES,
-  fromInstituteWallTime,
-  instituteWallTime,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
   type SeriesTestRow,
+  TEST_SERIES_KIND,
+  TEST_SERIES_KINDS,
+  type TestSeriesKind,
   type TestSeriesSummary,
+  UNLOCK_MODE,
+  UNLOCK_MODES,
   type UnlockMode,
+  fromInstituteWallTime,
+  instituteWallTime,
 } from '@iace/contracts';
 import { applyFieldErrors, bannerMessage } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -44,7 +47,14 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  TEST_SERIES_KIND_HINTS,
+  TEST_SERIES_KIND_LABELS,
+  UNLOCK_MODE_LABELS,
+} from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
@@ -64,7 +74,7 @@ interface SeriesFormValues {
   prerequisiteSeriesId: string;
   unlockMode: UnlockMode;
   sequentialTests: boolean;
-  isFree: boolean;
+  kind: TestSeriesKind;
 }
 
 const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
@@ -89,7 +99,7 @@ function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     prerequisiteSeriesId: detail?.prerequisiteSeriesId ?? '',
     unlockMode: detail?.unlockMode ?? UNLOCK_MODE.AUTO,
     sequentialTests: detail?.sequentialTests ?? false,
-    isFree: detail?.isFree ?? false,
+    kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
   };
 }
 
@@ -103,7 +113,7 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     prerequisiteSeriesId: values.prerequisiteSeriesId || null,
     unlockMode: values.unlockMode,
     sequentialTests: values.sequentialTests,
-    isFree: values.isFree,
+    kind: values.kind,
   };
 }
 
@@ -167,7 +177,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const programCode = useWatch({ control: form.control, name: 'programCode' });
   const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
   const name = useWatch({ control: form.control, name: 'name' });
-  const isFree = useWatch({ control: form.control, name: 'isFree' });
+  const kind = useWatch({ control: form.control, name: 'kind' });
 
   // The picker hands back only an id, so what the stage is CALLED has to be kept as it is chosen.
   const [stage, setStage] = useState<StageChoice | null>(
@@ -180,7 +190,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
     stageName: stage?.stageName,
     examStageId: examStageId || undefined,
     programCode,
-    isFree,
+    kind,
   });
   const banner = bannerMessage(save.error, SERVER_FIELDS);
 
@@ -360,8 +370,27 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
               label="Unlock the tests in order"
               /* ui-copy-ok: rule */ hint="Off opens every test in the series together."
             />
-            <SeriesToggle form={form} name="isFree" label="Free" />
           </div>
+
+          <FormField form={form} name="kind" label="Kind">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={kind}
+                onChange={(next) =>
+                  form.setValue('kind', next as TestSeriesKind, { shouldDirty: true })
+                }
+                items={TEST_SERIES_KINDS.map((value) => ({
+                  value,
+                  label: TEST_SERIES_KIND_LABELS[value],
+                  hint: TEST_SERIES_KIND_HINTS[value],
+                }))}
+              />
+            )}
+          </FormField>
         </div>
       </FormSection>
 
@@ -550,7 +579,7 @@ function SeriesToggle({
   hint,
 }: Readonly<{
   form: UseFormReturn<SeriesFormValues>;
-  name: 'sequentialTests' | 'isFree';
+  name: 'sequentialTests';
   label: string;
   hint?: string;
 }>) {

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   EVALUATION_MODE,
   TEST_SCOPE,
+  TEST_SERIES_KIND,
   nameStem,
   seriesNameKind,
   suggestedSeriesName,
@@ -119,12 +120,16 @@ describe('seriesNameKind', () => {
   });
 
   it('separates the free tier from the ordinary one', () => {
-    assert.equal(seriesNameKind({ isFree: true }), 'Free Mocks');
+    assert.equal(seriesNameKind({ kind: TEST_SERIES_KIND.FREE }), 'Free Mocks');
+    assert.equal(seriesNameKind({ kind: TEST_SERIES_KIND.SCHOLARSHIP }), 'Scholarship Test');
     assert.equal(seriesNameKind({}), 'Mock Test Series');
   });
 
   /** A program wins: it is the narrower fact, and a free program series is still that program's. */
   it('prefers the program over the free tier', () => {
-    assert.equal(seriesNameKind({ programCode: 'FOUNDATION', isFree: true }), 'FOUNDATION');
+    assert.equal(
+      seriesNameKind({ programCode: 'FOUNDATION', kind: TEST_SERIES_KIND.FREE }),
+      'FOUNDATION',
+    );
   });
 });

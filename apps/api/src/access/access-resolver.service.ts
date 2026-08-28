@@ -1,20 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  AppException,
   ATTEMPT_STATUS,
-  ErrorCodes,
-  TEST_STATUS,
-  UNLOCK_MODE,
-  UNLOCK_STATE,
-  testIsOpen,
-  testWindow,
+  AppException,
   type AttemptStatus,
+  ErrorCodes,
+  type ExamFamily,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
+  TEST_SERIES_KIND,
+  TEST_STATUS,
+  type TestSeriesKind,
+  UNLOCK_MODE,
+  UNLOCK_STATE,
   type UnlockMode,
   type UnlockState,
+  testIsOpen,
+  testWindow,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -82,7 +85,7 @@ interface ResolvedSeries {
   description: string | null;
   examStage: { id: string; name: string; examCode: string } | null;
   programCode: string | null;
-  isFree: boolean;
+  kind: TestSeriesKind;
   sequentialTests: boolean;
   unlockMode: UnlockMode;
   unlockState: UnlockState;
@@ -218,7 +221,13 @@ export class AccessResolverService {
   private async resolve(studentId: string): Promise<FreshCatalog> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null, isActive: true },
-      select: { isTestBlocked: true, currentBranchId: true, programs: true, enrolledExams: true },
+      select: {
+        isTestBlocked: true,
+        currentBranchId: true,
+        programs: true,
+        enrolledExams: true,
+        enrolledFamilies: true,
+      },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
@@ -268,6 +277,7 @@ export function reachableBy(
     currentBranchId: string | null;
     programs: string[];
     enrolledExams: string[];
+    enrolledFamilies: ExamFamily[];
   }>,
 ): Prisma.TestSeriesWhereInput {
   const automatic: Prisma.TestSeriesWhereInput[] = [
@@ -276,6 +286,16 @@ export function reachableBy(
     // enrolment alone must never open one.
     ...(student.enrolledExams.length > 0
       ? [{ programCode: null, examStage: { exam: { code: { in: student.enrolledExams } } } }]
+      : []),
+    // A family opens the FREE series on it and nothing else: that is what free means here.
+    ...(student.enrolledFamilies.length > 0
+      ? [
+          {
+            kind: TEST_SERIES_KIND.FREE,
+            programCode: null,
+            examStage: { exam: { family: { in: student.enrolledFamilies } } },
+          },
+        ]
       : []),
   ];
 
@@ -303,7 +323,7 @@ function toResolved(
       ? { id: row.examStage.id, name: row.examStage.name, examCode: row.examStage.exam.code }
       : null,
     programCode: row.programCode,
-    isFree: row.isFree,
+    kind: row.kind,
     sequentialTests: row.sequentialTests,
     unlockMode: row.unlockMode,
     unlockState: locked ? UNLOCK_STATE.LOCKED : UNLOCK_STATE.UNLOCKED,

@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  decideUnlockRequestSchema,
   TEST_BUCKET,
+  TEST_SERIES_KIND,
+  UNLOCK_REQUEST_STATUS,
+  decideUnlockRequestSchema,
+  studentCatalogSeriesSchema,
   testAction,
   testBucket,
-  type StudentCatalogTest,
-  studentCatalogSeriesSchema,
   testIsOpen,
   testWindow,
-  UNLOCK_REQUEST_STATUS,
+  type StudentCatalogTest,
 } from '../src/access';
 import { ME_ROUTES } from '../src/me';
 
@@ -19,7 +20,7 @@ const SERIES = {
   description: null,
   examStage: { id: 'stage_1', name: 'Tier 1', examCode: 'SSC CGL' },
   programCode: null,
-  isFree: false,
+  kind: TEST_SERIES_KIND.STANDARD,
   sequentialTests: false,
   unlockMode: 'AUTO',
   unlockState: 'UNLOCKED',

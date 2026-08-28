@@ -1,55 +1,57 @@
 import {
+  ANSWER_STATE,
+  ATTEMPT_STATUS,
+  type AdminPermissions,
+  type AnswerState,
   AppException,
-  ErrorCodes,
+  type AttemptStatus,
   BRANCH_TYPE,
+  type BranchType,
+  DRAW_STRATEGY,
+  type DrawSpec,
+  type DrawStrategy,
+  EVALUATION_MODE,
   EXAM_FAMILY,
   EXAM_MODE,
   EXAM_TEMPLATE,
-  LANGUAGE_CODE,
-  LANGUAGE_MODE,
-  MERIT_TYPE,
-  NAVIGATION_POLICY,
-  STAGE_DISPOSITION,
-  STUDENT_TYPE,
-  ANSWER_STATE,
-  ATTEMPT_STATUS,
-  DRAW_STRATEGY,
-  EVALUATION_MODE,
-  PAPER_BINDING,
-  TEST_SCOPE,
-  UNLOCK_MODE,
-  UNLOCK_REQUEST_STATUS,
-  TEST_STATUS,
-  TEST_UI,
-  TIMER_TEMPLATE,
-  type AdminPermissions,
-  type BranchType,
+  ErrorCodes,
+  type EvaluationMode,
   type ExamFamily,
   type ExamMode,
   type ExamTemplate,
   type FeatureKey,
+  LANGUAGE_CODE,
+  LANGUAGE_MODE,
   type LanguageCode,
   type LanguageMode,
+  MERIT_TYPE,
   type MeritType,
+  NAVIGATION_POLICY,
   type NavigationPolicy,
-  type PermissionLevel,
-  type StageDisposition,
-  type StudentType,
-  type UnlockMode,
-  type UnlockRequestStatus,
   type NotificationType,
-  type AnswerState,
-  type AttemptStatus,
-  type DrawStrategy,
-  type EvaluationMode,
+  PAPER_BINDING,
   type PaperBinding,
   type PaperQuestionStatus,
-  type DrawSpec,
+  type PermissionLevel,
+  STAGE_DISPOSITION,
+  STUDENT_TYPE,
+  type StageDisposition,
+  type StudentType,
+  TEST_SCOPE,
+  TEST_SERIES_KIND,
+  TEST_STATUS,
+  TEST_UI,
+  TIMER_TEMPLATE,
   type TestScope,
   type TestScopeRef,
+  type TestSeriesKind,
   type TestStatus,
   type TestUi,
   type TimerTemplate,
+  UNLOCK_MODE,
+  UNLOCK_REQUEST_STATUS,
+  type UnlockMode,
+  type UnlockRequestStatus,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { type Env } from '../../src/config/env.schema';
@@ -2915,7 +2917,7 @@ export interface FakeSeriesRow {
   sequentialTests: boolean;
   prerequisiteSeriesId: string | null;
   unlockMode: UnlockMode;
-  isFree: boolean;
+  kind: TestSeriesKind;
   createdAt: Date;
   _count: { tests: number };
 }
@@ -2964,7 +2966,7 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     sequentialTests: false,
     prerequisiteSeriesId: null,
     unlockMode: UNLOCK_MODE.AUTO,
-    isFree: false,
+    kind: TEST_SERIES_KIND.STANDARD,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
     _count: { tests: overrides._count?.tests ?? 0 },
@@ -3312,7 +3314,8 @@ export interface FakeCatalogData {
 interface CatalogReachWhere {
   grants?: { some: { studentId: string } };
   programCode?: null | { in: string[] };
-  examStage?: { exam: { code: { in: string[] } } };
+  kind?: TestSeriesKind;
+  examStage?: { exam: { code?: { in: string[] }; family?: { in: ExamFamily[] } } };
 }
 
 interface CatalogSeriesWhere extends CatalogReachWhere {
@@ -3610,6 +3613,7 @@ export class FakeCatalogPrisma {
     return (
       enabledHere &&
       (where.id === undefined || where.id.in.includes(row.id)) &&
+      (where.kind === undefined || row.kind === where.kind) &&
       this.matchesGrant(row, where.grants) &&
       matchesProgramCode(row.programCode, where.programCode) &&
       this.matchesExam(row, where.examStage) &&
@@ -3627,8 +3631,21 @@ export class FakeCatalogPrisma {
 
   private matchesExam(row: FakeSeriesRow, filter: CatalogReachWhere['examStage']): boolean {
     if (filter === undefined) return true;
-    const code = this.examCodeOf(row.examStageId);
-    return code !== null && filter.exam.code.in.includes(code);
+    if (filter.exam.code) {
+      const code = this.examCodeOf(row.examStageId);
+      return code !== null && filter.exam.code.in.includes(code);
+    }
+    if (filter.exam.family) {
+      const family = this.examFamilyOf(row.examStageId);
+      return family !== null && filter.exam.family.in.includes(family);
+    }
+    return true;
+  }
+
+  private examFamilyOf(examStageId: string | null): ExamFamily | null {
+    const stage = this.data.stages.find((candidate) => candidate.id === examStageId);
+    const exam = this.data.exams.find((candidate) => candidate.id === stage?.examId);
+    return exam?.family ?? null;
   }
 
   private examCodeOf(examStageId: string | null): string | null {

@@ -19,6 +19,16 @@ export const UNLOCK_MODE = {
   /** An admin grants it and nothing else does. */
   ADMIN: 'ADMIN',
 } as const;
+/** STANDARD reaches by exam or program; FREE also by an enrolled family; SCHOLARSHIP only by a grant. */
+export const TEST_SERIES_KIND = {
+  STANDARD: 'STANDARD',
+  FREE: 'FREE',
+  SCHOLARSHIP: 'SCHOLARSHIP',
+} as const;
+export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
+export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
+export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
+
 export const unlockModeSchema = z.enum(UNLOCK_MODE);
 export type UnlockMode = z.infer<typeof unlockModeSchema>;
 export const UNLOCK_MODES = unlockModeSchema.options;
@@ -117,8 +127,7 @@ export const testSeriesSchema = z.object({
   sequentialTests: z.boolean(),
   prerequisiteSeriesId: z.string().nullable(),
   unlockMode: unlockModeSchema,
-  /** Pricing only. Free is not open access. */
-  isFree: z.boolean(),
+  kind: testSeriesKindSchema,
   createdAt: z.string(),
 });
 export type TestSeries = z.infer<typeof testSeriesSchema>;
@@ -140,18 +149,23 @@ export const seriesNameSchema = z
   .min(2, 'Give the series a name')
   .max(SERIES_NAME_MAX, `A name cannot be longer than ${SERIES_NAME_MAX} characters`);
 
-/** A series is named by who reaches it: a program, the free tier, or nothing in particular. */
-export function seriesNameKind(input: { programCode?: string | null; isFree?: boolean }): string {
+/** A series is named by who reaches it: a program, its kind, or nothing in particular. */
+export function seriesNameKind(input: {
+  programCode?: string | null;
+  kind?: TestSeriesKind;
+}): string {
   const program = input.programCode?.trim();
   if (program) return program;
-  return input.isFree ? 'Free Mocks' : 'Mock Test Series';
+  if (input.kind === TEST_SERIES_KIND.FREE) return 'Free Mocks';
+  if (input.kind === TEST_SERIES_KIND.SCHOLARSHIP) return 'Scholarship Test';
+  return 'Mock Test Series';
 }
 
 export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   examStageId: csvIdQuery(),
   programCode: z.string().optional(),
-  isFree: optionalBooleanQuery(),
+  kind: testSeriesKindSchema.optional(),
   match: matchModeQuery(),
   /** A student id: drops what they already reach, so a picker cannot offer a grant that does nothing. */
   notReachedBy: z.string().optional(),
@@ -169,7 +183,7 @@ export const createTestSeriesSchema = z.object({
   sequentialTests: z.boolean().optional(),
   prerequisiteSeriesId: z.string().nullish(),
   unlockMode: unlockModeSchema.optional(),
-  isFree: z.boolean().optional(),
+  kind: testSeriesKindSchema.optional(),
 });
 export type CreateTestSeriesInput = z.input<typeof createTestSeriesSchema>;
 export type CreateTestSeriesBody = z.infer<typeof createTestSeriesSchema>;
@@ -204,6 +218,7 @@ export type StudentGrantRow = z.infer<typeof studentGrantRowSchema>;
 /** Why a student reaches a series. A grant can sit beside an automatic one, so a row carries a set. */
 export const STUDENT_SERIES_SOURCE = {
   EXAM: 'EXAM',
+  FAMILY: 'FAMILY',
   PROGRAM: 'PROGRAM',
   GRANT: 'GRANT',
 } as const;
@@ -395,7 +410,7 @@ export const studentCatalogSeriesSchema = z.object({
   description: z.string().nullable(),
   examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
   programCode: z.string().nullable(),
-  isFree: z.boolean(),
+  kind: testSeriesKindSchema,
   sequentialTests: z.boolean(),
   unlockMode: unlockModeSchema,
   unlockState: unlockStateSchema,

@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  type EvaluationMode,
   PAGE_SIZE_MAX,
+  type TestScope,
+  type TestSeriesKind,
   nameStem,
   seriesNameKind,
   suggestedSeriesName,
   suggestedTestName,
   testNameKind,
-  type EvaluationMode,
-  type TestScope,
 } from '@iace/contracts';
 import { api } from './api';
 import { QUERY_KEYS, QUERY_SCOPES } from './constants';
@@ -53,7 +54,7 @@ export interface SeriesNameSource {
   stageName?: string;
   examStageId?: string;
   programCode?: string | null;
-  isFree?: boolean;
+  kind?: TestSeriesKind;
 }
 
 export function useSuggestedSeriesName(source: SeriesNameSource): string | undefined {

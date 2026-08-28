@@ -2,7 +2,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { FEATURE_KEYS, PERMISSION_LEVELS, type TestSeriesSummary } from '@iace/contracts';
+import {
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  TEST_SERIES_KIND,
+  type TestSeriesSummary,
+} from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
@@ -21,7 +26,13 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  TEST_SERIES_KIND_LABELS,
+  UNLOCK_MODE_LABELS,
+} from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../components/exam-picker';
 
@@ -55,11 +66,11 @@ function seriesColumns(
         ),
     },
     {
-      key: 'pricing',
-      header: 'Pricing',
+      key: 'kind',
+      header: 'Kind',
       cell: (series) => (
-        <Badge variant={series.isFree ? 'success' : 'neutral'}>
-          {series.isFree ? 'Free' : 'Paid'}
+        <Badge variant={series.kind === TEST_SERIES_KIND.STANDARD ? 'neutral' : 'success'}>
+          {TEST_SERIES_KIND_LABELS[series.kind]}
         </Badge>
       ),
     },

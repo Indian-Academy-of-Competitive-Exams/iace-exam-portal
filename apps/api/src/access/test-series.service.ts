@@ -36,7 +36,7 @@ export const AUDITED_SERIES_FIELDS = [
   'sequentialTests',
   'prerequisiteSeriesId',
   'unlockMode',
-  'isFree',
+  'kind',
 ] as const;
 
 /**
@@ -59,7 +59,12 @@ export class TestSeriesService {
 
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null },
-      select: { currentBranchId: true, programs: true, enrolledExams: true },
+      select: {
+        currentBranchId: true,
+        programs: true,
+        enrolledExams: true,
+        enrolledFamilies: true,
+      },
     });
     if (!student) return [];
 
@@ -70,7 +75,7 @@ export class TestSeriesService {
     const chosen: Prisma.TestSeriesWhereInput[] = [
       ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
       ...(query.programCode ? [{ programCode: query.programCode }] : []),
-      ...(query.isFree === undefined ? [] : [{ isFree: query.isFree }]),
+      ...(query.kind === undefined ? [] : [{ kind: query.kind }]),
     ];
     const always: Prisma.TestSeriesWhereInput[] = query.q
       ? [{ name: { contains: query.q, mode: 'insensitive' } }]
@@ -316,7 +321,7 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
       ? {}
       : { prerequisiteSeriesId: input.prerequisiteSeriesId ?? null }),
     ...(input.unlockMode === undefined ? {} : { unlockMode: input.unlockMode }),
-    ...(input.isFree === undefined ? {} : { isFree: input.isFree }),
+    ...(input.kind === undefined ? {} : { kind: input.kind }),
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 
@@ -336,7 +341,7 @@ function toSummary(
     sequentialTests: row.sequentialTests,
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     unlockMode: row.unlockMode,
-    isFree: row.isFree,
+    kind: row.kind,
     testCount: row._count.tests,
     enabledBranchCount: branches?.enabled ?? 0,
     branchCount: branches?.total ?? 0,

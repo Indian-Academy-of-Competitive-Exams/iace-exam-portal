@@ -195,6 +195,15 @@ enum ImportSource {
   SELF_SIGNUP
 }
 
+/**
+ * STANDARD reaches by exam or program; FREE also by family; SCHOLARSHIP only by a grant.
+ */
+enum TestSeriesKind {
+  STANDARD
+  FREE
+  SCHOLARSHIP
+}
+
 enum UnlockMode {
   AUTO
   REQUEST
@@ -788,18 +797,19 @@ model Program {
 // The unit of offering — a test reaches students only through a series.
 // programCode null = exam/family access; set = program-only.
 model TestSeries {
-  id                   String     @id @default(cuid())
+  id                   String         @id @default(cuid())
   name                 String
   description          String?
   examStageId          String?
   programCode          String?
-  sequentialTests      Boolean    @default(false)
+  sequentialTests      Boolean        @default(false)
   prerequisiteSeriesId String?
-  unlockMode           UnlockMode @default(AUTO)
-  // Pricing only — free is not open access.
-  isFree               Boolean    @default(false)
-  createdAt            DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  unlockMode           UnlockMode     @default(AUTO)
+  // What the series IS, and one of three: only FREE is reached by an enrolled family, and
+  // only SCHOLARSHIP is reached by nothing but an import's grant.
+  kind                 TestSeriesKind @default(STANDARD)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
 
   examStage          ExamStage?            @relation(fields: [examStageId], references: [id], onDelete: Restrict)
   program            Program?              @relation(fields: [programCode], references: [code], onDelete: Restrict)
