@@ -4,6 +4,7 @@ import {
   BRANCH_TYPE,
   EXAM_FAMILY,
   EXAM_MODE,
+  EXAM_TEMPLATE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
   MERIT_TYPE,
@@ -25,6 +26,7 @@ import {
   type BranchType,
   type ExamFamily,
   type ExamMode,
+  type ExamTemplate,
   type FeatureKey,
   type LanguageCode,
   type LanguageMode,
@@ -1295,6 +1297,7 @@ export interface FakeTestModelRow {
   id: string;
   title: string | null;
   baseConfigId: string;
+  examTemplate: ExamTemplate;
   examStageId: string;
   scope: TestScope;
   scopeRef: TestScopeRef | null;
@@ -1317,6 +1320,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     id: 'tst_1',
     title: 'SSC CGL Tier 1 — Mock 1',
     baseConfigId: 'cfg_1',
+    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
     examStageId: 'stage_1',
     scope: TEST_SCOPE.FULL,
     scopeRef: null,
@@ -1833,6 +1837,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     return {
       ...row,
       test: {
+        examTemplate: test?.examTemplate ?? EXAM_TEMPLATE.COMFORTABLE,
         baseConfig: {
           languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
           timerTemplate: config?.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE,

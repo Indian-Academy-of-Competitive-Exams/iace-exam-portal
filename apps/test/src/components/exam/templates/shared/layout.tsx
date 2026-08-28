@@ -10,7 +10,12 @@ export function Layout({ view, config, slots }: Readonly<ExamLayoutProps>) {
       {config.watermark === 'SCREEN' ? <slots.Watermark view={view} config={config} /> : null}
       <slots.Header view={view} config={config} />
 
-      <Tabs value={view.sectionId} onValueChange={view.openSection} className="min-h-0 flex-1">
+      {/* A COLUMN: without it the section bar and the paper size to their content and spill over the bottom bar. */}
+      <Tabs
+        value={view.sectionId}
+        onValueChange={view.openSection}
+        className="flex min-h-0 flex-1 flex-col"
+      >
         <slots.SectionBar view={view} config={config} />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
