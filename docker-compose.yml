@@ -63,7 +63,8 @@ services:
       timeout: 5s
       retries: 20
 
-  # One-shot: wait for MinIO, create the bucket, exit 0. Safe to re-run.
+  # One-shot: wait for MinIO, create the bucket, open it for reading, exit 0. Safe to re-run.
+  # Anonymous download because a question's images are embedded as plain S3_PUBLIC_URL links.
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     container_name: iace-minio-init
@@ -78,6 +79,7 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 \"$$S3_ACCESS_KEY_ID\" \"$$S3_SECRET_ACCESS_KEY\" &&
       mc mb --ignore-existing local/\"$$S3_BUCKET\" &&
+      mc anonymous set download local/\"$$S3_BUCKET\" &&
       echo \"bucket ready: $$S3_BUCKET\"
       "
     restart: 'no'
