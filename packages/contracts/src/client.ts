@@ -182,8 +182,12 @@ import {
 import {
   IMPORT_FILE_FIELD,
   IMPORT_ROUTES,
+  scholarshipImportPlanSchema,
+  scholarshipImportResultSchema,
   studentImportPlanSchema,
   studentImportResultSchema,
+  type ScholarshipImportPlan,
+  type ScholarshipImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from './imports';
@@ -1154,6 +1158,21 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: fileBody(file),
             schema: studentImportResultSchema,
+          }),
+
+        /** A scholarship intake: an existing number is granted the series and nothing else. */
+        previewScholarship: (seriesId: string, file: File): Promise<ScholarshipImportPlan> =>
+          request(IMPORT_ROUTES.scholarshipPreview(seriesId), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: scholarshipImportPlanSchema,
+          }),
+
+        commitScholarship: (seriesId: string, file: File): Promise<ScholarshipImportResult> =>
+          request(IMPORT_ROUTES.scholarshipCommit(seriesId), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: scholarshipImportResultSchema,
           }),
 
         /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */

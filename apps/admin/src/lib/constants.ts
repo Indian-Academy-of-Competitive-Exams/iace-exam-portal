@@ -81,6 +81,8 @@ export const ROUTES = {
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
+  SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
+  SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',

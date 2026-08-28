@@ -46,11 +46,7 @@ export function seriesSources(
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
 
-/**
- * Owns `StudentGrant` — the escape hatch for access that is not exam-, program- or
- * branch-derivable. One row per (student, series), and it is the ONLY direct student-to-offering
- * link in the model, which is why it is granted one at a time and never in bulk.
- */
+/** Owns `StudentGrant`: the escape hatch, one row per (student, series), granted deliberately. */
 @Injectable()
 export class StudentGrantsService {
   constructor(
@@ -159,6 +155,26 @@ export class StudentGrantsService {
     if (!held) this.events.emit(DOMAIN_EVENTS.SERIES_GRANTED, key);
 
     return this.list(studentId);
+  }
+
+  /** A whole intake at once. `skipDuplicates`, so re-importing the same sheet grants nobody twice. */
+  async grantMany(
+    studentIds: readonly string[],
+    testSeriesId: string,
+    createdById: string,
+  ): Promise<number> {
+    if (studentIds.length === 0) return 0;
+
+    const { count } = await this.prisma.studentGrant.createMany({
+      data: studentIds.map((studentId) => ({ studentId, testSeriesId, createdById })),
+      skipDuplicates: true,
+    });
+
+    // Per student, not one global bust: an intake must not throw away every other student's catalog.
+    for (const studentId of studentIds) {
+      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
+    }
+    return count;
   }
 
   async revoke(studentId: string, testSeriesId: string): Promise<void> {

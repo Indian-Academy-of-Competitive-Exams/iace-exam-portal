@@ -11,6 +11,11 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
   type StudentImportRow,
+  type ScholarshipImportPlan,
+  type ScholarshipImportResult,
+  STUDENT_TYPE,
+  AppException,
+  ErrorCodes,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, defaultPinFor } from '../auth';
@@ -18,6 +23,8 @@ import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
 import { fetchPortalRoster, type PortalFetch } from './portal-roster';
+import { planScholarshipImport } from './scholarship-import';
+import { StudentGrantsService } from '../access';
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 import { toDateColumn } from '../common/time/institute-day';
@@ -46,6 +53,7 @@ export class ImportsService {
     private readonly auth: AuthService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly grants: StudentGrantsService,
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
@@ -60,6 +68,91 @@ export class ImportsService {
   async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     const plan = await this.planStudents(file);
     return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
+  }
+
+  /** Writes nothing. The series has to exist, so a stale page cannot enrol into a deleted one. */
+  async previewScholarship(seriesId: string, file: Buffer): Promise<ScholarshipImportPlan> {
+    await this.requireSeries(seriesId);
+    return this.planScholarship(file);
+  }
+
+  /** An existing number is GRANTED and nothing on that student is touched: this may not edit anybody. */
+  async commitScholarship(
+    seriesId: string,
+    file: Buffer,
+    actorId: string,
+  ): Promise<ScholarshipImportResult> {
+    await this.requireSeries(seriesId);
+    const plan = await this.planScholarship(file);
+    const logId = await this.openRun(
+      file,
+      plan.summary.total,
+      plan.fileErrors,
+      IMPORT_SOURCE.SHEET,
+      actorId,
+    );
+
+    let created = 0;
+    const studentIds: string[] = [];
+    const rowActions: { entityId: string; action: AuditAction }[] = [];
+    const written = (): RunOutcome => ({
+      feature: AUDIT_FEATURE.STUDENT,
+      rowActions,
+      counts: {
+        created,
+        updated: studentIds.length - created,
+        skipped: 0,
+        failed: plan.summary.invalid,
+      },
+      actorId,
+    });
+
+    try {
+      const pinHashes = await this.hashStartingPins(
+        plan.rows.filter((row) => row.action === 'create' && row.mobile).map((row) => row.mobile!),
+      );
+
+      for (const row of plan.rows) {
+        if (row.action === 'skip' || !row.mobile) continue;
+
+        if (row.existingStudentId) {
+          studentIds.push(row.existingStudentId);
+          rowActions.push({ entityId: row.existingStudentId, action: AUDIT_ACTION.UPDATE });
+          continue;
+        }
+
+        const student = await this.prisma.student.create({
+          data: {
+            mobile: row.mobile,
+            fullName: row.fullName,
+            // Outside the institute and at no centre of ours: the grant is the whole of their access.
+            studentType: STUDENT_TYPE.NON_IACE,
+            pinHash: pinHashes.get(row.mobile),
+            pinIsDefault: true,
+          },
+        });
+        created += 1;
+        studentIds.push(student.id);
+        rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
+      }
+
+      await this.grants.grantMany(studentIds, seriesId, actorId);
+    } catch (error) {
+      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
+        fileErrors: plan.fileErrors,
+        error,
+      });
+      throw error;
+    }
+
+    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
+
+    return {
+      ...plan.summary,
+      created,
+      granted: studentIds.length,
+      skipped: plan.summary.invalid,
+    };
   }
 
   /** What the portal WOULD do, judged by the same planner the sheet goes through. */
@@ -173,6 +266,37 @@ export class ImportsService {
       },
     });
     return { entityId: student.id, action: AUDIT_ACTION.CREATE };
+  }
+
+  private async requireSeries(seriesId: string): Promise<void> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: seriesId },
+      select: { id: true },
+    });
+    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
+  }
+
+  private async planScholarship(file: Buffer): Promise<ScholarshipImportPlan> {
+    const table = await readUploadedTable(file);
+    const mobiles = mobilesIn(table);
+    const students =
+      mobiles.length === 0
+        ? []
+        : await this.prisma.student.findMany({
+            where: { mobile: { in: mobiles } },
+            select: { id: true, mobile: true, pinHash: true, deletedAt: true },
+          });
+
+    return planScholarshipImport(table, {
+      existingByMobile: new Map(
+        students
+          .filter((student) => student.deletedAt === null)
+          .map((student) => [student.mobile, { id: student.id, hasPin: student.pinHash !== null }]),
+      ),
+      deletedMobiles: new Set(
+        students.filter((student) => student.deletedAt !== null).map((student) => student.mobile),
+      ),
+    });
   }
 
   private async planStudents(file: Buffer): Promise<StudentImportPlan> {

@@ -3,6 +3,7 @@ import {
   Get,
   Header,
   HttpCode,
+  Param,
   HttpStatus,
   Post,
   Res,
@@ -20,6 +21,8 @@ import {
   IMPORT_FILE_FIELD,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
+  type ScholarshipImportPlan,
+  type ScholarshipImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
@@ -85,6 +88,30 @@ export class ImportsController {
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
     return this.imports.commitStudents(this.bufferOf(file), user.id);
+  }
+
+  /** A scholarship intake, read against the series it enrols into. Writes nothing. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('scholarship/:seriesId/preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  previewScholarship(
+    @Param('seriesId') seriesId: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<ScholarshipImportPlan> {
+    return this.imports.previewScholarship(seriesId, this.bufferOf(file));
+  }
+
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post('scholarship/:seriesId/commit')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  commitScholarship(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('seriesId') seriesId: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<ScholarshipImportResult> {
+    return this.imports.commitScholarship(seriesId, this.bufferOf(file), user.id);
   }
 
   /** Super admin, as the old fire-and-forget trigger was: it pulls a whole roster from elsewhere. */

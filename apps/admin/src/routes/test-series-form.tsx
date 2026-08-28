@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Clock, Pencil, Power, Trash2 } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Clock, Pencil, Power, Trash2, Upload } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
@@ -357,6 +357,16 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
       {existing ? <SeriesTests series={detail} /> : null}
       {existing ? <BranchSchedule series={detail} /> : null}
+      {existing ? (
+        <FormSection title="Candidates">
+          <Button variant="outline" size="sm" asChild>
+            <Link to={ROUTES.SERIES_CANDIDATES(detail.id)}>
+              <Upload aria-hidden />
+              Import candidates
+            </Link>
+          </Button>
+        </FormSection>
+      ) : null}
     </FormPanel>
   );
 }

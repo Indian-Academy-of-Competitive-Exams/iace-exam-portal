@@ -15,6 +15,7 @@ import {
 import { AuditService } from '../src/audit/audit.service';
 import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
+import { type StudentGrantsService } from '../src/access';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
   FakePrisma,
@@ -111,6 +112,10 @@ const fakeAuth = (
   hashPin: (pin: string) => Promise<string> = (pin) => Promise.resolve(`hash:${pin}`),
 ) => ({ hashPin }) as unknown as AuthService;
 
+/** The scholarship path is not what these tests exercise, so the grants service is a stand-in. */
+const fakeGrants = () =>
+  ({ grantMany: () => Promise.resolve(0) }) as unknown as StudentGrantsService;
+
 describe('ImportsService — a preview writes nothing at all', () => {
   /**
    * `ImportLog` and its S3 object are kept indefinitely. Opening one for a preview nobody commits
@@ -124,6 +129,7 @@ describe('ImportsService — a preview writes nothing at all', () => {
       fakeAuth(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
     );
 
     await service.previewStudents(Buffer.from(roster('mobile\n9876543210')));
@@ -156,6 +162,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       fakeAuth(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
     );
 
     const result = await service.commitStudents(
@@ -217,6 +224,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       fakeAuth(() => Promise.reject(new Error('argon2 unavailable'))),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
     );
 
     await assert.rejects(
@@ -245,6 +253,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       fakeAuth(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
     );
 
     await assert.rejects(
@@ -289,6 +298,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       fakeAuth(),
       new FakeStorage() as never,
       throwingAudit,
+      fakeGrants(),
     );
 
     const result = await service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1');
@@ -321,6 +331,7 @@ describe('ImportsService — a failed close preserves what openRun already recor
       fakeAuth(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
     );
     const opened = await prisma.importLog.create({
       data: {

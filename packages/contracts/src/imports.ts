@@ -92,6 +92,44 @@ export const studentImportResultSchema = studentImportSummarySchema.extend({
 });
 export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 
+/** A scholarship intake: an enrolment list, never a roster, so a known mobile ONLY earns a grant. */
+export const scholarshipImportActionSchema = z.enum(['create', 'grant', 'skip']);
+export type ScholarshipImportAction = z.infer<typeof scholarshipImportActionSchema>;
+
+export const scholarshipImportRowSchema = z.object({
+  line: z.number().int(),
+  mobile: z.string().nullable(),
+  fullName: z.string().nullable(),
+  /** Set when the number already belongs to a LIVE student — this row grants and writes nothing else. */
+  existingStudentId: z.string().nullable(),
+  willReceiveDefaultPin: z.boolean(),
+  action: scholarshipImportActionSchema,
+  errors: z.array(z.string()),
+});
+export type ScholarshipImportRow = z.infer<typeof scholarshipImportRowSchema>;
+
+export const scholarshipImportSummarySchema = z.object({
+  total: z.number().int(),
+  willCreate: z.number().int(),
+  willGrant: z.number().int(),
+  invalid: z.number().int(),
+});
+export type ScholarshipImportSummary = z.infer<typeof scholarshipImportSummarySchema>;
+
+export const scholarshipImportPlanSchema = z.object({
+  rows: z.array(scholarshipImportRowSchema),
+  summary: scholarshipImportSummarySchema,
+  fileErrors: z.array(z.string()),
+});
+export type ScholarshipImportPlan = z.infer<typeof scholarshipImportPlanSchema>;
+
+export const scholarshipImportResultSchema = scholarshipImportSummarySchema.extend({
+  created: z.number().int(),
+  granted: z.number().int(),
+  skipped: z.number().int(),
+});
+export type ScholarshipImportResult = z.infer<typeof scholarshipImportResultSchema>;
+
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
@@ -100,6 +138,9 @@ export const IMPORT_ROUTES = {
   studentsPortalCommit: '/imports/students/portal/commit',
   /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
   studentsTemplate: '/imports/students/template',
+  /** A scholarship intake is filed against the series it enrols into. */
+  scholarshipPreview: (seriesId: string) => `/imports/scholarship/${seriesId}/preview`,
+  scholarshipCommit: (seriesId: string) => `/imports/scholarship/${seriesId}/commit`,
 } as const;
 
 /** What the sample file is called when it lands in the admin's downloads. */
