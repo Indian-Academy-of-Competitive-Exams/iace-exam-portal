@@ -286,12 +286,6 @@ export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
   ADMIN: 'Admin released',
 };
 
-export const UNLOCK_MODE_HINTS: Readonly<Record<UnlockMode, string>> = {
-  AUTO: 'Opens as soon as the student can reach it',
-  REQUEST: 'The student asks and an admin approves',
-  ADMIN: 'An admin opens it, one student at a time',
-};
-
 /**
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
  * the screens it gates are the ones that decide who decides.

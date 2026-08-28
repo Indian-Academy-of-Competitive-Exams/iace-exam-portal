@@ -6,8 +6,6 @@ export const QUEUE_NAMES = {
   ATTEMPT_SWEEP: 'attempt-sweep',
 } as const;
 
-export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
-
 /** Payload for a scoring job. Kept to ids — workers re-read from Postgres. */
 export interface ScoringJobData {
   attemptId: string;

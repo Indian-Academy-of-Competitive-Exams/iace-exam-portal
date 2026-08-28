@@ -1,4 +1,4 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cva } from 'class-variance-authority';
 
 /**
  * `record` — a table cell opening that row's page, no underline.
@@ -16,5 +16,3 @@ export const linkVariants = cva(
     defaultVariants: { variant: 'record' },
   },
 );
-
-export type LinkVariants = VariantProps<typeof linkVariants>;

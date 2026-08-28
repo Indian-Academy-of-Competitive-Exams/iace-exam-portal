@@ -1,4 +1,4 @@
-import { AppException, type ErrorCode } from '@iace/contracts';
+import { AppException } from '@iace/contracts';
 import { type FieldValues, type Path, type UseFormSetError } from 'react-hook-form';
 
 /**
@@ -42,9 +42,4 @@ export function bannerMessage(error: unknown, fields: readonly string[] = []): s
   if (isFullyFieldMapped(error, fields)) return null;
   if (AppException.is(error)) return error.message;
   return 'Something went wrong. Please try again.';
-}
-
-/** For the few places that branch on what went wrong rather than just show it. */
-export function errorCodeOf(error: unknown): ErrorCode | null {
-  return AppException.is(error) ? error.code : null;
 }

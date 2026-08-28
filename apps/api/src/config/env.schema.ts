@@ -47,7 +47,6 @@ export const NODE_ENVS = {
   TEST: 'test',
   PRODUCTION: 'production',
 } as const;
-export type NodeEnv = (typeof NODE_ENVS)[keyof typeof NODE_ENVS];
 
 /**
  * OTP delivery channels. CONSOLE prints the code to the API log and is refused outright in
@@ -57,7 +56,6 @@ export const OTP_SENDERS = {
   CONSOLE: 'console',
   MSG91: 'msg91',
 } as const;
-export type OtpSenderChannel = (typeof OTP_SENDERS)[keyof typeof OTP_SENDERS];
 
 /** A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb. */
 const byteSize = (fallback: string) =>
