@@ -1,5 +1,10 @@
 import ExcelJS from 'exceljs';
-import { EARLIEST_BIRTH_YEAR, IMPORT_MAX_ROWS, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
+import {
+  EARLIEST_BIRTH_YEAR,
+  IMPORT_MAX_ROWS,
+  SCHOLARSHIP_IMPORT_COLUMNS,
+  STUDENT_IMPORT_COLUMNS,
+} from '@iace/contracts';
 
 /** The sample file the UI offers. */
 export function buildStudentTemplate(): Promise<Buffer> {
@@ -8,6 +13,16 @@ export function buildStudentTemplate(): Promise<Buffer> {
     columns: STUDENT_IMPORT_COLUMNS,
     examples: STUDENT_IMPORT_EXAMPLES,
     notes: STUDENT_IMPORT_NOTES,
+  });
+}
+
+/** The sample for a scholarship intake: two columns, because the sheet may not edit anybody. */
+export function buildScholarshipTemplate(): Promise<Buffer> {
+  return buildTemplate({
+    sheetName: 'Candidates',
+    columns: SCHOLARSHIP_IMPORT_COLUMNS,
+    examples: SCHOLARSHIP_IMPORT_EXAMPLES,
+    notes: SCHOLARSHIP_IMPORT_NOTES,
   });
 }
 
@@ -145,6 +160,41 @@ const STUDENT_IMPORT_NOTES = [
   ['so write the month by name — 04-Jul-2003 — if a row could be read both ways.'],
   [''],
   ['Gender — MALE, FEMALE or OTHER.'],
+  [''],
+  ['Nothing is written until you press Import. The preview shows exactly what would'],
+  ['happen to every row, and rows with errors are skipped rather than stopping the file.'],
+];
+
+// Column order must match SCHOLARSHIP_IMPORT_COLUMNS.
+const SCHOLARSHIP_IMPORT_EXAMPLES = [
+  ['9876543210', 'Asha Kumari'],
+  ['9876543211', 'Ravi Teja'],
+  ['9876543212', ''],
+];
+
+const SCHOLARSHIP_IMPORT_NOTES = [
+  ['How to fill this in'],
+  [''],
+  ['This sheet enrols candidates into ONE test series — the one you opened it from.'],
+  ['It does not change anybody. A number already on the platform is given the series'],
+  ['and nothing else about that student is touched: not their branch, not their type,'],
+  ['not their enrolments. Use the Students importer when you mean to edit a record.'],
+  [''],
+  ['Mobile Number — required. 10 digits. This is what identifies a candidate.'],
+  [''],
+  ['A number we do not know creates a new account outside the institute: no branch,'],
+  ['no exams, no programs. The series you are importing into is the whole of what'],
+  ['they can reach, which is what a scholarship candidate should have.'],
+  [''],
+  ['Each new account is given a starting PIN: the FIRST FOUR DIGITS of their own'],
+  ['mobile number. Tell them to change it when they first sign in — anyone holding'],
+  ['this sheet can work it out. A candidate who already has an account keeps theirs.'],
+  [''],
+  ['Full Name — optional. Letters, spaces and . ’ - only. Leave it blank if the'],
+  ['enrolment form did not capture it.'],
+  [''],
+  ['A number that belonged to a student who was deleted is reported, not imported.'],
+  ['Restore that student, or enrol them on a different number.'],
   [''],
   ['Nothing is written until you press Import. The preview shows exactly what would'],
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],

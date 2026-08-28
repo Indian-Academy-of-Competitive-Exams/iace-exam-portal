@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import {
   IMPORT_ACCEPTED_EXTENSIONS,
+  SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type ScholarshipImportRow,
 } from '@iace/contracts';
@@ -30,6 +31,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
+import { saveBlob } from '../lib/save-blob';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<ScholarshipImportRow['action'], string>> = {
@@ -45,6 +47,11 @@ export function ImportScholarshipPage() {
   const series = useQuery({
     queryKey: [...QUERY_KEYS.TEST_SERIES, id],
     queryFn: () => api.admin.testSeries.detail(id),
+  });
+
+  const sample = useMutation({
+    mutationFn: () => api.admin.imports.scholarshipTemplate(),
+    onSuccess: (blob) => saveBlob(blob, SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME),
   });
 
   const preview = useMutation({
@@ -138,7 +145,19 @@ export function ImportScholarshipPage() {
           )}
         </Card>
 
-        <Card className="order-1 p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
+        <Card className="order-1 flex flex-col gap-6 p-4 lg:order-2 lg:min-h-0 lg:overflow-y-auto">
+          {/* The sample comes first: the shape of the file matters before anywhere to put one. */}
+          <FormSection title="Start from the sample">
+            <Button
+              variant="outline"
+              icon={<Download aria-hidden />}
+              loading={sample.isPending}
+              onClick={() => sample.mutate()}
+            >
+              Download sample file
+            </Button>
+          </FormSection>
+
           <FormSection title="Your file">
             <div className="flex flex-col gap-3">
               <FileDropzone

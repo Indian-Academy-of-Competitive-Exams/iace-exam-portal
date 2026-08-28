@@ -1160,6 +1160,9 @@ export function createApiClient(options: ApiClientOptions) {
             schema: studentImportResultSchema,
           }),
 
+        /** The scholarship sample — a Blob, not an envelope. */
+        scholarshipTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.scholarshipTemplate),
+
         /** A scholarship intake: an existing number is granted the series and nothing else. */
         previewScholarship: (seriesId: string, file: File): Promise<ScholarshipImportPlan> =>
           request(IMPORT_ROUTES.scholarshipPreview(seriesId), {

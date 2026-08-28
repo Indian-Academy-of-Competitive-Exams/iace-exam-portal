@@ -1,5 +1,6 @@
 import {
   IMPORT_MAX_ROWS,
+  SCHOLARSHIP_IMPORT_COLUMNS,
   mobileSchema,
   type ScholarshipImportPlan,
   type ScholarshipImportRow,
@@ -23,8 +24,9 @@ export interface ScholarshipImportContext {
 }
 
 function missingHeaders(headers: string[]): string[] {
-  const aliases = ['mobilenumber', 'mobile', 'mobileno', 'phonenumber', 'phone', 'number'];
-  return aliases.some((alias) => headers.includes(alias)) ? [] : ['That file has no mobile column'];
+  return SCHOLARSHIP_IMPORT_COLUMNS.filter(
+    (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
+  ).map((column) => `That file has no ${column.header} column`);
 }
 
 function tooManyRows(table: CsvTable): string[] {

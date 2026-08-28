@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { readCsvTable } from '../src/common/importing';
+import { readCsvTable, readUploadedTable } from '../src/common/importing';
+import { buildScholarshipTemplate } from '../src/imports/workbook';
 import {
   planScholarshipImport,
   type ScholarshipImportContext,
@@ -13,6 +14,22 @@ const context = (over: Partial<ScholarshipImportContext> = {}): ScholarshipImpor
   existingByMobile: new Map([['9000000001', { id: 'stu_existing', hasPin: true }]]),
   deletedMobiles: new Set<string>(),
   ...over,
+});
+
+describe('the scholarship sample', () => {
+  /** A sample that documents a format the parser rejects is worse than no sample at all. */
+  it('parses cleanly through the importer it was generated for', async () => {
+    const table = await readUploadedTable(await buildScholarshipTemplate());
+
+    const plan = planScholarshipImport(table, {
+      existingByMobile: new Map(),
+      deletedMobiles: new Set(),
+    });
+
+    assert.deepEqual(plan.fileErrors, []);
+    assert.equal(plan.summary.invalid, 0);
+    assert.equal(plan.summary.total, plan.summary.willCreate);
+  });
 });
 
 describe('planScholarshipImport', () => {
@@ -77,6 +94,6 @@ describe('planScholarshipImport', () => {
     const plan = planScholarshipImport(readCsvTable(roster('name\nAsha')), context());
 
     assert.deepEqual(plan.rows, []);
-    assert.match(plan.fileErrors[0] ?? '', /mobile/);
+    assert.match(plan.fileErrors[0] ?? '', /Mobile Number/);
   });
 });

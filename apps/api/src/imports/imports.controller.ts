@@ -19,6 +19,7 @@ import {
   AppException,
   ErrorCodes,
   IMPORT_FILE_FIELD,
+  SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type ScholarshipImportPlan,
@@ -35,7 +36,7 @@ import {
 } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildStudentTemplate } from './workbook';
+import { buildScholarshipTemplate, buildStudentTemplate } from './workbook';
 
 /** The two fields we use off a multipart upload. */
 interface UploadedFileLike {
@@ -88,6 +89,16 @@ export class ImportsController {
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
     return this.imports.commitStudents(this.bufferOf(file), user.id);
+  }
+
+  /** The scholarship sample, generated from the same two columns the parser matches on. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get('scholarship/template')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', `attachment; filename="${SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME}"`)
+  @Header('Cache-Control', 'no-store')
+  async scholarshipTemplate(@Res() response: Response): Promise<void> {
+    response.send(await buildScholarshipTemplate());
   }
 
   /** A scholarship intake, read against the series it enrols into. Writes nothing. */

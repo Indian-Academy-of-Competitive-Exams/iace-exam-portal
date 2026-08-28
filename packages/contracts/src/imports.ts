@@ -141,10 +141,15 @@ export const IMPORT_ROUTES = {
   /** A scholarship intake is filed against the series it enrols into. */
   scholarshipPreview: (seriesId: string) => `/imports/scholarship/${seriesId}/preview`,
   scholarshipCommit: (seriesId: string) => `/imports/scholarship/${seriesId}/commit`,
+  /** The sample workbook, generated from SCHOLARSHIP_IMPORT_COLUMNS. */
+  scholarshipTemplate: '/imports/scholarship/template',
 } as const;
 
 /** What the sample file is called when it lands in the admin's downloads. */
 export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
+
+/** What the scholarship sample is called when it lands in the admin's downloads. */
+export const SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME = 'iace-scholarship-template.xlsx';
 
 /** The multipart field the upload arrives under. Server and client must agree. */
 export const IMPORT_FILE_FIELD = 'file';
@@ -278,3 +283,8 @@ export const NO_ACCESS_ROUTE_MESSAGE =
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
+
+/** The roster list FILTERED, never restated: the sample and the parser read one set of aliases. */
+export const SCHOLARSHIP_IMPORT_COLUMNS = STUDENT_IMPORT_COLUMNS.filter(
+  (column) => column.key === 'mobile' || column.key === 'fullName',
+);
