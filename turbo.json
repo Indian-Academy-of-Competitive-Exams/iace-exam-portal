@@ -3,23 +3,27 @@
   "globalDependencies": [".env", "prisma/schema.prisma"],
   "globalEnv": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"],
   "tasks": {
+    "//#db:generate": {
+      "inputs": ["prisma/schema.prisma"],
+      "outputs": []
+    },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "//#db:generate"],
       "outputs": ["dist/**"]
     },
     "dev": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "//#db:generate"],
       "cache": false,
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "//#db:generate"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "//#db:generate"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "//#db:generate"],
       "outputs": []
     },
     "clean": {
