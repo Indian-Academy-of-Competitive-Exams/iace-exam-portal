@@ -8,6 +8,7 @@ import {
   EXAM_FAMILIES,
   examsInFamilies,
   GENDERS,
+  STUDENT_SERIES_SOURCE,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
@@ -15,13 +16,14 @@ import {
   type Gender,
   type StudentDetail,
   type UpdateStudentBody,
-  type StudentGrantRow,
+  type StudentSeriesAccess,
   type StudentType,
 } from '@iace/contracts';
 import {
   Alert,
   Avatar,
   Badge,
+  BadgeList,
   Button,
   Combobox,
   ConfirmDialog,
@@ -49,6 +51,7 @@ import {
   GENDER_LABELS,
   NAV_ITEMS,
   QUERY_KEYS,
+  SERIES_SOURCE_LABELS,
   STUDENT_TYPE_LABELS,
 } from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
@@ -301,52 +304,130 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   );
 }
 
-const grantsKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'grants'] as const;
+const seriesKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'series'] as const;
 
-/**
- * The escape hatch: one series, one student, because nothing else reaches them. An enrolment or a
- * program is how access normally arrives — a grant is what is left when neither fits.
- */
-function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
+function seriesColumns(
+  busy: boolean,
+  onRevoke: (row: StudentSeriesAccess) => void,
+): DataTableColumn<StudentSeriesAccess>[] {
+  return [
+    {
+      key: 'series',
+      header: 'Series',
+      className: 'max-w-72',
+      cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
+    },
+    {
+      key: 'sources',
+      header: 'Reached by',
+      className: 'max-w-56',
+      cell: (row) => (
+        <BadgeList items={row.sources} label={(source) => SERIES_SOURCE_LABELS[source]} max={2} />
+      ),
+    },
+    {
+      key: 'granted',
+      header: 'Granted',
+      className: 'max-w-48',
+      cell: (row) => (
+        <TruncatedText>
+          {row.grantedAt ? WHEN_FORMATTER.format(new Date(row.grantedAt)) : null}
+        </TruncatedText>
+      ),
+    },
+    {
+      key: 'actions',
+      // Left out rather than disabled: there is no grant on an exam or program match to revoke.
+      cell: (row) =>
+        row.sources.includes(STUDENT_SERIES_SOURCE.GRANT) ? (
+          <RowActions label={`Actions for ${row.name}`}>
+            <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(row)}>
+              <Trash2 aria-hidden />
+              Revoke grant
+            </DropdownMenuItem>
+          </RowActions>
+        ) : null,
+    },
+  ];
+}
+
+/** Capped: a student on many series must not push the fields above it off the page. */
+function SeriesList({
+  series,
+  isLoading,
+  busy,
+  onRevoke,
+}: Readonly<{
+  series: readonly StudentSeriesAccess[];
+  isLoading: boolean;
+  busy: boolean;
+  onRevoke: (row: StudentSeriesAccess) => void;
+}>) {
+  const columns = useMemo(() => seriesColumns(busy, onRevoke), [busy, onRevoke]);
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={series}
+      rowKey={(row) => row.id}
+      isLoading={isLoading}
+      skeletonRows={3}
+      scroll={{}}
+      empty={
+        <Alert variant="info">
+          Nothing reaches this student yet. A series arrives through an exam enrolment, a program or
+          a direct grant, and only once it is switched on at their branch.
+        </Alert>
+      }
+    />
+  );
+}
+
+/** Everything this student reaches and what opens each; a grant is one of the three, not the whole. */
+function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState({ id: '', name: '' });
   const [granting, setGranting] = useState(false);
-  const [revoking, setRevoking] = useState<StudentGrantRow | null>(null);
+  const [revoking, setRevoking] = useState<StudentSeriesAccess | null>(null);
   const studentId = detail.id;
   const name = detail.fullName ?? detail.mobile;
 
-  const grants = useQuery({
-    queryKey: grantsKey(studentId),
-    queryFn: () => api.admin.grants.list(studentId),
+  const series = useQuery({
+    queryKey: seriesKey(studentId),
+    queryFn: () => api.admin.studentSeries.list(studentId),
   });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: seriesKey(studentId) });
 
   const grant = useMutation({
     meta: { success: 'Series granted.' },
     mutationFn: () => api.admin.grants.create(studentId, { testSeriesId: chosen.id }),
-    onSuccess: (rows) => {
+    onSuccess: async () => {
       setGranting(false);
       setChosen({ id: '', name: '' });
-      queryClient.setQueryData(grantsKey(studentId), rows);
+      await refresh();
     },
-    // Drop out of the confirm on failure, or the card is left asking a question
-    // that has already been answered.
+    // Drop out of the confirm on failure, or it is left asking a question already answered.
     onError: () => setGranting(false),
   });
 
   const revoke = useMutation({
     meta: { success: 'Grant revoked.' },
     mutationFn: (testSeriesId: string) => api.admin.grants.remove(studentId, testSeriesId),
-    onSuccess: () => {
+    onSuccess: async () => {
       setRevoking(null);
-      void queryClient.invalidateQueries({ queryKey: grantsKey(studentId) });
+      await refresh();
     },
     onError: () => setRevoking(null),
   });
 
+  const keepsItAnyway =
+    revoking?.sources.some((source) => source !== STUDENT_SERIES_SOURCE.GRANT) ?? false;
+
   return (
-    <FormSection title="Series granted directly">
+    <FormSection title="Series they reach">
       <div className="flex flex-col gap-4">
-        {/* Not a nested <form>: this card stands inside the profile form. */}
+        {/* Not a nested <form>: this section stands inside the profile form. */}
         <div className="flex flex-wrap items-end gap-3">
           <Field
             htmlFor="grantSeries"
@@ -354,7 +435,7 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
             hint={
               detail.isTestBlocked
                 ? 'Blocked from tests — lift the block before granting a series.'
-                : 'Search the whole catalog. Granting one they already have changes nothing.'
+                : 'Search the whole catalog. Granting one they already reach changes nothing.'
             }
             className="min-w-56 flex-1"
           >
@@ -383,9 +464,9 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
           </Button>
         </div>
 
-        <GrantList
-          grants={grants.data ?? []}
-          isLoading={grants.isLoading}
+        <SeriesList
+          series={series.data ?? []}
+          isLoading={series.isLoading}
           busy={revoke.isPending}
           onRevoke={setRevoking}
         />
@@ -408,76 +489,16 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         onOpenChange={(open) => !open && setRevoking(null)}
         destructive
         loading={revoke.isPending}
-        title={`Revoke ${revoking?.testSeries.name} from ${name}?`}
-        description={`They lose this route to its tests straight away. If an enrolment or a program also reaches ${revoking?.testSeries.name}, they keep it through that. Attempts already made and their results are kept.`}
+        title={`Revoke ${revoking?.name} from ${name}?`}
+        description={
+          keepsItAnyway
+            ? `An enrolment or a program also reaches ${revoking?.name}, so they keep it and nothing they can sit changes. Only the direct grant is removed.`
+            : `They lose this route to its tests straight away. Attempts already made and their results are kept.`
+        }
         confirmLabel="Revoke grant"
-        onConfirm={() => revoking && revoke.mutate(revoking.testSeriesId)}
+        onConfirm={() => revoking && revoke.mutate(revoking.id)}
       />
     </FormSection>
-  );
-}
-
-function grantColumns(
-  busy: boolean,
-  onRevoke: (grant: StudentGrantRow) => void,
-): DataTableColumn<StudentGrantRow>[] {
-  return [
-    {
-      key: 'series',
-      header: 'Series',
-      className: 'max-w-72',
-      cell: (grant) => <TruncatedText>{grant.testSeries.name}</TruncatedText>,
-    },
-    {
-      key: 'granted',
-      header: 'Granted',
-      className: 'max-w-48',
-      cell: (grant) => (
-        <TruncatedText>{WHEN_FORMATTER.format(new Date(grant.createdAt))}</TruncatedText>
-      ),
-    },
-    {
-      key: 'actions',
-      cell: (grant) => (
-        <RowActions label={`Actions for ${grant.testSeries.name}`}>
-          <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(grant)}>
-            <Trash2 aria-hidden />
-            Revoke
-          </DropdownMenuItem>
-        </RowActions>
-      ),
-    },
-  ];
-}
-
-/** The grants, drawn the way this app draws any other list of rows. */
-function GrantList({
-  grants,
-  isLoading,
-  busy,
-  onRevoke,
-}: Readonly<{
-  grants: readonly StudentGrantRow[];
-  isLoading: boolean;
-  busy: boolean;
-  onRevoke: (grant: StudentGrantRow) => void;
-}>) {
-  const columns = useMemo(() => grantColumns(busy, onRevoke), [busy, onRevoke]);
-
-  return (
-    <DataTable
-      columns={columns}
-      rows={grants}
-      rowKey={(grant) => grant.testSeriesId}
-      isLoading={isLoading}
-      skeletonRows={2}
-      empty={
-        <Alert variant="info">
-          No series has been granted to this student. Everything they reach comes from their
-          enrolments and programs.
-        </Alert>
-      }
-    />
   );
 }
 
@@ -743,7 +764,7 @@ export function StudentDetailPage() {
           />
         </>
       }
-      after={<GrantsCard detail={detail} />}
+      after={<SeriesAccessCard detail={detail} />}
     >
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">

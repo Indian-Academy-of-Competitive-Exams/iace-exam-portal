@@ -269,7 +269,7 @@ function counterOf(raw: string | null | undefined): number {
   return Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
-function reachedBy(
+export function reachedBy(
   studentId: string,
   programs: string[],
   enrolledExams: string[],

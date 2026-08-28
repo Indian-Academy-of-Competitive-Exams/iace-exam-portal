@@ -199,6 +199,25 @@ export const studentGrantRowSchema = studentGrantSchema.extend({
 });
 export type StudentGrantRow = z.infer<typeof studentGrantRowSchema>;
 
+/** Why a student reaches a series. A grant can sit beside an automatic one, so a row carries a set. */
+export const STUDENT_SERIES_SOURCE = {
+  EXAM: 'EXAM',
+  PROGRAM: 'PROGRAM',
+  GRANT: 'GRANT',
+} as const;
+export const studentSeriesSourceSchema = z.enum(STUDENT_SERIES_SOURCE);
+export type StudentSeriesSource = z.infer<typeof studentSeriesSourceSchema>;
+export const STUDENT_SERIES_SOURCES = studentSeriesSourceSchema.options;
+
+/** One series a student reaches, and what opens it — the branch gate has already been applied. */
+export const studentSeriesAccessSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sources: z.array(studentSeriesSourceSchema),
+  grantedAt: z.string().nullable(),
+});
+export type StudentSeriesAccess = z.infer<typeof studentSeriesAccessSchema>;
+
 export const grantSeriesSchema = z.object({ testSeriesId: z.string().min(1, 'Choose a series') });
 export type GrantSeriesInput = z.input<typeof grantSeriesSchema>;
 export type GrantSeriesBody = z.infer<typeof grantSeriesSchema>;
@@ -451,6 +470,10 @@ export const ADMIN_UNLOCK_REQUEST_ROUTES = {
 } as const;
 
 /** A grant is filed against the STUDENT, which is who you are looking at when you make one. */
+export const ADMIN_STUDENT_SERIES_ROUTES = {
+  list: (studentId: string) => `/admin/students/${studentId}/series`,
+} as const;
+
 export const ADMIN_GRANT_ROUTES = {
   list: (studentId: string) => `/admin/students/${studentId}/grants`,
   create: (studentId: string) => `/admin/students/${studentId}/grants`,

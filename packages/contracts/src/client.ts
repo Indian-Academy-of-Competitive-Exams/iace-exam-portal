@@ -72,12 +72,14 @@ import {
 } from './branches';
 import {
   ADMIN_GRANT_ROUTES,
+  ADMIN_STUDENT_SERIES_ROUTES,
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
   branchTestConfigRowSchema,
   branchTestScheduleRowSchema,
   programCatalogSchema,
   studentGrantRowSchema,
+  studentSeriesAccessSchema,
   testSeriesSummarySchema,
   type BranchTestConfigRow,
   type BranchTestScheduleRow,
@@ -90,6 +92,7 @@ import {
   studentCatalogSchema,
   type StudentCatalog,
   type StudentGrantRow,
+  type StudentSeriesAccess,
   type TestSeriesListQueryInput,
   type TestSeriesSummary,
   type UpdateBranchTestConfigInput,
@@ -831,6 +834,14 @@ export function createApiClient(options: ApiClientOptions) {
           request(ADMIN_SERIES_ROUTES.test(id, testId), {
             method: 'DELETE',
             schema: seriesTestRowSchema.array(),
+          }),
+      },
+
+      /** Every series a student reaches and what opens each one, the branch gate already applied. */
+      studentSeries: {
+        list: (studentId: string): Promise<StudentSeriesAccess[]> =>
+          request(ADMIN_STUDENT_SERIES_ROUTES.list(studentId), {
+            schema: studentSeriesAccessSchema.array(),
           }),
       },
 

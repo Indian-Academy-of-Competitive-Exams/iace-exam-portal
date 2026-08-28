@@ -5,6 +5,7 @@ import { ConfigsModule } from '../configs';
 import {
   ProgramsController,
   StudentGrantsController,
+  StudentSeriesController,
   TestSeriesController,
   UnlockRequestsController,
 } from './access.controller';
@@ -25,6 +26,7 @@ import { UnlocksService } from './unlocks.service';
     ProgramsController,
     TestSeriesController,
     StudentGrantsController,
+    StudentSeriesController,
     UnlockRequestsController,
   ],
   providers: [

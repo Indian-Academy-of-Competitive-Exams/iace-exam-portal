@@ -2,12 +2,36 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
+  STUDENT_SERIES_SOURCE,
   type GrantSeriesBody,
   type StudentGrantRow,
+  type StudentSeriesAccess,
+  type StudentSeriesSource,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { reachedBy } from './access-resolver.service';
+
+/** Mirrors `reachedBy`: a program-tagged series is program-ONLY, so an enrolment never opens one. */
+export function seriesSources(
+  row: Readonly<{ programCode: string | null; examCode: string | null; granted: boolean }>,
+  student: Readonly<{ programs: readonly string[]; enrolledExams: readonly string[] }>,
+): StudentSeriesSource[] {
+  const sources: StudentSeriesSource[] = [];
+  if (row.programCode !== null && student.programs.includes(row.programCode)) {
+    sources.push(STUDENT_SERIES_SOURCE.PROGRAM);
+  }
+  if (
+    row.programCode === null &&
+    row.examCode !== null &&
+    student.enrolledExams.includes(row.examCode)
+  ) {
+    sources.push(STUDENT_SERIES_SOURCE.EXAM);
+  }
+  if (row.granted) sources.push(STUDENT_SERIES_SOURCE.GRANT);
+  return sources;
+}
 
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
@@ -39,6 +63,47 @@ export class StudentGrantsService {
       testSeriesId: row.testSeriesId,
       testSeries: row.testSeries,
       createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  /** Every series this student reaches and what opens each, read the way the resolver reads it. */
+  async reachedSeries(studentId: string): Promise<StudentSeriesAccess[]> {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { currentBranchId: true, programs: true, enrolledExams: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    // No branch, no access: the enable flag lives on the branch's row, as the resolver reads it.
+    if (student.currentBranchId === null) return [];
+
+    const rows = await this.prisma.testSeries.findMany({
+      where: {
+        branchConfigs: { some: { branchId: student.currentBranchId, enabled: true } },
+        OR: reachedBy(studentId, student.programs, student.enrolledExams),
+      },
+      select: {
+        id: true,
+        name: true,
+        programCode: true,
+        examStage: { select: { exam: { select: { code: true } } } },
+        grants: { where: { studentId }, select: { createdAt: true } },
+      },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      sources: seriesSources(
+        {
+          programCode: row.programCode,
+          examCode: row.examStage?.exam.code ?? null,
+          granted: row.grants.length > 0,
+        },
+        student,
+      ),
+      grantedAt: row.grants[0]?.createdAt.toISOString() ?? null,
     }));
   }
 

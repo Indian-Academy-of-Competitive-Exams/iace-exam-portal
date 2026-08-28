@@ -28,6 +28,7 @@ import {
   type EvaluationMode,
   type ExamTemplate,
   type Gender,
+  type StudentSeriesSource,
   type ImportSource,
   type LanguageCode,
   type LanguageMode,
@@ -102,6 +103,13 @@ export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
   MALE: 'Male',
   FEMALE: 'Female',
   OTHER: 'Other',
+};
+
+/** What opens a series for a student, in the words an admin would use for it. */
+export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>> = {
+  EXAM: 'Exam enrolment',
+  PROGRAM: 'Program',
+  GRANT: 'Granted directly',
 };
 
 /** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */

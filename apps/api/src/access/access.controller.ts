@@ -36,6 +36,7 @@ import {
   type ProgramListQuery,
   type SeriesUnlockRequestRow,
   type StudentGrantRow,
+  type StudentSeriesAccess,
   type TestSeriesListQuery,
   type TestSeriesSummary,
   type UnlockRequestListQuery,
@@ -218,5 +219,18 @@ export class StudentGrantsController {
     @Param('testSeriesId') testSeriesId: string,
   ): Promise<void> {
     return this.grants.revoke(studentId, testSeriesId);
+  }
+}
+
+/** What a student reaches and why — a grant is one of the three answers, not the whole of it. */
+@Controller('admin/students/:studentId/series')
+@Actors(ActorTypes.ADMIN)
+export class StudentSeriesController {
+  constructor(private readonly grants: StudentGrantsService) {}
+
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get()
+  list(@Param('studentId') studentId: string): Promise<StudentSeriesAccess[]> {
+    return this.grants.reachedSeries(studentId);
   }
 }
