@@ -224,10 +224,20 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             title={title}
             action={
               isEditing ? undefined : (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil aria-hidden />
-                  Edit series
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {existing ? (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={ROUTES.SERIES_CANDIDATES(detail.id)}>
+                        <Upload aria-hidden />
+                        Import candidates
+                      </Link>
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <Pencil aria-hidden />
+                    Edit series
+                  </Button>
+                </div>
               )
             }
           />
@@ -357,16 +367,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
       {existing ? <SeriesTests series={detail} /> : null}
       {existing ? <BranchSchedule series={detail} /> : null}
-      {existing ? (
-        <FormSection title="Candidates">
-          <Button variant="outline" size="sm" asChild>
-            <Link to={ROUTES.SERIES_CANDIDATES(detail.id)}>
-              <Upload aria-hidden />
-              Import candidates
-            </Link>
-          </Button>
-        </FormSection>
-      ) : null}
     </FormPanel>
   );
 }
