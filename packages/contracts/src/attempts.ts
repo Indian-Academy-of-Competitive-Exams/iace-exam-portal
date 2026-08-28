@@ -62,14 +62,11 @@ export const attemptSchema = z.object({
 });
 export type Attempt = z.infer<typeof attemptSchema>;
 
-/**
- * One row per question served in an attempt, plus the response. A null
- * `paperQuestionId` is what marks the row as drawn per attempt rather than
- * taken from a frozen paper.
- */
+/** One row per question served in an attempt, plus the response. */
 export const attemptQuestionSchema = z.object({
   attemptId: z.string(),
   questionId: z.string(),
+  /** Always set: a GENERATED test's variants are real paper rows, so marks have one home. */
   paperQuestionId: z.string().nullable(),
   /** Always present, so the row reproduces without a join. */
   questionVersionId: z.string(),

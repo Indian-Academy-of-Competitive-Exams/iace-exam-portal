@@ -603,7 +603,8 @@ model Attempt {
 }
 
 // One row per question served in an attempt, plus the student's response.
-// paperQuestionId null ⇔ GENERATED, not null ⇔ FIXED. The durable row is an
+// paperQuestionId is always set — a GENERATED test draws real PaperQuestion rows per variant
+// at finalize, so scoring reads its marks from there. The durable row is an
 // idempotent UPSERT flushed by a single writer; Redis holds the live state.
 model AttemptQuestion {
   attemptId           String
