@@ -5,22 +5,10 @@ import {
   type LanguageCode,
   type LanguageMode,
 } from '@iace/contracts';
-import { Badge, cn } from '@iace/ui';
+import { Badge, RichContent, cn } from '@iace/ui';
 import { LANGUAGE_LABELS } from '../../lib/constants';
 
 /** One question as a candidate sees it. A DUAL paper shows both languages, with nothing to choose. */
-
-/** The content is the bank's own markup — images and equations are why it is not plain text. */
-function Rich({ html, lang }: Readonly<{ html: string; lang: string }>) {
-  return (
-    <div
-      lang={lang}
-      className="exam-rich text-sm leading-relaxed text-foreground [&_img]:my-2 [&_img]:max-w-full"
-      // The bank's own markup, authored in admin: images and equations are why this is not text.
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
 
 const htmlOf = (nodes: { text: string }[] | undefined): string =>
   (nodes ?? []).map((node) => node.text).join('');
@@ -53,9 +41,10 @@ export function QuestionBody({
       </header>
 
       {shown.map((language) => (
-        <Rich
+        <RichContent
           key={language}
           lang={language.toLowerCase()}
+          className="text-sm leading-relaxed text-foreground"
           html={htmlOf(question.content[contentLanguageOf(language)]?.stem)}
         />
       ))}
@@ -83,9 +72,10 @@ export function QuestionBody({
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 {shown.map((language) => (
-                  <Rich
+                  <RichContent
                     key={language}
                     lang={language.toLowerCase()}
+                    className="text-sm leading-relaxed text-foreground"
                     html={htmlOf(option.text[contentLanguageOf(language)])}
                   />
                 ))}

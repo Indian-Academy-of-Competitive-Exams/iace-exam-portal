@@ -390,3 +390,26 @@
   background-color: var(--ring);
   cursor: col-resize;
 }
+
+/* An image is authored at whatever size the source had; the column is what bounds it. */
+.rich-content img {
+  max-width: 100%;
+  height: auto;
+  margin: var(--space-2) 0;
+}
+
+/* A table wider than its column scrolls in here, so the exam screen never scrolls sideways. */
+.rich-content .rich-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Bigger than its surroundings on purpose — a formula is read glyph by glyph, prose is not. */
+.rich-content .math-render {
+  font-size: calc(1em * var(--math-scale));
+}
+
+.rich-content .math-render--display {
+  margin: var(--space-3) 0;
+  text-align: center;
+}
