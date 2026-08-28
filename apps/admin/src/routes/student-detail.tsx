@@ -346,18 +346,11 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   return (
     <FormSection title="Series granted directly">
       <div className="flex flex-col gap-4">
-        <GrantList
-          grants={grants.data ?? []}
-          isLoading={grants.isLoading}
-          busy={revoke.isPending}
-          onRevoke={setRevoking}
-        />
-
         {/* Not a nested <form>: this card stands inside the profile form. */}
         <div className="flex flex-wrap items-end gap-3">
           <Field
             htmlFor="grantSeries"
-            label="Grant another series"
+            label="Grant a series"
             hint={
               detail.isTestBlocked
                 ? 'Blocked from tests — lift the block before granting a series.'
@@ -389,6 +382,13 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
             Grant
           </Button>
         </div>
+
+        <GrantList
+          grants={grants.data ?? []}
+          isLoading={grants.isLoading}
+          busy={revoke.isPending}
+          onRevoke={setRevoking}
+        />
       </div>
 
       {/* A grant is the one direct student-to-offering link in the model, so it is
