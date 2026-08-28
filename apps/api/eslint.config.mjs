@@ -5,6 +5,17 @@ export default [
   ...config,
   ...boundaries,
   {
+    // Type info, src only: a dropped await in the submit -> score handoff is invisible without it.
+    files: ['src/**/*.ts'],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
+  },
+  {
     // The interceptor is the ONE envelope author, and is not a controller, so it is out of scope.
     files: ['**/*.controller.ts'],
     rules: {
