@@ -73,6 +73,13 @@ enum LanguageMode {
   DUAL
 }
 
+// Which skin the exam screen wears. Presentation only — both run the same engine,
+// the same clock and the same state machine, so neither changes what is scored.
+enum ExamTemplate {
+  COMFORTABLE
+  STRICT
+}
+
 // Section-return behaviour derives from this: COMPOSITE_FREE may return,
 // SECTIONAL_LOCKED / SESSION_MODULE_LOCKED may not, PER_ITEM_TIMED is forward-only.
 enum TimerTemplate {
@@ -313,6 +320,8 @@ model BaseConfig {
   navigation           NavigationPolicy    @default(FREE)
   optionalSectionCount Int?
   defaultTestUi        TestUi              @default(CBT)
+  // The skin a test built from this config starts with; the test carries its own copy.
+  examTemplate         ExamTemplate        @default(COMFORTABLE)
   languageMode         LanguageMode        @default(SINGLE)
   // Ordered; DUAL renders all of them.
   languages            SupportedLanguage[] @default([])
@@ -485,6 +494,8 @@ model Test {
   maxRetakes         Int?
   questionPoolFilter Json?
   drawStrategy       DrawStrategy   @default(RANDOM)
+  // Copied from the config at creation: a sat paper must not re-skin because the config moved.
+  examTemplate       ExamTemplate   @default(COMFORTABLE)
   // How many papers were drawn. One for FIXED; a GENERATED test hands out one per attempt by seed.
   variantCount       Int            @default(1)
   status             TestStatus     @default(DRAFT)

@@ -26,6 +26,7 @@ import {
   type DifficultyLevel,
   type DrawStrategy,
   type EvaluationMode,
+  type ExamTemplate,
   type ImportSource,
   type LanguageCode,
   type LanguageMode,
@@ -178,6 +179,16 @@ export const TEST_UI_LABELS: Readonly<Record<TestUi, string>> = {
   OMR: 'OMR sheet',
   GENERIC: 'Generic',
   TYPING: 'Typing',
+};
+
+export const EXAM_TEMPLATE_LABELS: Readonly<Record<ExamTemplate, string>> = {
+  COMFORTABLE: 'Comfortable',
+  STRICT: 'Strict',
+};
+
+export const EXAM_TEMPLATE_HINTS: Readonly<Record<ExamTemplate, string>> = {
+  COMFORTABLE: 'Roomier spacing and larger targets',
+  STRICT: 'Dense and austere, like the government CBT',
 };
 
 export const LANGUAGE_MODE_LABELS: Readonly<Record<LanguageMode, string>> = {

@@ -1,11 +1,13 @@
-/** Every skin the exam can wear. The engine never reads this — the screen picks, the engine renders. */
-import { EXAM_TEMPLATES } from '../../../lib/constants';
+/** Every skin the exam can wear. The engine never reads this — the paper says which, the screen picks. */
+import { EXAM_TEMPLATE, type ExamTemplate } from '@iace/contracts';
 import type { ExamTemplateDefinition } from '../engine/template';
-import { defaultTemplate } from './default';
+import { comfortableTemplate } from './comfortable';
 
-const TEMPLATES: Readonly<Record<string, ExamTemplateDefinition>> = {
-  [EXAM_TEMPLATES.DEFAULT]: defaultTemplate,
+const TEMPLATES: Readonly<Record<ExamTemplate, ExamTemplateDefinition>> = {
+  [EXAM_TEMPLATE.COMFORTABLE]: comfortableTemplate,
+  [EXAM_TEMPLATE.STRICT]: comfortableTemplate,
 };
 
-/** An id nothing is registered for falls back rather than leaving a candidate on a blank page. */
-export const templateFor = (id: string): ExamTemplateDefinition => TEMPLATES[id] ?? defaultTemplate;
+/** A skin nothing is registered for falls back rather than leaving a candidate on a blank page. */
+export const templateFor = (id: ExamTemplate): ExamTemplateDefinition =>
+  TEMPLATES[id] ?? comfortableTemplate;

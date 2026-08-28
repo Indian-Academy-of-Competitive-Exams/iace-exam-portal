@@ -116,6 +116,8 @@ export class TestsService {
         baseConfigId: config.id,
         examStageId: config.examStageId,
         title: input.title,
+        // Copied, not read through: a config re-skinned later must not re-skin a sat paper.
+        examTemplate: config.examTemplate,
         scope,
         scopeRef: toJson(scopeRef),
         evaluationMode,

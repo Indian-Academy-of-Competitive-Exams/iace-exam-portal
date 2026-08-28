@@ -27,8 +27,10 @@ export function ExamTimer({
     <p
       aria-live="off"
       className={cn(
-        'flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-semibold tabular-nums',
-        left <= URGENT_SEC ? 'border-destructive text-destructive' : 'text-foreground',
+        'flex items-center gap-2 rounded-exam-option border px-3 py-1.5 text-sm font-semibold tabular-nums',
+        left <= URGENT_SEC
+          ? 'border-exam-timer-urgent-border bg-exam-timer-urgent text-exam-timer-urgent-ink'
+          : 'border-exam-timer-border bg-exam-timer-bg text-exam-timer-ink',
       )}
     >
       <AlarmClock aria-hidden className="size-4" />

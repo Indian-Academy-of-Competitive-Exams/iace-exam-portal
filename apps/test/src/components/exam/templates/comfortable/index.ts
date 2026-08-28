@@ -1,4 +1,4 @@
-import { EXAM_TEMPLATES } from '../../../../lib/constants';
+import { EXAM_TEMPLATE } from '@iace/contracts';
 import type { ExamTemplateDefinition } from '../../engine/template';
 import {
   BottomBar,
@@ -12,9 +12,9 @@ import {
   Timer,
 } from './slots';
 
-/** The polished default: the screen the engine plan shipped, filling every slot. */
-export const defaultTemplate: ExamTemplateDefinition = {
-  id: EXAM_TEMPLATES.DEFAULT,
+/** The polished default: roomier cells, softer contrast, the screen the engine plan shipped. */
+export const comfortableTemplate: ExamTemplateDefinition = {
+  id: EXAM_TEMPLATE.COMFORTABLE,
   slots: {
     Header,
     SectionBar,

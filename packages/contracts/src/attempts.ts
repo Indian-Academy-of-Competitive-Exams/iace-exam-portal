@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { languageCodeSchema } from './exams';
-import { languageModeSchema, navigationPolicySchema, timerTemplateSchema } from './configs';
+import {
+  examTemplateSchema,
+  languageModeSchema,
+  navigationPolicySchema,
+  timerTemplateSchema,
+} from './configs';
 import { localizedContentSchema, localizedRichSchema, questionTypeSchema } from './questions';
 
 // ============================================================================
@@ -326,6 +331,8 @@ export const examPaperSchema = z.object({
   serverNow: z.string(),
   languages: z.array(languageCodeSchema),
   languageMode: languageModeSchema,
+  /** Which skin draws this sitting. The screen reads it; it is never hardcoded. */
+  examTemplate: examTemplateSchema,
   timerTemplate: timerTemplateSchema,
   navigation: navigationPolicySchema,
   calculatorEnabled: z.boolean(),

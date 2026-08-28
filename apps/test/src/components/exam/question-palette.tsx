@@ -5,11 +5,11 @@ import { PALETTE_LEGEND } from '../../lib/constants';
 /** The grid every candidate reads before they read anything else. */
 
 const SWATCH: Readonly<Record<AnswerState, string>> = {
-  NOT_VISITED: 'bg-muted text-muted-foreground',
-  NOT_ANSWERED: 'bg-destructive text-destructive-foreground',
-  ANSWERED: 'bg-success text-success-foreground',
-  MARKED_REVIEW: 'bg-primary text-primary-foreground',
-  ANSWERED_MARKED: 'bg-warning text-warning-foreground',
+  NOT_VISITED: 'bg-exam-notvisited text-exam-notvisited-ink',
+  NOT_ANSWERED: 'bg-exam-notanswered text-exam-notanswered-ink',
+  ANSWERED: 'bg-exam-answered text-exam-answered-ink',
+  MARKED_REVIEW: 'bg-exam-marked text-exam-marked-ink',
+  ANSWERED_MARKED: 'bg-exam-answered-marked text-exam-answered-marked-ink',
 };
 
 export function QuestionPalette({
@@ -26,22 +26,22 @@ export function QuestionPalette({
   onOpen: (questionId: string) => void;
 }>) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-exam-gap">
       <ul className="flex flex-col gap-1.5">
         {ANSWER_STATES.map((state) => (
           <li key={state} className="flex items-center gap-2 text-xs">
-            <span className={cn('size-4 shrink-0 rounded', SWATCH[state])} />
-            <span className="text-muted-foreground">
+            <span className={cn('size-4 shrink-0 rounded-exam-cell', SWATCH[state])} />
+            <span className="text-exam-ink-muted">
               {PALETTE_LEGEND.find((entry) => entry.state === state)?.label}
             </span>
-            <span className="ml-auto font-semibold tabular-nums text-foreground">
+            <span className="ml-auto font-semibold tabular-nums text-exam-ink">
               {counts[state]}
             </span>
           </li>
         ))}
       </ul>
 
-      <div className="grid grid-cols-5 gap-1.5">
+      <div className="flex flex-wrap gap-exam-cell-gap">
         {questionIds.map((id, index) => {
           const state = answers[id]?.state ?? 'NOT_VISITED';
           return (
@@ -51,10 +51,11 @@ export function QuestionPalette({
               aria-current={id === currentId ? 'true' : undefined}
               onClick={() => onOpen(id)}
               className={cn(
-                'flex size-9 items-center justify-center rounded text-xs font-semibold tabular-nums',
+                'flex size-exam-cell items-center justify-center rounded-exam-cell text-xs font-semibold tabular-nums',
                 'focus-visible:shadow-focus focus-visible:outline-none',
                 SWATCH[state],
-                id === currentId && 'ring-2 ring-ring ring-offset-1 ring-offset-surface',
+                // Positional only: an outline, never a fill, so it cannot read as a state.
+                id === currentId && 'outline outline-2 outline-offset-1 outline-exam-current',
               )}
             >
               {index + 1}

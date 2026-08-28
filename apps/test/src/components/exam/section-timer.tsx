@@ -36,7 +36,7 @@ export function SectionTimer({
     <p
       className={cn(
         'flex items-center gap-1.5 text-xs font-semibold tabular-nums',
-        left <= URGENT_SEC ? 'text-destructive' : 'text-muted-foreground',
+        left <= URGENT_SEC ? 'text-exam-timer-urgent-border' : 'text-exam-ink-muted',
       )}
     >
       <Hourglass aria-hidden className="size-3.5" />

@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { TEST_BUCKET, type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Alert, LoadingState } from '@iace/ui';
 import { api } from '../lib/api';
-import { EXAM_TEMPLATES, ROUTES } from '../lib/constants';
+import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { TAB_KEY } from './tests';
 import { ExamShell } from '../components/exam/engine/exam-shell';
@@ -81,5 +81,5 @@ function ExamHall(
 ) {
   const view = useExamView(sitting);
 
-  return <ExamShell template={templateFor(EXAM_TEMPLATES.DEFAULT)} view={view} />;
+  return <ExamShell template={templateFor(sitting.paper.examTemplate)} view={view} />;
 }

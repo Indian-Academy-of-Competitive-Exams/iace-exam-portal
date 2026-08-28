@@ -22,6 +22,7 @@ import { seededRandom, shuffle } from '../common/seeded-shuffle';
 const PAPER_INCLUDE = {
   test: {
     select: {
+      examTemplate: true,
       baseConfig: {
         select: {
           languageMode: true,
@@ -137,6 +138,7 @@ export class AttemptPaperService {
       serverNow: new Date().toISOString(),
       languages,
       languageMode: config.languageMode,
+      examTemplate: attempt.test.examTemplate,
       timerTemplate: config.timerTemplate,
       navigation: config.navigation,
       calculatorEnabled: config.calculatorEnabled,

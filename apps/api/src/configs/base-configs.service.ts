@@ -212,6 +212,7 @@ export class BaseConfigsService {
           navigation: source.navigation,
           optionalSectionCount: source.optionalSectionCount,
           defaultTestUi: source.defaultTestUi,
+          examTemplate: source.examTemplate,
           languageMode: source.languageMode,
           languages: source.languages,
           shuffleQuestions: source.shuffleQuestions,
@@ -346,6 +347,7 @@ function shapeColumnsOf(
       ? {}
       : { optionalSectionCount: input.optionalSectionCount }),
     ...(input.defaultTestUi === undefined ? {} : { defaultTestUi: input.defaultTestUi }),
+    ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
     ...(input.languageMode === undefined ? {} : { languageMode: input.languageMode }),
     ...(input.languages === undefined ? {} : { languages: input.languages }),
     ...(input.shuffleQuestions === undefined ? {} : { shuffleQuestions: input.shuffleQuestions }),
@@ -440,6 +442,7 @@ function toConfig(row: ConfigRow): BaseConfig {
     navigation: row.navigation,
     optionalSectionCount: row.optionalSectionCount,
     defaultTestUi: row.defaultTestUi,
+    examTemplate: row.examTemplate,
     languageMode: row.languageMode,
     languages: row.languages,
     shuffleQuestions: row.shuffleQuestions,

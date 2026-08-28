@@ -24,10 +24,7 @@ export function Watermark({ text, className }: Readonly<WatermarkProps>) {
       )}
     >
       {TILES.map((tile) => (
-        <span
-          key={tile}
-          className="-rotate-45 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-foreground/5"
-        >
+        <span key={tile} className="watermark-tile">
           {text}
         </span>
       ))}

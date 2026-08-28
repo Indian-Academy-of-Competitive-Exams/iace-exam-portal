@@ -413,3 +413,17 @@
   margin: var(--space-3) 0;
   text-align: center;
 }
+
+/* ============================================================================
+   WATERMARK — the tiles, from tokens a surrounding skin can re-point
+   ========================================================================== */
+.watermark-tile {
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-size: var(--watermark-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  color: var(--watermark-ink);
+  opacity: var(--watermark-opacity);
+  transform: rotate(var(--watermark-angle));
+}

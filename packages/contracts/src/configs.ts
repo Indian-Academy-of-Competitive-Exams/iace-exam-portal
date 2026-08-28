@@ -42,6 +42,15 @@ export const languageModeSchema = z.enum(LANGUAGE_MODE);
 export type LanguageMode = z.infer<typeof languageModeSchema>;
 export const LANGUAGE_MODES = languageModeSchema.options;
 
+/** Which skin the exam screen wears. Presentation only: one engine, one clock, one paper. */
+export const EXAM_TEMPLATE = {
+  COMFORTABLE: 'COMFORTABLE',
+  STRICT: 'STRICT',
+} as const;
+export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
+export type ExamTemplate = z.infer<typeof examTemplateSchema>;
+export const EXAM_TEMPLATES = examTemplateSchema.options;
+
 /** The on-screen interface. OMR is a render mode over the same paper, not a scoring change. */
 export const TEST_UI = {
   CBT: 'CBT',
@@ -121,6 +130,8 @@ export const baseConfigSchema = z.object({
   navigation: navigationPolicySchema,
   optionalSectionCount: z.number().int().nullable(),
   defaultTestUi: testUiSchema,
+  /** The skin a test built from this config starts with. */
+  examTemplate: examTemplateSchema,
   languageMode: languageModeSchema,
   languages: z.array(languageCodeSchema),
   shuffleQuestions: z.boolean(),
@@ -197,6 +208,7 @@ const configShapeSchema = z.object({
   navigation: navigationPolicySchema.optional(),
   optionalSectionCount: z.coerce.number().int().min(0).max(20).nullish(),
   defaultTestUi: testUiSchema.optional(),
+  examTemplate: examTemplateSchema.optional(),
   languageMode: languageModeSchema.optional(),
   languages: z.array(languageCodeSchema).optional(),
   shuffleQuestions: z.boolean().optional(),

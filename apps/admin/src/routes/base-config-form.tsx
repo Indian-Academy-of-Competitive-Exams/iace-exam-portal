@@ -5,6 +5,8 @@ import { useFieldArray, useForm, useWatch, type Path, type UseFormReturn } from 
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   AppException,
+  EXAM_TEMPLATE,
+  EXAM_TEMPLATES,
   LANGUAGE_CODE,
   LANGUAGE_CODES,
   LANGUAGE_MODE,
@@ -21,6 +23,7 @@ import {
   type BaseConfigDetail,
   type BaseConfigSection,
   type BaseConfigSectionDraft,
+  type ExamTemplate,
   type LanguageCode,
   type LanguageMode,
   type MeritType,
@@ -50,6 +53,8 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import {
+  EXAM_TEMPLATE_HINTS,
+  EXAM_TEMPLATE_LABELS,
   LANGUAGE_CODE_LABELS,
   LANGUAGE_MODE_HINTS,
   LANGUAGE_MODE_LABELS,
@@ -103,6 +108,7 @@ interface ConfigFormValues {
   navigation: NavigationPolicy;
   optionalSectionCount: string;
   defaultTestUi: TestUi;
+  examTemplate: ExamTemplate;
   languageMode: LanguageMode;
   languages: LanguageCode[];
   shuffleQuestions: boolean;
@@ -139,6 +145,7 @@ function emptyValues(): ConfigFormValues {
     navigation: NAVIGATION_POLICY.FREE,
     optionalSectionCount: '',
     defaultTestUi: TEST_UI.CBT,
+    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
     languageMode: LANGUAGE_MODE.SINGLE,
     languages: [LANGUAGE_CODE.EN],
     shuffleQuestions: false,
@@ -169,6 +176,7 @@ function valuesOf(detail: BaseConfigDetail | null): ConfigFormValues {
     optionalSectionCount:
       detail.optionalSectionCount === null ? '' : String(detail.optionalSectionCount),
     defaultTestUi: detail.defaultTestUi,
+    examTemplate: detail.examTemplate,
     languageMode: detail.languageMode,
     languages: [...detail.languages],
     shuffleQuestions: detail.shuffleQuestions,
@@ -224,6 +232,7 @@ function shapeOf(values: ConfigFormValues) {
     navigation: values.navigation,
     optionalSectionCount: optionalNumber(values.optionalSectionCount),
     defaultTestUi: values.defaultTestUi,
+    examTemplate: values.examTemplate,
     languageMode: values.languageMode,
     languages: values.languages,
     shuffleQuestions: values.shuffleQuestions,
@@ -408,6 +417,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
   const timerTemplate = useWatch({ control: form.control, name: 'timerTemplate' });
   const navigation = useWatch({ control: form.control, name: 'navigation' });
   const defaultTestUi = useWatch({ control: form.control, name: 'defaultTestUi' });
+  const examTemplate = useWatch({ control: form.control, name: 'examTemplate' });
   const languageMode = useWatch({ control: form.control, name: 'languageMode' });
   const watchedSections = useWatch({ control: form.control, name: 'sections' }) ?? [];
   const sessionPaper = timerTemplate === TIMER_TEMPLATE.SESSION_MODULE_LOCKED;
@@ -598,6 +608,26 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
                   value,
                   label: LANGUAGE_MODE_LABELS[value],
                   hint: LANGUAGE_MODE_HINTS[value],
+                }))}
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="examTemplate" label="Exam screen">
+            {(control) => (
+              <Combobox
+                id={control.id}
+                aria-describedby={control['aria-describedby']}
+                aria-invalid={control['aria-invalid']}
+                clearable={false}
+                value={examTemplate}
+                onChange={(next) =>
+                  form.setValue('examTemplate', next as ExamTemplate, { shouldDirty: true })
+                }
+                items={EXAM_TEMPLATES.map((value) => ({
+                  value,
+                  label: EXAM_TEMPLATE_LABELS[value],
+                  hint: EXAM_TEMPLATE_HINTS[value],
                 }))}
               />
             )}

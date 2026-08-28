@@ -4,6 +4,7 @@
  * saves, or what the clock says.
  */
 import type { ComponentType } from 'react';
+import type { ExamTemplate } from '@iace/contracts';
 import type { ExamView } from './exam-view';
 
 export interface ExamSlotProps {
@@ -28,8 +29,8 @@ export interface ExamLayoutProps extends ExamSlotProps {
 }
 
 export interface ExamTemplateDefinition {
-  /** Also the `data-exam-template` value, which is what scopes the skin's tokens. */
-  id: string;
+  /** Lowercased, this is the `data-exam-template` value that scopes the skin's tokens. */
+  id: ExamTemplate;
   slots: ExamSlots;
   Layout: ComponentType<Readonly<ExamLayoutProps>>;
 }

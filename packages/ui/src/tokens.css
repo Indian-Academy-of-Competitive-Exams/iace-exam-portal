@@ -251,25 +251,13 @@
   --series-8: #e34948;
 
   /* ==========================================================================
-     7. EXAM CBT — completed to the real 5-state convention
+     7. EXAM CBT — the palette lives per template, at the end of this file
+     A repeating mark over whatever it covers. The exam skins re-point these.
      ========================================================================== */
-  --exam-answered: #16a34a;
-  --exam-answered-ink: #ffffff;
-  --exam-notanswered: #c1272d;
-  --exam-notanswered-ink: #ffffff;
-  --exam-notvisited: #e2e8f0;
-  --exam-notvisited-ink: #0f172a;
-  --exam-marked: #7c3aed;
-  --exam-marked-ink: #ffffff;
-  /* 5th state: marked for review AND answered — purple body, green tick.
-     Candidates rely on this to triage their final minutes. */
-  --exam-answered-marked: #7c3aed;
-  --exam-answered-marked-tick: #22c55e;
-  /* Ring on the question currently open. Blue: positional only, never a
-     status — it must not read as answered, marked, or wrong. */
-  --exam-current: #1d4ed8;
-  --exam-cell-size: 2.125rem; /* 34 */
-  --exam-cell-gap: var(--space-2);
+  --watermark-ink: var(--foreground);
+  --watermark-opacity: 0.05;
+  --watermark-angle: -45deg;
+  --watermark-size: var(--text-xs);
 
   /* ==========================================================================
      8. TIMER  [NEW]
@@ -498,17 +486,7 @@
   --series-7: #9085e9;
   --series-8: #e66767;
 
-  --exam-answered: #22c55e;
-  --exam-answered-ink: #04140a;
-  --exam-notanswered: #ef4444;
-  --exam-notanswered-ink: #ffffff;
-  --exam-notvisited: #334155;
-  --exam-notvisited-ink: #e2e8f0;
-  --exam-marked: #8b5cf6;
-  --exam-marked-ink: #ffffff;
-  --exam-answered-marked: #8b5cf6;
-  --exam-answered-marked-tick: #4ade80;
-  --exam-current: #60a5fa;
+  --watermark-ink: var(--foreground);
 
   --timer-normal-bg: #181c23;
   --timer-normal-ink: #f8fafc;
@@ -580,4 +558,176 @@
 /* Tag the element (lang="te") rather than branching in JS. */
 :lang(te) {
   line-height: var(--leading-indic);
+}
+
+/* ============================================================================
+   EXAM CBT — one namespace per template
+   The exam screen mimics a government CBT, not the IACE brand, so its palette
+   is separate from the semantic one above. Every value a skin varies is here:
+   swapping [data-exam-template] re-skins the whole screen with no component
+   edit, and re-skinning to an exact exam means editing one block.
+   ========================================================================== */
+
+/* Comfortable — the polished default: softer contrast, roomier cells. */
+[data-exam-template='comfortable'] {
+  --exam-surface: var(--surface);
+  --exam-surface-2: var(--surface-2);
+  --exam-ink: var(--foreground);
+  --exam-ink-muted: var(--muted-foreground);
+  --exam-border: var(--border);
+
+  --exam-answered: #16a34a;
+  --exam-answered-ink: #ffffff;
+  --exam-notanswered: #c1272d;
+  --exam-notanswered-ink: #ffffff;
+  --exam-notvisited: #e2e8f0;
+  --exam-notvisited-ink: #0f172a;
+  --exam-marked: #7c3aed;
+  --exam-marked-ink: #ffffff;
+  /* 5th state: marked for review AND answered — purple body, green tick.
+     Candidates rely on this to triage their final minutes. */
+  --exam-answered-marked: #7c3aed;
+  --exam-answered-marked-ink: #ffffff;
+  --exam-answered-marked-tick: #22c55e;
+  /* Ring on the question currently open. Blue: positional only, never a
+     status — it must not read as answered, marked, or wrong. */
+  --exam-current: #1d4ed8;
+
+  --exam-cell-size: 2.125rem; /* 34 */
+  --exam-cell-gap: var(--space-2);
+  --exam-cell-radius: var(--radius-md);
+  --exam-pad: var(--space-4);
+  --exam-gap: var(--space-4);
+
+  --exam-option-bg: transparent;
+  --exam-option-border: var(--border);
+  --exam-option-radius: var(--radius-lg);
+  --exam-option-selected-bg: #eef4ff;
+  --exam-option-selected-border: #1d4ed8;
+
+  --exam-section-ink: var(--muted-foreground);
+  --exam-section-active-bg: var(--surface);
+  --exam-section-active-ink: var(--foreground);
+
+  --exam-timer-ink: var(--foreground);
+  --exam-timer-bg: transparent;
+  --exam-timer-border: var(--border);
+  --exam-timer-urgent-bg: transparent;
+  --exam-timer-urgent-ink: #c1272d;
+  --exam-timer-urgent-border: #c1272d;
+
+  --watermark-ink: var(--foreground);
+  --watermark-opacity: 0.05;
+  --watermark-angle: -45deg;
+  --watermark-size: var(--text-xs);
+}
+
+/* Strict — the austere real-CBT baseline: flat fills, square edges, dense. */
+[data-exam-template='strict'] {
+  --exam-surface: #ffffff;
+  --exam-surface-2: #eef1f5;
+  --exam-ink: #10141a;
+  --exam-ink-muted: #4a5260;
+  --exam-border: #9aa3b0;
+
+  --exam-answered: #1f9d3d;
+  --exam-answered-ink: #ffffff;
+  --exam-notanswered: #d32f2f;
+  --exam-notanswered-ink: #ffffff;
+  --exam-notvisited: #d9dde2;
+  --exam-notvisited-ink: #10141a;
+  --exam-marked: #5b2d8e;
+  --exam-marked-ink: #ffffff;
+  --exam-answered-marked: #5b2d8e;
+  --exam-answered-marked-ink: #ffffff;
+  --exam-answered-marked-tick: #1f9d3d;
+  --exam-current: #0b3fae;
+
+  --exam-cell-size: 1.875rem; /* 30 */
+  --exam-cell-gap: var(--space-1);
+  --exam-cell-radius: 0px;
+  --exam-pad: var(--space-2);
+  --exam-gap: var(--space-2);
+
+  --exam-option-bg: #ffffff;
+  --exam-option-border: #9aa3b0;
+  --exam-option-radius: 0px;
+  --exam-option-selected-bg: #dbe6ff;
+  --exam-option-selected-border: #0b3fae;
+
+  --exam-section-ink: #10141a;
+  --exam-section-active-bg: #0b3fae;
+  --exam-section-active-ink: #ffffff;
+
+  --exam-timer-ink: #10141a;
+  --exam-timer-bg: #eef1f5;
+  --exam-timer-border: #9aa3b0;
+  --exam-timer-urgent-bg: #d32f2f;
+  --exam-timer-urgent-ink: #ffffff;
+  --exam-timer-urgent-border: #d32f2f;
+
+  --watermark-ink: #10141a;
+  --watermark-opacity: 0.06;
+  --watermark-angle: -30deg;
+  --watermark-size: var(--text-sm);
+}
+
+:root[data-theme='dark'] [data-exam-template='comfortable'] {
+  --exam-answered: #22c55e;
+  --exam-answered-ink: #04140a;
+  --exam-notanswered: #ef4444;
+  --exam-notanswered-ink: #ffffff;
+  --exam-notvisited: #334155;
+  --exam-notvisited-ink: #e2e8f0;
+  --exam-marked: #8b5cf6;
+  --exam-marked-ink: #ffffff;
+  --exam-answered-marked: #8b5cf6;
+  --exam-answered-marked-ink: #ffffff;
+  --exam-answered-marked-tick: #4ade80;
+  --exam-current: #60a5fa;
+
+  --exam-option-selected-bg: #16233d;
+  --exam-option-selected-border: #60a5fa;
+  --exam-timer-urgent-bg: transparent;
+  --exam-timer-urgent-ink: #ef4444;
+  --exam-timer-urgent-border: #ef4444;
+}
+
+:root[data-theme='dark'] [data-exam-template='strict'] {
+  --exam-surface: #0f1216;
+  --exam-surface-2: #191d23;
+  --exam-ink: #f2f4f7;
+  --exam-ink-muted: #aab2bd;
+  --exam-border: #4b535e;
+
+  --exam-answered: #2eb551;
+  --exam-answered-ink: #04140a;
+  --exam-notanswered: #ef4444;
+  --exam-notanswered-ink: #ffffff;
+  --exam-notvisited: #2b313a;
+  --exam-notvisited-ink: #e2e8f0;
+  --exam-marked: #8257c8;
+  --exam-marked-ink: #ffffff;
+  --exam-answered-marked: #8257c8;
+  --exam-answered-marked-ink: #ffffff;
+  --exam-answered-marked-tick: #4ade80;
+  --exam-current: #6ea8ff;
+
+  --exam-option-bg: #0f1216;
+  --exam-option-border: #4b535e;
+  --exam-option-selected-bg: #14243f;
+  --exam-option-selected-border: #6ea8ff;
+
+  --exam-section-ink: #f2f4f7;
+  --exam-section-active-bg: #6ea8ff;
+  --exam-section-active-ink: #0f1216;
+
+  --exam-timer-ink: #f2f4f7;
+  --exam-timer-bg: #191d23;
+  --exam-timer-border: #4b535e;
+  --exam-timer-urgent-bg: #ef4444;
+  --exam-timer-urgent-ink: #ffffff;
+  --exam-timer-urgent-border: #ef4444;
+
+  --watermark-ink: #f2f4f7;
 }

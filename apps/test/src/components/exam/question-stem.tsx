@@ -25,7 +25,7 @@ export function QuestionStem({
   return (
     <>
       <header className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-semibold text-foreground">{`Question ${index + 1}`}</h2>
+        <h2 className="text-sm font-semibold text-exam-ink">{`Question ${index + 1}`}</h2>
         <Badge variant="success">{`+${question.marks}`}</Badge>
         {question.negativeMarks > 0 ? (
           <Badge variant="danger">{`−${question.negativeMarks}`}</Badge>
@@ -36,7 +36,7 @@ export function QuestionStem({
         <RichContent
           key={language}
           lang={language.toLowerCase()}
-          className="text-sm leading-relaxed text-foreground"
+          className="text-sm leading-relaxed text-exam-ink"
           html={htmlOf(question.content[contentLanguageOf(language)]?.stem)}
         />
       ))}
