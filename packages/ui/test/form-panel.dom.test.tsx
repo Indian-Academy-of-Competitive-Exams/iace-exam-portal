@@ -136,6 +136,21 @@ describe('a read-only FormPanel', () => {
     assert.ok(!screen.getByRole('button', { name: 'Edit details' }).matches(':disabled'));
   });
 
+  /** A student's granted series is not the profile being edited, so Edit must not reach it. */
+  it('leaves an `after` section live while the fields are inert', () => {
+    render(
+      <FormPanel disabled after={<Input aria-label="Grant a series" />}>
+        <Input aria-label="Full name" />
+      </FormPanel>,
+    );
+
+    assert.ok(screen.getByLabelText('Full name').matches(':disabled'), 'the field is inert');
+    assert.ok(
+      !screen.getByLabelText('Grant a series').matches(':disabled'),
+      'the section outside the fieldset is not',
+    );
+  });
+
   it('leaves the same controls live when it is not disabled', () => {
     render(
       <FormPanel>

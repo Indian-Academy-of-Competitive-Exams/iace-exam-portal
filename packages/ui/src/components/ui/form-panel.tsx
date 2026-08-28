@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Card } from './card';
+import { Separator } from './separator';
 
 export interface FormPanelProps {
   /** Pinned above the card — a `PageHeader` and its trail. */
@@ -11,6 +12,8 @@ export interface FormPanelProps {
   onSubmit?: NonNullable<React.FormHTMLAttributes<HTMLFormElement>['onSubmit']>;
   /** Read-only: the same layout, every control inert. The footer stays live, so Edit is reachable. */
   disabled?: boolean;
+  /** Below the fields behind a divider, OUTSIDE the fieldset — a section Edit does not own. */
+  after?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
@@ -31,6 +34,7 @@ export function FormPanel({
   footer,
   onSubmit,
   disabled,
+  after,
   children,
   className,
 }: Readonly<FormPanelProps>) {
@@ -40,6 +44,12 @@ export function FormPanel({
       <fieldset disabled={disabled} className="contents">
         <FormDisabled.Provider value={disabled ?? false}>{children}</FormDisabled.Provider>
       </fieldset>
+      {after ? (
+        <>
+          <Separator />
+          {after}
+        </>
+      ) : null}
     </div>
   );
   const foot = footer ? (

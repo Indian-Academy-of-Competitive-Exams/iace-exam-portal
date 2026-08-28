@@ -244,6 +244,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
                 value: family,
                 label: familyLabel(family),
               }))}
+              chips={false}
               placeholder="No families yet"
               emptyLabel="No family matches that"
             />
@@ -267,6 +268,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
                 label: exam.code,
                 hint: exam.name,
               }))}
+              chips={false}
               placeholder="No exams yet"
               emptyLabel="No exam matches that"
             />
@@ -741,6 +743,7 @@ export function StudentDetailPage() {
           />
         </>
       }
+      after={<GrantsCard detail={detail} />}
     >
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">
@@ -817,10 +820,7 @@ export function StudentDetailPage() {
           </div>
         </FormSection>
 
-        <div className="flex flex-col gap-8">
-          <AccessCard form={form} />
-          <GrantsCard detail={detail} />
-        </div>
+        <AccessCard form={form} />
       </div>
     </FormPanel>
   );
