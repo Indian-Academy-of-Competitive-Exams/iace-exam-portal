@@ -5,6 +5,20 @@ export default [
   ...config,
   ...boundaries,
   {
+    // The interceptor is the ONE envelope author, and is not a controller, so it is out of scope.
+    files: ['**/*.controller.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ReturnStatement ObjectExpression:has(> Property[key.name="success"])',
+          message:
+            'Return the data or throw AppException. The response interceptor builds { success, data, meta }.',
+        },
+      ],
+    },
+  },
+  {
     files: ['src/**/*.ts'],
     rules: {
       // MUST stay off for NestJS. With `emitDecoratorMetadata`, TypeScript
