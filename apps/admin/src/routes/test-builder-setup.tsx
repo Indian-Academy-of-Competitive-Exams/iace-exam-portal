@@ -142,12 +142,7 @@ function Blueprint({
             )}
           </FormField>
 
-          <FormField
-            form={form}
-            name="baseConfigId"
-            label="Base configuration"
-            /* ui-copy-ok: rule */ hint="Only the ones still offered on this stage"
-          >
+          <FormField form={form} name="baseConfigId" label="Base configuration">
             {(control) => (
               <BaseConfigPicker
                 id={control.id}
@@ -276,7 +271,7 @@ function Rules({
           form={form}
           name="variantCount"
           label="Papers"
-          /* ui-copy-ok: limit */ hint={`How many to draw, up to ${MAX_PAPER_VARIANTS}`}
+          /* ui-copy-ok: limit */ hint={`Up to ${MAX_PAPER_VARIANTS}`}
         >
           {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
         </FormField>

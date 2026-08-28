@@ -374,12 +374,7 @@ function SeriesList({
       isLoading={isLoading}
       skeletonRows={3}
       scroll={{}}
-      empty={
-        <Alert variant="info">
-          Nothing reaches this student yet. A series arrives through an exam enrolment, a program or
-          a direct grant, and only once it is switched on at their branch.
-        </Alert>
-      }
+      empty={<Alert variant="info">Nothing reaches this student yet.</Alert>}
     />
   );
 }

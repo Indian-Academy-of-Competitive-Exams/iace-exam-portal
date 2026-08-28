@@ -142,9 +142,7 @@ export function ProgramsPage() {
 
       {!isSuperAdmin ? (
         <Alert variant="info" className="mb-5">
-          <span>
-            Only a super admin can add or change a program. You can see the list to pick from.
-          </span>
+          <span>Only a super admin can add or change a program.</span>
         </Alert>
       ) : null}
     </>
