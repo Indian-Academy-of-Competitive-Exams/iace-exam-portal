@@ -3,11 +3,12 @@ import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
 import {
   ActorTypes,
-  FEATURE_KEYS,
-  PERMISSION_LEVELS,
-  type AdminPermissions,
   AppException,
   ErrorCodes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  STUDENT_TYPE,
+  type AdminPermissions,
 } from '@iace/contracts';
 import { AuthService } from '../src/auth/auth.service';
 import { type AdminsService } from '../src/admins';
@@ -201,6 +202,15 @@ describe('AuthService — signup and PIN reset', () => {
     assert.equal(ctx.prisma.students.length, 1);
     assert.equal(ctx.prisma.students[0]?.mobile, MOBILE);
     assert.ok(ctx.prisma.students[0]?.pinHash);
+  });
+
+  /** ONLINE means an IACE student at the online branch. Somebody signing themselves up is neither. */
+  it('creates them outside the institute, at no branch', async () => {
+    const ctx = build();
+    await signUp(ctx, MOBILE, '4813');
+
+    assert.equal(ctx.prisma.students[0]?.studentType, STUDENT_TYPE.NON_IACE);
+    assert.equal(ctx.prisma.students[0]?.currentBranchId ?? null, null);
   });
 
   it('tells the caller whether this is a signup or a reset', async () => {

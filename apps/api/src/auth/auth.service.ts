@@ -105,9 +105,8 @@ export class AuthService {
             mobile,
             pinHash,
             pinIsDefault: false,
-            // A student who arrives at the PIN screen without a row signed themselves
-            // up, which only an online student can do.
-            studentType: STUDENT_TYPE.ONLINE,
+            // Signed themselves up, so they are outside the institute: ONLINE is a branch of ours.
+            studentType: STUDENT_TYPE.NON_IACE,
           },
         });
     if (!student.isActive)
