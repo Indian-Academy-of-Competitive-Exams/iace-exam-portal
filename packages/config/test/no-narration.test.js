@@ -27,6 +27,13 @@ ruleTester.run('no-narration', noNarration, {
 
     // Muted, but a VALUE rather than prose about the screen.
     screen('return <p className="text-sm text-muted-foreground">{value}</p>;'),
+
+    // A Field label that is the term for the value.
+    screen('return <Field label="Series" />;'),
+    // A Checkbox label is a PROPOSITION, and a Spinner's is a live state — neither names a value.
+    screen('return <Checkbox label="Every student must attempt this section" />;'),
+    screen('return <Spinner label="Checking your system" />;'),
+    screen('return <Stepper label="Building this test" />;'),
   ],
 
   invalid: [
@@ -49,6 +56,15 @@ ruleTester.run('no-narration', noNarration, {
         'return <p className="text-sm text-muted-foreground">This is where you grant access.</p>;',
       ),
       errors: [{ messageId: 'mutedProse' }],
+    },
+    {
+      // Leads with a verb: the label is instructing rather than naming.
+      code: screen('return <Field label="Grant a series" />;'),
+      errors: [{ messageId: 'narrativeLabel' }],
+    },
+    {
+      code: screen('return <FormField label="Bring them in as" />;'),
+      errors: [{ messageId: 'narrativeLabel' }],
     },
   ],
 });

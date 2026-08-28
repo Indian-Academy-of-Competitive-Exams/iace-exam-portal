@@ -60,6 +60,9 @@ const NARRATION_WORDS = new Set([
 const HEADING_TAGS = new Set(['h1', 'h2', 'h3', 'h4']);
 const HEADING_ATTRS = new Set(['title', 'heading']);
 
+/** A Field's label NAMES the value. A Checkbox label is a proposition and a Spinner's is a state. */
+const FIELD_ELEMENTS = new Set(['Field', 'FormField']);
+
 const word = (w) => w.toLowerCase().replace(/[^a-z]/g, '');
 
 function looksNarrative(text) {
@@ -98,6 +101,8 @@ export const noNarration = {
         '`{{attr}}=` narrates. Delete it, or justify with `// ui-copy-ok: <unit|format|limit|rule|consequence>` — the label usually says it better.',
       mutedProse:
         'A muted <p> reads as content and gets skipped. Put it in an Alert, fold it into a label, or delete it; justify with `// ui-copy-ok:` only if it truly earns its line.',
+      narrativeLabel:
+        'A field label names the value; it does not instruct. “{{text}}” reads as a sentence — use the term the reader already calls the thing.',
       narrativeHeading:
         'A heading is the plain noun for the region — “{{noun}}”, not “{{text}}”. Drop the narration.',
     },
@@ -124,6 +129,11 @@ export const noNarration = {
           const owner = elementName(node.parent);
           if (name === 'description' && owner && DIALOG_ELEMENTS.has(owner)) return;
           report(node, 'narrationAttr', { attr: name });
+          return;
+        }
+        if (name === 'label' && FIELD_ELEMENTS.has(elementName(node.parent))) {
+          const text = literal(node);
+          if (text && looksNarrative(text)) report(node, 'narrativeLabel', { text });
           return;
         }
         if (HEADING_ATTRS.has(name)) {

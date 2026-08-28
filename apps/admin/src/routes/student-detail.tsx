@@ -436,13 +436,9 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         <div className="flex flex-wrap items-end gap-3">
           <Field
             htmlFor="grantSeries"
-            label="Grant a series"
-            // ui-copy-ok: rule — what the picker refuses, and what it has already left out
-            hint={
-              detail.isTestBlocked
-                ? 'Blocked from tests — lift the block before granting a series.'
-                : 'Series they already reach are not listed.'
-            }
+            label="Series to grant"
+            // ui-copy-ok: rule — why Grant is dead, which a disabled button cannot say
+            hint={detail.isTestBlocked ? 'Lift the test block before granting.' : undefined}
             className="min-w-56 flex-1"
           >
             {({ id, 'aria-describedby': describedBy }) => (

@@ -184,7 +184,7 @@ export function ImportQuestionsPage() {
 
               {preview.isPending ? <LoadingState>Reading the file…</LoadingState> : null}
 
-              <Field htmlFor="import-status" label="Bring them in as">
+              <Field htmlFor="import-status" label="Status">
                 {(control) => (
                   <Combobox
                     id={control.id}
