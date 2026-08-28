@@ -330,7 +330,7 @@ export function QuestionFormPage() {
       }
     >
       {/* Taxonomy settles when the question leaves the draft: it is what a paper draws on. */}
-      <FormSection title="Where it is filed">
+      <FormSection title="Subject and topic">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField form={form} name="subjectId" label="Subject">
             {(control) => (
@@ -348,7 +348,12 @@ export function QuestionFormPage() {
             )}
           </FormField>
 
-          <FormField form={form} name="topicId" label="Topic" hint="Optional">
+          <FormField
+            form={form}
+            name="topicId"
+            label="Topic"
+            /* ui-copy-ok: rule */ hint="Optional"
+          >
             {(control) => (
               <TopicPicker
                 id={control.id}
@@ -484,7 +489,7 @@ export function QuestionFormPage() {
                 form={form}
                 name="tolerance"
                 label="Tolerance"
-                hint="How far either side still counts"
+                /* ui-copy-ok: rule */ hint="How far either side still counts"
               >
                 {(control) => <Input {...control} inputMode="decimal" placeholder="0.01" />}
               </FormField>
@@ -495,10 +500,20 @@ export function QuestionFormPage() {
 
       <FormSection title="Filing">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField form={form} name="questionCode" label="Question code" hint="Optional">
+          <FormField
+            form={form}
+            name="questionCode"
+            label="Question code"
+            /* ui-copy-ok: rule */ hint="Optional"
+          >
             {(control) => <Input {...control} placeholder="QA-001" />}
           </FormField>
-          <FormField form={form} name="tags" label="Tags" hint="Separate with a comma">
+          <FormField
+            form={form}
+            name="tags"
+            label="Tags"
+            /* ui-copy-ok: format */ hint="Separate with a comma"
+          >
             {(control) => <Input {...control} placeholder="ssc cgl, percentages" />}
           </FormField>
         </div>
@@ -557,6 +572,7 @@ function ApproveButton({ id }: Readonly<{ id: string }>) {
         open={asking}
         onOpenChange={setAsking}
         loading={approve.isPending}
+        // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Approve this question?"
         description="It goes into the bank as ACTIVE and can be drawn into any paper built from now on. Approving does not put it into a paper that already exists."
         confirmLabel="Approve it"

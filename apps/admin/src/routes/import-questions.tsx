@@ -178,7 +178,7 @@ export function ImportQuestionsPage() {
                 accept={`${IMPORT_ACCEPTED_EXTENSIONS.join(',')},${XLSX_CONTENT_TYPE}`}
                 file={file}
                 onFileChange={choose}
-                hint={IMPORT_ACCEPTED_EXTENSIONS.join(' or ')}
+                /* ui-copy-ok: format */ hint={IMPORT_ACCEPTED_EXTENSIONS.join(' or ')}
                 aria-label="Question import file"
               />
 
@@ -215,7 +215,7 @@ export function ImportQuestionsPage() {
           </FormSection>
 
           {plan ? (
-            <FormSection title="What this would do">
+            <FormSection title="Preview">
               <div className="flex flex-col gap-2 text-sm">
                 <StatRow label="Rows read" value={plan.summary.total} />
                 <StatRow label="New questions" value={plan.summary.willCreate} />

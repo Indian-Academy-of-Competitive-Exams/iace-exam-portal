@@ -6,7 +6,8 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
-import { iaceConfirmPlugin } from './eslint-rules/confirm-destructive.js';
+import { confirmDestructive } from './eslint-rules/confirm-destructive.js';
+import { noNarration } from './eslint-rules/no-narration.js';
 
 export default defineConfig([
   { ignores: ['dist/**', 'node_modules/**', '.turbo/**'] },
@@ -22,11 +23,15 @@ export default defineConfig([
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
-      '@iace': iaceConfirmPlugin,
+      '@iace': {
+        meta: { name: '@iace' },
+        rules: { 'confirm-destructive': confirmDestructive, 'no-narration': noNarration },
+      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
       '@iace/confirm-destructive': 'error',
+      '@iace/no-narration': 'error',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',

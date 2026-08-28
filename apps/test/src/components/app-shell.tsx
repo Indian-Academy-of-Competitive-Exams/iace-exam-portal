@@ -58,7 +58,7 @@ export function AppShell() {
 function DefaultPinGate() {
   return (
     <div className="mx-auto max-w-lg">
-      <PageHeader title="Choose your own PIN" />
+      <PageHeader title="PIN" />
       <ChangePinCard onDefaultPin />
     </div>
   );

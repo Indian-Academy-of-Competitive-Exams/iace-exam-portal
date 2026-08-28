@@ -493,7 +493,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
         </Alert>
       ) : null}
 
-      <FormSection title="Which stage this is for">
+      <FormSection title="Stage">
         <div className="grid gap-4 sm:grid-cols-2">
           {existing ? (
             <ReadOnlyField
@@ -526,7 +526,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
               form={form}
               name="isActive"
               label="Offered when building a test"
-              hint="Tests already built keep it"
+              /* ui-copy-ok: rule */ hint="Tests already built keep it"
             />
           ) : null}
         </div>
@@ -638,7 +638,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             form={form}
             name="optionalSectionCount"
             label="Optional sections"
-            hint="Blank means none"
+            /* ui-copy-ok: rule */ hint="Blank means none"
           >
             {(control) => <Input {...control} inputMode="numeric" placeholder="0" />}
           </FormField>
@@ -789,7 +789,7 @@ function ToggleField({
       checked={checked}
       onChange={(event) => form.setValue(name, event.target.checked)}
       label={label}
-      hint={hint}
+      /* ui-copy-ok: rule */ hint={hint}
     />
   );
 }
@@ -863,7 +863,12 @@ function SectionCard({
           {(control) => <Input {...control} placeholder="General Intelligence" />}
         </FormField>
 
-        <FormField form={form} name={`sections.${index}.subjectId`} label="Subject" hint="Optional">
+        <FormField
+          form={form}
+          name={`sections.${index}.subjectId`}
+          label="Subject"
+          /* ui-copy-ok: rule */ hint="Optional"
+        >
           {(control) => (
             <SubjectPicker
               id={control.id}
@@ -891,7 +896,7 @@ function SectionCard({
           form={form}
           name={`sections.${index}.negativeMarks`}
           label="Negative marks"
-          hint="Per wrong answer"
+          /* ui-copy-ok: unit */ hint="Per wrong answer"
         >
           {(control) => <Input {...control} inputMode="decimal" placeholder="0.5" />}
         </FormField>
@@ -900,7 +905,9 @@ function SectionCard({
           form={form}
           name={`sections.${index}.durationMin`}
           label="Minutes"
-          hint={sectionalClocks ? 'Required — this paper has a clock per section' : 'Optional'}
+          /* ui-copy-ok: rule */ hint={
+            sectionalClocks ? 'Required — this paper has a clock per section' : 'Optional'
+          }
         >
           {(control) => <Input {...control} inputMode="numeric" />}
         </FormField>
@@ -909,7 +916,7 @@ function SectionCard({
           form={form}
           name={`sections.${index}.perQuestionSec`}
           label="Seconds per question"
-          hint="Optional"
+          /* ui-copy-ok: rule */ hint="Optional"
         >
           {(control) => <Input {...control} inputMode="numeric" />}
         </FormField>
@@ -1001,7 +1008,7 @@ function Totals({ sections }: Readonly<{ sections: readonly SectionValues[] }>) 
   const totals = configTotalsOf(sections.map((section, index) => toSectionDraft(section, index)));
 
   return (
-    <FormSection title="What this adds up to">
+    <FormSection title="Totals">
       <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
         <StatRow label="Sections" value={sections.length} />
         <StatRow label="Questions" value={totals.totalQuestions} />

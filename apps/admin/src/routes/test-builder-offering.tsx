@@ -282,7 +282,7 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
               readOnly
               tabIndex={-1}
               label={requirement.label}
-              hint={requirement.owed ?? undefined}
+              /* ui-copy-ok: rule */ hint={requirement.owed ?? undefined}
             />
           </li>
         ))}

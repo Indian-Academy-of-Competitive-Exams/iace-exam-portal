@@ -56,7 +56,7 @@ export function DrawSpecEditor({
       <Field
         htmlFor={`topics-${section.id}`}
         label="Topics"
-        hint="Leave empty to draw from the whole subject"
+        /* ui-copy-ok: rule */ hint="Leave empty to draw from the whole subject"
       >
         {(control) => (
           <TopicMultiPicker

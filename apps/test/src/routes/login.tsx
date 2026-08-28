@@ -379,7 +379,7 @@ function SetPinStep({
             masked
             autoFocus
             autoComplete="new-password"
-            hint="Not a run like 1234, and not all one digit"
+            /* ui-copy-ok: rule */ hint="Not a run like 1234, and not all one digit"
           />
           <PinField
             name="confirmPin"

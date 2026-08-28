@@ -42,6 +42,7 @@ export function ExamShell({
       <ConfirmDialog
         open={submit.asking}
         onOpenChange={(open) => !open && submit.cancel()}
+        // ui-copy-ok: consequence — a confirm names what it is about to do
         title="Submit this test?"
         description={`${plural(submit.unanswered, 'question')} unanswered and ${submit.markedForReview} marked for review. Once submitted the paper closes and nothing more can be changed.`}
         confirmLabel="Submit"

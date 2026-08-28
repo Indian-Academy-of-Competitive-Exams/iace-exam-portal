@@ -153,9 +153,10 @@ function TestCard({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
         </div>
 
         {done ? (
+          /* ui-copy-ok: consequence */
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CircleCheck aria-hidden className="size-3.5 shrink-0 text-success" />
-            You have sat this test. Your result comes once it is marked.
+            Result once it is marked
           </p>
         ) : (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

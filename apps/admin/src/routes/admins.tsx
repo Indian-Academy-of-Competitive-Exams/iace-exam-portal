@@ -281,7 +281,7 @@ function NewAdminDialog({
               checked={isSuperAdmin}
               onChange={(event) => form.setValue('isSuperAdmin', event.target.checked)}
               label="Super admin"
-              hint="Bypasses every feature check, and can manage admins."
+              /* ui-copy-ok: consequence */ hint="Bypasses every feature check, and can manage admins."
             />
           )}
         </FormField>

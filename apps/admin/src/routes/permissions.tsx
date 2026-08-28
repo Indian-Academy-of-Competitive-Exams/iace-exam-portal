@@ -329,7 +329,7 @@ function FeatureGrid({
   onSetLevel: (key: FeatureKey, next: Level) => void;
 }>) {
   if (features.length === 0) {
-    return <p className="text-sm text-muted-foreground">No features registered yet.</p>;
+    return <Alert variant="info">No features registered yet.</Alert>;
   }
 
   return (

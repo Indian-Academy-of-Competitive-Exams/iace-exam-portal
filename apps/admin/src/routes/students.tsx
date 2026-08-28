@@ -421,7 +421,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Add a student"
+      title="New student"
       submitLabel="Add student"
       loading={create.isPending}
       form={form}
@@ -501,7 +501,12 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         )}
       </FormField>
 
-      <FormField form={form} name="currentBranchId" label="Current branch" hint={branch.hint}>
+      <FormField
+        form={form}
+        name="currentBranchId"
+        label="Current branch"
+        /* ui-copy-ok: rule */ hint={branch.hint}
+      >
         {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
           <Combobox
             id={id}

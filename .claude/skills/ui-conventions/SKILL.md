@@ -15,6 +15,8 @@ Read `packages/ui/src/index.ts` — the component inventory — before building 
 
 Files named in a bullet are the shape to STOP copying, not licence to add another.
 
+**The UI does not narrate.** The `<copy>` rules below are a hard gate, not tone. Before the terse report, grep your own diff for `text-muted-foreground` prose, `description=`, `subtitle=` and `hint=`, and delete or justify each. A screen that reads like it is describing itself has already failed review.
+
 </binding>
 
 ## Shared code
@@ -85,6 +87,10 @@ The people reading these screens ran exam centres before they saw them. Write fo
   - **Whatever survives is said in an `Alert`, never in prose on the page.** The variant carries half the meaning before a word is read: `info` for a fact they could not infer, `warning` for something that will cost them, `danger` for something already wrong, `success` only where the outcome is invisible from the screen. A muted `<p>` reads as CONTENT — the eye files it with the data and skips it — so the sentence is on screen and the meaning never lands. **The action that resolves it goes INSIDE the alert** (`PreTestPrompt`). **Never build a table or a row of chips out of something an Alert should say**: a sentence is taken in, a table has to be assembled.
   - **A `hint` is the same rule one level down: the label already said what the field is.** "The number you signed up with" under _Mobile number_ tells the reader nothing. If deleting the hint loses nothing, it was never a hint. A hint earns its line by carrying a UNIT, FORMAT, LIMIT or RULE the field cannot show — "Per wrong answer", "Blank means none", "Optional", "Locked once a student is enrolled" — each something they would otherwise learn from an error after typing. **Say the rule, not the advice**: "Avoid 1234" reads as a suggestion for something the server refuses outright.
   - Teaching the domain is documentation's job. A genuinely hard rule belongs in `docs/`, in the hint, or in the server's error — not in prose above a table.
+
+- **A heading is the plain noun for what sits under it — “Series”, not “Series they reach”; “Access”, not “Tests a student can sit”.** A section title, a card title, a `PageHeader`/`FormSection` title and an `h1`–`h3` NAME the region; they never narrate it with a pronoun, a verb or a phrase. If a title has crept into a sentence, cut it back to the noun the reader already calls the thing. The content below shows what it does; the heading only says what it is.
+
+- **This is enforced, not aspirational — the `no-narration` lint rule holds the line.** It flags a narrative heading (a title that is not a plain noun), an explanatory muted `<p>` on a page, and a `description`/`subtitle`/`hint` in a feature route, unless that line carries `// ui-copy-ok: <unit|format|limit|rule|consequence>` naming which one earns it. A `hint` that cannot name one is deleted, not justified. The fix for a flag is almost always a better label, not a longer sentence — run `pnpm lint` before reporting a screen done. Do not add a `hint`/`description` prop to a shared component that lacks one to make room for prose.
 
 </copy>
 

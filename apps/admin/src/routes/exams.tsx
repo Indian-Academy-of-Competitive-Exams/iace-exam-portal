@@ -318,7 +318,12 @@ function EditExamDialog({
         {(control) => <Input {...control} autoFocus />}
       </FormField>
 
-      <FormField form={form} name="code" label="Code" hint="Locked once a student is enrolled">
+      <FormField
+        form={form}
+        name="code"
+        label="Code"
+        /* ui-copy-ok: rule */ hint="Locked once a student is enrolled"
+      >
         {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
       </FormField>
     </FormDialog>
@@ -675,7 +680,7 @@ function NewStageDialog({
         )}
       </FormField>
 
-      <FormField form={form} name="order" label="Order" hint="Lowest first">
+      <FormField form={form} name="order" label="Order" /* ui-copy-ok: rule */ hint="Lowest first">
         {(control) => <NumericInput {...control} {...form.register('order')} />}
       </FormField>
 
@@ -763,7 +768,7 @@ function EditStageDialog({
         form={form}
         name="stageKey"
         label="Key"
-        hint={
+        /* ui-copy-ok: rule */ hint={
           stage.configCount > 0
             ? `${plural(stage.configCount, 'base configuration')} hangs off this key — it can no longer change.`
             : 'Free to change only while no base configuration hangs off it.'
@@ -778,7 +783,7 @@ function EditStageDialog({
         )}
       </FormField>
 
-      <FormField form={form} name="order" label="Order" hint="Lowest first">
+      <FormField form={form} name="order" label="Order" /* ui-copy-ok: rule */ hint="Lowest first">
         {(control) => <NumericInput {...control} {...form.register('order')} />}
       </FormField>
 

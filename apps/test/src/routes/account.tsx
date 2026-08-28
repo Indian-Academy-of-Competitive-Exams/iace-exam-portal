@@ -81,17 +81,18 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
             length={PIN_LENGTH}
             masked
             autoComplete="current-password"
-            hint={onDefaultPin ? 'The first four digits of your mobile number.' : undefined}
+            /* ui-copy-ok: format */ hint={
+              onDefaultPin ? 'The first four digits of your mobile number.' : undefined
+            }
           />
 
           <PinField
             name="newPin"
             form={form}
-            label="New PIN"
+            label={`New PIN (${PIN_LENGTH} digits)`}
             length={PIN_LENGTH}
             masked
             autoComplete="new-password"
-            hint={`${PIN_LENGTH} digits.`}
           />
 
           <Button type="submit" loading={change.isPending}>

@@ -281,6 +281,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         <Field
           htmlFor="currentBranchId"
           label="Current branch"
+          // ui-copy-ok: rule — why the picker is locked, which a disabled control cannot say
           hint={branch.hint}
           error={form.formState.errors.currentBranchId?.message}
         >
@@ -429,13 +430,14 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
     revoking?.sources.some((source) => source !== STUDENT_SERIES_SOURCE.GRANT) ?? false;
 
   return (
-    <FormSection title="Series they reach">
+    <FormSection title="Series">
       <div className="flex flex-col gap-4">
         {/* Not a nested <form>: this section stands inside the profile form. */}
         <div className="flex flex-wrap items-end gap-3">
           <Field
             htmlFor="grantSeries"
             label="Grant a series"
+            // ui-copy-ok: rule — what the picker refuses, and what it has already left out
             hint={
               detail.isTestBlocked
                 ? 'Blocked from tests — lift the block before granting a series.'

@@ -232,7 +232,7 @@ function NewSubjectDialog({
       <FormField form={form} name="name" label="Name">
         {(field) => <Input {...field} placeholder="QUANTITATIVE APTITUDE" autoFocus />}
       </FormField>
-      <FormField form={form} name="code" label="Code" hint="Optional">
+      <FormField form={form} name="code" label="Code" /* ui-copy-ok: rule */ hint="Optional">
         {(field) => <Input {...field} placeholder="QA" />}
       </FormField>
     </FormDialog>

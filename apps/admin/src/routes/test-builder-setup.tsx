@@ -58,7 +58,7 @@ export function SetupStep({
 
   return (
     <>
-      <FormSection title="Which paper this is">
+      <FormSection title="Paper">
         <Blueprint
           form={form}
           detail={detail}
@@ -66,7 +66,7 @@ export function SetupStep({
         />
       </FormSection>
 
-      <FormSection title="How it is judged">
+      <FormSection title="Scoring">
         <Rules form={form} config={config} sat={sat} />
       </FormSection>
     </>
@@ -146,7 +146,7 @@ function Blueprint({
             form={form}
             name="baseConfigId"
             label="Base configuration"
-            hint="Only the ones still offered on this stage"
+            /* ui-copy-ok: rule */ hint="Only the ones still offered on this stage"
           >
             {(control) => (
               <BaseConfigPicker
@@ -233,7 +233,7 @@ function Rules({
         form={form}
         name="paperBinding"
         label="Paper"
-        hint={
+        /* ui-copy-ok: rule */ hint={
           evaluationMode === EVALUATION_MODE.RANKED
             ? 'A ranked test needs one shared paper'
             : undefined
@@ -255,7 +255,12 @@ function Rules({
         )}
       </FormField>
 
-      <FormField form={form} name="maxRetakes" label="Retakes" hint="Blank means unlimited">
+      <FormField
+        form={form}
+        name="maxRetakes"
+        label="Retakes"
+        /* ui-copy-ok: limit */ hint="Blank means unlimited"
+      >
         {(control) => (
           <Input
             {...control}
@@ -271,7 +276,7 @@ function Rules({
           form={form}
           name="variantCount"
           label="Papers"
-          hint={`How many to draw, up to ${MAX_PAPER_VARIANTS}`}
+          /* ui-copy-ok: limit */ hint={`How many to draw, up to ${MAX_PAPER_VARIANTS}`}
         >
           {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
         </FormField>

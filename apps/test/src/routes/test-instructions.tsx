@@ -39,7 +39,7 @@ export function TestInstructionsPage() {
 
   if (brief.isLoading) {
     return (
-      <PageFrame header={<PageHeader title="Before you begin" />}>
+      <PageFrame header={<PageHeader title="Instructions" />}>
         <SkeletonParagraph lines={6} />
       </PageFrame>
     );
@@ -47,7 +47,7 @@ export function TestInstructionsPage() {
 
   if (!brief.data) {
     return (
-      <PageFrame header={<PageHeader title="Before you begin" />}>
+      <PageFrame header={<PageHeader title="Instructions" />}>
         <Alert variant="danger">This test is not open to you.</Alert>
       </PageFrame>
     );
@@ -59,7 +59,7 @@ export function TestInstructionsPage() {
   const ready = declared && picked;
 
   return (
-    <PageFrame header={<PageHeader title={paper.title ?? 'Before you begin'} />}>
+    <PageFrame header={<PageHeader title={paper.title ?? 'Instructions'} />}>
       <div className="flex flex-col gap-6 pb-6">
         <div className="grid gap-x-6 sm:grid-cols-2">
           <StatRow label="Duration" value={minutes(paper.durationSec)} />
@@ -116,7 +116,7 @@ export function TestInstructionsPage() {
           checked={declared}
           onChange={(event) => setDeclared(event.target.checked)}
           label="I have read the instructions and I am ready to begin"
-          hint="The clock starts the moment you begin, and the server keeps it."
+          /* ui-copy-ok: consequence */ hint="The clock starts the moment you begin, and the server keeps it."
         />
 
         <Button

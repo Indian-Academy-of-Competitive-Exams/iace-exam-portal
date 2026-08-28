@@ -6,6 +6,11 @@ export default [
   { ignores: ['tailwind.preset.js'] },
   ...config,
   {
+    // A design system takes its copy as props; the narration rule is for the screens passing them.
+    files: ['**/*.{ts,tsx}'],
+    rules: { '@iace/no-narration': 'off' },
+  },
+  {
     files: ['src/components/**/*.tsx'],
     rules: {
       // A component library is not an HMR surface, and exporting the cva

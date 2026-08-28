@@ -272,7 +272,12 @@ function EditProgramDialog({
         {(control) => <Input {...control} autoFocus />}
       </FormField>
 
-      <FormField form={form} name="code" label="Code" hint="Locked once anything carries it">
+      <FormField
+        form={form}
+        name="code"
+        label="Code"
+        /* ui-copy-ok: rule */ hint="Locked once anything carries it"
+      >
         {(control) => <Input {...control} className="uppercase placeholder:normal-case" />}
       </FormField>
     </FormDialog>

@@ -45,7 +45,7 @@ export function AppShell() {
 function DeactivatedNotice() {
   return (
     <>
-      <PageHeader title="Your access has been removed" />
+      <PageHeader title="Access removed" />
       <Alert variant="warning">
         <span>
           Every section and action across the platform is closed to you, including anything you were

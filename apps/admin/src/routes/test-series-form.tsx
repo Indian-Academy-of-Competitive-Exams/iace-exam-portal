@@ -240,7 +240,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         </>
       }
     >
-      <FormSection title="Who it is for">
+      <FormSection title="Details">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField form={form} name="name" label="Name">
             {(control) => (
@@ -255,7 +255,12 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField form={form} name="examStageId" label="Stage" hint="Optional">
+          <FormField
+            form={form}
+            name="examStageId"
+            label="Stage"
+            /* ui-copy-ok: rule */ hint="Optional"
+          >
             {(control) => (
               <ExamStagePicker
                 id={control.id}
@@ -285,13 +290,18 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField form={form} name="description" label="Description" hint="Optional">
+          <FormField
+            form={form}
+            name="description"
+            label="Description"
+            /* ui-copy-ok: rule */ hint="Optional"
+          >
             {(control) => <Textarea {...control} />}
           </FormField>
         </div>
       </FormSection>
 
-      <FormSection title="How it opens">
+      <FormSection title="Unlocking">
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField form={form} name="unlockMode" label="Unlocks">
             {(control) => (
@@ -312,7 +322,12 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField form={form} name="prerequisiteSeriesId" label="Waits on" hint="Optional">
+          <FormField
+            form={form}
+            name="prerequisiteSeriesId"
+            label="Waits on"
+            /* ui-copy-ok: rule */ hint="Optional"
+          >
             {(control) => (
               <TestSeriesPicker
                 id={control.id}
@@ -333,7 +348,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
               form={form}
               name="sequentialTests"
               label="Unlock the tests in order"
-              hint="Off opens every test in the series together."
+              /* ui-copy-ok: rule */ hint="Off opens every test in the series together."
             />
             <SeriesToggle form={form} name="isFree" label="Free" />
           </div>
@@ -383,7 +398,7 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
   });
 
   return (
-    <FormSection title="The tests it holds">
+    <FormSection title="Tests">
       <DataTable
         columns={testColumns({ canWrite, onOpening: setOpening, onRemove: setRemoving })}
         rows={tests.data ?? []}
@@ -536,7 +551,7 @@ function SeriesToggle({
       checked={checked}
       onChange={(event) => form.setValue(name, event.target.checked, { shouldDirty: true })}
       label={label}
-      hint={hint}
+      /* ui-copy-ok: rule */ hint={hint}
     />
   );
 }
@@ -566,7 +581,7 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   };
 
   return (
-    <FormSection title="Where it runs">
+    <FormSection title="Branches">
       <StatRow
         label="Switched on at"
         value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}
@@ -701,7 +716,6 @@ function BranchScheduleRow({
         disabled={!canWrite || save.isPending}
         onChange={(event) => setAsking(event.target.checked)}
         label={row.branch.name}
-        hint={row.enabled ? 'Offered here' : 'Not offered here'}
       />
 
       <ConfirmDialog
