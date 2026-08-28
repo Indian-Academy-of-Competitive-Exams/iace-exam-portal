@@ -50,6 +50,9 @@ export default defineConfig([
         { paths: [{ name: 'axios', message: 'Use the typed client from @iace/contracts.' }] },
       ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Locked, not inherited: recommended only WARNS on `any`, and a warning gets scrolled past.
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
