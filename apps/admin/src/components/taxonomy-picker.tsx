@@ -3,6 +3,7 @@ import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
+import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
 /**
  * Subject -> topic, each searched on the server a page at a time. A bank has more topics than
@@ -28,7 +29,7 @@ export function SubjectPicker(props: Readonly<PickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'subjects', 'picker', search],
+    queryKey: [...QUERY_KEYS.SUBJECTS, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) =>
       api.admin.taxonomy.listSubjects({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
@@ -57,7 +58,7 @@ export function TopicPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'topics', 'picker', subjectId, search],
+    queryKey: [...QUERY_KEYS.TOPICS, QUERY_SCOPES.PICKER, subjectId, search],
     fetchPage: (page) =>
       api.admin.taxonomy.listTopics({ page, pageSize: PAGE_SIZE_MAX, q: search, subjectId }),
     enabled: subjectId !== '',
@@ -97,7 +98,7 @@ export function SubjectMultiPicker(props: Readonly<MultiPickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'subjects', 'picker', search],
+    queryKey: [...QUERY_KEYS.SUBJECTS, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) =>
       api.admin.taxonomy.listSubjects({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
@@ -128,7 +129,7 @@ export function TopicMultiPicker({
   const scope = [...subjectIds].join(',');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'topics', 'picker', scope, search],
+    queryKey: [...QUERY_KEYS.TOPICS, QUERY_SCOPES.PICKER, scope, search],
     fetchPage: (page) =>
       api.admin.taxonomy.listTopics({
         page,

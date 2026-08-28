@@ -43,7 +43,7 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { familyLabel, NAV_ITEMS } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
@@ -102,9 +102,6 @@ const EXAM_FILTERS = [
   },
 ] as const;
 
-const EXAMS_KEY = ['admin', 'exams'] as const;
-const STAGES_KEY = ['admin', 'exam-stages'] as const;
-
 /** Anyone managing students may read the catalog, because they pick from it. Only a super admin writes. */
 export function ExamsPage() {
   const { identity: admin } = useAuth();
@@ -113,7 +110,7 @@ export function ExamsPage() {
   const [editing, setEditing] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: EXAMS_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAMS });
   }, [queryClient]);
 
   const startEdit = useCallback((exam: Exam) => {
@@ -127,7 +124,7 @@ export function ExamsPage() {
   );
 
   const exams = useListScreen({
-    queryKey: EXAMS_KEY,
+    queryKey: QUERY_KEYS.EXAMS,
     filters: EXAM_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,
@@ -536,8 +533,8 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
   const examId = exam.id;
 
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: STAGES_KEY });
-    void queryClient.invalidateQueries({ queryKey: EXAMS_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAM_STAGES });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EXAMS });
   }, [queryClient]);
 
   const startEdit = useCallback((stage: ExamStage) => {
@@ -552,7 +549,7 @@ function ExamStages({ exam, canWrite }: Readonly<{ exam: Exam; canWrite: boolean
 
   // Keyed by the exam, so opening a second row does not read the first one's page.
   const stages = useListScreen({
-    queryKey: [...STAGES_KEY, examId],
+    queryKey: [...QUERY_KEYS.EXAM_STAGES, examId],
     filters: [],
     toQuery: () => ({ examId }),
     fetchPage: (params) => api.admin.examStages.list(params),

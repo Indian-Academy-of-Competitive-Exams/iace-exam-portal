@@ -10,6 +10,7 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import { api } from './api';
+import { QUERY_KEYS, QUERY_SCOPES } from './constants';
 
 /** The names already on a stage, so a suggestion goes past the highest rather than repeating it. */
 
@@ -31,7 +32,7 @@ export function useSuggestedTestName(source: TestNameSource): string | undefined
   );
 
   const siblings = useQuery({
-    queryKey: ['admin', 'tests', 'named', source.examStageId, stem],
+    queryKey: [...QUERY_KEYS.TESTS, QUERY_SCOPES.NAMED, source.examStageId, stem],
     queryFn: () =>
       api.admin.tests.list({
         page: 1,
@@ -60,7 +61,7 @@ export function useSuggestedSeriesName(source: SeriesNameSource): string | undef
   const stem = nameStem([source.examCode, source.stageName], seriesNameKind(source));
 
   const siblings = useQuery({
-    queryKey: ['admin', 'test-series', 'named', source.examStageId, stem],
+    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.NAMED, source.examStageId, stem],
     queryFn: () =>
       api.admin.testSeries.list({
         page: 1,

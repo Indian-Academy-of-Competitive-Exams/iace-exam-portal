@@ -30,6 +30,7 @@ import { api } from '../lib/api';
 import {
   EVALUATION_MODE_LABELS,
   NAV_ITEMS,
+  QUERY_KEYS,
   ROUTES,
   TEST_SCOPE_LABELS,
   TEST_STATUS_LABELS,
@@ -64,8 +65,6 @@ const TEST_FILTERS = [
     ],
   },
 ] as const;
-
-const TESTS_KEY = ['admin', 'tests'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Test>[] {
@@ -127,13 +126,13 @@ export function TestsPage() {
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: TESTS_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
   }, [queryClient]);
 
   const columns = useMemo(() => testColumns(canWrite, refresh), [canWrite, refresh]);
 
   const tests = useListScreen({
-    queryKey: TESTS_KEY,
+    queryKey: QUERY_KEYS.TESTS,
     filters: TEST_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,

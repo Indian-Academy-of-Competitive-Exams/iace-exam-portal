@@ -28,7 +28,13 @@ import {
   type StepperStep,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, TEST_BUILDER_STEP_LABELS, TEST_STATUS_LABELS } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  TEST_BUILDER_STEP_LABELS,
+  TEST_STATUS_LABELS,
+} from '../lib/constants';
 import { ConfigSummaryButton } from '../components/config-summary';
 import {
   applyServerErrors,
@@ -44,7 +50,7 @@ import { BranchTimingStep, PublishStep, SeriesStep } from './test-builder-offeri
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
-const TEST_KEY = (testId: string) => ['admin', 'test', testId] as const;
+const TEST_KEY = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
 
 /** The steps the form itself owns — the only ones whose Next has anything to save. */
 const FIELD_STEPS: ReadonlySet<TestBuilderStep> = new Set([
@@ -112,7 +118,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   );
 
   const chosenConfig = useQuery({
-    queryKey: ['admin', 'base-config', baseConfigId],
+    queryKey: [...QUERY_KEYS.BASE_CONFIG, baseConfigId],
     queryFn: () => api.admin.baseConfigs.detail(baseConfigId),
     enabled: !existing && baseConfigId !== '',
   });
@@ -141,7 +147,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         : api.admin.tests.create({ ...owned, baseConfigId: values.baseConfigId });
     },
     onSuccess: async (saved, { target }) => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
       if (!existing) {
         navigate(ROUTES.TEST(saved.id), { replace: true, state: { step: target } });
         return;

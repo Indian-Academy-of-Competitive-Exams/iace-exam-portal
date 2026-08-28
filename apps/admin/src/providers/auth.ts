@@ -8,7 +8,7 @@ import {
 } from '@iace/contracts';
 import { createAuth } from '@iace/app-kit';
 import { api, signOutSignal, tokenStore } from '../lib/api';
-import { ME_QUERY_KEY } from '../lib/constants';
+import { QUERY_KEYS } from '../lib/constants';
 
 /**
  * This app's session: the actor, the cache key, the client, and one admin-only read.
@@ -19,7 +19,7 @@ export const { AuthProvider, useAuth } = createAuth<
   { can: (key: FeatureKey, level?: PermissionLevel) => boolean }
 >({
   actor: ActorTypes.ADMIN,
-  queryKey: ME_QUERY_KEY,
+  queryKey: QUERY_KEYS.ME,
   tokenStore,
   signOutSignal,
   endpoints: {

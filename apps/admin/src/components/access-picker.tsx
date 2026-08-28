@@ -3,6 +3,7 @@ import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
+import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
 /**
  * The two catalogs access is built out of, each searched on the server a page at a time.
@@ -26,7 +27,7 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'programs', 'picker', search],
+    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) =>
       api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
   });
@@ -69,7 +70,7 @@ export function TestSeriesPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'test-series', 'picker', search],
+    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) => api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 
@@ -118,7 +119,7 @@ export function TestSeriesMultiPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'test-series', 'picker', search],
+    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) => api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 

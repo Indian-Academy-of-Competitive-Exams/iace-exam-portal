@@ -34,6 +34,7 @@ import {
   linkVariants,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { QUERY_KEYS } from '../lib/constants';
 
 /** Reading one question without leaving the screen that referred to it. */
 
@@ -147,7 +148,7 @@ export function QuestionViewer({
   onOpenChange,
 }: Readonly<{ questionId: string; onOpenChange: (open: boolean) => void }>) {
   const question = useQuery({
-    queryKey: ['admin', 'question', questionId],
+    queryKey: [...QUERY_KEYS.QUESTION, questionId],
     queryFn: () => api.admin.questions.detail(questionId),
   });
 

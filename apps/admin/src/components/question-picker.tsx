@@ -24,7 +24,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { DIFFICULTY_LABELS } from '../lib/constants';
+import { DIFFICULTY_LABELS, QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 import { QuestionLink } from './question-viewer';
 
 /** The pool one section draws from, as its own configuration describes it, chosen from by hand. */
@@ -198,7 +198,7 @@ export function QuestionChooser({
   ] as const;
 
   const questions = useScrollList({
-    queryKey: ['admin', 'questions', 'picker', section.id],
+    queryKey: [...QUERY_KEYS.QUESTIONS, QUERY_SCOPES.PICKER, section.id],
     filters: filterSpec,
     store,
     toQuery: (values) => ({

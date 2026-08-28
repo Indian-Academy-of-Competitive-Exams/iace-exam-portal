@@ -63,6 +63,7 @@ import {
   NAV_ITEMS,
   NAVIGATION_POLICY_HINTS,
   NAVIGATION_POLICY_LABELS,
+  QUERY_KEYS,
   ROUTES,
   TEST_UI_LABELS,
   TIMER_TEMPLATE_HINTS,
@@ -301,7 +302,7 @@ export function BaseConfigFormPage() {
   const existing = id !== undefined;
 
   const config = useQuery({
-    queryKey: ['admin', 'base-config', id],
+    queryKey: [...QUERY_KEYS.BASE_CONFIG, id],
     queryFn: () => api.admin.baseConfigs.detail(id!),
     enabled: existing,
   });
@@ -407,7 +408,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             ...shapeOf(values),
           }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'base-configs'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
       navigate(ROUTES.BASE_CONFIGS);
     },
     onError: (error) => applyServerErrors(error, form, form.getValues('sections').length),

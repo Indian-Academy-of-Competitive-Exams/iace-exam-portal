@@ -4,6 +4,7 @@ import { useInfinitePages } from '@iace/app-kit';
 import { Combobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { durationLabel } from '../lib/duration';
+import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
 /** The blueprints a test can be built on: one stage's, and only the ones still offered. */
 export function BaseConfigPicker({
@@ -20,7 +21,7 @@ export function BaseConfigPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'base-configs', 'picker', examStageId, search],
+    queryKey: [...QUERY_KEYS.BASE_CONFIGS, QUERY_SCOPES.PICKER, examStageId, search],
     fetchPage: (page) =>
       api.admin.baseConfigs.list({
         page,

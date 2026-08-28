@@ -364,14 +364,39 @@ export function filterAdminNav(
   }, []);
 }
 
-/** The signed-in admin's identity, cached under one key. */
-export const ME_QUERY_KEY = ['auth', 'me'] as const;
+const ADMIN = 'admin';
 
-/** The code-owned feature keys and their grant lists, read by the Permissions screen. */
-export const FEATURES_QUERY_KEY = ['admin', 'features'] as const;
+/** Every query key this app owns; a raw key that drifts by a character fails silently at invalidation. */
+export const QUERY_KEYS = {
+  ADMINS: [ADMIN, 'admins'],
+  AUDIT: [ADMIN, 'audit'],
+  BASE_CONFIG: [ADMIN, 'base-config'],
+  BASE_CONFIGS: [ADMIN, 'base-configs'],
+  BRANCH_TIMING: [ADMIN, 'branch-timing'],
+  BRANCHES: [ADMIN, 'branches'],
+  EXAM_STAGES: [ADMIN, 'exam-stages'],
+  EXAMS: [ADMIN, 'exams'],
+  FEATURES: [ADMIN, 'features'],
+  ME: ['auth', 'me'],
+  PROGRAMS: [ADMIN, 'programs'],
+  QUESTION: [ADMIN, 'question'],
+  QUESTIONS: [ADMIN, 'questions'],
+  STUDENT: [ADMIN, 'student'],
+  STUDENTS: [ADMIN, 'students'],
+  SUBJECTS: [ADMIN, 'subjects'],
+  TEST: [ADMIN, 'test'],
+  TEST_PAPER: [ADMIN, 'test-paper'],
+  TEST_SERIES: [ADMIN, 'test-series'],
+  TEST_SERIES_LINKS: [ADMIN, 'test-series-links'],
+  TESTS: [ADMIN, 'tests'],
+  TOPICS: [ADMIN, 'topics'],
+} as const;
 
-/** Admins. A grant changes both this and the feature list, so both are invalidated together. */
-export const ADMINS_QUERY_KEY = ['admin', 'admins'] as const;
+/** Segments that qualify a key, shared because a picker and the list it feeds must agree. */
+export const QUERY_SCOPES = {
+  NAMED: 'named',
+  PICKER: 'picker',
+} as const;
 
 /**
  * The admin list the Permissions screen assigns from. PAGE_SIZE_MAX: an admin

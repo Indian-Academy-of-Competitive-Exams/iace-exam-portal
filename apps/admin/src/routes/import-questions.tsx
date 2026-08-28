@@ -39,7 +39,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { saveBlob } from '../lib/save-blob';
 
 /**
@@ -68,7 +68,7 @@ function useQuestionImport() {
       },
     },
     mutationFn: (importLogId: string) => api.admin.imports.commitQuestions(importLogId, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS }),
   });
 
   const sample = useMutation({

@@ -38,7 +38,7 @@ import {
 import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
-import { familyLabel, NAV_ITEMS, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, QUERY_KEYS, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
@@ -252,7 +252,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   );
 }
 
-const grantsKey = (studentId: string) => ['admin', 'student', studentId, 'grants'] as const;
+const grantsKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'grants'] as const;
 
 /**
  * The escape hatch: one series, one student, because nothing else reaches them. An enrolment or a
@@ -432,8 +432,8 @@ function StudentStateSwitches({ detail }: Readonly<{ detail: StudentDetail }>) {
   const name = detail.fullName ?? detail.mobile;
 
   const applyUpdate = (updated: StudentDetail) => {
-    queryClient.setQueryData(['admin', 'student', id], updated);
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+    queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
   };
 
   const setTestBlocked = useMutation({
@@ -522,7 +522,7 @@ export function StudentDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
 
   const student = useQuery({
-    queryKey: ['admin', 'student', id],
+    queryKey: [...QUERY_KEYS.STUDENT, id],
     queryFn: () => api.admin.students.detail(id),
   });
 
@@ -576,8 +576,8 @@ export function StudentDetailPage() {
         },
       }),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['admin', 'student', id], updated);
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+      queryClient.setQueryData([...QUERY_KEYS.STUDENT, id], updated);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
       form.reset(toFormValues(updated));
       setIsEditing(false);
     },

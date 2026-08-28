@@ -44,7 +44,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import { useAuth } from '../providers/auth';
@@ -67,9 +67,8 @@ interface SeriesFormValues {
   isFree: boolean;
 }
 
-const SERIES_KEY = ['admin', 'test-series'] as const;
-const seriesKey = (id: string) => ['admin', 'test-series', id] as const;
-const branchesKey = (id: string) => ['admin', 'test-series', id, 'branches'] as const;
+const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
+const branchesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'branches'] as const;
 
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
 const SERVER_FIELDS = [
@@ -154,7 +153,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
         ? api.admin.testSeries.update(detail.id, bodyOf(values))
         : api.admin.testSeries.create(bodyOf(values)),
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: SERIES_KEY });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
       queryClient.setQueryData(seriesKey(saved.id), saved);
       // A new series is switched off at every branch, so the next step is always
       // the scheduling card — which only exists once it has been created.
@@ -347,7 +346,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   );
 }
 
-const testsKey = (seriesId: string) => ['admin', 'test-series', seriesId, 'tests'] as const;
+const testsKey = (seriesId: string) => [...QUERY_KEYS.TEST_SERIES, seriesId, 'tests'] as const;
 
 /** The instant an exam starts, said in the institute's clock wherever the admin is sitting. */
 const opensLabel = (unlockAt: string | null): string =>
@@ -370,7 +369,7 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
 
   const held = (next: SeriesTestRow[]) => {
     queryClient.setQueryData(testsKey(series.id), next);
-    void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
   const remove = useMutation({
@@ -563,7 +562,7 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: branchesKey(series.id) });
-    void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
   return (

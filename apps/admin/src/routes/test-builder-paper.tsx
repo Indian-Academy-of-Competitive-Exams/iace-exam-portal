@@ -33,10 +33,11 @@ import { api } from '../lib/api';
 import { QuestionChooser } from '../components/question-picker';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { QuestionLink } from '../components/question-viewer';
+import { QUERY_KEYS } from '../lib/constants';
 
 /** What the paper holds: the questions chosen for it, and the pool each section chooses from. */
 
-const PAPER_KEY = (testId: string) => ['admin', 'test-paper', testId] as const;
+const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as const;
 
 /** What a section's own settings say about a question it is already holding. */
 const STRANDED_LABELS: Readonly<Record<PickRefusal, string>> = {
@@ -76,7 +77,7 @@ export function PaperStep({
 
   const refresh = async (next: TestPaper) => {
     queryClient.setQueryData(PAPER_KEY(detail.id), next);
-    await queryClient.invalidateQueries({ queryKey: ['admin', 'test', detail.id] });
+    await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TEST, detail.id] });
   };
 
   const chosen = [...held.values()].reduce((sum, section) => sum + section.questions.length, 0);

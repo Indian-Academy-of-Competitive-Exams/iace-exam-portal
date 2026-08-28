@@ -24,12 +24,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import {
-  ADMINS_QUERY_KEY,
-  FEATURES_QUERY_KEY,
-  NAV_ITEMS,
-  PAGE_SIZE_FOR_PICKERS,
-} from '../lib/constants';
+import { NAV_ITEMS, PAGE_SIZE_FOR_PICKERS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 /** What an admin holds for one feature, with "nothing" said out loud. */
@@ -71,19 +66,19 @@ export function PermissionsPage() {
   const queryClient = useQueryClient();
 
   const features = useQuery({
-    queryKey: FEATURES_QUERY_KEY,
+    queryKey: QUERY_KEYS.FEATURES,
     queryFn: () => api.admin.features.list(),
   });
   const admins = useQuery({
-    queryKey: [...ADMINS_QUERY_KEY, 'all'],
+    queryKey: [...QUERY_KEYS.ADMINS, 'all'],
     queryFn: () =>
       api.admin.admins.list({ page: 1, pageSize: PAGE_SIZE_FOR_PICKERS, activeOnly: 'true' }),
   });
 
   /** Both caches: a grant changes the feature's holders and the admin's permission map. */
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: FEATURES_QUERY_KEY });
-    void queryClient.invalidateQueries({ queryKey: ADMINS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FEATURES });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ADMINS });
   }, [queryClient]);
 
   const registered = features.data ?? [];

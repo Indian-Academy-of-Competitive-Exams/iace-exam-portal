@@ -12,7 +12,7 @@ import {
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
-import { NAV_ITEMS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import {
   Alert,
   Badge,
@@ -53,8 +53,6 @@ const PROGRAM_FILTERS = [
     ],
   },
 ] as const;
-
-const PROGRAMS_KEY = ['admin', 'programs'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function programColumns(
@@ -98,7 +96,7 @@ export function ProgramsPage() {
   const [editing, setEditing] = useState<Program | null>(null);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: PROGRAMS_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROGRAMS });
   }, [queryClient]);
 
   const startEdit = useCallback((program: Program) => {
@@ -112,7 +110,7 @@ export function ProgramsPage() {
   );
 
   const programs = useListScreen({
-    queryKey: PROGRAMS_KEY,
+    queryKey: QUERY_KEYS.PROGRAMS,
     filters: PROGRAM_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,

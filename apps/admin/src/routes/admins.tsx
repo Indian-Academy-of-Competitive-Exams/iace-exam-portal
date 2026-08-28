@@ -29,7 +29,7 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ADMINS_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
 const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
@@ -94,14 +94,14 @@ export function AdminsPage() {
   const [creating, setCreating] = useState(false);
 
   const admins = useListScreen({
-    queryKey: ADMINS_QUERY_KEY,
+    queryKey: QUERY_KEYS.ADMINS,
     filters: [],
     toQuery: () => ({}),
     fetchPage: (params) => api.admin.admins.list(params),
   });
 
   const refresh = useCallback(
-    () => void queryClient.invalidateQueries({ queryKey: ADMINS_QUERY_KEY }),
+    () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ADMINS }),
     [queryClient],
   );
 

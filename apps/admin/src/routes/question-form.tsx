@@ -51,7 +51,7 @@ import {
 import { RichText } from '@iace/ui/rich-text';
 import { api } from '../lib/api';
 import { useAuth } from '../providers/auth';
-import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { SubjectPicker, TopicPicker } from '../components/taxonomy-picker';
 
 /**
@@ -232,7 +232,7 @@ export function QuestionFormPage() {
   const [isEditing, setIsEditing] = useState(!existing);
 
   const question = useQuery({
-    queryKey: ['admin', 'question', id],
+    queryKey: [...QUERY_KEYS.QUESTION, id],
     queryFn: () => api.admin.questions.detail(id!),
     enabled: existing,
   });
@@ -253,7 +253,7 @@ export function QuestionFormPage() {
         ? api.admin.questions.update(id!, toDraft(values, loaded))
         : api.admin.questions.create(toDraft(values)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
       navigate(ROUTES.QUESTIONS);
     },
     onError: (error) => applyFieldErrors(error, form.setError, [...SERVER_FIELDS]),
@@ -538,8 +538,8 @@ function ApproveButton({ id }: Readonly<{ id: string }>) {
     mutationFn: () => api.admin.questions.setStatus(id, { status: QUESTION_STATUS.ACTIVE }),
     onSuccess: async () => {
       setAsking(false);
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'question', id] });
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+      await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.QUESTION, id] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
     },
     onError: () => setAsking(false),
   });

@@ -3,6 +3,7 @@ import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
 import { Combobox, MultiCombobox } from '@iace/ui';
 import { api } from '../lib/api';
+import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
 /**
  * The exam catalog, searched on the server a page at a time. The code is the label: it is what an
@@ -25,7 +26,7 @@ export function ExamPicker(props: Readonly<PickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'exams', 'picker', search],
+    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) => api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 
@@ -66,7 +67,7 @@ export function ExamStagePicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'exam-stages', 'picker', examId ?? '', search],
+    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.PICKER, examId ?? '', search],
     fetchPage: (page) =>
       api.admin.examStages.list({
         page,
@@ -117,7 +118,7 @@ export function ExamMultiPicker(props: Readonly<MultiPickerProps>) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'exams', 'picker', search],
+    queryKey: [...QUERY_KEYS.EXAMS, QUERY_SCOPES.PICKER, search],
     fetchPage: (page) => api.admin.exams.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
   });
 
@@ -147,7 +148,7 @@ export function ExamStageMultiPicker({
   const scope = [...examIds].join(',');
 
   const pages = useInfinitePages({
-    queryKey: ['admin', 'exam-stages', 'picker', scope, search],
+    queryKey: [...QUERY_KEYS.EXAM_STAGES, QUERY_SCOPES.PICKER, scope, search],
     fetchPage: (page) =>
       api.admin.examStages.list({
         page,

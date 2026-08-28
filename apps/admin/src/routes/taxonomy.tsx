@@ -32,7 +32,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, SubjectPicker } from '../components/taxonomy-picker';
 
@@ -132,9 +132,9 @@ export function TaxonomyPage() {
     />
   );
 
-  const done = (key: string) => () => {
+  const done = (queryKey: readonly string[]) => () => {
     setCreating(false);
-    void queryClient.invalidateQueries({ queryKey: ['admin', key] });
+    void queryClient.invalidateQueries({ queryKey });
   };
 
   return (
@@ -152,13 +152,17 @@ export function TaxonomyPage() {
       />
 
       {onSubjects ? (
-        <NewSubjectDialog open={creating} onOpenChange={setCreating} onDone={done('subjects')} />
+        <NewSubjectDialog
+          open={creating}
+          onOpenChange={setCreating}
+          onDone={done(QUERY_KEYS.SUBJECTS)}
+        />
       ) : (
         <NewTopicDialog
           subjectId={onlySubjectFiltered(filters.get('subjectId'))}
           open={creating}
           onOpenChange={setCreating}
-          onDone={done('topics')}
+          onDone={done(QUERY_KEYS.TOPICS)}
         />
       )}
     </>
@@ -179,7 +183,7 @@ function SubjectsList() {
   const columns = useMemo(() => subjectColumns(), []);
 
   const subjects = useListScreen({
-    queryKey: ['admin', 'subjects'],
+    queryKey: QUERY_KEYS.SUBJECTS,
     filters: SUBJECT_FILTERS,
     toQuery: (values) => ({ q: values.q || undefined }),
     fetchPage: (params) => api.admin.taxonomy.listSubjects(params),
@@ -272,7 +276,7 @@ function TopicsList() {
   const columns = useMemo(() => topicColumns(), []);
 
   const topics = useListScreen({
-    queryKey: ['admin', 'topics'],
+    queryKey: QUERY_KEYS.TOPICS,
     filters: TOPIC_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,

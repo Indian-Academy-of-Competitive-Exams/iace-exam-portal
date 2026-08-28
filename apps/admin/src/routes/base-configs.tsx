@@ -26,7 +26,7 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, TIMER_TEMPLATE_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker } from '../components/exam-picker';
@@ -47,8 +47,6 @@ const CONFIG_FILTERS = [
     render: (control: ListFilterMultiControl) => <ExamMultiPicker {...control} />,
   },
 ] as const;
-
-const CONFIGS_KEY = ['admin', 'base-configs'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function configColumns(canWrite: boolean, refresh: () => void): DataTableColumn<BaseConfig>[] {
@@ -111,13 +109,13 @@ export function BaseConfigsPage() {
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: CONFIGS_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BASE_CONFIGS });
   }, [queryClient]);
 
   const columns = useMemo(() => configColumns(canWrite, refresh), [canWrite, refresh]);
 
   const configs = useListScreen({
-    queryKey: CONFIGS_KEY,
+    queryKey: QUERY_KEYS.BASE_CONFIGS,
     filters: CONFIG_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,

@@ -21,13 +21,11 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, UNLOCK_MODE_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../components/exam-picker';
 
 type FilterKey = 'q' | 'examId' | 'examStageId';
-
-const SERIES_KEY = ['admin', 'test-series'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function seriesColumns(
@@ -97,7 +95,7 @@ export function TestSeriesPage() {
   const examIds = filters.get('examId').split(',').filter(Boolean);
 
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: SERIES_KEY });
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   }, [queryClient]);
 
   const columns = useMemo(() => seriesColumns(canWrite, refresh), [canWrite, refresh]);
@@ -135,7 +133,7 @@ export function TestSeriesPage() {
   ] as const;
 
   const series = useListScreen({
-    queryKey: SERIES_KEY,
+    queryKey: QUERY_KEYS.TEST_SERIES,
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,

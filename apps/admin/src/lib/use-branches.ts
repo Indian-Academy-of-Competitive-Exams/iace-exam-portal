@@ -7,13 +7,14 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import { api } from './api';
+import { QUERY_KEYS } from './constants';
 
 /** The branch list, unpaged and long-cached: a small list that changes a few times a year. */
 export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
   const { activeOnly } = options;
 
   const query = useQuery({
-    queryKey: ['admin', 'branches', { activeOnly: activeOnly ?? false }],
+    queryKey: [...QUERY_KEYS.BRANCHES, { activeOnly: activeOnly ?? false }],
     queryFn: () =>
       api.admin.branches.list({
         pageSize: PAGE_SIZE_MAX,

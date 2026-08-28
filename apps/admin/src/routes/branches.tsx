@@ -33,7 +33,7 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { BRANCH_TYPE_LABELS, NAV_ITEMS, ROUTES } from '../lib/constants';
+import { BRANCH_TYPE_LABELS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useBranches } from '../lib/use-branches';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -90,7 +90,7 @@ export function BranchesPage() {
   const queryClient = useQueryClient();
 
   const refresh = useCallback(
-    () => void queryClient.invalidateQueries({ queryKey: ['admin', 'branches'] }),
+    () => void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCHES }),
     [queryClient],
   );
 

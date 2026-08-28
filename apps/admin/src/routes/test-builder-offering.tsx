@@ -20,16 +20,17 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { TestSeriesMultiPicker } from '../components/access-picker';
+import { QUERY_KEYS } from '../lib/constants';
 
 /** Who is offered the test: the series that carry it, and the freeze that lets students sit it. */
 
-const SERIES_KEY = (testId: string) => ['admin', 'test-series-links', testId] as const;
+const SERIES_LINKS_KEY = (testId: string) => [...QUERY_KEYS.TEST_SERIES_LINKS, testId] as const;
 
 function useOfferingRefresh(testId: string) {
   const queryClient = useQueryClient();
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: ['admin', 'test', testId] });
-    await queryClient.invalidateQueries({ queryKey: ['admin', 'tests'] });
+    await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TEST, testId] });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
   };
 }
 
@@ -38,7 +39,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const refresh = useOfferingRefresh(detail.id);
 
   const links = useQuery({
-    queryKey: SERIES_KEY(detail.id),
+    queryKey: SERIES_LINKS_KEY(detail.id),
     queryFn: () => api.admin.tests.series(detail.id),
   });
   const chosen = (links.data ?? []).map((link) => link.testSeriesId);
@@ -50,7 +51,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
         series: testSeriesIds.map((testSeriesId, index) => ({ testSeriesId, order: index + 1 })),
       }),
     onSuccess: async (next) => {
-      queryClient.setQueryData(SERIES_KEY(detail.id), next);
+      queryClient.setQueryData(SERIES_LINKS_KEY(detail.id), next);
       await refresh();
     },
   });
@@ -71,7 +72,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   );
 }
 
-const TIMING_KEY = (testId: string) => ['admin', 'branch-timing', testId] as const;
+const TIMING_KEY = (testId: string) => [...QUERY_KEYS.BRANCH_TIMING, testId] as const;
 
 const SECONDS_PER_MINUTE = 60;
 

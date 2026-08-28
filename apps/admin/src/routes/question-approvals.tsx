@@ -31,13 +31,11 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
 
 type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty';
-
-const QUESTIONS_KEY = ['admin', 'questions'] as const;
 
 const DIFFICULTY_VARIANT = {
   LOW: 'success',
@@ -149,7 +147,7 @@ export function QuestionApprovalsPage() {
 
   // Status is not a filter here: a screen for approving drafts shows drafts.
   const questions = useListScreen({
-    queryKey: [...QUESTIONS_KEY, 'drafts'],
+    queryKey: [...QUERY_KEYS.QUESTIONS, 'drafts'],
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
@@ -214,7 +212,7 @@ function BulkApproval({
     onSuccess: async () => {
       setAsking(false);
       onDone();
-      await queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
     },
     onError: () => setAsking(false),
   });
@@ -271,7 +269,7 @@ function ApprovalActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
   const settle = () => {
     setAsking(null);
-    return queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY });
+    return queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
   };
 
   const approve = useMutation({

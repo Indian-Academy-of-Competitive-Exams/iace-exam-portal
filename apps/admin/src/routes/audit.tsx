@@ -38,6 +38,7 @@ import {
   AUDIT_FEATURE_LABELS,
   IMPORT_SOURCE_LABELS,
   NAV_ITEMS,
+  QUERY_KEYS,
 } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
@@ -182,7 +183,7 @@ export function AuditActivityPage() {
    *  anyone but a super admin, so it is fetched — and shown — only for one. */
   const [actorSearch, setActorSearch] = useState('');
   const actorPages = useInfinitePages({
-    queryKey: ['admin', 'admins', 'filter', actorSearch],
+    queryKey: [...QUERY_KEYS.ADMINS, 'filter', actorSearch],
     fetchPage: (page) => api.admin.admins.list({ page, pageSize: PAGE_SIZE_MAX, q: actorSearch }),
     enabled: isSuperAdmin,
   });
@@ -246,7 +247,7 @@ export function AuditActivityPage() {
 
   // Called twice from one declaration: the hook needs only the keys, the view needs the labels too.
   const activity = useListScreen({
-    queryKey: ['admin', 'audit', 'row-actions'],
+    queryKey: [...QUERY_KEYS.AUDIT, 'row-actions'],
     filters: buildFilters({}),
     toQuery: (values) => ({
       feature: values.feature as AuditFeature[],
@@ -298,7 +299,7 @@ export function AuditImportsPage() {
   const highlightRunId = filters.get('run');
 
   const imports = useListScreen({
-    queryKey: ['admin', 'audit', 'imports'],
+    queryKey: [...QUERY_KEYS.AUDIT, 'imports'],
     filters: [],
     toQuery: () => ({}),
     fetchPage: (params) => api.admin.audit.imports(params),

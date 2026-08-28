@@ -29,7 +29,7 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
 
@@ -166,7 +166,7 @@ export function QuestionsPage() {
   ] as const;
 
   const questions = useListScreen({
-    queryKey: ['admin', 'questions'],
+    queryKey: QUERY_KEYS.QUESTIONS,
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
@@ -272,7 +272,7 @@ function QuestionActions({ question }: Readonly<{ question: QuestionSummary }>) 
 
   const settle = () => {
     setAsking(null);
-    return queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+    return queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });
   };
 
   const act = useMutation({

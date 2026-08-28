@@ -47,7 +47,7 @@ import {
   useTruncation,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { familyLabel, NAV_ITEMS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { familyLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
@@ -233,7 +233,7 @@ export function StudentsPage() {
   ] as const;
 
   const students = useListScreen({
-    queryKey: ['admin', 'students'],
+    queryKey: QUERY_KEYS.STUDENTS,
     filters: filterSpec,
     toQuery: (values) => ({
       q: values.q || undefined,
@@ -409,7 +409,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         currentBranchId: chosenBranchId || undefined,
       }),
     onSuccess: (student) => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'students'] });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
       void navigate(ROUTES.STUDENT(student.id));
     },
     onError: (error) => applyFieldErrors(error, form.setError, NEW_STUDENT_FIELDS),
