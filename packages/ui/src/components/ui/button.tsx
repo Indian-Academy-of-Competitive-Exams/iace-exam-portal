@@ -91,6 +91,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         {...props}
       >
+        {/* eslint-disable-next-line no-restricted-syntax -- a Button's own loading state is the sanctioned action spinner. */}
         {loading ? <Loader2 className="animate-spin" aria-hidden /> : icon}
         {children}
       </button>

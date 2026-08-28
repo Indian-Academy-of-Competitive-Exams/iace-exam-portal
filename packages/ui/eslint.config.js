@@ -8,7 +8,11 @@ export default [
   {
     // A design system takes its copy as props; the narration rule is for the screens passing them.
     files: ['**/*.{ts,tsx}'],
-    rules: { '@iace/no-narration': 'off' },
+    rules: {
+      '@iace/no-narration': 'off',
+      // The primitives that MANAGE focus are what the rule tells feature code to lean on.
+      '@iace/no-manual-focus': 'off',
+    },
   },
   {
     files: ['src/components/**/*.tsx'],

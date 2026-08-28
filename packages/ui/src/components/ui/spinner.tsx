@@ -19,12 +19,14 @@ export interface SpinnerProps {
 
 /** For ACTIONS, not content — content arriving into a page uses `Skeleton`. */
 export function Spinner({ size = 'md', label, className }: Readonly<SpinnerProps>) {
+  /* eslint-disable no-restricted-syntax -- this component IS the spinner the rule points callers at. */
   const glyph = (
     <Loader2
       className={cn(SIZES[size], 'shrink-0 animate-spin text-muted-foreground', className)}
       aria-hidden
     />
   );
+  /* eslint-enable no-restricted-syntax */
 
   // <output> carries the live region natively; the glyph inside stays hidden.
   return label ? (

@@ -8,6 +8,7 @@ import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import { confirmDestructive } from './eslint-rules/confirm-destructive.js';
 import { noNarration } from './eslint-rules/no-narration.js';
+import { noHardcodedRoute, noManualFocus } from './eslint-rules/react-conventions.js';
 
 export default defineConfig([
   { ignores: ['dist/**', 'node_modules/**', '.turbo/**'] },
@@ -25,13 +26,29 @@ export default defineConfig([
       'react-refresh': reactRefresh,
       '@iace': {
         meta: { name: '@iace' },
-        rules: { 'confirm-destructive': confirmDestructive, 'no-narration': noNarration },
+        rules: {
+          'confirm-destructive': confirmDestructive,
+          'no-narration': noNarration,
+          'no-hardcoded-route': noHardcodedRoute,
+          'no-manual-focus': noManualFocus,
+        },
       },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
       '@iace/confirm-destructive': 'error',
       '@iace/no-narration': 'error',
+      // Warn, not error: a path literal is occasionally external, a first-focus occasionally real.
+      '@iace/no-hardcoded-route': 'warn',
+      '@iace/no-manual-focus': 'warn',
+      'no-restricted-globals': [
+        'error',
+        { name: 'fetch', message: 'Use the typed client from @iace/contracts, never raw HTTP.' },
+      ],
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'axios', message: 'Use the typed client from @iace/contracts.' }] },
+      ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -44,6 +61,16 @@ export default defineConfig([
       // Design-system rules a type cannot state, because these are intrinsic elements.
       'no-restricted-syntax': [
         'error',
+        {
+          selector: 'JSXOpeningElement[name.name="Loader2"]',
+          message:
+            'Content waits use Skeleton; actions use Spinner or LoadingState. Never hand-roll a spinner.',
+        },
+        {
+          selector: String.raw`JSXAttribute[name.name="className"][value.value=/\banimate-spin\b/]`,
+          message:
+            'Content waits use Skeleton; actions use Spinner or LoadingState. Never hand-roll a spinner.',
+        },
         {
           selector: 'JSXOpeningElement[name.name="select"]',
           message: 'Use Combobox. The OS draws a native <select> list, so it matches nothing else.',
