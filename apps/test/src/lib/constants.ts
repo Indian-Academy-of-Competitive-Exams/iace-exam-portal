@@ -47,6 +47,11 @@ export const PALETTE_LEGEND: readonly {
   { state: ANSWER_STATE.ANSWERED_MARKED, label: 'Answered and marked', variant: 'warning' },
 ];
 
+/** The skins the exam screen can wear. The id also scopes the skin's tokens in `tokens.css`. */
+export const EXAM_TEMPLATES = {
+  DEFAULT: 'default',
+} as const;
+
 /** The account screens, under the user menu, above Log out. */
 export const USER_MENU_ITEMS: readonly NavItem[] = [
   { to: ROUTES.PROFILE, label: 'Profile', icon: User },

@@ -228,6 +228,25 @@ export function paletteCounts(
   return counts;
 }
 
+/** The seat after this one, wrapping to the first: "next" is never a dead end mid-paper. */
+export function nextQuestionId(
+  questionIds: readonly string[],
+  currentId: string | null,
+): string | null {
+  const seat = currentId === null ? -1 : questionIds.indexOf(currentId);
+  return questionIds[seat + 1] ?? questionIds[0] ?? null;
+}
+
+/** Where a closed section hands over. Null means every other section has closed too. */
+export function nextOpenSectionId(
+  sections: readonly { id: string }[],
+  closed: Readonly<Record<string, { closed: boolean }>>,
+  leaving: string,
+): string | null {
+  const next = sections.find((section) => section.id !== leaving && !closed[section.id]?.closed);
+  return next?.id ?? null;
+}
+
 /** Which sections a student may open. A sectional clock shuts the ones behind and ahead of it. */
 export function openSections(
   sections: readonly { id: string }[],

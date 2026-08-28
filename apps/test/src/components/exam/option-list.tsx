@@ -5,50 +5,29 @@ import {
   type LanguageCode,
   type LanguageMode,
 } from '@iace/contracts';
-import { Badge, RichContent, cn } from '@iace/ui';
+import { RichContent, cn } from '@iace/ui';
 import { LANGUAGE_LABELS } from '../../lib/constants';
+import { htmlOf, shownLanguages } from './content';
 
-/** One question as a candidate sees it. A DUAL paper shows both languages, with nothing to choose. */
+/** The answers on offer. One radio group per question, lettered the way a paper letters them. */
 
-const htmlOf = (nodes: { text: string }[] | undefined): string =>
-  (nodes ?? []).map((node) => node.text).join('');
-
-export function QuestionBody({
+export function OptionList({
   question,
-  index,
   languages,
   languageMode,
   selectedOptionId,
   onSelect,
 }: Readonly<{
   question: ExamQuestion;
-  index: number;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
   selectedOptionId: string | null;
   onSelect: (optionId: string) => void;
 }>) {
-  const shown = languageMode === LANGUAGE_MODE.DUAL ? languages : languages.slice(0, 1);
+  const shown = shownLanguages(languages, languageMode);
 
   return (
-    <article className="flex min-w-0 flex-col gap-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-semibold text-foreground">{`Question ${index + 1}`}</h2>
-        <Badge variant="success">{`+${question.marks}`}</Badge>
-        {question.negativeMarks > 0 ? (
-          <Badge variant="danger">{`−${question.negativeMarks}`}</Badge>
-        ) : null}
-      </header>
-
-      {shown.map((language) => (
-        <RichContent
-          key={language}
-          lang={language.toLowerCase()}
-          className="text-sm leading-relaxed text-foreground"
-          html={htmlOf(question.content[contentLanguageOf(language)]?.stem)}
-        />
-      ))}
-
+    <>
       <ol className="flex flex-col gap-2">
         {question.options.map((option, position) => (
           <li key={option.id}>
@@ -88,6 +67,6 @@ export function QuestionBody({
       {languageMode !== LANGUAGE_MODE.DUAL && languages.length > 1 ? (
         <p className="text-xs text-muted-foreground">{`Shown in ${LANGUAGE_LABELS[shown[0]!]}`}</p>
       ) : null}
-    </article>
+    </>
   );
 }

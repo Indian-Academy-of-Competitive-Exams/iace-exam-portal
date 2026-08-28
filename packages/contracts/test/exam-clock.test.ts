@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import {
   ANSWER_STATE,
   clockText,
+  nextOpenSectionId,
+  nextQuestionId,
   openSections,
   paletteCounts,
   secondsLeft,
@@ -88,5 +90,45 @@ describe('openSections', () => {
     const allClosed = { a: { closed: true }, b: { closed: true }, c: { closed: true } };
 
     assert.deepEqual(openSections(sections, true, allClosed), []);
+  });
+});
+
+describe('nextQuestionId', () => {
+  const paper = ['q1', 'q2', 'q3'];
+
+  it('moves to the seat after this one', () => {
+    assert.equal(nextQuestionId(paper, 'q2'), 'q3');
+  });
+
+  /** The failure this prevents: the last question having no Next, so a review pass dead-ends. */
+  it('wraps round from the last back to the first', () => {
+    assert.equal(nextQuestionId(paper, 'q3'), 'q1');
+  });
+
+  it('opens the first when nothing is open yet', () => {
+    assert.equal(nextQuestionId(paper, null), 'q1');
+  });
+
+  it('has nowhere to go in an empty section', () => {
+    assert.equal(nextQuestionId([], 'q1'), null);
+  });
+});
+
+describe('nextOpenSectionId', () => {
+  const sections = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('hands over to the first section still open', () => {
+    assert.equal(nextOpenSectionId(sections, { a: { closed: true } }, 'a'), 'b');
+  });
+
+  /** The failure this prevents: a closing section handing back to itself and never ending. */
+  it('never hands back to the section being left', () => {
+    assert.equal(nextOpenSectionId(sections, { b: { closed: true } }, 'b'), 'a');
+  });
+
+  it('says nowhere once every other section has closed', () => {
+    const closed = { a: { closed: true }, b: { closed: true }, c: { closed: true } };
+
+    assert.equal(nextOpenSectionId(sections, closed, 'c'), null);
   });
 });
