@@ -19,7 +19,7 @@ export function ExamShell({
       data-exam-template={template.id.toLowerCase()}
       className="relative flex h-dvh flex-col bg-exam-surface text-exam-ink"
     >
-      <template.Layout view={view} slots={template.slots} />
+      <template.Layout view={view} config={template.config} slots={template.slots} />
 
       {fullscreen.nagging ? (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-exam-surface/95 p-6">

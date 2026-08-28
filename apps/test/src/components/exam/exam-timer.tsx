@@ -11,7 +11,8 @@ const URGENT_SEC = 5 * 60;
 export function ExamTimer({
   clock,
   onExpire,
-}: Readonly<{ clock: ExamClock; onExpire: () => void }>) {
+  labelled = false,
+}: Readonly<{ clock: ExamClock; onExpire: () => void; labelled?: boolean }>) {
   const [left, setLeft] = useState(() => secondsLeft(clock, Date.now()));
 
   useEffect(() => {
@@ -33,8 +34,8 @@ export function ExamTimer({
           : 'border-exam-timer-border bg-exam-timer-bg text-exam-timer-ink',
       )}
     >
-      <AlarmClock aria-hidden className="size-4" />
-      <span className="sr-only">Time left</span>
+      {labelled ? null : <AlarmClock aria-hidden className="size-4" />}
+      <span className={labelled ? 'font-normal' : 'sr-only'}>Time left</span>
       {clockText(left)}
     </p>
   );

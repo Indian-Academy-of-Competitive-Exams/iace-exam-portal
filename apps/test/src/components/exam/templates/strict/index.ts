@@ -12,17 +12,17 @@ import {
   Timer,
 } from '../shared/slots';
 
-/** Roomier cells, softer contrast, the clock where a reader looks first. */
+/** The austere baseline: square section buttons, a spelt-out clock beside them, the mark behind all of it. */
 const CONFIG: ExamTemplateConfig = {
-  timerPosition: 'HEADER',
-  timerFormat: 'CLOCK',
-  palettePosition: 'RIGHT',
-  sectionSwitch: 'TABS',
-  watermark: 'PAPER',
+  timerPosition: 'SECTION_BAR',
+  timerFormat: 'LABELLED',
+  palettePosition: 'LEFT',
+  sectionSwitch: 'BUTTONS',
+  watermark: 'SCREEN',
 };
 
-export const comfortableTemplate: ExamTemplateDefinition = {
-  id: EXAM_TEMPLATE.COMFORTABLE,
+export const strictTemplate: ExamTemplateDefinition = {
+  id: EXAM_TEMPLATE.STRICT,
   config: CONFIG,
   slots: {
     Header,

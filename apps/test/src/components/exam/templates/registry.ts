@@ -2,10 +2,11 @@
 import { EXAM_TEMPLATE, type ExamTemplate } from '@iace/contracts';
 import type { ExamTemplateDefinition } from '../engine/template';
 import { comfortableTemplate } from './comfortable';
+import { strictTemplate } from './strict';
 
 const TEMPLATES: Readonly<Record<ExamTemplate, ExamTemplateDefinition>> = {
   [EXAM_TEMPLATE.COMFORTABLE]: comfortableTemplate,
-  [EXAM_TEMPLATE.STRICT]: comfortableTemplate,
+  [EXAM_TEMPLATE.STRICT]: strictTemplate,
 };
 
 /** A skin nothing is registered for falls back rather than leaving a candidate on a blank page. */
