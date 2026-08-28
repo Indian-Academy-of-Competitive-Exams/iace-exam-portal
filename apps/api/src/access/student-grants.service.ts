@@ -11,18 +11,28 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import { reachedBy } from './access-resolver.service';
+import { reachableBy } from './access-resolver.service';
 
-/** Mirrors `reachedBy`: a program-tagged series is program-ONLY, so an enrolment never opens one. */
+/** Mirrors `reachableBy`: program-tagged is program-ONLY, and only a grant outranks the branch. */
 export function seriesSources(
-  row: Readonly<{ programCode: string | null; examCode: string | null; granted: boolean }>,
+  row: Readonly<{
+    programCode: string | null;
+    examCode: string | null;
+    granted: boolean;
+    enabledAtBranch: boolean;
+  }>,
   student: Readonly<{ programs: readonly string[]; enrolledExams: readonly string[] }>,
 ): StudentSeriesSource[] {
   const sources: StudentSeriesSource[] = [];
-  if (row.programCode !== null && student.programs.includes(row.programCode)) {
+  if (
+    row.enabledAtBranch &&
+    row.programCode !== null &&
+    student.programs.includes(row.programCode)
+  ) {
     sources.push(STUDENT_SERIES_SOURCE.PROGRAM);
   }
   if (
+    row.enabledAtBranch &&
     row.programCode === null &&
     row.examCode !== null &&
     student.enrolledExams.includes(row.examCode)
@@ -74,20 +84,18 @@ export class StudentGrantsService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    // No branch, no access: the enable flag lives on the branch's row, as the resolver reads it.
-    if (student.currentBranchId === null) return [];
-
     const rows = await this.prisma.testSeries.findMany({
-      where: {
-        branchConfigs: { some: { branchId: student.currentBranchId, enabled: true } },
-        OR: reachedBy(studentId, student.programs, student.enrolledExams),
-      },
+      where: reachableBy(studentId, student),
       select: {
         id: true,
         name: true,
         programCode: true,
         examStage: { select: { exam: { select: { code: true } } } },
         grants: { where: { studentId }, select: { createdAt: true } },
+        branchConfigs: {
+          where: { branchId: student.currentBranchId ?? '', enabled: true },
+          select: { branchId: true },
+        },
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
@@ -100,6 +108,7 @@ export class StudentGrantsService {
           programCode: row.programCode,
           examCode: row.examStage?.exam.code ?? null,
           granted: row.grants.length > 0,
+          enabledAtBranch: row.branchConfigs.length > 0,
         },
         student,
       ),

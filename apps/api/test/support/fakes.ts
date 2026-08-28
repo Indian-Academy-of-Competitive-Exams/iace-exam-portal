@@ -3315,16 +3315,17 @@ interface CatalogReachWhere {
   examStage?: { exam: { code: { in: string[] } } };
 }
 
-interface CatalogSeriesWhere {
+interface CatalogSeriesWhere extends CatalogReachWhere {
   branchConfigs?: { some: { branchId: string; enabled: boolean } };
-  OR?: CatalogReachWhere[];
   id?: { in: string[] };
+  OR?: CatalogSeriesWhere[];
+  NOT?: CatalogSeriesWhere;
 }
 
 interface CatalogInclude {
   tests: {
     where: { test: { status: TestStatus } };
-    select: { test: { select: { branchSchedules: { where: { branchId: string } } } } };
+    select: { test: { select: { branchSchedules: { where: { branchId: { in: string[] } } } } } };
   };
 }
 
@@ -3609,15 +3610,11 @@ export class FakeCatalogPrisma {
     return (
       enabledHere &&
       (where.id === undefined || where.id.in.includes(row.id)) &&
-      (where.OR === undefined || where.OR.some((clause) => this.matchesReach(row, clause)))
-    );
-  }
-
-  private matchesReach(row: FakeSeriesRow, clause: CatalogReachWhere): boolean {
-    return (
-      this.matchesGrant(row, clause.grants) &&
-      matchesProgramCode(row.programCode, clause.programCode) &&
-      this.matchesExam(row, clause.examStage)
+      this.matchesGrant(row, where.grants) &&
+      matchesProgramCode(row.programCode, where.programCode) &&
+      this.matchesExam(row, where.examStage) &&
+      (where.OR === undefined || where.OR.some((clause) => this.matchesSeries(row, clause))) &&
+      (where.NOT === undefined || !this.matchesSeries(row, where.NOT))
     );
   }
 
@@ -3657,7 +3654,7 @@ export class FakeCatalogPrisma {
           const test = this.data.tests.find((candidate) => candidate.id === link.testId);
           if (test?.status !== include.tests.where.test.status) return [];
 
-          const branchId = include.tests.select.test.select.branchSchedules.where.branchId;
+          const branchIds = include.tests.select.test.select.branchSchedules.where.branchId.in;
           return [
             {
               order: link.order,
@@ -3666,7 +3663,8 @@ export class FakeCatalogPrisma {
                 id: test.id,
                 title: test.title,
                 branchSchedules: this.data.branchSchedules.filter(
-                  (schedule) => schedule.testId === test.id && schedule.branchId === branchId,
+                  (schedule) =>
+                    schedule.testId === test.id && branchIds.includes(schedule.branchId),
                 ),
               },
             },

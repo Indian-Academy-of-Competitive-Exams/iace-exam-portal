@@ -477,7 +477,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         onOpenChange={(open) => !open && setGranting(false)}
         loading={grant.isPending}
         title={`Grant ${chosen.name} to ${name}?`}
-        description={`They reach every test in ${chosen.name} from now on, whatever their enrolments and programs say, for as long as the series is switched on at their branch. It is one row for this one student and changes nothing for anybody else.`}
+        description={`They reach every test in ${chosen.name} from now on, whatever their enrolments, programs or branch say. It is one row for this one student and changes nothing for anybody else.`}
         confirmLabel="Grant series"
         onConfirm={() => grant.mutate()}
       />

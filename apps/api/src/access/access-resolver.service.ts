@@ -32,9 +32,9 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v3';
+const CATALOG_SHAPE = 'v4';
 
-const catalogInclude = (branchId: string) =>
+const catalogInclude = (branchId: string | null) =>
   ({
     examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
     prerequisiteSeries: { select: { name: true } },
@@ -50,7 +50,8 @@ const catalogInclude = (branchId: string) =>
             id: true,
             title: true,
             branchSchedules: {
-              where: { branchId },
+              // No branch, no row, which is already what "no row" means: the plain timing rules.
+              where: { branchId: { in: branchId === null ? [] : [branchId] } },
               select: { lateEntrySec: true, extraTimeSec: true },
             },
           },
@@ -221,18 +222,9 @@ export class AccessResolverService {
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
-    const branchId = student.currentBranchId;
-    // No branch, no access: the enable flag and the window both live on the branch's row.
-    if (branchId === null) {
-      return { catalog: { testBlocked: student.isTestBlocked, series: [] }, opened: false };
-    }
-
     const rows = await this.prisma.testSeries.findMany({
-      where: {
-        branchConfigs: { some: { branchId, enabled: true } },
-        OR: reachedBy(studentId, student.programs, student.enrolledExams),
-      },
-      include: catalogInclude(branchId),
+      where: reachableBy(studentId, student),
+      include: catalogInclude(student.currentBranchId),
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
 
@@ -269,20 +261,31 @@ function counterOf(raw: string | null | undefined): number {
   return Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
-export function reachedBy(
+/** One where-input for reach, asked by all three readers; a grant sits OUTSIDE the branch gate. */
+export function reachableBy(
   studentId: string,
-  programs: string[],
-  enrolledExams: string[],
-): Prisma.TestSeriesWhereInput[] {
-  return [
-    { grants: { some: { studentId } } },
-    ...(programs.length > 0 ? [{ programCode: { in: programs } }] : []),
+  student: Readonly<{
+    currentBranchId: string | null;
+    programs: string[];
+    enrolledExams: string[];
+  }>,
+): Prisma.TestSeriesWhereInput {
+  const automatic: Prisma.TestSeriesWhereInput[] = [
+    ...(student.programs.length > 0 ? [{ programCode: { in: student.programs } }] : []),
     // `programCode: null` is what makes a program-tagged series program-ONLY: an exam
     // enrolment alone must never open one.
-    ...(enrolledExams.length > 0
-      ? [{ programCode: null, examStage: { exam: { code: { in: enrolledExams } } } }]
+    ...(student.enrolledExams.length > 0
+      ? [{ programCode: null, examStage: { exam: { code: { in: student.enrolledExams } } } }]
       : []),
   ];
+
+  const branchId = student.currentBranchId;
+  const gated: Prisma.TestSeriesWhereInput[] =
+    branchId === null || automatic.length === 0
+      ? []
+      : [{ branchConfigs: { some: { branchId, enabled: true } }, OR: automatic }];
+
+  return { OR: [{ grants: { some: { studentId } } }, ...gated] };
 }
 
 function toResolved(

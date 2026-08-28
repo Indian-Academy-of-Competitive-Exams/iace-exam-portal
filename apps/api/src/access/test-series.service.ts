@@ -14,7 +14,7 @@ import {
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { PrismaService } from '../prisma/prisma.service';
-import { reachedBy } from './access-resolver.service';
+import { reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
@@ -61,17 +61,9 @@ export class TestSeriesService {
       where: { id: studentId, deletedAt: null },
       select: { currentBranchId: true, programs: true, enrolledExams: true },
     });
-    // No branch, no access: they reach nothing, so nothing is dropped.
-    if (!student?.currentBranchId) return [];
+    if (!student) return [];
 
-    return [
-      {
-        NOT: {
-          branchConfigs: { some: { branchId: student.currentBranchId, enabled: true } },
-          OR: reachedBy(studentId, student.programs, student.enrolledExams),
-        },
-      },
-    ];
+    return [{ NOT: reachableBy(studentId, student) }];
   }
 
   async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {

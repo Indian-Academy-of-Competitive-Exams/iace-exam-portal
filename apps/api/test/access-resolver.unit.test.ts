@@ -180,8 +180,8 @@ describe('AccessResolverService — how a series is reached', () => {
     assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
   });
 
-  /** The escape hatch is not an exemption: a grant still has to pass the branch's own row. */
-  it('hides a granted series the student’s branch has switched off', async () => {
+  /** A branch's switch speaks for its cohort; a grant is one person, named, by an admin. */
+  it('opens a granted series even where the branch has switched it off', async () => {
     const { resolver } = build(
       reachable({
         students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [] })],
@@ -194,15 +194,26 @@ describe('AccessResolverService — how a series is reached', () => {
       }),
     );
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
+    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
   });
 
-  /** No branch, no access — the enable flag and the window both live on the branch's row. */
-  it('gives a student with no branch an empty catalog, grant and all', async () => {
+  /** A scholarship candidate enrols outside the institute and sits at no centre of ours. */
+  it('opens a granted series to a student with no branch at all', async () => {
+    const { resolver } = build(
+      reachable({
+        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledExams: [] })],
+        grants: [{ studentId: 'stu_1', testSeriesId: 'srs_1', createdById: null, createdAt: NOW }],
+      }),
+    );
+
+    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
+  });
+
+  /** The gate moved for grants alone: an enrolment with no branch behind it still reaches nothing. */
+  it('gives a student with no branch nothing on an exam match', async () => {
     const { resolver } = build(
       reachable({
         students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledExams: [EXAM] })],
-        grants: [{ studentId: 'stu_1', testSeriesId: 'srs_1', createdById: null, createdAt: NOW }],
       }),
     );
 
