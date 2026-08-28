@@ -14,6 +14,7 @@ import {
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { PrismaService } from '../prisma/prisma.service';
+import { reachedBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
@@ -52,6 +53,27 @@ export class TestSeriesService {
     private readonly events: DomainEventBus,
   ) {}
 
+  /** Prisma ANDs the keys inside NOT, so this is the exact complement of "already reaches it". */
+  private async outOfReachOf(studentId?: string): Promise<Prisma.TestSeriesWhereInput[]> {
+    if (studentId === undefined) return [];
+
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { currentBranchId: true, programs: true, enrolledExams: true },
+    });
+    // No branch, no access: they reach nothing, so nothing is dropped.
+    if (!student?.currentBranchId) return [];
+
+    return [
+      {
+        NOT: {
+          branchConfigs: { some: { branchId: student.currentBranchId, enabled: true } },
+          OR: reachedBy(studentId, student.programs, student.enrolledExams),
+        },
+      },
+    ];
+  }
+
   async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {
     const chosen: Prisma.TestSeriesWhereInput[] = [
       ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
@@ -62,7 +84,9 @@ export class TestSeriesService {
       ? [{ name: { contains: query.q, mode: 'insensitive' } }]
       : [];
 
-    const and = matchFilters(always, chosen, query.match);
+    // Scope, not a filter: it stands outside `match`, which is the reader's All/Any over THEIR choices.
+    const scope = await this.outOfReachOf(query.notReachedBy);
+    const and = [...matchFilters(always, chosen, query.match), ...scope];
     const where: Prisma.TestSeriesWhereInput = and.length > 0 ? { AND: and } : {};
 
     const [rows, total] = await this.prisma.$transaction([

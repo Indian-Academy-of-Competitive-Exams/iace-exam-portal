@@ -397,7 +397,11 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
     queryFn: () => api.admin.studentSeries.list(studentId),
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: seriesKey(studentId) });
+  // The picker asks the server what they do NOT reach, so a grant changes its answer too.
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: seriesKey(studentId) });
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
+  };
 
   const grant = useMutation({
     meta: { success: 'Series granted.' },
@@ -435,7 +439,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
             hint={
               detail.isTestBlocked
                 ? 'Blocked from tests — lift the block before granting a series.'
-                : 'Search the whole catalog. Granting one they already reach changes nothing.'
+                : 'Series they already reach are not listed.'
             }
             className="min-w-56 flex-1"
           >
@@ -445,6 +449,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
                 aria-describedby={describedBy}
                 value={chosen.id}
                 selectedLabel={chosen.name || undefined}
+                notReachedBy={studentId}
                 clearable
                 placeholder="Choose a series"
                 onChange={(value, label) => setChosen({ id: value, name: label })}

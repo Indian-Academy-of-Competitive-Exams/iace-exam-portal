@@ -153,6 +153,8 @@ export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   programCode: z.string().optional(),
   isFree: optionalBooleanQuery(),
   match: matchModeQuery(),
+  /** A student id: drops what they already reach, so a picker cannot offer a grant that does nothing. */
+  notReachedBy: z.string().optional(),
 });
 export type TestSeriesListQuery = z.infer<typeof testSeriesListQuerySchema>;
 export type TestSeriesListQueryInput = z.input<typeof testSeriesListQuerySchema>;

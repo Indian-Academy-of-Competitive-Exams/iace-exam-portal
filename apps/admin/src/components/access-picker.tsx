@@ -59,19 +59,23 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
  */
 export function TestSeriesPicker({
   excludeId,
+  notReachedBy,
   onChange,
   ...props
 }: Readonly<
   Omit<PickerProps, 'onChange'> & {
     excludeId?: string;
+    /** A student id: the server drops what they already reach, so a grant that does nothing is unofferable. */
+    notReachedBy?: string;
     onChange: (value: string, label: string) => void;
   }
 >) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) => api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search, notReachedBy ?? ''],
+    fetchPage: (page) =>
+      api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search, notReachedBy }),
   });
 
   const items = pages.items
