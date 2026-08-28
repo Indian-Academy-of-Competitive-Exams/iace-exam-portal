@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -7,6 +7,7 @@ import {
   EARLIEST_BIRTH_DATE,
   EXAM_FAMILIES,
   examsInFamilies,
+  GENDERS,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
@@ -22,23 +23,34 @@ import {
   Avatar,
   Badge,
   Button,
-  Card,
   Combobox,
   ConfirmDialog,
+  DataTable,
   DatePicker,
+  DropdownMenuItem,
   Field,
   FormPanel,
   FormSection,
   Input,
   MultiCombobox,
+  PageFrame,
   PageHeader,
+  RowActions,
   Skeleton,
   SkeletonParagraph,
+  TruncatedText,
+  type DataTableColumn,
 } from '@iace/ui';
 import { TestSeriesPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
-import { familyLabel, NAV_ITEMS, QUERY_KEYS, STUDENT_TYPE_LABELS } from '../lib/constants';
+import {
+  familyLabel,
+  GENDER_LABELS,
+  NAV_ITEMS,
+  QUERY_KEYS,
+  STUDENT_TYPE_LABELS,
+} from '../lib/constants';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
 import { useExams } from '../lib/use-exams';
 import { useAuth } from '../providers/auth';
@@ -131,11 +143,46 @@ function DocumentLink({ label, url }: Readonly<{ label: string; url?: string | n
   );
 }
 
-/** The three sign-in states, listed. Mirrors SignInStatus on the roster. */
-function SignInBadge({ detail }: Readonly<{ detail: StudentDetail }>) {
-  if (detail.hasSignedIn) return <Badge variant="success">Has signed in</Badge>;
-  if (detail.hasDefaultPin) return <Badge variant="warning">Default PIN — not yet changed</Badge>;
-  return <Badge variant="info">Never signed in</Badge>;
+/** The sign-in state as a value the header carries; what is WRONG with it belongs in the notice. */
+function signInSummary(detail: StudentDetail): string {
+  return detail.hasSignedIn ? 'Has signed in' : 'Never signed in';
+}
+
+/** Everything outstanding, said once: a strip of chips makes the reader assemble what a sentence carries. */
+function StudentStateNotice({
+  detail,
+  onAddPreTestDetails,
+}: Readonly<{ detail: StudentDetail; onAddPreTestDetails?: () => void }>) {
+  const notes = [
+    !detail.isActive ? 'Sign-in is suspended, so they cannot sign in on any device.' : null,
+    detail.isTestBlocked ? 'They cannot start a new test until the block is lifted.' : null,
+    detail.hasDefaultPin ? 'They are still on the default PIN.' : null,
+    !detail.preTestReady
+      ? "Mother's name, father's name and date of birth are needed before they can sit a test."
+      : null,
+    !detail.profileCompleted
+      ? 'Their full profile is incomplete, which nudges them but blocks nothing.'
+      : null,
+  ].filter((note): note is string => note !== null);
+
+  if (notes.length === 0) return null;
+
+  return (
+    <Alert
+      variant={!detail.isActive || detail.isTestBlocked ? 'danger' : 'warning'}
+      className="mb-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span>{notes.join(' ')}</span>
+        {!detail.preTestReady && onAddPreTestDetails ? (
+          <Button type="button" variant="outline" size="sm" onClick={onAddPreTestDetails}>
+            <Pencil aria-hidden />
+            Add pre-test details
+          </Button>
+        ) : null}
+      </div>
+    </Alert>
+  );
 }
 
 /** Where a student sits relative to the institute — the four fields access resolves through. */
@@ -368,7 +415,40 @@ function GrantsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   );
 }
 
-/** The three states of the grant list, so the card above stays one shape. */
+function grantColumns(
+  busy: boolean,
+  onRevoke: (grant: StudentGrantRow) => void,
+): DataTableColumn<StudentGrantRow>[] {
+  return [
+    {
+      key: 'series',
+      header: 'Series',
+      className: 'max-w-72',
+      cell: (grant) => <TruncatedText>{grant.testSeries.name}</TruncatedText>,
+    },
+    {
+      key: 'granted',
+      header: 'Granted',
+      className: 'max-w-48',
+      cell: (grant) => (
+        <TruncatedText>{WHEN_FORMATTER.format(new Date(grant.createdAt))}</TruncatedText>
+      ),
+    },
+    {
+      key: 'actions',
+      cell: (grant) => (
+        <RowActions label={`Actions for ${grant.testSeries.name}`}>
+          <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(grant)}>
+            <Trash2 aria-hidden />
+            Revoke
+          </DropdownMenuItem>
+        </RowActions>
+      ),
+    },
+  ];
+}
+
+/** The grants, drawn the way this app draws any other list of rows. */
 function GrantList({
   grants,
   isLoading,
@@ -380,45 +460,22 @@ function GrantList({
   busy: boolean;
   onRevoke: (grant: StudentGrantRow) => void;
 }>) {
-  if (isLoading) return <SkeletonParagraph lines={2} />;
-
-  if (grants.length === 0) {
-    return (
-      <Alert variant="info">
-        <span>
-          No series has been granted to this student. Everything they reach comes from their
-          enrolments and programs.
-        </span>
-      </Alert>
-    );
-  }
+  const columns = useMemo(() => grantColumns(busy, onRevoke), [busy, onRevoke]);
 
   return (
-    <ul className="flex flex-col gap-2">
-      {grants.map((grant) => (
-        <li
-          key={grant.testSeriesId}
-          className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-        >
-          <span className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">{grant.testSeries.name}</span>
-            <span className="text-xs text-muted-foreground">
-              Granted {WHEN_FORMATTER.format(new Date(grant.createdAt))}
-            </span>
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => onRevoke(grant)}
-          >
-            <Trash2 aria-hidden />
-            Revoke
-          </Button>
-        </li>
-      ))}
-    </ul>
+    <DataTable
+      columns={columns}
+      rows={grants}
+      rowKey={(grant) => grant.testSeriesId}
+      isLoading={isLoading}
+      skeletonRows={2}
+      empty={
+        <Alert variant="info">
+          No series has been granted to this student. Everything they reach comes from their
+          enrolments and programs.
+        </Alert>
+      }
+    />
   );
 }
 
@@ -593,23 +650,25 @@ export function StudentDetailPage() {
     },
   });
 
-  // Shaped like the page it stands in for: a heading, then the two cards.
+  // Framed like the page it stands in for, so the scrollport does not appear only once data lands.
   if (student.isPending) {
     return (
-      <div className="flex flex-col gap-5">
-        <Skeleton variant="title" />
-        <Card className="p-6">
+      <PageFrame>
+        <div className="flex flex-col gap-5">
+          <Skeleton variant="title" />
           <SkeletonParagraph lines={3} />
-        </Card>
-        <Card className="p-6">
           <SkeletonParagraph lines={5} />
-        </Card>
-      </div>
+        </div>
+      </PageFrame>
     );
   }
   if (student.error || !student.data) {
     // The reason is on the toast; this only has to stop the page being blank.
-    return <Alert variant="danger">Could not load this student.</Alert>;
+    return (
+      <PageFrame>
+        <Alert variant="danger">Could not load this student.</Alert>
+      </PageFrame>
+    );
   }
 
   const detail = student.data;
@@ -647,45 +706,42 @@ export function StudentDetailPage() {
         ) : undefined
       }
       header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: detail.fullName ?? detail.mobile }]} />
-          }
-          title={detail.fullName ?? detail.mobile}
-          meta={`+91 ${detail.mobile}`}
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Outside the fieldset, so suspending a sign-in never waits on Edit. */}
-              <StudentStateSwitches detail={detail} />
-              {!isEditing ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil aria-hidden />
-                  Edit details
-                </Button>
-              ) : null}
-            </div>
-          }
-        />
+        <>
+          <PageHeader
+            breadcrumbs={
+              <PageCrumbs nav={NAV_ITEMS} tail={[{ label: detail.fullName ?? detail.mobile }]} />
+            }
+            leading={
+              <Avatar
+                src={detail.profile?.photoUrl}
+                name={detail.fullName}
+                fallback={detail.mobile}
+                size="md"
+              />
+            }
+            title={detail.fullName ?? detail.mobile}
+            meta={`+91 ${detail.mobile} · ${signInSummary(detail)}`}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Outside the fieldset, so suspending a sign-in never waits on Edit. */}
+                <StudentStateSwitches detail={detail} />
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <Pencil aria-hidden />
+                    Edit details
+                  </Button>
+                ) : null}
+              </div>
+            }
+          />
+          {/* Outside the body: its fieldset would disable the button that resolves the notice. */}
+          <StudentStateNotice
+            detail={detail}
+            onAddPreTestDetails={isEditing ? undefined : () => setIsEditing(true)}
+          />
+        </>
       }
     >
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <Avatar
-          src={detail.profile?.photoUrl}
-          name={detail.fullName}
-          fallback={detail.mobile}
-          size="md"
-        />
-        {!detail.isActive ? <Badge variant="danger">Sign-in suspended</Badge> : null}
-        {detail.isTestBlocked ? <Badge variant="danger">Blocked from tests</Badge> : null}
-        <SignInBadge detail={detail} />
-        <Badge variant={detail.preTestReady ? 'success' : 'neutral'}>
-          Pre-test details {detail.preTestReady ? 'on file' : 'needed'}
-        </Badge>
-        <Badge variant={detail.profileCompleted ? 'success' : 'neutral'}>
-          Full profile {detail.profileCompleted ? 'complete' : 'incomplete'}
-        </Badge>
-      </div>
-
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">
           <DocumentLink label="Passport photo" url={detail.profile?.photoUrl} />
@@ -740,17 +796,12 @@ export function StudentDetailPage() {
                     id={control.id}
                     aria-describedby={control['aria-describedby']}
                     aria-invalid={control['aria-invalid']}
-                    clearable={false}
                     value={gender}
+                    placeholder="Not recorded"
                     onChange={(next) =>
                       form.setValue('gender', next as FormValues['gender'], { shouldDirty: true })
                     }
-                    items={[
-                      { value: '', label: 'Not recorded' },
-                      { value: 'MALE', label: 'Male' },
-                      { value: 'FEMALE', label: 'Female' },
-                      { value: 'OTHER', label: 'Other' },
-                    ]}
+                    items={GENDERS.map((value) => ({ value, label: GENDER_LABELS[value] }))}
                   />
                 )}
               </Field>

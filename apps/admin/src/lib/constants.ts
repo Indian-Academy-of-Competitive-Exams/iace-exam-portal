@@ -27,6 +27,7 @@ import {
   type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
+  type Gender,
   type ImportSource,
   type LanguageCode,
   type LanguageMode,
@@ -94,6 +95,13 @@ export const STUDENT_TYPE_LABELS: Readonly<Record<StudentType, string>> = {
   [STUDENT_TYPE.ONLINE]: 'Online',
   [STUDENT_TYPE.OFFLINE]: 'Offline',
   [STUDENT_TYPE.NON_IACE]: 'Non-IACE',
+};
+
+/** What each gender is called on screen; the picker builds itself from GENDERS. */
+export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
+  MALE: 'Male',
+  FEMALE: 'Female',
+  OTHER: 'Other',
 };
 
 /** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
