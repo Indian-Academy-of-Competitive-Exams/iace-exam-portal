@@ -9,12 +9,10 @@ import {
   todayISO,
   updateStudentSchema,
 } from '@iace/contracts';
+import { shiftInstituteDay } from '../src/common/time/institute-day';
 
-const shift = (days: number) => {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-};
+// Institute days: before 05:30 IST, UTC-tomorrow is today here and dobSchema rightly allows it.
+const shift = (days: number) => shiftInstituteDay(todayISO(), days);
 
 describe('dobSchema', () => {
   it('accepts a real date in the past', () => {
