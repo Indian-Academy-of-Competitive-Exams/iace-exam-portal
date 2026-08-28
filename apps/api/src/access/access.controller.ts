@@ -147,6 +147,17 @@ export class TestSeriesController {
     return this.series.branchConfigs(id);
   }
 
+  /** The same switch, thrown for every branch at once. */
+  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/branches')
+  updateEveryBranch(
+    @Param('id') id: string,
+    @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
+  ): Promise<BranchTestConfigRow[]> {
+    return this.series.updateEveryBranchConfig(id, body);
+  }
+
   /** Which branches run it, and when. A separate key: scheduling is its own job. */
   @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

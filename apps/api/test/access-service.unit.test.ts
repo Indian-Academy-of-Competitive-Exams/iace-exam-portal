@@ -70,6 +70,46 @@ describe('TestSeriesService — the branch fan-out', () => {
    * exists. An ABSENT row would have to be read as a default, and a default is exactly what
    * nobody can see on a screen or find in an audit trail.
    */
+  /** The fan-out leaves every row OFF, so the thirtieth switch is the one somebody forgets. */
+  it('switches every branch on at once, and tells the catalog', async () => {
+    const { series, prisma, events } = build({
+      branches: [
+        makeBranch({ id: 'br_1', name: 'AMEERPET' }),
+        makeBranch({ id: 'br_2', name: 'DILSUKHNAGAR' }),
+        makeBranch({ id: 'br_3', name: 'ONLINE' }),
+      ],
+    });
+    const created = await series.create(draft());
+    assert.deepEqual(
+      prisma.branchConfigs.map((config) => config.enabled),
+      [false, false, false],
+      'the fan-out leaves a new series off everywhere',
+    );
+
+    const rows = await series.updateEveryBranchConfig(created.id, { enabled: true });
+
+    assert.deepEqual(
+      rows.map((row) => row.enabled),
+      [true, true, true],
+    );
+    assert.deepEqual(
+      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED),
+      [{ testSeriesId: created.id }],
+      'a catalog nobody rebuilt would keep the series hidden from every student',
+    );
+  });
+
+  /** Only this series: the switch is per series, and every other one keeps the state it had. */
+  it('leaves another series alone', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1', name: 'AMEERPET' })] });
+    const mine = await series.create(draft());
+    const other = await series.create(draft({ name: 'RRB JE Tier 1 mocks' }));
+
+    await series.updateEveryBranchConfig(mine.id, { enabled: true });
+
+    assert.equal(prisma.branchConfigs.find((c) => c.testSeriesId === other.id)?.enabled, false);
+  });
+
   it('gives every branch a row the moment the series is created', async () => {
     const { series, prisma } = build({
       branches: [

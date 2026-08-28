@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Pencil, Trash2 } from 'lucide-react';
+import { Clock, Pencil, Power, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -568,6 +568,7 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const queryClient = useQueryClient();
   const canRead = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT);
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [askingAll, setAskingAll] = useState(false);
 
   const branches = useQuery({
     queryKey: branchesKey(series.id),
@@ -580,11 +581,47 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
+  const enableEverywhere = useMutation({
+    meta: { success: 'Switched on at every branch.' },
+    mutationFn: () => api.admin.testSeries.updateEveryBranch(series.id, { enabled: true }),
+    onSuccess: () => {
+      setAskingAll(false);
+      refresh();
+    },
+    onError: () => setAskingAll(false),
+  });
+
+  const off = series.branchCount - series.enabledBranchCount;
+
   return (
     <FormSection title="Branches">
-      <StatRow
-        label="Switched on at"
-        value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <StatRow
+          label="Switched on at"
+          value={`${series.enabledBranchCount} of ${plural(series.branchCount, 'branch', 'branches')}`}
+        />
+        {canWrite && off > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            loading={enableEverywhere.isPending}
+            onClick={() => setAskingAll(true)}
+          >
+            <Power aria-hidden />
+            Switch on everywhere
+          </Button>
+        ) : null}
+      </div>
+
+      <ConfirmDialog
+        open={askingAll}
+        onOpenChange={(open) => !open && setAskingAll(false)}
+        loading={enableEverywhere.isPending}
+        title={`Switch ${series.name} on at every branch?`}
+        description={`All ${plural(series.branchCount, 'branch', 'branches')} run it from now on, including the ${off} switched off today. A branch that was left off on purpose is switched on too.`}
+        confirmLabel="Switch on everywhere"
+        onConfirm={() => enableEverywhere.mutate()}
       />
 
       <BranchScheduleList

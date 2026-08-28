@@ -3130,6 +3130,20 @@ export class FakeAccessPrisma {
       return Promise.resolve({ count: data.length });
     },
 
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { testSeriesId: string };
+      data: Record<string, unknown>;
+    }) => {
+      const rows = this.branchConfigs.filter(
+        (config) => config.testSeriesId === where.testSeriesId,
+      );
+      for (const row of rows) Object.assign(row, data);
+      return Promise.resolve({ count: rows.length });
+    },
+
     update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const row = this.branchConfigs.find((config) => config.id === where.id);
       if (!row) throw new Error(`no branch config ${where.id}`);

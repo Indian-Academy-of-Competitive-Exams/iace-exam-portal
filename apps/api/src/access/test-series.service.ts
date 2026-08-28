@@ -225,6 +225,24 @@ export class TestSeriesService {
   }
 
   /** Switching a series on for a branch. The row is never created here, and it has no window. */
+  /** Every row at once: a free series is switched on branch by branch otherwise, thirty times. */
+  async updateEveryBranchConfig(
+    id: string,
+    input: UpdateBranchTestConfigBody,
+  ): Promise<BranchTestConfigRow[]> {
+    await this.requireSeries(id);
+    if (input.enabled === undefined) return this.branchConfigs(id);
+
+    await this.prisma.branchTestConfig.updateMany({
+      where: { testSeriesId: id },
+      data: { enabled: input.enabled },
+    });
+
+    this.auditContext.setEntityId(id);
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
+    return this.branchConfigs(id);
+  }
+
   async updateBranchConfig(
     id: string,
     branchId: string,

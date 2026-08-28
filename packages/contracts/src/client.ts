@@ -805,6 +805,16 @@ export function createApiClient(options: ApiClientOptions) {
         branches: (id: string): Promise<BranchTestConfigRow[]> =>
           request(ADMIN_SERIES_ROUTES.branches(id), { schema: branchTestConfigRowSchema.array() }),
 
+        updateEveryBranch: (
+          id: string,
+          input: UpdateBranchTestConfigInput,
+        ): Promise<BranchTestConfigRow[]> =>
+          request(ADMIN_SERIES_ROUTES.branches(id), {
+            method: 'PATCH',
+            body: input,
+            schema: branchTestConfigRowSchema.array(),
+          }),
+
         updateBranch: (
           id: string,
           branchId: string,
