@@ -24,6 +24,7 @@ import {
   type StudentType,
 } from '@iace/contracts';
 import {
+  Alert,
   Badge,
   BadgeList,
   Button,
@@ -284,7 +285,13 @@ export function StudentsPage() {
     />
   );
 
-  const banner =
+  const { identity: admin } = useAuth();
+  // Derived, never stored: not a super admin, not every branch, and none of their own.
+  const reachesNoBranch = Boolean(
+    admin && !admin.isSuperAdmin && !admin.allBranches && admin.branchIds.length === 0,
+  );
+
+  const branchBanner =
     chosenBranches.length > 0 ? (
       // Arrived from a branch link: say so above the fold. Clearing it is the bar's job, once.
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -296,6 +303,18 @@ export function StudentsPage() {
         ))}
       </div>
     ) : null;
+
+  // An empty roster reads as "no students yet", which is the wrong place to go looking.
+  const banner = reachesNoBranch ? (
+    <Alert variant="warning" className="mb-4">
+      <span>
+        You have not been given a branch yet, so this roster is empty. Ask a super admin to add
+        yours.
+      </span>
+    </Alert>
+  ) : (
+    branchBanner
+  );
 
   return (
     <TableFrame header={header}>

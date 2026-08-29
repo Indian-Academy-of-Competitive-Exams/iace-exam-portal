@@ -17,7 +17,14 @@ export function AppShell() {
 
   // A deactivated admin keeps their session but loses the nav.
   const nav = useMemo(
-    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, admin?.isSuperAdmin ?? false)),
+    () =>
+      isDeactivated
+        ? []
+        : filterAdminNav(NAV_ITEMS, {
+            isSuperAdmin: admin?.isSuperAdmin ?? false,
+            // Derived, never stored: not a super admin and not every branch is a branch admin.
+            isBranchAdmin: admin ? !admin.isSuperAdmin && !admin.allBranches : false,
+          }),
     [isDeactivated, admin?.isSuperAdmin],
   );
 

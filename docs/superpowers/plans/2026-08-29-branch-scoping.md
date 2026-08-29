@@ -177,10 +177,16 @@ Exemplar: `apps/api/src/audit/audit.service.ts:102` — `listRowActions`, which 
 - Modify `apps/api/src/audit/audit.service.ts:102` and `apps/api/src/audit/audit.controller.ts`.
 - Test `apps/api/test/audit-read.unit.test.ts`.
 
+**Already satisfied — verified 2026-08-29, no code changed.** `listRowActions:122` and
+`listImports:152` both pin `actorId` to the viewer for any non-super admin, outside the `AND`, so
+`match=any` cannot widen past it; `audit-read.unit.test.ts:60` covers it.
+
 **Acceptance**
 
 - A branch admin's audit list is forced to their own `actorId`, whatever the query asks for.
-- A super admin and an `allBranches` admin are unaffected.
+- Only a SUPER admin sees everyone's trail. An earlier draft of this plan said an `allBranches`
+  admin was unaffected too — that was wrong, and the existing behaviour is right: widening it would
+  hand one admin another's trail, which is a privacy regression, not a scoping fix.
 - The list is **not** scoped by branch, and a comment says why once: `RowActionLog` records an
   entity id and a label and no branch, so a row whose entity has since been deleted could never be
   resolved to one. Their own actions is both what was asked for and all the table can answer.

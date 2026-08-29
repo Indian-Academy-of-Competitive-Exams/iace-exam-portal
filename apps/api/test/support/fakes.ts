@@ -454,6 +454,22 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
   };
 }
 
+/** The branch filters the fakes answer: the list's own, plus the scope's `id in`. */
+interface FakeBranchWhere {
+  isActive?: boolean;
+  name?: { contains: string };
+  id?: { in: string[] };
+}
+
+function matchesBranch(branch: FakeBranch, where: FakeBranchWhere): boolean {
+  return (
+    (where.isActive === undefined || branch.isActive === where.isActive) &&
+    (where.name?.contains === undefined ||
+      branch.name.toLowerCase().includes(where.name.contains.toLowerCase())) &&
+    (where.id === undefined || where.id.in.includes(branch.id))
+  );
+}
+
 /** The student filters the fakes answer: the `in` lookups, an enrolment, a branch, and live-only. */
 interface StudentWhere {
   id?: string | { in: string[] };
@@ -711,19 +727,12 @@ export class FakePrisma {
       return Promise.resolve(row ? { ...row } : null);
     },
 
-    findMany: ({
-      where = {},
-    }: { where?: { isActive?: boolean; name?: { contains: string } } } = {}) =>
-      Promise.resolve(
-        this.branches.filter(
-          (b) =>
-            (where.isActive === undefined || b.isActive === where.isActive) &&
-            (where.name?.contains === undefined ||
-              b.name.toLowerCase().includes(where.name.contains.toLowerCase())),
-        ),
-      ),
+    findMany: ({ where = {} }: { where?: FakeBranchWhere } = {}) =>
+      Promise.resolve(this.branches.filter((b) => matchesBranch(b, where))),
 
-    count: () => Promise.resolve(this.branches.length),
+    // The same `where` the rows came off: a count that ignored it would promise unreachable pages.
+    count: ({ where = {} }: { where?: FakeBranchWhere } = {}) =>
+      Promise.resolve(this.branches.filter((b) => matchesBranch(b, where)).length),
 
     create: ({ data }: { data: { name: string; type?: BranchType } }) => {
       const created = makeBranch({ ...data, id: `br_new_${this.nextId++}` });

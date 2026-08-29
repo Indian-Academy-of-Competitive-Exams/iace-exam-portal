@@ -25,7 +25,14 @@ import {
   type Paginated,
   type UpdateBranchBody,
 } from '@iace/contracts';
-import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
+import {
+  Actors,
+  type AuthenticatedUser,
+  CurrentUser,
+  RequiresFeature,
+  RequiresSuperAdmin,
+  branchScopeOf,
+} from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { BranchesService } from './branches.service';
@@ -43,8 +50,9 @@ export class BranchesController {
   @Get()
   list(
     @Query(new ZodQuery(branchListQuerySchema)) query: BranchListQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<Branch>> {
-    return this.branches.list(query);
+    return this.branches.list(query, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.BRANCH, AUDIT_ACTION.CREATE)

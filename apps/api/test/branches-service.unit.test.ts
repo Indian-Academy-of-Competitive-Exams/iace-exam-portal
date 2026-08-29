@@ -10,6 +10,7 @@ import {
 import { BranchesService } from '../src/branches/branches.service';
 import { AuditContext } from '../src/audit';
 import { FakeSeriesFanOut, FakePrisma, makeBranch } from './support/fakes';
+import { EVERY_BRANCH } from '../src/common/security';
 
 /** The branch list, exercised through the service rather than its rule helpers. */
 function serviceWith(branches = [makeBranch()]) {
@@ -34,7 +35,7 @@ describe('BranchesService — listing', () => {
   it('reports the student count each branch carries', async () => {
     const { service } = serviceWith([makeBranch({ _count: { students: 4 } })]);
 
-    const page = await service.list(listQuery());
+    const page = await service.list(listQuery(), EVERY_BRANCH);
 
     assert.equal(page.items[0]?.studentCount, 4);
     assert.equal(page.total, 1);
@@ -43,7 +44,7 @@ describe('BranchesService — listing', () => {
   it('returns dates as strings, never Date objects', async () => {
     const { service } = serviceWith();
 
-    const page = await service.list(listQuery());
+    const page = await service.list(listQuery(), EVERY_BRANCH);
 
     // The contract says string. A Date would serialise to the same thing over
     // HTTP and then fail the client's schema on the way back in.
@@ -243,5 +244,34 @@ describe('BranchesService — updating', () => {
     const { service } = serviceWith([makeBranch({ id: 'br_1', name: 'AMEERPET' })]);
 
     assert.equal((await service.update('br_1', { name: 'AMEERPET' })).name, 'AMEERPET');
+  });
+});
+
+describe('BranchesService — the branches the admin asking may see', () => {
+  it('shows a branch admin only the branches they hold', async () => {
+    const { service } = serviceWith([
+      makeBranch({ id: 'br_1', name: 'AMEERPET' }),
+      makeBranch({ id: 'br_9', name: 'KUKATPALLY' }),
+    ]);
+
+    const page = await service.list(listQuery(), { all: false, branchIds: ['br_1'] });
+
+    assert.deepEqual(
+      page.items.map((branch) => branch.id),
+      ['br_1'],
+    );
+    // The count comes off the same where, or the pager promises rows nobody can reach.
+    assert.equal(page.total, 1);
+  });
+
+  it('shows an admin who reaches every branch all of them', async () => {
+    const { service } = serviceWith([
+      makeBranch({ id: 'br_1' }),
+      makeBranch({ id: 'br_9', name: 'KUKATPALLY' }),
+    ]);
+
+    const page = await service.list(listQuery(), EVERY_BRANCH);
+
+    assert.equal(page.total, 2);
   });
 });
