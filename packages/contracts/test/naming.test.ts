@@ -22,11 +22,39 @@ describe('nameStem', () => {
   it('drops a part the name has already said, whatever separates its words', () => {
     assert.equal(
       nameStem(['SSC CGL', 'Tier 1', 'SSC CGL Tier 1 — official pattern'], 'Mock'),
-      'SSC CGL Tier 1 — official pattern — Mock',
+      'SSC CGL Tier 1 — Mock',
     );
     assert.equal(
       nameStem(['SSC_CGL', 'Tier 1', 'SSC CGL Tier 1 — official pattern'], 'Mock'),
-      'SSC CGL Tier 1 — official pattern — Mock',
+      'SSC CGL Tier 1 — Mock',
+    );
+  });
+
+  /** The blueprint is the official pattern; a test drawn from it is one of a run under that name. */
+  it('drops the official pattern marker in either shape a config writes it', () => {
+    assert.equal(
+      nameStem(['IBPS PO', 'Prelims (official pattern)'], 'Mock'),
+      'IBPS PO Prelims — Mock',
+    );
+    assert.equal(
+      nameStem(['IBPS PO', 'Prelims — official pattern'], 'Mock'),
+      'IBPS PO Prelims — Mock',
+    );
+  });
+
+  /** Only the trailing marker goes: a parenthetical that tells two blueprints apart is the name. */
+  it('keeps a parenthetical that is not the marker', () => {
+    assert.equal(
+      nameStem(['RRB ALP', 'CBT 2 - Part B (Trade) (official pattern)'], 'Mock'),
+      'RRB ALP CBT 2 - Part B (Trade) — Mock',
+    );
+  });
+
+  /** Most configs interleave a word the code left out, so a contiguous match would miss them. */
+  it('drops what was already said even when the config puts words between', () => {
+    assert.equal(
+      nameStem(['IBPS_PO', 'Prelims', 'IBPS PO / MT — Prelims (official pattern)'], 'Mock'),
+      'IBPS PO / MT — Prelims — Mock',
     );
   });
 

@@ -49,20 +49,34 @@ const NAME_PART_SEPARATOR = ' — ';
 const NAME_NUMBER_PAD = 2;
 
 const NAME_SEPARATORS = /[^a-z0-9]+/g;
+const PATTERN_MARKERS = ['(official pattern)', '— official pattern'] as const;
 
-/** Space-padded and separator-blind, so SSC_CGL matches the SSC CGL a config name spells out. */
-function comparable(value: string): string {
-  return ` ${value.toLowerCase().replace(NAME_SEPARATORS, ' ').trim()} `;
+/** A blueprint is the official pattern; a test drawn from one is not, so a name it leads drops it. */
+function withoutMarker(value: string): string {
+  const lower = value.toLowerCase();
+  const marker = PATTERN_MARKERS.find((candidate) => lower.endsWith(candidate));
+  return marker === undefined ? value : value.slice(0, -marker.length).trim();
+}
+
+/** Separator-blind, so SSC_CGL and SSC CGL come apart into the same two words. */
+function words(value: string): string[] {
+  return value.toLowerCase().replace(NAME_SEPARATORS, ' ').trim().split(' ').filter(Boolean);
+}
+
+/** Already said if every word of it turns up in the other, whatever that one puts between them. */
+function saidWithin(part: string, whole: string): boolean {
+  const seen = new Set(words(whole));
+  return words(part).every((word) => seen.has(word));
 }
 
 /** Everything a name says before its number, saying nothing twice: a config may carry the stage. */
 export function nameStem(lead: readonly (string | null | undefined)[], kind: string): string {
   const head = lead.reduce<string>((said, part) => {
-    const next = part?.trim() ?? '';
-    if (next === '') return said;
-    if (said === '' || comparable(said).includes(comparable(next))) return said || next;
-    // A config named after its own exam and stage swallows them rather than repeating them.
-    if (comparable(next).includes(comparable(said))) return next;
+    const next = withoutMarker(part?.trim() ?? '');
+    if (next === '' || said === '') return said || next;
+    // A config named after its own exam and stage swallows them, so its spelling wins a tie.
+    if (saidWithin(said, next)) return next;
+    if (saidWithin(next, said)) return said;
     return `${said} ${next}`;
   }, '');
   return head === '' ? kind : head + NAME_PART_SEPARATOR + kind;
