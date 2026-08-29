@@ -21,6 +21,8 @@ export const AUDIT_FEATURE = {
   TEST_SERIES: 'TEST_SERIES',
   /** The blueprint, not the test built from it — the two change for different reasons. */
   BASE_CONFIG: 'BASE_CONFIG',
+  /** Which series a branch runs. A change here is a change to what its students reach. */
+  BRANCH_TEST_CONFIG: 'BRANCH_TEST_CONFIG',
   /** The whole catalog: an exam and its stages. One vocabulary, because they move together. */
   EXAM_TAXONOMY: 'EXAM_TAXONOMY',
   TAXONOMY_SUBJECT: 'TAXONOMY_SUBJECT',

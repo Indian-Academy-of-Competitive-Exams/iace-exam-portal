@@ -157,6 +157,7 @@ export const AUDIT_FEATURE_LABELS: Readonly<Record<AuditFeature, string>> = {
   TEST: 'Test',
   TEST_SERIES: 'Test series',
   BASE_CONFIG: 'Base configuration',
+  BRANCH_TEST_CONFIG: 'Branch series',
   EXAM_TAXONOMY: 'Exam catalog',
   TAXONOMY_SUBJECT: 'Subject',
   TAXONOMY_TOPIC: 'Topic',

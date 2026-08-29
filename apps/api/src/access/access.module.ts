@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { ConfigsModule } from '../configs';
 import {
+  BranchSeriesController,
   ProgramsController,
   StudentGrantsController,
   StudentSeriesController,
@@ -25,6 +26,7 @@ import { UnlocksService } from './unlocks.service';
   controllers: [
     ProgramsController,
     TestSeriesController,
+    BranchSeriesController,
     StudentGrantsController,
     StudentSeriesController,
     UnlockRequestsController,

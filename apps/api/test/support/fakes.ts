@@ -3153,6 +3153,12 @@ export class FakeAccessPrisma {
     // rows answers the same question either way.
     findMany: () =>
       Promise.resolve(this.branches.map((branch) => ({ id: branch.id, name: branch.name }))),
+
+    /** The existence check the branch-side reads make before they answer for one. */
+    findFirst: ({ where }: { where: { id: string; deletedAt?: null } }) => {
+      const branch = this.branches.find((candidate) => candidate.id === where.id);
+      return Promise.resolve(branch ? { id: branch.id, name: branch.name } : null);
+    },
   };
 
   readonly program = {
@@ -3196,23 +3202,41 @@ export class FakeAccessPrisma {
       return Promise.resolve(row ? this.hydrate(row) : null);
     },
 
-    findMany: ({ skip = 0, take }: { skip?: number; take?: number } = {}) =>
+    findMany: ({
+      where = {},
+      include,
+      skip = 0,
+      take,
+    }: {
+      where?: FakeSeriesWhere;
+      include?: { branchConfigs?: { where: { branchId: string } } };
+      skip?: number;
+      take?: number;
+    } = {}) =>
       Promise.resolve(
         this.series
+          .filter((row) => matchesSeries(row, where, this.branchConfigs))
+          // By name, as every paged read of this table asks for; the fixtures rely on it.
+          .sort(
+            (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+          )
           .slice(skip, take === undefined ? undefined : skip + take)
-          .map((row) => this.hydrate(row)),
+          .map((row) => ({
+            ...this.hydrate(row),
+            branchConfigs: include?.branchConfigs
+              ? this.branchConfigs.filter(
+                  (config) =>
+                    config.testSeriesId === row.id &&
+                    config.branchId === include.branchConfigs?.where.branchId,
+                )
+              : [],
+          })),
       ),
 
-    count: ({
-      where = {},
-    }: { where?: { programCode?: string; prerequisiteSeriesId?: string } } = {}) =>
+    // The same `where` the rows came off, or a pager promises pages nobody can open.
+    count: ({ where = {} }: { where?: FakeSeriesWhere } = {}) =>
       Promise.resolve(
-        this.series.filter(
-          (row) =>
-            (where.programCode === undefined || row.programCode === where.programCode) &&
-            (where.prerequisiteSeriesId === undefined ||
-              row.prerequisiteSeriesId === where.prerequisiteSeriesId),
-        ).length,
+        this.series.filter((row) => matchesSeries(row, where, this.branchConfigs)).length,
       ),
 
     create: ({ data }: { data: Partial<FakeSeriesRow> & { name: string } }) => {
@@ -3248,10 +3272,19 @@ export class FakeAccessPrisma {
       return Promise.resolve(row ? { ...row } : null);
     },
 
-    findMany: ({ where = {} }: { where?: { testSeriesId?: string | { in: string[] } } } = {}) =>
+    findMany: ({
+      where = {},
+    }: {
+      where?: { branchId?: string | { in: string[] }; testSeriesId?: string | { in: string[] } };
+    } = {}) =>
       Promise.resolve(
         this.branchConfigs
-          .filter((config) => matchesKey(config.testSeriesId, where.testSeriesId))
+          // `branchId` is the whole point of this table: ignoring it makes one branch read as all.
+          .filter(
+            (config) =>
+              matchesKey(config.branchId, where.branchId) &&
+              matchesKey(config.testSeriesId, where.testSeriesId),
+          )
           .map((config) => ({
             ...config,
             branch: this.branchRef(config.branchId),
@@ -3277,11 +3310,14 @@ export class FakeAccessPrisma {
       where,
       data,
     }: {
-      where: { testSeriesId: string };
+      where: { branchId?: string; testSeriesId?: string | { in: string[] } };
       data: Record<string, unknown>;
     }) => {
+      // Without `branchId` a write meant for one branch lands on every branch's row.
       const rows = this.branchConfigs.filter(
-        (config) => config.testSeriesId === where.testSeriesId,
+        (config) =>
+          (where.branchId === undefined || config.branchId === where.branchId) &&
+          matchesKey(config.testSeriesId, where.testSeriesId),
       );
       for (const row of rows) Object.assign(row, data);
       return Promise.resolve({ count: rows.length });
@@ -3395,6 +3431,49 @@ export class FakeAccessPrisma {
       examStage: stage ? { id: stage.id, name: stage.name, exam: { code: 'SSC CGL' } } : null,
     };
   }
+}
+
+/** The series filters the fakes answer, including the branch switch the branch-side list narrows by. */
+interface FakeSeriesWhere {
+  AND?: FakeSeriesWhere[];
+  NOT?: FakeSeriesWhere;
+  programCode?: string;
+  prerequisiteSeriesId?: string;
+  kind?: TestSeriesKind;
+  name?: { contains: string; mode?: string };
+  examStageId?: { in: string[] };
+  branchConfigs?: { some: { branchId: string; enabled: boolean } };
+}
+
+function matchesSeries(
+  row: FakeSeriesRow,
+  where: FakeSeriesWhere,
+  configs: readonly FakeBranchConfigRow[],
+): boolean {
+  if (where.AND && !where.AND.every((part) => matchesSeries(row, part, configs))) return false;
+  if (where.NOT && matchesSeries(row, where.NOT, configs)) return false;
+  if (where.programCode !== undefined && row.programCode !== where.programCode) return false;
+  if (
+    where.prerequisiteSeriesId !== undefined &&
+    row.prerequisiteSeriesId !== where.prerequisiteSeriesId
+  ) {
+    return false;
+  }
+  if (where.kind !== undefined && row.kind !== where.kind) return false;
+  if (where.name && !row.name.toLowerCase().includes(where.name.contains.toLowerCase())) {
+    return false;
+  }
+  if (where.examStageId && !where.examStageId.in.includes(row.examStageId ?? '')) return false;
+  if (where.branchConfigs) {
+    const { branchId, enabled } = where.branchConfigs.some;
+    return configs.some(
+      (config) =>
+        config.testSeriesId === row.id &&
+        config.branchId === branchId &&
+        config.enabled === enabled,
+    );
+  }
+  return true;
 }
 
 export function makeBranchConfig(

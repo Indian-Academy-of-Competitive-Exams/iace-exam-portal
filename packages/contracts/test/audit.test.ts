@@ -123,6 +123,7 @@ describe('audit vocabulary', () => {
       'TEST',
       'TEST_SERIES',
       'BASE_CONFIG',
+      'BRANCH_TEST_CONFIG',
       'EXAM_TAXONOMY',
       'TAXONOMY_SUBJECT',
       'TAXONOMY_TOPIC',

@@ -255,6 +255,39 @@ export const branchTestConfigRowSchema = branchTestConfigSchema.extend({
 });
 export type BranchTestConfigRow = z.infer<typeof branchTestConfigRowSchema>;
 
+/** One series as ONE branch sees it: what it is, and whether this branch runs it. */
+export const branchSeriesRowSchema = z.object({
+  testSeriesId: z.string(),
+  name: z.string(),
+  kind: testSeriesKindSchema,
+  examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
+  testCount: z.number().int(),
+  /** The branch's own switch. A series with no row for it reads as off, never as a third state. */
+  enabled: z.boolean(),
+});
+export type BranchSeriesRow = z.infer<typeof branchSeriesRowSchema>;
+
+export const branchSeriesListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  examStageId: csvIdQuery(),
+  kind: testSeriesKindSchema.optional(),
+  /** Absent is every series; the two values narrow to what this branch does or does not run. */
+  enabled: optionalBooleanQuery(),
+});
+export type BranchSeriesListQuery = z.infer<typeof branchSeriesListQuerySchema>;
+export type BranchSeriesListQueryInput = z.input<typeof branchSeriesListQuerySchema>;
+
+/** The whole draft in one write, so one confirm on screen is one request and one cache bust. */
+export const BRANCH_SERIES_DRAFT_MAX = 500;
+export const setBranchSeriesSchema = z.object({
+  changes: z
+    .array(z.object({ testSeriesId: z.string(), enabled: z.boolean() }))
+    .min(1, 'Nothing to save')
+    .max(BRANCH_SERIES_DRAFT_MAX, `Save at most ${BRANCH_SERIES_DRAFT_MAX} changes at a time`),
+});
+export type SetBranchSeriesInput = z.input<typeof setBranchSeriesSchema>;
+export type SetBranchSeriesBody = z.infer<typeof setBranchSeriesSchema>;
+
 /** The switch alone: a branch runs a series indefinitely, and WHEN an exam happens is the test's. */
 export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().optional() });
 export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;

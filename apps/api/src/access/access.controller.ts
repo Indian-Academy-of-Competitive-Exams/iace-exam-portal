@@ -21,6 +21,8 @@ import {
   grantSeriesSchema,
   PERMISSION_LEVELS,
   programListQuerySchema,
+  branchSeriesListQuerySchema,
+  setBranchSeriesSchema,
   testSeriesListQuerySchema,
   unlockRequestListQuerySchema,
   updateBranchTestConfigSchema,
@@ -37,6 +39,9 @@ import {
   type SeriesUnlockRequestRow,
   type StudentGrantRow,
   type StudentSeriesAccess,
+  type BranchSeriesListQuery,
+  type BranchSeriesRow,
+  type SetBranchSeriesBody,
   type TestSeriesListQuery,
   type TestSeriesSummary,
   type UnlockRequestListQuery,
@@ -46,6 +51,7 @@ import {
 } from '@iace/contracts';
 import {
   Actors,
+  assertBranchInScope,
   branchScopeOf,
   CurrentUser,
   RequiresFeature,
@@ -150,8 +156,11 @@ export class TestSeriesController {
 
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/branches')
-  branches(@Param('id') id: string): Promise<BranchTestConfigRow[]> {
-    return this.series.branchConfigs(id);
+  branches(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<BranchTestConfigRow[]> {
+    return this.series.branchConfigs(id, branchScopeOf(user));
   }
 
   /** The same switch, thrown for every branch at once. */
@@ -161,8 +170,9 @@ export class TestSeriesController {
   updateEveryBranch(
     @Param('id') id: string,
     @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<BranchTestConfigRow[]> {
-    return this.series.updateEveryBranchConfig(id, body);
+    return this.series.updateEveryBranchConfig(id, body, branchScopeOf(user));
   }
 
   /** Which branches run it, and when. A separate key: scheduling is its own job. */
@@ -173,8 +183,39 @@ export class TestSeriesController {
     @Param('id') id: string,
     @Param('branchId') branchId: string,
     @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<BranchTestConfigRow> {
-    return this.series.updateBranchConfig(id, branchId, body);
+    return this.series.updateBranchConfig(id, branchId, body, branchScopeOf(user));
+  }
+}
+
+/** One branch's series, from the branch's side. The rows are `access`'s, so the controller is too. */
+@Controller('admin/branches/:branchId/test-series')
+@Actors(ActorTypes.ADMIN)
+export class BranchSeriesController {
+  constructor(private readonly series: TestSeriesService) {}
+
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get()
+  list(
+    @Param('branchId') branchId: string,
+    @Query(new ZodQuery(branchSeriesListQuerySchema)) query: BranchSeriesListQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Paginated<BranchSeriesRow>> {
+    assertBranchInScope(branchScopeOf(user), branchId);
+    return this.series.seriesForBranch(branchId, query);
+  }
+
+  @Audit(AUDIT_FEATURE.BRANCH_TEST_CONFIG, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch()
+  set(
+    @Param('branchId') branchId: string,
+    @Body(new ZodBody(setBranchSeriesSchema)) body: SetBranchSeriesBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ changed: number }> {
+    assertBranchInScope(branchScopeOf(user), branchId);
+    return this.series.setSeriesForBranch(branchId, body).then((changed) => ({ changed }));
   }
 }
 
