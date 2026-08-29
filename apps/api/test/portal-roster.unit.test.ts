@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { EVERY_BRANCH } from '../src/common/security';
 import { BRANCH_TYPE, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
 import { normaliseHeader, readCsvTable } from '../src/common/importing';
 import { planStudentImport, type ImportContext } from '../src/imports/student-import';
@@ -11,8 +12,12 @@ import {
 import { roster } from './support/fakes';
 
 const context = (): ImportContext => ({
+  scope: EVERY_BRANCH,
   existingByMobile: new Map([
-    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
+    [
+      '9000000001',
+      { id: 'stu_existing', fullName: 'Already Here', hasPin: true, currentBranchId: null },
+    ],
   ]),
   branchByName: new Map([['AMEERPET', { id: 'br_ameerpet', type: BRANCH_TYPE.PHYSICAL }]]),
   examCodes: new Set(['SSC CGL']),

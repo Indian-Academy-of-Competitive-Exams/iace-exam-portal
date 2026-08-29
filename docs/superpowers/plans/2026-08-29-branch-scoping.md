@@ -154,6 +154,13 @@ row-level error the preview renders.
   the file can change between the two.
 - A super admin and an `allBranches` admin import exactly as they do today.
 
+**One accepted disclosure, deliberate rather than discovered.** The scope check runs AFTER "there is
+no active branch called X" and after the student-type pairing check, so a branch admin can learn
+every active branch's name, and its type, with a probe file. That contradicts the global "out of
+scope reads as missing" — and it is what this task's own criterion demands, because telling somebody
+their own roster names a branch that does not exist would be a lie. Branch names are on the students
+they already manage; the ids are not disclosed.
+
 This is the task where a rule that lets one row through undoes the whole boundary, which is why it
 carries two rounds despite being small.
 

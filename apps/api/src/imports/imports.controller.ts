@@ -29,6 +29,7 @@ import {
 } from '@iace/contracts';
 import {
   Actors,
+  branchScopeOf,
   CurrentUser,
   RequiresFeature,
   RequiresSuperAdmin,
@@ -76,8 +77,11 @@ export class ImportsController {
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(this.bufferOf(file));
+  preview(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(this.bufferOf(file), branchScopeOf(user));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -88,7 +92,7 @@ export class ImportsController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
-    return this.imports.commitStudents(this.bufferOf(file), user.id);
+    return this.imports.commitStudents(this.bufferOf(file), user.id, branchScopeOf(user));
   }
 
   /** The scholarship sample, generated from the same two columns the parser matches on. */
@@ -107,10 +111,11 @@ export class ImportsController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewScholarship(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('seriesId') seriesId: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<ScholarshipImportPlan> {
-    return this.imports.previewScholarship(seriesId, this.bufferOf(file));
+    return this.imports.previewScholarship(seriesId, this.bufferOf(file), branchScopeOf(user));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -122,7 +127,12 @@ export class ImportsController {
     @Param('seriesId') seriesId: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<ScholarshipImportResult> {
-    return this.imports.commitScholarship(seriesId, this.bufferOf(file), user.id);
+    return this.imports.commitScholarship(
+      seriesId,
+      this.bufferOf(file),
+      user.id,
+      branchScopeOf(user),
+    );
   }
 
   /** Super admin, as the old fire-and-forget trigger was: it pulls a whole roster from elsewhere. */

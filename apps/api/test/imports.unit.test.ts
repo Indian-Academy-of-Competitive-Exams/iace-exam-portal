@@ -1,3 +1,4 @@
+import { EVERY_BRANCH } from '../src/common/security';
 import assert from 'node:assert/strict';
 import { BRANCH_TYPE, IMPORT_MAX_ROWS } from '@iace/contracts';
 import { describe, it } from 'node:test';
@@ -109,10 +110,22 @@ describe('readCsvTable', () => {
 const context = (over: Partial<ImportContext> = {}): ImportContext => ({
   existingByMobile: new Map([
     // Chose their own PIN already — an import must never reset it.
-    ['9000000001', { id: 'stu_existing', fullName: 'Already Here', hasPin: true }],
+    [
+      '9000000001',
+      {
+        id: 'stu_existing',
+        fullName: 'Already Here',
+        hasPin: true,
+        currentBranchId: 'br_ameerpet',
+      },
+    ],
     // Added by an admin and never signed in: this one still needs a starting PIN.
-    ['9000000002', { id: 'stu_no_pin', fullName: null, hasPin: false }],
+    [
+      '9000000002',
+      { id: 'stu_no_pin', fullName: null, hasPin: false, currentBranchId: 'br_ameerpet' },
+    ],
   ]),
+  scope: EVERY_BRANCH,
   branchByName: new Map([
     ['AMEERPET', { id: 'br_ameerpet', type: BRANCH_TYPE.PHYSICAL }],
     ['ONLINE', { id: 'br_online', type: BRANCH_TYPE.VIRTUAL }],
@@ -444,5 +457,70 @@ describe('how big a file may be', () => {
     assert.deepEqual(plan.rows, [], 'nothing should be planned');
     assert.match(plan.fileErrors[0] ?? '', new RegExp(`${IMPORT_MAX_ROWS + 1} rows`));
     assert.match(plan.fileErrors[0] ?? '', /split it/);
+  });
+});
+
+/** Two centres both suit an OFFLINE student, so only the scope can be what refuses a row. */
+describe('planStudentImport — the branches the admin uploading may write into', () => {
+  const held = { all: false, branchIds: ['br_ameerpet'] } as const;
+
+  /** The failure this prevents: a roster placing students at somebody else's centre. */
+  const twoCentres = () =>
+    context({
+      scope: held,
+      branchByName: new Map([
+        ['AMEERPET', { id: 'br_ameerpet', type: BRANCH_TYPE.PHYSICAL }],
+        ['KUKATPALLY', { id: 'br_kukatpally', type: BRANCH_TYPE.PHYSICAL }],
+      ]),
+    });
+
+  it('fails the row naming a branch the admin does not hold, and keeps the rest', () => {
+    const plan = planStudentImport(
+      readCsvTable(
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+          '9876543210,Asha,OFFLINE,KUKATPALLY,SSC,,\n' +
+          '9876543211,Bela,OFFLINE,AMEERPET,SSC,,',
+      ),
+      twoCentres(),
+    );
+
+    assert.ok(plan.rows[0]?.errors.some((e) => e.includes('not one of your branches')));
+    assert.equal(plan.rows[1]?.errors.length, 0);
+    assert.equal(plan.summary.invalid, 1);
+  });
+
+  /** A row matching somebody else's student would MOVE them into this admin's branch. */
+  it('fails a row whose number belongs to a student at another branch', () => {
+    const elsewhere = context({
+      ...twoCentres(),
+      existingByMobile: new Map([
+        [
+          '9000000001',
+          { id: 'stu_elsewhere', fullName: 'Theirs', hasPin: true, currentBranchId: 'br_other' },
+        ],
+      ]),
+    });
+
+    const plan = planStudentImport(
+      readCsvTable(
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+          '9000000001,Renamed,OFFLINE,AMEERPET,SSC,,',
+      ),
+      elsewhere,
+    );
+
+    assert.ok(plan.rows[0]?.errors.some((e) => e.includes('another branch')));
+  });
+
+  it('lets an admin who reaches every branch write any of them', () => {
+    const plan = planStudentImport(
+      readCsvTable(
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+          '9876543210,Asha,ONLINE,ONLINE,SSC,,',
+      ),
+      context(),
+    );
+
+    assert.deepEqual(plan.rows[0]?.errors, []);
   });
 });

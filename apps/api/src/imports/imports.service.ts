@@ -25,6 +25,8 @@ import { mobilesIn, planStudentImport, type ImportContext } from './student-impo
 import { fetchPortalRoster, type PortalFetch } from './portal-roster';
 import { planScholarshipImport } from './scholarship-import';
 import { StudentGrantsService } from '../access';
+import { EVERY_BRANCH, type BranchScope } from '../common/security';
+
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
 import { toDateColumn } from '../common/time/institute-day';
@@ -57,21 +59,31 @@ export class ImportsService {
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
-  async previewStudents(file: Buffer): Promise<StudentImportPlan> {
-    return this.planStudents(file);
+  async previewStudents(file: Buffer, scope: BranchScope): Promise<StudentImportPlan> {
+    return this.planStudents(file, scope);
   }
 
   /**
    * Applies the plan. Re-plans from the same input rather than trusting a preview the client sends
    * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
    */
-  async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
-    const plan = await this.planStudents(file);
+  async commitStudents(
+    file: Buffer,
+    actorId: string,
+    scope: BranchScope,
+  ): Promise<StudentImportResult> {
+    // Re-judged against the scope on COMMIT too: a preview is not a permission check.
+    const plan = await this.planStudents(file, scope);
     return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
   }
 
   /** Writes nothing. The series has to exist, so a stale page cannot enrol into a deleted one. */
-  async previewScholarship(seriesId: string, file: Buffer): Promise<ScholarshipImportPlan> {
+  async previewScholarship(
+    seriesId: string,
+    file: Buffer,
+    scope: BranchScope,
+  ): Promise<ScholarshipImportPlan> {
+    assertReachesEveryBranch(scope);
     await this.requireSeries(seriesId);
     return this.planScholarship(file);
   }
@@ -81,7 +93,9 @@ export class ImportsService {
     seriesId: string,
     file: Buffer,
     actorId: string,
+    scope: BranchScope,
   ): Promise<ScholarshipImportResult> {
+    assertReachesEveryBranch(scope);
     await this.requireSeries(seriesId);
     const plan = await this.planScholarship(file);
     const logId = await this.openRun(
@@ -299,14 +313,17 @@ export class ImportsService {
     });
   }
 
-  private async planStudents(file: Buffer): Promise<StudentImportPlan> {
+  private async planStudents(file: Buffer, scope: BranchScope): Promise<StudentImportPlan> {
     const table = await readUploadedTable(file);
-    return planStudentImport(table, await this.contextFor(table));
+    return planStudentImport(table, await this.contextFor(table, scope));
   }
 
   /** A failed fetch is a SOURCE error, never a row error — there are no rows to blame. */
   private async planPortal(fetched: PortalFetch): Promise<StudentImportPlan> {
-    const plan = planStudentImport(fetched.table, await this.contextFor(fetched.table));
+    const plan = planStudentImport(
+      fetched.table,
+      await this.contextFor(fetched.table, EVERY_BRANCH),
+    );
     return { ...plan, fileErrors: [...fetched.errors, ...plan.fileErrors] };
   }
 
@@ -330,7 +347,7 @@ export class ImportsService {
    * Loads only the mobiles this file refers to rather than the whole table, so a 5,000-row
    * roster is one bounded query and not a table scan per line.
    */
-  private async contextFor(table: CsvTable): Promise<ImportContext> {
+  private async contextFor(table: CsvTable, scope: BranchScope): Promise<ImportContext> {
     const mobiles = mobilesIn(table);
 
     // Whole small catalogs: cheaper than a lookup per row, and a roster repeats a branch.
@@ -345,7 +362,13 @@ export class ImportsService {
         ? []
         : this.prisma.student.findMany({
             where: { mobile: { in: mobiles }, deletedAt: null },
-            select: { id: true, mobile: true, fullName: true, pinHash: true },
+            select: {
+              id: true,
+              mobile: true,
+              fullName: true,
+              pinHash: true,
+              currentBranchId: true,
+            },
           }),
     ]);
 
@@ -353,7 +376,12 @@ export class ImportsService {
       existingByMobile: new Map(
         students.map((student) => [
           student.mobile,
-          { id: student.id, fullName: student.fullName, hasPin: student.pinHash !== null },
+          {
+            id: student.id,
+            fullName: student.fullName,
+            hasPin: student.pinHash !== null,
+            currentBranchId: student.currentBranchId,
+          },
         ]),
       ),
       branchByName: new Map(
@@ -361,6 +389,7 @@ export class ImportsService {
       ),
       examCodes: new Set(exams.map((exam) => exam.code)),
       programCodes: new Set(programs.map((program) => program.code)),
+      scope,
     };
   }
 
@@ -460,4 +489,13 @@ function profileData(row: StudentImportRow) {
     ...(p.address === null ? {} : { address: p.address }),
   };
   return Object.keys(data).length === 0 ? null : data;
+}
+
+const SCHOLARSHIP_NEEDS_EVERY_BRANCH =
+  'A scholarship import grants access by mobile number alone, to students at any branch, so only an admin who reaches every branch can run one.';
+
+/** It grants by MOBILE alone, through `grantMany`, which never looks a student up to scope them. */
+function assertReachesEveryBranch(scope: BranchScope): void {
+  if (scope.all) return;
+  throw new AppException(ErrorCodes.FORBIDDEN, SCHOLARSHIP_NEEDS_EVERY_BRANCH);
 }

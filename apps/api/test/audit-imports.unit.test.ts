@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { AppException, ErrorCodes } from '@iace/contracts';
+import { EVERY_BRANCH } from '../src/common/security';
 import {
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -132,7 +134,7 @@ describe('ImportsService — a preview writes nothing at all', () => {
       fakeGrants(),
     );
 
-    await service.previewStudents(Buffer.from(roster('mobile\n9876543210')));
+    await service.previewStudents(Buffer.from(roster('mobile\n9876543210')), EVERY_BRANCH);
 
     assert.equal(prisma.importLogs.length, 0);
     assert.equal(storage.objects.size, 0);
@@ -168,6 +170,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     const result = await service.commitStudents(
       Buffer.from(roster('mobile,fullName\n9876543210,Asha\n9000000001,Renamed\nnot-a-number,Bad')),
       'adm_1',
+      EVERY_BRANCH,
     );
 
     assert.deepEqual(
@@ -228,7 +231,8 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     );
 
     await assert.rejects(
-      () => service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1'),
+      () =>
+        service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1', EVERY_BRANCH),
       /argon2 unavailable/,
     );
 
@@ -261,6 +265,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
         service.commitStudents(
           Buffer.from(roster('mobile\n9000000001\n9000000002\n9000000003')),
           'adm_1',
+          EVERY_BRANCH,
         ),
       /student write failed/,
     );
@@ -301,7 +306,11 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       fakeGrants(),
     );
 
-    const result = await service.commitStudents(Buffer.from(roster('mobile\n9876543210')), 'adm_1');
+    const result = await service.commitStudents(
+      Buffer.from(roster('mobile\n9876543210')),
+      'adm_1',
+      EVERY_BRANCH,
+    );
 
     assert.equal(result.created, 1);
     assert.equal(
@@ -477,5 +486,85 @@ describe('QuestionImportService.commit — the status the run lands in', () => {
     await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.ACTIVE);
 
     assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
+  });
+});
+
+describe('ImportsService — the branches the admin uploading may write into', () => {
+  const held = { all: false, branchIds: ['br_online'] } as const;
+
+  const serviceOn = (prisma: ReturnType<typeof importPrisma>) =>
+    new ImportsService(
+      prisma.asService(),
+      fakeAuth(),
+      new FakeStorage() as never,
+      new AuditService(prisma.asService(), new FakeStorage() as never),
+      fakeGrants(),
+    );
+
+  /** The failure this prevents: a scope reaching the planner on preview but not on commit. */
+  it('writes the row at a branch it holds and refuses the one it does not', async () => {
+    const prisma = new FakePrisma(
+      [],
+      [],
+      [
+        makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL }),
+        makeBranch({ id: 'br_other', name: 'KUKATPALLY', type: BRANCH_TYPE.VIRTUAL }),
+      ],
+    );
+
+    const result = await serviceOn(prisma).commitStudents(
+      Buffer.from(
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+          '9876543210,Asha,ONLINE,ONLINE,SSC,,\n' +
+          '9876543211,Bela,ONLINE,KUKATPALLY,SSC,,',
+      ),
+      'adm_1',
+      held,
+    );
+
+    assert.equal(result.created, 1);
+    assert.deepEqual(
+      prisma.students.map((student) => student.mobile),
+      ['9876543210'],
+    );
+  });
+
+  it('shows the same refusal on preview', async () => {
+    const prisma = new FakePrisma(
+      [],
+      [],
+      [makeBranch({ id: 'br_other', name: 'KUKATPALLY', type: BRANCH_TYPE.VIRTUAL })],
+    );
+
+    const plan = await serviceOn(prisma).previewStudents(
+      Buffer.from(
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+          '9876543211,Bela,ONLINE,KUKATPALLY,SSC,,',
+      ),
+      held,
+    );
+
+    assert.equal(plan.summary.invalid, 1);
+    assert.ok(plan.rows[0]?.errors.some((e) => e.includes('not one of your branches')));
+  });
+
+  /** A scholarship intake grants by mobile alone, so a scoped admin could reach anybody's student. */
+  it('refuses a scholarship intake from an admin who does not reach every branch', async () => {
+    const prisma = importPrisma();
+
+    for (const run of [
+      () => serviceOn(prisma).previewScholarship('srs_1', Buffer.from('Mobile\n9876543210'), held),
+      () =>
+        serviceOn(prisma).commitScholarship(
+          'srs_1',
+          Buffer.from('Mobile\n9876543210'),
+          'adm_1',
+          held,
+        ),
+    ]) {
+      const error = await run().catch((e: unknown) => e);
+      assert.ok(AppException.is(error));
+      assert.equal(error.code, ErrorCodes.FORBIDDEN);
+    }
   });
 });
