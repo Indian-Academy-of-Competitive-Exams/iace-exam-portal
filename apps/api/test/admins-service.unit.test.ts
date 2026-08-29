@@ -361,3 +361,21 @@ describe('AdminsService — setActive', () => {
     );
   });
 });
+
+describe('AdminsService — the branches a token carries', () => {
+  it('reads exactly the branches an admin was given', async () => {
+    const { service } = build([
+      makeAdminRow({ id: 'adm_1', branches: [{ branchId: 'br_1' }, { branchId: 'br_2' }] }),
+      makeAdminRow({ id: 'adm_2', branches: [{ branchId: 'br_9' }] }),
+    ]);
+
+    assert.deepEqual(await service.branchIdsFor('adm_1'), ['br_1', 'br_2']);
+  });
+
+  /** The failure this prevents: "no branches yet" arriving anywhere as "every branch". */
+  it('gives an admin with none an empty list', async () => {
+    const { service } = build([makeAdminRow({ id: 'adm_1', branches: [] })]);
+
+    assert.deepEqual(await service.branchIdsFor('adm_1'), []);
+  });
+});

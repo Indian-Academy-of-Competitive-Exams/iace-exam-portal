@@ -238,7 +238,7 @@ export class AuthService {
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
       isActive: admin.isActive,
-      permissions: await this.adminGrants(admin),
+      ...(await this.adminGrants(admin)),
     };
 
     return { tokens: await this.issue(identity, device), identity };
@@ -283,13 +283,7 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: claims.sid,
-      ...(identity.actor === ActorTypes.ADMIN
-        ? {
-            isSuperAdmin: identity.isSuperAdmin,
-            isActive: identity.isActive,
-            permissions: identity.permissions,
-          }
-        : {}),
+      ...adminClaims(identity),
     });
 
     return { accessToken, refreshToken: nextRefresh, expiresInSec: this.tokens.accessTtlSec };
@@ -323,13 +317,7 @@ export class AuthService {
       sub: identity.id,
       actor: identity.actor,
       sid: sessionId,
-      ...(identity.actor === ActorTypes.ADMIN
-        ? {
-            isSuperAdmin: identity.isSuperAdmin,
-            isActive: identity.isActive,
-            permissions: identity.permissions,
-          }
-        : {}),
+      ...adminClaims(identity),
     });
     const refreshToken = await this.tokens.signRefresh({
       sub: identity.id,
@@ -379,17 +367,38 @@ export class AuthService {
       fullName: admin.fullName,
       isSuperAdmin: admin.isSuperAdmin,
       isActive: admin.isActive,
-      permissions: await this.adminGrants(admin),
+      ...(await this.adminGrants(admin)),
     };
   }
 
-  /** The grant map a token carries. */
+  /** What a token carries about one admin. A super admin's grants are empty and their branches unread. */
   private async adminGrants(admin: {
     id: string;
     isSuperAdmin: boolean;
     isActive: boolean;
-  }): Promise<AdminPermissions> {
-    if (admin.isSuperAdmin || !admin.isActive) return {};
-    return this.admins.permissionsFor(admin.id);
+    allBranches: boolean;
+  }): Promise<{ permissions: AdminPermissions; allBranches: boolean; branchIds: string[] }> {
+    // A deactivated admin reaches nothing, scope included, not merely no permissions.
+    if (!admin.isActive) return { permissions: {}, allBranches: false, branchIds: [] };
+    if (admin.isSuperAdmin) {
+      return { permissions: {}, allBranches: admin.allBranches, branchIds: [] };
+    }
+    const [permissions, branchIds] = await Promise.all([
+      this.admins.permissionsFor(admin.id),
+      this.admins.branchIdsFor(admin.id),
+    ]);
+    return { permissions, allBranches: admin.allBranches, branchIds };
   }
+}
+
+/** What an admin token carries beyond the subject. A student's carries none of it. */
+function adminClaims(identity: AuthIdentity) {
+  if (identity.actor !== ActorTypes.ADMIN) return {};
+  return {
+    isSuperAdmin: identity.isSuperAdmin,
+    isActive: identity.isActive,
+    permissions: identity.permissions,
+    allBranches: identity.allBranches,
+    branchIds: identity.branchIds,
+  };
 }

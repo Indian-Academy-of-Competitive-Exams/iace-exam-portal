@@ -87,6 +87,8 @@ describe('JwtAuthGuard', () => {
       actor?: 'STUDENT' | 'ADMIN';
       isSuperAdmin?: boolean;
       permissions?: AdminPermissions;
+      allBranches?: boolean;
+      branchIds?: string[];
     } = {},
   ) {
     const sub = claims.sub ?? SUBJECT;
@@ -99,6 +101,8 @@ describe('JwtAuthGuard', () => {
       sid,
       ...(claims.isSuperAdmin === undefined ? {} : { isSuperAdmin: claims.isSuperAdmin }),
       ...(claims.permissions === undefined ? {} : { permissions: claims.permissions }),
+      ...(claims.allBranches === undefined ? {} : { allBranches: claims.allBranches }),
+      ...(claims.branchIds === undefined ? {} : { branchIds: claims.branchIds }),
     });
     return { token, sid, sub, actor };
   }
@@ -157,6 +161,8 @@ describe('JwtAuthGuard', () => {
       isSuperAdmin: false,
       isActive: true,
       permissions: {},
+      allBranches: false,
+      branchIds: [],
     } satisfies AuthenticatedUser);
   });
 
@@ -226,6 +232,53 @@ describe('JwtAuthGuard', () => {
     });
   });
 
+  /** The whole point of the task: what was minted is what the request is judged on. */
+  it('carries an admin branch scope through to the request', async () => {
+    const ctx = build();
+    const { token } = await signIn(ctx, {
+      sub: 'adm_1',
+      actor: ActorTypes.ADMIN,
+      allBranches: false,
+      branchIds: ['br_1', 'br_2'],
+    });
+    const { context, request } = probe(ProbeController.prototype.plainRoute, authed(token));
+
+    await ctx.guard.canActivate(context);
+
+    const user = request.user as AuthenticatedUser;
+    assert.equal(user.allBranches, false);
+    assert.deepEqual(user.branchIds, ['br_1', 'br_2']);
+  });
+
+  /** Asserted in BOTH directions, or a hardcoded `false` would narrow every admin unnoticed. */
+  it('carries an admin who holds every branch through unnarrowed', async () => {
+    const ctx = build();
+    const { token } = await signIn(ctx, {
+      sub: 'adm_1',
+      actor: ActorTypes.ADMIN,
+      allBranches: true,
+      branchIds: [],
+    });
+    const { context, request } = probe(ProbeController.prototype.plainRoute, authed(token));
+
+    await ctx.guard.canActivate(context);
+
+    assert.equal((request.user as AuthenticatedUser).allBranches, true);
+  });
+
+  /** The failure this prevents: a token minted before these claims reaching every branch. */
+  it('reads an admin token minted before branch claims as reaching no branch', async () => {
+    const ctx = build();
+    const { token } = await signIn(ctx, { sub: 'adm_1', actor: ActorTypes.ADMIN });
+    const { context, request } = probe(ProbeController.prototype.plainRoute, authed(token));
+
+    await ctx.guard.canActivate(context);
+
+    const user = request.user as AuthenticatedUser;
+    assert.equal(user.allBranches, false);
+    assert.deepEqual(user.branchIds, []);
+  });
+
   it('does not look up a session for a @Public route', async () => {
     // Public routes must work before anyone has a session at all — signup would
     // be unreachable otherwise.
@@ -243,7 +296,16 @@ describe('JwtAuthGuard', () => {
 describe('ActorGuard', () => {
   const guard = new ActorGuard(new Reflector());
   const user = (actor: 'STUDENT' | 'ADMIN'): { user: AuthenticatedUser } => ({
-    user: { id: 'x', actor, sessionId: 's', isSuperAdmin: false, isActive: true, permissions: {} },
+    user: {
+      id: 'x',
+      actor,
+      sessionId: 's',
+      isSuperAdmin: false,
+      isActive: true,
+      permissions: {},
+      allBranches: false,
+      branchIds: [],
+    },
   });
 
   it('allows a route that names no actor', async () => {
@@ -316,6 +378,8 @@ describe('FeaturePermissionGuard', () => {
       id: 'adm',
       actor: ActorTypes.ADMIN,
       sessionId: 's',
+      allBranches: true,
+      branchIds: [],
       isSuperAdmin,
       isActive,
       permissions,
@@ -423,6 +487,8 @@ describe('FeaturePermissionGuard', () => {
         isSuperAdmin: true,
         isActive: true,
         permissions: { [FEATURE_KEYS.QUESTION_MANAGEMENT]: PERMISSION_LEVELS.WRITE },
+        allBranches: false,
+        branchIds: [],
       } satisfies AuthenticatedUser,
     });
 

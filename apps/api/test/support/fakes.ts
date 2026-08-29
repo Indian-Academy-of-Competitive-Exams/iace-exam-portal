@@ -412,6 +412,8 @@ export interface FakeAdmin {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
+  /** Every branch, said out loud. False with no `AdminBranch` rows reaches none. */
+  allBranches: boolean;
 }
 
 export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
@@ -447,6 +449,7 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
     fullName: 'Super Admin',
     isSuperAdmin: true,
     isActive: true,
+    allBranches: false,
     ...overrides,
   };
 }
@@ -2301,17 +2304,22 @@ export const NO_DEVICE: DeviceContext = {
   userAgent: null,
 };
 
-/**
- * The admins facade, as far as auth is concerned: one method returning the grant map that goes
- * into a token.
- */
+/** The admins facade as auth sees it: the grant map and the branches a token carries. */
 export class FakeAdminsService {
   readonly calls: string[] = [];
-  constructor(private readonly grants: Record<string, AdminPermissions> = {}) {}
+  constructor(
+    private readonly grants: Record<string, AdminPermissions> = {},
+    private readonly branches: Record<string, string[]> = {},
+  ) {}
 
   permissionsFor(adminId: string): Promise<AdminPermissions> {
     this.calls.push(adminId);
     return Promise.resolve(this.grants[adminId] ?? {});
+  }
+
+  branchIdsFor(adminId: string): Promise<string[]> {
+    this.calls.push(adminId);
+    return Promise.resolve(this.branches[adminId] ?? []);
   }
 }
 
@@ -2351,6 +2359,12 @@ export class FakeAdminsPrisma {
     readonly admins: FakeAdminRow[] = [],
     readonly branches: FakeBranch[] = [],
   ) {}
+
+  /** The join the scope is read off, so the query feeding it is exercised rather than stubbed. */
+  readonly adminBranch = {
+    findMany: ({ where }: { where: { adminId: string } }) =>
+      Promise.resolve(this.admins.find((row) => row.id === where.adminId)?.branches ?? []),
+  };
 
   readonly branch = {
     count: ({ where }: { where: { id: { in: string[] } } }) =>

@@ -158,6 +158,9 @@ export const adminIdentitySchema = z.object({
   isActive: z.boolean(),
   /** By feature key, and only ever read together with `isSuperAdmin` — a super admin's is empty. */
   permissions: adminPermissionsSchema,
+  /** Every branch, said out loud. False with an empty `branchIds` reaches none, and means it. */
+  allBranches: z.boolean(),
+  branchIds: z.array(z.string()),
 });
 export type AdminIdentity = z.infer<typeof adminIdentitySchema>;
 
@@ -194,6 +197,9 @@ export const accessTokenClaimsSchema = z.object({
   /** Carried in the token, so the guard costs nothing at request time. A grant
    *  change takes effect on the next refresh (<= the access TTL). */
   permissions: adminPermissionsSchema.optional(),
+  /** Like `permissions`: moves on the next refresh, and absent reads as NO branch. */
+  allBranches: z.boolean().optional(),
+  branchIds: z.array(z.string()).optional(),
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
 

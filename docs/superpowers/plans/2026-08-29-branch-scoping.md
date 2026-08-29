@@ -20,6 +20,11 @@ writes the tests once, from the criteria.
   in a commit message, a comment or a report.
 - Super admins bypass; `allBranches: true` bypasses.
 - No new date helper; instants stay instants (`task-constraints.md`, Dates).
+- **No backfill migration, and here is why.** `Admin.allBranches` defaults to false and the branch
+  multi-select does not exist until Task 2, so every non-super admin in a database today has no
+  branches and would see an empty roster the moment Task 3 lands. This deployment has only super
+  admins, who bypass, so nobody is affected — confirmed 2026-08-29. **If a non-super admin exists
+  before this ships, they are locked out and a backfill is needed first.**
 
 ---
 
@@ -50,7 +55,11 @@ Exemplar: `apps/api/src/auth/guards/feature-permission.guard.ts` — the shape a
 - An admin with `allBranches: false` and no branches resolves to none — **never to all**. This is
   the failure `allBranches` exists to prevent, and its comment says so.
 - Asking the resolver about a branch outside scope refuses as missing, not as forbidden.
-- An access token minted before this task still works, and reads as unnarrowed.
+- An access token minted before this task still works, and reads as reaching NO branch — never as
+  unnarrowed. Fail closed: "none given" read as "all of them" is the hole this task exists to close.
+  The cost is that an `allBranches` admin holding a pre-deploy token sees an empty roster once Task 3
+  lands, for at most one `JWT_ACCESS_TTL`. Super admins are unaffected: `isSuperAdmin` is already in
+  the old claims.
 
 **Decision the reviewer must confirm.** Scope rides the JWT, exactly as `permissions` and
 `isSuperAdmin` already do, so removing a branch from an admin takes effect when their access token
@@ -73,11 +82,12 @@ Exemplar: `apps/admin/src/routes/permissions.tsx` for the card-per-record shape;
 
 **Acceptance**
 
-- Creating an admin offers "Branch admin", which switches `allBranches` off, reveals the branch
-  multi-select, and grants `STUDENT_MANAGEMENT` and `BRANCH_TEST_MANAGEMENT` at WRITE.
-- The preset is a starting point, not a mode: every field it sets stays editable afterwards, and
-  nothing about a role is sent to the server. `createAdminSchema` already takes `allBranches` and
-  `branchIds`; no contract changes.
+- Creating an admin offers "Every branch", and the branch multi-select it reveals when unticked.
+  `createAdminSchema` already takes `allBranches` and `branchIds`; no contract changes.
+- It grants no permissions. `createAdminSchema` takes none, deliberately — the Permissions screen
+  owns granting and the create confirm already points there.
+- The Role column names what is derived: Super admin, Branch admin, Admin.
+- An existing admin's branches are editable, or they could only ever be set once.
 - Choosing "every branch" and choosing branches are mutually exclusive on screen.
 - Saving an admin with `allBranches: false` and no branches is allowed and says what it means —
   they reach nothing — in an `Alert`, not muted prose.

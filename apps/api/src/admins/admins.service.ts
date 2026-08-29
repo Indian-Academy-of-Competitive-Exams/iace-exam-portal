@@ -95,6 +95,15 @@ export class AdminsService {
     return permissions;
   }
 
+  /** The branches a token carries. One indexed read, beside the grant map, on every admin login. */
+  async branchIdsFor(adminId: string): Promise<string[]> {
+    const rows = await this.prisma.adminBranch.findMany({
+      where: { adminId },
+      select: { branchId: true },
+    });
+    return rows.map((row) => row.branchId);
+  }
+
   // ==========================================================================
   // Admins
   // ==========================================================================

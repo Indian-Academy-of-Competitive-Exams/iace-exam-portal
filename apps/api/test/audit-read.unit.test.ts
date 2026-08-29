@@ -85,6 +85,7 @@ describe('AuditService.listRowActions', () => {
         fullName: 'Admin One',
         isSuperAdmin: false,
         isActive: true,
+        allBranches: false,
       },
       {
         id: 'adm_2',
@@ -92,6 +93,7 @@ describe('AuditService.listRowActions', () => {
         fullName: 'Admin Two',
         isSuperAdmin: false,
         isActive: true,
+        allBranches: false,
       },
     );
 

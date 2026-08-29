@@ -58,10 +58,14 @@ inferring it elsewhere — _"an admin who has been given no branch yet reaches n
 as 'all of them' is the failure this column exists to prevent."_ A stored `role` column would be a
 second answer to a question that already has one, free to disagree with it.
 
-What the create form gains is a **preset**, not a field: choosing "Branch admin" switches
-`allBranches` off, reveals the branch multi-select, and ticks `STUDENT_MANAGEMENT` and
-`BRANCH_TEST_MANAGEMENT` to WRITE. The preset exists on screen only; the server reads `allBranches`,
-`branchIds` and `permissions`, and has never heard of a role.
+What the create form gains is the **scope**, not a role field: an "Every branch" box, and the branch
+multi-select it reveals when unticked. The role is shown, derived, in the Role column — Super admin,
+Branch admin, Admin — and the server has never heard of one.
+
+**It does not grant permissions**, though an earlier draft of this spec said it would.
+`createAdminSchema` takes no permissions, deliberately: granting is the Permissions screen's job and
+the create confirm already sends the admin there. Adding grants to create would be a second write
+path for the same rows to serve one screen's convenience.
 
 `createAdminSchema` and `updateAdminSchema` already accept `allBranches` and `branchIds`, and
 `Admin` returns both. Only the multi-select is missing.

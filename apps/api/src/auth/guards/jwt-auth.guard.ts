@@ -41,6 +41,9 @@ export class JwtAuthGuard implements CanActivate {
       // claim existed; both mean active.
       isActive: claims.isActive ?? true,
       permissions: claims.permissions ?? {},
+      // Absent reads as NO branch: "none given" meaning "all of them" is the failure to prevent.
+      allBranches: claims.allBranches ?? false,
+      branchIds: claims.branchIds ?? [],
     };
     return true;
   }
