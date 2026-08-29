@@ -105,6 +105,26 @@ student lookups already follow, because an id is not a thing to confirm the exis
   and the only thing the table can answer.
 - **Unlock requests** — narrowed to their branches' students.
 
+## Complete — 2026-08-29 (`ddd5a8a` … `08f924a`)
+
+Every admin-reachable route keyed by a student, a branch, or a request from one narrows. Three of
+the holes were not in the plan when it was written: the four routes under
+`admin/students/:studentId/*`, both importers writing by mobile, and the series filter that answered
+what a student at another branch already reaches.
+
+It is a permission boundary for students, branches and requests. It is NOT one for questions, tests
+or configs — those are institute-wide by design and hidden from a branch admin's nav rather than
+scoped, and hiding is a courtesy.
+
+Three edges that stay true:
+
+- A student at NO branch is in nobody's scope, so self-signups and scholarship intakes are visible
+  to super admins alone until somebody gives them a branch.
+- Scope rides the JWT, so removing a branch lands when the access token turns over — the same
+  window a revoked permission already has.
+- The importer says a branch is "not one of yours" rather than that it does not exist, so branch
+  NAMES are discoverable by probe. The alternative was lying to an admin about their own roster.
+
 ## Navigation
 
 A branch admin's nav: Students (All students, Import students), Branches, Audit. Everything else is

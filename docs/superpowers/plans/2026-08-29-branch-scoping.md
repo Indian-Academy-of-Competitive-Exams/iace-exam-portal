@@ -16,8 +16,10 @@ writes the tests once, from the criteria.
 - A branch admin is `!isSuperAdmin && !allBranches`. **Derived, never stored** — no `role` column.
 - Out of scope reads as **`NOT_FOUND`**, never `FORBIDDEN`.
 - **Nav gating is presentation, never the boundary.** Every endpoint enforces on its own.
-- Until every task here is done, this **is not a permission boundary** and must not be called one
-  in a commit message, a comment or a report.
+- ~~Until every task here is done, this is not a permission boundary.~~ **All seven are done
+  (2026-08-29).** It may now be called one — for students, branches and requests. It is NOT one for
+  questions, tests or configs, which are institute-wide by design and hidden from a branch admin's
+  nav rather than scoped.
 - Super admins bypass; `allBranches: true` bypasses.
 - No new date helper; instants stay instants (`task-constraints.md`, Dates).
 - **No backfill migration, and here is why.** `Admin.allBranches` defaults to false and the branch
@@ -241,6 +243,13 @@ filtered.
   point: the row being absent is not what refuses the request.
 
 ---
+
+## Done
+
+All seven, 2026-08-29: `ddd5a8a` (scope + identity), `7c7d012` (admin form), `8ea62a8` (roster,
+detail, writes, and the four student-keyed access routes), `004fcbf` (both importers), `0d9b7da`
+(nav, branch list, empty-roster alert; task 5 needed no code), `08f924a` (unlock queue and the
+series-reachability filter).
 
 ## After this plan
 
