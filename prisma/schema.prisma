@@ -805,7 +805,8 @@ model TestSeries {
   prerequisiteSeriesId String?
   unlockMode           UnlockMode     @default(AUTO)
   // What the series IS, and one of three: only FREE is reached by an enrolled family, and
-  // only SCHOLARSHIP is reached by nothing but an import's grant.
+  // only SCHOLARSHIP is reached by nothing but an import's grant. A FREE series waits on
+  // nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
   kind                 TestSeriesKind @default(STANDARD)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)

@@ -1,7 +1,12 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, updateBranchTestConfigSchema } from '@iace/contracts';
+import {
+  AppException,
+  ErrorCodes,
+  TEST_SERIES_KIND,
+  updateBranchTestConfigSchema,
+} from '@iace/contracts';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
@@ -222,6 +227,61 @@ describe('TestSeriesService — what a series may point at', () => {
       () => series.update(created.id, { prerequisiteSeriesId: created.id }),
       AppException.is,
     );
+  });
+
+  /** The failure this prevents: a series offered in the browse list that is then held shut. */
+  it('refuses a free series that waits on another', async () => {
+    const { series } = build({ series: [makeSeries({ id: 'srs_1' })] });
+
+    const error = await series
+      .create(draft({ kind: TEST_SERIES_KIND.FREE, prerequisiteSeriesId: 'srs_1' }))
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    // Named on the field an admin clears to fix it, not on the kind they just chose.
+    assert.ok(error.fieldErrors?.prerequisiteSeriesId);
+  });
+
+  it('refuses turning a series that waits on another into a free one', async () => {
+    const { series } = build({
+      series: [
+        makeSeries({ id: 'srs_1' }),
+        makeSeries({ id: 'srs_2', name: 'Tier 2', prerequisiteSeriesId: 'srs_1' }),
+      ],
+    });
+
+    await assert.rejects(
+      () => series.update('srs_2', { kind: TEST_SERIES_KIND.FREE }),
+      AppException.is,
+    );
+  });
+
+  it('refuses putting a prerequisite in front of a series that is already free', async () => {
+    const { series } = build({
+      series: [
+        makeSeries({ id: 'srs_1' }),
+        makeSeries({ id: 'srs_2', name: 'Free mocks', kind: TEST_SERIES_KIND.FREE }),
+      ],
+    });
+
+    await assert.rejects(
+      () => series.update('srs_2', { prerequisiteSeriesId: 'srs_1' }),
+      AppException.is,
+    );
+  });
+
+  it('leaves a standard series waiting on another alone', async () => {
+    const { series } = build({
+      series: [
+        makeSeries({ id: 'srs_1' }),
+        makeSeries({ id: 'srs_2', name: 'Tier 2', prerequisiteSeriesId: 'srs_1' }),
+      ],
+    });
+
+    const updated = await series.update('srs_2', { name: 'Tier 2 mocks' });
+
+    assert.equal(updated.prerequisiteSeriesId, 'srs_1');
   });
 
   it('refuses to delete one that another series waits on', async () => {

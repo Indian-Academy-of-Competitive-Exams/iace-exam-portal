@@ -4,10 +4,12 @@ import {
   AppException,
   ErrorCodes,
   fieldDiff,
+  TEST_SERIES_KIND,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type Paginated,
   type TestSeriesListQuery,
+  type TestSeriesKind,
   type TestSeriesSummary,
   type UpdateBranchTestConfigBody,
   type UpdateTestSeriesBody,
@@ -19,6 +21,9 @@ import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
+
+const FREE_WAITS_ON_NOTHING_MESSAGE =
+  'A free series is offered to every enrolled student, so it cannot wait on another series. Clear the prerequisite, or make this a standard series.';
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
@@ -119,6 +124,7 @@ export class TestSeriesService {
    */
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
+    this.assertFreeWaitsOnNothing(input.kind, input.prerequisiteSeriesId ?? null);
 
     const id = await this.prisma.$transaction(async (tx) => {
       const series = await tx.testSeries.create({
@@ -154,6 +160,13 @@ export class TestSeriesService {
     await this.assertTargetsUsable(input);
     if (input.prerequisiteSeriesId)
       this.assertNotItsOwnPrerequisite(id, input.prerequisiteSeriesId);
+    // Judged against what the series WILL hold: either half of the pair may be the one moving.
+    this.assertFreeWaitsOnNothing(
+      input.kind ?? series.kind,
+      input.prerequisiteSeriesId === undefined
+        ? series.prerequisiteSeriesId
+        : (input.prerequisiteSeriesId ?? null),
+    );
 
     const changes = columnsOf(input);
     const updated = await this.prisma.testSeries.update({
@@ -261,6 +274,17 @@ export class TestSeriesService {
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
     return toBranchConfig(row);
+  }
+
+  /** FREE is offered to everyone enrolled, so one behind a prerequisite is offered and then refused. */
+  private assertFreeWaitsOnNothing(
+    kind: TestSeriesKind | undefined,
+    prerequisiteSeriesId: string | null,
+  ): void {
+    if (kind !== TEST_SERIES_KIND.FREE || prerequisiteSeriesId === null) return;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, FREE_WAITS_ON_NOTHING_MESSAGE, {
+      fieldErrors: { prerequisiteSeriesId: [FREE_WAITS_ON_NOTHING_MESSAGE] },
+    });
   }
 
   private assertNotItsOwnPrerequisite(id: string, prerequisiteSeriesId: string): void {
