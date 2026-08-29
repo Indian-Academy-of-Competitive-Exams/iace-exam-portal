@@ -2,14 +2,11 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
-  type ExamFamily,
   type GrantSeriesBody,
   STUDENT_SERIES_SOURCE,
   type StudentGrantRow,
   type StudentSeriesAccess,
   type StudentSeriesSource,
-  TEST_SERIES_KIND,
-  type TestSeriesKind,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
@@ -21,16 +18,10 @@ export function seriesSources(
   row: Readonly<{
     programCode: string | null;
     examCode: string | null;
-    examFamily: ExamFamily | null;
-    kind: TestSeriesKind;
     granted: boolean;
     enabledAtBranch: boolean;
   }>,
-  student: Readonly<{
-    programs: readonly string[];
-    enrolledExams: readonly string[];
-    enrolledFamilies: readonly ExamFamily[];
-  }>,
+  student: Readonly<{ programs: readonly string[]; enrolledExams: readonly string[] }>,
 ): StudentSeriesSource[] {
   const sources: StudentSeriesSource[] = [];
   if (
@@ -47,15 +38,6 @@ export function seriesSources(
     student.enrolledExams.includes(row.examCode)
   ) {
     sources.push(STUDENT_SERIES_SOURCE.EXAM);
-  }
-  if (
-    row.enabledAtBranch &&
-    row.kind === TEST_SERIES_KIND.FREE &&
-    row.programCode === null &&
-    row.examFamily !== null &&
-    student.enrolledFamilies.includes(row.examFamily)
-  ) {
-    sources.push(STUDENT_SERIES_SOURCE.FAMILY);
   }
   if (row.granted) sources.push(STUDENT_SERIES_SOURCE.GRANT);
   return sources;
@@ -98,7 +80,6 @@ export class StudentGrantsService {
         currentBranchId: true,
         programs: true,
         enrolledExams: true,
-        enrolledFamilies: true,
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
@@ -109,8 +90,7 @@ export class StudentGrantsService {
         id: true,
         name: true,
         programCode: true,
-        kind: true,
-        examStage: { select: { exam: { select: { code: true, family: true } } } },
+        examStage: { select: { exam: { select: { code: true } } } },
         grants: { where: { studentId }, select: { createdAt: true } },
         branchConfigs: {
           where: { branchId: student.currentBranchId ?? '', enabled: true },
@@ -127,8 +107,6 @@ export class StudentGrantsService {
         {
           programCode: row.programCode,
           examCode: row.examStage?.exam.code ?? null,
-          examFamily: row.examStage?.exam.family ?? null,
-          kind: row.kind,
           granted: row.grants.length > 0,
           enabledAtBranch: row.branchConfigs.length > 0,
         },

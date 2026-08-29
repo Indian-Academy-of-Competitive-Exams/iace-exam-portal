@@ -746,7 +746,7 @@ describe('asking for a FREE series nobody reaches', () => {
     );
   });
 
-  it('refuses a third exam family', async () => {
+  it('refuses a third exam', async () => {
     const { service } = build(
       outsider({
         grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],
@@ -759,7 +759,7 @@ describe('asking for a FREE series nobody reaches', () => {
     );
   });
 
-  /** Otherwise five asks queue in five families and every one of them is approvable. */
+  /** Otherwise five asks queue across five exams and every one of them is approvable. */
   it('counts an ask still waiting toward the cap', async () => {
     const { service } = build(outsider({ grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`)] }));
     await service.request('stu_1', `srs_${EXAM_FAMILY.RRB}`);
@@ -770,7 +770,37 @@ describe('asking for a FREE series nobody reaches', () => {
     );
   });
 
-  it('lets a second series inside a family they already hold through', async () => {
+  /** The whole change: SSC holds CGL, CHSL and MTS, and two of them are two, not one. */
+  it('counts two exams inside ONE family as two', async () => {
+    const oneFamily: FakeCatalogData = {
+      exams: [
+        makeExam({ id: 'exam_cgl', family: EXAM_FAMILY.SSC, code: 'SSC CGL', name: 'SSC CGL' }),
+        makeExam({ id: 'exam_chsl', family: EXAM_FAMILY.SSC, code: 'SSC CHSL', name: 'SSC CHSL' }),
+        makeExam({ id: 'exam_mts', family: EXAM_FAMILY.SSC, code: 'SSC MTS', name: 'SSC MTS' }),
+      ],
+      stages: [
+        makeExamStage({ id: 'stage_cgl', examId: 'exam_cgl', stageKey: 'CGL_T1' }),
+        makeExamStage({ id: 'stage_chsl', examId: 'exam_chsl', stageKey: 'CHSL_T1' }),
+        makeExamStage({ id: 'stage_mts', examId: 'exam_mts', stageKey: 'MTS_T1' }),
+      ],
+      series: ['cgl', 'chsl', 'mts'].map((exam) =>
+        makeSeries({
+          id: `srs_${exam}`,
+          examStageId: `stage_${exam}`,
+          kind: TEST_SERIES_KIND.FREE,
+        }),
+      ),
+      grants: [grantOf('srs_cgl'), grantOf('srs_chsl')],
+    };
+    const { service } = build(outsider(oneFamily));
+
+    await assert.rejects(
+      () => service.request('stu_1', 'srs_mts'),
+      (error: AppException) => error.code === ErrorCodes.VALIDATION_ERROR,
+    );
+  });
+
+  it('lets a second series on an exam they already hold through', async () => {
     const { service } = build(
       outsider({
         grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],

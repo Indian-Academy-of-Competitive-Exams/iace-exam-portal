@@ -3,7 +3,6 @@ import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attem
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
-import { examFamilySchema } from './exams';
 
 // ============================================================================
 // Access. A student reaches a series by exam match, by program match or by an
@@ -28,8 +27,8 @@ export const TEST_SERIES_KIND = {
 } as const;
 export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
 
-/** How many exam families a student may hold FREE-series access across by asking for it. */
-export const FREE_SERIES_FAMILY_CAP = 2;
+/** How many EXAMS a student may hold FREE-series access across by asking: a family is many exams. */
+export const FREE_SERIES_EXAM_CAP = 2;
 export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
 export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
 
@@ -222,7 +221,6 @@ export type StudentGrantRow = z.infer<typeof studentGrantRowSchema>;
 /** Why a student reaches a series. A grant can sit beside an automatic one, so a row carries a set. */
 export const STUDENT_SERIES_SOURCE = {
   EXAM: 'EXAM',
-  FAMILY: 'FAMILY',
   PROGRAM: 'PROGRAM',
   GRANT: 'GRANT',
 } as const;
@@ -320,16 +318,15 @@ export const openSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
   examStage: z.object({ name: z.string(), examCode: z.string() }).nullable(),
-  family: examFamilySchema.nullable(),
   /** They have already asked and nobody has answered yet. */
   pending: z.boolean(),
 });
 export type OpenSeries = z.infer<typeof openSeriesSchema>;
 
-/** The list, with the families they already hold — what the cap is counted against. */
+/** The list, with the exams they already hold a free series on — what the cap is counted against. */
 export const openSeriesListSchema = z.object({
   series: z.array(openSeriesSchema),
-  familiesHeld: z.array(examFamilySchema),
+  examsHeld: z.array(z.string()),
 });
 export type OpenSeriesList = z.infer<typeof openSeriesListSchema>;
 

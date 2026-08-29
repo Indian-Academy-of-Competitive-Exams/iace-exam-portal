@@ -3,20 +3,19 @@ import { Prisma } from '@prisma/client';
 import {
   AppException,
   ErrorCodes,
-  fieldDiff,
-  UNLOCK_MODE,
-  UNLOCK_REQUEST_STATUS,
-  UNLOCK_STATE,
-  TEST_SERIES_KIND,
-  FREE_SERIES_FAMILY_CAP,
-  type ExamFamily,
+  FREE_SERIES_EXAM_CAP,
   type OpenSeriesList,
   type Paginated,
   type SeriesUnlockRequest,
   type SeriesUnlockRequestRow,
+  TEST_SERIES_KIND,
+  UNLOCK_MODE,
+  UNLOCK_REQUEST_STATUS,
+  UNLOCK_STATE,
   type UnlockDecision,
   type UnlockRequestListQuery,
   type UnlockRequestStatus,
+  fieldDiff,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
@@ -92,9 +91,7 @@ export class UnlocksService {
       select: {
         id: true,
         name: true,
-        examStage: {
-          select: { name: true, exam: { select: { code: true, family: true } } },
-        },
+        examStage: { select: { name: true, exam: { select: { code: true } } } },
         unlockRequests: {
           where: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING },
           select: { id: true },
@@ -110,10 +107,9 @@ export class UnlocksService {
         examStage: row.examStage
           ? { name: row.examStage.name, examCode: row.examStage.exam.code }
           : null,
-        family: row.examStage?.exam.family ?? null,
         pending: row.unlockRequests.length > 0,
       })),
-      familiesHeld: [...(await this.familiesHeld(studentId))],
+      examsHeld: [...(await this.examsHeld(studentId))],
     };
   }
 
@@ -231,25 +227,25 @@ export class UnlocksService {
   private async assertFreeAndUnderCap(studentId: string, testSeriesId: string): Promise<void> {
     const target = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
-      select: { kind: true, examStage: { select: { exam: { select: { family: true } } } } },
+      select: { kind: true, examStage: { select: { exam: { select: { code: true } } } } },
     });
     if (target?.kind !== TEST_SERIES_KIND.FREE) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
     }
 
-    const family = target.examStage?.exam.family ?? null;
-    const held = await this.familiesHeld(studentId);
-    if (family !== null && held.has(family)) return;
-    if (held.size < FREE_SERIES_FAMILY_CAP) return;
+    const examCode = target.examStage?.exam.code ?? null;
+    const held = await this.examsHeld(studentId);
+    if (examCode !== null && held.has(examCode)) return;
+    if (held.size < FREE_SERIES_EXAM_CAP) return;
 
     throw new AppException(
       ErrorCodes.VALIDATION_ERROR,
-      `Free tests run to ${FREE_SERIES_FAMILY_CAP} exam families. Ask the institute to open another.`,
+      `Free tests run to ${FREE_SERIES_EXAM_CAP} exams. Ask the institute to open another.`,
     );
   }
 
-  /** The families a student already holds a free series in, granted or still queued. */
-  private async familiesHeld(studentId: string): Promise<Set<ExamFamily>> {
+  /** The exams a student already holds a free series on, granted or still queued. */
+  private async examsHeld(studentId: string): Promise<Set<string>> {
     const rows = await this.prisma.testSeries.findMany({
       where: {
         kind: TEST_SERIES_KIND.FREE,
@@ -258,13 +254,13 @@ export class UnlocksService {
           { unlockRequests: { some: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING } } },
         ],
       },
-      select: { examStage: { select: { exam: { select: { family: true } } } } },
+      select: { examStage: { select: { exam: { select: { code: true } } } } },
     });
 
     return new Set(
       rows
-        .map((row) => row.examStage?.exam.family)
-        .filter((family): family is ExamFamily => family !== undefined && family !== null),
+        .map((row) => row.examStage?.exam.code)
+        .filter((code): code is string => code !== undefined),
     );
   }
 

@@ -63,7 +63,6 @@ export class TestSeriesService {
         currentBranchId: true,
         programs: true,
         enrolledExams: true,
-        enrolledFamilies: true,
       },
     });
     if (!student) return [];

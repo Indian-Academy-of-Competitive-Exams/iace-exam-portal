@@ -5,7 +5,6 @@ import {
   EXAM_FAMILY,
   ErrorCodes,
   type StudentCatalog,
-  TEST_SERIES_KIND,
   TEST_STATUS,
   UNLOCK_MODE,
   UNLOCK_STATE,
@@ -134,85 +133,6 @@ describe('AccessResolverService — how a series is reached', () => {
   });
 
   /** A family is what the institute coaches across, never an entitlement to a paper. */
-  /** What FREE means here: the family opens it, with no exam enrolment behind it at all. */
-  it('opens a FREE series on an enrolled family', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            enrolledFamilies: [EXAM_FAMILY.SSC],
-          }),
-        ],
-        series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.FREE })],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
-  });
-
-  /** The family arm is inside the gate: a centre that does not run it still does not run it. */
-  it('hides a FREE series the branch has switched off, family or not', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            enrolledFamilies: [EXAM_FAMILY.SSC],
-          }),
-        ],
-        series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.FREE })],
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, enabled: false }),
-        ],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
-  /** A scholarship intake is for the candidates it named, and a family is not a name. */
-  it('never opens a SCHOLARSHIP series on a family', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            enrolledFamilies: [EXAM_FAMILY.SSC],
-          }),
-        ],
-        series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.SCHOLARSHIP })],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
-  /** Program-tagged stays program-ONLY, free or not — the same rule the exam arm keeps. */
-  it('does NOT open a program-tagged FREE series on the family alone', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            enrolledFamilies: [EXAM_FAMILY.SSC],
-          }),
-        ],
-        series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.FREE, programCode: PROGRAM })],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
   it('gives nothing on an exam family alone', async () => {
     const { resolver } = build(
       reachable({

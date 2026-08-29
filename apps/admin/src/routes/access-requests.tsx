@@ -163,7 +163,7 @@ export function AccessRequestsPage() {
         }
         description={
           approving
-            ? `${asking?.row.student.fullName ?? asking?.row.student.mobile} reaches every test in ${asking?.row.testSeries.name} from now on. It counts against the two exam families they may hold free tests across.`
+            ? `${asking?.row.student.fullName ?? asking?.row.student.mobile} reaches every test in ${asking?.row.testSeries.name} from now on. It counts against the two exams they may hold free tests across.`
             : 'They keep everything else they reach, and can ask again.'
         }
         confirmLabel={approving ? 'Approve' : 'Decline'}

@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { EXAM_FAMILY, STUDENT_SERIES_SOURCE, TEST_SERIES_KIND } from '@iace/contracts';
+import { STUDENT_SERIES_SOURCE } from '@iace/contracts';
 import { seriesSources } from '../src/access/student-grants.service';
 
-const student = {
-  programs: ['FOUNDATION'],
-  enrolledExams: ['SSC CGL'],
-  enrolledFamilies: [EXAM_FAMILY.SSC],
-};
+const student = { programs: ['FOUNDATION'], enrolledExams: ['SSC CGL'] };
 
 describe('seriesSources — why a student reaches a series', () => {
   it('reads an untagged series the student is enrolled for as an exam match', () => {
@@ -17,8 +13,6 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'SSC CGL',
         granted: false,
         enabledAtBranch: true,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
@@ -33,8 +27,6 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'SSC CGL',
         granted: false,
         enabledAtBranch: true,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
@@ -50,8 +42,6 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'SSC CGL',
         granted: false,
         enabledAtBranch: true,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
@@ -66,8 +56,6 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'SSC CGL',
         granted: true,
         enabledAtBranch: true,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
@@ -83,8 +71,6 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'SSC CGL',
         granted: true,
         enabledAtBranch: false,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
@@ -99,41 +85,10 @@ describe('seriesSources — why a student reaches a series', () => {
         examCode: 'RRB JE',
         granted: true,
         enabledAtBranch: true,
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
       },
       student,
     );
 
     assert.deepEqual(sources, [STUDENT_SERIES_SOURCE.GRANT]);
-  });
-
-  /** The family arm is FREE-only: a standard series on the same family opens for nobody. */
-  it('opens a FREE series on an enrolled family, and a standard one on the same family never', () => {
-    const free = seriesSources(
-      {
-        programCode: null,
-        examCode: 'RRB JE',
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.FREE,
-        granted: false,
-        enabledAtBranch: true,
-      },
-      student,
-    );
-    const standard = seriesSources(
-      {
-        programCode: null,
-        examCode: 'RRB JE',
-        examFamily: EXAM_FAMILY.SSC,
-        kind: TEST_SERIES_KIND.STANDARD,
-        granted: false,
-        enabledAtBranch: true,
-      },
-      student,
-    );
-
-    assert.deepEqual(free, [STUDENT_SERIES_SOURCE.FAMILY]);
-    assert.deepEqual(standard, []);
   });
 });

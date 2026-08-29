@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { FREE_SERIES_FAMILY_CAP, type OpenSeries } from '@iace/contracts';
+import { FREE_SERIES_EXAM_CAP, type OpenSeries } from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -32,8 +32,8 @@ export function BrowsePage() {
     },
   });
 
-  const familiesHeld = open.data?.familiesHeld ?? [];
-  const atCap = familiesHeld.length >= FREE_SERIES_FAMILY_CAP;
+  const examsHeld = open.data?.examsHeld ?? [];
+  const atCap = examsHeld.length >= FREE_SERIES_EXAM_CAP;
   const rows = open.data?.series ?? [];
 
   return (
@@ -43,8 +43,8 @@ export function BrowsePage() {
       {atCap ? (
         <Alert variant="info" className="mb-5">
           <span>
-            Free tests run to {FREE_SERIES_FAMILY_CAP} exam families, and yours are taken. Ask the
-            institute if you need another.
+            Free tests run to {FREE_SERIES_EXAM_CAP} exams, and yours are taken. Ask the institute
+            if you need another.
           </span>
         </Alert>
       ) : null}
@@ -60,7 +60,9 @@ export function BrowsePage() {
           <SeriesCard
             key={series.id}
             series={series}
-            askable={!atCap || (series.family !== null && familiesHeld.includes(series.family))}
+            askable={
+              !atCap || (series.examStage !== null && examsHeld.includes(series.examStage.examCode))
+            }
             busy={ask.isPending}
             onAsk={() => ask.mutate(series.id)}
           />

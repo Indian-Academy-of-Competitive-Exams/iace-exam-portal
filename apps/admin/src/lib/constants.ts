@@ -134,7 +134,6 @@ export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = 
 /** What opens a series for a student, in the words an admin would use for it. */
 export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>> = {
   EXAM: 'Exam enrolment',
-  FAMILY: 'Exam family',
   PROGRAM: 'Program',
   GRANT: 'Granted directly',
 };

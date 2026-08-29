@@ -5,11 +5,9 @@ import {
   AppException,
   type AttemptStatus,
   ErrorCodes,
-  type ExamFamily,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
-  TEST_SERIES_KIND,
   TEST_STATUS,
   type TestSeriesKind,
   UNLOCK_MODE,
@@ -226,7 +224,6 @@ export class AccessResolverService {
         currentBranchId: true,
         programs: true,
         enrolledExams: true,
-        enrolledFamilies: true,
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
@@ -277,7 +274,6 @@ export function reachableBy(
     currentBranchId: string | null;
     programs: string[];
     enrolledExams: string[];
-    enrolledFamilies: ExamFamily[];
   }>,
 ): Prisma.TestSeriesWhereInput {
   const automatic: Prisma.TestSeriesWhereInput[] = [
@@ -286,16 +282,6 @@ export function reachableBy(
     // enrolment alone must never open one.
     ...(student.enrolledExams.length > 0
       ? [{ programCode: null, examStage: { exam: { code: { in: student.enrolledExams } } } }]
-      : []),
-    // A family opens the FREE series on it and nothing else: that is what free means here.
-    ...(student.enrolledFamilies.length > 0
-      ? [
-          {
-            kind: TEST_SERIES_KIND.FREE,
-            programCode: null,
-            examStage: { exam: { family: { in: student.enrolledFamilies } } },
-          },
-        ]
       : []),
   ];
 
