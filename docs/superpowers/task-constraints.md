@@ -115,6 +115,21 @@ with fewer smells than you found; the pre-commit gate is the floor, not the targ
 Run a rewrite through the `code-simplifier` skill when the replacement branches more than what it
 replaced. Cognitive complexity is the thing being reduced, not line count.
 
+`graft` holds this repo's TypeScript and JavaScript as a wiring graph — every symbol with its exact
+span and its call edges. **Query it before you grep or open a file.** `graft grep "<symbol>"` is
+exhaustive and ranked by coupling where a ranked `ask` is only top-N; `graft callers <sym> --depth
+2` is the blast radius to read BEFORE a rename or a signature change, and `--depth all` before a
+multi-file refactor; `graft skeleton <file>` is a file's API for a tenth of the cost of reading it.
+One call replaces a search subagent — a sweep for every use of `enrolledExams` is 170 hits across 33
+files for ~4k tokens instead of ~127k. Prefer those three: they read the graph and are exact. `ask`
+is prose retrieval and is only as good as the concept layer `graft build --deep` writes.
+
+**It parses TypeScript and JavaScript and nothing else.** `prisma/schema.prisma`, the hand-written
+SQL under `prisma/migrations/`, and everything in `docs/` are invisible to it — and the schema is the
+target of record, so read those directly and never take graft's silence for absence. `graft/` is a
+local cache: git-ignored, rebuilt by `graft build`, never committed, and its cards lag a same-turn
+edit even though the tools do not.
+
 ## Code style
 
 <comments>

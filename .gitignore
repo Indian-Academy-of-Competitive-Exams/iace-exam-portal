@@ -99,3 +99,6 @@ sonar-project.properties
 
 # Brainstorming visual companion (local mockups)
 .superpowers/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/

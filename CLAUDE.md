@@ -114,6 +114,8 @@ Do not break these — they are why the live test holds at 4–5K:
 
 - `.claude/skills/ui-conventions/` — the binding UI rules. The constraints file above says when to
   invoke it; this is where it lives.
+- `graft/` — the wiring graph of every TypeScript and JavaScript file, queried with the `graft` CLI
+  or the `graft` skill. Git-ignored, so run `graft build` once in a fresh clone.
 - `packages/ui/src/index.ts` — the component inventory.
 - `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
 - `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: test-taking UI variants (§14),
