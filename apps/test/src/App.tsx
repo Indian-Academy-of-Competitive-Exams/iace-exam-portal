@@ -7,6 +7,7 @@ import { DashboardPage } from './routes/dashboard';
 import { AppShell } from './components/app-shell';
 import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
+import { BrowsePage } from './routes/browse';
 import { TestsPage } from './routes/tests';
 import { TestInstructionsPage } from './routes/test-instructions';
 import { ExamPage } from './routes/exam';
@@ -31,6 +32,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
+          <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
           <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
           <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />

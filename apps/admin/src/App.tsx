@@ -6,6 +6,7 @@ import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
+import { AccessRequestsPage } from './routes/access-requests';
 import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
@@ -67,6 +68,7 @@ export function App() {
           <Route path={ROUTES.TEST_SERIES} element={<TestSeriesPage />} />
           {/* Before the :id route, or "new" would be read as a series id. */}
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
+          <Route path={ROUTES.ACCESS_REQUESTS} element={<AccessRequestsPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.SERIES_CANDIDATES_PATTERN} element={<ImportScholarshipPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />

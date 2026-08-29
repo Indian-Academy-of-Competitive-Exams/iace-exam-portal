@@ -10,6 +10,7 @@ import {
   TEST_SERIES_KIND,
   FREE_SERIES_FAMILY_CAP,
   type ExamFamily,
+  type OpenSeriesList,
   type Paginated,
   type SeriesUnlockRequest,
   type SeriesUnlockRequestRow,
@@ -81,6 +82,41 @@ export class UnlocksService {
   }
 
   /** The admin queue: newest first, because triage works from what just came in. */
+  /** The FREE series a student could ask for: everything of that kind they do not already reach. */
+  async openToAsk(studentId: string): Promise<OpenSeriesList> {
+    const { series } = await this.resolver.catalog(studentId);
+    const reached = new Set(series.map((row) => row.id));
+
+    const rows = await this.prisma.testSeries.findMany({
+      where: { kind: TEST_SERIES_KIND.FREE, id: { notIn: [...reached] } },
+      select: {
+        id: true,
+        name: true,
+        examStage: {
+          select: { name: true, exam: { select: { code: true, family: true } } },
+        },
+        unlockRequests: {
+          where: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING },
+          select: { id: true },
+        },
+      },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+
+    return {
+      series: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        examStage: row.examStage
+          ? { name: row.examStage.name, examCode: row.examStage.exam.code }
+          : null,
+        family: row.examStage?.exam.family ?? null,
+        pending: row.unlockRequests.length > 0,
+      })),
+      familiesHeld: [...(await this.familiesHeld(studentId))],
+    };
+  }
+
   async listRequests(query: UnlockRequestListQuery): Promise<Paginated<SeriesUnlockRequestRow>> {
     const where: Prisma.SeriesUnlockRequestWhereInput = {
       ...(query.status ? { status: query.status } : {}),

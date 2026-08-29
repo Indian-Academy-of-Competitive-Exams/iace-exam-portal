@@ -15,24 +15,25 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { type Request } from 'express';
 import {
-  ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
-  DOCUMENT_FILE_FIELD,
-  changePinSchema,
-  documentKindSchema,
-  notificationListQuerySchema,
-  updateMeSchema,
-  type DocumentKind,
-  type ChangePinBody,
+  ActorTypes,
   type AuthSessionResponse,
+  type ChangePinBody,
+  DOCUMENT_FILE_FIELD,
+  type DocumentKind,
   type Me,
   type Notification,
   type NotificationListQuery,
+  type OpenSeriesList,
   type Paginated,
   type SeriesUnlockRequest,
   type StudentCatalog,
   type UpdateMeBody,
+  changePinSchema,
+  documentKindSchema,
+  notificationListQuerySchema,
+  updateMeSchema,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
@@ -75,7 +76,13 @@ export class MeController {
     return this.access.catalog(user.id);
   }
 
-  /** Asking for a locked series. Refused unless the student already reaches it — see the service. */
+  /** The FREE series they do not reach yet. Writes nothing — this is the browse list. */
+  @Get('series/open')
+  openSeries(@CurrentUser() user: AuthenticatedUser): Promise<OpenSeriesList> {
+    return this.unlocks.openToAsk(user.id);
+  }
+
+  /** Asking for a locked series they reach, or a FREE one they do not — see the service. */
   @Post('series/:testSeriesId/unlock-request')
   requestUnlock(
     @CurrentUser() user: AuthenticatedUser,

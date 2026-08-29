@@ -185,7 +185,7 @@ export class UnlockRequestsController {
     return this.unlocks.listRequests(query);
   }
 
-  /** Approving opens the series for that one student. It mints no grant — see the service. */
+  /** Approving opens a locked series, or grants a FREE one they do not reach — see the service. */
   @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')

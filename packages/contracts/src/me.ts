@@ -72,8 +72,10 @@ export const ME_ROUTES = {
   update: '/me',
   changePin: '/me/pin',
   catalog: '/me/catalog',
-  /** Asking for a REQUEST-mode series the student already reaches. No body: the id is the ask. */
+  /** Asking for a locked series they reach, or a FREE one they do not. No body: the id is the ask. */
   requestUnlock: (testSeriesId: string) => `/me/series/${testSeriesId}/unlock-request`,
+  /** The FREE series they could ask for, and the families the cap is counted against. */
+  openSeries: '/me/series/open',
   notifications: '/me/notifications',
   readNotification: (id: string) => `/me/notifications/${id}/read`,
   /** The kind is in the path — see DOCUMENT_KINDS. */

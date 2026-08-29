@@ -39,6 +39,7 @@ import {
   type TestBuilderStep,
   type TestScope,
   type TestSeriesKind,
+  type UnlockRequestStatus,
   type TestStatus,
   type TestUi,
   type TimerTemplate,
@@ -82,6 +83,7 @@ export const ROUTES = {
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
+  ACCESS_REQUESTS: '/tests/access-requests',
   SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
   SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
   /** Super-admin only: who the admins are and who holds what. */
@@ -106,6 +108,13 @@ export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
   MALE: 'Male',
   FEMALE: 'Female',
   OTHER: 'Other',
+};
+
+/** What a request's state is called on screen. */
+export const UNLOCK_REQUEST_STATUS_LABELS: Readonly<Record<UnlockRequestStatus, string>> = {
+  PENDING: 'Waiting',
+  APPROVED: 'Approved',
+  REJECTED: 'Declined',
 };
 
 /** What each kind of series is called on screen. */
@@ -362,6 +371,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
+      { to: ROUTES.ACCESS_REQUESTS, label: 'Access requests', icon: KeyRound },
     ],
   },
   {
@@ -421,6 +431,7 @@ export const QUERY_KEYS = {
   TEST: [ADMIN, 'test'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
+  UNLOCK_REQUESTS: [ADMIN, 'unlock-requests'],
   TEST_SERIES_LINKS: [ADMIN, 'test-series-links'],
   TESTS: [ADMIN, 'tests'],
   TOPICS: [ADMIN, 'topics'],

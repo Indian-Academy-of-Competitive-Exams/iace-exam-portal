@@ -1,4 +1,4 @@
-import { ClipboardList, KeyRound, User } from 'lucide-react';
+import { ClipboardList, Gift, KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { ANSWER_STATE, type AnswerState, type LanguageCode } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -8,6 +8,7 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
   TESTS: '/tests',
+  BROWSE: '/free-tests',
   TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
   TEST_INSTRUCTIONS_PATTERN: '/tests/:testId/instructions',
   /** Full screen, outside the shell: an exam hall has no navigation out of it. */
@@ -22,10 +23,14 @@ export const ROUTES = {
 /** One row while Tests is the only destination; Report and the rest join it as they are built. */
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
+  { to: ROUTES.BROWSE, label: 'Free tests', icon: Gift },
 ];
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
+
+/** The free series they could ask for, which an ask changes. */
+export const BROWSE_QUERY_KEY = ['me', 'open-series'] as const;
 
 /** The languages a paper can be sat in, in the words the exam world uses for them. */
 export const LANGUAGE_LABELS: Readonly<Record<LanguageCode, string>> = {

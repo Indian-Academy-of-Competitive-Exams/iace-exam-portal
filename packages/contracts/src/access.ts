@@ -3,6 +3,7 @@ import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attem
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
+import { examFamilySchema } from './exams';
 
 // ============================================================================
 // Access. A student reaches a series by exam match, by program match or by an
@@ -313,6 +314,24 @@ export const seriesUnlockRequestRowSchema = seriesUnlockRequestSchema.extend({
   student: z.object({ id: z.string(), fullName: z.string().nullable(), mobile: z.string() }),
 });
 export type SeriesUnlockRequestRow = z.infer<typeof seriesUnlockRequestRowSchema>;
+
+/** A FREE series a student does not reach yet, as the browse screen lists it. */
+export const openSeriesSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  examStage: z.object({ name: z.string(), examCode: z.string() }).nullable(),
+  family: examFamilySchema.nullable(),
+  /** They have already asked and nobody has answered yet. */
+  pending: z.boolean(),
+});
+export type OpenSeries = z.infer<typeof openSeriesSchema>;
+
+/** The list, with the families they already hold — what the cap is counted against. */
+export const openSeriesListSchema = z.object({
+  series: z.array(openSeriesSchema),
+  familiesHeld: z.array(examFamilySchema),
+});
+export type OpenSeriesList = z.infer<typeof openSeriesListSchema>;
 
 export const unlockRequestListQuerySchema = paginationQuerySchema.extend({
   status: unlockRequestStatusSchema.optional(),
