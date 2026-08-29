@@ -1,3 +1,4 @@
+import { EVERY_BRANCH } from '../src/common/security';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -428,7 +429,7 @@ describe('UnlocksService.request', () => {
     const { service, resolver, world, events, listener } = build(waitingOnPrerequisite());
     const request = await service.request('stu_1', 'srs_1');
 
-    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
     await deliverBusts(events, listener);
 
     assert.ok(world.unlocks.some((row) => row.testSeriesId === 'srs_1' && row.unlockedAt !== null));
@@ -522,7 +523,12 @@ describe('UnlocksService.decide', () => {
     const { service, resolver, listener, events, world } = pending();
     assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
 
-    const decided = await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    const decided = await service.decide(
+      'sur_1',
+      ADMIN,
+      UNLOCK_REQUEST_STATUS.APPROVED,
+      EVERY_BRANCH,
+    );
     await deliverBusts(events, listener);
 
     assert.equal(decided.status, UNLOCK_REQUEST_STATUS.APPROVED);
@@ -536,7 +542,7 @@ describe('UnlocksService.decide', () => {
   it('announces the unlock AND the cache bust behind it', async () => {
     const { service, events } = pending();
 
-    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_UNLOCKED), [
       { studentId: 'stu_1', testSeriesId: 'srs_1' },
@@ -552,7 +558,7 @@ describe('UnlocksService.decide', () => {
   it('mints no grant', async () => {
     const { service, world } = pending();
 
-    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
 
     assert.deepEqual(world.grants, []);
   });
@@ -567,7 +573,7 @@ describe('UnlocksService.decide', () => {
     });
     assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
 
-    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
     await deliverBusts(events, listener);
 
     assert.equal(world.unlocks.length, 1);
@@ -600,7 +606,12 @@ describe('UnlocksService.decide', () => {
     await resolver.catalog('stu_1', NOW);
     await deliverBusts(events, listener);
 
-    const decided = await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    const decided = await service.decide(
+      'sur_1',
+      ADMIN,
+      UNLOCK_REQUEST_STATUS.APPROVED,
+      EVERY_BRANCH,
+    );
 
     assert.equal(decided.status, UNLOCK_REQUEST_STATUS.APPROVED);
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_UNLOCKED), [
@@ -618,7 +629,7 @@ describe('UnlocksService.decide', () => {
       branchConfigs: [branchConfig],
     });
 
-    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
     branchConfig.enabled = false;
     await deliverBusts(events, listener);
 
@@ -629,7 +640,12 @@ describe('UnlocksService.decide', () => {
   it('rejecting records the decision and opens nothing', async () => {
     const { service, resolver, world, events } = pending();
 
-    const decided = await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.REJECTED);
+    const decided = await service.decide(
+      'sur_1',
+      ADMIN,
+      UNLOCK_REQUEST_STATUS.REJECTED,
+      EVERY_BRANCH,
+    );
 
     assert.equal(decided.status, UNLOCK_REQUEST_STATUS.REJECTED);
     assert.equal(decided.decidedById, ADMIN);
@@ -641,10 +657,10 @@ describe('UnlocksService.decide', () => {
   /** Two admins open the same queue. The second one must be told, not silently overrule the first. */
   it('refuses to decide a request somebody already answered', async () => {
     const { service, world } = pending();
-    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.REJECTED);
+    await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.REJECTED, EVERY_BRANCH);
 
     const error = await service
-      .decide('sur_1', 'adm_2', UNLOCK_REQUEST_STATUS.APPROVED)
+      .decide('sur_1', 'adm_2', UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -657,7 +673,7 @@ describe('UnlocksService.decide', () => {
     const { service } = pending();
 
     const error = await service
-      .decide('sur_gone', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED)
+      .decide('sur_gone', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -699,7 +715,7 @@ describe('UnlocksService.listRequests', () => {
   it('reads newest first, naming the student and the series rather than two ids', async () => {
     const { service } = queue();
 
-    const page = await service.listRequests({ page: 1, pageSize: 20 });
+    const page = await service.listRequests({ page: 1, pageSize: 20 }, EVERY_BRANCH);
 
     assert.deepEqual(
       page.items.map((row) => row.id),
@@ -713,11 +729,14 @@ describe('UnlocksService.listRequests', () => {
   it('narrows to what is still waiting on somebody', async () => {
     const { service } = queue();
 
-    const page = await service.listRequests({
-      page: 1,
-      pageSize: 20,
-      status: UNLOCK_REQUEST_STATUS.PENDING,
-    });
+    const page = await service.listRequests(
+      {
+        page: 1,
+        pageSize: 20,
+        status: UNLOCK_REQUEST_STATUS.PENDING,
+      },
+      EVERY_BRANCH,
+    );
 
     assert.deepEqual(
       page.items.map((row) => row.id),
@@ -729,7 +748,7 @@ describe('UnlocksService.listRequests', () => {
   it('pages, so a queue that grows does not arrive in one response', async () => {
     const { service } = queue();
 
-    const page = await service.listRequests({ page: 2, pageSize: 1 });
+    const page = await service.listRequests({ page: 2, pageSize: 1 }, EVERY_BRANCH);
 
     assert.deepEqual(
       page.items.map((row) => row.id),
@@ -832,7 +851,7 @@ describe('asking for a FREE series nobody reaches', () => {
     const { service, resolver, listener, events, world } = build(outsider());
     const request = await service.request('stu_1', `srs_${EXAM_FAMILY.SSC}`);
 
-    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
     await deliverBusts(events, listener);
 
     assert.deepEqual(
@@ -923,5 +942,46 @@ describe('asking for a FREE series nobody reaches', () => {
     const request = await service.request('stu_1', 'srs_ssc_two');
 
     assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
+  });
+});
+
+describe('UnlocksService — the branches the admin deciding may reach', () => {
+  const held = { all: false, branchIds: [BRANCH] } as const;
+  const elsewhere = { all: false, branchIds: ['br_elsewhere'] } as const;
+
+  /** Whose request it is decides who may see it: a student belongs to exactly one branch. */
+  it("lists only the requests of students at the admin's branches", async () => {
+    const { service } = build(reachable());
+    await service.request('stu_1', 'srs_1');
+
+    const mine = await service.listRequests({ page: 1, pageSize: 20 } as never, held);
+    const theirs = await service.listRequests({ page: 1, pageSize: 20 } as never, elsewhere);
+
+    assert.equal(mine.total, 1);
+    // The count comes off the same where as the rows, or the pager promises unreachable pages.
+    assert.equal(theirs.total, 0);
+    assert.equal(theirs.items.length, 0);
+  });
+
+  /** The failure this prevents: approving series access for somebody else's student. */
+  it('refuses to decide a request from a student at another branch', async () => {
+    const { service } = build(reachable());
+    const request = await service.request('stu_1', 'srs_1');
+
+    const error = await service
+      .decide(request.id, 'adm_1', UNLOCK_REQUEST_STATUS.APPROVED, elsewhere)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('decides a request from a student at their own branch', async () => {
+    const { service } = build(reachable());
+    const request = await service.request('stu_1', 'srs_1');
+
+    const decided = await service.decide(request.id, 'adm_1', UNLOCK_REQUEST_STATUS.APPROVED, held);
+
+    assert.equal(decided.status, UNLOCK_REQUEST_STATUS.APPROVED);
   });
 });

@@ -3679,10 +3679,21 @@ export class FakeCatalogPrisma {
     },
   };
 
+  /** The branch a request's student sits at, which is what a scoped read narrows on. */
+  private requestInScope(row: FakeUnlockRequestRow, where: UnlockRequestWhere): boolean {
+    const wanted = where.student?.currentBranchId;
+    if (!wanted) return true;
+    const student = this.data.students.find((candidate) => candidate.id === row.studentId);
+    return student?.currentBranchId != null && wanted.in.includes(student.currentBranchId);
+  }
+
   readonly seriesUnlockRequest = {
     findFirst: async ({ where }: { where: UnlockRequestWhere }) => {
       await this.record('seriesUnlockRequest.findFirst');
-      return this.data.unlockRequests.find((row) => matchesRequest(row, where)) ?? null;
+      const row = this.data.unlockRequests.find(
+        (candidate) => matchesRequest(candidate, where) && this.requestInScope(candidate, where),
+      );
+      return row ? this.hydrateRequest(row) : null;
     },
 
     findUnique: async ({ where }: { where: { id: string } }) => {
@@ -3702,7 +3713,7 @@ export class FakeCatalogPrisma {
     } = {}) => {
       await this.record('seriesUnlockRequest.findMany');
       return this.data.unlockRequests
-        .filter((row) => matchesRequest(row, where))
+        .filter((row) => matchesRequest(row, where) && this.requestInScope(row, where))
         .sort((left, right) => right.requestedAt.getTime() - left.requestedAt.getTime())
         .slice(skip, take === undefined ? undefined : skip + take)
         .map((row) => this.hydrateRequest(row));
@@ -3710,7 +3721,9 @@ export class FakeCatalogPrisma {
 
     count: async ({ where = {} }: { where?: UnlockRequestWhere } = {}) => {
       await this.record('seriesUnlockRequest.count');
-      return this.data.unlockRequests.filter((row) => matchesRequest(row, where)).length;
+      return this.data.unlockRequests.filter(
+        (row) => matchesRequest(row, where) && this.requestInScope(row, where),
+      ).length;
     },
 
     /** Enforces the partial unique the migration declares — Prisma cannot see it, so it throws. */
@@ -3899,13 +3912,17 @@ export class FakeCatalogPrisma {
 }
 
 interface UnlockRequestWhere {
+  id?: string;
   studentId?: string;
   testSeriesId?: string;
   status?: UnlockRequestStatus;
+  /** The scope's own: whose request it is decides who may see it. */
+  student?: { currentBranchId?: { in: string[] } };
 }
 
 function matchesRequest(row: FakeUnlockRequestRow, where: UnlockRequestWhere): boolean {
   return (
+    (where.id === undefined || row.id === where.id) &&
     (where.studentId === undefined || row.studentId === where.studentId) &&
     (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId) &&
     (where.status === undefined || row.status === where.status)

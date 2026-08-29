@@ -15,6 +15,7 @@ import {
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
+import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
@@ -59,11 +60,20 @@ export class TestSeriesService {
   ) {}
 
   /** Prisma ANDs the keys inside NOT, so this is the exact complement of "already reaches it". */
-  private async outOfReachOf(studentId?: string): Promise<Prisma.TestSeriesWhereInput[]> {
+  private async outOfReachOf(
+    scope: BranchScope,
+    studentId?: string,
+  ): Promise<Prisma.TestSeriesWhereInput[]> {
     if (studentId === undefined) return [];
 
+    // Scoped, or this answers what a student every other route calls missing already reaches.
+    const reachable = branchScopeWhere(scope);
     const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
+      where: {
+        id: studentId,
+        deletedAt: null,
+        ...(reachable ? { currentBranchId: reachable } : {}),
+      },
       select: {
         currentBranchId: true,
         programs: true,
@@ -75,7 +85,10 @@ export class TestSeriesService {
     return [{ NOT: reachableBy(studentId, student) }];
   }
 
-  async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {
+  async list(
+    query: TestSeriesListQuery,
+    scope: BranchScope,
+  ): Promise<Paginated<TestSeriesSummary>> {
     const chosen: Prisma.TestSeriesWhereInput[] = [
       ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
       ...(query.programCode ? [{ programCode: query.programCode }] : []),
@@ -85,9 +98,9 @@ export class TestSeriesService {
       ? [{ name: { contains: query.q, mode: 'insensitive' } }]
       : [];
 
-    // Scope, not a filter: it stands outside `match`, which is the reader's All/Any over THEIR choices.
-    const scope = await this.outOfReachOf(query.notReachedBy);
-    const and = [...matchFilters(always, chosen, query.match), ...scope];
+    // Not a filter: it stands outside `match`, which is the reader's All/Any over THEIR choices.
+    const complement = await this.outOfReachOf(scope, query.notReachedBy);
+    const and = [...matchFilters(always, chosen, query.match), ...complement];
     const where: Prisma.TestSeriesWhereInput = and.length > 0 ? { AND: and } : {};
 
     const [rows, total] = await this.prisma.$transaction([

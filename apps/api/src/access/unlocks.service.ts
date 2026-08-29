@@ -15,6 +15,7 @@ import {
   type UnlockRequestStatus,
   fieldDiff,
 } from '@iace/contracts';
+import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import { AuditContext } from '../audit';
@@ -113,10 +114,16 @@ export class UnlocksService {
     };
   }
 
-  async listRequests(query: UnlockRequestListQuery): Promise<Paginated<SeriesUnlockRequestRow>> {
+  async listRequests(
+    query: UnlockRequestListQuery,
+    scope: BranchScope,
+  ): Promise<Paginated<SeriesUnlockRequestRow>> {
+    const reachable = branchScopeWhere(scope);
     const where: Prisma.SeriesUnlockRequestWhereInput = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.testSeriesId ? { testSeriesId: query.testSeriesId } : {}),
+      // Whose request it is decides who may see it, and a student belongs to one branch.
+      ...(reachable ? { student: { currentBranchId: reachable } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([
@@ -141,9 +148,14 @@ export class UnlocksService {
     requestId: string,
     adminId: string,
     status: UnlockDecision,
+    scope: BranchScope,
   ): Promise<SeriesUnlockRequestRow> {
-    const pending = await this.prisma.seriesUnlockRequest.findUnique({
-      where: { id: requestId },
+    const reachable = branchScopeWhere(scope);
+    const pending = await this.prisma.seriesUnlockRequest.findFirst({
+      where: {
+        id: requestId,
+        ...(reachable ? { student: { currentBranchId: reachable } } : {}),
+      },
       include: requestInclude,
     });
     if (!pending) throw new AppException(ErrorCodes.NOT_FOUND, 'No such request');

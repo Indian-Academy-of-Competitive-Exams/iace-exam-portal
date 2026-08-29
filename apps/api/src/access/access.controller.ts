@@ -109,8 +109,9 @@ export class TestSeriesController {
   @Get()
   list(
     @Query(new ZodQuery(testSeriesListQuerySchema)) query: TestSeriesListQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<TestSeriesSummary>> {
-    return this.series.list(query);
+    return this.series.list(query, branchScopeOf(user));
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -187,8 +188,9 @@ export class UnlockRequestsController {
   @Get()
   list(
     @Query(new ZodQuery(unlockRequestListQuerySchema)) query: UnlockRequestListQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<SeriesUnlockRequestRow>> {
-    return this.unlocks.listRequests(query);
+    return this.unlocks.listRequests(query, branchScopeOf(user));
   }
 
   /** Approving opens a locked series, or grants a FREE one they do not reach — see the service. */
@@ -200,7 +202,7 @@ export class UnlockRequestsController {
     @Body(new ZodBody(decideUnlockRequestSchema)) body: DecideUnlockRequestBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SeriesUnlockRequestRow> {
-    return this.unlocks.decide(id, user.id, body.status);
+    return this.unlocks.decide(id, user.id, body.status, branchScopeOf(user));
   }
 }
 
