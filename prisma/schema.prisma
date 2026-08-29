@@ -207,7 +207,6 @@ enum TestSeriesKind {
 enum UnlockMode {
   AUTO
   REQUEST
-  ADMIN
 }
 
 // Derived from StudentSeriesUnlock presence; mirrored in @iace/contracts for the

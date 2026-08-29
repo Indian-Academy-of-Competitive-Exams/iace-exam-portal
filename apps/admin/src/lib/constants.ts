@@ -325,7 +325,6 @@ export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
 export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
   AUTO: 'Automatic',
   REQUEST: 'On request',
-  ADMIN: 'Admin released',
 };
 
 /**

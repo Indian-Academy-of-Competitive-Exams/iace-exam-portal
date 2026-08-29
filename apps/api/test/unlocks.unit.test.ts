@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   AppException,
+  ATTEMPT_STATUS,
   EXAM_FAMILY,
   ErrorCodes,
   STUDENT_TYPE,
@@ -94,6 +95,23 @@ function reachable(over: FakeCatalogData = {}): FakeCatalogData {
   };
 }
 
+/** Advanced sits behind Foundation and the student has sat nothing — the early-unlock case. */
+function waitingOnPrerequisite(over: FakeCatalogData = {}): FakeCatalogData {
+  return reachable({
+    series: [
+      makeSeries({ id: 'srs_0', name: 'Foundation mocks' }),
+      makeSeries({ id: 'srs_1', name: 'Advanced mocks', prerequisiteSeriesId: 'srs_0' }),
+    ],
+    branchConfigs: chainConfigs(['srs_0', 'srs_1']),
+    seriesTests: [
+      { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
+      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+    ],
+    tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
+    ...over,
+  });
+}
+
 /** Delivers what the producer announced, exactly as the cache listener does in the app. */
 async function deliverBusts(events: FakeEventBus, listener: AccessCacheListener): Promise<void> {
   for (const payload of events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED)) {
@@ -117,7 +135,7 @@ function chainConfigs(ids: readonly string[]) {
 }
 
 describe('auto-unlock — a series that opens itself on the read that reaches it', () => {
-  /** Foundation is already open to the student; Advanced sits behind it. */
+  /** Foundation is open to the student AND sat; Advanced sits behind it. */
   const chained = (over: FakeCatalogData = {}) =>
     build(
       reachable({
@@ -130,13 +148,16 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
             unlockMode: UNLOCK_MODE.AUTO,
           }),
         ],
-        branchConfigs: [
-          makeBranchConfig({ id: 'btc_0', testSeriesId: 'srs_0', branchId: BRANCH }),
-          makeBranchConfig({ id: 'btc_1', testSeriesId: 'srs_1', branchId: BRANCH }),
+        branchConfigs: chainConfigs(['srs_0', 'srs_1']),
+        seriesTests: [
+          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
         ],
+        tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
         unlocks: [
           { studentId: 'stu_1', testSeriesId: 'srs_0', unlockedAt: new Date('2026-05-01') },
         ],
+        attempts: [{ studentId: 'stu_1', testId: 'tst_0', status: ATTEMPT_STATUS.SUBMITTED }],
         ...over,
       }),
     );
@@ -176,15 +197,48 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_UNLOCKED).length, 1);
   });
 
-  it('leaves an AUTO series alone while what comes first is still locked', async () => {
-    const { resolver, world } = chained({ unlocks: [] });
+  /** THE rule this change made: opening the prerequisite is not finishing it, and only one opens. */
+  it('leaves an AUTO series shut while the prerequisite is open but unsat', async () => {
+    const { resolver, world } = chained({ attempts: [] });
 
     assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
-    assert.deepEqual(world.unlocks, []);
+    assert.deepEqual(
+      world.unlocks.map((row) => row.testSeriesId),
+      ['srs_0'],
+      'the fixture opened the prerequisite; nothing opened the series behind it',
+    );
   });
 
-  /** REQUEST and ADMIN never open on their own — that is the whole difference from AUTO. */
-  it('never auto-opens a REQUEST series, prerequisite satisfied or not', async () => {
+  it('stays shut while only some of what comes first is sat', async () => {
+    const { resolver } = chained({
+      seriesTests: [
+        { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
+        { testSeriesId: 'srs_0', testId: 'tst_0b', order: 2 },
+        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+      ],
+      tests: [
+        makeTestRow({ id: 'tst_0' }),
+        makeTestRow({ id: 'tst_0b' }),
+        makeTestRow({ id: 'tst_1' }),
+      ],
+    });
+
+    assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
+  });
+
+  /** A prerequisite holding no tests has nothing anyone can finish, so it never counts as done. */
+  it('stays shut behind a prerequisite that has no tests in it at all', async () => {
+    const { resolver } = chained({
+      seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      tests: [makeTestRow({ id: 'tst_1' })],
+      attempts: [],
+    });
+
+    assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
+  });
+
+  /** REQUEST never opens on its own — that is the whole difference from AUTO. */
+  it('never auto-opens a REQUEST series, prerequisite finished or not', async () => {
     const { resolver, world, events } = chained({
       series: [
         makeSeries({ id: 'srs_0', name: 'Foundation mocks', unlockMode: UNLOCK_MODE.REQUEST }),
@@ -202,12 +256,8 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_UNLOCKED), []);
   });
 
-  /**
-   * THE failure this prevents: a prerequisite that opens without a row has no row to find, and
-   * counting only rows left every AUTO series behind one LOCKED for good — with no endpoint that
-   * could open it, because only a REQUEST series can be asked about.
-   */
-  it('opens behind a prerequisite that is itself open without a row', async () => {
+  /** A prerequisite needing no unlock row of its own is still measured by the tests in it. */
+  it('opens behind a prerequisite that is open without a row, once that one is sat', async () => {
     const { resolver, world } = build(
       reachable({
         series: [
@@ -215,6 +265,12 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
           makeSeries({ id: 'srs_1', name: 'Advanced mocks', prerequisiteSeriesId: 'srs_0' }),
         ],
         branchConfigs: chainConfigs(['srs_0', 'srs_1']),
+        seriesTests: [
+          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+        ],
+        tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
+        attempts: [{ studentId: 'stu_1', testId: 'tst_0', status: ATTEMPT_STATUS.EVALUATED }],
       }),
     );
 
@@ -229,9 +285,9 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     );
   });
 
-  /** A chain is ordinary, so it must not cost the student one catalog read per link. */
-  it('opens a three-link chain end to end on a single read', async () => {
-    const { resolver, prisma } = build(
+  /** A chain advances one link per sitting: B has nothing sat the moment it opens, so C waits. */
+  it('opens the next link only, leaving the one behind it waiting to be sat', async () => {
+    const { resolver } = build(
       reachable({
         series: [
           makeSeries({ id: 'srs_0', name: 'A foundation' }),
@@ -239,16 +295,25 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
           makeSeries({ id: 'srs_2', name: 'C advanced', prerequisiteSeriesId: 'srs_1' }),
         ],
         branchConfigs: chainConfigs(['srs_0', 'srs_1', 'srs_2']),
+        seriesTests: [
+          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
+          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+          { testSeriesId: 'srs_2', testId: 'tst_2', order: 1 },
+        ],
+        tests: [
+          makeTestRow({ id: 'tst_0' }),
+          makeTestRow({ id: 'tst_1' }),
+          makeTestRow({ id: 'tst_2' }),
+        ],
+        attempts: [{ studentId: 'stu_1', testId: 'tst_0', status: ATTEMPT_STATUS.SUBMITTED }],
       }),
     );
 
     const states = await statesOf(resolver);
 
-    assert.deepEqual(
-      [...states.values()],
-      [UNLOCK_STATE.UNLOCKED, UNLOCK_STATE.UNLOCKED, UNLOCK_STATE.UNLOCKED],
-    );
-    assert.equal(prisma.queries.filter((name) => name === 'testSeries.findMany').length, 1);
+    assert.equal(states.get('srs_0'), UNLOCK_STATE.UNLOCKED);
+    assert.equal(states.get('srs_1'), UNLOCK_STATE.UNLOCKED);
+    assert.equal(states.get('srs_2'), UNLOCK_STATE.LOCKED);
   });
 
   /** An AUTO series with nothing in front of it is open already and needs no row written. */
@@ -324,16 +389,50 @@ describe('UnlocksService.request', () => {
     assert.deepEqual(world.requests, []);
   });
 
-  /** ADMIN means an admin grants it or nobody does; AUTO opens on its own or waits. */
-  it('refuses a series that does not open by asking', async () => {
+  /** An AUTO series with nothing in front of it is open already, so there is nothing to ask for. */
+  it('refuses a series that is already open to the student', async () => {
     const { service } = build(
-      reachable({ series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.ADMIN })] }),
+      reachable({ series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.AUTO })] }),
     );
 
     const error = await service.request('stu_1', 'srs_1').catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+  });
+
+  /** The early-unlock path: a student may ask to skip ahead, and an admin is the one who decides. */
+  it('takes an ask for an AUTO series still waiting on its prerequisite', async () => {
+    const { service } = build(waitingOnPrerequisite());
+
+    const request = await service.request('stu_1', 'srs_1');
+
+    assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
+    assert.equal(request.testSeriesId, 'srs_1');
+  });
+
+  /** Without this the screen offers to ask again on every reload, and the student cannot tell. */
+  it('shows on the catalog as already asked', async () => {
+    const { service, resolver, events, listener } = build(waitingOnPrerequisite());
+
+    await service.request('stu_1', 'srs_1');
+    await deliverBusts(events, listener);
+    const catalog = await resolver.catalog('stu_1', NOW);
+
+    assert.equal(catalog.series[0]?.id, 'srs_1');
+    assert.equal(catalog.series[0]?.unlockRequested, true);
+  });
+
+  /** THE point of the ask: approval is what gets a student past a prerequisite they have not sat. */
+  it('opens it on approval, past the prerequisite it never finished', async () => {
+    const { service, resolver, world, events, listener } = build(waitingOnPrerequisite());
+    const request = await service.request('stu_1', 'srs_1');
+
+    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await deliverBusts(events, listener);
+
+    assert.ok(world.unlocks.some((row) => row.testSeriesId === 'srs_1' && row.unlockedAt !== null));
+    assert.equal(await stateOf(resolver), UNLOCK_STATE.UNLOCKED);
   });
 
   /**

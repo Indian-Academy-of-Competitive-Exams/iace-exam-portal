@@ -9,9 +9,7 @@ import {
   type SeriesUnlockRequest,
   type SeriesUnlockRequestRow,
   TEST_SERIES_KIND,
-  UNLOCK_MODE,
   UNLOCK_REQUEST_STATUS,
-  UNLOCK_STATE,
   type UnlockDecision,
   type UnlockRequestListQuery,
   type UnlockRequestStatus,
@@ -69,6 +67,8 @@ export class UnlocksService {
       const created = await this.prisma.seriesUnlockRequest.create({
         data: { studentId, testSeriesId },
       });
+      // The catalog carries the ask, so without this the screen offers to ask all over again.
+      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
       return toRequest(created);
     } catch (error) {
       // The partial unique is what really holds "one open request"; two taps race past the read.
@@ -206,7 +206,7 @@ export class UnlocksService {
    * Reach is the resolver's answer, never a second copy of it here: a series the student cannot
    * reach must not become reachable by asking about it.
    */
-  /** Two ways to be askable: a REQUEST-mode series they reach, or a FREE one they do not. */
+  /** Two ways to be askable: a series they reach that is shut, or a FREE one they do not reach. */
   private async assertRequestable(studentId: string, testSeriesId: string): Promise<void> {
     const { series } = await this.resolver.catalog(studentId);
     const reached = series.find((row) => row.id === testSeriesId);
@@ -215,10 +215,8 @@ export class UnlocksService {
       await this.assertFreeAndUnderCap(studentId, testSeriesId);
       return;
     }
-    if (reached.unlockMode !== UNLOCK_MODE.REQUEST) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, 'This series does not open by asking');
-    }
-    if (reached.unlockState === UNLOCK_STATE.UNLOCKED) {
+    // Asking is what gets a student past a prerequisite early, so every shut series takes one.
+    if (!reached.canRequestUnlock) {
       throw new AppException(ErrorCodes.CONFLICT, 'That series is already open to you');
     }
   }

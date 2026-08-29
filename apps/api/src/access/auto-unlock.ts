@@ -3,32 +3,44 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { isUniqueViolation } from '../common/prisma-errors';
 
-/** The three columns the unlock decision reads off a series the student already reaches. */
-export interface UnlockCandidate {
-  id: string;
+/** The two columns the unlock decision reads off a series the student already reaches. */
+export interface UnlockRule {
   unlockMode: UnlockMode;
   prerequisiteSeriesId: string | null;
 }
 
-/**
- * AUTO opens on its own unless something has to come first; REQUEST and ADMIN never open on
- * their own, so without this both modes would be decoration on an already-open series.
- */
-export function needsUnlock(row: Omit<UnlockCandidate, 'id'>): boolean {
+/** Plus what the prerequisite is measured in: a series is done when its tests are. */
+export interface UnlockCandidate extends UnlockRule {
+  id: string;
+  tests: readonly { test: { id: string } }[];
+}
+
+/** AUTO with nothing in front opens on its own; REQUEST and a pending prerequisite both hold shut. */
+export function needsUnlock(row: UnlockRule): boolean {
   return row.unlockMode !== UNLOCK_MODE.AUTO || row.prerequisiteSeriesId !== null;
 }
 
-/**
- * Completing the prerequisite's tests replaces this the day the exam module lands and there are
- * attempts to read. Until then an AUTO series behind one opens on the first read that reaches it.
- */
-function prerequisiteSatisfied(row: UnlockCandidate, unlocked: ReadonlySet<string>): boolean {
-  return row.prerequisiteSeriesId === null || unlocked.has(row.prerequisiteSeriesId);
-}
-
-/** AUTO with nothing in front opens without a row at all, so it is not a candidate for one. */
+/** Only AUTO opens without being asked, and only once whatever stands in front of it is finished. */
 function opensOnItsOwn(row: UnlockCandidate): boolean {
   return row.unlockMode === UNLOCK_MODE.AUTO && row.prerequisiteSeriesId !== null;
+}
+
+/** Finished means every test in it is sat; a series holding no tests has nothing anyone can finish. */
+function completedSeries(
+  series: readonly UnlockCandidate[],
+  finished: ReadonlySet<string>,
+): Set<string> {
+  const done = new Set<string>();
+  for (const row of series) {
+    const sat = row.tests.length > 0 && row.tests.every((link) => finished.has(link.test.id));
+    if (sat) done.add(row.id);
+  }
+  return done;
+}
+
+/** A prerequisite the student cannot reach is not among the rows, so it is not done. */
+function prerequisiteDone(row: UnlockCandidate, done: ReadonlySet<string>): boolean {
+  return row.prerequisiteSeriesId !== null && done.has(row.prerequisiteSeriesId);
 }
 
 /**
@@ -61,28 +73,22 @@ export async function openUnlock(
   return true;
 }
 
-/**
- * Opens every AUTO series whose prerequisite the student has already unlocked, and answers with
- * the ids it opened so the resolution that called it reflects them without reading again.
- */
+/** Opens every AUTO series whose prerequisite this student has now finished, and says which. */
 export async function applyAutoUnlocks(
   prisma: PrismaService,
   events: DomainEventBus,
   studentId: string,
   series: readonly UnlockCandidate[],
+  finished: ReadonlySet<string>,
   now: Date,
 ): Promise<string[]> {
   const candidates = series.filter(opensOnItsOwn);
   if (candidates.length === 0) return [];
 
+  const done = completedSeries(series, finished);
   const held = await unlockedAmong(prisma, studentId, candidates);
-  // A series that opens without a row has no row to find, so without this a prerequisite nobody
-  // ever writes a row for would hold everything behind it shut for good.
-  for (const row of series) {
-    if (!needsUnlock(row)) held.add(row.id);
-  }
-
-  const opening = openableNow(candidates, held);
+  // One pass is the whole chain: a series opened here has no sittings yet, so nothing waits on it.
+  const opening = candidates.filter((row) => !held.has(row.id) && prerequisiteDone(row, done));
   if (opening.length === 0) return [];
 
   const opened = await Promise.all(
@@ -99,25 +105,6 @@ export async function applyAutoUnlocks(
   return opening.map((row) => row.id);
 }
 
-/**
- * A chain opens end to end on one read: what a pass opens is the prerequisite the next pass is
- * waiting on, so stopping after one would cost a catalog read per link.
- */
-function openableNow(candidates: readonly UnlockCandidate[], held: Set<string>): UnlockCandidate[] {
-  const opening: UnlockCandidate[] = [];
-  let waiting = candidates.filter((row) => !held.has(row.id));
-  let ready = waiting.filter((row) => prerequisiteSatisfied(row, held));
-
-  while (ready.length > 0) {
-    for (const row of ready) held.add(row.id);
-    opening.push(...ready);
-    waiting = waiting.filter((row) => !held.has(row.id));
-    ready = waiting.filter((row) => prerequisiteSatisfied(row, held));
-  }
-
-  return opening;
-}
-
 /** A row another read just wrote is the outcome this wanted; a catalog GET must not 409 on it. */
 function tolerateRace(write: Promise<boolean>): Promise<boolean> {
   return write.catch((error: unknown) => {
@@ -126,20 +113,18 @@ function tolerateRace(write: Promise<boolean>): Promise<boolean> {
   });
 }
 
-/** One read covering both halves of the question: what is open, and what stands in front of it. */
+/** What is already open, so a second read does not rewrite a row it wrote a moment ago. */
 async function unlockedAmong(
   prisma: PrismaService,
   studentId: string,
   candidates: readonly UnlockCandidate[],
 ): Promise<Set<string>> {
-  const ids = new Set<string>();
-  for (const row of candidates) {
-    ids.add(row.id);
-    if (row.prerequisiteSeriesId !== null) ids.add(row.prerequisiteSeriesId);
-  }
-
   const rows = await prisma.studentSeriesUnlock.findMany({
-    where: { studentId, testSeriesId: { in: [...ids] }, unlockedAt: { not: null } },
+    where: {
+      studentId,
+      testSeriesId: { in: candidates.map((row) => row.id) },
+      unlockedAt: { not: null },
+    },
     select: { testSeriesId: true },
   });
   return new Set(rows.map((row) => row.testSeriesId));

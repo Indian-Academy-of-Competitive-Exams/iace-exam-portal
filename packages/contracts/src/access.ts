@@ -12,12 +12,10 @@ import { canonicalNameSchema } from './naming';
 
 /** How a series becomes available. */
 export const UNLOCK_MODE = {
-  /** Opens on its own, typically when the prerequisite series is done. */
+  /** Opens on its own: at once, or once every test in the prerequisite series is finished. */
   AUTO: 'AUTO',
-  /** The student asks; an admin or a rule approves. */
+  /** Never opens on its own — the student asks and an admin answers. */
   REQUEST: 'REQUEST',
-  /** An admin grants it and nothing else does. */
-  ADMIN: 'ADMIN',
 } as const;
 /** STANDARD reaches by exam or program; FREE also by an enrolled family; SCHOLARSHIP only by a grant. */
 export const TEST_SERIES_KIND = {
@@ -436,6 +434,8 @@ export const studentCatalogSeriesSchema = z.object({
   prerequisiteSeriesId: z.string().nullable(),
   prerequisiteSeriesName: z.string().nullable(),
   canRequestUnlock: z.boolean(),
+  /** An ask already in the queue, so the screen offers waiting rather than asking twice. */
+  unlockRequested: z.boolean(),
   tests: z.array(studentCatalogTestSchema),
 });
 export type StudentCatalogSeries = z.infer<typeof studentCatalogSeriesSchema>;

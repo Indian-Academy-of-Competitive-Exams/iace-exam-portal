@@ -27,6 +27,7 @@ const SERIES = {
   prerequisiteSeriesId: null,
   prerequisiteSeriesName: null,
   canRequestUnlock: false,
+  unlockRequested: false,
   tests: [
     {
       id: 'tst_1',

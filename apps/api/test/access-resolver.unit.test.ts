@@ -446,7 +446,7 @@ describe('AccessResolverService — a series that never opens on its own', () =>
   const byMode = (unlockMode: (typeof UNLOCK_MODE)[keyof typeof UNLOCK_MODE]) =>
     build(reachable({ series: [makeSeries({ id: 'srs_1', unlockMode })] }));
 
-  /** The failure this prevents: REQUEST and ADMIN reduced to decoration on an open series. */
+  /** The failure this prevents: REQUEST reduced to decoration on an already-open series. */
   it('holds a REQUEST series LOCKED with nothing to come first, and offers the request', async () => {
     const catalog = await byMode(UNLOCK_MODE.REQUEST).resolver.catalog('stu_1', NOW);
 
@@ -457,17 +457,10 @@ describe('AccessResolverService — a series that never opens on its own', () =>
     assert.ok(series?.tests.every((test) => !test.canStart));
   });
 
-  it('holds an ADMIN series LOCKED and offers no request — an admin grants it or nobody does', async () => {
-    const catalog = await byMode(UNLOCK_MODE.ADMIN).resolver.catalog('stu_1', NOW);
-
-    assert.equal(catalog.series[0]?.unlockState, UNLOCK_STATE.LOCKED);
-    assert.equal(catalog.series[0]?.canRequestUnlock, false);
-  });
-
-  it('opens either one once an unlock row carries a time', async () => {
+  it('opens it once an unlock row carries a time', async () => {
     const catalog = await build(
       reachable({
-        series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.ADMIN })],
+        series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.REQUEST })],
         unlocks: [
           { studentId: 'stu_1', testSeriesId: 'srs_1', unlockedAt: new Date('2026-05-20') },
         ],

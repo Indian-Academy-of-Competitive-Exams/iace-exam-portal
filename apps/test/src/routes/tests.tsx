@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFilters } from '@iace/app-kit/browser';
 import { CalendarClock, CircleCheck, LockKeyhole } from 'lucide-react';
 import {
@@ -75,7 +75,16 @@ export function TestsPage() {
   const asked = params.get(TAB_KEY) as TestBucket | '';
   const tab = TAB_ORDER.includes(asked as TestBucket) ? (asked as TestBucket) : TEST_BUCKET.OPEN;
 
+  const queryClient = useQueryClient();
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+
+  const ask = useMutation({
+    meta: { success: 'Asked. You will hear when it is answered.' },
+    mutationFn: (testSeriesId: string) => api.me.askForSeries(testSeriesId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY }),
+  });
+
+  const shut = (catalog.data?.series ?? []).filter((series) => series.canRequestUnlock);
 
   const now = new Date();
   const all = flatten(catalog.data?.series ?? []);
@@ -90,6 +99,15 @@ export function TestsPage() {
           is lifted.
         </Alert>
       ) : null}
+
+      {shut.map((series) => (
+        <ShutSeries
+          key={series.id}
+          series={series}
+          onAsk={() => ask.mutate(series.id)}
+          asking={ask.isPending}
+        />
+      ))}
 
       <Tabs value={tab} onValueChange={(next) => params.set({ [TAB_KEY]: next })}>
         <TabsList>
@@ -190,6 +208,36 @@ function whenLine(test: StudentCatalogTest, now: Date): string {
     return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
   }
   return 'No fixed time — sit it whenever you are ready';
+}
+
+/** A shut series names what opens it, and carries the only thing the student can do about it. */
+function ShutSeries({
+  series,
+  onAsk,
+  asking,
+}: Readonly<{ series: StudentCatalogSeries; onAsk: () => void; asking: boolean }>) {
+  return (
+    <Alert variant="info" className="mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="flex items-start gap-2">
+          <LockKeyhole aria-hidden />
+          <span>
+            <strong className="font-medium">{series.name}</strong>{' '}
+            {series.prerequisiteSeriesName === null
+              ? 'is not open to you yet.'
+              : `opens once you have finished every test in ${series.prerequisiteSeriesName}.`}
+          </span>
+        </span>
+        {series.unlockRequested ? (
+          <Badge variant="neutral">Asked — waiting to be answered</Badge>
+        ) : (
+          <Button size="sm" disabled={asking} onClick={onAsk}>
+            Ask to open it now
+          </Button>
+        )}
+      </div>
+    </Alert>
+  );
 }
 
 /** Why there is no button. "Waiting its turn" is not an error and must not read like one. */

@@ -10,7 +10,7 @@ import {
   type StudentCatalogTest,
   TEST_STATUS,
   type TestSeriesKind,
-  UNLOCK_MODE,
+  UNLOCK_REQUEST_STATUS,
   UNLOCK_STATE,
   type UnlockMode,
   type UnlockState,
@@ -33,7 +33,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v4';
+const CATALOG_SHAPE = 'v5';
 
 const catalogInclude = (branchId: string | null) =>
   ({
@@ -89,6 +89,7 @@ interface ResolvedSeries {
   unlockState: UnlockState;
   prerequisiteSeriesId: string | null;
   prerequisiteSeriesName: string | null;
+  unlockRequested: boolean;
   tests: ResolvedTest[];
 }
 
@@ -234,19 +235,36 @@ export class AccessResolverService {
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
 
+    const sittings = await this.sittings(studentId);
     // Before the unlock state is read, so a series this call opens is UNLOCKED in this call.
-    const opened = await applyAutoUnlocks(this.prisma, this.events, studentId, rows, new Date());
+    const opened = await applyAutoUnlocks(
+      this.prisma,
+      this.events,
+      studentId,
+      rows,
+      finishedTests(sittings),
+      new Date(),
+    );
     const unlocked = await this.unlockedIds(studentId, rows);
     for (const id of opened) unlocked.add(id);
-    const sittings = await this.sittings(studentId);
+    const asked = await this.askedIds(studentId);
 
     return {
       catalog: {
         testBlocked: student.isTestBlocked,
-        series: rows.map((row) => toResolved(row, unlocked, sittings)),
+        series: rows.map((row) => toResolved(row, unlocked, asked, sittings)),
       },
       opened: opened.length > 0,
     };
+  }
+
+  /** The asks still in the queue, so a locked series can offer waiting instead of asking again. */
+  private async askedIds(studentId: string): Promise<Set<string>> {
+    const rows = await this.prisma.seriesUnlockRequest.findMany({
+      where: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING },
+      select: { testSeriesId: true },
+    });
+    return new Set(rows.map((row) => row.testSeriesId));
   }
 
   private async unlockedIds(studentId: string, rows: CatalogRow[]): Promise<Set<string>> {
@@ -297,6 +315,7 @@ export function reachableBy(
 function toResolved(
   row: CatalogRow,
   unlocked: Set<string>,
+  asked: ReadonlySet<string>,
   sittings: ReadonlyMap<string, AttemptStatus>,
 ): ResolvedSeries {
   const locked = needsUnlock(row) && !unlocked.has(row.id);
@@ -315,6 +334,7 @@ function toResolved(
     unlockState: locked ? UNLOCK_STATE.LOCKED : UNLOCK_STATE.UNLOCKED,
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     prerequisiteSeriesName: row.prerequisiteSeries?.name ?? null,
+    unlockRequested: asked.has(row.id),
     tests: row.tests.map((link) => toResolvedTest(link, sittings)).sort(byOrderThenId),
   };
 }
@@ -342,6 +362,13 @@ function toResolvedTest(
 const isFinished = (status: AttemptStatus | null): boolean =>
   status !== null && FINISHED.has(status);
 
+/** What a prerequisite series is measured in: the tests this student has actually sat. */
+function finishedTests(sittings: ReadonlyMap<string, AttemptStatus>): Set<string> {
+  const done = new Set<string>();
+  for (const [testId, status] of sittings) if (isFinished(status)) done.add(testId);
+  return done;
+}
+
 function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
   const reachable = series.unlockState === UNLOCK_STATE.UNLOCKED && !testBlocked;
   // In order means: the first one not yet sat is open, and everything past it waits its turn.
@@ -351,8 +378,7 @@ function project(series: ResolvedSeries, testBlocked: boolean, now: Date): Stude
 
   return {
     ...series,
-    canRequestUnlock:
-      series.unlockState === UNLOCK_STATE.LOCKED && series.unlockMode === UNLOCK_MODE.REQUEST,
+    canRequestUnlock: series.unlockState === UNLOCK_STATE.LOCKED,
     tests: series.tests.map((test, index) =>
       projectTest(test, reachable && (waiting === NONE_WAITING || index <= waiting), now),
     ),
