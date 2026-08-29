@@ -454,12 +454,19 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
   };
 }
 
-/** The student filters the fakes answer: the `in` lookups, an enrolment, and live-only. */
+/** The student filters the fakes answer: the `in` lookups, an enrolment, a branch, and live-only. */
 interface StudentWhere {
   id?: string | { in: string[] };
   mobile?: string | { in: string[] };
   enrolledExams?: { has: string };
+  currentBranchId?: { in: string[] };
   deletedAt?: null;
+}
+
+/** `in: []` matches nothing, as Prisma compiles it — an admin with no branch reaches no student. */
+function inBranch(student: FakeStudent, filter: { in: string[] } | undefined): boolean {
+  if (!filter) return true;
+  return student.currentBranchId !== null && filter.in.includes(student.currentBranchId);
 }
 
 function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
@@ -467,6 +474,7 @@ function matchesStudent(student: FakeStudent, where: StudentWhere): boolean {
     matchesKey(student.id, where.id) &&
     matchesKey(student.mobile, where.mobile) &&
     (where.enrolledExams ? student.enrolledExams.includes(where.enrolledExams.has) : true) &&
+    inBranch(student, where.currentBranchId) &&
     (where.deletedAt === undefined ? true : student.deletedAt === null)
   );
 }
@@ -3281,6 +3289,23 @@ export class FakeAccessPrisma {
   readonly student = {
     findUnique: ({ where }: { where: { id: string } }) => {
       const row = this.students.find((student) => student.id === where.id);
+      return Promise.resolve(row ? { ...row } : null);
+    },
+
+    /** The scoped read: a branch filter, and `in: []` matching nobody exactly as Prisma does. */
+    findFirst: ({
+      where,
+    }: {
+      where: { id: string; deletedAt?: null; currentBranchId?: { in: string[] } };
+    }) => {
+      const row = this.students.find(
+        (student) =>
+          student.id === where.id &&
+          (where.deletedAt === undefined || student.deletedAt === null) &&
+          (where.currentBranchId === undefined ||
+            (student.currentBranchId !== null &&
+              where.currentBranchId.in.includes(student.currentBranchId))),
+      );
       return Promise.resolve(row ? { ...row } : null);
     },
 

@@ -19,7 +19,14 @@ import {
   type StudentSummary,
   type UpdateStudentBody,
 } from '@iace/contracts';
-import { Actors, RequiresFeature, RequiresSuperAdmin } from '../common/security';
+import {
+  Actors,
+  branchScopeOf,
+  CurrentUser,
+  RequiresFeature,
+  RequiresSuperAdmin,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit, TOGGLE_ACTIONS } from '../audit';
 import { StudentsService } from './students.service';
@@ -38,21 +45,25 @@ export class StudentsController {
   @Get()
   list(
     @Query(new ZodQuery(studentListQuerySchema)) query: StudentListQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<StudentSummary>> {
-    return this.students.list(query);
+    return this.students.list(query, branchScopeOf(user));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id')
-  detail(@Param('id') id: string): Promise<StudentDetail> {
-    return this.students.detail(id);
+  detail(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<StudentDetail> {
+    return this.students.detail(id, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
-  create(@Body(new ZodBody(createStudentSchema)) body: CreateStudentBody): Promise<StudentDetail> {
-    return this.students.create(body);
+  create(
+    @Body(new ZodBody(createStudentSchema)) body: CreateStudentBody,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StudentDetail> {
+    return this.students.create(body, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
@@ -61,8 +72,9 @@ export class StudentsController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(updateStudentSchema)) body: UpdateStudentBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<StudentDetail> {
-    return this.students.update(id, body);
+    return this.students.update(id, body, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, TOGGLE_ACTIONS.signIn)
@@ -81,7 +93,8 @@ export class StudentsController {
   setTestBlocked(
     @Param('id') id: string,
     @Body(new ZodBody(setStudentTestBlockedSchema)) body: SetStudentTestBlockedBody,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<StudentDetail> {
-    return this.students.setTestBlocked(id, body.isTestBlocked);
+    return this.students.setTestBlocked(id, body.isTestBlocked, branchScopeOf(user));
   }
 }

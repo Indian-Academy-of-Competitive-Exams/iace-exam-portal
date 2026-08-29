@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { STUDENT_SORTS, studentListQuerySchema, type StudentListQuery } from '@iace/contracts';
 import { studentOrderBy, studentWhere } from '../src/students/student-query';
+import { EVERY_BRANCH, type BranchScope } from '../src/common/security';
 
 /** Parses like a real request would, so the tests exercise the coercions too. */
 const query = (params: Record<string, string> = {}): StudentListQuery =>
   studentListQuerySchema.parse(params);
 
 /** The conditions a query produced, in no particular order. */
-const conditionsFor = (params: Record<string, string> = {}) =>
-  (studentWhere(query(params)).AND as Record<string, unknown>[] | undefined) ?? [];
+const conditionsFor = (params: Record<string, string> = {}, scope: BranchScope = EVERY_BRANCH) =>
+  (studentWhere(query(params), scope).AND as Record<string, unknown>[] | undefined) ?? [];
 
 /** Asserts one exact condition is present among them. */
 const assertHas = (params: Record<string, string>, condition: unknown) => {
@@ -26,11 +27,11 @@ describe('studentWhere — an absent filter narrows nothing', () => {
    * quietly shows a subset of the students while looking exactly like the whole thing.
    */
   it('is empty when nothing was asked for', () => {
-    assert.deepEqual(studentWhere(query()), {});
+    assert.deepEqual(studentWhere(query(), EVERY_BRANCH), {});
   });
 
   it('ignores an empty search box', () => {
-    assert.deepEqual(studentWhere(query({ q: '   ' })), {});
+    assert.deepEqual(studentWhere(query({ q: '   ' }), EVERY_BRANCH), {});
   });
 });
 
@@ -214,5 +215,43 @@ describe('studentOrderBy', () => {
 
   it('refuses a sort the database was never asked to serve', () => {
     assert.equal(studentListQuerySchema.safeParse({ sort: 'pinHash' }).success, false);
+  });
+});
+
+describe('studentWhere — the branches the admin asking may see', () => {
+  const held: BranchScope = { all: false, branchIds: ['br_1', 'br_2'] };
+
+  it('narrows nothing for an admin who reaches every branch', () => {
+    assert.deepEqual(studentWhere(query(), EVERY_BRANCH), {});
+  });
+
+  it('narrows to the branches held', () => {
+    const conditions = conditionsFor({}, held);
+
+    assert.deepEqual(conditions, [{ currentBranchId: { in: ['br_1', 'br_2'] } }]);
+  });
+
+  /** The failure this prevents: `match=any` ORing the scope away the moment a second filter is set. */
+  it('keeps narrowing when the reader asks for ANY of their filters', () => {
+    const conditions = conditionsFor(
+      { match: 'any', isActive: 'true', hasDefaultPin: 'true' },
+      held,
+    );
+
+    assert.ok(
+      conditions.some(
+        (candidate) =>
+          JSON.stringify(candidate) ===
+          JSON.stringify({ currentBranchId: { in: ['br_1', 'br_2'] } }),
+      ),
+      'the scope must be its own AND term, never one of the ORed choices',
+    );
+  });
+
+  /** An admin given no branch reaches none — `in: []` is a false predicate, not "no filter". */
+  it('shows an admin with no branches nobody', () => {
+    const conditions = conditionsFor({}, { all: false, branchIds: [] });
+
+    assert.deepEqual(conditions, [{ currentBranchId: { in: [] } }]);
   });
 });

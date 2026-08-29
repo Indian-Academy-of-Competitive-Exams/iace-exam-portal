@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { EVERY_BRANCH } from '../src/common/security';
 import {
   AppException,
   ErrorCodes,
@@ -382,7 +383,7 @@ describe('StudentGrantsService — the escape hatch', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    const after = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    const after = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
 
     assert.equal(after.length, 1);
     assert.equal(after[0]?.testSeries.name, 'Scholarship mocks');
@@ -395,8 +396,8 @@ describe('StudentGrantsService — the escape hatch', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
 
     assert.equal(prisma.grants.length, 1);
   });
@@ -408,7 +409,7 @@ describe('StudentGrantsService — the escape hatch', () => {
     });
 
     await assert.rejects(
-      () => grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN),
+      () => grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.ok(error.fieldErrors?.testSeriesId);
@@ -421,7 +422,7 @@ describe('StudentGrantsService — the escape hatch', () => {
     const { grants } = build({ students: [makeStudent({ id: 'stu_1' })] });
 
     await assert.rejects(
-      () => grants.grant('stu_1', { testSeriesId: 'nope' }, ADMIN),
+      () => grants.grant('stu_1', { testSeriesId: 'nope' }, ADMIN, EVERY_BRANCH),
       AppException.is,
     );
   });
@@ -431,9 +432,9 @@ describe('StudentGrantsService — the escape hatch', () => {
       series: [makeSeries({ id: 'srs_1' })],
       students: [makeStudent({ id: 'stu_1' })],
     });
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
 
-    await grants.revoke('stu_1', 'srs_1');
+    await grants.revoke('stu_1', 'srs_1', EVERY_BRANCH);
 
     assert.equal(prisma.grants.length, 0);
   });
@@ -450,8 +451,8 @@ describe('the access writes that bust the catalog cache', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
-    await grants.revoke('stu_1', 'srs_1');
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.revoke('stu_1', 'srs_1', EVERY_BRANCH);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED), [
       { studentId: 'stu_1' },
@@ -466,8 +467,8 @@ describe('the access writes that bust the catalog cache', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_GRANTED), [
       { studentId: 'stu_1', testSeriesId: 'srs_1' },
@@ -483,5 +484,63 @@ describe('the access writes that bust the catalog cache', () => {
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
     ]);
+  });
+});
+
+describe('StudentGrantsService — the branches the admin asking may reach', () => {
+  const held = { all: false, branchIds: ['br_1'] } as const;
+
+  const atBranch = (branchId: string | null) =>
+    build({
+      series: [makeSeries({ id: 'srs_1' })],
+      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_9' })],
+      students: [makeStudent({ id: 'stu_1', currentBranchId: branchId })],
+    });
+
+  /** The failure this prevents: granting series to a student at somebody else's branch. */
+  it('refuses to grant to a student at another branch', async () => {
+    const { grants } = atBranch('br_9');
+
+    const error = await grants
+      .grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, held)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('refuses to list what a student at another branch reaches', async () => {
+    const { grants } = atBranch('br_9');
+
+    const error = await grants.reachedSeries('stu_1', held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('refuses to read what a student at another branch was granted', async () => {
+    const { grants } = atBranch('br_9');
+
+    const error = await grants.list('stu_1', held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('refuses to take a grant back from a student at another branch', async () => {
+    const { grants } = atBranch('br_9');
+
+    const error = await grants.revoke('stu_1', 'srs_1', held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it("grants to a student at the admin's own branch", async () => {
+    const { grants } = atBranch('br_1');
+
+    const rows = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, held);
+
+    assert.equal(rows.length, 1);
   });
 });

@@ -3,6 +3,7 @@ export {
   assertBranchInScope,
   branchScopeOf,
   branchScopeWhere,
+  EVERY_BRANCH,
   type BranchScope,
 } from './branch-scope';
 export {

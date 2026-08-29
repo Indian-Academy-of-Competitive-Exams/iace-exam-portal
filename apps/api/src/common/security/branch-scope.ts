@@ -10,7 +10,8 @@ import { type AuthenticatedUser } from './authenticated-user';
 export type BranchScope =
   { readonly all: true } | { readonly all: false; readonly branchIds: readonly string[] };
 
-const EVERY_BRANCH: BranchScope = { all: true };
+/** Named, so a caller that means "no admin is asking" says so rather than defaulting into it. */
+export const EVERY_BRANCH: BranchScope = { all: true };
 
 /** A super admin bypasses, and so does an admin holding every branch. Everyone else gets their set. */
 export function branchScopeOf(user: AuthenticatedUser): BranchScope {

@@ -44,8 +44,14 @@ import {
   type UpdateProgramBody,
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, RequiresSuperAdmin } from '../common/security';
-import { type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  branchScopeOf,
+  CurrentUser,
+  RequiresFeature,
+  RequiresSuperAdmin,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { ProgramsService } from './programs.service';
@@ -206,8 +212,11 @@ export class StudentGrantsController {
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
-  list(@Param('studentId') studentId: string): Promise<StudentGrantRow[]> {
-    return this.grants.list(studentId);
+  list(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StudentGrantRow[]> {
+    return this.grants.list(studentId, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
@@ -218,7 +227,7 @@ export class StudentGrantsController {
     @Body(new ZodBody(grantSeriesSchema)) body: GrantSeriesBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StudentGrantRow[]> {
-    return this.grants.grant(studentId, body, user.id);
+    return this.grants.grant(studentId, body, user.id, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
@@ -228,8 +237,9 @@ export class StudentGrantsController {
   revoke(
     @Param('studentId') studentId: string,
     @Param('testSeriesId') testSeriesId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
-    return this.grants.revoke(studentId, testSeriesId);
+    return this.grants.revoke(studentId, testSeriesId, branchScopeOf(user));
   }
 }
 
@@ -241,7 +251,10 @@ export class StudentSeriesController {
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
-  list(@Param('studentId') studentId: string): Promise<StudentSeriesAccess[]> {
-    return this.grants.reachedSeries(studentId);
+  list(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StudentSeriesAccess[]> {
+    return this.grants.reachedSeries(studentId, branchScopeOf(user));
   }
 }

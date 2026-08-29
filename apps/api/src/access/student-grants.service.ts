@@ -8,6 +8,7 @@ import {
   type StudentSeriesAccess,
   type StudentSeriesSource,
 } from '@iace/contracts';
+import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
@@ -55,8 +56,8 @@ export class StudentGrantsService {
     private readonly events: DomainEventBus,
   ) {}
 
-  async list(studentId: string): Promise<StudentGrantRow[]> {
-    await this.requireStudent(studentId);
+  async list(studentId: string, scope: BranchScope): Promise<StudentGrantRow[]> {
+    await this.requireStudent(studentId, scope);
 
     const rows = await this.prisma.studentGrant.findMany({
       where: { studentId },
@@ -73,9 +74,14 @@ export class StudentGrantsService {
   }
 
   /** Every series this student reaches and what opens each, read the way the resolver reads it. */
-  async reachedSeries(studentId: string): Promise<StudentSeriesAccess[]> {
+  async reachedSeries(studentId: string, scope: BranchScope): Promise<StudentSeriesAccess[]> {
+    const reachable = branchScopeWhere(scope);
     const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null },
+      where: {
+        id: studentId,
+        deletedAt: null,
+        ...(reachable ? { currentBranchId: reachable } : {}),
+      },
       select: {
         currentBranchId: true,
         programs: true,
@@ -120,8 +126,9 @@ export class StudentGrantsService {
     studentId: string,
     input: GrantSeriesBody,
     createdById: string,
+    scope: BranchScope,
   ): Promise<StudentGrantRow[]> {
-    const student = await this.requireStudent(studentId);
+    const student = await this.requireStudent(studentId, scope);
     if (student.isTestBlocked) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, BLOCKED_GRANT_MESSAGE, {
         fieldErrors: { testSeriesId: [BLOCKED_GRANT_MESSAGE] },
@@ -158,7 +165,7 @@ export class StudentGrantsService {
     // Only what the grant CHANGED is announced: re-reading a roster must not ring the bell again.
     if (!held) this.events.emit(DOMAIN_EVENTS.SERIES_GRANTED, key);
 
-    return this.list(studentId);
+    return this.list(studentId, scope);
   }
 
   /** A whole intake at once. `skipDuplicates`, so re-importing the same sheet grants nobody twice. */
@@ -181,17 +188,22 @@ export class StudentGrantsService {
     return count;
   }
 
-  async revoke(studentId: string, testSeriesId: string): Promise<void> {
-    await this.requireStudent(studentId);
+  async revoke(studentId: string, testSeriesId: string, scope: BranchScope): Promise<void> {
+    await this.requireStudent(studentId, scope);
 
     await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
     this.auditContext.setEntityId(studentId);
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
-  private async requireStudent(id: string): Promise<{ isTestBlocked: boolean }> {
-    const student = await this.prisma.student.findUnique({
-      where: { id },
+  /** Scoped, so a student at another branch is missing rather than merely unmodifiable. */
+  private async requireStudent(
+    id: string,
+    scope: BranchScope,
+  ): Promise<{ isTestBlocked: boolean }> {
+    const reachable = branchScopeWhere(scope);
+    const student = await this.prisma.student.findFirst({
+      where: { id, ...(reachable ? { currentBranchId: reachable } : {}) },
       select: { isTestBlocked: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');

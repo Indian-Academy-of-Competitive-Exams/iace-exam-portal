@@ -1,3 +1,4 @@
+import { EVERY_BRANCH } from '../src/common/security';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, BRANCH_TYPE, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
@@ -81,7 +82,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('stores the type the request asked for', async () => {
     const { service, prisma } = serviceWith([]);
 
-    await service.create({ mobile: '9000000001', studentType: STUDENT_TYPE.OFFLINE });
+    await service.create({ mobile: '9000000001', studentType: STUDENT_TYPE.OFFLINE }, EVERY_BRANCH);
 
     assert.equal(prisma.students[0]?.studentType, STUDENT_TYPE.OFFLINE);
   });
@@ -90,7 +91,7 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('gives the student a starting PIN, so they can sign in the day they are added', async () => {
     const { service, prisma } = serviceWith([]);
 
-    await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE });
+    await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE }, EVERY_BRANCH);
 
     assert.equal(prisma.students[0]?.pinHash, 'hash:9000');
     assert.equal(prisma.students[0]?.pinIsDefault, true);
@@ -100,10 +101,13 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('reports them as never signed in, and as still on the default PIN', async () => {
     const { service } = serviceWith([]);
 
-    const created = await service.create({
-      mobile: '9000000021',
-      studentType: STUDENT_TYPE.ONLINE,
-    });
+    const created = await service.create(
+      {
+        mobile: '9000000021',
+        studentType: STUDENT_TYPE.ONLINE,
+      },
+      EVERY_BRANCH,
+    );
 
     assert.equal(created.hasSignedIn, false);
     assert.equal(created.hasDefaultPin, true);
@@ -112,13 +116,16 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('stores the enrolments, the programme and the branch', async () => {
     const { service, prisma } = serviceWith([]);
 
-    await service.create({
-      mobile: '9000000002',
-      studentType: STUDENT_TYPE.OFFLINE,
-      enrolledExams: ['SSC CGL'],
-      programs: ['SSC CGL FOUNDATION'],
-      currentBranchId: 'br_1',
-    });
+    await service.create(
+      {
+        mobile: '9000000002',
+        studentType: STUDENT_TYPE.OFFLINE,
+        enrolledExams: ['SSC CGL'],
+        programs: ['SSC CGL FOUNDATION'],
+        currentBranchId: 'br_1',
+      },
+      EVERY_BRANCH,
+    );
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
     assert.deepEqual(prisma.students[0]?.programs, ['SSC CGL FOUNDATION']);
@@ -135,11 +142,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
     await assert.rejects(
       () =>
-        service.create({
-          mobile: '9000000010',
-          studentType: STUDENT_TYPE.ONLINE,
-          currentBranchId: PHYSICAL.id,
-        }),
+        service.create(
+          {
+            mobile: '9000000010',
+            studentType: STUDENT_TYPE.ONLINE,
+            currentBranchId: PHYSICAL.id,
+          },
+          EVERY_BRANCH,
+        ),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -152,11 +162,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('takes an online student in the online branch', async () => {
     const { service, prisma } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
-    await service.create({
-      mobile: '9000000011',
-      studentType: STUDENT_TYPE.ONLINE,
-      currentBranchId: ONLINE_BRANCH.id,
-    });
+    await service.create(
+      {
+        mobile: '9000000011',
+        studentType: STUDENT_TYPE.ONLINE,
+        currentBranchId: ONLINE_BRANCH.id,
+      },
+      EVERY_BRANCH,
+    );
 
     assert.equal(prisma.students[0]?.currentBranchId, ONLINE_BRANCH.id);
   });
@@ -166,11 +179,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
     await assert.rejects(
       () =>
-        service.create({
-          mobile: '9000000012',
-          studentType: STUDENT_TYPE.OFFLINE,
-          currentBranchId: ONLINE_BRANCH.id,
-        }),
+        service.create(
+          {
+            mobile: '9000000012',
+            studentType: STUDENT_TYPE.OFFLINE,
+            currentBranchId: ONLINE_BRANCH.id,
+          },
+          EVERY_BRANCH,
+        ),
       (error: unknown) => AppException.is(error) && error.code === ErrorCodes.VALIDATION_ERROR,
     );
   });
@@ -179,11 +195,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   it('lets a non-IACE student sit in either kind of branch', async () => {
     const { service, prisma } = serviceWith([], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
-    await service.create({
-      mobile: '9000000013',
-      studentType: STUDENT_TYPE.NON_IACE,
-      currentBranchId: ONLINE_BRANCH.id,
-    });
+    await service.create(
+      {
+        mobile: '9000000013',
+        studentType: STUDENT_TYPE.NON_IACE,
+        currentBranchId: ONLINE_BRANCH.id,
+      },
+      EVERY_BRANCH,
+    );
 
     assert.equal(prisma.students[0]?.currentBranchId, ONLINE_BRANCH.id);
   });
@@ -196,11 +215,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     const { service, prisma } = serviceWith([]);
 
     const error = await service
-      .create({
-        mobile: '9000000003',
-        studentType: STUDENT_TYPE.ONLINE,
-        enrolledExams: ['SSC CGI'],
-      })
+      .create(
+        {
+          mobile: '9000000003',
+          studentType: STUDENT_TYPE.ONLINE,
+          enrolledExams: ['SSC CGI'],
+        },
+        EVERY_BRANCH,
+      )
       .then(
         () => null,
         (thrown: unknown) => thrown,
@@ -220,11 +242,14 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     const { service, prisma } = serviceWith([], undefined, []);
 
     const error = await service
-      .create({
-        mobile: '9000000004',
-        studentType: STUDENT_TYPE.ONLINE,
-        currentBranchId: 'br_missing',
-      })
+      .create(
+        {
+          mobile: '9000000004',
+          studentType: STUDENT_TYPE.ONLINE,
+          currentBranchId: 'br_missing',
+        },
+        EVERY_BRANCH,
+      )
       .then(
         () => null,
         (thrown: unknown) => thrown,
@@ -242,7 +267,10 @@ describe('StudentsService.create — the type is the caller’s, never the servi
     ]);
 
     const error = await service
-      .create({ mobile: '9000000005', studentType: STUDENT_TYPE.ONLINE, currentBranchId: 'br_1' })
+      .create(
+        { mobile: '9000000005', studentType: STUDENT_TYPE.ONLINE, currentBranchId: 'br_1' },
+        EVERY_BRANCH,
+      )
       .then(
         () => null,
         (thrown: unknown) => thrown,
@@ -263,11 +291,14 @@ describe('StudentsService — a whole exam family', () => {
   it('stores the families a student is coached across', async () => {
     const { service, prisma } = serviceWith([]);
 
-    await service.create({
-      mobile: '9000000010',
-      studentType: STUDENT_TYPE.ONLINE,
-      enrolledFamilies: [EXAM_FAMILY.SSC],
-    });
+    await service.create(
+      {
+        mobile: '9000000010',
+        studentType: STUDENT_TYPE.ONLINE,
+        enrolledFamilies: [EXAM_FAMILY.SSC],
+      },
+      EVERY_BRANCH,
+    );
 
     assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
   });
@@ -277,7 +308,7 @@ describe('StudentsService — a whole exam family', () => {
       makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC, EXAM_FAMILY.RRB] }),
     ]);
 
-    await service.update('stu_1', { enrolledFamilies: [EXAM_FAMILY.RRB] });
+    await service.update('stu_1', { enrolledFamilies: [EXAM_FAMILY.RRB] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.RRB]);
   });
@@ -287,7 +318,7 @@ describe('StudentsService — a whole exam family', () => {
       makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC] }),
     ]);
 
-    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+    await service.update('stu_1', { fullName: 'Ravi Kumar' }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
   });
@@ -302,11 +333,14 @@ describe('StudentsService — the program tag', () => {
     const { service } = serviceWith([]);
 
     const error = await service
-      .create({
-        mobile: '9000000009',
-        studentType: STUDENT_TYPE.ONLINE,
-        programs: ['NOT A PROGRAM'],
-      })
+      .create(
+        {
+          mobile: '9000000009',
+          studentType: STUDENT_TYPE.ONLINE,
+          programs: ['NOT A PROGRAM'],
+        },
+        EVERY_BRANCH,
+      )
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -318,7 +352,7 @@ describe('StudentsService — the program tag', () => {
       makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'] }),
     ]);
 
-    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+    await service.update('stu_1', { fullName: 'Ravi Kumar' }, EVERY_BRANCH);
 
     assert.deepEqual(programs.calls, [], 'an untouched list is not re-checked');
   });
@@ -328,7 +362,7 @@ describe('StudentsService — the program tag', () => {
       makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'] }),
     ]);
 
-    await service.update('stu_1', { programs: [] });
+    await service.update('stu_1', { programs: [] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.programs, []);
   });
@@ -340,7 +374,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
-    await service.update('stu_1', { enrolledExams: ['RRB JE'] });
+    await service.update('stu_1', { enrolledExams: ['RRB JE'] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['RRB JE']);
     assert.deepEqual(exams.calls.at(-1), { codes: ['RRB JE'], fieldKey: 'enrolledExams' });
@@ -351,7 +385,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
-    await service.update('stu_1', { enrolledExams: [] });
+    await service.update('stu_1', { enrolledExams: [] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, []);
   });
@@ -365,10 +399,12 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', isTestBlocked: true, enrolledExams: ['SSC CGL'] }),
     ]);
 
-    const error = await service.update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] }).then(
-      () => null,
-      (thrown: unknown) => thrown,
-    );
+    const error = await service
+      .update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] }, EVERY_BRANCH)
+      .then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
 
     assert.ok(error instanceof AppException);
     assert.match(error.message, /blocked from tests/i);
@@ -381,7 +417,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', isTestBlocked: true, enrolledExams: ['SSC CGL', 'RRB JE'] }),
     ]);
 
-    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
   });
@@ -391,7 +427,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', programs: ['SSC CGL FOUNDATION'], currentBranchId: 'br_1' }),
     ]);
 
-    await service.update('stu_1', { programs: [], currentBranchId: null });
+    await service.update('stu_1', { programs: [], currentBranchId: null }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.programs, []);
     assert.equal(prisma.students[0]?.currentBranchId, null);
@@ -402,7 +438,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'], programs: ['SSC CGL FOUNDATION'] }),
     ]);
 
-    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+    await service.update('stu_1', { fullName: 'Ravi Kumar' }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.students[0]?.enrolledExams, ['SSC CGL']);
     assert.deepEqual(prisma.students[0]?.programs, ['SSC CGL FOUNDATION']);
@@ -413,7 +449,7 @@ describe('StudentsService.update — the access fields', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
-    const error = await service.update('stu_1', { enrolledExams: ['SSC CGI'] }).then(
+    const error = await service.update('stu_1', { enrolledExams: ['SSC CGI'] }, EVERY_BRANCH).then(
       () => null,
       (thrown: unknown) => thrown,
     );
@@ -427,10 +463,12 @@ describe('StudentsService.update — the access fields', () => {
   it('refuses a branch that does not exist, under the form’s own field name', async () => {
     const { service, prisma } = serviceWith([makeStudent({ id: 'stu_1' })], undefined, []);
 
-    const error = await service.update('stu_1', { currentBranchId: 'br_missing' }).then(
-      () => null,
-      (thrown: unknown) => thrown,
-    );
+    const error = await service
+      .update('stu_1', { currentBranchId: 'br_missing' }, EVERY_BRANCH)
+      .then(
+        () => null,
+        (thrown: unknown) => thrown,
+      );
 
     assert.ok(error instanceof AppException);
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -443,7 +481,7 @@ describe('StudentsService.update — the access fields', () => {
       makeBranch({ id: 'br_1', isActive: false }),
     ]);
 
-    const error = await service.update('stu_1', { currentBranchId: 'br_1' }).then(
+    const error = await service.update('stu_1', { currentBranchId: 'br_1' }, EVERY_BRANCH).then(
       () => null,
       (thrown: unknown) => thrown,
     );
@@ -469,7 +507,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
     const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
     await assert.rejects(
-      () => service.update(student.id, { studentType: STUDENT_TYPE.ONLINE }),
+      () => service.update(student.id, { studentType: STUDENT_TYPE.ONLINE }, EVERY_BRANCH),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
@@ -486,10 +524,14 @@ describe('StudentsService.update — the branch has to suit the type', () => {
     });
     const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
-    const updated = await service.update(student.id, {
-      studentType: STUDENT_TYPE.ONLINE,
-      currentBranchId: ONLINE_BRANCH.id,
-    });
+    const updated = await service.update(
+      student.id,
+      {
+        studentType: STUDENT_TYPE.ONLINE,
+        currentBranchId: ONLINE_BRANCH.id,
+      },
+      EVERY_BRANCH,
+    );
 
     assert.equal(updated.currentBranchId, ONLINE_BRANCH.id);
   });
@@ -505,7 +547,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
     });
     const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
-    const updated = await service.update(student.id, { fullName: 'Asha Kumari' });
+    const updated = await service.update(student.id, { fullName: 'Asha Kumari' }, EVERY_BRANCH);
 
     assert.equal(updated.fullName, 'Asha Kumari');
   });
@@ -517,7 +559,7 @@ describe('StudentsService.update — the branch has to suit the type', () => {
     });
     const { service } = serviceWith([student], undefined, [PHYSICAL, ONLINE_BRANCH]);
 
-    const updated = await service.update(student.id, { currentBranchId: null });
+    const updated = await service.update(student.id, { currentBranchId: null }, EVERY_BRANCH);
 
     assert.equal(updated.currentBranchId, null);
   });
@@ -527,7 +569,7 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
   it('blocks tests without touching whether they can sign in', async () => {
     const { service, prisma } = serviceWith([makeStudent({ id: 'stu_1' })]);
 
-    const detail = await service.setTestBlocked('stu_1', true);
+    const detail = await service.setTestBlocked('stu_1', true, EVERY_BRANCH);
 
     assert.equal(detail.isTestBlocked, true);
     assert.equal(prisma.students[0]?.isTestBlocked, true);
@@ -537,7 +579,7 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
   it('lifts the block again', async () => {
     const { service, prisma } = serviceWith([makeStudent({ id: 'stu_1', isTestBlocked: true })]);
 
-    await service.setTestBlocked('stu_1', false);
+    await service.setTestBlocked('stu_1', false, EVERY_BRANCH);
 
     assert.equal(prisma.students[0]?.isTestBlocked, false);
   });
@@ -545,7 +587,7 @@ describe('StudentsService.setTestBlocked — separate from sign-in', () => {
   it('refuses a student that does not exist', async () => {
     const { service } = serviceWith([]);
 
-    const error = await service.setTestBlocked('stu_missing', true).then(
+    const error = await service.setTestBlocked('stu_missing', true, EVERY_BRANCH).then(
       () => null,
       (thrown: unknown) => thrown,
     );
@@ -565,7 +607,7 @@ describe('the student writes that bust the catalog cache', () => {
   it('announces a test block', async () => {
     const { service, events } = serviceWith([makeStudent({ id: 'stu_1' })]);
 
-    await service.setTestBlocked('stu_1', true);
+    await service.setTestBlocked('stu_1', true, EVERY_BRANCH);
 
     assert.deepEqual(changed(events), [{ studentId: 'stu_1' }]);
   });
@@ -581,7 +623,7 @@ describe('the student writes that bust the catalog cache', () => {
   it('announces an enrolment change', async () => {
     const { service, events } = serviceWith([makeStudent({ id: 'stu_1', enrolledExams: [] })]);
 
-    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] }, EVERY_BRANCH);
 
     assert.deepEqual(changed(events), [{ studentId: 'stu_1' }]);
   });
@@ -592,7 +634,7 @@ describe('the student writes that bust the catalog cache', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
-    await service.update('stu_1', { fullName: 'Ravi Kumar' });
+    await service.update('stu_1', { fullName: 'Ravi Kumar' }, EVERY_BRANCH);
 
     assert.deepEqual(changed(events), []);
   });
@@ -611,7 +653,7 @@ describe('the enrolment a student is told about', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL'] }),
     ]);
 
-    await service.update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] });
+    await service.update('stu_1', { enrolledExams: ['SSC CGL', 'RRB JE'] }, EVERY_BRANCH);
 
     assert.deepEqual(added(events), [{ studentId: 'stu_1', examCodes: ['RRB JE'] }]);
   });
@@ -621,7 +663,7 @@ describe('the enrolment a student is told about', () => {
       makeStudent({ id: 'stu_1', enrolledExams: ['SSC CGL', 'RRB JE'] }),
     ]);
 
-    await service.update('stu_1', { enrolledExams: ['SSC CGL'] });
+    await service.update('stu_1', { enrolledExams: ['SSC CGL'] }, EVERY_BRANCH);
 
     assert.deepEqual(added(events), []);
     assert.deepEqual(
@@ -629,5 +671,138 @@ describe('the enrolment a student is told about', () => {
       [{ studentId: 'stu_1' }],
       'the cache still has to forget',
     );
+  });
+});
+
+describe('StudentsService — the branches the admin asking may reach', () => {
+  const held = { all: false, branchIds: ['br_1'] } as const;
+
+  it('reads a student at another branch as missing', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_9' })]);
+
+    const error = await service.detail('stu_1', held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('reads a student at their own branch normally', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })]);
+
+    assert.equal((await service.detail('stu_1', held)).id, 'stu_1');
+  });
+
+  /** A student at no branch belongs to no branch admin — `in: []` semantics, made explicit. */
+  it('reads a student at NO branch as missing', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: null })]);
+
+    const error = await service.detail('stu_1', held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  /** The failure this prevents: moving somebody into a branch you cannot see them in again. */
+  it('refuses moving a student to a branch the admin does not hold', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })]);
+
+    const error = await service
+      .update('stu_1', { currentBranchId: 'br_9' }, held)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.currentBranchId);
+  });
+
+  it('refuses taking a student out of every branch', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })]);
+
+    const error = await service
+      .update('stu_1', { currentBranchId: null }, held)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  /** The read above the write is load-bearing: without it, a patch naming no branch edits anyone. */
+  it('refuses to edit a student at another branch, even without naming a branch', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_9' })]);
+
+    const error = await service
+      .update('stu_1', { fullName: 'Renamed' }, held)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('refuses to block a student at another branch from tests', async () => {
+    const { service } = serviceWith([makeStudent({ id: 'stu_1', currentBranchId: 'br_9' })]);
+
+    const error = await service.setTestBlocked('stu_1', true, held).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  /** The failure this prevents: creating a student into somebody else's branch. */
+  it('refuses to create a student into a branch the admin does not hold', async () => {
+    const { service } = serviceWith([], undefined, [
+      makeBranch({ id: 'br_1' }),
+      makeBranch({ id: 'br_9' }),
+    ]);
+
+    const error = await service
+      .create(
+        {
+          mobile: '9000000009',
+          studentType: STUDENT_TYPE.OFFLINE,
+          currentBranchId: 'br_9',
+          enrolledFamilies: [EXAM_FAMILY.SSC],
+        } as never,
+        held,
+      )
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.currentBranchId);
+  });
+
+  /** A duplicate mobile must not tell a branch admin about a student they cannot otherwise see. */
+  it('does not name a student at another branch when a mobile is taken', async () => {
+    const { service } = serviceWith([
+      makeStudent({ id: 'stu_hidden', mobile: '9000000009', currentBranchId: 'br_9' }),
+    ]);
+
+    const error = await service
+      .create(
+        {
+          mobile: '9000000009',
+          studentType: STUDENT_TYPE.OFFLINE,
+          currentBranchId: 'br_1',
+          enrolledFamilies: [EXAM_FAMILY.SSC],
+        } as never,
+        held,
+      )
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.details, undefined);
+  });
+
+  it('lets a super admin move a student anywhere', async () => {
+    const { service } = serviceWith(
+      [makeStudent({ id: 'stu_1', currentBranchId: 'br_1', studentType: STUDENT_TYPE.ONLINE })],
+      undefined,
+      [ONLINE_BRANCH, makeBranch({ id: 'br_9', name: 'ONLINE TWO', type: BRANCH_TYPE.VIRTUAL })],
+    );
+
+    const updated = await service.update('stu_1', { currentBranchId: 'br_9' }, EVERY_BRANCH);
+
+    assert.equal(updated.currentBranchId, 'br_9');
   });
 });

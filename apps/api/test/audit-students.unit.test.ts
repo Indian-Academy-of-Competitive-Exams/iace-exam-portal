@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EVERY_BRANCH } from '../src/common/security';
 import { describe, it } from 'node:test';
 import { AUDITED_STUDENT_FIELDS, StudentsService } from '../src/students/students.service';
 import { fieldDiff } from '@iace/contracts';
@@ -84,7 +85,7 @@ describe('StudentsService.update — driven live, the diff a real admin edit con
     const { auditContext, service } = build([makeStudent({ id: 'stu_1', fullName: 'Asha' })]);
 
     await auditContext.run(async () => {
-      await service.update('stu_1', { fullName: 'Asha Rani' });
+      await service.update('stu_1', { fullName: 'Asha Rani' }, EVERY_BRANCH);
 
       assert.deepEqual(auditContext.current()?.changed, {
         fullName: { from: 'Asha', to: 'Asha Rani' },
@@ -104,10 +105,14 @@ describe('StudentsService.update — driven live, the diff a real admin edit con
     ]);
 
     await auditContext.run(async () => {
-      await service.update('stu_1', {
-        fullName: 'Asha Rani',
-        profile: { motherName: 'Lakshmi' },
-      });
+      await service.update(
+        'stu_1',
+        {
+          fullName: 'Asha Rani',
+          profile: { motherName: 'Lakshmi' },
+        },
+        EVERY_BRANCH,
+      );
 
       assert.deepEqual(auditContext.current()?.changed, {
         fullName: { from: 'Asha', to: 'Asha Rani' },
@@ -119,7 +124,7 @@ describe('StudentsService.update — driven live, the diff a real admin edit con
     const { auditContext, service } = build([makeStudent({ id: 'stu_1', fullName: 'Asha' })]);
 
     await auditContext.run(async () => {
-      await service.update('stu_1', { fullName: 'Asha' });
+      await service.update('stu_1', { fullName: 'Asha' }, EVERY_BRANCH);
 
       assert.equal(auditContext.current()?.changed, null);
     });
@@ -156,12 +161,12 @@ describe('StudentsService toggles — driven live', () => {
     const { auditContext, service } = build([makeStudent({ id: 'stu_1', isTestBlocked: false })]);
 
     await auditContext.run(async () => {
-      await service.setTestBlocked('stu_1', true);
+      await service.setTestBlocked('stu_1', true, EVERY_BRANCH);
       assert.deepEqual(auditContext.current()?.changed, {
         isTestBlocked: { from: false, to: true },
       });
 
-      await service.setTestBlocked('stu_1', true);
+      await service.setTestBlocked('stu_1', true, EVERY_BRANCH);
       assert.equal(auditContext.current()?.changed, null);
     });
   });
