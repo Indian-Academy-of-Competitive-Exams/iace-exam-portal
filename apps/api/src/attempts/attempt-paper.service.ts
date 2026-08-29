@@ -19,7 +19,12 @@ import { applyImageUrls, imageKeysIn } from '../questions';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
-const PAPER_INCLUDE = {
+/** Named field by field, never `include`: the sitting's own scored columns never load at all. */
+const PAPER_SELECT = {
+  id: true,
+  endsAt: true,
+  languages: true,
+  shuffleSeed: true,
   test: {
     select: {
       examTemplate: true,
@@ -45,6 +50,7 @@ const PAPER_INCLUDE = {
     },
   },
   questions: {
+    // `answerKey` never loads; `content` and `options` are whole JSON, so the mappers below strip them.
     select: {
       questionId: true,
       order: true,
@@ -55,9 +61,9 @@ const PAPER_INCLUDE = {
     },
     orderBy: { order: 'asc' },
   },
-} as const satisfies Prisma.AttemptInclude;
+} as const satisfies Prisma.AttemptSelect;
 
-type PaperRow = Prisma.AttemptGetPayload<{ include: typeof PAPER_INCLUDE }>;
+type PaperRow = Prisma.AttemptGetPayload<{ select: typeof PAPER_SELECT }>;
 type ServedQuestion = PaperRow['questions'][number];
 
 /** The paper as a candidate sees it. Nothing it returns may say what the answers are. */
@@ -123,7 +129,7 @@ export class AttemptPaperService {
     // The owner is part of the QUERY, so serving someone else's paper is not a check to forget.
     const attempt = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
-      include: PAPER_INCLUDE,
+      select: PAPER_SELECT,
     });
     // NOT_FOUND, never FORBIDDEN: an id is not a thing to confirm the existence of.
     if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, 'No such sitting');
