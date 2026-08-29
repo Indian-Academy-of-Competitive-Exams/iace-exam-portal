@@ -4,19 +4,10 @@
  * saves, or what the clock says.
  */
 import type { ComponentType } from 'react';
-import type { ExamTemplate } from '@iace/contracts';
+import type { ExamTemplate, ExamTemplateConfig } from '@iace/contracts';
 import type { ExamView } from './exam-view';
 
-/** What an operator moves to match an exact exam. Read by a skin, never forked into one. */
-export interface ExamTemplateConfig {
-  timerPosition: 'HEADER' | 'SECTION_BAR';
-  /** LABELLED spells "Time left" out, the way a government CBT does. */
-  timerFormat: 'CLOCK' | 'LABELLED';
-  palettePosition: 'LEFT' | 'RIGHT';
-  sectionSwitch: 'TABS' | 'BUTTONS';
-  /** PAPER marks the question panel, SCREEN the whole sitting behind everything. */
-  watermark: 'PAPER' | 'SCREEN' | 'NONE';
-}
+export type { ExamTemplateConfig };
 
 export interface ExamSlotProps {
   view: ExamView;

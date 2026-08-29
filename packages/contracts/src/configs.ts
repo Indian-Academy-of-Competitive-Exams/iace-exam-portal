@@ -51,6 +51,35 @@ export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
 export type ExamTemplate = z.infer<typeof examTemplateSchema>;
 export const EXAM_TEMPLATES = examTemplateSchema.options;
 
+/** Where a skin puts things. Read by the sitting AND by the picker that previews it. */
+export interface ExamTemplateConfig {
+  timerPosition: 'HEADER' | 'SECTION_BAR';
+  /** LABELLED spells "Time left" out, the way a government CBT does. */
+  timerFormat: 'CLOCK' | 'LABELLED';
+  palettePosition: 'LEFT' | 'RIGHT';
+  sectionSwitch: 'TABS' | 'BUTTONS';
+  /** PAPER marks the question panel, SCREEN the whole sitting behind everything. */
+  watermark: 'PAPER' | 'SCREEN' | 'NONE';
+}
+
+/** One home, so the admin's preview cannot describe a screen the student does not get. */
+export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateConfig>> = {
+  [EXAM_TEMPLATE.COMFORTABLE]: {
+    timerPosition: 'HEADER',
+    timerFormat: 'CLOCK',
+    palettePosition: 'RIGHT',
+    sectionSwitch: 'TABS',
+    watermark: 'PAPER',
+  },
+  [EXAM_TEMPLATE.STRICT]: {
+    timerPosition: 'SECTION_BAR',
+    timerFormat: 'LABELLED',
+    palettePosition: 'LEFT',
+    sectionSwitch: 'BUTTONS',
+    watermark: 'SCREEN',
+  },
+};
+
 /** The on-screen interface. OMR is a render mode over the same paper, not a scoring change. */
 export const TEST_UI = {
   CBT: 'CBT',

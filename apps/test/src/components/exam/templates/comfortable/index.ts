@@ -1,5 +1,5 @@
-import { EXAM_TEMPLATE } from '@iace/contracts';
-import type { ExamTemplateConfig, ExamTemplateDefinition } from '../../engine/template';
+import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG } from '@iace/contracts';
+import type { ExamTemplateDefinition } from '../../engine/template';
 import { Layout } from '../shared/layout';
 import {
   BottomBar,
@@ -13,13 +13,7 @@ import {
 } from '../shared/slots';
 
 /** Roomier cells, softer contrast, the clock where a reader looks first. */
-const CONFIG: ExamTemplateConfig = {
-  timerPosition: 'HEADER',
-  timerFormat: 'CLOCK',
-  palettePosition: 'RIGHT',
-  sectionSwitch: 'TABS',
-  watermark: 'PAPER',
-};
+const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.COMFORTABLE];
 
 export const comfortableTemplate: ExamTemplateDefinition = {
   id: EXAM_TEMPLATE.COMFORTABLE,

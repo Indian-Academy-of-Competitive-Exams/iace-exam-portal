@@ -1,5 +1,5 @@
-import { EXAM_TEMPLATE } from '@iace/contracts';
-import type { ExamTemplateConfig, ExamTemplateDefinition } from '../../engine/template';
+import { EXAM_TEMPLATE, EXAM_TEMPLATE_CONFIG } from '@iace/contracts';
+import type { ExamTemplateDefinition } from '../../engine/template';
 import { Layout } from '../shared/layout';
 import {
   BottomBar,
@@ -13,13 +13,7 @@ import {
 } from '../shared/slots';
 
 /** The austere baseline: square section buttons, a spelt-out clock beside them, the mark behind all of it. */
-const CONFIG: ExamTemplateConfig = {
-  timerPosition: 'SECTION_BAR',
-  timerFormat: 'LABELLED',
-  palettePosition: 'LEFT',
-  sectionSwitch: 'BUTTONS',
-  watermark: 'SCREEN',
-};
+const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.STRICT];
 
 export const strictTemplate: ExamTemplateDefinition = {
   id: EXAM_TEMPLATE.STRICT,

@@ -19,13 +19,20 @@ import {
   type TestDetail,
   type TestScope,
 } from '@iace/contracts';
-import { Combobox, FormField, FormSection, Input, plural } from '@iace/ui';
+import {
+  Combobox,
+  FormField,
+  FormSection,
+  Input,
+  RadioGroup,
+  RadioGroupItem,
+  plural,
+} from '@iace/ui';
 import {
   DRAW_STRATEGY_HINTS,
   DRAW_STRATEGY_LABELS,
   EVALUATION_MODE_HINTS,
   EVALUATION_MODE_LABELS,
-  EXAM_TEMPLATE_HINTS,
   EXAM_TEMPLATE_LABELS,
   PAPER_BINDING_HINTS,
   PAPER_BINDING_LABELS,
@@ -33,6 +40,7 @@ import {
 } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
+import { ExamTemplatePreview } from '../components/exam-template-preview';
 import { TopicMultiPicker } from '../components/taxonomy-picker';
 import { useSuggestedTestName } from '../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
@@ -183,23 +191,33 @@ function Blueprint({
         )}
       </FormField>
 
-      <FormField form={form} name="examTemplate" label="Exam screen">
+      <FormField form={form} name="examTemplate" label="Exam screen" className="sm:col-span-2">
         {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
+          <RadioGroup
+            name={control.name}
+            legend="Exam screen"
+            hideLegend
             value={examTemplate}
-            onChange={(next) =>
+            onValueChange={(next) =>
               form.setValue('examTemplate', next as ExamTemplate, { shouldDirty: true })
             }
-            items={EXAM_TEMPLATES.map((value) => ({
-              value,
-              label: EXAM_TEMPLATE_LABELS[value],
-              hint: EXAM_TEMPLATE_HINTS[value],
-            }))}
-          />
+            className="grid max-w-2xl gap-3 sm:grid-cols-2"
+          >
+            {EXAM_TEMPLATES.map((value) => (
+              <RadioGroupItem
+                key={value}
+                id={`${control.id}-${value}`}
+                value={value}
+                className="rounded-lg border border-border p-3 has-[input:checked]:border-primary"
+                label={
+                  <span className="flex flex-col gap-2">
+                    <span className="font-medium">{EXAM_TEMPLATE_LABELS[value]}</span>
+                    <ExamTemplatePreview template={value} />
+                  </span>
+                }
+              />
+            ))}
+          </RadioGroup>
         )}
       </FormField>
     </div>
