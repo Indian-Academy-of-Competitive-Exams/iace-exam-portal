@@ -36,6 +36,20 @@ export function resolveNavLayout(item: NavItem): Exclude<NavLayout, 'AUTO'> {
   return count > NAV_INLINE_MAX_ITEMS ? NAV_LAYOUT.PANEL : NAV_LAYOUT.INLINE;
 }
 
+/** Drop what a viewer may not see, at every depth. An emptied section goes with its children. */
+export function filterNavBy<T extends NavItem & { children?: T[] }>(
+  items: readonly T[],
+  hidden: (item: T) => boolean,
+): T[] {
+  return items.reduce<T[]>((kept, item) => {
+    if (hidden(item)) return kept;
+    const children = item.children ? filterNavBy(item.children, hidden) : undefined;
+    if (children?.length === 0 && !item.to) return kept;
+    kept.push(children ? { ...item, children } : item);
+    return kept;
+  }, []);
+}
+
 /**
  * Drop what this user may not see, at every depth. No `can` or no `featureKey` means
  * visible — hiding nav is not the security boundary. An emptied section goes with its children.

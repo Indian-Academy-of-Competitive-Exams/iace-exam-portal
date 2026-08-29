@@ -16,6 +16,7 @@ export { useListQuery, filterKey, type ListQueryResult } from './use-list-query'
 export {
   NAV_INLINE_MAX_ITEMS,
   NAV_LAYOUT,
+  filterNavBy,
   filterNavByPermission,
   activeNavPath,
   isNavItemActive,

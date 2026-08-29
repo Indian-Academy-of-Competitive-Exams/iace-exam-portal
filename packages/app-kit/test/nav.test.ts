@@ -4,6 +4,7 @@ import { FEATURE_KEYS } from '@iace/contracts';
 import {
   NAV_INLINE_MAX_ITEMS,
   NAV_LAYOUT,
+  filterNavBy,
   filterNavByPermission,
   activeNavPath,
   isNavItemActive,
@@ -257,5 +258,55 @@ describe('navTrail', () => {
       label: 'All students',
       to: '/students',
     });
+  });
+});
+
+describe('filterNavBy', () => {
+  const NAV: NavItem[] = [
+    {
+      label: 'Students',
+      children: [leaf('All students', { to: '/students' }), leaf('Exams', { to: '/exams' })],
+    },
+    { label: 'Audit', children: [leaf('Activity', { to: '/audit' })] },
+  ];
+
+  it('drops the rows the rule hides and keeps the rest', () => {
+    const kept = filterNavBy(NAV, (item) => item.to === '/exams');
+
+    assert.deepEqual(
+      kept[0]?.children?.map((child) => child.to),
+      ['/students'],
+    );
+  });
+
+  /** A section whose every child went is a heading over nothing. */
+  it('drops a section once its last child goes', () => {
+    const kept = filterNavBy(NAV, (item) => item.to === '/audit');
+
+    assert.deepEqual(
+      kept.map((item) => item.label),
+      ['Students'],
+    );
+  });
+
+  /** A section that is itself a destination stays, children or not. */
+  it('keeps an emptied section that is a destination of its own', () => {
+    const withLink: NavItem[] = [
+      { label: 'Tests', to: '/tests', children: [leaf('Series', { to: '/tests/series' })] },
+    ];
+
+    const kept = filterNavBy(withLink, (item) => item.to === '/tests/series');
+
+    assert.deepEqual(
+      kept.map((item) => item.to),
+      ['/tests'],
+    );
+  });
+
+  it('hides nothing when the rule hides nothing', () => {
+    assert.deepEqual(
+      filterNavBy(NAV, () => false),
+      NAV,
+    );
   });
 });

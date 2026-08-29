@@ -14,7 +14,7 @@ import {
   Upload,
   Users,
 } from 'lucide-react';
-import { type NavItem } from '@iace/app-kit';
+import { filterNavBy, type NavItem } from '@iace/app-kit';
 import {
   type AuditAction,
   type AuditActorType,
@@ -401,19 +401,15 @@ const BRANCH_ADMIN_ROUTES = new Set<string>([
   ROUTES.AUDIT_IMPORTS,
 ]);
 
-/** Strips `superAdminOnly` at every depth. `featureKey` is the shell's job. */
+/** Strips `superAdminOnly` and what a branch admin has no use for. `featureKey` is the shell's job. */
 export function filterAdminNav(
   items: readonly AdminNavItem[],
   viewer: { isSuperAdmin: boolean; isBranchAdmin: boolean },
 ): AdminNavItem[] {
-  return items.reduce<AdminNavItem[]>((kept, item) => {
-    if (item.superAdminOnly && !viewer.isSuperAdmin) return kept;
-    if (viewer.isBranchAdmin && item.to && !BRANCH_ADMIN_ROUTES.has(item.to)) return kept;
-    const children = item.children ? filterAdminNav(item.children, viewer) : undefined;
-    if (children?.length === 0 && !item.to) return kept;
-    kept.push(children ? { ...item, children } : item);
-    return kept;
-  }, []);
+  return filterNavBy(items, (item) => {
+    if (item.superAdminOnly && !viewer.isSuperAdmin) return true;
+    return viewer.isBranchAdmin && item.to !== undefined && !BRANCH_ADMIN_ROUTES.has(item.to);
+  });
 }
 
 const ADMIN = 'admin';
