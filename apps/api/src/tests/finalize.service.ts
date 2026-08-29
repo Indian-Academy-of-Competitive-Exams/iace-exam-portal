@@ -32,6 +32,9 @@ const FINALIZE_SELECT = {
 
 type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
 
+/** A 50-variant paper is thousands of rows, and the default 5s is a cliff nobody sees coming. */
+const FREEZE_TIMEOUT_MS = 15_000;
+
 interface PaperRowRef {
   questionId: string;
   baseConfigSectionId: string;
@@ -97,36 +100,52 @@ export class FinalizeService {
     if (test.isLocked) return this.alreadyFinalized(test);
 
     // Drawn BEFORE the freeze, not per attempt: a pool query per student is the thing to avoid.
-    if (!fixed(test.paperBinding)) await this.paper.drawVariants(test.id, test.variantCount);
+    const drawn = fixed(test.paperBinding)
+      ? null
+      : await this.paper.drawVariants(test.id, test.variantCount);
 
     const finalizedAt = new Date();
-    const frozen = await this.prisma.$transaction(async (tx) => {
-      // The one gate: the request whose `version` still matches wins, the other writes nothing.
-      const claimed = await tx.test.updateMany({
-        where: { id: test.id, version: test.version, isLocked: false },
-        // The status rides the SAME claim, so the two can never land apart.
-        data: {
-          isLocked: true,
-          finalizedAt,
-          version: { increment: 1 },
-          ...(opening ? { status: opening } : {}),
-        },
-      });
-      if (claimed.count === 0) return null;
-
-      // Behind the gate: a paper counted outside it can be redrawn before the freeze.
-      const paper = await this.paperOf(tx, test);
-      // Throwing here rolls the claim back, so a paper that is not whole leaves the test unlocked.
-      if (fixed(test.paperBinding)) await this.assertPaperIsWhole(tx, test, paper);
-
-      if (paper.length > 0) {
-        await tx.question.updateMany({
-          where: { id: { in: paper.map((row) => row.questionId) } },
-          data: { fixedUseCount: { increment: 1 } },
+    const frozen = await this.prisma.$transaction(
+      async (tx) => {
+        // The one gate: the request whose `version` still matches wins, the other writes nothing.
+        const claimed = await tx.test.updateMany({
+          // The draw was made from these two, so a call that changed them must lose the freeze.
+          where: {
+            id: test.id,
+            version: test.version,
+            isLocked: false,
+            paperBinding: test.paperBinding,
+            variantCount: test.variantCount,
+          },
+          // The status rides the SAME claim, so the two can never land apart.
+          data: {
+            isLocked: true,
+            finalizedAt,
+            version: { increment: 1 },
+            ...(opening ? { status: opening } : {}),
+          },
         });
-      }
-      return paper.length;
-    });
+        if (claimed.count === 0) return null;
+
+        // Written behind the gate: a draw that lost this race must not replace a frozen paper.
+        if (drawn) await this.paper.writeVariants(tx, test.id, drawn);
+
+        // Behind the gate: a paper counted outside it can be redrawn before the freeze.
+        const paper = drawn ?? (await this.paperOf(tx, test));
+        // Throwing here rolls the claim back, so a paper that is not whole leaves the test unlocked.
+        if (fixed(test.paperBinding)) await this.assertPaperIsWhole(tx, test, paper);
+
+        const served = [...new Set(paper.map((row) => row.questionId))];
+        if (served.length > 0) {
+          await tx.question.updateMany({
+            where: { id: { in: served } },
+            data: { fixedUseCount: { increment: 1 } },
+          });
+        }
+        return paper.length;
+      },
+      { timeout: FREEZE_TIMEOUT_MS },
+    );
 
     if (frozen === null) return this.alreadyFinalized(await this.requireTest(testId));
 

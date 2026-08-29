@@ -119,43 +119,64 @@ export class PaperService {
     return this.paperOf(test.id, config);
   }
 
-  /** The papers a GENERATED test hands out, drawn once at the freeze rather than per attempt. */
-  async drawVariants(testId: string, count: number): Promise<number> {
+  /** The papers a GENERATED test hands out. DRAWN only — writing them belongs behind the freeze. */
+  async drawVariants(
+    testId: string,
+    count: number,
+  ): Promise<Prisma.PaperQuestionCreateManyInput[]> {
     const test = await this.requireTest(testId);
     const config = await this.configs.detail(test.baseConfigId);
     const sections = config.sections.map(toDrawSection);
     const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
 
+    if (count < 1) {
+      const none = 'A drawn test needs at least one paper to hand out.';
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, none, {
+        fieldErrors: { variantCount: [none] },
+      });
+    }
+
     const pool = await this.poolFor(sections, spec);
     this.assertBankCanFill(config.sections, spec, pool);
 
-    const papers = Array.from({ length: count }, (_, variant) => {
-      const result = drawPaper({
-        sections,
-        pool,
-        strategy: test.drawStrategy,
-        spec,
-        // A seed per variant, so the same test drawn twice gives the same set of papers.
-        seed: freshSeed() + variant,
-      });
-      if (!result.ok) {
-        throw new AppException(
-          ErrorCodes.DRAW_SHORTFALL,
-          'The bank does not hold enough questions to fill every section of this paper.',
-          { fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)) },
-        );
-      }
-      return result.questions.map((row) => ({ ...row, variant }));
-    });
+    const papers = Array.from(
+      { length: count },
+      (_, variant): Prisma.PaperQuestionCreateManyInput[] => {
+        const result = drawPaper({
+          sections,
+          pool,
+          strategy: test.drawStrategy,
+          spec,
+          // A seed per variant, so the same test drawn twice gives the same set of papers.
+          seed: freshSeed() + variant,
+        });
+        if (!result.ok) {
+          throw new AppException(
+            ErrorCodes.DRAW_SHORTFALL,
+            'The bank does not hold enough questions to fill every section of this paper.',
+            { fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)) },
+          );
+        }
+        return result.questions.map((row) => ({
+          ...row,
+          variant,
+          testId,
+          baseConfigId: test.baseConfigId,
+        }));
+      },
+    );
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.paperQuestion.deleteMany({ where: { testId } });
-      await tx.paperQuestion.createMany({
-        data: papers.flat().map((row) => ({ ...row, testId, baseConfigId: test.baseConfigId })),
-      });
-    });
+    return papers.flat();
+  }
 
-    return papers.flat().length;
+  /** Takes the caller's transaction because the only safe place to write a paper is behind a gate. */
+  async writeVariants(
+    tx: Prisma.TransactionClient,
+    testId: string,
+    rows: readonly Prisma.PaperQuestionCreateManyInput[],
+  ): Promise<void> {
+    await tx.paperQuestion.deleteMany({ where: { testId } });
+    await tx.paperQuestion.createMany({ data: [...rows] });
   }
 
   /** One more question, in the next free place its section has. Refused once the section is full. */

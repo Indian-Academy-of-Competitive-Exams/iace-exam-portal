@@ -10,6 +10,7 @@ import {
 } from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { PaperService } from '../src/tests/paper.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
@@ -209,9 +210,26 @@ describe('FinalizeService — what it refuses to freeze', () => {
   });
 });
 
+/** A finalize that loses the freeze to another call while it is still drawing. */
+class RacedPaperService extends PaperService {
+  constructor(
+    prisma: PrismaService,
+    configs: BaseConfigsService,
+    private readonly onDraw: () => void,
+  ) {
+    super(prisma, configs);
+  }
+
+  override async drawVariants(testId: string, count: number) {
+    const rows = await super.drawVariants(testId, count);
+    this.onDraw();
+    return rows;
+  }
+}
+
 describe('FinalizeService — a test drawn per student', () => {
   /** Enough of each subject that three variants can be drawn without repeating within one. */
-  function generated(variantCount: number) {
+  function generated(variantCount: number, onDraw?: () => void) {
     const bank = [
       ...Array.from({ length: 9 }, (_, index) =>
         makeQuestion({
@@ -245,9 +263,12 @@ describe('FinalizeService — a test drawn per student', () => {
     );
     const stages = new ExamStagesService(prisma.asService(), new AuditContext());
     const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
-    const paper = new PaperService(prisma.asService(), configs);
+    const paper = onDraw
+      ? new RacedPaperService(prisma.asService(), configs, onDraw)
+      : new PaperService(prisma.asService(), configs);
     return {
       prisma,
+      paper,
       service: new FinalizeService(prisma.asService(), paper, new FakeEventBus().asService()),
     };
   }
@@ -266,6 +287,33 @@ describe('FinalizeService — a test drawn per student', () => {
       ),
       [5, 5, 5],
     );
+  });
+
+  it('draws a paper without writing one, so only the freeze can put one down', async () => {
+    const { prisma, paper } = generated(3);
+
+    const rows = await paper.drawVariants('tst_1', 3);
+
+    assert.equal(rows.length, 15);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  /** The failure this prevents: a raced finalize redrawing the paper another call just froze. */
+  it('leaves the frozen paper alone when it loses the freeze', async () => {
+    const frozen = wholePaper('tst_1');
+    const built = generated(3, () => {
+      Object.assign(built.prisma.tests[0]!, {
+        isLocked: true,
+        version: 1,
+        finalizedAt: new Date(),
+      });
+    });
+    built.prisma.paperQuestions.push(...frozen);
+
+    const result = await built.service.finalize('tst_1');
+
+    assert.equal(result.finalizedByThisCall, false);
+    assert.deepEqual(built.prisma.paperQuestions, frozen);
   });
 
   /** The lock is the first ATTEMPT, and freezing twenty papers is not somebody sitting one. */
