@@ -18,12 +18,21 @@ describe('nameStem', () => {
     assert.equal(nameStem(['SSC CGL', 'Tier 1', 'Standard'], 'Mock'), MOCK_STEM);
   });
 
-  /** The failure this prevents: "SSC CGL Tier 1 SSC CGL Tier 1 — official pattern — Mock 01". */
-  it('drops a part the name has already said', () => {
+  /** The failure this prevents: "SSC_CGL Tier 1 SSC CGL Tier 1 — official pattern — Mock 01". */
+  it('drops a part the name has already said, whatever separates its words', () => {
     assert.equal(
       nameStem(['SSC CGL', 'Tier 1', 'SSC CGL Tier 1 — official pattern'], 'Mock'),
       'SSC CGL Tier 1 — official pattern — Mock',
     );
+    assert.equal(
+      nameStem(['SSC_CGL', 'Tier 1', 'SSC CGL Tier 1 — official pattern'], 'Mock'),
+      'SSC CGL Tier 1 — official pattern — Mock',
+    );
+  });
+
+  /** Tier 10 only starts like Tier 1, so a blind substring would swallow the stage it is not. */
+  it('matches whole words rather than the start of one', () => {
+    assert.equal(nameStem(['Tier 1', 'Tier 10'], 'Mock'), 'Tier 1 Tier 10 — Mock');
   });
 
   it('keeps a config that names something the stage did not', () => {
