@@ -2,12 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
+import { Building2, Plus, ShieldCheck, UserCheck, UserMinus } from 'lucide-react';
 import {
   createAdminSchema,
+  updateAdminSchema,
   type Admin,
   type CreateAdminInput,
   type FeatureKey,
+  type UpdateAdminInput,
 } from '@iace/contracts';
 import {
   Badge,
@@ -19,7 +21,9 @@ import {
   FormDialog,
   FormField,
   Input,
+  Alert,
   ListView,
+  MultiCombobox,
   PageHeader,
   RowActions,
   TableFrame,
@@ -29,10 +33,17 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
+import { useBranches } from '../lib/use-branches';
 import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { SuperAdminOnly } from '../components/super-admin-only';
 
-const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin'] as const;
+const NEW_ADMIN_FIELDS = ['email', 'fullName', 'isSuperAdmin', 'branchIds'] as const;
+const EDIT_BRANCH_FIELDS = ['allBranches', 'branchIds'] as const;
+
+/** Derived, never stored: a role column would be a second answer free to disagree with this one. */
+function isBranchAdmin(admin: Admin): boolean {
+  return !admin.isSuperAdmin && !admin.allBranches;
+}
 
 /**
  * Who can get into the admin app. Super admin only — this screen decides who decides.
@@ -56,15 +67,13 @@ function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
     {
       key: 'role',
       header: 'Role',
-      cell: (a) =>
-        a.isSuperAdmin ? (
-          <Badge variant="primary">
-            <ShieldCheck aria-hidden />
-            Super admin
-          </Badge>
-        ) : (
-          <Badge variant="neutral">Admin</Badge>
-        ),
+      cell: (a) => <RoleBadge admin={a} />,
+    },
+    {
+      key: 'branches',
+      header: 'Branches',
+      className: 'max-w-[16rem]',
+      cell: (a) => <BranchesCell admin={a} />,
     },
     {
       key: 'grants',
@@ -84,9 +93,46 @@ function adminColumns(refresh: () => void): DataTableColumn<Admin>[] {
     {
       key: 'actions',
       className: 'text-right',
-      cell: (a) => <ActiveToggle admin={a} onChanged={refresh} />,
+      cell: (a) => <AdminRowActions admin={a} onChanged={refresh} />,
     },
   ];
+}
+
+function RoleBadge({ admin }: Readonly<{ admin: Admin }>) {
+  if (admin.isSuperAdmin) {
+    return (
+      <Badge variant="primary">
+        <ShieldCheck aria-hidden />
+        Super admin
+      </Badge>
+    );
+  }
+  if (isBranchAdmin(admin)) {
+    return (
+      <Badge variant="neutral">
+        <Building2 aria-hidden />
+        Branch admin
+      </Badge>
+    );
+  }
+  return <Badge variant="neutral">Admin</Badge>;
+}
+
+/** A super admin bypasses every branch check, so naming branches for one would be a lie. */
+function BranchesCell({ admin }: Readonly<{ admin: Admin }>) {
+  const branches = useBranches();
+  if (admin.isSuperAdmin || admin.allBranches) {
+    return <TruncatedText>Every branch</TruncatedText>;
+  }
+
+  const held = branches.filter((branch) => admin.branchIds.includes(branch.id));
+  return (
+    <BadgeList
+      items={held}
+      label={(branch) => branch.name}
+      empty={<Badge variant="warning">No branch</Badge>}
+    />
+  );
 }
 
 export function AdminsPage() {
@@ -166,8 +212,9 @@ function GrantSummary({ admin }: Readonly<{ admin: Admin }>) {
 }
 
 /** Switch an account off, or back on — one control, because it is one decision. */
-function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
+function AdminRowActions({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: () => void }>) {
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const setActive = useMutation({
     meta: {
@@ -188,6 +235,13 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
   return (
     <>
       <RowActions label={`Actions for ${admin.email}`}>
+        {/* Left out for a super admin rather than disabled: they bypass every branch check. */}
+        {admin.isSuperAdmin ? null : (
+          <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <Building2 aria-hidden />
+            Edit branches
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           destructive={admin.isActive}
           disabled={busy}
@@ -197,6 +251,20 @@ function ActiveToggle({ admin, onChanged }: Readonly<{ admin: Admin; onChanged: 
           {admin.isActive ? 'Deactivate' : 'Reactivate'}
         </DropdownMenuItem>
       </RowActions>
+
+      {/* Keyed by the row, and mounted only while it is open, or it opens holding the last one's. */}
+      {editing ? (
+        <EditBranchesDialog
+          key={admin.id}
+          admin={admin}
+          open={editing}
+          onOpenChange={setEditing}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       {/* Both directions ask, and the reverse one is not politeness: switching an
           admin back on restores their sign-in and NOT the permissions that were
@@ -229,13 +297,23 @@ function NewAdminDialog({
   onOpenChange,
   onDone,
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
+  const branches = useBranches();
   const form = useForm<CreateAdminInput>({
     resolver: zodResolver(createAdminSchema),
-    defaultValues: { email: '', fullName: '', isSuperAdmin: false },
+    // Every branch by default: narrowing somebody is deliberate, and neither reaches nobody.
+    defaultValues: {
+      email: '',
+      fullName: '',
+      isSuperAdmin: false,
+      allBranches: true,
+      branchIds: [],
+    },
   });
 
   // useWatch, not form.watch: a fresh function each render stops React Compiler memoising.
   const isSuperAdmin = useWatch({ control: form.control, name: 'isSuperAdmin' }) ?? false;
+  const allBranches = useWatch({ control: form.control, name: 'allBranches' }) ?? true;
+  const branchIds = useWatch({ control: form.control, name: 'branchIds' }) ?? [];
 
   /** Held between "submit" and "yes" — the form has already validated. */
   const [pending, setPending] = useState<CreateAdminInput | null>(null);
@@ -285,6 +363,39 @@ function NewAdminDialog({
             />
           )}
         </FormField>
+
+        {/* A super admin bypasses every branch check, so asking which branches would be a lie. */}
+        {isSuperAdmin ? null : (
+          <>
+            <FormField form={form} name="allBranches" label="">
+              {(control) => (
+                <Checkbox
+                  {...control}
+                  checked={allBranches}
+                  onChange={(event) => {
+                    form.setValue('allBranches', event.target.checked);
+                    if (event.target.checked) form.setValue('branchIds', []);
+                  }}
+                  label="Every branch"
+                />
+              )}
+            </FormField>
+
+            {allBranches ? null : (
+              <FormField form={form} name="branchIds" label="Branches">
+                {(control) => (
+                  <MultiCombobox
+                    {...control}
+                    value={branchIds}
+                    onChange={(next) => form.setValue('branchIds', next)}
+                    items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                    placeholder="Choose branches"
+                  />
+                )}
+              </FormField>
+            )}
+          </>
+        )}
       </FormDialog>
 
       {/* Creating an admin is creating a way into this app, and a super admin
@@ -314,5 +425,81 @@ function NewAdminDialog({
         onConfirm={() => pending && create.mutate(pending)}
       />
     </>
+  );
+}
+
+function EditBranchesDialog({
+  admin,
+  open,
+  onOpenChange,
+  onDone,
+}: Readonly<{
+  admin: Admin;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}>) {
+  const branches = useBranches();
+  const form = useForm<UpdateAdminInput>({
+    resolver: zodResolver(updateAdminSchema),
+    defaultValues: { allBranches: admin.allBranches, branchIds: [...admin.branchIds] },
+  });
+  const allBranches = useWatch({ control: form.control, name: 'allBranches' }) ?? false;
+  const branchIds = useWatch({ control: form.control, name: 'branchIds' }) ?? [];
+
+  const save = useMutation({
+    meta: { success: 'Branches updated.', fields: EDIT_BRANCH_FIELDS },
+    mutationFn: (values: UpdateAdminInput) => api.admin.admins.update(admin.id, values),
+    onSuccess: onDone,
+    onError: (error) => applyFieldErrors(error, form.setError, EDIT_BRANCH_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={`Branches for ${admin.email}`}
+      submitLabel="Save"
+      loading={save.isPending}
+    >
+      <FormField form={form} name="allBranches" label="">
+        {(control) => (
+          <Checkbox
+            {...control}
+            checked={allBranches}
+            onChange={(event) => {
+              form.setValue('allBranches', event.target.checked);
+              if (event.target.checked) form.setValue('branchIds', []);
+            }}
+            label="Every branch"
+          />
+        )}
+      </FormField>
+
+      {allBranches ? null : (
+        <FormField form={form} name="branchIds" label="Branches">
+          {(control) => (
+            <MultiCombobox
+              {...control}
+              value={branchIds}
+              onChange={(next) => form.setValue('branchIds', next)}
+              items={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+              placeholder="Choose branches"
+            />
+          )}
+        </FormField>
+      )}
+
+      {allBranches || branchIds.length > 0 ? null : (
+        <Alert variant="warning">
+          <span>
+            With no branch chosen, {admin.email} reaches no students at all. That is a real answer —
+            it is not read as every branch.
+          </span>
+        </Alert>
+      )}
+    </FormDialog>
   );
 }
