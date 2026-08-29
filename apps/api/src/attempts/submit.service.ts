@@ -126,9 +126,10 @@ export class SubmitService {
     });
   }
 
-  /** Found already ended: whoever ended it may have died before clearing its live state. */
+  /** Found already ended. Taking the state makes this the only caller that can still write it. */
   private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
-    await this.state.take(attemptId);
+    const stray = await this.state.take(attemptId);
+    if (stray) await this.flush(attemptId, rowsToFlush(stray));
     return this.alreadySubmitted(attemptId);
   }
 

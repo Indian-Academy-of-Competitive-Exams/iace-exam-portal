@@ -19,6 +19,14 @@ export const SCORING_REQUEST = {
 /** How many stranded requests one relay pass hands on. */
 const RELAY_BATCH = 200;
 
+/** How long a request must sit before a SWEEP takes it: the submit may still be writing answers. */
+const RELAY_GRACE_SEC = 30;
+
+/** What a pass did with one request: handed it on, gave up on it, or left it for the next sweep. */
+const HANDLED = { SENT: 'sent', DROPPED: 'dropped', LEFT: 'left' } as const;
+
+type Handled = (typeof HANDLED)[keyof typeof HANDLED];
+
 interface PendingRequest {
   id: string;
   aggregateId: string;
@@ -56,22 +64,26 @@ export class ScoringOutbox {
     let handed = 0;
     for (;;) {
       const pending = await this.pending(eventId);
-      let sent = 0;
+      const outcomes: Handled[] = [];
       for (const row of pending) {
-        sent += await this.deliver(row);
+        outcomes.push(await this.deliver(row));
       }
-      handed += sent;
-      // Drains a backlog rather than 200 of it a sweep, and stops dead when nothing can be sent.
-      if (pending.length < RELAY_BATCH || sent === 0) return handed;
+      handed += outcomes.filter((outcome) => outcome === HANDLED.SENT).length;
+
+      // Drains a backlog rather than 200 of it a sweep, and stops on a queue nobody can reach.
+      const stuck = outcomes.every((outcome) => outcome === HANDLED.LEFT);
+      if (pending.length < RELAY_BATCH || stuck) return handed;
     }
   }
 
   private async pending(eventId?: string): Promise<PendingRequest[]> {
+    const settling = new Date(Date.now() - RELAY_GRACE_SEC * MILLISECONDS_PER_SECOND);
     return this.prisma.outboxEvent.findMany({
       where: {
         eventType: SCORING_REQUEST.EVENT_TYPE,
         processedAt: null,
-        ...(eventId ? { id: eventId } : {}),
+        // A submit hands on its own; a sweep waits, or it scores answers still being written.
+        ...(eventId ? { id: eventId } : { createdAt: { lt: settling } }),
       },
       orderBy: { createdAt: 'asc' },
       take: RELAY_BATCH,
@@ -80,28 +92,28 @@ export class ScoringOutbox {
   }
 
   /** Queued BEFORE it is marked, so a crash between the two redelivers rather than loses. */
-  private async deliver(row: PendingRequest): Promise<number> {
+  private async deliver(row: PendingRequest): Promise<Handled> {
     const testId = testIdOf(row.payload);
-    if (!testId) {
-      this.logger.error(`Scoring request ${row.id} carries no testId, so nothing can score it`);
-      return 0;
-    }
-
     try {
-      await this.scoring.add(
-        QUEUE_NAMES.SCORING,
-        { attemptId: row.aggregateId, testId },
-        { jobId: scoringJobId(row.aggregateId) },
-      );
+      if (testId === null) {
+        // Left pending, a request nothing can ever act on blocks every request behind it.
+        this.logger.error(`Scoring request ${row.id} names no test, so nothing can score it`);
+      } else {
+        await this.scoring.add(
+          QUEUE_NAMES.SCORING,
+          { attemptId: row.aggregateId, testId },
+          { jobId: scoringJobId(row.aggregateId) },
+        );
+      }
       await this.prisma.outboxEvent.update({
         where: { id: row.id },
         data: { processedAt: new Date() },
       });
-      return 1;
+      return testId === null ? HANDLED.DROPPED : HANDLED.SENT;
     } catch (error) {
       // One request's failure is its own: it stays pending, and the next sweep hands it on again.
       this.logger.error(`Handing scoring request ${row.id} to the queue failed`, error);
-      return 0;
+      return HANDLED.LEFT;
     }
   }
 }
@@ -111,3 +123,5 @@ function testIdOf(payload: Prisma.JsonValue | null): string | null {
   const testId = payload.testId;
   return typeof testId === 'string' ? testId : null;
 }
+
+const MILLISECONDS_PER_SECOND = 1000;

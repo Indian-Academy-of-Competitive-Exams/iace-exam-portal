@@ -38,7 +38,7 @@ export class AttemptFlushProcessor extends WorkerHost {
       where: { id: attemptId },
       select: { id: true, status: true },
     });
-    // Submit writes its final answers in the transaction that flips the status.
+    // Submit writes its final answers around the flip, so anything ended is already durable.
     if (attempt?.status !== ATTEMPT_STATUS.IN_PROGRESS) {
       await this.state.clearDirty(attemptId);
       return;

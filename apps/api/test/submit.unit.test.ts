@@ -11,7 +11,7 @@ import {
 } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
-import { ScoringOutbox } from '../src/attempts/scoring-outbox';
+import { ScoringOutbox, SCORING_REQUEST } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import {
@@ -302,8 +302,8 @@ describe('a save that races the submit', () => {
     assert.equal(q2?.selectedOptionId, 'opt_a');
   });
 
-  /** A sitting already ended must not keep a live key: it would accept saves for its whole TTL. */
-  it('clears live state it finds behind an attempt that has already ended', async () => {
+  /** The failure this prevents: the one caller that can still write those answers dropping them. */
+  it('writes the live state it finds behind an attempt that has already ended', async () => {
     const { submit, state, prisma } = build();
     await answered(state);
     prisma.attemptRows[0]!.status = ATTEMPT_STATUS.SUBMITTED;
@@ -312,6 +312,9 @@ describe('a save that races the submit', () => {
     const result = await submit.submit('stu_1', 'att_1');
 
     assert.equal(result.submittedByThisCall, false);
+    assert.equal(result.answeredCount, 1);
+    assert.equal(prisma.attemptQuestions[0]?.selectedOptionId, 'opt_a');
+    // A key outliving its sitting would go on accepting saves for the whole 12h TTL.
     assert.equal(await state.read('att_1'), null);
   });
 });
@@ -323,9 +326,9 @@ describe('the scoring relay', () => {
     for (let n = 0; n < 250; n += 1) {
       await prisma.outboxEvent.create({
         data: {
-          aggregateType: 'Attempt',
+          aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
           aggregateId: `att_${n}`,
-          eventType: 'attempt.scoring_requested',
+          eventType: SCORING_REQUEST.EVENT_TYPE,
           payload: { testId: 'tst_1' },
         },
       });
@@ -337,8 +340,8 @@ describe('the scoring relay', () => {
     assert.equal(queue.jobs.length, 250);
   });
 
-  /** Two relays racing hand on the same job id, which is what makes the queue collapse them. */
-  it('names every hand-off after the attempt, so a redelivery is not a second scoring', async () => {
+  /** The job id is what lets BullMQ collapse two hand-offs; deriving it here is our half. */
+  it('names every hand-off after the attempt it scores', async () => {
     const { submit, state, queue, outbox } = build();
     await answered(state);
     await submit.submit('stu_1', 'att_1');
@@ -356,3 +359,24 @@ function prismaReopen(outbox: ScoringOutbox): void {
   const rows = (outbox as unknown as { prisma: FakeTestsPrisma }).prisma.outboxEvents;
   for (const row of rows) row.processedAt = null;
 }
+
+describe('a request nothing can act on', () => {
+  /** The failure this prevents: one unusable row at the head starving every request behind it. */
+  it('gives up on it rather than blocking the queue behind it', async () => {
+    const { prisma, queue, outbox } = build();
+    await prisma.outboxEvent.create({
+      data: {
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
+        aggregateId: 'att_broken',
+        eventType: SCORING_REQUEST.EVENT_TYPE,
+        payload: {},
+      },
+    });
+
+    await outbox.relay();
+    await outbox.relay();
+
+    assert.equal(queue.jobs.length, 0);
+    assert.ok(prisma.outboxEvents[0]?.processedAt, 'it must not come back every sweep forever');
+  });
+});

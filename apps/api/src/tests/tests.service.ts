@@ -183,6 +183,8 @@ export class TestsService {
           ...(input.questionPoolFilter === undefined
             ? {}
             : { questionPoolFilter: toJson(input.questionPoolFilter ?? null) }),
+          // A finalize drawing from these must lose its claim, so every paper edit moves the version.
+          ...(thawsThePaper(input) ? { version: { increment: 1 } } : {}),
         },
         include: TEST_INCLUDE,
       });
