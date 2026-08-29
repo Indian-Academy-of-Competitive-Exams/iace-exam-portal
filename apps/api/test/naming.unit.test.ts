@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { branchNameSchema, canonicalName, examCodeSchema } from '@iace/contracts';
+import { EXAM_CODE_MAX, branchNameSchema, canonicalName, examCodeSchema } from '@iace/contracts';
 
 /**
  * Branch names and exam codes are the vocabulary access is routed through, and the failure these
@@ -56,10 +56,9 @@ describe('examCodeSchema', () => {
   });
 
   it('measures length AFTER normalising, so padding cannot smuggle one past', () => {
-    const tooLong = 'A'.repeat(41);
-    assert.equal(examCodeSchema.safeParse(tooLong).success, false);
-    // 40 characters plus padding is still 40 characters.
-    assert.equal(examCodeSchema.parse(`  ${'A'.repeat(40)}  `), 'A'.repeat(40));
+    assert.equal(examCodeSchema.safeParse('A'.repeat(EXAM_CODE_MAX + 1)).success, false);
+    const atCap = 'A'.repeat(EXAM_CODE_MAX);
+    assert.equal(examCodeSchema.parse(`  ${atCap}  `), atCap);
   });
 
   it('makes case-different duplicates impossible rather than merely reported', () => {

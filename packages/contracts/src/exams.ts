@@ -62,7 +62,7 @@ export type LanguageCode = z.infer<typeof languageCodeSchema>;
 export const LANGUAGE_CODES = languageCodeSchema.options;
 
 export const EXAM_NAME_MAX = 80;
-export const EXAM_CODE_MAX = 40;
+export const EXAM_CODE_MAX = 60;
 
 /** Display text — what an admin reads in a list, not what anything stores. */
 export const examNameSchema = z

@@ -94,7 +94,7 @@ ON CONFLICT DO NOTHING;
 -- objective modules can be sat as a mock, and the DEST typing module cannot.
 -- ---------------------------------------------------------------------------
 INSERT INTO "Exam" ("id", "family", "code", "name", "description")
-VALUES ('exam_ssc_cgl', 'SSC', 'SSC_CGL', 'Combined Graduate Level',
+VALUES ('exam_ssc_cgl', 'SSC', 'SSC CGL', 'Combined Graduate Level',
         'SSC Combined Graduate Level examination')
 ON CONFLICT DO NOTHING;
 

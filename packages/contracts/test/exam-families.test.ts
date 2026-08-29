@@ -5,10 +5,10 @@ import { describe, it } from 'node:test';
 import { examsInFamilies, type ExamFamily } from '../src/exams';
 
 const EXAMS = [
-  { code: 'SSC_CGL', family: 'SSC' as ExamFamily },
-  { code: 'SSC_CHSL', family: 'SSC' as ExamFamily },
-  { code: 'RRB_JE', family: 'RRB' as ExamFamily },
-  { code: 'IBPS_PO', family: 'BANKING' as ExamFamily },
+  { code: 'SSC CGL', family: 'SSC' as ExamFamily },
+  { code: 'SSC CHSL', family: 'SSC' as ExamFamily },
+  { code: 'RRB JE', family: 'RRB' as ExamFamily },
+  { code: 'IBPS PO', family: 'BANKING' as ExamFamily },
 ];
 
 const codes = (families: ExamFamily[], chosen: string[] = []): string[] =>
@@ -16,26 +16,26 @@ const codes = (families: ExamFamily[], chosen: string[] = []): string[] =>
 
 describe('examsInFamilies', () => {
   it('offers everything while no family is chosen', () => {
-    assert.deepEqual(codes([]), ['SSC_CGL', 'SSC_CHSL', 'RRB_JE', 'IBPS_PO']);
+    assert.deepEqual(codes([]), ['SSC CGL', 'SSC CHSL', 'RRB JE', 'IBPS PO']);
   });
 
   it('narrows to the chosen family', () => {
-    assert.deepEqual(codes(['SSC']), ['SSC_CGL', 'SSC_CHSL']);
+    assert.deepEqual(codes(['SSC']), ['SSC CGL', 'SSC CHSL']);
   });
 
   it('adds up across several families rather than intersecting them', () => {
-    assert.deepEqual(codes(['SSC', 'RRB']), ['SSC_CGL', 'SSC_CHSL', 'RRB_JE']);
+    assert.deepEqual(codes(['SSC', 'RRB']), ['SSC CGL', 'SSC CHSL', 'RRB JE']);
   });
 
   it('keeps an exam already on the record even once its family is taken off', () => {
-    assert.deepEqual(codes(['RRB'], ['SSC_CGL']), ['SSC_CGL', 'RRB_JE']);
+    assert.deepEqual(codes(['RRB'], ['SSC CGL']), ['SSC CGL', 'RRB JE']);
   });
 
   it('keeps the order the exams arrived in, so the list does not reshuffle as families change', () => {
-    assert.deepEqual(codes(['BANKING'], ['SSC_CHSL']), ['SSC_CHSL', 'IBPS_PO']);
+    assert.deepEqual(codes(['BANKING'], ['SSC CHSL']), ['SSC CHSL', 'IBPS PO']);
   });
 
   it('never invents a code that was not in the source list', () => {
-    assert.deepEqual(codes(['SSC'], ['NOT_AN_EXAM']), ['SSC_CGL', 'SSC_CHSL']);
+    assert.deepEqual(codes(['SSC'], ['NOT AN EXAM']), ['SSC CGL', 'SSC CHSL']);
   });
 });
