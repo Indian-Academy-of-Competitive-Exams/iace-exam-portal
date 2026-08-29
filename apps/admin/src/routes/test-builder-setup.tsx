@@ -3,6 +3,8 @@ import {
   DRAW_STRATEGIES,
   EVALUATION_MODE,
   EVALUATION_MODES,
+  EXAM_TEMPLATE,
+  EXAM_TEMPLATES,
   MAX_PAPER_VARIANTS,
   MAX_RETAKES_CEILING,
   PAPER_BINDING,
@@ -12,6 +14,7 @@ import {
   type BaseConfigDetail,
   type DrawStrategy,
   type EvaluationMode,
+  type ExamTemplate,
   type PaperBinding,
   type TestDetail,
   type TestScope,
@@ -22,6 +25,8 @@ import {
   DRAW_STRATEGY_LABELS,
   EVALUATION_MODE_HINTS,
   EVALUATION_MODE_LABELS,
+  EXAM_TEMPLATE_HINTS,
+  EXAM_TEMPLATE_LABELS,
   PAPER_BINDING_HINTS,
   PAPER_BINDING_LABELS,
   TEST_SCOPE_LABELS,
@@ -62,6 +67,7 @@ export function SetupStep({
         <Blueprint
           form={form}
           detail={detail}
+          config={config}
           suggestion={values.title?.trim() === '' ? suggested : undefined}
         />
       </FormSection>
@@ -88,11 +94,20 @@ function scopeNameOf(values: TestFormValues, config: BaseConfigDetail | null): s
 function Blueprint({
   form,
   detail,
+  config,
   suggestion,
-}: Readonly<{ form: TestForm; detail: TestDetail | null; suggestion?: string }>) {
+}: Readonly<{
+  form: TestForm;
+  detail: TestDetail | null;
+  config: BaseConfigDetail | null;
+  suggestion?: string;
+}>) {
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
+  const chosen = useWatch({ control: form.control, name: 'examTemplate' });
+  // Unchosen shows what the blueprint would give, which is exactly what the server would store.
+  const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.COMFORTABLE;
 
   /** A cascade: a stage belongs to one exam, and a configuration to one stage. */
   const pickExam = (value: string) => {
@@ -164,6 +179,26 @@ function Blueprint({
             onAcceptSuggestion={(name) =>
               form.setValue('title', name, { shouldDirty: true, shouldValidate: true })
             }
+          />
+        )}
+      </FormField>
+
+      <FormField form={form} name="examTemplate" label="Exam screen">
+        {(control) => (
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={examTemplate}
+            onChange={(next) =>
+              form.setValue('examTemplate', next as ExamTemplate, { shouldDirty: true })
+            }
+            items={EXAM_TEMPLATES.map((value) => ({
+              value,
+              label: EXAM_TEMPLATE_LABELS[value],
+              hint: EXAM_TEMPLATE_HINTS[value],
+            }))}
           />
         )}
       </FormField>

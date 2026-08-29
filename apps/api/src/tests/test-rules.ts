@@ -75,12 +75,21 @@ export function scopeRefIssue(scope: TestScope, scopeRef: TestScopeRef | null): 
 /** The one field a sat test may still change: renaming it moves no question. */
 export const TEST_UNFROZEN_FIELDS = ['title'] as const;
 
+/** Neither of these can change WHICH questions the paper holds, so neither unfreezes one. */
+export const PAPER_NEUTRAL_FIELDS = ['title', 'examTemplate'] as const;
+
 export const SAT_TEST_MESSAGE =
   'Students have sat this test, so its paper cannot move under their results. Only its name still changes.';
 
 export function locksOutTestEdit(input: UpdateTestBody): boolean {
   const unfrozen = new Set<string>(TEST_UNFROZEN_FIELDS);
   return Object.keys(input).some((key) => !unfrozen.has(key));
+}
+
+/** A frozen paper thaws only for an edit that could change what it holds — a re-skin cannot. */
+export function thawsThePaper(input: UpdateTestBody): boolean {
+  const neutral = new Set<string>(PAPER_NEUTRAL_FIELDS);
+  return Object.keys(input).some((key) => !neutral.has(key));
 }
 
 /** A frozen paper that no longer matches its own scope is worse than either state, so it thaws. */

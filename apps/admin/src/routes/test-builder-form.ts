@@ -9,6 +9,7 @@ import {
   TEST_SCOPE,
   type DrawStrategy,
   type EvaluationMode,
+  type ExamTemplate,
   type PaperBinding,
   type TestDetail,
   type TestScope,
@@ -29,6 +30,8 @@ export interface TestFormValues {
   topicIds: string[];
   evaluationMode: EvaluationMode;
   paperBinding: PaperBinding;
+  /** Null until the admin picks one — the config's default stands in until they do. */
+  examTemplate: ExamTemplate | null;
   maxRetakes: string;
   variantCount: string;
   drawSpec: DrawSpec;
@@ -50,6 +53,7 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     topicIds: scopeRef?.topicIds ?? [],
     evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
+    examTemplate: detail?.examTemplate ?? null,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
     variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
     drawSpec: detail?.questionPoolFilter ?? { sections: {} },

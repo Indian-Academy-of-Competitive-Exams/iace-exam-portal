@@ -137,6 +137,8 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         scopeRef: scopeRefOf(values),
         evaluationMode: values.evaluationMode,
         paperBinding: values.paperBinding,
+        // Left out while unchosen, so the server takes the config's rather than guessing here.
+        examTemplate: values.examTemplate ?? undefined,
         maxRetakes: optionalNumber(values.maxRetakes),
         variantCount: optionalNumber(values.variantCount),
         drawStrategy: values.drawStrategy,

@@ -24,6 +24,7 @@ import { BaseConfigsService } from '../configs';
 import {
   SAT_TEST_MESSAGE,
   locksOutTestEdit,
+  thawsThePaper,
   paperBindingIssue,
   scopeRefIssue,
   TEST_DEFAULTS,
@@ -55,6 +56,7 @@ export const AUDITED_TEST_FIELDS = [
   'scope',
   'evaluationMode',
   'paperBinding',
+  'examTemplate',
   'maxRetakes',
   'drawStrategy',
   'status',
@@ -116,8 +118,8 @@ export class TestsService {
         baseConfigId: config.id,
         examStageId: config.examStageId,
         title: input.title,
-        // Copied, not read through: a config re-skinned later must not re-skin a sat paper.
-        examTemplate: config.examTemplate,
+        // The config only supplies the default; from here the test owns which screen it wears.
+        examTemplate: input.examTemplate ?? config.examTemplate,
         scope,
         scopeRef: toJson(scopeRef),
         evaluationMode,
@@ -161,7 +163,7 @@ export class TestsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // Before the paper goes: the thaw reads it to give back what finalizing counted.
-      if (shapeChange) await thaw(tx, test);
+      if (thawsThePaper(input)) await thaw(tx, test);
 
       // A paper belongs to a FIXED test. Per-attempt leaves rows nothing will ever read.
       if (droppingThePaper) await tx.paperQuestion.deleteMany({ where: { testId: id } });
@@ -173,6 +175,7 @@ export class TestsService {
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
+          ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
           ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
           ...(input.drawStrategy === undefined ? {} : { drawStrategy: input.drawStrategy }),
@@ -290,6 +293,7 @@ function toTest(row: TestRow): Test {
     scopeRef: scopeRefOf(row),
     evaluationMode: row.evaluationMode,
     paperBinding: row.paperBinding,
+    examTemplate: row.examTemplate,
     maxRetakes: row.maxRetakes,
     drawStrategy: row.drawStrategy,
     variantCount: row.variantCount,

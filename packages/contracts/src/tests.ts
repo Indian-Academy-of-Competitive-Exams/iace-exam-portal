@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { csvIdQuery, csvQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
-import { baseConfigDetailSchema, stageRefSchema } from './configs';
+import { baseConfigDetailSchema, examTemplateSchema, stageRefSchema } from './configs';
 import {
   DIFFICULTY_LEVELS,
   difficultyLevelSchema,
@@ -310,6 +310,8 @@ export const testSchema = z.object({
   scopeRef: testScopeRefSchema.nullable(),
   evaluationMode: evaluationModeSchema,
   paperBinding: paperBindingSchema,
+  /** This test's own copy — the config's is only what it started from. */
+  examTemplate: examTemplateSchema,
   /** Null means unlimited. A ranked graded attempt is always one. */
   maxRetakes: z.number().int().nullable(),
   drawStrategy: drawStrategySchema,
@@ -465,6 +467,8 @@ const testOwnFieldsSchema = z.object({
   scopeRef: testScopeRefSchema.nullish(),
   evaluationMode: evaluationModeSchema.optional(),
   paperBinding: paperBindingSchema.optional(),
+  /** Absent on create means take the config's; a test chooses its own screen from then on. */
+  examTemplate: examTemplateSchema.optional(),
   maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
   /** How many papers to draw. A fixed test is one, and the server holds it there. */
   variantCount: z.coerce.number().int().min(1).max(MAX_PAPER_VARIANTS).optional(),

@@ -987,6 +987,7 @@ export interface FakeBaseConfigRow {
   navigation: NavigationPolicy;
   optionalSectionCount: number | null;
   defaultTestUi: TestUi;
+  examTemplate: ExamTemplate;
   languageMode: LanguageMode;
   languages: LanguageCode[];
   shuffleQuestions: boolean;
@@ -1040,6 +1041,7 @@ export function makeBaseConfig(overrides: Partial<FakeBaseConfigRow> = {}): Fake
     navigation: NAVIGATION_POLICY.FREE,
     optionalSectionCount: null,
     defaultTestUi: TEST_UI.CBT,
+    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
     languageMode: LANGUAGE_MODE.SINGLE,
     languages: [LANGUAGE_CODE.EN],
     shuffleQuestions: true,

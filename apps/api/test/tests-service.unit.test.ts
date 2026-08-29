@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   DRAW_STRATEGY,
+  EXAM_TEMPLATE,
   ErrorCodes,
   EVALUATION_MODE,
   PAPER_BINDING,
@@ -72,6 +73,38 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(created.totalQuestions, 50);
     assert.equal(created.durationSec, 3600);
     assert.equal(created.baseConfig.sections.length, 2);
+  });
+
+  /** The screen is asked for at creation now; the blueprint only says where the answer starts. */
+  it('wears the screen the admin chose, not the config default', async () => {
+    const { service } = serviceWith();
+
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', examTemplate: EXAM_TEMPLATE.STRICT },
+      ADMIN,
+    );
+
+    assert.equal(created.examTemplate, EXAM_TEMPLATE.STRICT);
+  });
+
+  it('falls back to the config when the admin chose no screen', async () => {
+    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.STRICT });
+    const { service } = serviceWith([], [config]);
+
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+
+    assert.equal(created.examTemplate, EXAM_TEMPLATE.STRICT);
+  });
+
+  /** The copy is the point: re-skinning the blueprint must not re-skin a test already built. */
+  it('keeps the screen it was built with when the config is re-skinned', async () => {
+    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.COMFORTABLE });
+    const { service } = serviceWith([], [config]);
+    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+
+    config.examTemplate = EXAM_TEMPLATE.STRICT;
+
+    assert.equal((await service.detail(created.id)).examTemplate, EXAM_TEMPLATE.COMFORTABLE);
   });
 
   it('follows the config when it changes, because it never copied it', async () => {
@@ -308,6 +341,33 @@ describe('TestsService — editing and removing', () => {
     await service.update('tst_1', { variantCount: 12 });
 
     assert.equal(prisma.tests[0]!.variantCount, 1);
+  });
+
+  /** THE failure this prevents: a re-skin silently un-finalizing a paper it moves no question in. */
+  it('re-skins a frozen test without thawing the paper', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE }),
+    ]);
+
+    const updated = await service.update('tst_1', { examTemplate: EXAM_TEMPLATE.STRICT });
+
+    assert.equal(updated.examTemplate, EXAM_TEMPLATE.STRICT);
+    assert.equal(prisma.tests[0]!.isLocked, true);
+    assert.equal(prisma.tests[0]!.status, TEST_STATUS.ACTIVE);
+  });
+
+  /** A student who sat the comfortable screen must not have their test re-skinned under them. */
+  it('refuses a re-skin once a student has sat it', async () => {
+    const { service } = serviceWith([makeTest({ id: 'tst_1' })], undefined, {
+      attempts: [{ testId: 'tst_1' }],
+    });
+
+    const error = await service
+      .update('tst_1', { examTemplate: EXAM_TEMPLATE.STRICT })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
   });
 
   /** The failure this prevents: a frozen paper left pointing at a scope it no longer covers. */
