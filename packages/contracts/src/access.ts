@@ -26,6 +26,9 @@ export const TEST_SERIES_KIND = {
   SCHOLARSHIP: 'SCHOLARSHIP',
 } as const;
 export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
+
+/** How many exam families a student may hold FREE-series access across by asking for it. */
+export const FREE_SERIES_FAMILY_CAP = 2;
 export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
 export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
 

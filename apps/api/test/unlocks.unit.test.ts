@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   AppException,
+  EXAM_FAMILY,
   ErrorCodes,
+  STUDENT_TYPE,
+  TEST_SERIES_KIND,
   UNLOCK_MODE,
   UNLOCK_REQUEST_STATUS,
   UNLOCK_STATE,
@@ -13,17 +16,19 @@ import { UnlocksService } from '../src/access/unlocks.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import {
+  type FakeCatalogData,
   FakeCatalogPrisma,
   FakeEventBus,
+  type FakeGrantRowAccess,
   FakeRedis,
+  type FakeUnlockRequestRow,
+  type FakeUnlockRow,
   makeBranchConfig,
+  makeExam,
+  makeExamStage,
   makeSeries,
   makeStudent,
   makeTestRow,
-  type FakeCatalogData,
-  type FakeGrantRowAccess,
-  type FakeUnlockRequestRow,
-  type FakeUnlockRow,
 } from './support/fakes';
 
 /**
@@ -632,5 +637,162 @@ describe('UnlocksService.listRequests', () => {
       ['sur_old'],
     );
     assert.equal(page.total, 2);
+  });
+});
+
+/** Asking for a FREE series nobody reaches: the one way in for a student outside the institute. */
+
+const FAMILIES = [EXAM_FAMILY.SSC, EXAM_FAMILY.RRB, EXAM_FAMILY.BANKING] as const;
+
+/** Three FREE series, one per family, and a student who reaches none of them. */
+function outsider(over: FakeCatalogData = {}): FakeCatalogData {
+  return {
+    students: [
+      makeStudent({
+        id: 'stu_1',
+        currentBranchId: null,
+        enrolledExams: [],
+        enrolledFamilies: [],
+        studentType: STUDENT_TYPE.NON_IACE,
+      }),
+    ],
+    exams: FAMILIES.map((family) =>
+      makeExam({ id: `exam_${family}`, family, code: family, name: family }),
+    ),
+    stages: FAMILIES.map((family) =>
+      makeExamStage({ id: `stage_${family}`, examId: `exam_${family}`, stageKey: `${family}_T1` }),
+    ),
+    series: FAMILIES.map((family) =>
+      makeSeries({
+        id: `srs_${family}`,
+        examStageId: `stage_${family}`,
+        kind: TEST_SERIES_KIND.FREE,
+      }),
+    ),
+    ...over,
+  };
+}
+
+const grantOf = (testSeriesId: string): FakeGrantRowAccess => ({
+  studentId: 'stu_1',
+  testSeriesId,
+  createdById: ADMIN,
+  createdAt: NOW,
+});
+
+describe('asking for a FREE series nobody reaches', () => {
+  it('takes the ask, though the student reaches nothing at all', async () => {
+    const { service, resolver } = build(outsider());
+    assert.deepEqual((await resolver.catalog('stu_1', NOW)).series, []);
+
+    const request = await service.request('stu_1', `srs_${EXAM_FAMILY.SSC}`);
+
+    assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
+  });
+
+  /** A scholarship intake names its candidates; putting a hand up is not being named. */
+  it('refuses a SCHOLARSHIP series', async () => {
+    const { service } = build(
+      outsider({
+        series: [
+          makeSeries({
+            id: 'srs_scholar',
+            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            kind: TEST_SERIES_KIND.SCHOLARSHIP,
+          }),
+        ],
+      }),
+    );
+
+    await assert.rejects(
+      () => service.request('stu_1', 'srs_scholar'),
+      (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  it('refuses a STANDARD series', async () => {
+    const { service } = build(
+      outsider({
+        series: [
+          makeSeries({
+            id: 'srs_std',
+            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            kind: TEST_SERIES_KIND.STANDARD,
+          }),
+        ],
+      }),
+    );
+
+    await assert.rejects(
+      () => service.request('stu_1', 'srs_std'),
+      (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
+    );
+  });
+
+  it('approving writes a GRANT, and the series is theirs on the next read', async () => {
+    const { service, resolver, listener, events, world } = build(outsider());
+    const request = await service.request('stu_1', `srs_${EXAM_FAMILY.SSC}`);
+
+    await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED);
+    await deliverBusts(events, listener);
+
+    assert.deepEqual(
+      world.grants.map((grant) => grant.testSeriesId),
+      [`srs_${EXAM_FAMILY.SSC}`],
+    );
+    assert.deepEqual(
+      (await resolver.catalog('stu_1', NOW)).series.map((series) => series.id),
+      [`srs_${EXAM_FAMILY.SSC}`],
+    );
+  });
+
+  it('refuses a third exam family', async () => {
+    const { service } = build(
+      outsider({
+        grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],
+      }),
+    );
+
+    await assert.rejects(
+      () => service.request('stu_1', `srs_${EXAM_FAMILY.BANKING}`),
+      (error: AppException) => error.code === ErrorCodes.VALIDATION_ERROR,
+    );
+  });
+
+  /** Otherwise five asks queue in five families and every one of them is approvable. */
+  it('counts an ask still waiting toward the cap', async () => {
+    const { service } = build(outsider({ grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`)] }));
+    await service.request('stu_1', `srs_${EXAM_FAMILY.RRB}`);
+
+    await assert.rejects(
+      () => service.request('stu_1', `srs_${EXAM_FAMILY.BANKING}`),
+      (error: AppException) => error.code === ErrorCodes.VALIDATION_ERROR,
+    );
+  });
+
+  it('lets a second series inside a family they already hold through', async () => {
+    const { service } = build(
+      outsider({
+        grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],
+        series: [
+          ...FAMILIES.map((family) =>
+            makeSeries({
+              id: `srs_${family}`,
+              examStageId: `stage_${family}`,
+              kind: TEST_SERIES_KIND.FREE,
+            }),
+          ),
+          makeSeries({
+            id: 'srs_ssc_two',
+            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            kind: TEST_SERIES_KIND.FREE,
+          }),
+        ],
+      }),
+    );
+
+    const request = await service.request('stu_1', 'srs_ssc_two');
+
+    assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
   });
 });

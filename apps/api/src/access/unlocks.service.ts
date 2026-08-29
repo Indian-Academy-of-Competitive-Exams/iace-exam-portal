@@ -7,6 +7,9 @@ import {
   UNLOCK_MODE,
   UNLOCK_REQUEST_STATUS,
   UNLOCK_STATE,
+  TEST_SERIES_KIND,
+  FREE_SERIES_FAMILY_CAP,
+  type ExamFamily,
   type Paginated,
   type SeriesUnlockRequest,
   type SeriesUnlockRequestRow,
@@ -45,11 +48,7 @@ type RequestRow = RequestColumns & {
 /** What an unlock decision's audit row records — the only column a decision moves. */
 const AUDITED_REQUEST_FIELDS = ['status'] as const;
 
-/**
- * Owns `StudentSeriesUnlock` and `SeriesUnlockRequest` — who has been let into a series, and who
- * is asking. An unlock is NOT a way to reach a series: the branch gate and the three reach paths
- * decide that, and this only ever opens something the student already reaches.
- */
+/** Owns who has been let into a series and who is asking: a locked one they reach, or a FREE one. */
 @Injectable()
 export class UnlocksService {
   constructor(
@@ -137,9 +136,30 @@ export class UnlocksService {
     });
 
     if (status === UNLOCK_REQUEST_STATUS.APPROVED) {
-      await this.open(pending.studentId, pending.testSeriesId, decidedAt);
+      await this.approve(pending.studentId, pending.testSeriesId, decidedAt, adminId);
     }
     return toRequestRow(decided);
+  }
+
+  /** Reached means it was merely locked; not reached means it was FREE, so it earns a grant. */
+  private async approve(
+    studentId: string,
+    testSeriesId: string,
+    at: Date,
+    adminId: string,
+  ): Promise<void> {
+    const { series } = await this.resolver.catalog(studentId);
+    if (series.some((row) => row.id === testSeriesId)) {
+      await this.open(studentId, testSeriesId, at);
+      return;
+    }
+
+    await this.assertFreeAndUnderCap(studentId, testSeriesId);
+    await this.prisma.studentGrant.createMany({
+      data: [{ studentId, testSeriesId, createdById: adminId }],
+      skipDuplicates: true,
+    });
+    this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }
 
   private async open(studentId: string, testSeriesId: string, at: Date): Promise<void> {
@@ -154,17 +174,62 @@ export class UnlocksService {
    * Reach is the resolver's answer, never a second copy of it here: a series the student cannot
    * reach must not become reachable by asking about it.
    */
+  /** Two ways to be askable: a REQUEST-mode series they reach, or a FREE one they do not. */
   private async assertRequestable(studentId: string, testSeriesId: string): Promise<void> {
     const { series } = await this.resolver.catalog(studentId);
     const reached = series.find((row) => row.id === testSeriesId);
 
-    if (!reached) throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
+    if (!reached) {
+      await this.assertFreeAndUnderCap(studentId, testSeriesId);
+      return;
+    }
     if (reached.unlockMode !== UNLOCK_MODE.REQUEST) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'This series does not open by asking');
     }
     if (reached.unlockState === UNLOCK_STATE.UNLOCKED) {
       throw new AppException(ErrorCodes.CONFLICT, 'That series is already open to you');
     }
+  }
+
+  /** Askable unreached only when FREE, and only inside the cap — which pending asks count toward. */
+  private async assertFreeAndUnderCap(studentId: string, testSeriesId: string): Promise<void> {
+    const target = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: { kind: true, examStage: { select: { exam: { select: { family: true } } } } },
+    });
+    if (target?.kind !== TEST_SERIES_KIND.FREE) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
+    }
+
+    const family = target.examStage?.exam.family ?? null;
+    const held = await this.familiesHeld(studentId);
+    if (family !== null && held.has(family)) return;
+    if (held.size < FREE_SERIES_FAMILY_CAP) return;
+
+    throw new AppException(
+      ErrorCodes.VALIDATION_ERROR,
+      `Free tests run to ${FREE_SERIES_FAMILY_CAP} exam families. Ask the institute to open another.`,
+    );
+  }
+
+  /** The families a student already holds a free series in, granted or still queued. */
+  private async familiesHeld(studentId: string): Promise<Set<ExamFamily>> {
+    const rows = await this.prisma.testSeries.findMany({
+      where: {
+        kind: TEST_SERIES_KIND.FREE,
+        OR: [
+          { grants: { some: { studentId } } },
+          { unlockRequests: { some: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING } } },
+        ],
+      },
+      select: { examStage: { select: { exam: { select: { family: true } } } } },
+    });
+
+    return new Set(
+      rows
+        .map((row) => row.examStage?.exam.family)
+        .filter((family): family is ExamFamily => family !== undefined && family !== null),
+    );
   }
 
   private openRequest(studentId: string, testSeriesId: string): Promise<RequestColumns | null> {

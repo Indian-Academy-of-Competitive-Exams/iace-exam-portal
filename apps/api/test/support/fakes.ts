@@ -3313,6 +3313,7 @@ export interface FakeCatalogData {
  */
 interface CatalogReachWhere {
   grants?: { some: { studentId: string } };
+  unlockRequests?: { some: { studentId: string; status: string } };
   programCode?: null | { in: string[] };
   kind?: TestSeriesKind;
   examStage?: { exam: { code?: { in: string[] }; family?: { in: ExamFamily[] } } };
@@ -3423,7 +3424,34 @@ export class FakeCatalogPrisma {
       const rows = this.data.series
         .filter((row) => this.matchesSeries(row, where))
         .sort(comparing(orderBy));
-      return include ? rows.map((row) => this.hydrate(row, include)) : rows;
+      // The stage rides along: serving a `select` for it is cheaper than detecting one.
+      return include
+        ? rows.map((row) => this.hydrate(row, include))
+        : rows.map((row) => ({ ...row, examStage: this.stageOf(row.examStageId) }));
+    },
+
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      await this.record('testSeries.findUnique');
+      const row = this.data.series.find((candidate) => candidate.id === where.id);
+      return row ? { ...row, examStage: this.stageOf(row.examStageId) } : null;
+    },
+  };
+
+  readonly studentGrant = {
+    createMany: async ({
+      data,
+    }: {
+      data: { studentId: string; testSeriesId: string; createdById: string | null }[];
+    }) => {
+      await this.record('studentGrant.createMany');
+      const added = data.filter(
+        (row) =>
+          !this.data.grants.some(
+            (held) => held.studentId === row.studentId && held.testSeriesId === row.testSeriesId,
+          ),
+      );
+      for (const row of added) this.data.grants.push({ ...row, createdAt: new Date() });
+      return { count: added.length };
     },
   };
 
@@ -3615,6 +3643,7 @@ export class FakeCatalogPrisma {
       (where.id === undefined || where.id.in.includes(row.id)) &&
       (where.kind === undefined || row.kind === where.kind) &&
       this.matchesGrant(row, where.grants) &&
+      this.matchesPendingRequest(row, where.unlockRequests) &&
       matchesProgramCode(row.programCode, where.programCode) &&
       this.matchesExam(row, where.examStage) &&
       (where.OR === undefined || where.OR.some((clause) => this.matchesSeries(row, clause))) &&
@@ -3629,6 +3658,19 @@ export class FakeCatalogPrisma {
     );
   }
 
+  private matchesPendingRequest(
+    row: FakeSeriesRow,
+    filter: CatalogReachWhere['unlockRequests'],
+  ): boolean {
+    if (filter === undefined) return true;
+    return this.data.unlockRequests.some(
+      (request) =>
+        request.testSeriesId === row.id &&
+        request.studentId === filter.some.studentId &&
+        request.status === filter.some.status,
+    );
+  }
+
   private matchesExam(row: FakeSeriesRow, filter: CatalogReachWhere['examStage']): boolean {
     if (filter === undefined) return true;
     if (filter.exam.code) {
@@ -3640,6 +3682,13 @@ export class FakeCatalogPrisma {
       return family !== null && filter.exam.family.in.includes(family);
     }
     return true;
+  }
+
+  /** The shape a `select: { examStage: { exam: ... } }` expects back. */
+  private stageOf(examStageId: string | null) {
+    const family = this.examFamilyOf(examStageId);
+    const code = this.examCodeOf(examStageId);
+    return family === null && code === null ? null : { exam: { family, code } };
   }
 
   private examFamilyOf(examStageId: string | null): ExamFamily | null {
