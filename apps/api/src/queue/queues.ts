@@ -12,6 +12,11 @@ export interface ScoringJobData {
   testId: string;
 }
 
+/** The attempt's own, so a redelivered request is the same job rather than a second scoring. */
+export function scoringJobId(attemptId: string): string {
+  return `${QUEUE_NAMES.SCORING}-${attemptId}`;
+}
+
 /** How often the live sittings are drained to Postgres. A crash costs at most this much. */
 export const ATTEMPT_FLUSH_EVERY_MS = 60 * 1000;
 

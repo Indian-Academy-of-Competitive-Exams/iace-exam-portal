@@ -11,9 +11,11 @@ import {
 } from '@iace/contracts';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptSweeperProcessor } from '../src/attempts/attempt-sweeper.processor';
+import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
-import { QUEUE_NAMES } from '../src/queue/queues';
+import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import {
+  FakeQueue,
   FakeRedis,
   FakeTestsPrisma,
   makeAttempt,
@@ -34,16 +36,6 @@ const change = (over: Partial<AnswerChange> = {}): AnswerChange => ({
   ...over,
 });
 
-/** Records what was enqueued, which is the whole of what submit asks of Phase 4. */
-class FakeQueue {
-  readonly jobs: { name: string; data: unknown }[] = [];
-
-  add(name: string, data: unknown): Promise<void> {
-    this.jobs.push({ name, data });
-    return Promise.resolve();
-  }
-}
-
 function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
   const prisma = new FakeTestsPrisma(
     [makeTest({ id: 'tst_1' })],
@@ -63,20 +55,18 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
         status: over.status ?? ATTEMPT_STATUS.IN_PROGRESS,
       }),
     ],
-    [
-      {
-        attemptId: 'att_1',
-        questionId: 'q1',
-        paperQuestionId: 'pq_1',
-        questionVersionId: 'q1_v1',
-        baseConfigSectionId: 'sec_1',
-        order: 1,
-        state: ANSWER_STATE.NOT_VISITED,
-        selectedOptionId: null,
-        typedAnswer: null,
-        timeSpentSec: 0,
-      },
-    ],
+    ['q1', 'q2'].map((questionId, index) => ({
+      attemptId: 'att_1',
+      questionId,
+      paperQuestionId: `pq_${index + 1}`,
+      questionVersionId: `${questionId}_v1`,
+      baseConfigSectionId: 'sec_1',
+      order: index + 1,
+      state: ANSWER_STATE.NOT_VISITED,
+      selectedOptionId: null,
+      typedAnswer: null,
+      timeSpentSec: 0,
+    })),
   );
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma.asService(), redis.asService());
@@ -88,14 +78,25 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
       return Promise.resolve();
     },
   } as never;
-  const submit = new SubmitService(prisma.asService(), state, access, queue as never);
+  const outbox = new ScoringOutbox(prisma.asService(), queue.asQueue());
+  const submit = new SubmitService(prisma.asService(), state, access, outbox);
   return {
     prisma,
     state,
     queue,
     busts,
+    outbox,
     submit,
-    sweeper: new AttemptSweeperProcessor(prisma.asService(), submit),
+    sweeper: new AttemptSweeperProcessor(prisma.asService(), submit, outbox),
+  };
+}
+
+/** The database refusing the very write submit is in the middle of. Returns the repair. */
+function breakTheWrite(prisma: FakeTestsPrisma): () => void {
+  const real = prisma.attemptQuestion.updateMany;
+  prisma.attemptQuestion.updateMany = () => Promise.reject(new Error('write refused'));
+  return () => {
+    prisma.attemptQuestion.updateMany = real;
   };
 }
 
@@ -117,7 +118,11 @@ describe('SubmitService', () => {
     assert.equal(prisma.attemptQuestions[0]?.selectedOptionId, 'opt_a');
     assert.equal(prisma.attemptRows[0]?.status, ATTEMPT_STATUS.SUBMITTED);
     assert.deepEqual(queue.jobs, [
-      { name: QUEUE_NAMES.SCORING, data: { attemptId: 'att_1', testId: 'tst_1' } },
+      {
+        name: QUEUE_NAMES.SCORING,
+        data: { attemptId: 'att_1', testId: 'tst_1' },
+        jobId: scoringJobId('att_1'),
+      },
     ]);
   });
 
@@ -168,6 +173,26 @@ describe('SubmitService', () => {
 
     assert.equal(result.answeredCount, 0);
     assert.equal(prisma.attemptRows[0]?.status, ATTEMPT_STATUS.SUBMITTED);
+  });
+
+  /** The failure this prevents: a database error losing the answers AND ending the sitting. */
+  it('keeps the live state and the sitting open when the write fails', async () => {
+    const { submit, state, prisma } = build();
+    await answered(state);
+    const repair = breakTheWrite(prisma);
+
+    await assert.rejects(() => submit.submit('stu_1', 'att_1'));
+
+    assert.ok(await state.read('att_1'), 'the answers must survive to be written again');
+    assert.equal(prisma.attemptRows[0]?.status, ATTEMPT_STATUS.IN_PROGRESS);
+    assert.equal(prisma.attemptQuestions[0]?.selectedOptionId, null);
+    assert.equal(prisma.outboxEvents.length, 0);
+
+    repair();
+    const result = await submit.submit('stu_1', 'att_1');
+
+    assert.equal(result.answeredCount, 1);
+    assert.equal(prisma.attemptQuestions[0]?.selectedOptionId, 'opt_a');
   });
 
   it('refuses another student with NOT_FOUND, not FORBIDDEN', async () => {
@@ -224,3 +249,110 @@ describe('AttemptSweeperProcessor', () => {
     assert.equal(queue.jobs.length, 1);
   });
 });
+
+describe('the scoring outbox', () => {
+  /** The failure this prevents: a crash between the commit and the queue, scored by nobody. */
+  it('hands on a request the queue never took, exactly once', async () => {
+    const { submit, state, prisma, queue, sweeper } = build();
+    await answered(state);
+    queue.failNext = true;
+
+    const result = await submit.submit('stu_1', 'att_1');
+
+    // The student's submit stands: the request is durable whether or not the queue was reachable.
+    assert.equal(result.submittedByThisCall, true);
+    assert.equal(queue.jobs.length, 0);
+    assert.equal(prisma.outboxEvents[0]?.processedAt, null);
+
+    await sweeper.process();
+    await sweeper.process();
+
+    assert.equal(queue.jobs.length, 1);
+    assert.equal(queue.jobs[0]?.jobId, scoringJobId('att_1'));
+    assert.ok(prisma.outboxEvents[0]?.processedAt);
+  });
+
+  it('does not ask again for a score it has already asked for', async () => {
+    const { submit, state, queue, sweeper } = build();
+    await answered(state);
+
+    await submit.submit('stu_1', 'att_1');
+    await sweeper.process();
+
+    assert.equal(queue.jobs.length, 1);
+  });
+});
+
+describe('a save that races the submit', () => {
+  /** The failure this prevents: an autosave accepted with a 200 and then thrown away by the take. */
+  it('writes an answer that landed while the claim was in flight', async () => {
+    const { submit, state, prisma } = build();
+    await answered(state);
+    const claim = prisma.attempt.updateMany;
+    prisma.attempt.updateMany = async (args) => {
+      // The student's last answer lands between the read and the take, as an autosave would.
+      await state.save('stu_1', 'att_1', { revision: 2, answers: [change({ questionId: 'q2' })] });
+      return claim(args);
+    };
+
+    const result = await submit.submit('stu_1', 'att_1');
+
+    assert.equal(result.answeredCount, 2);
+    const q2 = prisma.attemptQuestions.find((row) => row.questionId === 'q2');
+    assert.equal(q2?.selectedOptionId, 'opt_a');
+  });
+
+  /** A sitting already ended must not keep a live key: it would accept saves for its whole TTL. */
+  it('clears live state it finds behind an attempt that has already ended', async () => {
+    const { submit, state, prisma } = build();
+    await answered(state);
+    prisma.attemptRows[0]!.status = ATTEMPT_STATUS.SUBMITTED;
+    prisma.attemptRows[0]!.submittedAt = NOW;
+
+    const result = await submit.submit('stu_1', 'att_1');
+
+    assert.equal(result.submittedByThisCall, false);
+    assert.equal(await state.read('att_1'), null);
+  });
+});
+
+describe('the scoring relay', () => {
+  /** The failure this prevents: 200 a sweep, so a queue outage takes 40 minutes to drain. */
+  it('drains a backlog bigger than one batch in a single pass', async () => {
+    const { prisma, queue, outbox } = build();
+    for (let n = 0; n < 250; n += 1) {
+      await prisma.outboxEvent.create({
+        data: {
+          aggregateType: 'Attempt',
+          aggregateId: `att_${n}`,
+          eventType: 'attempt.scoring_requested',
+          payload: { testId: 'tst_1' },
+        },
+      });
+    }
+
+    const handed = await outbox.relay();
+
+    assert.equal(handed, 250);
+    assert.equal(queue.jobs.length, 250);
+  });
+
+  /** Two relays racing hand on the same job id, which is what makes the queue collapse them. */
+  it('names every hand-off after the attempt, so a redelivery is not a second scoring', async () => {
+    const { submit, state, queue, outbox } = build();
+    await answered(state);
+    await submit.submit('stu_1', 'att_1');
+    queue.jobs.length = 0;
+    prismaReopen(outbox);
+
+    await Promise.all([outbox.relay(), outbox.relay()]);
+
+    assert.deepEqual(new Set(queue.jobs.map((job) => job.jobId)), new Set([scoringJobId('att_1')]));
+  });
+});
+
+/** Puts the request back in flight, as a crash between the queue and the mark would leave it. */
+function prismaReopen(outbox: ScoringOutbox): void {
+  const rows = (outbox as unknown as { prisma: FakeTestsPrisma }).prisma.outboxEvents;
+  for (const row of rows) row.processedAt = null;
+}

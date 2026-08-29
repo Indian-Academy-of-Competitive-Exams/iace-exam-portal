@@ -14,11 +14,13 @@ import { AttemptsService } from '../src/attempts/attempts.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { AttemptPaperService } from '../src/attempts/attempt-paper.service';
 import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
+import { ScoringOutbox } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES } from '../src/queue/queues';
 import {
   FakeCatalogPrisma,
   FakeEventBus,
+  FakeQueue,
   FakeRedis,
   FakeTestsPrisma,
   makeBaseConfig,
@@ -70,16 +72,6 @@ const version = (id: string, correct: string): FakeServedVersion => ({
     text: { en: [{ text: letter.toUpperCase() }] },
   })),
 });
-
-/** Records what was enqueued, which is the whole of what a submit asks of Phase 4. */
-class FakeQueue {
-  readonly jobs: { name: string; data: unknown }[] = [];
-
-  add(name: string, data: unknown): Promise<void> {
-    this.jobs.push({ name, data });
-    return Promise.resolve();
-  }
-}
 
 /** A student at a branch the series is enabled for, and one ACTIVE test inside it. */
 function catalogue() {
@@ -136,7 +128,12 @@ function hall() {
     attempts: new AttemptsService(prisma.asService(), reach, state),
     paper: new AttemptPaperService(prisma.asService(), reach, noStorage()),
     flusher: new AttemptFlushProcessor(prisma.asService(), state),
-    submit: new SubmitService(prisma.asService(), state, reach, queue as never),
+    submit: new SubmitService(
+      prisma.asService(),
+      state,
+      reach,
+      new ScoringOutbox(prisma.asService(), queue.asQueue()),
+    ),
   };
 }
 

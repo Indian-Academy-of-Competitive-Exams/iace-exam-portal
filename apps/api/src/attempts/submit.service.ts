@@ -1,12 +1,11 @@
 /**
  * Ending a sitting, exactly once, whoever ends it — the student or the sweeper.
- * The ORDER is the whole design: claim the status first, then TAKE the live state
- * in one command. A save racing this either lands before the take and is written,
- * or finds no key after it and is refused. There is no in-between to lose.
+ * The ORDER is the whole design: the answers are written BEFORE the claim, so a write that
+ * throws leaves the sitting open with its state intact; the claim and the scoring request
+ * then commit together; and the state is taken last, so nothing scores a half-written paper.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { type Queue } from 'bullmq';
+import { type Prisma } from '@prisma/client';
 import {
   ANSWER_STATE,
   AppException,
@@ -17,14 +16,17 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { QUEUE_NAMES, type ScoringJobData } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
-import { rowsToFlush } from './attempt-flush';
+import { rowsToFlush, type FlushRow } from './attempt-flush';
+import { ScoringOutbox } from './scoring-outbox';
 
 const NOT_YOURS = 'No such attempt';
 
 /** What counts as answered on the way out — a marked answer is still an answer. */
 const ANSWERED_STATES = [ANSWER_STATE.ANSWERED, ANSWER_STATE.ANSWERED_MARKED];
+
+/** Ahead of the claim, so a call that lost the race cannot write over the winner's answers. */
+const STILL_LIVE = { attempt: { status: ATTEMPT_STATUS.IN_PROGRESS } } as const;
 
 @Injectable()
 export class SubmitService {
@@ -34,7 +36,7 @@ export class SubmitService {
     private readonly prisma: PrismaService,
     private readonly state: AttemptStateService,
     private readonly access: AccessResolverService,
-    @InjectQueue(QUEUE_NAMES.SCORING) private readonly scoring: Queue<ScoringJobData>,
+    private readonly outbox: ScoringOutbox,
   ) {}
 
   /** The student's own. Another student's id reads as missing, never as refused. */
@@ -52,15 +54,21 @@ export class SubmitService {
   }
 
   private async end(attempt: AttemptRow, now: Date = new Date()): Promise<SubmittedAttempt> {
-    // The one gate. The request whose UPDATE still matches IN_PROGRESS wins; the other reports it.
-    const claimed = await this.prisma.attempt.updateMany({
-      where: { id: attempt.id, status: ATTEMPT_STATUS.IN_PROGRESS },
-      data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt: now },
-    });
-    if (claimed.count === 0) return this.alreadySubmitted(attempt.id);
+    if (attempt.status !== ATTEMPT_STATUS.IN_PROGRESS) return this.closeOff(attempt.id);
 
-    const answeredCount = await this.flushFinalState(attempt.id);
-    await this.scoring.add(QUEUE_NAMES.SCORING, { attemptId: attempt.id, testId: attempt.testId });
+    // READ, never taken: the live state has to outlive a write that throws.
+    const held = await this.state.read(attempt.id);
+    await this.flush(attempt.id, held ? rowsToFlush(held) : [], STILL_LIVE);
+
+    const requested = await this.claim(attempt, now);
+    if (requested === null) return this.alreadySubmitted(attempt.id);
+
+    // Taken only behind the claim, so a save arriving after this is refused rather than swallowed.
+    const last = await this.state.take(attempt.id);
+    // A save that beat the claim: written before the request is handed to a scorer.
+    if (last && last.revision !== held?.revision) await this.flush(attempt.id, rowsToFlush(last));
+
+    await this.hand(requested);
     // The catalog caches where this student has got to; ending a sitting is what moves it last.
     await this.access.invalidateStudent(attempt.studentId);
 
@@ -69,33 +77,59 @@ export class SubmitService {
       status: ATTEMPT_STATUS.SUBMITTED,
       submittedAt: now.toISOString(),
       submittedByThisCall: true,
-      answeredCount,
+      answeredCount: await this.countAnswered(attempt.id),
     };
   }
 
-  /** Behind the gate: read AFTER the claim, so a save that landed while claiming is still written. */
-  private async flushFinalState(attemptId: string): Promise<number> {
-    const held = await this.state.take(attemptId);
-    if (!held) return this.countAnswered(attemptId);
+  /** The scoring request's id, or null when another call had already ended this sitting. */
+  private async claim(attempt: AttemptRow, now: Date): Promise<string | null> {
+    return this.prisma.$transaction(async (tx) => {
+      // The one gate. The request whose UPDATE still matches IN_PROGRESS wins; the other reports it.
+      const claimed = await tx.attempt.updateMany({
+        where: { id: attempt.id, status: ATTEMPT_STATUS.IN_PROGRESS },
+        data: { status: ATTEMPT_STATUS.SUBMITTED, submittedAt: now },
+      });
+      if (claimed.count === 0) return null;
+      // The same transaction as the flip, so submitted and scoring-requested never land apart.
+      return this.outbox.request(tx, attempt);
+    });
+  }
 
-    const rows = rowsToFlush(held);
-    if (rows.length > 0) {
-      await this.prisma.$transaction(
-        rows.map((row) =>
-          this.prisma.attemptQuestion.updateMany({
-            where: { attemptId, questionId: row.questionId },
-            data: row.data,
-          }),
-        ),
-      );
-    }
-    return this.countAnswered(attemptId);
+  /** Idempotent: every value comes off the held state, so writing it twice writes the same row. */
+  private async flush(
+    attemptId: string,
+    rows: readonly FlushRow[],
+    gate: Prisma.AttemptQuestionWhereInput = {},
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    // The batched form: one round trip for the whole paper, on the path 5K students converge on.
+    await this.prisma.$transaction(
+      rows.map((row) =>
+        this.prisma.attemptQuestion.updateMany({
+          where: { attemptId, questionId: row.questionId, ...gate },
+          data: row.data,
+        }),
+      ),
+    );
+  }
+
+  /** A queue nobody can reach must not fail a submit that committed — the sweeper hands it on. */
+  private async hand(requestId: string): Promise<void> {
+    await this.outbox.relay(requestId).catch((error: unknown) => {
+      this.logger.error(`Scoring request ${requestId} was not handed on; the sweeper will`, error);
+    });
   }
 
   private async countAnswered(attemptId: string): Promise<number> {
     return this.prisma.attemptQuestion.count({
       where: { attemptId, state: { in: ANSWERED_STATES } },
     });
+  }
+
+  /** Found already ended: whoever ended it may have died before clearing its live state. */
+  private async closeOff(attemptId: string): Promise<SubmittedAttempt> {
+    await this.state.take(attemptId);
+    return this.alreadySubmitted(attemptId);
   }
 
   private async alreadySubmitted(attemptId: string): Promise<SubmittedAttempt> {

@@ -12,6 +12,7 @@ import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
+import { ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 
 /** Owns `Attempt` — the live sitting. AccessModule because the start guard is the catalog's own. */
@@ -22,6 +23,7 @@ import { SubmitService } from './submit.service';
     AttemptsService,
     AttemptPaperService,
     AttemptStateService,
+    ScoringOutbox,
     SubmitService,
     AttemptFlushProcessor,
     AttemptSweeperProcessor,

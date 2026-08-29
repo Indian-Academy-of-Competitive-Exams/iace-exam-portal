@@ -1417,6 +1417,38 @@ export interface FakeAttemptQuestionRow {
   answeredAt?: Date | null;
 }
 
+/** A queue that only remembers. Every add is recorded, so two hand-offs never read as one. */
+export class FakeQueue {
+  readonly jobs: { name: string; data: unknown; jobId?: string }[] = [];
+
+  /** Set to make the next add throw: the crash between a commit and the queue. */
+  failNext = false;
+
+  add(name: string, data: unknown, options?: { jobId?: string }): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      return Promise.reject(new Error('queue unreachable'));
+    }
+    this.jobs.push({ name, data, jobId: options?.jobId });
+    return Promise.resolve();
+  }
+
+  asQueue<T>(): T {
+    return this as unknown as T;
+  }
+}
+
+/** A durable event waiting to be handed to a queue. */
+export interface FakeOutboxRow {
+  id: string;
+  aggregateType: string;
+  aggregateId: string;
+  eventType: string;
+  payload: unknown;
+  createdAt: Date;
+  processedAt: Date | null;
+}
+
 /** A row of an assembled paper, before finalize freezes it. */
 export interface FakePaperRow {
   id: string;
@@ -1547,12 +1579,16 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       where,
       data,
     }: {
-      where: { attemptId: string; questionId: string };
+      where: { attemptId: string; questionId: string; attempt?: { status: AttemptStatus } };
       data: Partial<FakeAttemptQuestionRow>;
     }) => {
-      const matched = this.attemptQuestions.filter(
-        (row) => row.attemptId === where.attemptId && row.questionId === where.questionId,
-      );
+      const sitting = this.attemptRows.find((row) => row.id === where.attemptId);
+      const live = where.attempt === undefined || sitting?.status === where.attempt.status;
+      const matched = live
+        ? this.attemptQuestions.filter(
+            (row) => row.attemptId === where.attemptId && row.questionId === where.questionId,
+          )
+        : [];
       for (const row of matched) Object.assign(row, data);
       return Promise.resolve({ count: matched.length });
     },
@@ -1568,8 +1604,53 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       this.series,
       this.attemptRows,
       this.attemptQuestions,
+      this.outboxEvents,
     ];
   }
+
+  readonly outboxEvents: FakeOutboxRow[] = [];
+
+  private outboxSeq = 0;
+
+  readonly outboxEvent = {
+    create: ({ data }: { data: Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'> }) => {
+      this.outboxSeq += 1;
+      const created: FakeOutboxRow = {
+        ...data,
+        id: `obx_${this.outboxSeq}`,
+        createdAt: new Date(this.outboxSeq),
+        processedAt: null,
+      };
+      this.outboxEvents.push(created);
+      return Promise.resolve({ id: created.id });
+    },
+
+    findMany: ({
+      where,
+      take,
+    }: {
+      where: { eventType: string; processedAt: null; id?: string };
+      take?: number;
+    }) =>
+      Promise.resolve(
+        this.outboxEvents
+          .filter(
+            (row) =>
+              row.eventType === where.eventType &&
+              row.processedAt === null &&
+              (where.id === undefined || row.id === where.id),
+          )
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .slice(0, take),
+      ),
+
+    update: ({ where, data }: { where: { id: string }; data: { processedAt: Date } }) => {
+      const row = this.outboxEvents.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no outbox row ${where.id}`);
+      row.processedAt = data.processedAt;
+      return Promise.resolve(row);
+    },
+  };
 
   readonly attempt = {
     findUnique: ({ where }: { where: { id: string } }) =>
