@@ -1438,6 +1438,26 @@ export class FakeQueue {
   }
 }
 
+/** The filters the relay and the pruner narrow `OutboxEvent` by. */
+interface FakeOutboxWhere {
+  eventType?: string;
+  id?: string;
+  createdAt?: { lt: Date };
+  processedAt?: null | { not?: null; lt?: Date };
+}
+
+/** Pending is `processedAt: null`; the pruner asks for the opposite, before a cutoff. */
+function matchesOutboxWhere(row: FakeOutboxRow, where: FakeOutboxWhere): boolean {
+  if (where.eventType !== undefined && row.eventType !== where.eventType) return false;
+  if (where.id !== undefined && row.id !== where.id) return false;
+  if (where.createdAt && row.createdAt >= where.createdAt.lt) return false;
+  if (where.processedAt === null) return row.processedAt === null;
+  if (where.processedAt?.lt) {
+    return row.processedAt !== null && row.processedAt < where.processedAt.lt;
+  }
+  return true;
+}
+
 /** A durable event waiting to be handed to a queue. */
 export interface FakeOutboxRow {
   id: string;
@@ -1627,22 +1647,29 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
 
     findMany: ({
       where,
+      orderBy,
       take,
     }: {
-      where: { eventType: string; processedAt: null; id?: string };
+      where: FakeOutboxWhere;
+      orderBy?: { createdAt?: 'asc' } | { processedAt?: 'asc' };
       take?: number;
-    }) =>
-      Promise.resolve(
+    }) => {
+      const by = orderBy && 'processedAt' in orderBy ? 'processedAt' : 'createdAt';
+      return Promise.resolve(
         this.outboxEvents
-          .filter(
-            (row) =>
-              row.eventType === where.eventType &&
-              row.processedAt === null &&
-              (where.id === undefined || row.id === where.id),
-          )
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .filter((row) => matchesOutboxWhere(row, where))
+          .sort((a, b) => (a[by]?.getTime() ?? 0) - (b[by]?.getTime() ?? 0))
           .slice(0, take),
-      ),
+      );
+    },
+
+    deleteMany: ({ where }: { where: { id: { in: string[] } } }) => {
+      const kept = this.outboxEvents.filter((row) => !where.id.in.includes(row.id));
+      const count = this.outboxEvents.length - kept.length;
+      this.outboxEvents.length = 0;
+      this.outboxEvents.push(...kept);
+      return Promise.resolve({ count });
+    },
 
     update: ({ where, data }: { where: { id: string }; data: { processedAt: Date } }) => {
       const row = this.outboxEvents.find((candidate) => candidate.id === where.id);

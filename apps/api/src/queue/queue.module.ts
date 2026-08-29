@@ -28,6 +28,7 @@ import { ScoringProcessor } from './scoring.processor';
     BullModule.registerQueue({ name: QUEUE_NAMES.AUDIT_ARCHIVE }),
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_FLUSH }),
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_SWEEP }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.OUTBOX_PRUNE }),
   ],
   providers: [ScoringProcessor],
   exports: [BullModule],
