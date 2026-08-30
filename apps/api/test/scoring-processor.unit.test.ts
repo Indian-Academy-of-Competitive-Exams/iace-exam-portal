@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS } from '@iace/contracts';
+import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import {
+  FakeQueue,
+  FakeRedis,
   FakeScoringPrisma,
   makeAttempt,
   makeServedAnswer,
@@ -35,7 +38,18 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
     makeServedAnswer({ questionId: 'q3', order: 3, options: mcqOptions(2) }),
   ];
   const prisma = new FakeScoringPrisma([attempt], served);
-  return { prisma, attempt, served, processor: new ScoringProcessor(prisma.asService()) };
+  const redis = new FakeRedis();
+  const leaderboard = new LeaderboardService(
+    prisma.asService(),
+    redis.asService(),
+    new FakeQueue().asQueue(),
+  );
+  return {
+    prisma,
+    attempt,
+    served,
+    processor: new ScoringProcessor(prisma.asService(), leaderboard),
+  };
 }
 
 describe('ScoringProcessor — what it writes', () => {
@@ -73,14 +87,26 @@ describe('ScoringProcessor — what it writes', () => {
     assert.equal(rerun.attempt.evaluatedAt, stamped);
   });
 
-  it('writes the same rows the second time, so a redelivered job costs nothing', async () => {
+  /** The rank snapshot is left out on purpose: a rank moves as the cohort grows, and marks do not. */
+  const marksOf = (attempt: FakeAttemptRow, served: FakeServedAnswerRow[]) => ({
+    status: attempt.status,
+    score: attempt.score,
+    correctCount: attempt.correctCount,
+    wrongCount: attempt.wrongCount,
+    unattemptedCount: attempt.unattemptedCount,
+    sectionScores: attempt.sectionScores,
+    evaluatedAt: attempt.evaluatedAt,
+    questions: served.map((row) => [row.isCorrect, row.marksAwarded]),
+  });
+
+  it('writes the same marks the second time, so a redelivered job costs nothing', async () => {
     const { attempt, served, processor } = sitting();
 
     await processor.score(attempt.id);
-    const first = structuredClone({ attempt, served });
+    const first = structuredClone(marksOf(attempt, served));
     await processor.score(attempt.id);
 
-    assert.deepEqual({ attempt, served }, first);
+    assert.deepEqual(marksOf(attempt, served), first);
   });
 
   it('re-scores an evaluated sitting, which is how a dropped question reaches it', async () => {

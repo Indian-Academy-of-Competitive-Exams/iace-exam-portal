@@ -56,6 +56,12 @@ export const redisKeys = {
   /** Attempts holding writes Postgres has not seen. A SET, so draining needs no SCAN. */
   attemptsDirty: 'attempt:dirty',
 
+  /** One test's ranking: a sorted set of attempt ids scored by marks-then-speed, packed as one double. */
+  testLeaderboard: (testId: string) => `test:leaderboard:${testId}`,
+
+  /** Held while one worker puts a board back, so a wiped Redis is rebuilt once and not per reader. */
+  testLeaderboardRebuild: (testId: string) => `test:leaderboard:${testId}:rebuilding`,
+
   /** One student's resolved catalog, at one payload shape and both epochs. */
   studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
     `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,

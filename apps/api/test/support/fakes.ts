@@ -75,8 +75,18 @@ import {
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
 interface Entry {
-  value: string | Set<string>;
+  value: string | Set<string> | Map<string, number>;
   expiresAtMs: number | null;
+}
+
+/** `-inf`, `+inf`, a number, or a `(`-prefixed exclusive bound — the ZCOUNT range vocabulary. */
+function zBound(raw: string | number): { at: number; exclusive: boolean } {
+  const text = String(raw);
+  const exclusive = text.startsWith('(');
+  const body = exclusive ? text.slice(1) : text;
+  if (body === '-inf') return { at: Number.NEGATIVE_INFINITY, exclusive };
+  if (body === '+inf' || body === 'inf') return { at: Number.POSITIVE_INFINITY, exclusive };
+  return { at: Number(body), exclusive };
 }
 
 export class FakeRedis {
@@ -93,6 +103,7 @@ export class FakeRedis {
     const out: Record<string, string | string[]> = {};
     for (const [key, entry] of this.store) {
       if (this.expired(entry)) continue;
+      if (entry.value instanceof Map) continue;
       out[key] = entry.value instanceof Set ? [...entry.value] : entry.value;
     }
     return out;
@@ -194,7 +205,64 @@ export class FakeRedis {
       const entry = this.live(key);
       return Promise.resolve(entry?.value instanceof Set ? [...entry.value] : []);
     },
+
+    zadd: (key: string, ...pairs: (number | string)[]): Promise<number> => {
+      const entry = this.live(key);
+      const zset = entry?.value instanceof Map ? entry.value : new Map<string, number>();
+      let added = 0;
+      for (let at = 0; at + 1 < pairs.length; at += 2) {
+        const member = String(pairs[at + 1]);
+        if (!zset.has(member)) added += 1;
+        zset.set(member, Number(pairs[at]));
+      }
+      this.store.set(key, { value: zset, expiresAtMs: entry?.expiresAtMs ?? null });
+      return Promise.resolve(added);
+    },
+
+    zscore: (key: string, member: string): Promise<string | null> => {
+      const score = this.zset(key).get(member);
+      return Promise.resolve(score === undefined ? null : String(score));
+    },
+
+    rename: (from: string, to: string): Promise<'OK'> => {
+      const entry = this.live(from);
+      if (!entry) throw new Error(`no such key ${from}`);
+      this.store.set(to, entry);
+      this.store.delete(from);
+      return Promise.resolve('OK');
+    },
+
+    zcard: (key: string): Promise<number> => Promise.resolve(this.zset(key).size),
+
+    /** Highest score is seat 0; Redis orders a tie by member ascending, so REV reverses that too. */
+    zrevrank: (key: string, member: string): Promise<number | null> => {
+      const seat = this.descending(key).indexOf(member);
+      return Promise.resolve(seat === -1 ? null : seat);
+    },
+
+    zcount: (key: string, min: string | number, max: string | number): Promise<number> => {
+      const low = zBound(min);
+      const high = zBound(max);
+      const inRange = [...this.zset(key).values()].filter(
+        (score) =>
+          (low.exclusive ? score > low.at : score >= low.at) &&
+          (high.exclusive ? score < high.at : score <= high.at),
+      );
+      return Promise.resolve(inRange.length);
+    },
   };
+
+  private zset(key: string): Map<string, number> {
+    const entry = this.live(key);
+    return entry?.value instanceof Map ? entry.value : new Map<string, number>();
+  }
+
+  /** The board as a reader sees it, best first — and a tie the way ZREVRANGE returns one. */
+  descending(key: string): string[] {
+    return [...this.zset(key).entries()]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1))
+      .map(([member]) => member);
+  }
 
   // --- the typed helpers RedisService adds on top ---------------------------
 
@@ -4262,6 +4330,29 @@ export class FakeScoringPrisma {
           })),
       });
     },
+
+    /** The rebuild's page: every graded, scored sitting on one test, in a stable order. */
+    findMany: ({
+      where,
+      skip = 0,
+      take,
+    }: {
+      where: { testId: string; isGraded: boolean; status: AttemptStatus; score: { not: null } };
+      skip?: number;
+      take?: number;
+    }) =>
+      Promise.resolve(
+        this.attempts
+          .filter(
+            (row) =>
+              row.testId === where.testId &&
+              row.isGraded === where.isGraded &&
+              row.status === where.status &&
+              row.score !== null,
+          )
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .slice(skip, take === undefined ? undefined : skip + take),
+      ),
 
     update: ({ where, data }: { where: { id: string }; data: Partial<FakeAttemptRow> }) => {
       const row = this.attempts.find((candidate) => candidate.id === where.id);

@@ -13,11 +13,16 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, type ScoringJobData } from '../queue/queues';
+import { LeaderboardService } from './leaderboard.service';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 
 const SCORING_SELECT = {
   id: true,
+  testId: true,
   status: true,
+  isGraded: true,
+  startedAt: true,
+  submittedAt: true,
   questions: {
     select: {
       questionId: true,
@@ -43,7 +48,10 @@ const SCORABLE: readonly AttemptStatus[] = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_ST
 export class ScoringProcessor extends WorkerHost {
   private readonly logger = new Logger(ScoringProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderboard: LeaderboardService,
+  ) {
     super();
   }
 
@@ -70,6 +78,14 @@ export class ScoringProcessor extends WorkerHost {
 
     const scored = scorePaper(attempt.questions.map(toScorable));
     await this.persist(attemptId, scored);
+    await this.leaderboard.rank({
+      id: attempt.id,
+      testId: attempt.testId,
+      isGraded: attempt.isGraded,
+      score: scored.score,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+    });
     return scored;
   }
 

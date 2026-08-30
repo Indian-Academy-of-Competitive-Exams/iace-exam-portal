@@ -12,6 +12,8 @@ import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
+import { LeaderboardRebuildProcessor } from './leaderboard-rebuild.processor';
+import { LeaderboardService } from './leaderboard.service';
 import { ScoringOutbox } from './scoring-outbox';
 import { ScoringProcessor } from './scoring.processor';
 import { SubmitService } from './submit.service';
@@ -24,6 +26,8 @@ import { SubmitService } from './submit.service';
     AttemptsService,
     AttemptPaperService,
     AttemptStateService,
+    LeaderboardService,
+    LeaderboardRebuildProcessor,
     ScoringOutbox,
     ScoringProcessor,
     SubmitService,

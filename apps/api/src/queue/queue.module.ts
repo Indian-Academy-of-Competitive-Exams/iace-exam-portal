@@ -24,6 +24,7 @@ import { QUEUE_NAMES } from './queues';
       }),
     }),
     BullModule.registerQueue({ name: QUEUE_NAMES.SCORING }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.LEADERBOARD_REBUILD }),
     BullModule.registerQueue({ name: QUEUE_NAMES.AUDIT_ARCHIVE }),
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_FLUSH }),
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_SWEEP }),
