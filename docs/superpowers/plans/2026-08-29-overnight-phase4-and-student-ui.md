@@ -1,5 +1,14 @@
 # Overnight runbook — Phase 4 (scoring, ranking, report) + the Student Tests experience
 
+> **NOT BLOCKED, but NOT VERIFIED against a database.** Docker was not running for the whole of
+> this session, so there was no Postgres on 5433 and no Redis on 6379. Everything below shipped
+> and every code gate is green — `format:check`, `lint` (0 errors), `typecheck`, `test` (1561
+> passing) and `build` — but three things could not be exercised and are yours to run first:
+> `pnpm db:check`; `node scripts/dev-seed-cohort.mjs` (P0, written but never executed); and the
+> Sonar pre-commit gate, which skipped itself on every commit because its server was unreachable.
+> No task in this run changed `prisma/schema.prisma`, so `db:migrate:deploy` was never a gate for
+> any of them.
+
 > **For the agent running this unattended.** Work top-to-bottom. Follow the lean loop in
 > `docs/superpowers/WORKFLOW.md` per task: intent check → implement + tests → gates green →
 > review by risk → terse report → **one commit per task**. Model: opus throughout. Read
