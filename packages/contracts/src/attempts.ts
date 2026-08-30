@@ -290,6 +290,8 @@ export const ME_ATTEMPT_ROUTES = {
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
   solutions: (attemptId: string) => `/me/attempts/${attemptId}/solutions`,
+  analytics: (attemptId: string) => `/me/attempts/${attemptId}/analytics`,
+  performance: '/me/performance',
 } as const;
 
 /** How a sitting ended. A second submit reports the first one's outcome rather than refusing. */
@@ -450,3 +452,92 @@ export const solutionReportSchema = z.object({
   questions: z.array(solutionQuestionSchema),
 });
 export type SolutionReport = z.infer<typeof solutionReportSchema>;
+
+// ============================================================================
+// Analytics. Every figure below is DERIVED from rows the exam already wrote —
+// the option chosen, the palette state, the seconds on each question — so
+// nothing here needs a new column or a new event to be true.
+// ============================================================================
+
+/** One slice of a paper: a section, a subject, a difficulty band, or the whole thing. */
+export const analyticsBucketSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  total: z.number().int(),
+  attempted: z.number().int(),
+  correct: z.number().int(),
+  wrong: z.number().int(),
+  unattempted: z.number().int(),
+  /** Correct over ATTEMPTED. An answer nothing could judge is attempted and neither right nor wrong. */
+  accuracy: z.number(),
+  marks: z.number(),
+  timeSpentSec: z.number().int(),
+});
+export type AnalyticsBucket = z.infer<typeof analyticsBucketSchema>;
+
+export const timeUseSchema = z.object({
+  totalSec: z.number().int(),
+  avgPerQuestionSec: z.number(),
+  avgOnCorrectSec: z.number(),
+  avgOnWrongSec: z.number(),
+  /** Time the paper took and gave nothing back for. */
+  spentOnUnattemptedSec: z.number().int(),
+});
+export type TimeUse = z.infer<typeof timeUseSchema>;
+
+/** The five palette states, which partition the paper. No revisit count: the exam never wrote one. */
+export const attemptStrategySchema = z.object({
+  answered: z.number().int(),
+  answeredAndMarked: z.number().int(),
+  markedOnly: z.number().int(),
+  seenAndLeft: z.number().int(),
+  neverOpened: z.number().int(),
+});
+export type AttemptStrategy = z.infer<typeof attemptStrategySchema>;
+
+/** Where this sitting stands against the ones around it. Null where the cohort cannot say. */
+export const cohortStandingSchema = z.object({
+  score: z.number(),
+  topperScore: z.number().nullable(),
+  averageScore: z.number().nullable(),
+  rank: z.number().int().nullable(),
+  percentile: z.number().nullable(),
+  cohortSize: z.number().int().nullable(),
+});
+export type CohortStanding = z.infer<typeof cohortStandingSchema>;
+
+export const attemptAnalyticsSchema = z.object({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  overall: analyticsBucketSchema,
+  sections: z.array(analyticsBucketSchema),
+  subjects: z.array(analyticsBucketSchema),
+  difficulty: z.array(analyticsBucketSchema),
+  time: timeUseSchema,
+  strategy: attemptStrategySchema,
+  cohort: cohortStandingSchema,
+});
+export type AttemptAnalytics = z.infer<typeof attemptAnalyticsSchema>;
+
+/** One sat test on the trend line, oldest first — what a chart plots. */
+export const performancePointSchema = z.object({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  score: z.number(),
+  maxMarks: z.number(),
+  percentage: z.number(),
+  accuracy: z.number(),
+  rank: z.number().int().nullable(),
+  percentile: z.number().nullable(),
+});
+export type PerformancePoint = z.infer<typeof performancePointSchema>;
+
+export const performanceTrendSchema = z.object({
+  /** Distinct TESTS, not sittings: three retakes of one paper is one test done. */
+  testsSat: z.number().int(),
+  points: z.array(performancePointSchema),
+});
+export type PerformanceTrend = z.infer<typeof performanceTrendSchema>;

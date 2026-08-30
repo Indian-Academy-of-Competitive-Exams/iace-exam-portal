@@ -8,6 +8,8 @@ import {
   type AttemptStatus,
   BRANCH_TYPE,
   type BranchType,
+  DIFFICULTY_LEVEL,
+  type DifficultyLevel,
   DRAW_STRATEGY,
   type DrawSpec,
   type DrawStrategy,
@@ -4323,6 +4325,9 @@ export interface FakeServedAnswerRow {
   attemptId: string;
   questionId: string;
   baseConfigSectionId: string;
+  subjectId: string;
+  subjectName: string;
+  difficulty: DifficultyLevel;
   order: number;
   type: QuestionType;
   selectedOptionId: string | null;
@@ -4354,6 +4359,9 @@ export function makeServedAnswer(
     attemptId: 'att_1',
     questionId: 'q_1',
     baseConfigSectionId: 'sec_1',
+    subjectId: 'sub_1',
+    subjectName: 'Reasoning',
+    difficulty: DIFFICULTY_LEVEL.MEDIUM,
     order: 1,
     type: QUESTION_TYPE.SINGLE_MCQ,
     selectedOptionId: null,
@@ -4438,7 +4446,11 @@ export class FakeScoringPrisma {
         .sort((a, b) => a.order - b.order)
         .map((served) => ({
           ...served,
-          question: { type: served.type },
+          question: {
+            type: served.type,
+            difficulty: served.difficulty,
+            subject: { id: served.subjectId, name: served.subjectName },
+          },
           questionVersion: {
             content: served.content,
             options: served.options,
@@ -4481,28 +4493,80 @@ export class FakeScoringPrisma {
       });
     },
 
-    /** The rebuild's page: every graded, scored sitting on one test, in a stable order. */
+    /** The rebuild's page, and the trend read — both are "the sittings that count", ordered. */
     findMany: ({
       where,
+      orderBy,
+      distinct,
       skip = 0,
       take,
     }: {
-      where: { testId: string; isGraded: boolean; status: AttemptStatus; score: { not: null } };
+      where: {
+        testId?: string;
+        studentId?: string;
+        isGraded?: boolean;
+        status: AttemptStatus;
+        score?: { not: null };
+      };
+      orderBy?: { submittedAt?: 'desc' };
+      distinct?: string[];
       skip?: number;
       take?: number;
-    }) =>
+    }) => {
+      const matched = this.attempts.filter(
+        (row) =>
+          (where.testId === undefined || row.testId === where.testId) &&
+          (where.studentId === undefined || row.studentId === where.studentId) &&
+          (where.isGraded === undefined || row.isGraded === where.isGraded) &&
+          row.status === where.status &&
+          (where.score === undefined || row.score !== null),
+      );
+      // Postgres sorts NULLS FIRST on a descending order; a fake that did not would hide it.
+      const byNewest = (a: FakeAttemptRow, b: FakeAttemptRow) => {
+        if (a.submittedAt === null || b.submittedAt === null) {
+          return (a.submittedAt === null ? 0 : 1) - (b.submittedAt === null ? 0 : 1);
+        }
+        return b.submittedAt.getTime() - a.submittedAt.getTime();
+      };
+      const ordered = orderBy?.submittedAt
+        ? matched.sort(byNewest)
+        : matched.sort((a, b) => a.id.localeCompare(b.id));
+      const paged = ordered.slice(skip, take === undefined ? undefined : skip + take);
+      return Promise.resolve(
+        distinct?.includes('testId') ? uniqueByTest(paged) : paged.map((row) => this.reported(row)),
+      );
+    },
+
+    count: ({ where }: { where: { studentId?: string; status?: AttemptStatus } }) =>
       Promise.resolve(
-        this.attempts
-          .filter(
-            (row) =>
-              row.testId === where.testId &&
-              row.isGraded === where.isGraded &&
-              row.status === where.status &&
-              row.score !== null,
-          )
-          .sort((a, b) => a.id.localeCompare(b.id))
-          .slice(skip, take === undefined ? undefined : skip + take),
+        this.attempts.filter(
+          (row) =>
+            (where.studentId === undefined || row.studentId === where.studentId) &&
+            (where.status === undefined || row.status === where.status),
+        ).length,
       ),
+
+    aggregate: ({
+      where,
+    }: {
+      where: { testId: string; isGraded: boolean; status: AttemptStatus; score: { not: null } };
+    }) => {
+      const scored = this.attempts.filter(
+        (row) =>
+          row.testId === where.testId &&
+          row.isGraded === where.isGraded &&
+          row.status === where.status &&
+          row.score !== null,
+      );
+      const marks = scored.map((row) => row.score ?? 0);
+      return Promise.resolve({
+        _avg: {
+          score: marks.length === 0 ? null : marks.reduce((a, b) => a + b, 0) / marks.length,
+        },
+        _max: { score: marks.length === 0 ? null : Math.max(...marks) },
+        _count: scored.length,
+      });
+    },
 
     update: ({ where, data }: { where: { id: string }; data: Partial<FakeAttemptRow> }) => {
       const row = this.attempts.find((candidate) => candidate.id === where.id);
@@ -4549,6 +4613,14 @@ export class FakeScoringPrisma {
   asService(): PrismaService {
     return this as unknown as PrismaService;
   }
+}
+
+/** `distinct: ['testId']` returns one row per test, which is what "tests done" counts. */
+function uniqueByTest(rows: readonly FakeAttemptRow[]): { testId: string }[] {
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => !seen.has(row.testId) && seen.add(row.testId) !== undefined)
+    .map((row) => ({ testId: row.testId }));
 }
 
 /** The seam a paper edit asks for a re-score through. Nothing here exercises the scoring itself. */

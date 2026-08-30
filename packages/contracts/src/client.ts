@@ -123,6 +123,8 @@ import {
   ME_ATTEMPT_ROUTES,
   examBriefSchema,
   examPaperSchema,
+  attemptAnalyticsSchema,
+  performanceTrendSchema,
   scoreCardSchema,
   solutionReportSchema,
   liveAttemptSchema,
@@ -131,6 +133,8 @@ import {
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
+  type AttemptAnalytics,
+  type PerformanceTrend,
   type ScoreCard,
   type SolutionReport,
   type SaveAttemptStateInput,
@@ -617,6 +621,14 @@ export function createApiClient(options: ApiClientOptions) {
       /** The worked solutions. Refused until the test has closed for everyone sitting it. */
       solutions: (attemptId: string): Promise<SolutionReport> =>
         request(ME_ATTEMPT_ROUTES.solutions(attemptId), { schema: solutionReportSchema }),
+
+      /** Accuracy, time and strategy for one sitting, all derived from what the exam wrote. */
+      analytics: (attemptId: string): Promise<AttemptAnalytics> =>
+        request(ME_ATTEMPT_ROUTES.analytics(attemptId), { schema: attemptAnalyticsSchema }),
+
+      /** Every test this student has sat, oldest first. */
+      performance: (): Promise<PerformanceTrend> =>
+        request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
     },
 
     admin: {

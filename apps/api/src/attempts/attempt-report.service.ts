@@ -15,6 +15,9 @@ import {
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
+  type AttemptAnalytics,
+  type PerformancePoint,
+  type PerformanceTrend,
   type ScoreCard,
   type ScoreCardQuestion,
   type SolutionQuestion,
@@ -24,6 +27,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService, type TestSchedule } from '../access';
 import { StorageService } from '../storage/storage.service';
 import { imageUrlsIn } from './exam-images';
+import {
+  bucketOf,
+  bucketsBy,
+  byDifficulty,
+  strategyOf,
+  timeUseOf,
+  type AnalysedQuestion,
+} from './attempt-analytics';
 import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 import { solutionsAreOpen, solutionsClosedReason, solutionsOpenAt } from './solution-gate';
@@ -39,6 +50,12 @@ import {
 } from './attempt-report';
 
 const NOT_YOURS = 'No such sitting';
+
+/** The key the whole-paper bucket carries, and the word a screen shows for it. */
+const ALL_QUESTIONS = 'Overall';
+
+/** How many sat tests a trend line carries. Beyond this a chart is a smear, not a trend. */
+const TREND_LENGTH = 20;
 const NOT_REVIEWABLE = 'This paper has not been marked yet, so there is nothing to review.';
 const NOT_MARKED = 'This paper has not been marked yet. Its score card opens the moment it is.';
 
@@ -96,6 +113,18 @@ const SCORE_CARD_SELECT = {
   },
 } as const satisfies Prisma.AttemptSelect;
 
+/** The score card's read plus the question meta every figure is bucketed by. No key, still. */
+const ANALYTICS_SELECT = {
+  ...SCORE_CARD_SELECT,
+  questions: {
+    select: {
+      ...SCORE_CARD_SELECT.questions.select,
+      question: { select: { difficulty: true, subject: { select: { id: true, name: true } } } },
+    },
+    orderBy: { order: 'asc' },
+  },
+} as const satisfies Prisma.AttemptSelect;
+
 /** What the GATE needs, and nothing else — this read happens before anybody has been let in. */
 const GATE_SELECT = {
   id: true,
@@ -141,6 +170,7 @@ const SOLUTION_SELECT = {
 } as const satisfies Prisma.AttemptSelect;
 
 type ScoreCardRow = Prisma.AttemptGetPayload<{ select: typeof SCORE_CARD_SELECT }>;
+type AnalyticsRow = Prisma.AttemptGetPayload<{ select: typeof ANALYTICS_SELECT }>;
 type GateRow = Prisma.AttemptGetPayload<{ select: typeof GATE_SELECT }>;
 type SolutionRow = Prisma.AttemptGetPayload<{ select: typeof SOLUTION_SELECT }>;
 
@@ -206,6 +236,88 @@ export class AttemptReportService {
         perSection,
       ),
       questions,
+    };
+  }
+
+  /** How the paper was sat, derived from what the exam wrote. Same gate as the score card. */
+  async analytics(studentId: string, attemptId: string): Promise<AttemptAnalytics> {
+    const attempt = await this.prisma.attempt.findFirst({
+      where: { id: attemptId, studentId },
+      select: ANALYTICS_SELECT,
+    });
+    if (!attempt) throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
+    if (attempt.status !== ATTEMPT_STATUS.EVALUATED) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
+    }
+
+    const sections = new Map(
+      attempt.test.baseConfig.sections.map((section) => [section.id, section.name]),
+    );
+    const rows = attempt.questions.map(toAnalysed);
+    const [standing, cohort] = await Promise.all([
+      this.leaderboard.liveStanding(attempt.testId, attempt.id),
+      this.cohortOf(attempt.testId),
+    ]);
+
+    return {
+      attemptId: attempt.id,
+      testId: attempt.testId,
+      testTitle: attempt.test.title,
+      overall: bucketOf(ALL_QUESTIONS, ALL_QUESTIONS, rows),
+      sections: bucketsBy(
+        rows,
+        (row) => row.baseConfigSectionId,
+        (row) => sections.get(row.baseConfigSectionId) ?? row.baseConfigSectionId,
+      ),
+      subjects: bucketsBy(
+        rows,
+        (row) => row.subjectId,
+        (row) => row.subjectName,
+      ),
+      difficulty: byDifficulty(rows),
+      time: timeUseOf(rows),
+      strategy: strategyOf(rows),
+      cohort: {
+        score: Number(attempt.score ?? 0),
+        topperScore: cohort.topperScore,
+        averageScore: cohort.averageScore,
+        rank: standing?.rank ?? attempt.lastRank,
+        percentile: standing?.percentile ?? numberOrNull(attempt.lastPercentile),
+        cohortSize: standing?.cohortSize ?? cohort.size,
+      },
+    };
+  }
+
+  /** Every test this student has sat, oldest first — the line a trend chart draws. */
+  async performance(studentId: string): Promise<PerformanceTrend> {
+    const sat = await this.prisma.attempt.findMany({
+      where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+      orderBy: { submittedAt: 'desc' },
+      take: TREND_LENGTH,
+      select: TREND_SELECT,
+    });
+
+    const tests = await this.prisma.attempt.findMany({
+      where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+      distinct: ['testId'],
+      select: { testId: true },
+    });
+
+    return { testsSat: tests.length, points: [...sat].reverse().map(toPerformancePoint) };
+  }
+
+  /** One indexed aggregate, off the report path's own budget — never off a live sitting's. */
+  private async cohortOf(testId: string) {
+    const cohort = await this.prisma.attempt.aggregate({
+      where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
+      _avg: { score: true },
+      _max: { score: true },
+      _count: true,
+    });
+    return {
+      topperScore: numberOrNull(cohort._max.score),
+      averageScore: cohort._avg.score === null ? null : round(Number(cohort._avg.score)),
+      size: cohort._count,
     };
   }
 
@@ -366,5 +478,55 @@ function signed(question: SolutionQuestion, urls: ReadonlyMap<string, string>): 
       ...option,
       text: signLocalizedRich(option.text, urls),
     })),
+  };
+}
+
+const TREND_SELECT = {
+  id: true,
+  testId: true,
+  submittedAt: true,
+  score: true,
+  correctCount: true,
+  wrongCount: true,
+  lastRank: true,
+  lastPercentile: true,
+  test: { select: { title: true } },
+  // The PAPER's own marks, so one sitting cannot read one percentage here and another on its card.
+  questions: { select: { paperItem: { select: { marks: true } } } },
+} as const satisfies Prisma.AttemptSelect;
+
+type TrendRow = Prisma.AttemptGetPayload<{ select: typeof TREND_SELECT }>;
+
+function toPerformancePoint(row: TrendRow): PerformancePoint {
+  const score = Number(row.score ?? 0);
+  const maxMarks = round(
+    row.questions.reduce((sum, question) => sum + Number(question.paperItem?.marks ?? 0), 0),
+  );
+  const attempted = (row.correctCount ?? 0) + (row.wrongCount ?? 0);
+  return {
+    attemptId: row.id,
+    testId: row.testId,
+    testTitle: row.test.title,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+    score,
+    maxMarks,
+    percentage: percentageOf(score, maxMarks),
+    accuracy: attempted === 0 ? 0 : round(((row.correctCount ?? 0) / attempted) * 100),
+    rank: row.lastRank,
+    percentile: numberOrNull(row.lastPercentile),
+  };
+}
+
+function toAnalysed(row: AnalyticsRow['questions'][number]): AnalysedQuestion {
+  return {
+    baseConfigSectionId: row.baseConfigSectionId,
+    subjectId: row.question.subject.id,
+    subjectName: row.question.subject.name,
+    difficulty: row.question.difficulty,
+    state: row.state,
+    answered: row.selectedOptionId !== null || (row.typedAnswer?.trim() ?? '') !== '',
+    isCorrect: row.isCorrect,
+    marksAwarded: Number(row.marksAwarded ?? 0),
+    timeSpentSec: row.timeSpentSec,
   };
 }
