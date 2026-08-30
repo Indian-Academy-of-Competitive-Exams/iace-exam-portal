@@ -121,7 +121,7 @@ describe('SubmitService', () => {
       {
         name: QUEUE_NAMES.SCORING,
         data: { attemptId: 'att_1', testId: 'tst_1' },
-        jobId: scoringJobId('att_1'),
+        jobId: scoringJobId('obx_1'),
       },
     ]);
   });
@@ -268,7 +268,7 @@ describe('the scoring outbox', () => {
     await sweeper.process();
 
     assert.equal(queue.jobs.length, 1);
-    assert.equal(queue.jobs[0]?.jobId, scoringJobId('att_1'));
+    assert.equal(queue.jobs[0]?.jobId, scoringJobId('obx_1'));
     assert.ok(prisma.outboxEvents[0]?.processedAt);
   });
 
@@ -341,7 +341,7 @@ describe('the scoring relay', () => {
   });
 
   /** The job id is what lets BullMQ collapse two hand-offs; deriving it here is our half. */
-  it('names every hand-off after the attempt it scores', async () => {
+  it('names every hand-off after the request it carries', async () => {
     const { submit, state, queue, outbox } = build();
     await answered(state);
     await submit.submit('stu_1', 'att_1');
@@ -350,7 +350,7 @@ describe('the scoring relay', () => {
 
     await Promise.all([outbox.relay(), outbox.relay()]);
 
-    assert.deepEqual(new Set(queue.jobs.map((job) => job.jobId)), new Set([scoringJobId('att_1')]));
+    assert.deepEqual(new Set(queue.jobs.map((job) => job.jobId)), new Set([scoringJobId('obx_1')]));
   });
 });
 
@@ -378,5 +378,61 @@ describe('a request nothing can act on', () => {
 
     assert.equal(queue.jobs.length, 0);
     assert.ok(prisma.outboxEvents[0]?.processedAt, 'it must not come back every sweep forever');
+  });
+});
+
+describe('a sitting the scorer never scored', () => {
+  const LONG_AGO = new Date(Date.now() - 60 * 60 * 1000);
+
+  /** The failure this prevents: a job that exhausted its retries leaving a result nobody owns. */
+  it('asks for a score again once the request it made has been handed on and lost', async () => {
+    const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
+    const attempt = prisma.attemptRows[0]!;
+    attempt.submittedAt = LONG_AGO;
+    await prisma.outboxEvent.create({
+      data: {
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
+        aggregateId: attempt.id,
+        eventType: SCORING_REQUEST.EVENT_TYPE,
+        payload: { testId: attempt.testId },
+      },
+    });
+    await prisma.outboxEvent.update({ where: { id: 'obx_1' }, data: { processedAt: LONG_AGO } });
+
+    await sweeper.process();
+
+    assert.equal(prisma.outboxEvents.length, 2);
+    assert.equal(prisma.outboxEvents[1]?.aggregateId, attempt.id);
+  });
+
+  it('does not stack a second ask on top of one still waiting to be handed on', async () => {
+    const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
+    const attempt = prisma.attemptRows[0]!;
+    attempt.submittedAt = LONG_AGO;
+    await prisma.outboxEvent.create({
+      data: {
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
+        aggregateId: attempt.id,
+        eventType: SCORING_REQUEST.EVENT_TYPE,
+        payload: { testId: attempt.testId },
+      },
+    });
+
+    await sweeper.process();
+
+    assert.equal(prisma.outboxEvents.length, 1);
+  });
+
+  it('leaves a scored sitting alone, and one that has only just ended', async () => {
+    const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
+    const attempt = prisma.attemptRows[0]!;
+    attempt.submittedAt = new Date();
+
+    await sweeper.process();
+    attempt.submittedAt = LONG_AGO;
+    attempt.score = 0;
+    await sweeper.process();
+
+    assert.equal(prisma.outboxEvents.length, 0);
   });
 });

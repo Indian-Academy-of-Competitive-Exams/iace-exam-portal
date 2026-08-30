@@ -3,7 +3,6 @@ import { BullModule } from '@nestjs/bullmq';
 import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
 import { QUEUE_NAMES } from './queues';
-import { ScoringProcessor } from './scoring.processor';
 
 /**
  * BullMQ over the same Redis instance, on its own connection: workers issue blocking commands
@@ -30,7 +29,6 @@ import { ScoringProcessor } from './scoring.processor';
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_SWEEP }),
     BullModule.registerQueue({ name: QUEUE_NAMES.OUTBOX_PRUNE }),
   ],
-  providers: [ScoringProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}

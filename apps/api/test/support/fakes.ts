@@ -3,6 +3,7 @@ import {
   ATTEMPT_STATUS,
   type AdminPermissions,
   type AnswerState,
+  type AttemptSectionScore,
   AppException,
   type AttemptStatus,
   BRANCH_TYPE,
@@ -30,9 +31,12 @@ import {
   type NavigationPolicy,
   type NotificationType,
   PAPER_BINDING,
+  PAPER_QUESTION_STATUS,
   type PaperBinding,
   type PaperQuestionStatus,
   type PermissionLevel,
+  QUESTION_TYPE,
+  type QuestionType,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
   type StageDisposition,
@@ -1391,6 +1395,7 @@ export interface FakeAttemptRow {
   correctCount: number | null;
   wrongCount: number | null;
   unattemptedCount: number | null;
+  sectionScores: AttemptSectionScore[] | null;
   lastRank: number | null;
   lastPercentile: number | null;
   createdAt: Date;
@@ -1415,6 +1420,7 @@ export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemp
     correctCount: null,
     wrongCount: null,
     unattemptedCount: null,
+    sectionScores: null,
     lastRank: null,
     lastPercentile: null,
     createdAt: startedAt,
@@ -1462,6 +1468,7 @@ export class FakeQueue {
 interface FakeOutboxWhere {
   eventType?: string;
   id?: string;
+  aggregateId?: { in: string[] };
   createdAt?: { lt: Date };
   processedAt?: null | { not?: null; lt?: Date };
 }
@@ -1470,6 +1477,7 @@ interface FakeOutboxWhere {
 function matchesOutboxWhere(row: FakeOutboxRow, where: FakeOutboxWhere): boolean {
   if (where.eventType !== undefined && row.eventType !== where.eventType) return false;
   if (where.id !== undefined && row.id !== where.id) return false;
+  if (where.aggregateId && !where.aggregateId.in.includes(row.aggregateId)) return false;
   if (where.createdAt && row.createdAt >= where.createdAt.lt) return false;
   if (where.processedAt === null) return row.processedAt === null;
   if (where.processedAt?.lt) {
@@ -1703,13 +1711,29 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     findUnique: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.attemptRows.find((row) => row.id === where.id) ?? null),
 
-    findMany: ({ where }: { where: { status: AttemptStatus; endsAt?: { lt: Date } } }) =>
+    findMany: ({
+      where,
+      take,
+    }: {
+      where: {
+        status: AttemptStatus;
+        endsAt?: { lt: Date };
+        score?: null;
+        submittedAt?: { lt: Date };
+      };
+      take?: number;
+    }) =>
       Promise.resolve(
-        this.attemptRows.filter(
-          (row) =>
-            row.status === where.status &&
-            (where.endsAt === undefined || row.endsAt < where.endsAt.lt),
-        ),
+        this.attemptRows
+          .filter(
+            (row) =>
+              row.status === where.status &&
+              (where.endsAt === undefined || row.endsAt < where.endsAt.lt) &&
+              (where.score === undefined || row.score === null) &&
+              (where.submittedAt === undefined ||
+                (row.submittedAt !== null && row.submittedAt < where.submittedAt.lt)),
+          )
+          .slice(0, take),
       ),
 
     updateMany: ({
@@ -4158,4 +4182,130 @@ export class FakeNotificationsPrisma {
       return Promise.resolve(row);
     },
   };
+}
+
+// --------------------------------------------------------------------------- scoring
+// ---------------------------------------------------------------------------
+
+export interface FakeServedAnswerRow {
+  attemptId: string;
+  questionId: string;
+  baseConfigSectionId: string;
+  order: number;
+  type: QuestionType;
+  selectedOptionId: string | null;
+  typedAnswer: string | null;
+  timeSpentSec: number;
+  options: unknown;
+  answerKey: unknown;
+  paperItem: { marks: number; negativeMarks: number; status: PaperQuestionStatus } | null;
+  isCorrect: boolean | null;
+  marksAwarded: number | null;
+}
+
+/** Four options at `o1`..`o4`, one of them right — the shape a version's `options` column holds. */
+export function mcqOptions(correctPosition: number, count = 4): unknown {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `o${index + 1}`,
+    position: index + 1,
+    isCorrect: index + 1 === correctPosition,
+    text: { en: [{ type: 'TEXT', text: `Option ${index + 1}` }] },
+  }));
+}
+
+export function makeServedAnswer(
+  overrides: Partial<FakeServedAnswerRow> = {},
+): FakeServedAnswerRow {
+  return {
+    attemptId: 'att_1',
+    questionId: 'q_1',
+    baseConfigSectionId: 'sec_1',
+    order: 1,
+    type: QUESTION_TYPE.SINGLE_MCQ,
+    selectedOptionId: null,
+    typedAnswer: null,
+    timeSpentSec: 0,
+    options: mcqOptions(1),
+    answerKey: null,
+    paperItem: { marks: 2, negativeMarks: 0.5, status: PAPER_QUESTION_STATUS.ACTIVE },
+    isCorrect: null,
+    marksAwarded: null,
+    ...overrides,
+  };
+}
+
+/** Only what the scorer touches: a sitting, its served rows, and the two writes it makes. */
+export class FakeScoringPrisma {
+  constructor(
+    readonly attempts: FakeAttemptRow[] = [],
+    readonly served: FakeServedAnswerRow[] = [],
+  ) {}
+
+  readonly attempt = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.attempts.find((candidate) => candidate.id === where.id);
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve({
+        ...row,
+        questions: this.served
+          .filter((served) => served.attemptId === row.id)
+          .sort((a, b) => a.order - b.order)
+          .map((served) => ({
+            questionId: served.questionId,
+            baseConfigSectionId: served.baseConfigSectionId,
+            selectedOptionId: served.selectedOptionId,
+            typedAnswer: served.typedAnswer,
+            timeSpentSec: served.timeSpentSec,
+            question: { type: served.type },
+            questionVersion: { options: served.options, answerKey: served.answerKey },
+            paperItem: served.paperItem,
+          })),
+      });
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAttemptRow> }) => {
+      const row = this.attempts.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no attempt ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; evaluatedAt: null };
+      data: { evaluatedAt: Date };
+    }) => {
+      const matched = this.attempts.filter(
+        (row) => row.id === where.id && row.evaluatedAt === null,
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
+  };
+
+  readonly attemptQuestion = {
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { attemptId: string; questionId: { in: string[] } };
+      data: { isCorrect: boolean | null; marksAwarded: number };
+    }) => {
+      const matched = this.served.filter(
+        (row) => row.attemptId === where.attemptId && where.questionId.in.includes(row.questionId),
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
+  };
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
 }

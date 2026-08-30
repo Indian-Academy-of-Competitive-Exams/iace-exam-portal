@@ -36,6 +36,17 @@ export const answerStateSchema = z.enum(ANSWER_STATE);
 export type AnswerState = z.infer<typeof answerStateSchema>;
 export const ANSWER_STATES = answerStateSchema.options;
 
+/** One section's slice of a scored paper — exactly what `Attempt.sectionScores` holds. */
+export const attemptSectionScoreSchema = z.object({
+  baseConfigSectionId: z.string(),
+  score: z.number(),
+  correctCount: z.number().int(),
+  wrongCount: z.number().int(),
+  unattemptedCount: z.number().int(),
+  timeSpentSec: z.number().int(),
+});
+export type AttemptSectionScore = z.infer<typeof attemptSectionScoreSchema>;
+
 export const attemptSchema = z.object({
   id: z.string(),
   testId: z.string(),
@@ -55,6 +66,7 @@ export const attemptSchema = z.object({
   correctCount: z.number().int().nullable(),
   wrongCount: z.number().int().nullable(),
   unattemptedCount: z.number().int().nullable(),
+  sectionScores: z.array(attemptSectionScoreSchema).nullable(),
   /** Snapshots. The live values are always read from Redis. */
   lastRank: z.number().int().nullable(),
   lastPercentile: z.number().nullable(),

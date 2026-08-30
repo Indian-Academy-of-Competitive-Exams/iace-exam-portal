@@ -102,7 +102,7 @@ export class ScoringOutbox {
         await this.scoring.add(
           QUEUE_NAMES.SCORING,
           { attemptId: row.aggregateId, testId },
-          { jobId: scoringJobId(row.aggregateId) },
+          { jobId: scoringJobId(row.id) },
         );
       }
       await this.prisma.outboxEvent.update({
