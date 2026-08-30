@@ -1,0 +1,79 @@
+import {
+  ATTEMPT_STATUS,
+  TEST_BUCKET,
+  testAction,
+  testBucket,
+  type StudentCatalogSeries,
+  type StudentCatalogTest,
+  type TestBucket,
+} from '@iace/contracts';
+
+/** How far through a series a student is. Pure, so both the shelf and the series page share it. */
+export interface SeriesProgress {
+  total: number;
+  done: number;
+  percent: number;
+}
+
+export function seriesProgress(series: StudentCatalogSeries): SeriesProgress {
+  const total = series.tests.length;
+  const done = series.tests.filter(
+    (test) => test.attemptStatus !== null && test.attemptStatus !== ATTEMPT_STATUS.IN_PROGRESS,
+  ).length;
+  return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
+}
+
+/** One test, ready to draw: which shelf it sits on and what its button does. */
+export interface Sittable {
+  test: StudentCatalogTest;
+  seriesId: string;
+  seriesName: string;
+  bucket: TestBucket;
+  action: 'START' | 'RESUME' | null;
+}
+
+export function sittablesOf(series: readonly StudentCatalogSeries[], now: Date): Sittable[] {
+  return series.flatMap((one) =>
+    one.tests.map((test) => ({
+      test,
+      seriesId: one.id,
+      seriesName: one.name,
+      bucket: testBucket(test, now),
+      action: testAction(test),
+    })),
+  );
+}
+
+/** The one thing to do next: a sitting already running beats anything a student has not opened. */
+export function continueWith(rows: readonly Sittable[]): Sittable | undefined {
+  return rows.find((row) => row.test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS);
+}
+
+/** Open now, soonest to close first — a test with no closing time waits behind one that has. */
+export function openNow(rows: readonly Sittable[]): Sittable[] {
+  return rows
+    .filter((row) => row.bucket === TEST_BUCKET.OPEN)
+    .sort((a, b) => closesAt(a) - closesAt(b));
+}
+
+/** What opens next, soonest first. */
+export function upNext(rows: readonly Sittable[]): Sittable[] {
+  return rows
+    .filter((row) => row.bucket === TEST_BUCKET.LATER)
+    .sort((a, b) => opensAt(a) - opensAt(b));
+}
+
+/** A search over what a student can see: the test's own name, and the series carrying it. */
+export function matching(rows: readonly Sittable[], term: string): Sittable[] {
+  const wanted = term.trim().toLowerCase();
+  if (wanted === '') return [...rows];
+  return rows.filter((row) =>
+    `${row.test.title ?? ''} ${row.seriesName}`.toLowerCase().includes(wanted),
+  );
+}
+
+const FAR_FUTURE = Number.MAX_SAFE_INTEGER;
+const closesAt = (row: Sittable) =>
+  row.test.closesAt === null ? FAR_FUTURE : Date.parse(row.test.closesAt);
+const opensAt = (row: Sittable) =>
+  row.test.opensAt === null ? FAR_FUTURE : Date.parse(row.test.opensAt);

@@ -9,6 +9,8 @@ export const ROUTES = {
   LOGIN: '/login',
   TESTS: '/tests',
   BROWSE: '/free-tests',
+  SERIES: (seriesId: string) => `/series/${seriesId}`,
+  SERIES_PATTERN: '/series/:seriesId',
   TEST_ABOUT: (testId: string) => `/tests/${testId}/about`,
   TEST_ABOUT_PATTERN: '/tests/:testId/about',
   TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
