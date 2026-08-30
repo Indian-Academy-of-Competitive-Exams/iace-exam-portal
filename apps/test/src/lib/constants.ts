@@ -9,6 +9,8 @@ export const ROUTES = {
   LOGIN: '/login',
   TESTS: '/tests',
   BROWSE: '/free-tests',
+  TEST_ABOUT: (testId: string) => `/tests/${testId}/about`,
+  TEST_ABOUT_PATTERN: '/tests/:testId/about',
   TEST_INSTRUCTIONS: (testId: string) => `/tests/${testId}/instructions`,
   TEST_INSTRUCTIONS_PATTERN: '/tests/:testId/instructions',
   /** Full screen, outside the shell: an exam hall has no navigation out of it. */
@@ -41,6 +43,9 @@ export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attem
 
 /** Every test this student has sat, which is what the Performance tab and the landing both read. */
 export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
+
+/** What a test covers, read before the clock starts. */
+export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];
 
 /** The free series they could ask for, which an ask changes. */
 export const BROWSE_QUERY_KEY = ['me', 'open-series'] as const;

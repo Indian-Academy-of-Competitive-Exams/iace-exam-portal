@@ -9,6 +9,7 @@ import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
 import { BrowsePage } from './routes/browse';
 import { TestsPage } from './routes/tests';
+import { TestAboutPage } from './routes/test-about';
 import { TestInstructionsPage } from './routes/test-instructions';
 import { ExamPage } from './routes/exam';
 import { ScoreCardPage } from './routes/score-card';
@@ -37,6 +38,7 @@ export function App() {
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           <Route path={ROUTES.PERFORMANCE} element={<PerformancePage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
+          <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
           <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ScoreCardPage />} />
           <Route path={ROUTES.REVIEW_PATTERN} element={<ReviewPage />} />
