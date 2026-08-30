@@ -92,65 +92,78 @@ async function chunked(rows, write) {
   }
 }
 
-/** The pool, round-robined across difficulty, so one section is never all-HIGH. */
-function spread(questions) {
-  const byDifficulty = DIFFICULTIES.map((difficulty) =>
-    questions.filter((row) => row.difficulty === difficulty),
-  );
-  const out = [];
-  for (let depth = 0; out.length < questions.length; depth += 1) {
-    for (const bucket of byDifficulty) if (bucket[depth]) out.push(bucket[depth]);
-  }
-  return out;
-}
-
 function correctOptionOf(version) {
-  const options = Array.isArray(version.options) ? version.options : [];
+  const options = Array.isArray(version?.options) ? version.options : [];
   const correct = options.find((option) => option?.isCorrect === true);
   return { correct: correct?.id ?? null, all: options.map((option) => option?.id) };
 }
 
-async function poolFor(prisma) {
-  const candidates = await prisma.question.findMany({
-    where: { status: 'ACTIVE', currentVersionId: { not: null }, type: 'SINGLE_MCQ' },
-    select: {
-      id: true,
-      subjectId: true,
-      difficulty: true,
-      currentVersionId: true,
-      currentVersion: { select: { options: true } },
-    },
-    orderBy: { id: 'asc' },
-  });
+const ANSWERABLE = { status: 'ACTIVE', currentVersionId: { not: null }, type: 'SINGLE_MCQ' };
 
-  const bySubject = new Map();
-  for (const row of candidates) {
-    const { correct, all } = correctOptionOf(row.currentVersion ?? {});
-    if (!correct || all.length < 2) continue;
-    const held = bySubject.get(row.subjectId) ?? [];
-    held.push({ ...row, correctOptionId: correct, optionIds: all });
-    bySubject.set(row.subjectId, held);
+/** How much each subject has, counted rather than loaded — the bank is tens of thousands of rows. */
+async function subjectDepths(prisma) {
+  const counted = await prisma.question.groupBy({
+    by: ['subjectId'],
+    where: ANSWERABLE,
+    _count: { _all: true },
+  });
+  return counted
+    .map((row) => ({ subjectId: row.subjectId, available: row._count._all }))
+    .sort((a, b) => b.available - a.available);
+}
+
+/** `need` questions from one subject, drawn evenly across difficulty so it is never all-HIGH. */
+async function questionsFrom(prisma, subjectId, need) {
+  const perBand = Math.ceil(need / DIFFICULTIES.length);
+  const bands = await Promise.all(
+    DIFFICULTIES.map((difficulty) =>
+      prisma.question.findMany({
+        where: { ...ANSWERABLE, subjectId, difficulty },
+        select: {
+          id: true,
+          difficulty: true,
+          currentVersionId: true,
+          currentVersion: { select: { options: true } },
+        },
+        orderBy: { id: 'asc' },
+        take: perBand + need,
+      }),
+    ),
+  );
+
+  const picked = [];
+  for (let depth = 0; picked.length < need; depth += 1) {
+    const before = picked.length;
+    for (const band of bands) {
+      const row = band[depth];
+      if (!row || picked.length >= need) continue;
+      const { correct, all } = correctOptionOf(row.currentVersion);
+      if (!correct || all.length < 2) continue;
+      picked.push({ ...row, correctOptionId: correct, optionIds: all });
+    }
+    // Every band ran dry at this depth, so nothing deeper will fill it either.
+    if (picked.length === before) break;
   }
-  return bySubject;
+  return picked;
 }
 
 /** One subject per section where the bank allows it, so subject analytics has two buckets. */
-function assign(bySubject) {
-  const ranked = [...bySubject.entries()].sort((a, b) => b[1].length - a[1].length);
+async function assign(prisma) {
+  const depths = await subjectDepths(prisma);
   const picked = [];
+
   for (const section of SECTIONS) {
     const taken = picked.map((entry) => entry.subjectId);
-    const free = ranked.find(
-      ([subjectId, rows]) => !taken.includes(subjectId) && rows.length >= section.questionCount,
+    const free = depths.find(
+      (row) => !taken.includes(row.subjectId) && row.available >= section.questionCount,
     );
-    const shared = ranked.find(([, rows]) => rows.length >= section.questionCount);
+    const shared = depths.find((row) => row.available >= section.questionCount);
     const chosen = free ?? shared;
     if (!chosen) return null;
-    picked.push({
-      section,
-      subjectId: chosen[0],
-      questions: spread(chosen[1]).slice(0, section.questionCount),
-    });
+
+    const questions = await questionsFrom(prisma, chosen.subjectId, section.questionCount);
+    if (questions.length < section.questionCount) return null;
+    picked.push({ section, subjectId: chosen.subjectId, questions });
   }
   return picked;
 }
@@ -194,7 +207,6 @@ async function writePaper(prisma, stageId, assigned) {
       totalQuestions: TOTAL_QUESTIONS,
       totalMarks: TOTAL_MARKS,
       durationSec: DURATION_SEC,
-      locked: true,
       shuffleQuestions: false,
       shuffleOptions: false,
       sections: {
@@ -210,6 +222,9 @@ async function writePaper(prisma, stageId, assigned) {
       },
     },
   });
+
+  // Locked AFTER its sections exist: a trigger refuses a shape change to a locked blueprint.
+  await prisma.baseConfig.update({ where: { id: IDS.config }, data: { locked: true } });
 
   const finalizedAt = new Date();
   await prisma.test.create({
@@ -411,7 +426,7 @@ async function main() {
       process.exit(1);
     }
 
-    const assigned = assign(await poolFor(prisma));
+    const assigned = await assign(prisma);
     if (!assigned) {
       console.error(
         `Seed a question pool first — no subject has ${TOTAL_QUESTIONS} answerable ACTIVE questions.`,
