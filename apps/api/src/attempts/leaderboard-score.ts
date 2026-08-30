@@ -4,7 +4,14 @@
  * marks scaled past every possible time, plus a time term counted DOWN. More marks therefore
  * always outranks fewer, and at equal marks less time wins.
  */
+import { elapsedSeconds } from './attempt-report';
 export const LEADERBOARD_MAX_TIME_SEC = 24 * 60 * 60;
+
+/** Ranking's own reading of an unfinished sitting: the slowest there is. */
+export function timeTakenSec(startedAt: Date, submittedAt: Date | null): number {
+  if (submittedAt === null) return LEADERBOARD_MAX_TIME_SEC;
+  return elapsedSeconds(startedAt, submittedAt);
+}
 
 /** One more than the widest time, so the minor term can never reach into the marks above it. */
 const TIME_SPAN = LEADERBOARD_MAX_TIME_SEC + 1;
@@ -28,12 +35,6 @@ export function bandOf(composite: number): { floor: number; ceiling: number } {
   return { floor, ceiling: floor + LEADERBOARD_MAX_TIME_SEC };
 }
 
-/** How long the sitting took. One with no submission is treated as having taken the whole day. */
-export function timeTakenSec(startedAt: Date, submittedAt: Date | null): number {
-  if (submittedAt === null) return LEADERBOARD_MAX_TIME_SEC;
-  return Math.max(0, Math.round((submittedAt.getTime() - startedAt.getTime()) / MS_PER_SECOND));
-}
-
 /** Percentile rank, counting a tie as half. `tied` includes this sitting itself. */
 export function percentileOf(outscored: number, tied: number, cohortSize: number): number {
   // A field of one is its own top; reporting the median of a field of one reads as a failure.
@@ -47,5 +48,3 @@ export function percentileOf(outscored: number, tied: number, cohortSize: number
 
 const clamp = (value: number, low: number, high: number) =>
   Math.min(Math.max(value, low), Math.max(high, low));
-
-const MS_PER_SECOND = 1000;

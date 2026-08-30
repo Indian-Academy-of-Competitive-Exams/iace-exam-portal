@@ -4263,6 +4263,7 @@ export interface FakeServedAnswerRow {
   type: QuestionType;
   selectedOptionId: string | null;
   typedAnswer: string | null;
+  state: AnswerState;
   timeSpentSec: number;
   options: unknown;
   answerKey: unknown;
@@ -4292,6 +4293,7 @@ export function makeServedAnswer(
     type: QUESTION_TYPE.SINGLE_MCQ,
     selectedOptionId: null,
     typedAnswer: null,
+    state: ANSWER_STATE.NOT_VISITED,
     timeSpentSec: 0,
     options: mcqOptions(1),
     answerKey: null,
@@ -4302,14 +4304,71 @@ export function makeServedAnswer(
   };
 }
 
+/** The blueprint a scored sitting is read back against — the shape, not this student's marks. */
+export interface FakeScoredTest {
+  title: string | null;
+  durationSec: number;
+  totalQuestions: number;
+  totalMarks: number;
+  sections: {
+    id: string;
+    name: string;
+    order: number;
+    questionCount: number;
+    marksPerQuestion: number;
+  }[];
+}
+
+export function makeScoredTest(overrides: Partial<FakeScoredTest> = {}): FakeScoredTest {
+  return {
+    title: 'SSC CGL Tier 1 — Mock 1',
+    durationSec: 3600,
+    totalQuestions: 3,
+    totalMarks: 6,
+    sections: [{ id: 'sec_1', name: 'Section A', order: 1, questionCount: 3, marksPerQuestion: 2 }],
+    ...overrides,
+  };
+}
+
 /** Only what the scorer touches: a sitting, its served rows, and the two writes it makes. */
 export class FakeScoringPrisma {
   constructor(
     readonly attempts: FakeAttemptRow[] = [],
     readonly served: FakeServedAnswerRow[] = [],
+    readonly shape: FakeScoredTest = makeScoredTest(),
   ) {}
 
+  /** Deliberately hands over the WHOLE served row, key and all: excluding it is the code's job. */
+  private reported(row: FakeAttemptRow) {
+    return {
+      ...row,
+      test: {
+        title: this.shape.title,
+        baseConfig: {
+          durationSec: this.shape.durationSec,
+          totalQuestions: this.shape.totalQuestions,
+          totalMarks: this.shape.totalMarks,
+          sections: [...this.shape.sections].sort((a, b) => a.order - b.order),
+        },
+      },
+      questions: this.served
+        .filter((served) => served.attemptId === row.id)
+        .sort((a, b) => a.order - b.order)
+        .map((served) => ({
+          ...served,
+          questionVersion: { options: served.options, answerKey: served.answerKey },
+        })),
+    };
+  }
+
   readonly attempt = {
+    findFirst: ({ where }: { where: { id: string; studentId: string } }) => {
+      const row = this.attempts.find(
+        (candidate) => candidate.id === where.id && candidate.studentId === where.studentId,
+      );
+      return Promise.resolve(row ? this.reported(row) : null);
+    },
+
     findUnique: ({ where }: { where: { id: string } }) => {
       const row = this.attempts.find((candidate) => candidate.id === where.id);
       if (!row) return Promise.resolve(null);

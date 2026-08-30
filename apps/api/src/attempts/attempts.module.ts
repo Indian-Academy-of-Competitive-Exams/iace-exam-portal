@@ -9,6 +9,7 @@ import { AccessModule } from '../access';
 import { AttemptsController } from './attempts.controller';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
+import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
@@ -25,6 +26,7 @@ import { SubmitService } from './submit.service';
   providers: [
     AttemptsService,
     AttemptPaperService,
+    AttemptReportService,
     AttemptStateService,
     LeaderboardService,
     LeaderboardRebuildProcessor,
@@ -37,6 +39,7 @@ import { SubmitService } from './submit.service';
   exports: [
     AttemptsService,
     AttemptPaperService,
+    AttemptReportService,
     AttemptStateService,
     ScoringProcessor,
     SubmitService,

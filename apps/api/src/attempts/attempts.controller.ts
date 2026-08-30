@@ -8,6 +8,7 @@ import {
   type LiveAttempt,
   type LiveAttemptState,
   type SaveAttemptStateBody,
+  type ScoreCard,
   type StartAttemptBody,
   type SubmittedAttempt,
 } from '@iace/contracts';
@@ -15,6 +16,7 @@ import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security'
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
+import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
 import { SubmitService } from './submit.service';
 
@@ -25,6 +27,7 @@ export class AttemptsController {
   constructor(
     private readonly attempts: AttemptsService,
     private readonly papers: AttemptPaperService,
+    private readonly reports: AttemptReportService,
     private readonly state: AttemptStateService,
     private readonly submitter: SubmitService,
   ) {}
@@ -63,6 +66,12 @@ export class AttemptsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SubmittedAttempt> {
     return this.submitter.submit(user.id, id);
+  }
+
+  /** Marks, standing and their OWN answers. Carries no correct option, on any question. */
+  @Get('attempts/:id/scorecard')
+  scoreCard(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ScoreCard> {
+    return this.reports.scoreCard(user.id, id);
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */

@@ -7,6 +7,7 @@ import {
   timerTemplateSchema,
 } from './configs';
 import { localizedContentSchema, localizedRichSchema, questionTypeSchema } from './questions';
+import { paperQuestionStatusSchema } from './tests';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
@@ -281,6 +282,7 @@ export const ME_ATTEMPT_ROUTES = {
   paper: (attemptId: string) => `/me/attempts/${attemptId}/paper`,
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
+  scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
 } as const;
 
 /** How a sitting ended. A second submit reports the first one's outcome rather than refusing. */
@@ -349,3 +351,67 @@ export const examPaperSchema = z.object({
   questions: z.array(examQuestionSchema),
 });
 export type ExamPaper = z.infer<typeof examPaperSchema>;
+
+// ============================================================================
+// The Score Card. Marks, standing and the student's OWN answers — nothing here
+// says what the right answer was, which is why a missed question is safe to
+// show. The correct option rides only on the gated Solution Report.
+// ============================================================================
+
+/** How one question went FOR THIS STUDENT. There is deliberately no correct option on it. */
+export const scoreCardQuestionSchema = z.object({
+  questionId: z.string(),
+  /** This student's display order, so the palette redraws exactly as they sat it. */
+  order: z.number().int(),
+  baseConfigSectionId: z.string(),
+  state: answerStateSchema,
+  /** Their own answer. Safe: on a miss it says what they picked, never what was right. */
+  selectedOptionId: z.string().nullable(),
+  typedAnswer: z.string().nullable(),
+  isCorrect: z.boolean().nullable(),
+  marksAwarded: z.number().nullable(),
+  /** What the paper was paying and charging here — the arithmetic, shown. */
+  marks: z.number(),
+  negativeMarks: z.number(),
+  /** Set when the question was withdrawn or made a bonus, which is why its marks read oddly. */
+  disposition: paperQuestionStatusSchema,
+  timeSpentSec: z.number().int(),
+});
+export type ScoreCardQuestion = z.infer<typeof scoreCardQuestionSchema>;
+
+export const scoreCardSectionSchema = attemptSectionScoreSchema.extend({
+  name: z.string(),
+  order: z.number().int(),
+  questionCount: z.number().int(),
+  maxMarks: z.number(),
+});
+export type ScoreCardSection = z.infer<typeof scoreCardSectionSchema>;
+
+export const scoreCardSchema = z.object({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  attemptNo: z.number().int(),
+  /** False for a retake: it is marked, but it is not in the ranking. */
+  isGraded: z.boolean(),
+  submittedAt: z.string().nullable(),
+  evaluatedAt: z.string().nullable(),
+  score: z.number(),
+  maxMarks: z.number(),
+  percentage: z.number(),
+  correctCount: z.number().int(),
+  wrongCount: z.number().int(),
+  unattemptedCount: z.number().int(),
+  totalQuestions: z.number().int(),
+  timeTakenSec: z.number().int(),
+  durationSec: z.number().int(),
+  /** Live from the ranking. Null for a retake, and while a wiped board is being put back. */
+  rank: z.number().int().nullable(),
+  percentile: z.number().nullable(),
+  cohortSize: z.number().int().nullable(),
+  /** True while the test can still be sat by somebody, so the standing is not final yet. */
+  provisional: z.boolean(),
+  sections: z.array(scoreCardSectionSchema),
+  questions: z.array(scoreCardQuestionSchema),
+});
+export type ScoreCard = z.infer<typeof scoreCardSchema>;

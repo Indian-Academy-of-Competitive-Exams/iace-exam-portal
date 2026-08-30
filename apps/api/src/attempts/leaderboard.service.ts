@@ -83,6 +83,14 @@ export class LeaderboardService {
     return { rank: seat + 1, percentile: percentileOf(outscored, tied, cohortSize), cohortSize };
   }
 
+  /** For a SCREEN: a Redis nobody can reach costs the live standing, never the whole page. */
+  async liveStanding(testId: string, attemptId: string): Promise<Standing | null> {
+    return this.standing(testId, attemptId).catch((error: unknown) => {
+      this.logger.error(`Reading the standing for ${attemptId} failed; the snapshot stands`, error);
+      return null;
+    });
+  }
+
   /** Built aside and swapped in: a rebuild that dies half-way leaves the board cold, not wrong. */
   async rebuild(testId: string): Promise<number> {
     const key = redisKeys.testLeaderboard(testId);

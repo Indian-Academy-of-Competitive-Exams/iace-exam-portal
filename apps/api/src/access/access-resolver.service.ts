@@ -93,6 +93,13 @@ interface ResolvedSeries {
   tests: ResolvedTest[];
 }
 
+/** When one test opens and shuts FOR THIS STUDENT, and what their branch adds to the clock. */
+export interface StudentTestWindow {
+  opensAt: string | null;
+  closesAt: string | null;
+  extraTimeSec: number | null;
+}
+
 interface ResolvedCatalog {
   testBlocked: boolean;
   series: ResolvedSeries[];
@@ -166,9 +173,44 @@ export class AccessResolverService {
 
   /** What this student's branch adds to the clock here — from the catalog the gate just read. */
   async extraTimeSecFor(studentId: string, testId: string): Promise<number> {
+    return (await this.windowFor(studentId, testId))?.extraTimeSec ?? 0;
+  }
+
+  /** When entry shuts EVERYWHERE. Null while any branch can still let somebody in. */
+  async entryClosesAt(testId: string): Promise<{ closesAt: string; extraTimeSec: number } | null> {
+    const links = await this.prisma.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true, unlockAt: true },
+    });
+    if (links.length === 0 || links.some((link) => link.unlockAt === null)) return null;
+
+    const [schedules, offered] = await Promise.all([
+      this.prisma.branchTestSchedule.findMany({
+        where: { testId },
+        select: { lateEntrySec: true, extraTimeSec: true },
+      }),
+      this.prisma.branchTestConfig.count({
+        where: { testSeriesId: { in: links.map((link) => link.testSeriesId) }, enabled: true },
+      }),
+    ]);
+    // A branch with no row runs the plain rules, and the plain rule for late entry is no cap.
+    if (schedules.length < offered) return null;
+    if (schedules.some((row) => row.lateEntrySec === null)) return null;
+
+    const opensAt = Math.max(...links.map((link) => link.unlockAt?.getTime() ?? 0));
+    const lateEntrySec = Math.max(...schedules.map((row) => row.lateEntrySec ?? 0));
+    return {
+      closesAt: new Date(opensAt + lateEntrySec * MILLISECONDS_PER_SECOND).toISOString(),
+      extraTimeSec: Math.max(0, ...schedules.map((row) => row.extraTimeSec ?? 0)),
+    };
+  }
+
+  /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */
+  async windowFor(studentId: string, testId: string): Promise<StudentTestWindow | null> {
     const resolved = await this.resolved(studentId);
     const test = resolved.series.flatMap((series) => series.tests).find((row) => row.id === testId);
-    return test?.extraTimeSec ?? 0;
+    if (!test) return null;
+    return { opensAt: test.opensAt, closesAt: test.closesAt, extraTimeSec: test.extraTimeSec };
   }
 
   async invalidateStudent(studentId: string): Promise<void> {
@@ -358,6 +400,8 @@ function toResolvedTest(
     extraTimeSec: branch?.extraTimeSec ?? null,
   };
 }
+
+const MILLISECONDS_PER_SECOND = 1000;
 
 const isFinished = (status: AttemptStatus | null): boolean =>
   status !== null && FINISHED.has(status);

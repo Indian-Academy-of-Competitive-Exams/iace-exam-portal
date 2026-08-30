@@ -123,12 +123,14 @@ import {
   ME_ATTEMPT_ROUTES,
   examBriefSchema,
   examPaperSchema,
+  scoreCardSchema,
   liveAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
   type ExamBrief,
   type ExamPaper,
   type LiveAttempt,
+  type ScoreCard,
   type SaveAttemptStateInput,
   type StartAttemptInput,
   type SubmittedAttempt,
@@ -604,6 +606,10 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           schema: submittedAttemptSchema,
         }),
+
+      /** Marks, standing and their own answers. Refused until the paper has been marked. */
+      scoreCard: (attemptId: string): Promise<ScoreCard> =>
+        request(ME_ATTEMPT_ROUTES.scoreCard(attemptId), { schema: scoreCardSchema }),
     },
 
     admin: {

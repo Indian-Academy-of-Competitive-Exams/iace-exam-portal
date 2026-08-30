@@ -3,5 +3,5 @@ export { AccessModule } from './access.module';
 export { ProgramsService } from './programs.service';
 export { TestSeriesService } from './test-series.service';
 export { StudentGrantsService } from './student-grants.service';
-export { AccessResolverService } from './access-resolver.service';
+export { AccessResolverService, type StudentTestWindow } from './access-resolver.service';
 export { UnlocksService } from './unlocks.service';
