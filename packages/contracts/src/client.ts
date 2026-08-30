@@ -154,6 +154,7 @@ import {
   type ReplacePaperQuestionInput,
   type CreateTestInput,
   type FinalizeResult,
+  type SetPaperQuestionStatusInput,
   type SetTestSeriesInput,
   type SetTestStatusInput,
   type Test,
@@ -1025,6 +1026,18 @@ export function createApiClient(options: ApiClientOptions) {
         removePaperQuestion: (id: string, rowId: string): Promise<TestPaper> =>
           request(ADMIN_TEST_PAPER_ROUTES.removeQuestion(id, rowId), {
             method: 'DELETE',
+            schema: testPaperSchema,
+          }),
+
+        /** Drops a question or makes it a bonus, and re-scores every sitting that served it. */
+        setPaperQuestionStatus: (
+          id: string,
+          rowId: string,
+          input: SetPaperQuestionStatusInput,
+        ): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.questionStatus(id, rowId), {
+            method: 'PATCH',
+            body: input,
             schema: testPaperSchema,
           }),
 

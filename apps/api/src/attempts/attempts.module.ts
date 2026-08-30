@@ -36,12 +36,12 @@ import { SubmitService } from './submit.service';
     AttemptFlushProcessor,
     AttemptSweeperProcessor,
   ],
+  // ScoringProcessor is NOT here on purpose: an export is how evaluation reaches a request path.
   exports: [
     AttemptsService,
     AttemptPaperService,
-    AttemptReportService,
     AttemptStateService,
-    ScoringProcessor,
+    ScoringOutbox,
     SubmitService,
   ],
 })

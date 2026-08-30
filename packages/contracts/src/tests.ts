@@ -440,6 +440,11 @@ export const paperQuestionSchema = z.object({
 });
 export type PaperQuestion = z.infer<typeof paperQuestionSchema>;
 
+/** DROPPED pays everyone who attempted it; BONUS pays the whole cohort; ACTIVE undoes either. */
+export const setPaperQuestionStatusSchema = z.object({ status: paperQuestionStatusSchema });
+export type SetPaperQuestionStatusInput = z.input<typeof setPaperQuestionStatusSchema>;
+export type SetPaperQuestionStatusBody = z.infer<typeof setPaperQuestionStatusSchema>;
+
 // ============================================================================
 // Writing. A test owns only what it covers, how it is judged and where its
 // questions come from — every shape field is read through its config.
@@ -640,6 +645,8 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
+  /** The ONE change a finalized paper still allows: withdrawing a question, or paying it to all. */
+  questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,
   offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,

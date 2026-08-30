@@ -46,6 +46,8 @@ import {
   type SetSeriesTestUnlockBody,
   type TestStatus,
   type UpdateTestBody,
+  setPaperQuestionStatusSchema,
+  type SetPaperQuestionStatusBody,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -138,6 +140,18 @@ export class TestsController {
     @Body(new ZodBody(replacePaperQuestionSchema)) body: ReplacePaperQuestionBody,
   ): Promise<TestPaper> {
     return this.paper.replaceQuestion(id, rowId, body);
+  }
+
+  /** The only change a finalized paper allows — and it re-scores every sitting that served it. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Patch(':id/paper/:rowId/status')
+  setPaperQuestionStatus(
+    @Param('id') id: string,
+    @Param('rowId') rowId: string,
+    @Body(new ZodBody(setPaperQuestionStatusSchema)) body: SetPaperQuestionStatusBody,
+  ): Promise<TestPaper> {
+    return this.paper.setQuestionStatus(id, rowId, body.status);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

@@ -58,6 +58,7 @@ import {
   type UnlockRequestStatus,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
+import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -1677,12 +1678,44 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve({ count: data.length });
     },
 
-    findMany: ({ where }: { where: { attemptId: string } }) =>
-      Promise.resolve(
-        this.attemptQuestions
-          .filter((row) => row.attemptId === where.attemptId)
-          .sort((a, b) => a.order - b.order),
-      ),
+    findMany: ({
+      where,
+    }: {
+      where: {
+        attemptId?: string;
+        questionId?: string;
+        attempt?: { testId?: string; status: { in: AttemptStatus[] } };
+      };
+      distinct?: string[];
+    }) => {
+      const sittingOf = (row: FakeAttemptQuestionRow) =>
+        this.attemptRows.find((candidate) => candidate.id === row.attemptId);
+      const reachable = (row: FakeAttemptQuestionRow) => {
+        if (!where.attempt) return true;
+        const sitting = sittingOf(row);
+        if (!sitting) return false;
+        const onTest =
+          where.attempt.testId === undefined || sitting.testId === where.attempt.testId;
+        return onTest && where.attempt.status.in.includes(sitting.status);
+      };
+      const matched = this.attemptQuestions
+        .filter(
+          (row) =>
+            (where.attemptId === undefined || row.attemptId === where.attemptId) &&
+            (where.questionId === undefined || row.questionId === where.questionId) &&
+            reachable(row),
+        )
+        .sort((a, b) => a.order - b.order);
+      if (!where.attempt) return Promise.resolve(matched);
+
+      // The re-score read asks for the SITTING behind each row, once per sitting.
+      const seen = new Set<string>();
+      return Promise.resolve(
+        matched
+          .filter((row) => !seen.has(row.attemptId) && seen.add(row.attemptId) !== undefined)
+          .map((row) => ({ attemptId: row.attemptId })),
+      );
+    },
 
     count: ({ where }: { where: { attemptId: string; state: { in: AnswerState[] } } }) =>
       Promise.resolve(
@@ -1757,6 +1790,19 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
           .sort((a, b) => (a[by]?.getTime() ?? 0) - (b[by]?.getTime() ?? 0))
           .slice(0, take),
       );
+    },
+
+    createMany: ({ data }: { data: Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'>[] }) => {
+      for (const row of data) {
+        this.outboxSeq += 1;
+        this.outboxEvents.push({
+          ...row,
+          id: `obx_${this.outboxSeq}`,
+          createdAt: new Date(this.outboxSeq),
+          processedAt: null,
+        });
+      }
+      return Promise.resolve({ count: data.length });
     },
 
     deleteMany: ({ where }: { where: { id: { in: string[] } } }) => {
@@ -2045,6 +2091,24 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       if (!row) throw new Error(`no paper row ${where.id}`);
       Object.assign(row, data);
       return Promise.resolve({ ...row });
+    },
+
+    /** Every variant carrying one question, gated on the status it is NOT already in. */
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { testId: string; questionId: string; status: { not: PaperQuestionStatus } };
+      data: { status: PaperQuestionStatus };
+    }) => {
+      const matched = this.paperQuestions.filter(
+        (row) =>
+          row.testId === where.testId &&
+          row.questionId === where.questionId &&
+          row.status !== where.status.not,
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
     },
 
     delete: ({ where }: { where: { id: string } }) => {
@@ -4485,4 +4549,9 @@ export class FakeScoringPrisma {
   asService(): PrismaService {
     return this as unknown as PrismaService;
   }
+}
+
+/** The seam a paper edit asks for a re-score through. Nothing here exercises the scoring itself. */
+export function fakeScoringOutbox(prisma: FakeTestsPrisma): ScoringOutbox {
+  return new ScoringOutbox(prisma.asService(), new FakeQueue().asQueue());
 }

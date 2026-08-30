@@ -2,3 +2,4 @@
 export { AttemptsModule } from './attempts.module';
 export { AttemptsService } from './attempts.service';
 export { AttemptPaperService } from './attempt-paper.service';
+export { ScoringOutbox } from './scoring-outbox';

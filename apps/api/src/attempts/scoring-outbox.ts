@@ -7,6 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { type Prisma } from '@prisma/client';
+import { ATTEMPT_STATUS, type AttemptStatus } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, scoringJobId, type ScoringJobData } from '../queue/queues';
 
@@ -21,6 +22,9 @@ const RELAY_BATCH = 200;
 
 /** How long a request must sit before a SWEEP takes it: the submit may still be writing answers. */
 const RELAY_GRACE_SEC = 30;
+
+/** Sittings a re-score can still reach. One still in progress will be scored when it ends. */
+const ENDED: readonly AttemptStatus[] = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
 
 /** What a pass did with one request: handed it on, gave up on it, or left it for the next sweep. */
 const HANDLED = { SENT: 'sent', DROPPED: 'dropped', LEFT: 'left' } as const;
@@ -57,6 +61,33 @@ export class ScoringOutbox {
       select: { id: true },
     });
     return row.id;
+  }
+
+  /** Written with the caller's transaction: a drop and its re-scores commit together or not. */
+  async rescore(
+    tx: Prisma.TransactionClient,
+    served: { testId: string; questionId: string },
+  ): Promise<number> {
+    // By question, not by row: a GENERATED test holds one row per variant for the same question.
+    const sittings = await tx.attemptQuestion.findMany({
+      where: {
+        questionId: served.questionId,
+        attempt: { testId: served.testId, status: { in: [...ENDED] } },
+      },
+      select: { attemptId: true },
+      distinct: ['attemptId'],
+    });
+    if (sittings.length === 0) return 0;
+
+    await tx.outboxEvent.createMany({
+      data: sittings.map((row) => ({
+        aggregateType: SCORING_REQUEST.AGGREGATE_TYPE,
+        aggregateId: row.attemptId,
+        eventType: SCORING_REQUEST.EVENT_TYPE,
+        payload: { testId: served.testId },
+      })),
+    });
+    return sittings.length;
   }
 
   /** One id straight after a submit, or every request left pending when the sweeper runs. */

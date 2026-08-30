@@ -10,6 +10,7 @@ import {
 } from '@iace/contracts';
 import { FinalizeService } from '../src/tests/finalize.service';
 import { PaperService } from '../src/tests/paper.service';
+import { type ScoringOutbox } from '../src/attempts/scoring-outbox';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
@@ -18,6 +19,7 @@ import {
   type FakePaperRow,
   type FakeSectionRow,
   FakeTestsPrisma,
+  fakeScoringOutbox,
   makeBaseConfig,
   makeQuestion,
   makeSection,
@@ -63,7 +65,12 @@ function serviceWith(
   const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], [], questions, paper);
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
-  const paperService = new PaperService(prisma.asService(), configs);
+  const paperService = new PaperService(
+    prisma.asService(),
+    configs,
+    fakeScoringOutbox(prisma),
+    new AuditContext(),
+  );
   return {
     prisma,
     service: new FinalizeService(prisma.asService(), paperService, new FakeEventBus().asService()),
@@ -215,9 +222,10 @@ class RacedPaperService extends PaperService {
   constructor(
     prisma: PrismaService,
     configs: BaseConfigsService,
+    outbox: ScoringOutbox,
     private readonly onDraw: () => void,
   ) {
-    super(prisma, configs);
+    super(prisma, configs, outbox, new AuditContext());
   }
 
   override async drawVariants(testId: string, count: number) {
@@ -264,8 +272,13 @@ describe('FinalizeService — a test drawn per student', () => {
     const stages = new ExamStagesService(prisma.asService(), new AuditContext());
     const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
     const paper = onDraw
-      ? new RacedPaperService(prisma.asService(), configs, onDraw)
-      : new PaperService(prisma.asService(), configs);
+      ? new RacedPaperService(prisma.asService(), configs, fakeScoringOutbox(prisma), onDraw)
+      : new PaperService(
+          prisma.asService(),
+          configs,
+          fakeScoringOutbox(prisma),
+          new AuditContext(),
+        );
     return {
       prisma,
       paper,

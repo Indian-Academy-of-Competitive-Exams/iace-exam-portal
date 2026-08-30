@@ -10,6 +10,7 @@ import {
   type FakeQuestionRow,
   type FakeSectionRow,
   FakeTestsPrisma,
+  fakeScoringOutbox,
   makeBaseConfig,
   makeQuestion,
   makeSection,
@@ -48,7 +49,15 @@ function serviceWith(
   );
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
-  return { prisma, service: new PaperService(prisma.asService(), configs) };
+  return {
+    prisma,
+    service: new PaperService(
+      prisma.asService(),
+      configs,
+      fakeScoringOutbox(prisma),
+      new AuditContext(),
+    ),
+  };
 }
 
 const SEED = 42;

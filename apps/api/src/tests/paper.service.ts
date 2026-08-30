@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
@@ -16,6 +16,7 @@ import {
   type FeasibilitySection,
   type SectionAvailability,
   type AddPaperQuestionBody,
+  type PaperQuestionStatus,
   type ReplacePaperQuestionBody,
   type TestPaper,
 } from '@iace/contracts';
@@ -29,6 +30,8 @@ import {
   type DrawnQuestion,
 } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
+import { ScoringOutbox } from '../attempts';
+import { AuditContext } from '../audit';
 
 /** The one a FIXED test has, and the first a GENERATED test draws. */
 const FIXED_VARIANT = 0;
@@ -36,6 +39,8 @@ const FIXED_VARIANT = 0;
 const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
+const NOT_FROZEN_MESSAGE =
+  'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
 import { thaw } from './thaw';
 
 const CANDIDATE_SELECT = {
@@ -63,9 +68,13 @@ export const GENERATED_HAS_NO_PAPER_MESSAGE =
 /** Assembles a DRAFT test's paper — drawn, hand-picked, or both. Finalize is what freezes it. */
 @Injectable()
 export class PaperService {
+  private readonly logger = new Logger(PaperService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configs: BaseConfigsService,
+    private readonly outbox: ScoringOutbox,
+    private readonly auditContext: AuditContext,
   ) {}
 
   async read(testId: string): Promise<TestPaper> {
@@ -259,10 +268,53 @@ export class PaperService {
     return this.paperOf(testId, await this.configs.detail(test.baseConfigId));
   }
 
+  /** The only change a LOCKED paper allows; a draft's question is edited, never withdrawn. */
+  async setQuestionStatus(
+    testId: string,
+    rowId: string,
+    status: PaperQuestionStatus,
+  ): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    if (!test.isLocked) {
+      throw new AppException(ErrorCodes.CONFLICT, NOT_FROZEN_MESSAGE);
+    }
+    const row = await this.requireRow(testId, rowId);
+
+    const asked = await this.prisma.$transaction(async (tx) => {
+      // The gate is the WRITE, not a read before it: two admins clicking cannot both win.
+      const moved = await tx.paperQuestion.updateMany({
+        where: { testId, questionId: row.questionId, status: { not: status } },
+        data: { status },
+      });
+      if (moved.count === 0) return null;
+      return {
+        rows: moved.count,
+        sittings: await this.outbox.rescore(tx, { testId, questionId: row.questionId }),
+      };
+    });
+
+    // Only on a real change, and against the ROW: "test updated" cannot settle a dispute later.
+    if (asked) {
+      this.auditContext.setEntityId(rowId);
+      this.auditContext.setChanged({ status: { from: row.status, to: status } });
+      this.logger.log(
+        `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
+      );
+    }
+    return this.paperOf(testId, await this.configs.detail(test.baseConfigId), row.variant);
+  }
+
   private async requireRow(testId: string, rowId: string) {
     const row = await this.prisma.paperQuestion.findUnique({
       where: { id: rowId },
-      select: { id: true, testId: true, baseConfigSectionId: true },
+      select: {
+        id: true,
+        testId: true,
+        baseConfigSectionId: true,
+        questionId: true,
+        status: true,
+        variant: true,
+      },
     });
     if (row?.testId !== testId) {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That question is not on this paper');
