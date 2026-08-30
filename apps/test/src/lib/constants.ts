@@ -14,6 +14,10 @@ export const ROUTES = {
   /** Full screen, outside the shell: an exam hall has no navigation out of it. */
   EXAM: (testId: string) => `/tests/${testId}/exam`,
   EXAM_PATTERN: '/tests/:testId/exam',
+  SCORE_CARD: (attemptId: string) => `/attempts/${attemptId}/score-card`,
+  SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
+  REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
+  REVIEW_PATTERN: '/attempts/:attemptId/review',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -28,6 +32,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
+
+/** One sitting's marks, and the worked solutions the gate may still be holding back. */
+export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];
+export const solutionsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'solutions'];
 
 /** The free series they could ask for, which an ask changes. */
 export const BROWSE_QUERY_KEY = ['me', 'open-series'] as const;
