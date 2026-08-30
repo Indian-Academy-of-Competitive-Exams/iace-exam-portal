@@ -1,4 +1,4 @@
-import { ClipboardList, Gift, KeyRound, User } from 'lucide-react';
+import { BarChart3, ClipboardList, Gift, KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { ANSWER_STATE, type AnswerState, type LanguageCode } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -18,15 +18,16 @@ export const ROUTES = {
   SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
   REVIEW_PATTERN: '/attempts/:attemptId/review',
+  PERFORMANCE: '/performance',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
   NOT_FOUND: '*',
 } as const;
 
-/** One row while Tests is the only destination; Report and the rest join it as they are built. */
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
+  { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.BROWSE, label: 'Free tests', icon: Gift },
 ];
 
@@ -36,6 +37,10 @@ export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
 /** One sitting's marks, and the worked solutions the gate may still be holding back. */
 export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];
 export const solutionsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'solutions'];
+export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'analytics'];
+
+/** Every test this student has sat, which is what the Performance tab and the landing both read. */
+export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
 
 /** The free series they could ask for, which an ask changes. */
 export const BROWSE_QUERY_KEY = ['me', 'open-series'] as const;

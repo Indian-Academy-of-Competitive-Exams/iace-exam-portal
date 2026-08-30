@@ -144,6 +144,13 @@ export { Watermark, type WatermarkProps } from './components/ui/watermark';
 export { RichContent, type RichContentProps } from './components/ui/rich-content';
 export { richHtml } from './lib/rich-html';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
+export { TrendLine, type TrendLineProps, type TrendPoint } from './components/ui/trend-line';
+export {
+  MeasureBars,
+  type MeasureBar,
+  type MeasureBarsProps,
+  type MeasureTone,
+} from './components/ui/measure-bars';
 export {
   RatioBar,
   type RatioBarProps,

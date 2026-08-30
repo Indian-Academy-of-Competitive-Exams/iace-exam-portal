@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Check, Minus, X } from 'lucide-react';
 import { Alert, Badge, Button, RichContent, Tabs, TabsList, TabsTrigger, cn } from '@iace/ui';
 import {
   type ExamSection,
@@ -233,6 +232,3 @@ function ReviewPalette({
 
 /** `LanguageCode` (EN) is the row's; the content JSON is keyed by the lower-case form. */
 const contentKey = (language: LanguageCode) => language.toLowerCase() as 'en' | 'hi' | 'te';
-
-/** What the review shows when the key is still shut, and the icon the strip uses for each state. */
-export const VERDICT_ICON = { RIGHT: Check, WRONG: X, LEFT: Minus } as const;

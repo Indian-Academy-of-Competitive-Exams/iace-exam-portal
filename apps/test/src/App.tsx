@@ -13,6 +13,7 @@ import { TestInstructionsPage } from './routes/test-instructions';
 import { ExamPage } from './routes/exam';
 import { ScoreCardPage } from './routes/score-card';
 import { ReviewPage } from './routes/review';
+import { PerformancePage } from './routes/performance';
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
@@ -34,6 +35,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
+          <Route path={ROUTES.PERFORMANCE} element={<PerformancePage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
           <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ScoreCardPage />} />
