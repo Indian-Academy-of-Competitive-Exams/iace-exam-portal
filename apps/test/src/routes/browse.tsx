@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { FREE_SERIES_EXAM_CAP, type OpenSeries } from '@iace/contracts';
+import {
+  FREE_SERIES_EXAM_CAP,
+  TEST_SERIES_KIND,
+  type OpenSeries,
+  type StudentCatalogSeries,
+} from '@iace/contracts';
 import {
   Alert,
   Badge,
@@ -9,19 +14,23 @@ import {
   CardContent,
   PageFrame,
   PageHeader,
-  SkeletonParagraph,
+  Skeleton,
+  TruncatedText,
+  plural,
 } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { BROWSE_QUERY_KEY, CATALOG_QUERY_KEY, NAV_ITEMS } from '../lib/constants';
+import { BROWSE_QUERY_KEY, CATALOG_QUERY_KEY } from '../lib/constants';
+import { sittablesOf, type Sittable } from '../lib/catalog';
+import { SeriesShelf } from '../components/tests/series-shelf';
 
+const SKELETON_KEYS = ['a', 'b'];
+
+/** Free content reads exactly as paid content does — the same shelves, in their own tab. */
 export function BrowsePage() {
   const queryClient = useQueryClient();
 
-  const open = useQuery({
-    queryKey: BROWSE_QUERY_KEY,
-    queryFn: () => api.me.openSeries(),
-  });
+  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+  const open = useQuery({ queryKey: BROWSE_QUERY_KEY, queryFn: () => api.me.openSeries() });
 
   const ask = useMutation({
     meta: { success: 'Asked. You will hear when it is answered.' },
@@ -32,44 +41,72 @@ export function BrowsePage() {
     },
   });
 
+  const now = new Date();
+  const mine = (catalog.data?.series ?? []).filter((row) => row.kind === TEST_SERIES_KIND.FREE);
+  const rows = sittablesOf(mine, now);
+
   const examsHeld = open.data?.examsHeld ?? [];
   const atCap = examsHeld.length >= FREE_SERIES_EXAM_CAP;
-  const rows = open.data?.series ?? [];
+  const askable = open.data?.series ?? [];
 
   return (
-    <PageFrame
-      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Free tests" />}
-    >
+    <PageFrame header={<PageHeader title="Free tests" meta={plural(rows.length, 'test')} />}>
       {atCap ? (
+        /* ui-copy-ok: limit */
         <Alert variant="info" className="mb-5">
-          <span>
-            Free tests run to {FREE_SERIES_EXAM_CAP} exams, and yours are taken. Ask the institute
-            if you need another.
-          </span>
+          Free tests run to {FREE_SERIES_EXAM_CAP} exams, and yours are taken. Ask the institute if
+          you need another.
         </Alert>
       ) : null}
 
-      {open.isPending ? <SkeletonParagraph lines={4} /> : null}
+      {catalog.isLoading || open.isPending ? (
+        <div className="flex flex-col gap-3">
+          {SKELETON_KEYS.map((key) => (
+            <Skeleton key={key} variant="row" className="h-40 rounded-lg" />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-8">
+          {shelves(mine, rows).map(({ row, tests }) => (
+            <SeriesShelf key={row.id} series={row} rows={tests} now={now} />
+          ))}
 
-      {!open.isPending && rows.length === 0 ? (
-        <Alert variant="info">There is no free test to ask for at the moment.</Alert>
-      ) : null}
+          {askable.length > 0 ? (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-foreground">Open to ask for</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {askable.map((series) => (
+                  <SeriesCard
+                    key={series.id}
+                    series={series}
+                    askable={
+                      !atCap ||
+                      (series.examStage !== null && examsHeld.includes(series.examStage.examCode))
+                    }
+                    busy={ask.isPending}
+                    onAsk={() => ask.mutate(series.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {rows.map((series) => (
-          <SeriesCard
-            key={series.id}
-            series={series}
-            askable={
-              !atCap || (series.examStage !== null && examsHeld.includes(series.examStage.examCode))
-            }
-            busy={ask.isPending}
-            onAsk={() => ask.mutate(series.id)}
-          />
-        ))}
-      </div>
+          {rows.length === 0 && askable.length === 0 ? (
+            <Alert variant="info">There is no free test to ask for at the moment.</Alert>
+          ) : null}
+        </div>
+      )}
     </PageFrame>
   );
+}
+
+function shelves(
+  series: readonly StudentCatalogSeries[],
+  rows: readonly Sittable[],
+): { row: StudentCatalogSeries; tests: Sittable[] }[] {
+  return series
+    .map((row) => ({ row, tests: rows.filter((sittable) => sittable.seriesId === row.id) }))
+    .filter(({ tests }) => tests.length > 0);
 }
 
 function SeriesCard({
@@ -82,11 +119,13 @@ function SeriesCard({
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="truncate text-sm font-semibold text-foreground">{series.name}</h3>
+          <TruncatedText className="text-sm font-semibold text-foreground">
+            {series.name}
+          </TruncatedText>
           {series.examStage ? (
-            <p className="truncate text-xs text-muted-foreground">
-              {series.examStage.examCode} · {series.examStage.name}
-            </p>
+            <TruncatedText className="text-xs text-muted-foreground">
+              {`${series.examStage.examCode} · ${series.examStage.name}`}
+            </TruncatedText>
           ) : null}
         </div>
 

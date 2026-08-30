@@ -16,7 +16,12 @@ import {
   Skeleton,
   plural,
 } from '@iace/ui';
-import { EXAM_FAMILIES, type ExamFamily, type StudentCatalogSeries } from '@iace/contracts';
+import {
+  EXAM_FAMILIES,
+  TEST_SERIES_KIND,
+  type ExamFamily,
+  type StudentCatalogSeries,
+} from '@iace/contracts';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY } from '../lib/constants';
 import { matching, sittablesOf, type Sittable } from '../lib/catalog';
@@ -45,8 +50,11 @@ export function TestsPage() {
   });
 
   const now = new Date();
+  // Free series have their own tab, so this screen is the paid journey and only that.
   const series = (catalog.data?.series ?? []).filter(
-    (row) => family === ANY_FAMILY || row.examStage?.family === family,
+    (row) =>
+      row.kind !== TEST_SERIES_KIND.FREE &&
+      (family === ANY_FAMILY || row.examStage?.family === family),
   );
   const rows = matching(sittablesOf(series, now), params.get(FILTER_KEYS.SEARCH));
   const shut = series.filter((row) => row.canRequestUnlock);
