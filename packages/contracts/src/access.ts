@@ -3,6 +3,7 @@ import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attem
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
+import { examFamilySchema } from './exams';
 
 // ============================================================================
 // Access. A student reaches a series by exam match, by program match or by an
@@ -458,7 +459,14 @@ export const studentCatalogSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
-  examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
+  examStage: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      examCode: z.string(),
+      family: examFamilySchema,
+    })
+    .nullable(),
   programCode: z.string().nullable(),
   kind: testSeriesKindSchema,
   sequentialTests: z.boolean(),

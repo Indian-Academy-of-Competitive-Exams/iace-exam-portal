@@ -5,6 +5,7 @@ import {
   AppException,
   type AttemptStatus,
   ErrorCodes,
+  type ExamFamily,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
@@ -33,11 +34,11 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v5';
+const CATALOG_SHAPE = 'v6';
 
 const catalogInclude = (branchId: string | null) =>
   ({
-    examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
+    examStage: { select: { id: true, name: true, exam: { select: { code: true, family: true } } } },
     prerequisiteSeries: { select: { name: true } },
     // The `access` → `Test` seam docs/03 §4 records: the tests module does not exist yet, so
     // there is no facade to ask and the read is made here.
@@ -81,7 +82,7 @@ interface ResolvedSeries {
   id: string;
   name: string;
   description: string | null;
-  examStage: { id: string; name: string; examCode: string } | null;
+  examStage: { id: string; name: string; examCode: string; family: ExamFamily } | null;
   programCode: string | null;
   kind: TestSeriesKind;
   sequentialTests: boolean;
@@ -390,7 +391,12 @@ function toResolved(
     name: row.name,
     description: row.description,
     examStage: row.examStage
-      ? { id: row.examStage.id, name: row.examStage.name, examCode: row.examStage.exam.code }
+      ? {
+          id: row.examStage.id,
+          name: row.examStage.name,
+          examCode: row.examStage.exam.code,
+          family: row.examStage.exam.family,
+        }
       : null,
     programCode: row.programCode,
     kind: row.kind,

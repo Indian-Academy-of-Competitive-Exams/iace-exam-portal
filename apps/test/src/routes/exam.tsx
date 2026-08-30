@@ -5,12 +5,11 @@
  */
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { TEST_BUCKET, type ExamPaper, type LanguageCode } from '@iace/contracts';
+import { type ExamPaper, type LanguageCode } from '@iace/contracts';
 import { Alert, LoadingState } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
-import { TAB_KEY } from './tests';
 import { ExamShell } from '../components/exam/engine/exam-shell';
 import { useExamView } from '../components/exam/engine/use-exam-view';
 import { templateFor } from '../components/exam/templates/registry';
@@ -64,8 +63,8 @@ export function ExamPage() {
       title={attempt.data.testTitle}
       // The one thing on the paper that leads back to a person: there is no enrolment number.
       watermark={student?.mobile ?? ''}
-      // Onto the tab now holding it: landing on Open now would look like the test had vanished.
-      onEnded={() => navigate(`${ROUTES.TESTS}?${TAB_KEY}=${TEST_BUCKET.DONE}`, { replace: true })}
+      // Back to their tests, where the strip now shows it done rather than waiting to be sat.
+      onEnded={() => navigate(ROUTES.TESTS, { replace: true })}
     />
   );
 }
