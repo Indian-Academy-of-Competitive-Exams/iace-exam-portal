@@ -93,6 +93,13 @@ interface ResolvedSeries {
   tests: ResolvedTest[];
 }
 
+/** How a test is offered institute-wide. `closesAt` null means somebody can always still enter. */
+export interface TestSchedule {
+  scheduled: boolean;
+  closesAt: string | null;
+  extraTimeSec: number;
+}
+
 /** When one test opens and shuts FOR THIS STUDENT, and what their branch adds to the clock. */
 export interface StudentTestWindow {
   opensAt: string | null;
@@ -176,30 +183,46 @@ export class AccessResolverService {
     return (await this.windowFor(studentId, testId))?.extraTimeSec ?? 0;
   }
 
-  /** When entry shuts EVERYWHERE. Null while any branch can still let somebody in. */
-  async entryClosesAt(testId: string): Promise<{ closesAt: string; extraTimeSec: number } | null> {
+  /** How this test is offered to the whole institute — not to one branch, and not to one student. */
+  async testSchedule(testId: string): Promise<TestSchedule> {
     const links = await this.prisma.testSeriesTest.findMany({
       where: { testId },
       select: { testSeriesId: true, unlockAt: true },
     });
-    if (links.length === 0 || links.some((link) => link.unlockAt === null)) return null;
+    // Standalone: it belongs to no series, so nothing schedules it and nothing shuts it.
+    if (links.length === 0) return { scheduled: false, closesAt: null, extraTimeSec: 0 };
 
-    const [schedules, offered] = await Promise.all([
+    const open = { scheduled: true, closesAt: null, extraTimeSec: 0 } as const;
+    if (links.some((link) => link.unlockAt === null)) return open;
+
+    const [schedules, offers] = await Promise.all([
       this.prisma.branchTestSchedule.findMany({
         where: { testId },
-        select: { lateEntrySec: true, extraTimeSec: true },
+        select: { branchId: true, lateEntrySec: true, extraTimeSec: true },
       }),
-      this.prisma.branchTestConfig.count({
+      this.prisma.branchTestConfig.findMany({
         where: { testSeriesId: { in: links.map((link) => link.testSeriesId) }, enabled: true },
+        select: { branchId: true },
+        distinct: ['branchId'],
       }),
     ]);
+    // Compared BRANCH by branch: a test in two series has two offers to one branch, not two branches.
+    const capped = new Set(
+      schedules.filter((row) => row.lateEntrySec !== null).map((row) => row.branchId),
+    );
     // A branch with no row runs the plain rules, and the plain rule for late entry is no cap.
-    if (schedules.length < offered) return null;
-    if (schedules.some((row) => row.lateEntrySec === null)) return null;
+    if (capped.size === 0 || offers.some((offer) => !capped.has(offer.branchId))) return open;
+
+    // A grant reaches PAST the branch gate, so a granted student's branch may cap nothing at all.
+    const granted = await this.prisma.studentGrant.count({
+      where: { testSeriesId: { in: links.map((link) => link.testSeriesId) } },
+    });
+    if (granted > 0) return open;
 
     const opensAt = Math.max(...links.map((link) => link.unlockAt?.getTime() ?? 0));
-    const lateEntrySec = Math.max(...schedules.map((row) => row.lateEntrySec ?? 0));
+    const lateEntrySec = Math.max(0, ...schedules.map((row) => row.lateEntrySec ?? 0));
     return {
+      scheduled: true,
       closesAt: new Date(opensAt + lateEntrySec * MILLISECONDS_PER_SECOND).toISOString(),
       extraTimeSec: Math.max(0, ...schedules.map((row) => row.extraTimeSec ?? 0)),
     };

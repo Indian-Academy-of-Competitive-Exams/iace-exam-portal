@@ -10,12 +10,12 @@ import {
   type ExamQuestion,
   type LanguageCode,
   type LocalizedContent,
-  type LocalizedRich,
   type QuestionOption,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { applyImageUrls, imageKeysIn } from '../questions';
+import { imageUrlsIn } from './exam-images';
+import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
 import { StorageService } from '../storage/storage.service';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
 
@@ -165,18 +165,8 @@ export class AttemptPaperService {
 
   /** Content on disk holds only the image KEY, so the sitting signs its own, long enough to last. */
   private async withImages(questions: ExamQuestion[]): Promise<ExamQuestion[]> {
-    const keys = new Set(questions.flatMap(htmlOf).flatMap(imageKeysIn));
-    if (keys.size === 0) return questions;
-
-    const urls = new Map(
-      await Promise.all(
-        [...keys].map(
-          async (key) =>
-            [key, await this.storage.createDownloadUrl(key, EXAM_IMAGE_URL_TTL_SEC)] as const,
-        ),
-      ),
-    );
-    return questions.map((question) => signed(question, urls));
+    const urls = await imageUrlsIn(this.storage, questions.flatMap(htmlOf));
+    return urls.size === 0 ? questions : questions.map((question) => signed(question, urls));
   }
 }
 
@@ -224,47 +214,27 @@ function narrowContent(
   return kept;
 }
 
-function narrowRich(text: LocalizedRich, languages: readonly LanguageCode[]): LocalizedRich {
-  const kept: LocalizedRich = {};
-  for (const code of languages) {
-    const key = contentLanguageOf(code);
-    const held = text?.[key];
-    if (held) kept[key] = held;
-  }
-  return kept;
-}
-
-/** Longer than the longest sitting: an image that expires mid-exam is a question nobody can read. */
-const EXAM_IMAGE_URL_TTL_SEC = 6 * 60 * 60;
-
 /** Every piece of HTML one served question carries — its stem and every option, in every language. */
 function htmlOf(question: ExamQuestion): string[] {
-  const stems = Object.values(question.content).flatMap((content) =>
-    (content?.stem ?? []).map((node) => node.text),
-  );
+  const stems = Object.values(question.content).flatMap((content) => htmlIn(content?.stem));
   const options = question.options.flatMap((option) =>
-    Object.values(option.text).flatMap((nodes) => (nodes ?? []).map((node) => node.text)),
+    Object.values(option.text).flatMap((nodes) => htmlIn(nodes)),
   );
   return [...stems, ...options];
 }
 
 function signed(question: ExamQuestion, urls: ReadonlyMap<string, string>): ExamQuestion {
-  const rich = (nodes: { type: 'TEXT'; text: string }[] | undefined) =>
-    (nodes ?? []).map((node) => ({ ...node, text: applyImageUrls(node.text, urls) }));
-
   return {
     ...question,
     content: Object.fromEntries(
       Object.entries(question.content).map(([language, content]) => [
         language,
-        content ? { ...content, stem: rich(content.stem) } : content,
+        content ? { ...content, stem: signRich(content.stem, urls) } : content,
       ]),
     ),
     options: question.options.map((option) => ({
       ...option,
-      text: Object.fromEntries(
-        Object.entries(option.text).map(([language, nodes]) => [language, rich(nodes)]),
-      ),
+      text: signLocalizedRich(option.text, urls),
     })),
   };
 }

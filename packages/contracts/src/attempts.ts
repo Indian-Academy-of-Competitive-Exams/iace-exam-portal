@@ -6,7 +6,13 @@ import {
   navigationPolicySchema,
   timerTemplateSchema,
 } from './configs';
-import { localizedContentSchema, localizedRichSchema, questionTypeSchema } from './questions';
+import {
+  answerKeySchema,
+  localizedContentSchema,
+  localizedRichSchema,
+  questionOptionSchema,
+  questionTypeSchema,
+} from './questions';
 import { paperQuestionStatusSchema } from './tests';
 
 // ============================================================================
@@ -283,6 +289,7 @@ export const ME_ATTEMPT_ROUTES = {
   state: (attemptId: string) => `/me/attempts/${attemptId}/state`,
   submit: (attemptId: string) => `/me/attempts/${attemptId}/submit`,
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
+  solutions: (attemptId: string) => `/me/attempts/${attemptId}/solutions`,
 } as const;
 
 /** How a sitting ended. A second submit reports the first one's outcome rather than refusing. */
@@ -415,3 +422,31 @@ export const scoreCardSchema = z.object({
   questions: z.array(scoreCardQuestionSchema),
 });
 export type ScoreCard = z.infer<typeof scoreCardSchema>;
+
+// ============================================================================
+// The Solution Report — the ONE payload the answer key rides on, and only once
+// the gate has opened. Everything a Score Card carries, plus what was right.
+// ============================================================================
+
+/** One question, reviewed. `options` carry `isCorrect`, which is why this whole shape is gated. */
+export const solutionQuestionSchema = scoreCardQuestionSchema.extend({
+  type: questionTypeSchema,
+  /** Stem AND the worked solution, in the languages this sitting was taken in. */
+  content: localizedContentSchema,
+  options: z.array(questionOptionSchema),
+  /** TEXT_FIELD only: what a typed answer was compared against. */
+  answerKey: answerKeySchema.nullable(),
+});
+export type SolutionQuestion = z.infer<typeof solutionQuestionSchema>;
+
+export const solutionReportSchema = z.object({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  languages: z.array(languageCodeSchema),
+  /** When the key opened. Null when there was never anything to wait for. */
+  openedAt: z.string().nullable(),
+  sections: z.array(examSectionSchema),
+  questions: z.array(solutionQuestionSchema),
+});
+export type SolutionReport = z.infer<typeof solutionReportSchema>;

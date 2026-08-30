@@ -60,6 +60,9 @@ const TOTAL_MARKS = SECTIONS.reduce(
 );
 
 const DURATION_SEC = 1800;
+
+/** How late a branch may still let somebody in. Without one, entry never shuts and no key opens. */
+const LATE_ENTRY_SEC = 2 * 60 * 60;
 const STUDENTS = 200;
 const CHUNK = 500;
 const DIFFICULTIES = ['LOW', 'MEDIUM', 'HIGH'];
@@ -276,6 +279,10 @@ async function writeOffering(prisma, stageId) {
   await prisma.branchTestConfig.create({
     data: { branchId, testSeriesId: IDS.series, enabled: true },
   });
+  // A late-entry cap is what lets entry CLOSE, which is what opens the solution gate.
+  await prisma.branchTestSchedule.create({
+    data: { branchId, testId: IDS.test, lateEntrySec: LATE_ENTRY_SEC, extraTimeSec: null },
+  });
   return branchId;
 }
 
@@ -429,6 +436,9 @@ async function main() {
     );
     console.log(
       `  Waiting:  ${attempts} scoring requests in the outbox — run the API to drain them`,
+    );
+    console.log(
+      `  Key:      entry closed ${LATE_ENTRY_SEC / 3600}h after unlock, so the solution gate is open`,
     );
     console.log(`Purge with: node scripts/dev-seed-cohort.mjs --reset`);
   } finally {

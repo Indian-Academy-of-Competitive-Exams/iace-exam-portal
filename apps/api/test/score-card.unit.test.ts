@@ -7,6 +7,7 @@ import {
   FakeQueue,
   FakeRedis,
   FakeScoringPrisma,
+  FakeStorage,
   makeAttempt,
   makeScoredTest,
   makeServedAnswer,
@@ -27,8 +28,22 @@ const SHAPE: FakeScoredTest = makeScoredTest({
   totalMarks: 8,
   durationSec: 3600,
   sections: [
-    { id: 'sec_a', name: 'Section A', order: 1, questionCount: 2, marksPerQuestion: 2 },
-    { id: 'sec_b', name: 'Section B', order: 2, questionCount: 2, marksPerQuestion: 2 },
+    {
+      id: 'sec_a',
+      name: 'Section A',
+      order: 1,
+      questionCount: 2,
+      marksPerQuestion: 2,
+      durationSec: null,
+    },
+    {
+      id: 'sec_b',
+      name: 'Section B',
+      order: 2,
+      questionCount: 2,
+      marksPerQuestion: 2,
+      durationSec: null,
+    },
   ],
 });
 
@@ -111,10 +126,12 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   });
 }
 
-/** When entry to the test shuts EVERYWHERE, which is what a final standing waits for. */
-type Closing = { closesAt: string; extraTimeSec: number } | null;
+/** How the test is offered institute-wide, which is what a final standing waits for. */
+type Schedule = { scheduled: boolean; closesAt: string | null; extraTimeSec: number };
 
-function report(attempts: FakeAttemptRow[], closing: Closing = null) {
+const OPEN_ENDED: Schedule = { scheduled: true, closesAt: null, extraTimeSec: 0 };
+
+function report(attempts: FakeAttemptRow[], schedule: Schedule = OPEN_ENDED) {
   const prisma = new FakeScoringPrisma(attempts, answers(), SHAPE);
   const redis = new FakeRedis();
   const leaderboard = new LeaderboardService(
@@ -122,12 +139,17 @@ function report(attempts: FakeAttemptRow[], closing: Closing = null) {
     redis.asService(),
     new FakeQueue().asQueue(),
   );
-  const access = { entryClosesAt: () => Promise.resolve(closing) } as never;
+  const access = { testSchedule: () => Promise.resolve(schedule) } as never;
   return {
     prisma,
     redis,
     leaderboard,
-    service: new AttemptReportService(prisma.asService(), access, leaderboard),
+    service: new AttemptReportService(
+      prisma.asService(),
+      access,
+      leaderboard,
+      new FakeStorage() as never,
+    ),
   };
 }
 
@@ -214,10 +236,12 @@ describe('the Score Card', () => {
   it('calls the standing provisional while anybody can still sit the paper', async () => {
     const attempt = scored();
     const open = report([attempt], {
+      scheduled: true,
       closesAt: new Date(NOW.getTime() + 60_000).toISOString(),
       extraTimeSec: 0,
     });
     const shut = report([attempt], {
+      scheduled: true,
       closesAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(),
       extraTimeSec: 0,
     });
@@ -230,6 +254,7 @@ describe('the Score Card', () => {
   it('keeps it provisional until the last sitting that could have started has ended', async () => {
     const attempt = scored();
     const { service } = report([attempt], {
+      scheduled: true,
       closesAt: new Date(NOW.getTime() - 30 * 60_000).toISOString(),
       extraTimeSec: 0,
     });
@@ -240,7 +265,7 @@ describe('the Score Card', () => {
   /** The failure this prevents: telling one branch a rank is final while another is still sitting. */
   it('never calls a standing final while entry is uncapped somewhere', async () => {
     const attempt = scored();
-    const { service } = report([attempt], null);
+    const { service } = report([attempt], OPEN_ENDED);
 
     assert.equal((await service.scoreCard(STUDENT, attempt.id, NOW)).provisional, true);
   });

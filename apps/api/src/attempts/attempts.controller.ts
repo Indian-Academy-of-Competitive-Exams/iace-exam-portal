@@ -9,6 +9,7 @@ import {
   type LiveAttemptState,
   type SaveAttemptStateBody,
   type ScoreCard,
+  type SolutionReport,
   type StartAttemptBody,
   type SubmittedAttempt,
 } from '@iace/contracts';
@@ -72,6 +73,15 @@ export class AttemptsController {
   @Get('attempts/:id/scorecard')
   scoreCard(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ScoreCard> {
     return this.reports.scoreCard(user.id, id);
+  }
+
+  /** The answer key, and the ONLY endpoint carrying it. Refused until the gate opens. */
+  @Get('attempts/:id/solutions')
+  solutions(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SolutionReport> {
+    return this.reports.solutions(user.id, id);
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */

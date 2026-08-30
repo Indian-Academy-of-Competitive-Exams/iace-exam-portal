@@ -4265,6 +4265,7 @@ export interface FakeServedAnswerRow {
   typedAnswer: string | null;
   state: AnswerState;
   timeSpentSec: number;
+  content: unknown;
   options: unknown;
   answerKey: unknown;
   paperItem: { marks: number; negativeMarks: number; status: PaperQuestionStatus } | null;
@@ -4295,6 +4296,7 @@ export function makeServedAnswer(
     typedAnswer: null,
     state: ANSWER_STATE.NOT_VISITED,
     timeSpentSec: 0,
+    content: null,
     options: mcqOptions(1),
     answerKey: null,
     paperItem: { marks: 2, negativeMarks: 0.5, status: PAPER_QUESTION_STATUS.ACTIVE },
@@ -4307,6 +4309,8 @@ export function makeServedAnswer(
 /** The blueprint a scored sitting is read back against — the shape, not this student's marks. */
 export interface FakeScoredTest {
   title: string | null;
+  evaluationMode: EvaluationMode;
+  shuffleOptions: boolean;
   durationSec: number;
   totalQuestions: number;
   totalMarks: number;
@@ -4316,16 +4320,28 @@ export interface FakeScoredTest {
     order: number;
     questionCount: number;
     marksPerQuestion: number;
+    durationSec: number | null;
   }[];
 }
 
 export function makeScoredTest(overrides: Partial<FakeScoredTest> = {}): FakeScoredTest {
   return {
     title: 'SSC CGL Tier 1 — Mock 1',
+    evaluationMode: EVALUATION_MODE.RANKED,
+    shuffleOptions: false,
     durationSec: 3600,
     totalQuestions: 3,
     totalMarks: 6,
-    sections: [{ id: 'sec_1', name: 'Section A', order: 1, questionCount: 3, marksPerQuestion: 2 }],
+    sections: [
+      {
+        id: 'sec_1',
+        name: 'Section A',
+        order: 1,
+        questionCount: 3,
+        marksPerQuestion: 2,
+        durationSec: null,
+      },
+    ],
     ...overrides,
   };
 }
@@ -4344,10 +4360,12 @@ export class FakeScoringPrisma {
       ...row,
       test: {
         title: this.shape.title,
+        evaluationMode: this.shape.evaluationMode,
         baseConfig: {
           durationSec: this.shape.durationSec,
           totalQuestions: this.shape.totalQuestions,
           totalMarks: this.shape.totalMarks,
+          shuffleOptions: this.shape.shuffleOptions,
           sections: [...this.shape.sections].sort((a, b) => a.order - b.order),
         },
       },
@@ -4356,13 +4374,22 @@ export class FakeScoringPrisma {
         .sort((a, b) => a.order - b.order)
         .map((served) => ({
           ...served,
-          questionVersion: { options: served.options, answerKey: served.answerKey },
+          question: { type: served.type },
+          questionVersion: {
+            content: served.content,
+            options: served.options,
+            answerKey: served.answerKey,
+          },
         })),
     };
   }
 
+  /** How many times a caller has read one sitting — a refusal that reads twice has read the key. */
+  reads = 0;
+
   readonly attempt = {
     findFirst: ({ where }: { where: { id: string; studentId: string } }) => {
+      this.reads += 1;
       const row = this.attempts.find(
         (candidate) => candidate.id === where.id && candidate.studentId === where.studentId,
       );

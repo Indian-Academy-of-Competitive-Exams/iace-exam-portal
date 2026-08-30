@@ -124,6 +124,7 @@ import {
   examBriefSchema,
   examPaperSchema,
   scoreCardSchema,
+  solutionReportSchema,
   liveAttemptSchema,
   liveAttemptStateSchema,
   submittedAttemptSchema,
@@ -131,6 +132,7 @@ import {
   type ExamPaper,
   type LiveAttempt,
   type ScoreCard,
+  type SolutionReport,
   type SaveAttemptStateInput,
   type StartAttemptInput,
   type SubmittedAttempt,
@@ -610,6 +612,10 @@ export function createApiClient(options: ApiClientOptions) {
       /** Marks, standing and their own answers. Refused until the paper has been marked. */
       scoreCard: (attemptId: string): Promise<ScoreCard> =>
         request(ME_ATTEMPT_ROUTES.scoreCard(attemptId), { schema: scoreCardSchema }),
+
+      /** The worked solutions. Refused until the test has closed for everyone sitting it. */
+      solutions: (attemptId: string): Promise<SolutionReport> =>
+        request(ME_ATTEMPT_ROUTES.solutions(attemptId), { schema: solutionReportSchema }),
     },
 
     admin: {
