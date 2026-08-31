@@ -128,7 +128,8 @@ the sitting once the branch's late-entry cap has passed, while `assertReachable`
 student open the test and read about it. Those two guards are the rule, and they are separate on
 purpose.
 
-**The six analytics models have no owner because no code touches them.** `TestQuestionStat` is read
+**The six analytics models have no owner because no code touches them.** What each one backs is in
+`docs/02-mocktest-feature-spec.md` §6; their columns are in `docs/schema-target.dbml`. `TestQuestionStat` is read
 once (`questions.service.ts`, the in-use check that freezes a question) and written by nothing; the
 other five are referenced nowhere at all. They are schema provisioned ahead of the rollup jobs that
 will fill them — see §6's unwired events. Give them an owning module in the same change that first

@@ -128,7 +128,31 @@ Verified on the live report. We ship the core in V1 and fast-follow the rest.
 
 **Data points captured from day one (non-negotiable):** answer-level detail per attempt — option chosen, correct/incorrect, marked-for-review state, and **time spent per question/section** — so analytics can be derived later without re-instrumenting.
 
-**Analytics screen: shipped.** The student's Performance screen (`apps/test/src/routes/performance.tsx`) is live. The deeper cuts — Subject Report, Question Report, Compare-Yourself, time-utilisation, difficulty — are still fast-follow, and the six rollup tables that would back them (`StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat`, `ProcessedRollup`) sit in the schema with nothing writing them yet. No migration needed when that lands.
+**Analytics screen: shipped.** The student's Performance screen (`apps/test/src/routes/performance.tsx`) is live, computed from `Attempt` and `AttemptQuestion` directly. The deeper cuts are still fast-follow.
+
+### The rollup tables — in the schema, written by nothing
+
+Six tables were provisioned for the fast-follow so it costs no migration when it lands. **No code
+writes any of them today**, and only one is read (`TestQuestionStat`, by the check that freezes a
+question somebody has served). Columns and their exact meanings are in `docs/schema-target.dbml`;
+what each one is FOR:
+
+| Table                | Grain                                       | Backs                                                                                                                                                                          |
+| -------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `StudentStat`        | one row per student                         | The dashboard header — lifetime tests, averages (`sum… / testsEvaluated`), best percentile, accuracy, total time                                                               |
+| `StudentSubjectStat` | student × subject × scope × evaluation mode | **Subject Report** — where a student is weak. Keyed by mode so practice never pollutes ranked                                                                                  |
+| `TestStat`           | one row per test                            | **Compare Yourself** — cohort count, score sum/max/min, `scoreHistogram`, the topper's attempt                                                                                 |
+| `TestSectionStat`    | test × section                              | Section-level cohort comparison and time utilisation                                                                                                                           |
+| `TestQuestionStat`   | test × paper question                       | **Question Report** — classical item analysis: `pValue` (difficulty index), `discrimination`, and `optionCounts` for distractor analysis. FIXED papers only                    |
+| `ProcessedRollup`    | attempt × rollup type                       | Not analytics — the **exactly-once guard**. A retried or redelivered evaluation checks here first, so a worker retry cannot double-count an attempt into any of the five above |
+
+Two design points already settled in the schema and worth not relitigating: every aggregate stores
+**sums and counts, not averages**, so a rollup is incremental and a retry is cheap; and
+`discrimination` is explicitly **batch-only** — it compares a top group against a bottom group and
+cannot be maintained one attempt at a time.
+
+The data these fold up from — option chosen, correct/incorrect, marked-for-review, time per question
+— is captured on `AttemptQuestion` from day one, which is why none of this needs a migration.
 
 **Ranking:** computed live from a Redis sorted set. Open tests show "your rank as of now, out of N"; fixed-time tests rank only those who attempted in the window. Ties handled per config (allow duplicate ranks / skip after duplicate). Drop/bonus corrections auto-recompute.
 
