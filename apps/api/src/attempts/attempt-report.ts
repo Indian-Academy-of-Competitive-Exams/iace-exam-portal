@@ -1,5 +1,10 @@
 /** What a finished sitting is worth to the student who sat it, worked out without a database. */
+import { type Prisma } from '@prisma/client';
 import { type AttemptSectionScore, type ScoreCardSection } from '@iace/contracts';
+
+/** A `Decimal?` column on its way into JSON. Never let the Decimal itself reach a payload. */
+export const numberOrNull = (value: Prisma.Decimal | null): number | null =>
+  value === null ? null : Number(value);
 
 /** A section as the blueprint describes it, before this student's marks are laid over it. */
 export interface SectionShape {

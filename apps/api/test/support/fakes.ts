@@ -4409,6 +4409,7 @@ export class FakeNotificationsPrisma {
 export interface FakeServedAnswerRow {
   attemptId: string;
   questionId: string;
+  paperQuestionId: string | null;
   baseConfigSectionId: string;
   subjectId: string;
   subjectName: string;
@@ -4443,6 +4444,7 @@ export function makeServedAnswer(
   return {
     attemptId: 'att_1',
     questionId: 'q_1',
+    paperQuestionId: null,
     baseConfigSectionId: 'sec_1',
     subjectId: 'sub_1',
     subjectName: 'Reasoning',
@@ -4711,4 +4713,141 @@ function uniqueByTest(rows: readonly FakeAttemptRow[]): { testId: string }[] {
 /** The seam a paper edit asks for a re-score through. Nothing here exercises the scoring itself. */
 export function fakeScoringOutbox(prisma: FakeTestsPrisma): ScoringOutbox {
   return new ScoringOutbox(prisma.asService(), new FakeQueue().asQueue());
+}
+
+/** The rollup rows the performance report reads, plus the catalog it resolves a scope through. */
+export interface FakePerformanceData {
+  attempts: FakeAttemptRow[];
+  served: FakeServedAnswerRow[];
+  shape: FakeScoredTest;
+  students: { id: string; deletedAt: Date | null }[];
+  series: { id: string; name: string }[];
+  seriesTests: { testSeriesId: string; testId: string }[];
+  testStats: {
+    testId: string;
+    evaluatedCount: number;
+    sumScore: number;
+    maxScore: number | null;
+    scoreHistogram: unknown;
+  }[];
+  sectionStats: {
+    testId: string;
+    baseConfigSectionId: string;
+    attempted: number;
+    sumScore: number;
+    sumTimeSec: number;
+  }[];
+  questionStats: { testId: string; paperQuestionId: string; pValue: number | null }[];
+}
+
+/** Hands over the WHOLE served row, answer key and all — leaving it out of a payload is the code's job. */
+export class FakePerformancePrisma {
+  constructor(private readonly data: FakePerformanceData) {}
+
+  private reported(row: FakeAttemptRow) {
+    return {
+      ...row,
+      test: {
+        title: this.data.shape.title,
+        baseConfig: { sections: [...this.data.shape.sections].sort((a, b) => a.order - b.order) },
+      },
+      questions: this.data.served
+        .filter((served) => served.attemptId === row.id)
+        .sort((a, b) => a.order - b.order)
+        .map((served) => ({
+          ...served,
+          question: {
+            difficulty: served.difficulty,
+            subject: { id: served.subjectId, name: served.subjectName },
+          },
+          questionVersion: {
+            content: served.content,
+            options: served.options,
+            answerKey: served.answerKey,
+          },
+        })),
+    };
+  }
+
+  readonly attempt = {
+    findMany: ({
+      where,
+      take,
+    }: {
+      where: {
+        studentId: string;
+        status: AttemptStatus;
+        id?: string;
+        testId?: string;
+        test?: { series: { some: { testSeriesId: string } } };
+      };
+      take?: number;
+    }) => {
+      const inSeries = where.test?.series.some.testSeriesId;
+      const matched = this.data.attempts.filter(
+        (row) =>
+          row.studentId === where.studentId &&
+          row.status === where.status &&
+          (where.id === undefined || row.id === where.id) &&
+          (where.testId === undefined || row.testId === where.testId) &&
+          (inSeries === undefined ||
+            this.data.seriesTests.some(
+              (link) => link.testSeriesId === inSeries && link.testId === row.testId,
+            )),
+      );
+      const newestFirst = matched.toSorted(
+        (a, b) => (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0),
+      );
+      return Promise.resolve(newestFirst.slice(0, take).map((row) => this.reported(row)));
+    },
+
+    aggregate: ({ where }: { where: { testId: string } }) => {
+      const scored = this.data.attempts.filter(
+        (row) => row.testId === where.testId && row.isGraded && row.score !== null,
+      );
+      const marks = scored.map((row) => row.score ?? 0);
+      return Promise.resolve({
+        _avg: {
+          score: marks.length === 0 ? null : marks.reduce((a, b) => a + b, 0) / marks.length,
+        },
+        _max: { score: marks.length === 0 ? null : Math.max(...marks) },
+        _count: scored.length,
+      });
+    },
+  };
+
+  readonly student = {
+    findFirst: ({ where }: { where: { id: string; deletedAt: null } }) =>
+      Promise.resolve(
+        this.data.students.find((row) => row.id === where.id && row.deletedAt === null) ?? null,
+      ),
+  };
+
+  readonly testSeries = {
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.data.series.find((row) => row.id === where.id) ?? null),
+  };
+
+  readonly testStat = {
+    findMany: ({ where }: { where: { testId: { in: string[] } } }) =>
+      Promise.resolve(this.data.testStats.filter((row) => where.testId.in.includes(row.testId))),
+  };
+
+  readonly testSectionStat = {
+    findMany: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(this.data.sectionStats.filter((row) => row.testId === where.testId)),
+  };
+
+  readonly testQuestionStat = {
+    findMany: ({ where }: { where: { testId: { in: string[] } } }) =>
+      Promise.resolve(
+        this.data.questionStats.filter(
+          (row) => where.testId.in.includes(row.testId) && row.pValue !== null,
+        ),
+      ),
+  };
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
 }

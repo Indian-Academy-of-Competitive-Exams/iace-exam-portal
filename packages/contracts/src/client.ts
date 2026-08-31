@@ -149,6 +149,12 @@ import {
   type LiveAttemptState,
 } from './attempts';
 import {
+  PERFORMANCE_ROUTES,
+  performanceReportSchema,
+  type PerformanceReport,
+  type PerformanceReportQueryInput,
+} from './stats';
+import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
   finalizeResultSchema,
@@ -641,6 +647,12 @@ export function createApiClient(options: ApiClientOptions) {
       /** Every test this student has sat, oldest first. */
       performance: (): Promise<PerformanceTrend> =>
         request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
+
+      /** The cutoff-free metric set for one sitting, one paper, one series or the whole career. */
+      performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
+        request(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, {
+          schema: performanceReportSchema,
+        }),
     },
 
     admin: {
@@ -679,6 +691,12 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: studentDetailSchema,
+          }),
+
+        /** Any student's analytics, behind STUDENT_PERFORMANCE. Same payload the student reads. */
+        performance: (id: string, query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
+          request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
+            schema: performanceReportSchema,
           }),
       },
 

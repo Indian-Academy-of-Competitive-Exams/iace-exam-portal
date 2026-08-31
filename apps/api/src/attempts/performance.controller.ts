@@ -1,0 +1,47 @@
+/**
+ * The two ways into one report. The student's path takes its subject from the token and cannot
+ * name anybody; the admin's names one in the path and pays for it with STUDENT_PERFORMANCE.
+ */
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  ActorTypes,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
+  performanceReportQuerySchema,
+  type PerformanceReport,
+  type PerformanceReportQuery,
+} from '@iace/contracts';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import { ZodQuery } from '../common/zod-validation.pipe';
+import { PerformanceAnalyticsService } from './performance.service';
+
+@Controller('me/performance')
+@Actors(ActorTypes.STUDENT)
+export class MePerformanceController {
+  constructor(private readonly performance: PerformanceAnalyticsService) {}
+
+  /** One sitting, one paper, one series or the whole career — never anybody else's. */
+  @Get('report')
+  report(
+    @Query(new ZodQuery(performanceReportQuerySchema)) query: PerformanceReportQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<PerformanceReport> {
+    return this.performance.report(user.id, query);
+  }
+}
+
+@Controller('admin/students/:studentId/performance')
+@Actors(ActorTypes.ADMIN)
+export class AdminPerformanceController {
+  constructor(private readonly performance: PerformanceAnalyticsService) {}
+
+  /** The same payload the student reads, for any student. Still carries no answer key. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)
+  @Get()
+  report(
+    @Param('studentId') studentId: string,
+    @Query(new ZodQuery(performanceReportQuerySchema)) query: PerformanceReportQuery,
+  ): Promise<PerformanceReport> {
+    return this.performance.forStudent(studentId, query);
+  }
+}

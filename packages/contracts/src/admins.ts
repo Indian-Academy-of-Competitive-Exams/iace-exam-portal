@@ -22,6 +22,7 @@ export const FEATURE_KEYS = {
   QUESTION_MANAGEMENT: 'QUESTION_MANAGEMENT',
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
+  STUDENT_PERFORMANCE: 'STUDENT_PERFORMANCE',
 } as const;
 export const featureKeySchema = z.enum(FEATURE_KEYS);
 export type FeatureKey = z.infer<typeof featureKeySchema>;
@@ -44,6 +45,10 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT]: {
     label: 'Branch scheduling',
     description: 'Which series a branch runs, and when.',
+  },
+  [FEATURE_KEYS.STUDENT_PERFORMANCE]: {
+    label: 'Student performance',
+    description: "Any student's analytics — percentile, cohort standing and time use.",
   },
 };
 

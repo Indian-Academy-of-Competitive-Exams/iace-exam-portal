@@ -7,6 +7,8 @@ import { RedisModule } from '../redis/redis.module';
 import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { AttemptsController } from './attempts.controller';
+import { AdminPerformanceController, MePerformanceController } from './performance.controller';
+import { PerformanceAnalyticsService } from './performance.service';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptReportService } from './attempt-report.service';
@@ -22,13 +24,14 @@ import { SubmitService } from './submit.service';
 /** Owns `Attempt` — the live sitting. AccessModule because the start guard is the catalog's own. */
 @Module({
   imports: [PrismaModule, RedisModule, QueueModule, AccessModule],
-  controllers: [AttemptsController],
+  controllers: [AttemptsController, MePerformanceController, AdminPerformanceController],
   providers: [
     AttemptsService,
     AttemptPaperService,
     AttemptReportService,
     AttemptStateService,
     LeaderboardService,
+    PerformanceAnalyticsService,
     LeaderboardRebuildProcessor,
     ScoringOutbox,
     ScoringProcessor,

@@ -45,6 +45,7 @@ import {
   isProvisional,
   lastSittingEndsAt,
   marksBySection,
+  numberOrNull,
   percentageOf,
   sectionsWithScores,
 } from './attempt-report';
@@ -307,18 +308,8 @@ export class AttemptReportService {
   }
 
   /** One indexed aggregate, off the report path's own budget — never off a live sitting's. */
-  private async cohortOf(testId: string) {
-    const cohort = await this.prisma.attempt.aggregate({
-      where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
-      _avg: { score: true },
-      _max: { score: true },
-      _count: true,
-    });
-    return {
-      topperScore: numberOrNull(cohort._max.score),
-      averageScore: cohort._avg.score === null ? null : round(Number(cohort._avg.score)),
-      size: cohort._count,
-    };
+  private cohortOf(testId: string) {
+    return cohortAggregate(this.prisma, testId);
   }
 
   /** The answer key, once and only once the gate has opened. Two reads, so a refusal never held it. */
@@ -401,8 +392,20 @@ function toScoreCardQuestion(row: ScoreCardRow['questions'][number]): ScoreCardQ
   };
 }
 
-const numberOrNull = (value: Prisma.Decimal | null): number | null =>
-  value === null ? null : Number(value);
+/** Shared with the performance report, so the two can never disagree about who the topper is. */
+export async function cohortAggregate(prisma: PrismaService, testId: string) {
+  const cohort = await prisma.attempt.aggregate({
+    where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
+    _avg: { score: true },
+    _max: { score: true },
+    _count: true,
+  });
+  return {
+    topperScore: numberOrNull(cohort._max.score),
+    averageScore: cohort._avg.score === null ? null : round(Number(cohort._avg.score)),
+    size: cohort._count,
+  };
+}
 
 const round = (value: number) => Math.round(value * 100) / 100;
 

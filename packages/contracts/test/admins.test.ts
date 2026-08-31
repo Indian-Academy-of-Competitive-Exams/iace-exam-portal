@@ -52,6 +52,7 @@ describe('shared vocabularies', () => {
         'BRANCH_TEST_MANAGEMENT',
         'QUESTION_MANAGEMENT',
         'STUDENT_MANAGEMENT',
+        'STUDENT_PERFORMANCE',
         'TEST_MANAGEMENT',
       ].sort(),
     );
