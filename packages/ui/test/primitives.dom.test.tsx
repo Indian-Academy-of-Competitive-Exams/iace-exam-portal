@@ -206,6 +206,12 @@ describe('EmptyState', () => {
 
     assert.ok(screen.getByText('Your branch adds them as they open.'));
   });
+
+  it('drops a level where it sits under another heading', () => {
+    render(<EmptyState icon={Inbox} title="Nothing waiting" level={3} />);
+
+    assert.ok(screen.getByRole('heading', { level: 3, name: 'Nothing waiting' }));
+  });
 });
 
 describe('SectionHeading', () => {

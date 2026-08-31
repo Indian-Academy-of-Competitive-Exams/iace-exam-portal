@@ -5,7 +5,7 @@ export { NumericInput, digitsOnly, type NumericInputProps } from './components/u
 export { PinInput, type PinInputProps } from './components/ui/pin-input';
 export { PinField, type PinFieldProps } from './components/ui/pin-field';
 export { StatRow, type StatRowProps } from './components/ui/stat-row';
-export { Metric, type MetricProps, type MetricSize, type MetricTone } from './components/ui/metric';
+export { Metric, type MetricProps, type MetricSize } from './components/ui/metric';
 export { MetricGroup, type MetricGroupProps } from './components/ui/metric-group';
 export { StepIcon, type StepIconProps } from './components/ui/step-icon';
 export {

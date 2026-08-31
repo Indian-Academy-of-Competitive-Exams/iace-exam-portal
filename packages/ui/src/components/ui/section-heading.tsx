@@ -11,6 +11,14 @@ export interface SectionHeadingProps {
   className?: string;
 }
 
+const HEADING_TAG = { 2: 'h2', 3: 'h3' } as const;
+
+/** Two tiers, not one style twice — level 3 reads as subordinate to level 2, not a peer of it. */
+const HEADING_CLASS = {
+  2: 'text-md font-semibold tracking-tight text-foreground',
+  3: 'text-xs font-semibold uppercase tracking-wide text-muted-foreground',
+} as const;
+
 export function SectionHeading({
   title,
   level = 2,
@@ -18,13 +26,13 @@ export function SectionHeading({
   action,
   className,
 }: Readonly<SectionHeadingProps>) {
-  const Tag = level === 2 ? 'h2' : 'h3';
+  const Tag = HEADING_TAG[level];
 
   return (
-    <div className={cn('flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1', className)}>
-      <Tag className="text-md font-semibold tracking-tight text-foreground">{title}</Tag>
-      {meta ? <span className="text-sm tabular-nums text-muted-foreground">{meta}</span> : null}
-      {action}
+    <div className={cn('flex flex-wrap items-baseline gap-x-3 gap-y-1', className)}>
+      <Tag className={HEADING_CLASS[level]}>{title}</Tag>
+      {meta ? <span className="text-sm text-muted-foreground">{meta}</span> : null}
+      {action ? <span className="ml-auto">{action}</span> : null}
     </div>
   );
 }

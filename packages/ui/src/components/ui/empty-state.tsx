@@ -2,6 +2,8 @@ import * as React from 'react';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+const HEADING_TAG = { 2: 'h2', 3: 'h3' } as const;
+
 export interface EmptyStateProps {
   icon: LucideIcon;
   /** The plain noun for what is absent — "No tests yet". Never a sentence about the reader. */
@@ -9,6 +11,8 @@ export interface EmptyStateProps {
   /** A rule or consequence they cannot infer; call sites must justify it with `ui-copy-ok`. */
   hint?: string;
   action?: React.ReactNode;
+  /** Set to 3 when nested under a `SectionHeading` — never two `h2`s in one region. */
+  level?: 2 | 3;
   className?: string;
 }
 
@@ -17,8 +21,11 @@ export function EmptyState({
   title,
   hint,
   action,
+  level = 2,
   className,
 }: Readonly<EmptyStateProps>) {
+  const Tag = HEADING_TAG[level];
+
   return (
     <div
       className={cn(
@@ -32,7 +39,7 @@ export function EmptyState({
       >
         <Icon className="size-6 text-[var(--empty-icon)]" />
       </span>
-      <h2 className="text-md font-semibold text-foreground">{title}</h2>
+      <Tag className="text-md font-semibold text-foreground">{title}</Tag>
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
       {action}
     </div>
