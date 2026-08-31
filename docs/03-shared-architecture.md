@@ -84,36 +84,55 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `auth` → `Admin` rows directly (`prisma.admin.findUnique`) for the login and `me` reads. The grant lookup already routes through `AdminsService.permissionsFor`, which is the pattern; the two identity reads predate the split and are the remaining seam.
 - `../auth/decorators` (`@Public`) is imported widely — acceptable as shared kernel; consider relocating the decorator to `common` so no module depends on the _auth module_ for a guard.
 - `configs` → `Test` through `_count: { select: { tests: true } }` for the base-config deletion
-  blocker. `Test` belongs to the tests/builder module, which does not exist yet, so there is no
-  facade to ask. Becomes `TestsService.countByBaseConfig` when that module lands.
+  blocker. The `tests` module now exists, so this is a read that should route through
+  `TestsService.countByBaseConfig` — the facade to add, not a module to wait for.
 - `access` → `prisma.student.count` for the program deletion blocker. `Student.programs` holds the
   code as free text with no foreign key, so that count is the only thing between a rename and a
   silent detach across every student. Route it through a `StudentsService` facade method.
-- `access` → `Test` / `TestSeriesTest` through `AccessResolverService`, which lists a series' live
-  tests by joining the link rows and filtering on `Test.status`. Same shape as the `configs` → `Test`
-  entry above: the tests/builder module does not exist yet, so there is no facade to ask. Becomes
-  `TestsService.activeTestsInSeries` when that module lands — and that module must then emit
-  `access.catalog_changed`, which nothing does for those two tables today.
+- `access` → `Test` / `TestSeriesTest` / `BranchTestSchedule` through `AccessResolverService`, which
+  resolves a student's catalog by joining the link rows, filtering on `Test.status`, and reading the
+  branch's late-entry cap. All three tables belong to `tests`. The half that was open is now closed:
+  `tests` DOES emit `access.catalog_changed` on every offering write, so the cache cannot go stale
+  behind it. What remains is the read itself — `TestsService.activeTestsInSeries` is the facade to
+  add. Note these are READS: `tests` is the only writer of all three, so rule 2 holds.
 
 ---
 
 ## 5. Table-ownership map
 
-Only the owning module writes these tables. `existing` = module built; `planned` = module to be created (tables currently live under a broader module until then).
+Only the owning module writes these tables. `existing` = the module is built and owns them;
+`provisioned` = the tables are in the schema and nothing writes them yet.
 
-| Module          | Owns (Prisma models)                                                       | State    |
-| --------------- | -------------------------------------------------------------------------- | -------- |
-| admins          | `Admin`, `AdminBranch`, `AdminFeaturePermission`                           | existing |
-| students        | `Student`, `StudentProfile`                                                | existing |
-| branches        | `Branch`                                                                   | existing |
-| access          | `Program`, `TestSeries`, `StudentGrant`, `BranchTestConfig`                | existing |
-| unlocks         | `StudentSeriesUnlock`, `SeriesUnlockRequest`                               | existing |
-| question-bank   | `Subject`, `Topic`, `Question`, `QuestionVersion`                          | existing |
-| configs         | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection` | existing |
-| audit           | `RowActionLog`, `ImportLog`                                                | existing |
-| tests / builder | `Test`, `TestSeriesTest`, `PaperQuestion`                                  | planned  |
-| exam (engine)   | `Attempt`, `AttemptQuestion`                                               | planned  |
-| notifications   | `Notification`                                                             | existing |
+All 37 models in `prisma/schema.prisma` appear here. A model with no owner is a model any module
+may quietly start writing, which is how the boundary erodes.
+
+| Module                 | Owns (Prisma models)                                                                                      | State       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | ----------- |
+| admins                 | `Admin`, `AdminBranch`, `AdminFeaturePermission`                                                          | existing    |
+| students               | `Student`, `StudentProfile`                                                                               | existing    |
+| branches               | `Branch`                                                                                                  | existing    |
+| access                 | `Program`, `TestSeries`, `StudentGrant`, `BranchTestConfig`                                               | existing    |
+| unlocks                | `StudentSeriesUnlock`, `SeriesUnlockRequest`                                                              | existing    |
+| question-bank          | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                         | existing    |
+| configs                | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                | existing    |
+| audit                  | `RowActionLog`, `ImportLog`                                                                               | existing    |
+| tests                  | `Test`, `TestSeriesTest`, `PaperQuestion`, `BranchTestSchedule`                                           | existing    |
+| attempts (exam engine) | `Attempt`, `AttemptQuestion`, `OutboxEvent`                                                               | existing    |
+| notifications          | `Notification`                                                                                            | existing    |
+| — (analytics rollups)  | `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` | provisioned |
+
+**`BranchTestSchedule` belongs to `tests`, not to `access`.** It is a TEST's timing, varied by
+branch — `tests/offering.service.ts` is its only writer, and `access` reads it to resolve a
+student's window. What it does is BLOCK STARTING a test, never hide one: `assertCanStart` refuses
+the sitting once the branch's late-entry cap has passed, while `assertReachable` still lets the
+student open the test and read about it. Those two guards are the rule, and they are separate on
+purpose.
+
+**The six analytics models have no owner because no code touches them.** `TestQuestionStat` is read
+once (`questions.service.ts`, the in-use check that freezes a question) and written by nothing; the
+other five are referenced nowhere at all. They are schema provisioned ahead of the rollup jobs that
+will fill them — see §6's unwired events. Give them an owning module in the same change that first
+writes one, and delete this row when that happens.
 
 `unlocks` is a service inside `access` rather than a folder of its own: an unlock is not a way to
 REACH a series, so every one of its writes has to be checked against the reach predicate that lives
@@ -129,22 +148,32 @@ binding live in **Redis**, never Postgres.
 
 ## 6. Event catalog (the seam to build)
 
-No event bus exists yet. Introduce Nest `EventEmitter` (or BullMQ for durable
-events) and register cross-module reactions here. Seed set:
+**The bus exists.** `DomainEventBus` over Nest's `EventEmitter`, with every name declared once in
+`apps/api/src/common/events/event-catalog.ts` as `DOMAIN_EVENTS`. That constant is the catalog; this
+table is its prose, and the two must be edited together.
 
-| Event                                           | Producer                                                                              | Consumers                                   |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `attempt.submitted`                             | exam                                                                                  | scoring-worker (enqueue), notifications     |
-| `scoring.completed`                             | scoring-worker                                                                        | notifications (result ready), leaderboard   |
-| `test.assigned`                                 | access/admin                                                                          | notifications                               |
-| `paperQuestion.dropped` / `paperQuestion.bonus` | admin                                                                                 | scoring-worker (recompute)                  |
-| `student.pin_reset`                             | auth                                                                                  | (sessions revoked — already handled)        |
-| `branch.created`                                | branches                                                                              | access (fan out `BranchTestConfig`)         |
-| `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke) | access (bust that student's cached catalog) |
-| `access.catalog_changed`                        | access (series edit, delete, branch-config change)                                    | access (bust every cached catalog)          |
-| `series.unlocked`                               | access (auto-unlock on resolve, approved request)                                     | notifications                               |
-| `series.granted`                                | access (a grant that did not already exist)                                           | notifications                               |
-| `student.enrolment_added`                       | students (the exam codes one save ADDED)                                              | notifications                               |
+Twelve events are declared. **Wired** means something emits it and something reacts;
+**declared** means the name exists and the producer is still to come.
+
+| Event                                           | Producer                                                                              | Consumers                                   | State    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | -------- |
+| `audit.row_action`                              | the audit interceptor, on every write carrying `@Audit`                               | audit listener (writes `RowActionLog`)      | wired    |
+| `student.pin_reset`                             | auth                                                                                  | (sessions revoked)                          | wired    |
+| `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke) | access (bust that student's cached catalog) | wired    |
+| `access.catalog_changed`                        | access (series edit, delete, branch-config change), tests (every offering write)      | access (bust every cached catalog)          | wired    |
+| `series.unlocked`                               | access (auto-unlock on resolve, approved request)                                     | notifications                               | wired    |
+| `series.granted`                                | access (a grant that did not already exist)                                           | notifications                               | wired    |
+| `student.enrolment_added`                       | students (the exam codes one save ADDED)                                              | notifications                               | wired    |
+| `attempt.submitted`                             | attempts                                                                              | scoring-worker (enqueue), notifications     | declared |
+| `scoring.completed`                             | scoring-worker                                                                        | notifications (result ready), leaderboard   | declared |
+| `test.assigned`                                 | access/admin                                                                          | notifications                               | declared |
+| `paperQuestion.dropped` / `paperQuestion.bonus` | admin                                                                                 | scoring-worker (recompute)                  | declared |
+
+Two notes on the declared four. Submit and scoring do not go through the bus today — they go
+through `OutboxEvent` and the BullMQ `scoring` queue, which is the durable path and the right one;
+the event names are for the notification reactions that do not exist yet. `branch.created` was in
+this table and is **not** in `DOMAIN_EVENTS`: the branch → series fan-out is still the direct call
+described in §4, and closing that cycle is what would add it.
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 
@@ -196,7 +225,8 @@ Every autoscale-candidate service must satisfy all of these:
 
 ## 10. Cross-cutting backend to add
 
-- **Event bus** (§6) — Nest `EventEmitter` + BullMQ for durable events.
+The event bus (§6) and the BullMQ queues that were listed here are built. What is left:
+
 - **Message/notification sender** — generalize the existing `OtpSender` into one outbound abstraction (SMS/email/in-app) used by OTP + result-ready + reminders.
 - **Rate-limit guard** — a shared Redis-backed `@Throttle` decorator + guard for public auth/exam endpoints.
 - **Cache helper** — a Redis `getOrSet(key, ttl, fn)` for base-config/leaderboard reads.
@@ -207,10 +237,13 @@ Every autoscale-candidate service must satisfy all of these:
 
 ## 11. DX & repo conventions
 
-- **Git hooks** — husky + lint-staged running format/lint/typecheck on staged files pre-commit (CI is the backstop, not the first line).
-- **commitlint** — enforce the conventional-commit style already in use.
-- **`.editorconfig` + `.vscode/extensions.json`** — one editor baseline; recommend ESLint, Prettier, Prisma.
-- **Dependency alignment** — `syncpack` to keep shared deps (react, zod, tanstack…) on one version across workspaces; Renovate/Dependabot for batched updates.
+Built: **git hooks** (husky + lint-staged running format/lint/typecheck on staged files, plus the
+comment gate and the Sonar quality gate), **commitlint**, **`.editorconfig` + `.vscode/extensions.json`**,
+and **`syncpack`** (`pnpm deps:check`, enforced in CI).
+
+Still to add:
+
+- **Renovate / Dependabot** — batched dependency updates; `syncpack` aligns versions but nothing raises them.
 - **Turbo remote cache** — reuse task outputs across CI and machines.
 
 ---
@@ -219,7 +252,9 @@ Every autoscale-candidate service must satisfy all of these:
 
 - **Module-boundary lint rule** — no deep sibling imports (`apps/api/src/<a>` may not import `apps/api/src/<b>/**` except the module's public entry); infra packages importable by all.
 - **No-DOM lint rule** — `packages/app-kit` and `packages/contracts` `src` may not reference `window`/`document`/`localStorage`/`sessionStorage`.
-- **Existing CI gates** — format → lint → typecheck → test → build, plus the migrations-apply job.
+- **Existing CI gates** — format → **deps:check** → lint → typecheck → test → build, plus the
+  migrations job, which applies every migration to a scratch database **from scratch** and then runs
+  `db:check` to prove the result still matches `schema.prisma`.
 - **Schema convention check** — every model has `createdAt`/`updatedAt` (a lint script or review checklist).
 
 A rule that isn't enforced by CI is a suggestion; prefer adding the check over adding a paragraph.
