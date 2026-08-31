@@ -369,6 +369,8 @@ export type OpenSeriesList = z.infer<typeof openSeriesListSchema>;
 export const unlockRequestListQuerySchema = paginationQuerySchema.extend({
   status: unlockRequestStatusSchema.optional(),
   testSeriesId: z.string().optional(),
+  /** NARROWS the caller's scope. A branch outside it answers nothing, never everything. */
+  branchId: z.string().optional(),
 });
 export type UnlockRequestListQuery = z.infer<typeof unlockRequestListQuerySchema>;
 export type UnlockRequestListQueryInput = z.input<typeof unlockRequestListQuerySchema>;

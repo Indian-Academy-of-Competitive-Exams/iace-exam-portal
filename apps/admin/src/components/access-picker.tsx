@@ -111,12 +111,16 @@ export function TestSeriesMultiPicker({
   value,
   onChange,
   disabled,
+  placeholder = 'No series yet',
   ...control
 }: Readonly<{
   value: readonly string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  /** A form says what is chosen; a filter says what choosing nothing means. */
+  placeholder?: string;
   id?: string;
+  'aria-label'?: string;
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
 }>) {
@@ -134,7 +138,7 @@ export function TestSeriesMultiPicker({
       disabled={disabled}
       value={value}
       onChange={onChange}
-      placeholder="No series yet"
+      placeholder={placeholder}
       items={pages.items.map((series) => ({
         value: series.id,
         label: series.name,

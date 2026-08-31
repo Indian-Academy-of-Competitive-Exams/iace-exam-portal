@@ -107,6 +107,17 @@ function requestColumns(
 }
 
 export function AccessRequestsPage() {
+  return (
+    <TableFrame
+      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Access requests" />}
+    >
+      <AccessRequestList />
+    </TableFrame>
+  );
+}
+
+/** The queue itself, so the branch configuration screen shows it rather than rebuilding it. */
+export function AccessRequestList({ branchId }: Readonly<{ branchId?: string }>) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState<{
     row: SeriesUnlockRequestRow;
@@ -139,18 +150,19 @@ export function AccessRequestsPage() {
   );
 
   const requests = useListScreen({
-    queryKey: QUERY_KEYS.UNLOCK_REQUESTS,
+    queryKey: [...QUERY_KEYS.UNLOCK_REQUESTS, branchId ?? ''],
     filters: REQUEST_FILTERS,
-    toQuery: (values) => ({ status: (values.status || undefined) as UnlockDecision | undefined }),
+    toQuery: (values) => ({
+      status: (values.status || undefined) as UnlockDecision | undefined,
+      branchId,
+    }),
     fetchPage: (params) => api.admin.unlockRequests.list(params),
   });
 
   const approving = asking?.status === UNLOCK_REQUEST_STATUS.APPROVED;
 
   return (
-    <TableFrame
-      header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Access requests" />}
-    >
+    <>
       <ConfirmDialog
         open={asking !== null}
         onOpenChange={(open) => !open && setAsking(null)}
@@ -178,6 +190,6 @@ export function AccessRequestsPage() {
         empty="Nobody has asked for a series yet."
         emptyFiltered="No request matches those filters."
       />
-    </TableFrame>
+    </>
   );
 }

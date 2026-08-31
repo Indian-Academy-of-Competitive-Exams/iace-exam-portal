@@ -40,6 +40,7 @@ import { api } from '../lib/api';
 import { ExamStageMultiPicker } from '../components/exam-picker';
 import { TestSeriesMultiPicker } from '../components/access-picker';
 import { StageCell } from '../components/stage-cell';
+import { AccessRequestList } from './access-requests';
 import { NAV_ITEMS, QUERY_KEYS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
 import { opensLabel, toMinutes, toSeconds } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
@@ -50,12 +51,13 @@ import { useBranch } from '../lib/use-branches';
 const TABS = {
   SERIES: 'series',
   TESTS: 'tests',
+  REQUESTS: 'requests',
 } as const;
 
 /** Cleared on every tab change: a search typed against series means nothing against tests. */
-type FilterKey = 'tab' | 'q' | 'enabled' | 'examStageId' | 'testSeriesId';
+type FilterKey = 'tab' | 'q' | 'enabled' | 'examStageId' | 'testSeriesId' | 'status';
 
-const TAB_FILTERS = { q: '', enabled: '', examStageId: '', testSeriesId: '' } as const;
+const TAB_FILTERS = { q: '', enabled: '', examStageId: '', testSeriesId: '', status: '' } as const;
 
 const branchSeriesKey = (branchId: string) =>
   [...QUERY_KEYS.BRANCH_CONFIG, branchId, 'test-series'] as const;
@@ -122,6 +124,11 @@ function BranchConfiguration({ branch }: Readonly<{ branch: Branch }>) {
               content: <SeriesTab branch={branch} draft={draft} setDraft={setDraft} />,
             },
             { value: TABS.TESTS, label: 'Tests', content: <TestsTab branch={branch} /> },
+            {
+              value: TABS.REQUESTS,
+              label: 'Access requests',
+              content: <AccessRequestList branchId={branch.id} />,
+            },
           ],
         }}
       />
@@ -306,7 +313,7 @@ function SeriesTab({
         onOpenChange={(open) => !open && setAsking(false)}
         loading={save.isPending}
         title={`Change what ${branch.name} runs?`}
-        description={`${plural(changes.length, 'series', 'series')} change for every student whose current branch is ${branch.name}. Switching one on lets them start its tests; switching one off takes the route away straight away, keeping every attempt already made.`}
+        description={`This changes ${plural(changes.length, 'series', 'series')} for every student whose current branch is ${branch.name}. Switching one on lets them start its tests; switching one off takes the route away straight away, keeping every attempt already made.`}
         confirmLabel="Save changes"
         onConfirm={() => save.mutate()}
       >
@@ -409,7 +416,9 @@ function TestsTab({ branch }: Readonly<{ branch: Branch }>) {
       kind: 'customMulti',
       label: 'Filter by series',
       primary: true,
-      render: (control: ListFilterMultiControl) => <TestSeriesMultiPicker {...control} />,
+      render: (control: ListFilterMultiControl) => (
+        <TestSeriesMultiPicker {...control} placeholder="All series" />
+      ),
     },
   ] as const;
 

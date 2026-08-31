@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Plus, Power, Trash2, Users } from 'lucide-react';
+import { ClipboardList, Plus, Power, Trash2, Users } from 'lucide-react';
 import {
   BRANCH_TYPE,
   BRANCH_TYPES,
   createBranchSchema,
+  FEATURE_KEYS,
   type Branch,
   type BranchType,
   type CreateBranchInput,
@@ -41,7 +42,11 @@ import { PageCrumbs } from '@iace/app-kit/browser';
 const NEW_BRANCH_FIELDS = ['name', 'type'] as const;
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
-function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableColumn<Branch>[] {
+function branchColumns(
+  isSuperAdmin: boolean,
+  canConfigure: boolean,
+  refresh: () => void,
+): DataTableColumn<Branch>[] {
   return [
     {
       key: 'name',
@@ -74,7 +79,12 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
       key: 'actions',
       className: 'text-right',
       cell: (branch) => (
-        <BranchRowActions branch={branch} canEdit={isSuperAdmin} onChanged={refresh} />
+        <BranchRowActions
+          branch={branch}
+          canEdit={isSuperAdmin}
+          canConfigure={canConfigure}
+          onChanged={refresh}
+        />
       ),
     },
   ];
@@ -82,8 +92,9 @@ function branchColumns(isSuperAdmin: boolean, refresh: () => void): DataTableCol
 
 /** Anyone managing students may read the list, because they pick from it. Only a super admin writes. */
 export function BranchesPage() {
-  const { identity: admin } = useAuth();
+  const { identity: admin, can } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
+  const canConfigure = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT);
 
   const [creating, setCreating] = useState(false);
   const branches = useBranches();
@@ -94,7 +105,10 @@ export function BranchesPage() {
     [queryClient],
   );
 
-  const columns = useMemo(() => branchColumns(isSuperAdmin, refresh), [isSuperAdmin, refresh]);
+  const columns = useMemo(
+    () => branchColumns(isSuperAdmin, canConfigure, refresh),
+    [isSuperAdmin, canConfigure, refresh],
+  );
 
   const header = (
     <>
@@ -231,11 +245,13 @@ type BranchConfirm = (typeof BRANCH_CONFIRMS)[keyof typeof BRANCH_CONFIRMS];
 function BranchActions({
   branch,
   canEdit,
+  canConfigure,
   busy,
   onAsk,
 }: Readonly<{
   branch: Branch;
   canEdit: boolean;
+  canConfigure: boolean;
   busy: boolean;
   onAsk: (confirm: BranchConfirm) => void;
 }>) {
@@ -250,6 +266,16 @@ function BranchActions({
           Students
         </Link>
       </DropdownMenuItem>
+
+      {/* What makes the branch a route rather than a picker: an admin holding several picks one. */}
+      {canConfigure ? (
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.BRANCH_TESTS(branch.id)}>
+            <ClipboardList aria-hidden />
+            Configure tests
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
 
       {editable ? (
         <>
@@ -283,10 +309,12 @@ function BranchStatus({ branch }: Readonly<{ branch: Branch }>) {
 function BranchRowActions({
   branch,
   canEdit,
+  canConfigure,
   onChanged,
 }: Readonly<{
   branch: Branch;
   canEdit: boolean;
+  canConfigure: boolean;
   onChanged: () => void;
 }>) {
   const [asking, setAsking] = useState<BranchConfirm | null>(null);
@@ -318,7 +346,13 @@ function BranchRowActions({
 
   return (
     <>
-      <BranchActions branch={branch} canEdit={canEdit} busy={busy} onAsk={setAsking} />
+      <BranchActions
+        branch={branch}
+        canEdit={canEdit}
+        canConfigure={canConfigure}
+        busy={busy}
+        onAsk={setAsking}
+      />
 
       {/* Retiring is reversible, and it still asks. It is not the undo that
           makes it worth a question — it is that the effect is invisible from

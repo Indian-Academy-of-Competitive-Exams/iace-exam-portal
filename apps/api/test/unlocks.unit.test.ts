@@ -984,4 +984,35 @@ describe('UnlocksService — the branches the admin deciding may reach', () => {
 
     assert.equal(decided.status, UNLOCK_REQUEST_STATUS.APPROVED);
   });
+
+  it('narrows an unnarrowed admin to the one branch they asked for', async () => {
+    const { service } = build(reachable());
+    await service.request('stu_1', 'srs_1');
+
+    const here = await service.listRequests(
+      { page: 1, pageSize: 20, branchId: BRANCH } as never,
+      EVERY_BRANCH,
+    );
+    const there = await service.listRequests(
+      { page: 1, pageSize: 20, branchId: 'br_other' } as never,
+      EVERY_BRANCH,
+    );
+
+    assert.equal(here.total, 1);
+    assert.equal(there.total, 0);
+  });
+
+  /** The failure this prevents: a filter that WIDENS a scope instead of narrowing it. */
+  it("answers nothing when the branch asked for is outside the admin's own", async () => {
+    const { service } = build(reachable());
+    await service.request('stu_1', 'srs_1');
+
+    const page = await service.listRequests(
+      { page: 1, pageSize: 20, branchId: BRANCH } as never,
+      elsewhere,
+    );
+
+    assert.equal(page.total, 0);
+    assert.equal(page.items.length, 0);
+  });
 });

@@ -118,12 +118,12 @@ export class UnlocksService {
     query: UnlockRequestListQuery,
     scope: BranchScope,
   ): Promise<Paginated<SeriesUnlockRequestRow>> {
-    const reachable = branchScopeWhere(scope);
+    const branches = narrowedTo(scope, query.branchId);
     const where: Prisma.SeriesUnlockRequestWhereInput = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.testSeriesId ? { testSeriesId: query.testSeriesId } : {}),
       // Whose request it is decides who may see it, and a student belongs to one branch.
-      ...(reachable ? { student: { currentBranchId: reachable } } : {}),
+      ...(branches ? { student: { currentBranchId: branches } } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([
@@ -299,4 +299,14 @@ function toRequestRow(row: RequestRow): SeriesUnlockRequestRow {
     testSeries: row.testSeries,
     student: row.student,
   };
+}
+
+/** The filter INTERSECTS the caller's scope: `in: []` is how a branch outside it answers nothing. */
+function narrowedTo(
+  scope: BranchScope,
+  branchId: string | undefined,
+): { in: string[] } | undefined {
+  const reachable = branchScopeWhere(scope);
+  if (branchId === undefined) return reachable;
+  return { in: reachable && !reachable.in.includes(branchId) ? [] : [branchId] };
 }
