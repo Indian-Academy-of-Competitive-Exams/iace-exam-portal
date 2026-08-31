@@ -4,6 +4,7 @@ import {
   examTemplateSchema,
   languageModeSchema,
   navigationPolicySchema,
+  testUiSchema,
   timerTemplateSchema,
 } from './configs';
 import {
@@ -42,6 +43,33 @@ export const ANSWER_STATE = {
 export const answerStateSchema = z.enum(ANSWER_STATE);
 export type AnswerState = z.infer<typeof answerStateSchema>;
 export const ANSWER_STATES = answerStateSchema.options;
+
+/** How full an OMR bubble is, as an answer state. The fill is never stored — it is derived from one. */
+export const OMR_FILL = {
+  /** Below this a press is a smudge: a stray tap must not flag a question nobody engaged with. */
+  MIN: 0.15,
+  /** What a half-filled bubble redraws at. One value, so 40% and 70% are the same commitment. */
+  PARTIAL: 0.5,
+  /** Committed, and past the point the student may take it back. */
+  FULL: 1,
+} as const;
+
+export function omrStateFor(fill: number): AnswerState {
+  if (fill >= OMR_FILL.FULL) return ANSWER_STATE.ANSWERED;
+  if (fill >= OMR_FILL.MIN) return ANSWER_STATE.ANSWERED_MARKED;
+  return ANSWER_STATE.NOT_ANSWERED;
+}
+
+/** The inverse, for redrawing a bubble on return or reload. A state holding no option holds no ink. */
+export const omrFillFor = (state: AnswerState): number => OMR_FILL_BY_STATE[state];
+
+const OMR_FILL_BY_STATE: Readonly<Record<AnswerState, number>> = {
+  [ANSWER_STATE.NOT_VISITED]: 0,
+  [ANSWER_STATE.NOT_ANSWERED]: 0,
+  [ANSWER_STATE.MARKED_REVIEW]: 0,
+  [ANSWER_STATE.ANSWERED_MARKED]: OMR_FILL.PARTIAL,
+  [ANSWER_STATE.ANSWERED]: OMR_FILL.FULL,
+};
 
 /** One section's slice of a scored paper — exactly what `Attempt.sectionScores` holds. */
 export const attemptSectionScoreSchema = z.object({
@@ -353,6 +381,8 @@ export const examPaperSchema = z.object({
   languageMode: languageModeSchema,
   /** Which skin draws this sitting. The screen reads it; it is never hardcoded. */
   examTemplate: examTemplateSchema,
+  /** How the student answers — CBT picks an option, OMR fills a bubble. One engine under both. */
+  testUi: testUiSchema,
   timerTemplate: timerTemplateSchema,
   navigation: navigationPolicySchema,
   calculatorEnabled: z.boolean(),

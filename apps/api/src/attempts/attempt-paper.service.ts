@@ -30,6 +30,7 @@ const PAPER_SELECT = {
       examTemplate: true,
       baseConfig: {
         select: {
+          defaultTestUi: true,
           languageMode: true,
           timerTemplate: true,
           navigation: true,
@@ -145,6 +146,7 @@ export class AttemptPaperService {
       languages,
       languageMode: config.languageMode,
       examTemplate: attempt.test.examTemplate,
+      testUi: config.defaultTestUi,
       timerTemplate: config.timerTemplate,
       navigation: config.navigation,
       calculatorEnabled: config.calculatorEnabled,
