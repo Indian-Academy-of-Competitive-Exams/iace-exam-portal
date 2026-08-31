@@ -3,13 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { BookOpenCheck } from 'lucide-react';
 import {
   Alert,
-  Badge,
   Button,
   DataTable,
   LoadingState,
+  Metric,
+  MetricGroup,
   PageFrame,
   PageHeader,
   Progress,
+  SectionHeading,
   StatRow,
   TruncatedText,
   plural,
@@ -88,21 +90,20 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
         </Alert>
       )}
 
-      <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-        <StatRow label="Marks" value={`${card.score} / ${card.maxMarks}`} />
-        <StatRow label="Percentage" value={`${card.percentage}%`} />
-        <StatRow
+      <MetricGroup>
+        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} />
+        <Metric label="Percentage" value={card.percentage} unit="%" />
+        <Metric
           label="Rank"
-          value={
-            <span className="flex items-center gap-2">
-              {card.rank === null ? '—' : rankOf(card.rank, card.cohortSize)}
-              {card.provisional && card.rank !== null ? (
-                <Badge variant="neutral">Provisional</Badge>
-              ) : null}
-            </span>
+          value={card.rank ?? '—'}
+          unit={
+            card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
           }
         />
-        <StatRow label="Percentile" value={card.percentile === null ? '—' : `${card.percentile}`} />
+        <Metric label="Percentile" value={card.percentile ?? '—'} />
+      </MetricGroup>
+
+      <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
         <StatRow label="Correct" value={card.correctCount} />
         <StatRow label="Wrong" value={card.wrongCount} />
         <StatRow label="Unattempted" value={card.unattemptedCount} />
@@ -113,7 +114,7 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Accuracy</h2>
+        <SectionHeading title="Accuracy" />
         <Progress value={accuracy} aria-label="Accuracy" />
         <StatRow
           label={`${card.correctCount} right of ${plural(attempted, 'attempt')}`}
@@ -122,7 +123,7 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
       </div>
 
       <div className="flex min-h-0 flex-col gap-2">
-        <h2 className="text-sm font-semibold text-foreground">Sections</h2>
+        <SectionHeading title="Sections" />
         <DataTable
           columns={SECTION_COLUMNS}
           rows={card.sections}
@@ -134,9 +135,6 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
     </div>
   );
 }
-
-const rankOf = (rank: number, cohortSize: number | null) =>
-  cohortSize === null ? `${rank}` : `${rank} of ${cohortSize}`;
 
 /** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */
 function minutes(seconds: number): string {
