@@ -166,6 +166,31 @@ Exemplar: `apps/admin/src/routes/access-requests.tsx` — reused, not rebuilt.
 
 ---
 
+## Complete — 2026-08-31 (`b6cc734`, `f629b91` … `9312d78`)
+
+All five tasks are built. Task 1 landed on 2026-08-29 as `b6cc734`; tasks 2–5 on 2026-08-31.
+
+Three things the plan did not anticipate, all found by opening the screen:
+
+- **A series older than the fan-out could not be switched at all** (`b0d5d5d`). The list reads from
+  `TestSeries` so a series with no `BranchTestConfig` row shows switched OFF, but task 1's write
+  demanded a row per pair and refused the whole draft without one — a switch the screen offered and
+  the server could only refuse. The write now creates the row the fan-out would have, and the
+  all-or-nothing refusal is kept for an id naming no series at all.
+- **The route guard is a pinned warning, not a blocker.** The app mounts `BrowserRouter` and
+  `useBlocker` needs a data router, so leaving the SCREEN with a draft is warned about rather than
+  intercepted; leaving the TAB asks first, because the tab that leaves is unmounted by Radix.
+- **The series picker announced "No series yet" as a filter**, where choosing nothing means all of
+  them. It takes a placeholder now, keeping the form's wording as its default.
+
+Two shared moves the plan's file lists did not name: `toMinutes`/`toSeconds`/`opensLabel` to
+`apps/admin/src/lib/schedule-format.ts`, because two screens now convert between the seconds the API
+speaks and the minutes a reader speaks; and `AccessRequestList` out of `access-requests.tsx`, so the
+third tab reuses the queue rather than rebuilding it.
+
+Every pair of screens writing one row now busts both keys: the two series editors, and the two
+timing editors.
+
 ## Not in this plan
 
 - The series form's "enable everywhere" still switches on branches deliberately switched off. Its

@@ -215,6 +215,14 @@ dangerous, and its confirm copy already says what it does.
 
 ---
 
+---
+
+## Built
+
+**C** — `20260829120000_a_free_series_waits_on_nothing`. **A** — complete, see above. **B** —
+complete on 2026-08-31 (`b6cc734`, `f629b91` … `9312d78`); what the build found that this spec did
+not anticipate is in the plan's own completion note.
+
 ## Shape of the work
 
 Roughly thirteen commit-sized tasks across three plans, one per piece.
