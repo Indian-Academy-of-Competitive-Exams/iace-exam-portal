@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3 } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 import {
+  Alert,
+  Button,
   DataTable,
   EmptyState,
   LoadingState,
@@ -60,6 +62,32 @@ export function PerformancePage() {
     enabled: latest !== '',
   });
 
+  let body;
+  if (trend.isLoading) {
+    body = <LoadingState />;
+  } else if (trend.isError) {
+    body = <Alert variant="danger">Your performance did not load.</Alert>;
+  } else if (trend.data && trend.data.points.length > 0) {
+    body = (
+      <div className="flex flex-col gap-8">
+        <Trend trend={trend.data} />
+        {detail.data ? <LatestPaper analytics={detail.data} /> : null}
+      </div>
+    );
+  } else {
+    body = (
+      <EmptyState
+        icon={ClipboardList}
+        title="No tests sat yet"
+        action={
+          <Button asChild>
+            <Link to={ROUTES.TESTS}>Go to your tests</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
   return (
     <PageFrame
       header={
@@ -69,16 +97,7 @@ export function PerformancePage() {
         />
       }
     >
-      {trend.isLoading ? <LoadingState /> : null}
-      {trend.data?.points.length === 0 ? (
-        <EmptyState icon={BarChart3} title="No performance yet" />
-      ) : null}
-      {trend.data && trend.data.points.length > 0 ? (
-        <div className="flex flex-col gap-8">
-          <Trend trend={trend.data} />
-          {detail.data ? <LatestPaper analytics={detail.data} /> : null}
-        </div>
-      ) : null}
+      {body}
     </PageFrame>
   );
 }
@@ -94,15 +113,18 @@ function Trend({ trend }: Readonly<{ trend: PerformanceTrend }>) {
   const mean = averageAccuracy(trend.points);
 
   return (
-    <section className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <MetricGroup>
         <Metric label="Tests done" value={trend.testsSat} />
         <Metric label="Best rank" value={best} />
         <Metric label="Average accuracy" value={mean} unit={mean === '—' ? undefined : '%'} />
       </MetricGroup>
 
-      <SectionHeading title="Accuracy" />
-      <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+      <section className="flex flex-col gap-3">
+        <SectionHeading title="Accuracy" />
+        <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+      </section>
+
       <DataTable
         columns={TREND_COLUMNS}
         rows={[...trend.points].reverse()}
@@ -110,7 +132,7 @@ function Trend({ trend }: Readonly<{ trend: PerformanceTrend }>) {
         isLoading={false}
         empty="You have not sat a test yet."
       />
-    </section>
+    </div>
   );
 }
 
@@ -121,17 +143,17 @@ function LatestPaper({ analytics }: Readonly<{ analytics: AttemptAnalytics }>) {
     <div className="flex flex-col gap-8">
       <SectionHeading title="Last paper" meta={analytics.testTitle} />
       <section className="flex flex-col gap-3">
-        <SectionHeading title="Subjects" />
+        <SectionHeading title="Subjects" level={3} />
         <MeasureBars bars={analytics.subjects.map(toAccuracyBar)} max={100} />
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeading title="Difficulty" />
+        <SectionHeading title="Difficulty" level={3} />
         <MeasureBars bars={analytics.difficulty.map(toAccuracyBar)} max={100} />
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeading title="Cohort" />
+        <SectionHeading title="Cohort" level={3} />
         <MeasureBars
           bars={[
             { key: 'you', label: 'You', value: cohort.score, tone: 1 },
@@ -143,7 +165,7 @@ function LatestPaper({ analytics }: Readonly<{ analytics: AttemptAnalytics }>) {
       </section>
 
       <section className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-        <SectionHeading title="Time" className="sm:col-span-2" />
+        <SectionHeading title="Time" level={3} className="sm:col-span-2" />
         <StatRow label="Average per question" value={`${time.avgPerQuestionSec}s`} />
         <StatRow label="Average on a right answer" value={`${time.avgOnCorrectSec}s`} />
         <StatRow label="Average on a wrong answer" value={`${time.avgOnWrongSec}s`} />

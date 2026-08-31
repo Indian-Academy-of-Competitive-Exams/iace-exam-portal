@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList } from 'lucide-react';
 import {
+  Alert,
   Avatar,
   Button,
   EmptyState,
@@ -24,7 +25,7 @@ import {
   PROFILE_QUERY_KEY,
   ROUTES,
 } from '../lib/constants';
-import { sittablesOf } from '../lib/catalog';
+import { sittablesOf, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
 
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
@@ -49,6 +50,8 @@ export function DashboardPage() {
   let trendRegion;
   if (trend.isLoading) {
     trendRegion = <LoadingState />;
+  } else if (trend.isError) {
+    trendRegion = <Alert variant="danger">Your performance did not load.</Alert>;
   } else if (sat) {
     trendRegion = (
       <>
@@ -109,13 +112,28 @@ export function DashboardPage() {
 
         <section className="flex flex-col gap-3">
           <SectionHeading title="Next" />
-          {catalog.isLoading ? (
-            <Skeleton variant="row" className="h-40 rounded-lg" />
-          ) : (
-            <StatusStrip rows={rows} now={now} />
-          )}
+          <NextRegion catalog={catalog} rows={rows} now={now} />
         </section>
       </div>
     </PageFrame>
   );
+}
+
+/** The catalog's own load state, distinct from a genuinely empty one — an error is not "nothing". */
+function NextRegion({
+  catalog,
+  rows,
+  now,
+}: Readonly<{
+  catalog: { isLoading: boolean; isError: boolean };
+  rows: readonly Sittable[];
+  now: Date;
+}>) {
+  if (catalog.isLoading) {
+    return <Skeleton variant="row" className="h-40 rounded-lg" />;
+  }
+  if (catalog.isError) {
+    return <Alert variant="danger">Your tests did not load.</Alert>;
+  }
+  return <StatusStrip rows={rows} now={now} />;
 }

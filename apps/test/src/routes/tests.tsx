@@ -37,6 +37,9 @@ const familyLabel = (family: string) => family.replaceAll('_', '/');
 const ANY_FAMILY = '';
 const SKELETON_KEYS = ['a', 'b', 'c'];
 
+/** Reaching nothing and searching for nothing are different facts, and they read differently. */
+type Emptiness = 'NONE' | 'FILTERED' | null;
+
 export function TestsPage() {
   const params = useFilters<(typeof FILTER_KEYS)[keyof typeof FILTER_KEYS]>();
   const family = params.get(FILTER_KEYS.FAMILY);
@@ -96,23 +99,51 @@ export function TestsPage() {
         ))}
       </div>
 
-      {catalog.isLoading ? (
-        <div className="flex flex-col gap-3">
-          {SKELETON_KEYS.map((key) => (
-            <Skeleton key={key} variant="row" className="h-40 rounded-lg" />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-8">
-          <CatalogBody emptiness={emptiness} series={series} rows={rows} now={now} />
-        </div>
-      )}
+      <CatalogRegion
+        catalog={catalog}
+        emptiness={emptiness}
+        series={series}
+        rows={rows}
+        now={now}
+      />
     </PageFrame>
   );
 }
 
-/** Reaching nothing and searching for nothing are different facts, and they read differently. */
-function emptyReason(reached: number, showing: number): 'NONE' | 'FILTERED' | null {
+/** The catalog's own load state, distinct from a genuinely empty one — an error is not "none yet". */
+function CatalogRegion({
+  catalog,
+  emptiness,
+  series,
+  rows,
+  now,
+}: Readonly<{
+  catalog: { isLoading: boolean; isError: boolean };
+  emptiness: Emptiness;
+  series: readonly StudentCatalogSeries[];
+  rows: readonly Sittable[];
+  now: Date;
+}>) {
+  if (catalog.isLoading) {
+    return (
+      <div className="flex flex-col gap-3">
+        {SKELETON_KEYS.map((key) => (
+          <Skeleton key={key} variant="row" className="h-40 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+  if (catalog.isError) {
+    return <Alert variant="danger">Your tests did not load.</Alert>;
+  }
+  return (
+    <div className="flex flex-col gap-8">
+      <CatalogBody emptiness={emptiness} series={series} rows={rows} now={now} />
+    </div>
+  );
+}
+
+function emptyReason(reached: number, showing: number): Emptiness {
   if (reached === 0) return 'NONE';
   return showing === 0 ? 'FILTERED' : null;
 }
@@ -123,7 +154,7 @@ function CatalogBody({
   rows,
   now,
 }: Readonly<{
-  emptiness: 'NONE' | 'FILTERED' | null;
+  emptiness: Emptiness;
   series: readonly StudentCatalogSeries[];
   rows: readonly Sittable[];
   now: Date;

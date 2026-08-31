@@ -12,6 +12,7 @@ import {
   PageHeader,
   Progress,
   SectionHeading,
+  Skeleton,
   TruncatedText,
   linkVariants,
   plural,
@@ -23,11 +24,12 @@ import {
   TEST_BUCKET,
   testAction,
   testBucket,
+  type PerformancePoint,
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY, ROUTES } from '../lib/constants';
-import { averageAccuracy, bestRank, seriesProgress } from '../lib/catalog';
+import { averageAccuracy, bestRank, seriesProgress, type SeriesProgress } from '../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -109,23 +111,43 @@ export function SeriesPage() {
 
           <aside className="flex flex-col gap-3">
             <SectionHeading title="Standing" />
-            <Metric
-              size="md"
-              label="Tests done"
-              value={progress.done}
-              unit={`/ ${progress.total}`}
-            />
-            <Metric size="md" label="Best rank" value={bestRank(sat)} />
-            <Metric
-              size="md"
-              label="Average accuracy"
-              value={mean}
-              unit={mean === '—' ? undefined : '%'}
-            />
+            <Standing trend={trend} progress={progress} sat={sat} mean={mean} />
           </aside>
         </div>
       ) : null}
     </PageFrame>
+  );
+}
+
+/** The performance query's own load state — two of these three figures come from it, not the catalog. */
+function Standing({
+  trend,
+  progress,
+  sat,
+  mean,
+}: Readonly<{
+  trend: { isLoading: boolean; isError: boolean };
+  progress: SeriesProgress;
+  sat: readonly PerformancePoint[];
+  mean: string;
+}>) {
+  if (trend.isLoading) {
+    return <Skeleton variant="row" className="h-32 rounded-lg" />;
+  }
+  if (trend.isError) {
+    return <Alert variant="danger">Your performance did not load.</Alert>;
+  }
+  return (
+    <>
+      <Metric size="md" label="Tests done" value={progress.done} unit={`/ ${progress.total}`} />
+      <Metric size="md" label="Best rank" value={bestRank(sat)} />
+      <Metric
+        size="md"
+        label="Average accuracy"
+        value={mean}
+        unit={mean === '—' ? undefined : '%'}
+      />
+    </>
   );
 }
 
