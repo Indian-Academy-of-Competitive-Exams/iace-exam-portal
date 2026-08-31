@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { BarChart3 } from 'lucide-react';
 import {
-  Alert,
   DataTable,
+  EmptyState,
   LoadingState,
   MeasureBars,
+  Metric,
+  MetricGroup,
   PageFrame,
   PageHeader,
+  SectionHeading,
   StatRow,
   TrendLine,
   TruncatedText,
@@ -24,6 +28,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { PERFORMANCE_QUERY_KEY, ROUTES, analyticsQueryKey } from '../lib/constants';
+import { averageAccuracy, bestRank } from '../lib/catalog';
 
 const TREND_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   {
@@ -66,7 +71,7 @@ export function PerformancePage() {
     >
       {trend.isLoading ? <LoadingState /> : null}
       {trend.data?.points.length === 0 ? (
-        <Alert variant="info">Sit a test and your performance starts here.</Alert>
+        <EmptyState icon={BarChart3} title="No performance yet" />
       ) : null}
       {trend.data && trend.data.points.length > 0 ? (
         <div className="flex flex-col gap-8">
@@ -85,10 +90,18 @@ function Trend({ trend }: Readonly<{ trend: PerformanceTrend }>) {
     value: point.accuracy,
     caption: `${point.score} of ${point.maxMarks} marks`,
   }));
+  const best = bestRank(trend.points);
+  const mean = averageAccuracy(trend.points);
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-foreground">Accuracy</h2>
+    <section className="flex flex-col gap-6">
+      <MetricGroup>
+        <Metric label="Tests done" value={trend.testsSat} />
+        <Metric label="Best rank" value={best} />
+        <Metric label="Average accuracy" value={mean} unit={mean === '—' ? undefined : '%'} />
+      </MetricGroup>
+
+      <SectionHeading title="Accuracy" />
       <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
       <DataTable
         columns={TREND_COLUMNS}
@@ -106,22 +119,19 @@ function LatestPaper({ analytics }: Readonly<{ analytics: AttemptAnalytics }>) {
 
   return (
     <div className="flex flex-col gap-8">
-      <h2 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
-        <span>Last paper</span>
-        <span className="font-normal text-muted-foreground">{analytics.testTitle}</span>
-      </h2>
+      <SectionHeading title="Last paper" meta={analytics.testTitle} />
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-foreground">Subjects</h2>
+        <SectionHeading title="Subjects" />
         <MeasureBars bars={analytics.subjects.map(toAccuracyBar)} max={100} />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-foreground">Difficulty</h2>
+        <SectionHeading title="Difficulty" />
         <MeasureBars bars={analytics.difficulty.map(toAccuracyBar)} max={100} />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-foreground">Cohort</h2>
+        <SectionHeading title="Cohort" />
         <MeasureBars
           bars={[
             { key: 'you', label: 'You', value: cohort.score, tone: 1 },
@@ -133,7 +143,7 @@ function LatestPaper({ analytics }: Readonly<{ analytics: AttemptAnalytics }>) {
       </section>
 
       <section className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-        <h2 className="text-sm font-semibold text-foreground sm:col-span-2">Time</h2>
+        <SectionHeading title="Time" className="sm:col-span-2" />
         <StatRow label="Average per question" value={`${time.avgPerQuestionSec}s`} />
         <StatRow label="Average on a right answer" value={`${time.avgOnCorrectSec}s`} />
         <StatRow label="Average on a wrong answer" value={`${time.avgOnWrongSec}s`} />

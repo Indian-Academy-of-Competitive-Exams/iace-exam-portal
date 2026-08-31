@@ -7,10 +7,11 @@ import {
   Button,
   DataTable,
   LoadingState,
+  Metric,
   PageFrame,
   PageHeader,
   Progress,
-  StatRow,
+  SectionHeading,
   TruncatedText,
   linkVariants,
   plural,
@@ -26,7 +27,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY, ROUTES } from '../lib/constants';
-import { seriesProgress } from '../lib/catalog';
+import { averageAccuracy, bestRank, seriesProgress } from '../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -60,6 +61,7 @@ export function SeriesPage() {
   const sat = (trend.data?.points ?? []).filter((point) =>
     (series?.tests ?? []).some((test) => test.id === point.testId),
   );
+  const mean = averageAccuracy(sat);
 
   return (
     <PageFrame
@@ -105,11 +107,21 @@ export function SeriesPage() {
             />
           </div>
 
-          <aside className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-foreground">Your standing</h2>
-            <StatRow label="Tests done" value={`${progress.done} / ${progress.total}`} />
-            <StatRow label="Best rank" value={bestRank(sat)} />
-            <StatRow label="Average accuracy" value={averageAccuracy(sat)} />
+          <aside className="flex flex-col gap-3">
+            <SectionHeading title="Standing" />
+            <Metric
+              size="md"
+              label="Tests done"
+              value={progress.done}
+              unit={`/ ${progress.total}`}
+            />
+            <Metric size="md" label="Best rank" value={bestRank(sat)} />
+            <Metric
+              size="md"
+              label="Average accuracy"
+              value={mean}
+              unit={mean === '—' ? undefined : '%'}
+            />
           </aside>
         </div>
       ) : null}
@@ -175,14 +187,3 @@ function shutReason(test: StudentCatalogTest, now: Date): string {
   if (test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime()) return 'Entry closed';
   return 'Waiting its turn';
 }
-
-const bestRank = (points: readonly { rank: number | null }[]) => {
-  const ranked = points.map((point) => point.rank).filter((rank) => rank !== null);
-  return ranked.length === 0 ? '—' : Math.min(...ranked);
-};
-
-const averageAccuracy = (points: readonly { accuracy: number }[]) => {
-  if (points.length === 0) return '—';
-  const mean = points.reduce((sum, point) => sum + point.accuracy, 0) / points.length;
-  return `${Math.round(mean)}%`;
-};

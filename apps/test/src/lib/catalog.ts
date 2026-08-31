@@ -77,3 +77,16 @@ const closesAt = (row: Sittable) =>
   row.test.closesAt === null ? FAR_FUTURE : Date.parse(row.test.closesAt);
 const opensAt = (row: Sittable) =>
   row.test.opensAt === null ? FAR_FUTURE : Date.parse(row.test.opensAt);
+
+/** The best (lowest) rank across a set of scored points, or '—' when none carry one. */
+export const bestRank = (points: readonly { rank: number | null }[]) => {
+  const ranked = points.map((point) => point.rank).filter((rank) => rank !== null);
+  return ranked.length === 0 ? '—' : Math.min(...ranked);
+};
+
+/** Bare number, not "N%" — the caller supplies the unit, and guards it when this is '—'. */
+export const averageAccuracy = (points: readonly { accuracy: number }[]) => {
+  if (points.length === 0) return '—';
+  const mean = points.reduce((sum, point) => sum + point.accuracy, 0) / points.length;
+  return `${Math.round(mean)}`;
+};

@@ -8,6 +8,7 @@ import {
   LoadingState,
   PageFrame,
   PageHeader,
+  SectionHeading,
   StatRow,
   TruncatedText,
   linkVariants,
@@ -144,7 +145,7 @@ export function TestAboutPage() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Sections</h2>
+            <SectionHeading title="Sections" />
             <DataTable
               columns={SECTION_COLUMNS}
               rows={brief.data.sections}
@@ -156,7 +157,7 @@ export function TestAboutPage() {
 
           {cohortOf.data ? (
             <section className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
-              <h2 className="text-sm font-semibold text-foreground sm:col-span-3">Cohort</h2>
+              <SectionHeading title="Cohort" className="sm:col-span-3" />
               <StatRow label="Topper" value={cohortOf.data.cohort.topperScore ?? '—'} />
               <StatRow label="Average" value={cohortOf.data.cohort.averageScore ?? '—'} />
               <StatRow label="Sat by" value={cohortOf.data.cohort.cohortSize ?? '—'} />
@@ -165,7 +166,7 @@ export function TestAboutPage() {
 
           {past.length > 0 ? (
             <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-foreground">Past attempts</h2>
+              <SectionHeading title="Past attempts" />
               <DataTable
                 columns={PAST_COLUMNS}
                 rows={past}
