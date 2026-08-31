@@ -712,8 +712,8 @@ describe("TestSeriesService — saving a branch's draft in one write", () => {
     );
   });
 
-  /** A series configured elsewhere but not here is not this branch's to switch. */
-  it('refuses a series whose row belongs to another branch', async () => {
+  /** The failure this prevents: a switch the list offers and the write can only refuse. */
+  it('gives a branch the row a series older than the fan-out never got', async () => {
     const { series, prisma } = build({
       series: [makeSeries({ id: 'srs_1' })],
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'KUKATPALLY' })],
@@ -722,13 +722,19 @@ describe("TestSeriesService — saving a branch's draft in one write", () => {
       ],
     });
 
-    const error = await series
-      .setSeriesForBranch('br_1', { changes: [{ testSeriesId: 'srs_1', enabled: true }] })
-      .catch((e: unknown) => e);
+    const changed = await series.setSeriesForBranch('br_1', {
+      changes: [{ testSeriesId: 'srs_1', enabled: true }],
+    });
 
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.branchConfigs[0]?.enabled, false);
+    assert.equal(changed, 1);
+    assert.deepEqual(
+      prisma.branchConfigs
+        .filter((row) => row.branchId === 'br_1')
+        .map((row) => [row.testSeriesId, row.enabled]),
+      [['srs_1', true]],
+    );
+    // The other branch's row is untouched: one branch's draft is one branch's write.
+    assert.equal(prisma.branchConfigs.find((row) => row.branchId === 'br_2')?.enabled, false);
   });
 
   it('reads a branch that is not there as missing', async () => {
@@ -747,7 +753,7 @@ describe("TestSeriesService — saving a branch's draft in one write", () => {
   });
 
   /** All or nothing: a half-applied draft leaves the screen disagreeing with the server. */
-  it('writes nothing when one of the series is no longer here', async () => {
+  it('writes nothing when one of the ids names no series at all', async () => {
     const { series, prisma } = withBoth();
 
     const error = await series

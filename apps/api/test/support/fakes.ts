@@ -3522,17 +3522,27 @@ export class FakeAccessPrisma {
 
     createMany: ({
       data,
+      skipDuplicates,
     }: {
       data: { branchId: string; testSeriesId: string; enabled: boolean }[];
+      skipDuplicates?: boolean;
     }) => {
-      for (const row of data) {
+      const fresh = skipDuplicates
+        ? data.filter(
+            (row) =>
+              !this.branchConfigs.some(
+                (held) => held.branchId === row.branchId && held.testSeriesId === row.testSeriesId,
+              ),
+          )
+        : data;
+      for (const row of fresh) {
         this.branchConfigs.push({
           id: this.id('btc'),
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           ...row,
         });
       }
-      return Promise.resolve({ count: data.length });
+      return Promise.resolve({ count: fresh.length });
     },
 
     updateMany: ({
@@ -3666,6 +3676,7 @@ export class FakeAccessPrisma {
 interface FakeSeriesWhere {
   AND?: FakeSeriesWhere[];
   NOT?: FakeSeriesWhere;
+  id?: { in: string[] };
   programCode?: string;
   prerequisiteSeriesId?: string;
   kind?: TestSeriesKind;
@@ -3681,6 +3692,19 @@ function matchesSeries(
 ): boolean {
   if (where.AND && !where.AND.every((part) => matchesSeries(row, part, configs))) return false;
   if (where.NOT && matchesSeries(row, where.NOT, configs)) return false;
+  if (!matchesSeriesColumns(row, where)) return false;
+  if (!where.branchConfigs) return true;
+
+  const { branchId, enabled } = where.branchConfigs.some;
+  return configs.some(
+    (config) =>
+      config.testSeriesId === row.id && config.branchId === branchId && config.enabled === enabled,
+  );
+}
+
+/** The series' own columns, apart from the recursion and the join above. */
+function matchesSeriesColumns(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
+  if (where.id && !where.id.in.includes(row.id)) return false;
   if (where.programCode !== undefined && row.programCode !== where.programCode) return false;
   if (
     where.prerequisiteSeriesId !== undefined &&
@@ -3692,17 +3716,7 @@ function matchesSeries(
   if (where.name && !row.name.toLowerCase().includes(where.name.contains.toLowerCase())) {
     return false;
   }
-  if (where.examStageId && !where.examStageId.in.includes(row.examStageId ?? '')) return false;
-  if (where.branchConfigs) {
-    const { branchId, enabled } = where.branchConfigs.some;
-    return configs.some(
-      (config) =>
-        config.testSeriesId === row.id &&
-        config.branchId === branchId &&
-        config.enabled === enabled,
-    );
-  }
-  return true;
+  return !where.examStageId || where.examStageId.in.includes(row.examStageId ?? '');
 }
 
 export function makeBranchConfig(

@@ -284,17 +284,17 @@ export class TestSeriesService {
     const wanted = new Map<string, boolean>(
       input.changes.map((row) => [row.testSeriesId, row.enabled]),
     );
+    const named = [...wanted.keys()];
     const rows = await this.prisma.branchTestConfig.findMany({
-      where: { branchId, testSeriesId: { in: [...wanted.keys()] } },
+      where: { branchId, testSeriesId: { in: named } },
       select: { testSeriesId: true, enabled: true },
     });
 
-    if (rows.length !== wanted.size) {
-      // Refused BEFORE anything is written: a half-applied draft leaves the screen disagreeing.
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_SUCH_SERIES_HERE, {
-        fieldErrors: { changes: [NO_SUCH_SERIES_HERE] },
-      });
-    }
+    const held = new Map(rows.map((row) => [row.testSeriesId, row.enabled]));
+    await this.giveThisBranchARow(
+      branchId,
+      named.filter((id) => !held.has(id)),
+    );
 
     // By VALUE, not by diff: two statements, and a row flipped since the read still lands right.
     const [on, off] = partitionWanted(wanted);
@@ -317,18 +317,40 @@ export class TestSeriesService {
         : []),
     ]);
 
-    const moved = rows.filter((row) => wanted.get(row.testSeriesId) !== row.enabled);
+    // A row that was missing read as OFF on the screen, so that is what it moved FROM.
+    const moved = named.filter((id) => wanted.get(id) !== (held.get(id) ?? false));
     if (moved.length === 0) return 0;
 
     this.auditContext.setEntityId(branchId);
     this.auditContext.setChanged(
       Object.fromEntries(
-        moved.map((row) => [row.testSeriesId, { from: row.enabled, to: !row.enabled }]),
+        moved.map((id) => [id, { from: held.get(id) ?? false, to: wanted.get(id) }]),
       ),
     );
     // ONE event, naming no series: the listener busts the whole catalog whatever it is handed.
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: null });
     return moved.length;
+  }
+
+  /** The list shows a series with no row here switched OFF, so the write writes one rather than refusing. */
+  private async giveThisBranchARow(branchId: string, testSeriesIds: string[]): Promise<void> {
+    if (testSeriesIds.length === 0) return;
+
+    const real = await this.prisma.testSeries.findMany({
+      where: { id: { in: testSeriesIds } },
+      select: { id: true },
+    });
+    if (real.length !== testSeriesIds.length) {
+      // Refused BEFORE anything is written: a half-applied draft leaves the screen disagreeing.
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_SUCH_SERIES_HERE, {
+        fieldErrors: { changes: [NO_SUCH_SERIES_HERE] },
+      });
+    }
+
+    await this.prisma.branchTestConfig.createMany({
+      data: testSeriesIds.map((testSeriesId) => ({ branchId, testSeriesId, enabled: false })),
+      skipDuplicates: true,
+    });
   }
 
   /** A branch that is not there is not one to configure, and it reads as missing rather than empty. */
@@ -519,7 +541,7 @@ function toBranchConfig(row: {
 const EVERY_BRANCH_IS_NOT_YOURS =
   'Switching a series for every branch is for an admin who reaches every branch.';
 
-const NO_SUCH_SERIES_HERE = 'One of those series is no longer here. Reload and try again.';
+const NO_SUCH_SERIES_HERE = 'One of those series no longer exists. Reload and try again.';
 
 /** The draft split by the value it asks for, so each half is one statement. */
 function partitionWanted(wanted: ReadonlyMap<string, boolean>): [string[], string[]] {
