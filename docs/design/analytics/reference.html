@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IACE student analytics — visual reference</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@800&display=swap">
+<style>
+
+  :root{
+    --bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--border-strong:#cbd5e1;--brick:#a8221b;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--success-subtle:#dcfce7;--success-ink:#166534;--warning:#f59e0b;--warning-subtle:#fef3c7;--warning-ink:#92400e;--crimson:#be123c;
+    --c-blue:#2563eb;--c-teal:#0d9488;--c-amber:#b45309;--c-violet:#7c3aed;--c-slate:#94a3b8;
+    --ch-grid:#e1e0d9;--ch-axis:#c3c2b7;--ch-ink:#52514e;
+    --r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1440px;height:1360px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:6px 16px;font-size:24px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .navdisc{width:36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--mut-fg)}
+  .navdisc.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .ctitle{font-size:14px;font-weight:600;color:var(--ink)}
+  .csub{font-size:12px;color:var(--mut-fg);margin-top:1px}
+  .stat{font-variant-numeric:tabular-nums}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;font-weight:500;color:var(--ink-2);background:var(--surface)}
+  .lg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)}
+  .sw{width:10px;height:10px;border-radius:2px;flex:none}
+  text{font-family:'Inter',sans-serif}
+
+
+  :root{
+    --bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--border-strong:#cbd5e1;--brick:#a8221b;--brick-hover:#922119;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--success-subtle:#dcfce7;--success-ink:#166534;--warning-ink:#92400e;--warning-subtle:#fef3c7;
+    --c-blue:#2563eb;--c-slate:#94a3b8;--r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1440px;height:820px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:6px 16px;font-size:24px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .navdisc{width:36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--mut-fg)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .stat{font-variant-numeric:tabular-nums}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r-md);font-weight:500;cursor:pointer;border:1px solid transparent;height:40px;padding:0 16px;font-size:14px}
+  .btn-primary{background:var(--brick);color:#fff}.btn-outline{background:var(--surface);color:var(--ink);border:1px solid var(--border-strong)}
+
+
+  :root{
+    --bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--border-strong:#cbd5e1;--brick:#a8221b;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--crimson:#be123c;--c-blue:#2563eb;--c-slate:#94a3b8;--c-teal:#0d9488;
+    --r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1440px;height:960px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:6px 16px;font-size:24px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .navdisc{width:36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--mut-fg)}
+  .navdisc.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .ctitle{font-size:14px;font-weight:600}.csub{font-size:12px;color:var(--mut-fg);margin-top:1px}
+  .stat{font-variant-numeric:tabular-nums}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;font-weight:500;color:var(--ink-2);background:var(--surface)}
+  .lg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)}.sw{width:10px;height:10px;border-radius:2px}
+
+
+  :root{
+    --bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--border-strong:#cbd5e1;--brick:#a8221b;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--success-subtle:#dcfce7;--success-ink:#166534;--warning:#f59e0b;--warning-ink:#92400e;
+    --c-blue:#2563eb;--c-teal:#0d9488;--c-amber:#b45309;--c-slate:#94a3b8;--ch-grid:#e1e0d9;--ch-axis:#c3c2b7;
+    --r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1440px;height:1140px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:6px 16px;font-size:24px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .navdisc{width:36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--mut-fg)}
+  .navdisc.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .ctitle{font-size:14px;font-weight:600}.csub{font-size:12px;color:var(--mut-fg);margin-top:1px}
+  .stat{font-variant-numeric:tabular-nums}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;font-weight:500;color:var(--ink-2);background:var(--surface)}
+  text{font-family:'Inter',sans-serif}
+
+
+  :root{
+    --bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--border-strong:#cbd5e1;--brick:#a8221b;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--warning:#f59e0b;--warning-subtle:#fef3c7;--warning-ink:#92400e;--c-blue:#2563eb;--crimson:#be123c;
+    --r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1440px;height:1000px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:6px 16px;font-size:24px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .navdisc{width:36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;color:var(--mut-fg)}
+  .navdisc.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .stat{font-variant-numeric:tabular-nums}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-lg);font-size:13px;font-weight:500;color:var(--ink-2);background:var(--surface)}
+  .av{width:32px;height:32px;border-radius:var(--r-full);background:#e2e8f0;color:#475569;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+  .row{display:grid;grid-template-columns:52px 1fr 96px 64px;align-items:center;gap:14px;padding:11px 18px;border-top:1px solid var(--border)}
+  .rank{font-weight:700;font-size:15px;text-align:center}
+
+
+  :root{
+    --bg:#eef0f3;--surface:#fff;--ink:#0f172a;--ink-2:#334155;--muted:#f1f5f9;--mut-fg:#64748b;
+    --border:#e2e8f0;--brick:#a8221b;--brick-subtle:#f8e4e1;--brick-ink:#922119;
+    --success:#15803d;--success-ink:#166534;--crimson:#be123c;--c-blue:#2563eb;--c-slate:#94a3b8;
+    --r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  }
+  body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .root{width:1040px;height:1180px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  .plate{display:inline-flex;align-items:center;border-radius:var(--r-md);background:var(--brick);color:#fff;font-family:'Nunito',sans-serif;font-weight:800;letter-spacing:.01em;padding:5px 13px;font-size:19px;line-height:1}
+  .ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-fg)}
+  .stat{font-variant-numeric:tabular-nums}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl)}
+  text{font-family:'Inter',sans-serif}
+
+/* reference-page chrome only (not part of the app) */
+.ref-page{background:#e9ebee;padding:32px;font-family:'Inter',system-ui,sans-serif}
+.ref-note{max-width:900px;margin:0 auto 28px;font-size:13px;color:#334155;line-height:1.6}
+.ref-label{max-width:1440px;margin:36px auto 10px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#a8221b}
+.ref-frame{max-width:1440px;margin:0 auto;box-shadow:0 6px 30px rgba(15,23,42,.10);border-radius:14px;overflow:hidden;background:#fff}
+.ref-frame .root{height:auto !important}
+</style>
+</head>
+<body class="ref-page">
+<div class="ref-note">
+<b>IACE student analytics — visual reference (not the implementation).</b><br>
+Static render of the approved mockups: exact layout, spacing, tokens, chart SVG geometry, and copy. Build the real screens as React using <code>@iace/ui</code>, the app shell, and a proper chart approach (per the <code>dataviz</code> skill — hover/tooltips, a chart lib or componentised SVG). These SVGs are geometry + copy reference only, not to be pasted. Colors are the app chart palette (blue-led, never brand red).
+</div>
+<div class="ref-label">Performance — ranked</div>
+<div class="ref-frame"><div class="root">
+  <!-- HEADER -->
+  <header style="flex:none;border-bottom:1px solid var(--border);background:var(--surface)"><div style="display:flex;align-items:center;gap:12px;padding:8px 16px"><span class="plate">IACE</span><div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">HD</div><span style="font-size:13px;font-weight:500;color:var(--ink-2)">Harshith D.</span></div></div></header>
+  <div style="display:flex;flex:1;min-height:0">
+    <!-- RAIL: Performance active -->
+    <div style="position:relative;width:56px;flex:none;border-right:1px solid var(--border);background:var(--surface);padding:8px"><nav style="margin-top:32px;display:flex;flex-direction:column;gap:2px;align-items:center">
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h4"/></svg></div>
+      <div class="navdisc on"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/><path d="M12 8S10 3 7.5 3 5 5 5 5s.5 3 3 3M12 8s2-5 4.5-5S19 5 19 5s-.5 3-3 3"/></svg></div>
+    </nav></div>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="margin:0 auto;width:100%;max-width:1400px;flex:1;overflow-y:auto;padding:24px 24px 40px">
+
+      <!-- header + filter -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+        <div><h1 style="font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0">Performance</h1></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="chip" style="border-color:var(--success);color:var(--success-ink);background:var(--success-subtle)"><span class="sw" style="border-radius:50%;background:var(--success)"></span> Ranked</span>
+          <div class="chip">SSC CGL Mock 08 <svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+          <div class="chip" style="background:var(--muted);border-color:var(--border)">This test · Series · All time</div>
+        </div>
+      </div>
+
+      <!-- HERO ROW: trajectory + cohort curve -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- Percentile trajectory -->
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><div><div class="ctitle">Percentile trajectory</div><div class="csub">Where you stand across your mocks</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:700;color:var(--c-blue)" class="stat">85th</div><div class="csub" style="color:var(--success-ink)">▲ 3 vs last</div></div></div>
+          <svg viewBox="0 0 500 210" width="100%" style="margin-top:12px">
+            <line x1="46" y1="20" x2="46" y2="176" stroke="var(--ch-axis)" stroke-width="1"/>
+            <line x1="46" y1="176" x2="484" y2="176" stroke="var(--ch-axis)" stroke-width="1"/>
+            <g stroke="var(--ch-grid)" stroke-width="1" stroke-dasharray="3 3">
+              <line x1="46" y1="137" x2="484" y2="137"/><line x1="46" y1="98" x2="484" y2="98"/><line x1="46" y1="59" x2="484" y2="59"/>
+            </g>
+            <g fill="var(--mut-fg)" font-size="10">
+              <text x="40" y="180" text-anchor="end">0</text><text x="40" y="141" text-anchor="end">25</text><text x="40" y="102" text-anchor="end">50</text><text x="40" y="63" text-anchor="end">75</text><text x="40" y="24" text-anchor="end">100</text>
+            </g>
+            <!-- cohort median band -->
+            <rect x="46" y="88" width="438" height="20" fill="var(--c-slate)" opacity="0.14"/>
+            <text x="480" y="103" text-anchor="end" font-size="9" fill="var(--mut-fg)">cohort median</text>
+            <!-- trajectory: 8 mocks percentiles 55,58,62,60,71,68,82,85 -->
+            <polyline fill="none" stroke="var(--c-blue)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"
+              points="72,90 130,85 189,79 247,82 306,65 364,70 423,49 481,44"/>
+            <g fill="var(--c-blue)"><circle cx="72" cy="90" r="3.5"/><circle cx="130" cy="85" r="3.5"/><circle cx="189" cy="79" r="3.5"/><circle cx="247" cy="82" r="3.5"/><circle cx="306" cy="65" r="3.5"/><circle cx="364" cy="70" r="3.5"/><circle cx="423" cy="49" r="3.5"/></g>
+            <circle cx="481" cy="44" r="6" fill="var(--c-blue)" stroke="#fff" stroke-width="2"/>
+            <g fill="var(--mut-fg)" font-size="9.5" text-anchor="middle"><text x="72" y="192">M1</text><text x="189" y="192">M3</text><text x="306" y="192">M5</text><text x="423" y="192">M7</text><text x="481" y="192">M8</text></g>
+          </svg>
+        </div>
+        <!-- Cohort curve you-are-here -->
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><div><div class="ctitle">You vs the crowd</div><div class="csub">Everyone who sat this paper</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:700;color:var(--c-blue)" class="stat">#58</div><div class="csub">of 1,284</div></div></div>
+          <svg viewBox="0 0 500 210" width="100%" style="margin-top:12px">
+            <line x1="30" y1="176" x2="484" y2="176" stroke="var(--ch-axis)" stroke-width="1"/>
+            <!-- distribution bars (bell) -->
+            <g fill="var(--c-slate)" opacity="0.55">
+              <rect x="40" y="164" width="26" height="12" rx="2"/><rect x="70" y="150" width="26" height="26" rx="2"/><rect x="100" y="128" width="26" height="48" rx="2"/><rect x="130" y="98" width="26" height="78" rx="2"/><rect x="160" y="72" width="26" height="104" rx="2"/><rect x="190" y="56" width="26" height="120" rx="2"/><rect x="220" y="52" width="26" height="124" rx="2"/><rect x="250" y="64" width="26" height="112" rx="2"/><rect x="280" y="86" width="26" height="90" rx="2"/><rect x="310" y="112" width="26" height="64" rx="2"/><rect x="340" y="134" width="26" height="42" rx="2"/><rect x="370" y="152" width="26" height="24" rx="2"/><rect x="400" y="164" width="26" height="12" rx="2"/><rect x="430" y="170" width="26" height="6" rx="2"/>
+            </g>
+            <!-- avg marker -->
+            <line x1="243" y1="40" x2="243" y2="176" stroke="var(--mut-fg)" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <text x="243" y="34" text-anchor="middle" font-size="10" fill="var(--mut-fg)">Avg 142</text>
+            <!-- you marker -->
+            <line x1="356" y1="30" x2="356" y2="176" stroke="var(--c-blue)" stroke-width="2.5"/>
+            <text x="356" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="var(--c-blue)">You 164</text>
+            <!-- topper -->
+            <line x1="446" y1="52" x2="446" y2="176" stroke="var(--success)" stroke-width="1.5"/>
+            <text x="446" y="46" text-anchor="middle" font-size="10" fill="var(--success-ink)">Top 188</text>
+            <g fill="var(--mut-fg)" font-size="9.5" text-anchor="middle"><text x="53" y="192">0</text><text x="256" y="192">100</text><text x="443" y="192">200 marks</text></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- COMPOSITION (marks) -->
+      <div class="card" style="padding:18px 22px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><div><div class="ctitle">Where your marks came from — and leaked</div><div class="csub">100 questions · you attempted 78 · net 131 / 200</div></div>
+          <div style="display:flex;gap:16px"><span class="lg"><span class="sw" style="background:var(--success)"></span> Correct 68</span><span class="lg"><span class="sw" style="background:var(--crimson)"></span> Wrong 10</span><span class="lg"><span class="sw" style="background:var(--c-slate)"></span> Left blank 22</span></div>
+        </div>
+        <div style="display:flex;height:34px;border-radius:var(--r-md);overflow:hidden;gap:2px">
+          <div style="flex:68;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600">+136</div>
+          <div style="flex:10;background:var(--crimson);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600">−5</div>
+          <div style="flex:22;background:var(--c-slate);opacity:.6;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600">0</div>
+        </div>
+        <div style="display:flex;gap:24px;margin-top:12px;font-size:12.5px;color:var(--ink-2)">
+          <span>Lost to negative marking: <b style="color:var(--crimson)" class="stat">−5 marks</b> on 10 wrong attempts</span>
+          <span>Left on the table: <b class="stat">22 unattempted</b> — worth up to <b class="stat">+44</b> if answered</span>
+        </div>
+      </div>
+
+      <!-- SECTIONAL + DIFFICULTY -->
+      <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- sectional diverging vs cohort -->
+        <div class="card" style="padding:18px 20px">
+          <div class="ctitle">Section by section, vs the crowd</div><div class="csub" style="margin-bottom:14px">Your section score minus the cohort average</div>
+          <svg viewBox="0 0 560 210" width="100%">
+            <line x1="280" y1="10" x2="280" y2="196" stroke="var(--ch-axis)" stroke-width="1"/>
+            <g font-size="12" fill="var(--ink-2)" text-anchor="end">
+              <text x="150" y="34">Quant</text><text x="150" y="82">Reasoning</text><text x="150" y="130">English</text><text x="150" y="178">Gen. Awareness</text>
+            </g>
+            <!-- below (amber) left, above (blue) right -->
+            <rect x="232" y="20" width="48" height="20" rx="3" fill="var(--c-amber)"/><text x="226" y="34" text-anchor="end" font-size="11" font-weight="600" fill="var(--c-amber)">−6</text>
+            <rect x="280" y="68" width="72" height="20" rx="3" fill="var(--c-blue)"/><text x="358" y="82" font-size="11" font-weight="600" fill="var(--c-blue)">+8</text>
+            <rect x="280" y="116" width="30" height="20" rx="3" fill="var(--c-blue)"/><text x="316" y="130" font-size="11" font-weight="600" fill="var(--c-blue)">+3</text>
+            <rect x="256" y="164" width="24" height="20" rx="3" fill="var(--c-amber)"/><text x="250" y="178" text-anchor="end" font-size="11" font-weight="600" fill="var(--c-amber)">−2</text>
+            <text x="200" y="206" font-size="9.5" fill="var(--mut-fg)">below crowd</text><text x="360" y="206" font-size="9.5" fill="var(--mut-fg)">above crowd</text>
+          </svg>
+        </div>
+        <!-- difficulty -->
+        <div class="card" style="padding:18px 20px">
+          <div class="ctitle">By difficulty</div><div class="csub" style="margin-bottom:14px">Your accuracy · n shown · vs how hard the crowd found it</div>
+          <svg viewBox="0 0 360 210" width="100%">
+            <line x1="40" y1="176" x2="352" y2="176" stroke="var(--ch-axis)" stroke-width="1"/>
+            <!-- easy 92% (n34), med 74% (n40), hard 41% (n26) -->
+            <rect x="66" y="40" width="52" height="136" rx="4" fill="#bfdbfe"/><text x="92" y="32" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">92%</text><text x="92" y="192" text-anchor="middle" font-size="10.5" fill="var(--ink-2)">Easy</text><text x="92" y="204" text-anchor="middle" font-size="9" fill="var(--mut-fg)">n=34</text>
+            <rect x="154" y="66" width="52" height="110" rx="4" fill="#60a5fa"/><text x="180" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">74%</text><text x="180" y="192" text-anchor="middle" font-size="10.5" fill="var(--ink-2)">Medium</text><text x="180" y="204" text-anchor="middle" font-size="9" fill="var(--mut-fg)">n=40</text>
+            <rect x="242" y="115" width="52" height="61" rx="4" fill="var(--c-blue)"/><text x="268" y="107" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">41%</text><text x="268" y="192" text-anchor="middle" font-size="10.5" fill="var(--ink-2)">Hard</text><text x="268" y="204" text-anchor="middle" font-size="9" fill="var(--mut-fg)">n=26</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- TIME BUDGET -->
+      <div class="card" style="padding:18px 22px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><div><div class="ctitle">How the 60 minutes were spent</div><div class="csub">Time on questions you got right, wrong, and left</div></div>
+          <div style="display:flex;gap:16px"><span class="lg"><span class="sw" style="background:var(--success)"></span> On correct</span><span class="lg"><span class="sw" style="background:var(--crimson)"></span> On wrong</span><span class="lg"><span class="sw" style="background:var(--c-slate)"></span> Idle / skipped</span></div>
+        </div>
+        <div style="display:flex;height:30px;border-radius:var(--r-md);overflow:hidden;gap:2px">
+          <div style="flex:34;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11.5px;font-weight:600">34 min</div>
+          <div style="flex:14;background:var(--crimson);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11.5px;font-weight:600">14 min</div>
+          <div style="flex:12;background:var(--c-slate);opacity:.6;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11.5px;font-weight:600">12 min</div>
+        </div>
+        <div style="margin-top:12px;font-size:12.5px;color:var(--ink-2)">You spent <b class="stat">14 minutes</b> on the 10 questions you got wrong — nearly a quarter of the clock on marks that cost you.</div>
+      </div>
+
+    </div></main>
+  </div>
+</div></div>
+<div class="ref-label">Dashboard (lean)</div>
+<div class="ref-frame"><div class="root">
+  <header style="flex:none;border-bottom:1px solid var(--border);background:var(--surface)"><div style="display:flex;align-items:center;gap:12px;padding:8px 16px"><span class="plate">IACE</span><div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">HD</div><span style="font-size:13px;font-weight:500;color:var(--ink-2)">Harshith D.</span></div></div></header>
+  <div style="display:flex;flex:1;min-height:0">
+    <div style="width:56px;flex:none;border-right:1px solid var(--border);background:var(--surface);padding:8px"><nav style="margin-top:32px;display:flex;flex-direction:column;gap:2px;align-items:center">
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h4"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></div>
+    </nav></div>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="margin:0 auto;width:100%;max-width:1400px;flex:1;overflow-y:auto;padding:24px 24px 40px">
+      <h1 style="font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px">Your standing</h1>
+      <p style="font-size:13.5px;color:var(--mut-fg);margin:0 0 20px">A quick read — the full picture is in Performance.</p>
+
+      <!-- 3 hero metrics -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+        <div class="card" style="padding:18px 20px">
+          <div class="sh">Avg percentile</div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:6px">
+            <div><div style="font-size:34px;font-weight:700;color:var(--c-blue);line-height:1" class="stat">78<span style="font-size:16px;color:var(--mut-fg);font-weight:600">th</span></div><div style="font-size:12px;color:var(--success-ink);margin-top:4px">▲ 3 this week</div></div>
+            <svg viewBox="0 0 120 48" width="120" height="48"><polyline fill="none" stroke="var(--c-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="4,40 24,36 44,30 64,32 84,20 104,14 116,10"/><circle cx="116" cy="10" r="3.5" fill="var(--c-blue)"/></svg>
+          </div>
+        </div>
+        <div class="card" style="padding:18px 20px">
+          <div class="sh">Best rank</div>
+          <div style="font-size:34px;font-weight:700;line-height:1;margin-top:6px" class="stat">#44</div>
+          <div style="font-size:12px;color:var(--mut-fg);margin-top:8px">SSC CGL Mock 07 · of 1,190</div>
+        </div>
+        <div class="card" style="padding:18px 20px">
+          <div class="sh">Tests done</div>
+          <div style="font-size:34px;font-weight:700;line-height:1;margin-top:6px" class="stat">6<span style="font-size:16px;color:var(--mut-fg);font-weight:600"> / 20</span></div>
+          <div style="height:6px;background:var(--muted);border-radius:var(--r-full);margin-top:10px"><div style="width:30%;height:6px;background:var(--brick);border-radius:var(--r-full)"></div></div>
+        </div>
+      </div>
+
+      <!-- continuations -->
+      <div class="sh" style="margin-bottom:12px">Pick up where you left off</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div class="card" style="padding:16px 18px;border-color:var(--brick)">
+          <div class="sh" style="color:var(--brick-ink);margin-bottom:8px">Continue</div>
+          <div style="font-size:14.5px;font-weight:600;margin-bottom:3px">Quantitative Aptitude 07</div>
+          <div style="font-size:12px;color:var(--mut-fg);margin-bottom:12px">12:40 left</div>
+          <button class="btn btn-primary" style="width:100%">Resume</button>
+        </div>
+        <div class="card" style="padding:16px 18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="sh">Open now</div><span style="font-size:11px;color:var(--warning-ink)">Closes 3h</span></div>
+          <div style="font-size:14.5px;font-weight:600;margin-bottom:3px">Full Mock 08</div>
+          <div style="font-size:12px;color:var(--mut-fg);margin-bottom:12px">100 Q · 60 min</div>
+          <button class="btn btn-primary" style="width:100%">Start test</button>
+        </div>
+        <div class="card" style="padding:16px 18px">
+          <div class="sh" style="margin-bottom:8px">Latest result</div>
+          <div style="font-size:14.5px;font-weight:600;margin-bottom:3px">Full Mock 06 · 164/200</div>
+          <div style="font-size:12px;color:var(--mut-fg);margin-bottom:12px">Rank #58 · 82nd percentile</div>
+          <button class="btn btn-outline" style="width:100%">See score card</button>
+        </div>
+      </div>
+    </div></main>
+  </div>
+</div></div>
+<div class="ref-label">Performance — non-ranked (attempt comparison)</div>
+<div class="ref-frame"><div class="root">
+  <header style="flex:none;border-bottom:1px solid var(--border);background:var(--surface)"><div style="display:flex;align-items:center;gap:12px;padding:8px 16px"><span class="plate">IACE</span><div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">HD</div><span style="font-size:13px;font-weight:500;color:var(--ink-2)">Harshith D.</span></div></div></header>
+  <div style="display:flex;flex:1;min-height:0">
+    <div style="width:56px;flex:none;border-right:1px solid var(--border);background:var(--surface);padding:8px"><nav style="margin-top:32px;display:flex;flex-direction:column;gap:2px;align-items:center">
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h4"/></svg></div>
+      <div class="navdisc on"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></div>
+    </nav></div>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="margin:0 auto;width:100%;max-width:1400px;flex:1;overflow-y:auto;padding:24px 24px 40px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0">Performance</h1>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="chip" style="background:var(--muted)"><span class="sw" style="border-radius:50%;background:var(--mut-fg)"></span> Not ranked</span>
+          <div class="chip">Quant Sectional 07 · Practice <svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;background:var(--muted);border-color:var(--border)">
+        <svg class="ico" style="color:var(--mut-fg)" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        <span style="font-size:12.5px;color:var(--ink-2)">Practice tests aren't ranked against a cohort. Here you're measured against <b>your own best</b>, and the paper's topper where one is on record.</span>
+      </div>
+
+      <!-- three-way compare -->
+      <div class="sh" style="margin-bottom:12px">This attempt vs your best vs the paper topper</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
+        <!-- current -->
+        <div class="card" style="padding:18px 20px;border-color:var(--c-blue)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="sh" style="color:var(--c-blue)">This attempt</span><span style="font-size:11px;color:var(--mut-fg)">Today</span></div>
+          <div style="font-size:30px;font-weight:700;line-height:1" class="stat">41<span style="font-size:15px;color:var(--mut-fg);font-weight:600">/50</span></div>
+          <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin:14px 0 10px"><div style="flex:21;background:var(--success)"></div><div style="flex:3;background:var(--crimson)"></div><div style="flex:1;background:var(--c-slate);opacity:.6"></div></div>
+          <div style="font-size:12px;color:var(--ink-2)">21 correct · 3 wrong · 1 left · 18 min</div>
+        </div>
+        <!-- best -->
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="sh">Your best</span><span style="font-size:11px;color:var(--mut-fg)">3 days ago</span></div>
+          <div style="font-size:30px;font-weight:700;line-height:1" class="stat">44<span style="font-size:15px;color:var(--mut-fg);font-weight:600">/50</span></div>
+          <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin:14px 0 10px"><div style="flex:23;background:var(--success)"></div><div style="flex:2;background:var(--crimson)"></div><div style="flex:0;background:var(--c-slate)"></div></div>
+          <div style="font-size:12px;color:var(--ink-2)">23 correct · 2 wrong · 0 left · 19 min</div>
+        </div>
+        <!-- topper -->
+        <div class="card" style="padding:18px 20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span class="sh" style="color:var(--success)">Paper topper</span><span style="font-size:11px;color:var(--mut-fg)">on record</span></div>
+          <div style="font-size:30px;font-weight:700;line-height:1;color:var(--success)" class="stat">49<span style="font-size:15px;color:var(--mut-fg);font-weight:600">/50</span></div>
+          <div style="display:flex;height:10px;border-radius:var(--r-full);overflow:hidden;gap:2px;margin:14px 0 10px"><div style="flex:24;background:var(--success)"></div><div style="flex:1;background:var(--crimson)"></div><div style="flex:0;background:var(--c-slate)"></div></div>
+          <div style="font-size:12px;color:var(--ink-2)">24 correct · 1 wrong · 0 left · 16 min</div>
+        </div>
+      </div>
+
+      <!-- your attempts over time on THIS test -->
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:16px">
+        <div class="card" style="padding:18px 20px">
+          <div class="ctitle">Your attempts on this test</div><div class="csub" style="margin-bottom:8px">Each retake, newest last</div>
+          <svg viewBox="0 0 560 190" width="100%">
+            <line x1="40" y1="160" x2="548" y2="160" stroke="var(--c-slate)" stroke-width="1" opacity=".5"/>
+            <g fill="var(--mut-fg)" font-size="10"><text x="34" y="164" text-anchor="end">0</text><text x="34" y="96" text-anchor="end">25</text><text x="34" y="30" text-anchor="end">50</text></g>
+            <line x1="40" y1="93" x2="548" y2="93" stroke="var(--ch-grid,#e1e0d9)" stroke-dasharray="3 3"/>
+            <!-- topper reference -->
+            <line x1="40" y1="33" x2="548" y2="33" stroke="var(--success)" stroke-width="1.5" stroke-dasharray="5 3" opacity=".7"/><text x="544" y="28" text-anchor="end" font-size="9.5" fill="var(--success)">topper 49</text>
+            <!-- attempts 34,39,44,41 -->
+            <polyline fill="none" stroke="var(--c-blue)" stroke-width="2.5" points="90,70 240,57 390,44 500,52"/>
+            <g fill="var(--c-blue)"><circle cx="90" cy="70" r="4"/><circle cx="240" cy="57" r="4"/><circle cx="390" cy="44" r="4"/></g>
+            <circle cx="500" cy="52" r="6" fill="var(--c-blue)" stroke="#fff" stroke-width="2"/>
+            <g font-size="10" fill="var(--ink-2)" text-anchor="middle"><text x="90" y="178">#1 · 34</text><text x="240" y="178">#2 · 39</text><text x="390" y="178">#3 · 44</text><text x="500" y="178" font-weight="600">now · 41</text></g>
+          </svg>
+        </div>
+        <!-- section compare current vs best -->
+        <div class="card" style="padding:18px 20px">
+          <div class="ctitle">By topic — now vs your best</div><div class="csub" style="margin-bottom:12px">Where this attempt slipped</div>
+          <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>Arithmetic</span><span class="stat" style="color:var(--crimson)">7/10 · was 9/10</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:70%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>Algebra</span><span class="stat">8/10 · same</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:80%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>Geometry</span><span class="stat" style="color:var(--success)">6/5 ▲</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:60%;height:8px;background:var(--c-teal);border-radius:99px"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div></main>
+  </div>
+</div></div>
+<div class="ref-label">Series progression (progressive series only)</div>
+<div class="ref-frame"><div class="root">
+  <header style="flex:none;border-bottom:1px solid var(--border);background:var(--surface)"><div style="display:flex;align-items:center;gap:12px;padding:8px 16px"><span class="plate">IACE</span><div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">HD</div><span style="font-size:13px;font-weight:500;color:var(--ink-2)">Harshith D.</span></div></div></header>
+  <div style="display:flex;flex:1;min-height:0">
+    <div style="width:56px;flex:none;border-right:1px solid var(--border);background:var(--surface);padding:8px"><nav style="margin-top:32px;display:flex;flex-direction:column;gap:2px;align-items:center">
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h4"/></svg></div>
+      <div class="navdisc on"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></div>
+    </nav></div>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="margin:0 auto;width:100%;max-width:1400px;flex:1;overflow-y:auto;padding:24px 24px 40px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0">Performance</h1>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="chip" style="border-color:var(--c-amber);color:var(--c-amber);background:#fdf3e7"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg> Progressive series</span>
+          <div class="chip">SSC CGL 2026 — Full Mocks <svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;background:#fdf3e7;border-color:#f0d9b8">
+        <svg class="ico" style="color:var(--warning-ink)" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg>
+        <span style="font-size:12.5px;color:var(--warning-ink)">This series steps up in difficulty. What matters isn't your raw score — it's whether you're climbing <b>faster than the papers are getting harder</b>.</span>
+      </div>
+
+      <!-- learning curve: percentile line over rising difficulty strip -->
+      <div class="card" style="padding:18px 22px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <div><div class="ctitle">Your climb against the ramp</div><div class="csub">Percentile per test (line) over each paper's difficulty (bars)</div></div>
+          <div style="text-align:right"><div style="font-size:20px;font-weight:700;color:var(--success-ink)" class="stat">Outpacing</div><div class="csub">+30 pctile · difficulty +32%</div></div>
+        </div>
+        <svg viewBox="0 0 1320 300" width="100%" style="margin-top:6px">
+          <!-- top plot: percentile line -->
+          <g stroke="var(--ch-grid)" stroke-dasharray="3 3"><line x1="60" y1="40" x2="1300" y2="40"/><line x1="60" y1="100" x2="1300" y2="100"/><line x1="60" y1="160" x2="1300" y2="160"/></g>
+          <g fill="var(--mut-fg)" font-size="10" text-anchor="end"><text x="52" y="44">100</text><text x="52" y="104">70</text><text x="52" y="164">40</text></g>
+          <!-- percentiles 55,58,62,60,71,68,82,85 across 8 tests -->
+          <polyline fill="none" stroke="var(--c-blue)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"
+            points="120,150 270,144 420,136 570,140 720,118 870,124 1020,96 1170,90"/>
+          <g fill="var(--c-blue)"><circle cx="120" cy="150" r="4.5"/><circle cx="270" cy="144" r="4.5"/><circle cx="420" cy="136" r="4.5"/><circle cx="570" cy="140" r="4.5"/><circle cx="720" cy="118" r="4.5"/><circle cx="870" cy="124" r="4.5"/><circle cx="1020" cy="96" r="4.5"/></g>
+          <circle cx="1170" cy="90" r="7" fill="var(--c-blue)" stroke="#fff" stroke-width="2.5"/>
+          <text x="120" y="140" text-anchor="middle" font-size="10" fill="var(--c-blue)">55</text><text x="1170" y="80" text-anchor="middle" font-size="11" font-weight="700" fill="var(--c-blue)">85</text>
+          <!-- divider -->
+          <line x1="60" y1="205" x2="1300" y2="205" stroke="var(--border)" stroke-width="1"/>
+          <text x="60" y="225" font-size="10" fill="var(--mut-fg)" class="sh">Paper difficulty</text>
+          <!-- difficulty bars rising -->
+          <g fill="var(--c-amber)" opacity="0.85">
+            <rect x="104" y="262" width="32" height="24" rx="2"/><rect x="254" y="256" width="32" height="30" rx="2"/><rect x="404" y="250" width="32" height="36" rx="2"/><rect x="554" y="246" width="32" height="40" rx="2"/><rect x="704" y="240" width="32" height="46" rx="2"/><rect x="854" y="234" width="32" height="52" rx="2"/><rect x="1004" y="228" width="32" height="58" rx="2"/><rect x="1154" y="222" width="32" height="64" rx="2"/>
+          </g>
+          <g fill="var(--mut-fg)" font-size="10" text-anchor="middle"><text x="120" y="299">Mock 1</text><text x="420" y="299">Mock 3</text><text x="720" y="299">Mock 5</text><text x="1020" y="299">Mock 7</text><text x="1170" y="299">Mock 8</text></g>
+        </svg>
+      </div>
+
+      <!-- subject mastery across the sequence -->
+      <div class="card" style="padding:18px 22px">
+        <div class="ctitle">Subject mastery across the sequence</div><div class="csub" style="margin-bottom:16px">Accuracy per subject over the ordered mocks — where you're gaining, and where you plateaued</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600">Quant</span><span style="font-size:12px;color:var(--success-ink)" class="stat">62→76% ▲</span></div>
+            <svg viewBox="0 0 260 90" width="100%"><line x1="0" y1="80" x2="260" y2="80" stroke="var(--ch-grid)"/><polyline fill="none" stroke="var(--c-blue)" stroke-width="2.5" points="10,58 45,54 80,50 115,52 150,42 185,44 220,32 250,26"/><circle cx="250" cy="26" r="4" fill="var(--c-blue)"/></svg>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600">Reasoning</span><span style="font-size:12px;color:var(--success-ink)" class="stat">80→92% ▲</span></div>
+            <svg viewBox="0 0 260 90" width="100%"><line x1="0" y1="80" x2="260" y2="80" stroke="var(--ch-grid)"/><polyline fill="none" stroke="var(--c-teal)" stroke-width="2.5" points="10,34 45,30 80,28 115,26 150,22 185,20 220,16 250,14"/><circle cx="250" cy="14" r="4" fill="var(--c-teal)"/></svg>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600">English</span><span style="font-size:12px;color:var(--mut-fg)" class="stat">84→86% ~</span></div>
+            <svg viewBox="0 0 260 90" width="100%"><line x1="0" y1="80" x2="260" y2="80" stroke="var(--ch-grid)"/><polyline fill="none" stroke="var(--c-slate)" stroke-width="2.5" points="10,28 45,26 80,30 115,24 150,28 185,25 220,24 250,23"/><circle cx="250" cy="23" r="4" fill="var(--c-slate)"/></svg>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600">Gen. Awareness</span><span style="font-size:12px;color:var(--warning-ink)" class="stat">70→66% ▼</span></div>
+            <svg viewBox="0 0 260 90" width="100%"><line x1="0" y1="80" x2="260" y2="80" stroke="var(--ch-grid)"/><polyline fill="none" stroke="var(--c-amber)" stroke-width="2.5" points="10,44 45,42 80,46 115,48 150,46 185,52 220,50 250,54"/><circle cx="250" cy="54" r="4" fill="var(--c-amber)"/></svg>
+          </div>
+        </div>
+        <div style="margin-top:16px;font-size:12.5px;color:var(--ink-2)">Reasoning and Quant are climbing as the papers harden. <b style="color:var(--warning-ink)">General Awareness is sliding</b> — the one to shore up before the series ends.</div>
+      </div>
+
+    </div></main>
+  </div>
+</div></div>
+<div class="ref-label">Leaderboard (signed-in only, real names)</div>
+<div class="ref-frame"><div class="root">
+  <header style="flex:none;border-bottom:1px solid var(--border);background:var(--surface)"><div style="display:flex;align-items:center;gap:12px;padding:8px 16px"><span class="plate">IACE</span><div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">HD</div><span style="font-size:13px;font-weight:500;color:var(--ink-2)">Harshith D.</span></div></div></header>
+  <div style="display:flex;flex:1;min-height:0">
+    <div style="width:56px;flex:none;border-right:1px solid var(--border);background:var(--surface);padding:8px"><nav style="margin-top:32px;display:flex;flex-direction:column;gap:2px;align-items:center">
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h4"/></svg></div>
+      <div class="navdisc on"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="4" width="3" height="14"/></svg></div>
+      <div class="navdisc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></div>
+    </nav></div>
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="margin:0 auto;width:100%;max-width:1000px;flex:1;overflow-y:auto;padding:24px 24px 40px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap">
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0">Leaderboard</h1>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="chip">SSC CGL Mock 08 <svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+          <div class="chip" style="background:var(--muted)">This test · Series points · All-time</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:8px;align-items:end">
+        <div class="card" style="padding:18px;text-align:center">
+          <div class="av" style="margin:0 auto 8px">PS</div><div style="font-size:13px;font-weight:600">Priya Sharma</div><div style="font-size:11px;color:var(--mut-fg)">Kukatpally</div><div style="font-size:20px;font-weight:700;margin-top:6px" class="stat">184</div><div class="sh" style="color:var(--mut-fg)">2nd</div>
+        </div>
+        <div class="card" style="padding:22px 18px;text-align:center;border-color:var(--warning);box-shadow:0 4px 16px rgba(245,158,11,.12)">
+          <div class="av" style="margin:0 auto 8px;width:40px;height:40px;background:var(--warning-subtle);color:var(--warning-ink)">SR</div><div style="font-size:14px;font-weight:700">Sai Teja Reddy</div><div style="font-size:11px;color:var(--mut-fg)">Ameerpet</div><div style="font-size:24px;font-weight:700;margin-top:6px;color:var(--warning-ink)" class="stat">188</div><div class="sh" style="color:var(--warning-ink)">Topper</div>
+        </div>
+        <div class="card" style="padding:18px;text-align:center">
+          <div class="av" style="margin:0 auto 8px">VK</div><div style="font-size:13px;font-weight:600">Vamshi Krishna</div><div style="font-size:11px;color:var(--mut-fg)">Dilsukhnagar</div><div style="font-size:20px;font-weight:700;margin-top:6px" class="stat">181</div><div class="sh" style="color:var(--mut-fg)">3rd</div>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden;margin-top:16px">
+        <div style="display:grid;grid-template-columns:52px 1fr 96px 64px;gap:14px;padding:10px 18px;background:var(--muted)">
+          <div class="sh" style="text-align:center">Rank</div><div class="sh">Student</div><div class="sh" style="text-align:right">Score</div><div class="sh" style="text-align:right">Δ rank</div>
+        </div>
+        <div class="row"><div class="rank">4</div><div style="display:flex;align-items:center;gap:12px"><div class="av">AR</div><div><div style="font-size:13.5px;font-weight:600">Ananya Rao</div><div style="font-size:11px;color:var(--mut-fg)">SR Nagar</div></div></div><div style="text-align:right;font-weight:700" class="stat">179</div><div style="text-align:right;font-size:12px;color:var(--success)">▲2</div></div>
+        <div class="row"><div class="rank">5</div><div style="display:flex;align-items:center;gap:12px"><div class="av">KN</div><div><div style="font-size:13.5px;font-weight:600">Karthik Nair</div><div style="font-size:11px;color:var(--mut-fg)">Ameerpet</div></div></div><div style="text-align:right;font-weight:700" class="stat">177</div><div style="text-align:right;font-size:12px;color:var(--mut-fg)">–</div></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;color:var(--mut-fg);font-size:12px"><div style="flex:1;height:1px;background:var(--border)"></div>your neighbourhood<div style="flex:1;height:1px;background:var(--border)"></div></div>
+        <div class="row"><div class="rank" style="color:var(--mut-fg)">56</div><div style="display:flex;align-items:center;gap:12px"><div class="av">DM</div><div><div style="font-size:13.5px;font-weight:600">Divya Menon</div><div style="font-size:11px;color:var(--mut-fg)">Kukatpally</div></div></div><div style="text-align:right;font-weight:700" class="stat">165</div><div style="text-align:right;font-size:12px;color:var(--mut-fg)">–</div></div>
+        <div class="row"><div class="rank" style="color:var(--mut-fg)">57</div><div style="display:flex;align-items:center;gap:12px"><div class="av">RV</div><div><div style="font-size:13.5px;font-weight:600">Rohit Verma</div><div style="font-size:11px;color:var(--mut-fg)">Dilsukhnagar</div></div></div><div style="text-align:right;font-weight:700" class="stat">164</div><div style="text-align:right;font-size:12px;color:var(--success)">▲4</div></div>
+        <div class="row" style="background:var(--brick-subtle);border-top:2px solid var(--brick)"><div class="rank" style="color:var(--brick-ink)">58</div><div style="display:flex;align-items:center;gap:12px"><div class="av" style="background:var(--brick);color:#fff">HD</div><div><div style="font-size:13.5px;font-weight:700;color:var(--brick-ink)">Harshith Diyyala <span style="font-weight:500;opacity:.75">· you</span></div><div style="font-size:11px;color:var(--brick-ink);opacity:.75">Ameerpet · 82nd percentile</div></div></div><div style="text-align:right;font-weight:700;color:var(--brick-ink)" class="stat">164</div><div style="text-align:right;font-size:12px;color:var(--success)">▲6</div></div>
+        <div class="row"><div class="rank" style="color:var(--mut-fg)">59</div><div style="display:flex;align-items:center;gap:12px"><div class="av">SI</div><div><div style="font-size:13.5px;font-weight:600">Sneha Iyer</div><div style="font-size:11px;color:var(--mut-fg)">SR Nagar</div></div></div><div style="text-align:right;font-weight:700" class="stat">163</div><div style="text-align:right;font-size:12px;color:var(--crimson)">▼1</div></div>
+        <div class="row"><div class="rank" style="color:var(--mut-fg)">60</div><div style="display:flex;align-items:center;gap:12px"><div class="av">AR</div><div><div style="font-size:13.5px;font-weight:600">Aditya Rao</div><div style="font-size:11px;color:var(--mut-fg)">Ameerpet</div></div></div><div style="text-align:right;font-weight:700" class="stat">162</div><div style="text-align:right;font-size:12px;color:var(--mut-fg)">–</div></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--mut-fg);margin-top:12px">Ranks are among enrolled students, first sitting only. Shown to signed-in students — the leaderboard is never a public page. A student shares only their own report, from a link they control.</p>
+
+    </div></main>
+  </div>
+</div></div>
+<div class="ref-label">Public share report (revocable, own data only)</div>
+<div class="ref-frame"><div class="root">
+  <!-- public header (no app nav) -->
+  <header style="flex:none;background:var(--surface);border-bottom:1px solid var(--border)">
+    <div style="max-width:820px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 20px">
+      <div style="display:flex;align-items:center;gap:10px"><span class="plate">IACE</span><span style="font-size:12px;color:var(--mut-fg)">Performance report</span></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--success-ink);background:#e7f5ee;border:1px solid #bfe3cf;padding:4px 10px;border-radius:var(--r-full)"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> Verified result · IACE</div>
+    </div>
+  </header>
+
+  <div style="flex:1;overflow-y:auto;padding:28px 20px 40px">
+    <div style="max-width:820px;margin:0 auto">
+
+      <!-- identity -->
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:22px">
+        <div style="width:56px;height:56px;border-radius:var(--r-full);background:var(--brick-subtle);color:var(--brick-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px">HD</div>
+        <div><div style="font-size:22px;font-weight:700;letter-spacing:-.015em">Harshith Diyyala</div><div style="font-size:13px;color:var(--mut-fg);margin-top:2px">SSC CGL 2026 · Full Mock 08 · Tier 1 · sat 29 Aug 2026</div></div>
+      </div>
+
+      <!-- hero stats -->
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr)">
+          <div style="padding:22px 24px;border-right:1px solid var(--border)"><div class="sh">Score</div><div style="font-size:32px;font-weight:700;margin-top:4px" class="stat">164<span style="font-size:16px;color:var(--mut-fg);font-weight:600">/200</span></div></div>
+          <div style="padding:22px 24px;border-right:1px solid var(--border)"><div class="sh">Rank</div><div style="font-size:32px;font-weight:700;margin-top:4px;color:var(--brick-ink)" class="stat">#58</div><div style="font-size:12px;color:var(--mut-fg)">of 1,284</div></div>
+          <div style="padding:22px 24px"><div class="sh">Percentile</div><div style="font-size:32px;font-weight:700;margin-top:4px;color:var(--c-blue)" class="stat">82<span style="font-size:16px;color:var(--mut-fg);font-weight:600">nd</span></div></div>
+        </div>
+      </div>
+
+      <!-- you vs crowd -->
+      <div class="card" style="padding:20px 24px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600">Against everyone who sat this paper</div>
+        <svg viewBox="0 0 780 200" width="100%" style="margin-top:10px">
+          <line x1="30" y1="168" x2="756" y2="168" stroke="#c3c2b7" stroke-width="1"/>
+          <g fill="var(--c-slate)" opacity="0.5">
+            <rect x="60" y="156" width="42" height="12" rx="2"/><rect x="108" y="140" width="42" height="28" rx="2"/><rect x="156" y="118" width="42" height="50" rx="2"/><rect x="204" y="90" width="42" height="78" rx="2"/><rect x="252" y="66" width="42" height="102" rx="2"/><rect x="300" y="52" width="42" height="116" rx="2"/><rect x="348" y="48" width="42" height="120" rx="2"/><rect x="396" y="60" width="42" height="108" rx="2"/><rect x="444" y="82" width="42" height="86" rx="2"/><rect x="492" y="108" width="42" height="60" rx="2"/><rect x="540" y="130" width="42" height="38" rx="2"/><rect x="588" y="148" width="42" height="20" rx="2"/><rect x="636" y="158" width="42" height="10" rx="2"/>
+          </g>
+          <line x1="378" y1="36" x2="378" y2="168" stroke="var(--mut-fg)" stroke-width="1.5" stroke-dasharray="4 3"/><text x="378" y="30" text-anchor="middle" font-size="11" fill="var(--mut-fg)">Avg 142</text>
+          <line x1="560" y1="28" x2="560" y2="168" stroke="var(--c-blue)" stroke-width="2.5"/><text x="560" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="var(--c-blue)">You 164</text>
+          <line x1="690" y1="48" x2="690" y2="168" stroke="var(--success)" stroke-width="1.5"/><text x="690" y="42" text-anchor="middle" font-size="11" fill="var(--success-ink)">Top 188</text>
+        </svg>
+      </div>
+
+      <!-- sections -->
+      <div class="card" style="padding:20px 24px;margin-bottom:20px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:14px">Section by section</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Quantitative Aptitude</span><span class="stat" style="font-weight:600">38 / 50</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:76%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Reasoning</span><span class="stat" style="font-weight:600">46 / 50</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:92%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>English</span><span class="stat" style="font-weight:600">43 / 50</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:86%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>General Awareness</span><span class="stat" style="font-weight:600">37 / 50</span></div><div style="height:8px;background:var(--muted);border-radius:99px"><div style="width:74%;height:8px;background:var(--c-blue);border-radius:99px"></div></div></div>
+        </div>
+      </div>
+
+      <!-- footer: control + privacy, NO answer key, NO other students -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 4px;flex-wrap:wrap">
+        <div style="font-size:11.5px;color:var(--mut-fg);max-width:52ch">A private report shared by the student. It shows only their own result — no answer key, no other students. The link can be revoked at any time.</div>
+        <div style="display:flex;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--r-md);padding:7px 12px;background:var(--surface)"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8"/><path d="M12 3v13M8 7l4-4 4 4"/></svg> Share</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--crimson);border:1px solid #f3cdd6;border-radius:var(--r-md);padding:7px 12px;background:#fff">Revoke link</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div></div>
+</body>
+</html>
