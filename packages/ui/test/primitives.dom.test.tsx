@@ -10,6 +10,8 @@ import { Brandmark } from '../src/components/ui/brandmark';
 import { StatRow } from '../src/components/ui/stat-row';
 import { StepIcon } from '../src/components/ui/step-icon';
 import { PinField } from '../src/components/ui/pin-field';
+import { Metric } from '../src/components/ui/metric';
+import { MetricGroup } from '../src/components/ui/metric-group';
 
 afterEach(cleanup);
 
@@ -138,5 +140,36 @@ describe('PinField', () => {
     const field = screen.getByLabelText('One-time code');
     assert.equal(field.tagName, 'INPUT');
     assert.equal(screen.getAllByRole('textbox').length, 1);
+  });
+});
+
+describe('Metric', () => {
+  it('shows the label, the number and the unit that qualifies it', () => {
+    render(<Metric label="Marks" value={45} unit="/ 100" />);
+
+    assert.ok(screen.getByText('Marks'));
+    assert.ok(screen.getByText('45'));
+    assert.ok(screen.getByText('/ 100'));
+  });
+
+  it('renders the value it was given when there is no number to show', () => {
+    render(<Metric label="Rank" value="—" />);
+
+    assert.ok(screen.getByText('Rank'));
+    assert.ok(screen.getByText('—'));
+  });
+});
+
+describe('MetricGroup', () => {
+  it('renders every metric it was given', () => {
+    render(
+      <MetricGroup>
+        <Metric label="Marks" value={45} />
+        <Metric label="Rank" value={12} />
+      </MetricGroup>,
+    );
+
+    assert.ok(screen.getByText('Marks'));
+    assert.ok(screen.getByText('Rank'));
   });
 });
