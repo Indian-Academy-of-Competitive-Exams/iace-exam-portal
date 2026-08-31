@@ -36,6 +36,7 @@ export {
   type BreadcrumbsProps,
 } from './components/ui/breadcrumbs';
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox';
+export { FillBubble, FILL_BUBBLE_HOLD_MS, type FillBubbleProps } from './components/ui/fill-bubble';
 export {
   RadioGroup,
   RadioGroupItem,
