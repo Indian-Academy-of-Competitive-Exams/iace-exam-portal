@@ -32,7 +32,8 @@ export const Progress = React.forwardRef<HTMLProgressElement, ProgressProps>(
       value={value}
       max={max}
       className={cn(
-        'w-full appearance-none overflow-hidden rounded-full',
+        // Capped: past its measure a bar stops reading as a proportion and becomes a rule.
+        'w-full max-w-[var(--progress-max-w)] appearance-none overflow-hidden rounded-full',
         SIZES[size],
         // Firefox: the element is the track.
         'border-0 bg-muted',

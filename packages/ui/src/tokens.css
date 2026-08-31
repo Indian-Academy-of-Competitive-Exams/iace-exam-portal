@@ -172,6 +172,7 @@
   --control-px-lg: var(--space-5);
   --row-h-comfortable: 3rem;
   --row-h-compact: 2.5rem;
+  --progress-max-w: 20rem; /* measure cap so a bar never runs the width of the screen */
 
   /* ==========================================================================
      5. SEMANTIC COLOUR ROLES
