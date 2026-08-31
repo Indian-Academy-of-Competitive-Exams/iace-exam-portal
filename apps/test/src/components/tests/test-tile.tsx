@@ -17,13 +17,13 @@ export function TestTile({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
   const done = row.bucket === TEST_BUCKET.DONE;
 
   return (
-    <Card className="flex w-64 shrink-0 snap-start flex-col">
+    <Card className="flex w-72 shrink-0 snap-start flex-col">
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <Link to={ROUTES.TEST_ABOUT(test.id)} className="flex min-w-0 flex-col gap-1">
-          <TruncatedText className="text-sm font-semibold text-foreground">
+          <TruncatedText className="text-md font-semibold text-foreground">
             {test.title ?? 'Untitled test'}
           </TruncatedText>
-          <TruncatedText className="text-xs text-muted-foreground">{row.seriesName}</TruncatedText>
+          <TruncatedText className="text-sm text-muted-foreground">{row.seriesName}</TruncatedText>
         </Link>
 
         {done ? (

@@ -1,4 +1,4 @@
-import { Alert } from '@iace/ui';
+import { Alert, SectionHeading } from '@iace/ui';
 import { continueWith, openNow, upNext, type Sittable } from '../../lib/catalog';
 import { TestTile } from './test-tile';
 
@@ -28,9 +28,7 @@ function Lane({
 }: Readonly<{ title: string; rows: readonly Sittable[]; now: Date }>) {
   return (
     <div className="flex flex-col gap-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h2>
+      <SectionHeading title={title} level={3} />
       {rows.length === 0 ? (
         <span className="text-sm text-muted-foreground">—</span>
       ) : (

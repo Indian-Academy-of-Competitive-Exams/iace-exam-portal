@@ -20,7 +20,7 @@ export function SeriesShelf({ series, rows, now }: Readonly<SeriesShelfProps>) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
-            <TruncatedText className="text-sm font-semibold">{series.name}</TruncatedText>
+            <TruncatedText className="text-md font-semibold">{series.name}</TruncatedText>
           </Link>
           <span className="text-xs tabular-nums text-muted-foreground">
             {progress.done} of {plural(progress.total, 'test')} done

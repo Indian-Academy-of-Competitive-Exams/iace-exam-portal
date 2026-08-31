@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Gift, Plus } from 'lucide-react';
 import {
   FREE_SERIES_EXAM_CAP,
   TEST_SERIES_KIND,
@@ -12,8 +12,10 @@ import {
   Button,
   Card,
   CardContent,
+  EmptyState,
   PageFrame,
   PageHeader,
+  SectionHeading,
   Skeleton,
   TruncatedText,
   plural,
@@ -73,7 +75,7 @@ export function BrowsePage() {
 
           {askable.length > 0 ? (
             <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-foreground">Open to ask for</h2>
+              <SectionHeading title="Open to ask for" />
               <div className="grid gap-3 md:grid-cols-2">
                 {askable.map((series) => (
                   <SeriesCard
@@ -92,7 +94,7 @@ export function BrowsePage() {
           ) : null}
 
           {rows.length === 0 && askable.length === 0 ? (
-            <Alert variant="info">There is no free test to ask for at the moment.</Alert>
+            <EmptyState icon={Gift} title="No free tests to ask for" />
           ) : null}
         </div>
       )}

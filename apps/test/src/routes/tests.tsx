@@ -4,12 +4,13 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFilters } from '@iace/app-kit/browser';
-import { LockKeyhole } from 'lucide-react';
+import { ClipboardList, LockKeyhole, SearchX } from 'lucide-react';
 import {
   Alert,
   Badge,
   Button,
   Combobox,
+  EmptyState,
   PageFrame,
   PageHeader,
   SearchInput,
@@ -103,16 +104,7 @@ export function TestsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          {emptiness === null ? (
-            <>
-              <StatusStrip rows={rows} now={now} />
-              {shelves(series, rows).map(({ row, tests }) => (
-                <SeriesShelf key={row.id} series={row} rows={tests} now={now} />
-              ))}
-            </>
-          ) : (
-            <Alert variant="info">{emptiness}</Alert>
-          )}
+          <CatalogBody emptiness={emptiness} series={series} rows={rows} now={now} />
         </div>
       )}
     </PageFrame>
@@ -120,9 +112,42 @@ export function TestsPage() {
 }
 
 /** Reaching nothing and searching for nothing are different facts, and they read differently. */
-function emptyReason(reached: number, showing: number): string | null {
-  if (reached === 0) return 'You have no tests yet. Your branch adds them as they open.';
-  return showing === 0 ? 'Nothing here matches what you are looking for.' : null;
+function emptyReason(reached: number, showing: number): 'NONE' | 'FILTERED' | null {
+  if (reached === 0) return 'NONE';
+  return showing === 0 ? 'FILTERED' : null;
+}
+
+function CatalogBody({
+  emptiness,
+  series,
+  rows,
+  now,
+}: Readonly<{
+  emptiness: 'NONE' | 'FILTERED' | null;
+  series: readonly StudentCatalogSeries[];
+  rows: readonly Sittable[];
+  now: Date;
+}>) {
+  if (emptiness === null) {
+    return (
+      <>
+        <StatusStrip rows={rows} now={now} />
+        {shelves(series, rows).map(({ row, tests }) => (
+          <SeriesShelf key={row.id} series={row} rows={tests} now={now} />
+        ))}
+      </>
+    );
+  }
+  if (emptiness === 'NONE') {
+    return (
+      <EmptyState
+        icon={ClipboardList}
+        title="No tests yet"
+        /* ui-copy-ok: rule */ hint="Your branch adds them as they open."
+      />
+    );
+  }
+  return <EmptyState icon={SearchX} title="Nothing matches" />;
 }
 
 /** A shelf per series, and no shelf for one the search emptied. */
