@@ -18,6 +18,9 @@ export const ROUTES = {
   /** Full screen, outside the shell: an exam hall has no navigation out of it. */
   EXAM: (testId: string) => `/tests/${testId}/exam`,
   EXAM_PATTERN: '/tests/:testId/exam',
+  /** Where a sitting lands the moment it ends, while the marking job is still running. */
+  SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted`,
+  SUBMITTED_PATTERN: '/attempts/:attemptId/submitted',
   SCORE_CARD: (attemptId: string) => `/attempts/${attemptId}/score-card`,
   SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,

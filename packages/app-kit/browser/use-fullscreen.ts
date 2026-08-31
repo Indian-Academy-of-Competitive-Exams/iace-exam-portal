@@ -26,6 +26,8 @@ export interface FullscreenHandle {
   /** How many times it has been left since this page loaded. */
   exits: number;
   enter: () => Promise<void>;
+  /** Hands the screen back when the sitting is over; a caller that also counts exits must ignore its own. */
+  exit: () => Promise<void>;
 }
 
 /** Subscribed rather than mirrored into state: the DOM owns this, and it is right on the first render. */
@@ -67,5 +69,11 @@ export function useFullscreen(): FullscreenHandle {
     await request?.().catch(() => undefined);
   }, []);
 
-  return { isFullscreen, isSupported, exits, enter };
+  const exit = useCallback(async () => {
+    const doc = document as PrefixedDocument;
+    const release = doc.exitFullscreen?.bind(doc) ?? doc.webkitExitFullscreen?.bind(doc);
+    await release?.().catch(() => undefined);
+  }, []);
+
+  return { isFullscreen, isSupported, exits, enter, exit };
 }

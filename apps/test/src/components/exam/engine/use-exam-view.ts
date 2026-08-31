@@ -23,13 +23,22 @@ import { CATALOG_QUERY_KEY } from '../../../lib/constants';
 import { useAttemptState, type AnswerIntent } from '../../../lib/use-attempt-state';
 import type { ExamView } from './exam-view';
 
+/** What the sitting knows about itself the moment it ends, before anything has been marked. */
+export interface EndedSitting {
+  attemptId: string;
+  answered: number;
+  unanswered: number;
+  markedForReview: number;
+  total: number;
+}
+
 export interface ExamSitting {
   paper: ExamPaper;
   /** `Date.now()` when the paper landed, so device skew cancels out of the countdown. */
   arrivedAt: number;
   title: string | null;
   watermark: string;
-  onEnded: () => void;
+  onEnded: (sitting: EndedSitting) => void;
 }
 
 const isMarked = (state: string | undefined): boolean =>
@@ -66,10 +75,18 @@ export function useExamView({
       await state.flush();
       return api.me.submitAttempt(paper.attemptId);
     },
-    onSuccess: async () => {
+    onSuccess: async (submitted) => {
       // The sat test moves from Open now to Done, and the server has already dropped its own copy.
       await queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY });
-      onEnded();
+      // The hall gives the screen back before the next one draws; `nagging` is already stood down.
+      await fullscreen.exit();
+      onEnded({
+        attemptId: submitted.attemptId,
+        answered: counts[ANSWER_STATE.ANSWERED] + counts[ANSWER_STATE.ANSWERED_MARKED],
+        unanswered: counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED],
+        markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
+        total: paper.questions.length,
+      });
     },
   });
 
@@ -112,6 +129,8 @@ export function useExamView({
   const unanswered = counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED];
   // Never a trap: dismissing holds until the NEXT exit, so a browser that refuses does not lock them out.
   const nagging =
+    !submit.isSuccess &&
+    !submit.isPending &&
     fullscreen.isSupported &&
     !fullscreen.isFullscreen &&
     fullscreen.exits > 0 &&

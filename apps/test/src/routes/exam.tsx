@@ -11,7 +11,7 @@ import { api } from '../lib/api';
 import { ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamShell } from '../components/exam/engine/exam-shell';
-import { useExamView } from '../components/exam/engine/use-exam-view';
+import { useExamView, type EndedSitting } from '../components/exam/engine/use-exam-view';
 import { templateFor } from '../components/exam/templates/registry';
 
 interface BeganWith {
@@ -63,8 +63,10 @@ export function ExamPage() {
       title={attempt.data.testTitle}
       // The one thing on the paper that leads back to a person: there is no enrolment number.
       watermark={student?.mobile ?? ''}
-      // Back to their tests, where the strip now shows it done rather than waiting to be sat.
-      onEnded={() => navigate(ROUTES.TESTS, { replace: true })}
+      // `replace`: Back must never re-enter a paper that has been handed in.
+      onEnded={(ended) => {
+        navigate(ROUTES.SUBMITTED(ended.attemptId), { replace: true, state: ended });
+      }}
     />
   );
 }
@@ -75,7 +77,7 @@ function ExamHall(
     arrivedAt: number;
     title: string | null;
     watermark: string;
-    onEnded: () => void;
+    onEnded: (ended: EndedSitting) => void;
   }>,
 ) {
   const view = useExamView(sitting);
