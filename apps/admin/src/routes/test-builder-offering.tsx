@@ -21,6 +21,7 @@ import {
 import { api } from '../lib/api';
 import { TestSeriesMultiPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
+import { toMinutes, toSeconds } from '../lib/schedule-format';
 
 /** Who is offered the test: the series that carry it, and the freeze that lets students sit it. */
 
@@ -74,14 +75,6 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
 const TIMING_KEY = (testId: string) => [...QUERY_KEYS.BRANCH_TIMING, testId] as const;
 
-const SECONDS_PER_MINUTE = 60;
-
-const toMinutes = (seconds: number | null): string =>
-  seconds === null ? '' : String(Math.round(seconds / SECONDS_PER_MINUTE));
-
-const toSeconds = (minutes: string): number | null =>
-  minutes.trim() === '' ? null : Number(minutes) * SECONDS_PER_MINUTE;
-
 type TimingDraft = Readonly<Record<string, { lateEntry: string; extraTime: string }>>;
 
 const draftOf = (rows: readonly BranchTestScheduleRow[]): TimingDraft =>
@@ -130,6 +123,8 @@ export function BranchTimingStep({ detail }: Readonly<{ detail: TestDetail }>) {
       setAsking(false);
       setDraft(null);
       queryClient.setQueryData(TIMING_KEY(detail.id), next);
+      // The branch screen reads the same rows from the other side, and would go stale behind this.
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_CONFIG });
     },
     onError: () => setAsking(false),
   });

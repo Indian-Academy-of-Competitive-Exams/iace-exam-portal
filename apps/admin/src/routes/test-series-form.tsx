@@ -56,7 +56,7 @@ import {
   UNLOCK_MODE_LABELS,
 } from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
-import { WHEN_FORMATTER } from '../lib/audit-format';
+import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
@@ -403,8 +403,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 const testsKey = (seriesId: string) => [...QUERY_KEYS.TEST_SERIES, seriesId, 'tests'] as const;
 
 /** The instant an exam starts, said in the institute's clock wherever the admin is sitting. */
-const opensLabel = (unlockAt: string | null): string =>
-  unlockAt ? WHEN_FORMATTER.format(new Date(unlockAt)) : 'With the series';
 
 interface UnlockFormValues {
   unlockAt: string;

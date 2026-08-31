@@ -1,13 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
+import { Clock } from 'lucide-react';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   TEST_SERIES_KIND,
   type Branch,
   type BranchSeriesRow,
+  type BranchTestRow,
 } from '@iace/contracts';
+import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Alert,
@@ -16,20 +20,28 @@ import {
   Card,
   Checkbox,
   ConfirmDialog,
+  DropdownMenuItem,
+  FormDialog,
+  FormField,
   ListView,
+  NumericInput,
   PageHeader,
+  RowActions,
   Skeleton,
   SkeletonParagraph,
   TableFrame,
   TruncatedText,
+  digitsOnly,
   plural,
   type DataTableColumn,
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ExamStageMultiPicker } from '../components/exam-picker';
+import { TestSeriesMultiPicker } from '../components/access-picker';
 import { StageCell } from '../components/stage-cell';
 import { NAV_ITEMS, QUERY_KEYS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
+import { opensLabel, toMinutes, toSeconds } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { useBranch } from '../lib/use-branches';
 
@@ -37,10 +49,19 @@ import { useBranch } from '../lib/use-branches';
 
 const TABS = {
   SERIES: 'series',
+  TESTS: 'tests',
 } as const;
+
+/** Cleared on every tab change: a search typed against series means nothing against tests. */
+type FilterKey = 'tab' | 'q' | 'enabled' | 'examStageId' | 'testSeriesId';
+
+const TAB_FILTERS = { q: '', enabled: '', examStageId: '', testSeriesId: '' } as const;
 
 const branchSeriesKey = (branchId: string) =>
   [...QUERY_KEYS.BRANCH_CONFIG, branchId, 'test-series'] as const;
+
+const branchTestsKey = (branchId: string) =>
+  [...QUERY_KEYS.BRANCH_CONFIG, branchId, 'tests'] as const;
 
 export function BranchTestsPage() {
   const { branchId = '' } = useParams();
@@ -71,8 +92,14 @@ export function BranchTestsPage() {
 }
 
 function BranchConfiguration({ branch }: Readonly<{ branch: Branch }>) {
-  const filters = useFilters<'tab'>();
+  const filters = useFilters<FilterKey>();
   const tab = filters.get('tab') || TABS.SERIES;
+  // Held here rather than in the tab: the tab that leaves is unmounted, and the draft with it.
+  const [draft, setDraft] = useState<SeriesDraft>({});
+  const [leaving, setLeaving] = useState<string | null>(null);
+
+  const pending = Object.keys(draft).length;
+  const openTab = (value: string) => filters.set({ tab: value, ...TAB_FILTERS });
 
   const header = (
     <PageHeader
@@ -82,16 +109,37 @@ function BranchConfiguration({ branch }: Readonly<{ branch: Branch }>) {
   );
 
   return (
-    <TableFrame
-      header={header}
-      tabs={{
-        value: tab,
-        onValueChange: (value) => filters.set({ tab: value }),
-        items: [
-          { value: TABS.SERIES, label: 'Test series', content: <SeriesTab branch={branch} /> },
-        ],
-      }}
-    />
+    <>
+      <TableFrame
+        header={header}
+        tabs={{
+          value: tab,
+          onValueChange: (value) => (pending > 0 ? setLeaving(value) : openTab(value)),
+          items: [
+            {
+              value: TABS.SERIES,
+              label: 'Test series',
+              content: <SeriesTab branch={branch} draft={draft} setDraft={setDraft} />,
+            },
+            { value: TABS.TESTS, label: 'Tests', content: <TestsTab branch={branch} /> },
+          ],
+        }}
+      />
+
+      <ConfirmDialog
+        open={leaving !== null}
+        onOpenChange={(open) => !open && setLeaving(null)}
+        destructive
+        title="Leave without saving?"
+        description={`Leaving this tab discards ${plural(pending, 'unsaved change')} to what ${branch.name} runs.`}
+        confirmLabel="Leave without saving"
+        onConfirm={() => {
+          setDraft({});
+          if (leaving !== null) openTab(leaving);
+          setLeaving(null);
+        }}
+      />
+    </>
   );
 }
 
@@ -130,7 +178,7 @@ function seriesColumns(
       header: 'Runs here',
       cell: (row) => (
         <Checkbox
-          aria-label={`${branchRunsLabel(row)} ${row.name}`}
+          aria-label={`${row.enabled ? 'Stop offering' : 'Offer'} ${row.name}`}
           checked={draft[row.testSeriesId]?.enabled ?? row.enabled}
           disabled={!canWrite}
           onChange={(event) => onToggle(row, event.target.checked)}
@@ -140,13 +188,18 @@ function seriesColumns(
   ];
 }
 
-const branchRunsLabel = (row: BranchSeriesRow): string => (row.enabled ? 'Stop offering' : 'Offer');
-
-function SeriesTab({ branch }: Readonly<{ branch: Branch }>) {
+function SeriesTab({
+  branch,
+  draft,
+  setDraft,
+}: Readonly<{
+  branch: Branch;
+  draft: SeriesDraft;
+  setDraft: React.Dispatch<React.SetStateAction<SeriesDraft>>;
+}>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<SeriesDraft>({});
   const [asking, setAsking] = useState(false);
 
   const filterSpec = [
@@ -199,7 +252,7 @@ function SeriesTab({ branch }: Readonly<{ branch: Branch }>) {
         else next[row.testSeriesId] = { name: row.name, enabled };
         return next;
       }),
-    [],
+    [setDraft],
   );
 
   const changes = Object.entries(draft);
@@ -234,7 +287,7 @@ function SeriesTab({ branch }: Readonly<{ branch: Branch }>) {
           changes.length > 0 ? (
             <Alert variant="warning" className="mb-4 items-center justify-between">
               <span>
-                {`${plural(changes.length, 'change')} not saved yet. Leaving this screen loses them.`}
+                {`${plural(changes.length, 'unsaved change')} to what ${branch.name} runs. Leaving the screen without saving discards the draft.`}
               </span>
               <Button type="button" size="sm" onClick={() => setAsking(true)}>
                 Save changes
@@ -269,5 +322,217 @@ function SeriesTab({ branch }: Readonly<{ branch: Branch }>) {
         </ul>
       </ConfirmDialog>
     </>
+  );
+}
+
+// ============================================================================
+// Tests — the schedule this branch keeps on what its series carry.
+// ============================================================================
+
+/** A test carried by two of this branch's series is two rows, each with that series' own instant. */
+const testRowKey = (row: BranchTestRow) => `${row.testSeriesId}:${row.testId}`;
+
+const minutesCell = (seconds: number | null) =>
+  seconds === null ? (
+    <span className="text-muted-foreground">—</span>
+  ) : (
+    <span>{toMinutes(seconds)}</span>
+  );
+
+function testColumns(
+  canWrite: boolean,
+  onEdit: (row: BranchTestRow) => void,
+): DataTableColumn<BranchTestRow>[] {
+  return [
+    {
+      key: 'title',
+      header: 'Test',
+      className: 'max-w-[22rem] font-medium',
+      cell: (row) => <TruncatedText>{row.title}</TruncatedText>,
+    },
+    {
+      key: 'series',
+      header: 'Series',
+      className: 'max-w-[18rem]',
+      cell: (row) => <TruncatedText>{row.seriesName}</TruncatedText>,
+    },
+    {
+      key: 'opens',
+      header: 'Opens',
+      className: 'max-w-48',
+      cell: (row) => <TruncatedText>{opensLabel(row.unlockAt)}</TruncatedText>,
+    },
+    {
+      key: 'lateEntry',
+      header: 'Late entry (minutes)',
+      numeric: true,
+      cell: (row) => minutesCell(row.lateEntrySec),
+    },
+    {
+      key: 'extraTime',
+      header: 'Extra time (minutes)',
+      numeric: true,
+      cell: (row) => minutesCell(row.extraTimeSec),
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      // Left out rather than disabled: a permission the reader does not hold is not greyed text.
+      cell: (row) =>
+        canWrite ? (
+          <RowActions label={`Actions for ${row.title ?? row.testId}`}>
+            <DropdownMenuItem onSelect={() => onEdit(row)}>
+              <Clock aria-hidden />
+              Edit timing
+            </DropdownMenuItem>
+          </RowActions>
+        ) : null,
+    },
+  ];
+}
+
+function TestsTab({ branch }: Readonly<{ branch: Branch }>) {
+  const { can } = useAuth();
+  const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
+  const [editing, setEditing] = useState<BranchTestRow | null>(null);
+
+  const filterSpec = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search tests',
+      placeholder: 'Search tests by title',
+      primary: true,
+    },
+    {
+      key: 'testSeriesId',
+      kind: 'customMulti',
+      label: 'Filter by series',
+      primary: true,
+      render: (control: ListFilterMultiControl) => <TestSeriesMultiPicker {...control} />,
+    },
+  ] as const;
+
+  const tests = useListScreen({
+    queryKey: branchTestsKey(branch.id),
+    filters: filterSpec,
+    toQuery: (values) => ({
+      q: values.q || undefined,
+      testSeriesId: values.testSeriesId,
+    }),
+    fetchPage: (params) => api.admin.branches.tests(branch.id, params),
+  });
+
+  const columns = useMemo(() => testColumns(canWrite, setEditing), [canWrite]);
+
+  return (
+    <>
+      <ListView
+        list={tests}
+        filters={filterSpec}
+        columns={columns}
+        rowKey={testRowKey}
+        empty="No test reaches this branch yet. Switch a series on under Test series."
+        emptyFiltered="No test matches those filters."
+      />
+
+      {/* Mounted only while a row is open and keyed by it, or it opens on the last row's values. */}
+      {editing ? (
+        <ScheduleDialog
+          key={testRowKey(editing)}
+          branch={branch}
+          row={editing}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+interface ScheduleFormValues {
+  lateEntry: string;
+  extraTime: string;
+}
+
+const SCHEDULE_FIELDS = ['lateEntry', 'extraTime'] as const;
+
+function ScheduleDialog({
+  branch,
+  row,
+  onClose,
+}: Readonly<{ branch: Branch; row: BranchTestRow; onClose: () => void }>) {
+  const queryClient = useQueryClient();
+  const form = useForm<ScheduleFormValues>({
+    defaultValues: {
+      lateEntry: toMinutes(row.lateEntrySec),
+      extraTime: toMinutes(row.extraTimeSec),
+    },
+  });
+
+  const save = useMutation({
+    meta: { success: `${branch.name} timing saved.`, fields: SCHEDULE_FIELDS },
+    mutationFn: (values: ScheduleFormValues) =>
+      api.admin.branches.setTestSchedule(branch.id, row.testId, {
+        lateEntrySec: toSeconds(values.lateEntry),
+        extraTimeSec: toSeconds(values.extraTime),
+      }),
+    onSuccess: async () => {
+      onClose();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_CONFIG });
+      // The test builder edits the same rows from the other side, and would go stale behind this.
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_TIMING });
+    },
+    onError: (error) => applyFieldErrors(error, form.setError, SCHEDULE_FIELDS),
+  });
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      form={form}
+      onSubmit={(values) => save.mutate(values)}
+      title={row.title ?? 'Test timing'}
+      submitLabel="Save timing"
+      loading={save.isPending}
+    >
+      <Alert variant="info">
+        Left blank, {branch.name} goes back to the plain rules: its students may start whenever the
+        test is open, on the clock the configuration gives everyone.
+      </Alert>
+
+      <MinutesField form={form} name="lateEntry" label="Late entry (minutes)" autoFocus />
+      <MinutesField form={form} name="extraTime" label="Extra time (minutes)" />
+    </FormDialog>
+  );
+}
+
+/** Digits the form owns. `register` alone cannot hold a value the keystroke filter rewrites. */
+function MinutesField({
+  form,
+  name,
+  label,
+  autoFocus,
+}: Readonly<{
+  form: UseFormReturn<ScheduleFormValues>;
+  name: keyof ScheduleFormValues;
+  label: string;
+  autoFocus?: boolean;
+}>) {
+  const value = useWatch({ control: form.control, name }) ?? '';
+
+  return (
+    <FormField form={form} name={name} label={label}>
+      {(control) => (
+        <NumericInput
+          {...control}
+          placeholder="None"
+          autoFocus={autoFocus}
+          value={value}
+          onChange={(event) =>
+            form.setValue(name, digitsOnly(event.target.value), { shouldDirty: true })
+          }
+        />
+      )}
+    </FormField>
   );
 }
