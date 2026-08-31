@@ -15,6 +15,8 @@ export interface FilterBarProps {
   advancedCount?: number;
   /** The controls that stay on screen: the search box, and at most one choice beside it. */
   children: React.ReactNode;
+  /** A mandatory scope the list is READ THROUGH, not narrowed by — it never counts toward Clear. */
+  leading?: React.ReactNode;
   /** True widens instead of narrowing. Omit the pair for a bar with nothing to combine. */
   matchAny?: boolean;
   onMatchAnyChange?: (matchAny: boolean) => void;
@@ -31,6 +33,7 @@ export function FilterBar({
   advanced,
   advancedCount = 0,
   children,
+  leading,
   matchAny,
   onMatchAnyChange,
   className,
@@ -42,6 +45,7 @@ export function FilterBar({
   return (
     <div className={className}>
       <div className="mb-3 flex flex-wrap items-center gap-3">
+        {leading}
         {children}
 
         {advanced ? (

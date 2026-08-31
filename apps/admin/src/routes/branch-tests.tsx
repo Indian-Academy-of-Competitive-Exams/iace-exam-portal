@@ -63,7 +63,7 @@ function BranchScreen({
   title: string;
   /** False holds the change — the series screen asks before a branch switch drops its draft. */
   onLeave?: (branchId: string) => boolean;
-  children: (branch: Branch) => ReactNode;
+  children: (branch: Branch, picker: ReactNode) => ReactNode;
 }>) {
   const { branch, branches, isLoading, notYours, choose } = useStandingBranch();
 
@@ -97,20 +97,22 @@ function BranchScreen({
     );
   }
 
+  // In the filter row, not above it: one row of controls, and it is not one of the filters.
+  const picker = (
+    <BranchPicker
+      branches={branches}
+      value={branch.id}
+      onChange={(next) => (!onLeave || onLeave(next)) && choose(next)}
+    />
+  );
+
   return (
     <TableFrame
       header={
         <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title={title} meta={branch.name} />
       }
-      toolbar={
-        <BranchPicker
-          branches={branches}
-          value={branch.id}
-          onChange={(next) => (!onLeave || onLeave(next)) && choose(next)}
-        />
-      }
     >
-      {children(branch)}
+      {children(branch, picker)}
     </TableFrame>
   );
 }
@@ -177,7 +179,9 @@ export function BranchSeriesPage() {
           return false;
         }}
       >
-        {(branch) => <SeriesList branch={branch} draft={draft} setDraft={setDraft} />}
+        {(branch, picker) => (
+          <SeriesList branch={branch} draft={draft} setDraft={setDraft} leading={picker} />
+        )}
       </BranchScreen>
 
       {/* Switching branch is the one leaving this screen can intercept; the nav belongs to the router. */}
@@ -202,10 +206,12 @@ function SeriesList({
   branch,
   draft,
   setDraft,
+  leading,
 }: Readonly<{
   branch: Branch;
   draft: SeriesDraft;
   setDraft: React.Dispatch<React.SetStateAction<SeriesDraft>>;
+  leading: ReactNode;
 }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
@@ -290,6 +296,7 @@ function SeriesList({
     <>
       <ListView
         list={series}
+        leading={leading}
         filters={filterSpec}
         columns={columns}
         rowKey={(row) => row.testSeriesId}
@@ -402,10 +409,14 @@ function testColumns(
 }
 
 export function BranchTestsPage() {
-  return <BranchScreen title="Tests">{(branch) => <TestsList branch={branch} />}</BranchScreen>;
+  return (
+    <BranchScreen title="Tests">
+      {(branch, picker) => <TestsList branch={branch} leading={picker} />}
+    </BranchScreen>
+  );
 }
 
-function TestsList({ branch }: Readonly<{ branch: Branch }>) {
+function TestsList({ branch, leading }: Readonly<{ branch: Branch; leading: ReactNode }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [editing, setEditing] = useState<BranchTestRow | null>(null);
@@ -445,6 +456,7 @@ function TestsList({ branch }: Readonly<{ branch: Branch }>) {
     <>
       <ListView
         list={tests}
+        leading={leading}
         filters={filterSpec}
         columns={columns}
         rowKey={testRowKey}
@@ -560,7 +572,7 @@ function MinutesField({
 export function BranchAccessRequestsPage() {
   return (
     <BranchScreen title="Access requests">
-      {(branch) => <AccessRequestList branchId={branch.id} />}
+      {(branch, picker) => <AccessRequestList branchId={branch.id} leading={picker} />}
     </BranchScreen>
   );
 }

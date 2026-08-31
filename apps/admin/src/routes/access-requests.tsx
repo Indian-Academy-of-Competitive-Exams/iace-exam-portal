@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, X } from 'lucide-react';
 import {
@@ -117,7 +117,10 @@ export function AccessRequestsPage() {
 }
 
 /** The queue itself, so the branch configuration screen shows it rather than rebuilding it. */
-export function AccessRequestList({ branchId }: Readonly<{ branchId?: string }>) {
+export function AccessRequestList({
+  branchId,
+  leading,
+}: Readonly<{ branchId?: string; leading?: ReactNode }>) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState<{
     row: SeriesUnlockRequestRow;
@@ -184,6 +187,7 @@ export function AccessRequestList({ branchId }: Readonly<{ branchId?: string }>)
 
       <ListView
         list={requests}
+        leading={leading}
         filters={REQUEST_FILTERS}
         columns={columns}
         rowKey={(row) => row.id}

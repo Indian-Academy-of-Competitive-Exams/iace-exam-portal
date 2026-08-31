@@ -96,6 +96,8 @@ export interface ListViewProps<TRow> {
   emptyFiltered?: React.ReactNode;
   /** Above the filters: what this list is pinned to, when a link arrived carrying it. */
   banner?: React.ReactNode;
+  /** First in the filter row: a mandatory scope the list is read through, never one of its filters. */
+  leading?: React.ReactNode;
   skeletonRows?: number;
   selection?: DataTableSelection;
   expand?: DataTableExpand<TRow>;
@@ -188,6 +190,7 @@ export function ListView<TRow>({
   empty,
   emptyFiltered,
   banner,
+  leading,
   skeletonRows,
   selection,
   expand,
@@ -211,8 +214,9 @@ export function ListView<TRow>({
   const offersMatch = Boolean(list.setMatchAny) && combinable > 1;
 
   const bar =
-    spec.length > 0 ? (
+    spec.length > 0 || leading ? (
       <FilterBar
+        leading={leading}
         activeCount={activeCount}
         advancedCount={countSet(folded)}
         onClear={list.clearFilters}
