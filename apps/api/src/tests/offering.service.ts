@@ -27,6 +27,7 @@ const OFFERING_SELECT = {
   id: true,
   status: true,
   isLocked: true,
+  examStageId: true,
   _count: { select: { series: true, attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
@@ -93,7 +94,10 @@ export class OfferingService {
     const test = await this.requireTest(testId);
     const wanted = [...new Map(input.series.map((row) => [row.testSeriesId, row])).values()];
     this.assertStillReachable(test, wanted.length);
-    await this.assertSeriesExist(wanted.map((row) => row.testSeriesId));
+    await this.assertSeriesUsable(
+      test,
+      wanted.map((row) => row.testSeriesId),
+    );
     await this.assertNoneDropped(test, new Set(wanted.map((row) => row.testSeriesId)));
 
     const touched = await this.prisma.$transaction(async (tx) => {
@@ -174,15 +178,29 @@ export class OfferingService {
     }));
   }
 
-  private async assertSeriesExist(ids: readonly string[]): Promise<void> {
+  /** A series must exist, and must be built for this test's stage or for no stage at all. */
+  private async assertSeriesUsable(test: OfferingRow, ids: readonly string[]): Promise<void> {
     if (ids.length === 0) return;
     const found = await this.prisma.testSeries.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true },
+      select: { id: true, name: true, examStageId: true },
     });
-    if (found.length === ids.length) return;
 
-    const message = 'One of the chosen series no longer exists.';
+    if (found.length !== ids.length) {
+      const gone = 'One of the chosen series no longer exists.';
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, gone, {
+        fieldErrors: { series: [gone] },
+      });
+    }
+
+    // A stage-agnostic series carries any test; another stage's would serve this paper to its students.
+    const foreign = found.filter(
+      (row) => row.examStageId !== null && row.examStageId !== test.examStageId,
+    );
+    if (foreign.length === 0) return;
+
+    const named = foreign.map((row) => row.name).join(', ');
+    const message = `${named} ${foreign.length === 1 ? 'is' : 'are'} built for a different exam stage, and a test reaches students through the series carrying it.`;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
       fieldErrors: { series: [message] },
     });

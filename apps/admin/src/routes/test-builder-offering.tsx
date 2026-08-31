@@ -65,6 +65,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
             {...control}
             value={chosen}
             disabled={setSeries.isPending}
+            forExamStageId={detail.examStageId}
             onChange={(next) => setSeries.mutate(next)}
           />
         )}

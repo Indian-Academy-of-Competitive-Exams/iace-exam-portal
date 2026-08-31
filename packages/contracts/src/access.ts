@@ -166,6 +166,8 @@ export function seriesNameKind(input: {
 export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   examStageId: csvIdQuery(),
+  /** One test's stage: keeps a picker to series built for it, plus the stage-agnostic ones. */
+  forExamStageId: z.string().optional(),
   programCode: z.string().optional(),
   kind: testSeriesKindSchema.optional(),
   match: matchModeQuery(),

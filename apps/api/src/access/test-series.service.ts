@@ -94,6 +94,9 @@ export class TestSeriesService {
   ): Promise<Paginated<TestSeriesSummary>> {
     const chosen: Prisma.TestSeriesWhereInput[] = [
       ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
+      ...(query.forExamStageId
+        ? [{ OR: [{ examStageId: query.forExamStageId }, { examStageId: null }] }]
+        : []),
       ...(query.programCode ? [{ programCode: query.programCode }] : []),
       ...(query.kind === undefined ? [] : [{ kind: query.kind }]),
     ];

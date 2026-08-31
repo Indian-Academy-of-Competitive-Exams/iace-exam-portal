@@ -111,12 +111,15 @@ export function TestSeriesMultiPicker({
   value,
   onChange,
   disabled,
+  forExamStageId,
   placeholder = 'No series yet',
   ...control
 }: Readonly<{
   value: readonly string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
+  /** The stage of the test being offered: hides series built for a different one. */
+  forExamStageId?: string;
   /** A form says what is chosen; a filter says what choosing nothing means. */
   placeholder?: string;
   id?: string;
@@ -127,8 +130,9 @@ export function TestSeriesMultiPicker({
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search],
-    fetchPage: (page) => api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search, forExamStageId ?? ''],
+    fetchPage: (page) =>
+      api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search, forExamStageId }),
   });
 
   return (

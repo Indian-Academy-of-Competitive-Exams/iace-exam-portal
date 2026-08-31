@@ -105,6 +105,36 @@ describe('OfferingService — attaching a test to a series', () => {
     assert.equal(prisma.seriesTests.length, 0);
   });
 
+  it('refuses a series built for another exam stage', async () => {
+    const { service, prisma } = serviceWith();
+    prisma.series.push(makeSeries({ id: 'srs_rrb', name: 'RRB JE mocks', examStageId: 'stage_9' }));
+
+    const error = await service
+      .setSeries('tst_1', { series: [{ testSeriesId: 'srs_rrb', order: 1 }] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(prisma.seriesTests.length, 0);
+  });
+
+  it('carries a stage-agnostic series, which belongs to no stage and so fits any test', async () => {
+    const { service, prisma } = serviceWith();
+    prisma.series.push(makeSeries({ id: 'srs_free', name: 'Free mocks', examStageId: null }));
+
+    const links = await service.setSeries('tst_1', {
+      series: [
+        { testSeriesId: 'srs_1', order: 1 },
+        { testSeriesId: 'srs_free', order: 2 },
+      ],
+    });
+
+    assert.deepEqual(
+      new Set(links.map((link) => link.testSeriesId)),
+      new Set(['srs_1', 'srs_free']),
+    );
+  });
+
   it('refuses to take an OFFERED test out of its last series', async () => {
     const { service, prisma } = serviceWith(
       makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
