@@ -7,14 +7,14 @@ import {
   Button,
   EmptyState,
   LoadingState,
+  LinePlot,
   Metric,
   MetricGroup,
   PageFrame,
   PageHeader,
   SectionHeading,
   Skeleton,
-  TrendLine,
-  type TrendPoint,
+  type LinePoint,
 } from '@iace/ui';
 import { PreTestPrompt } from '../components/pre-test-prompt';
 import { StatusStrip } from '../components/tests/status-strip';
@@ -25,7 +25,7 @@ import {
   PROFILE_QUERY_KEY,
   ROUTES,
 } from '../lib/constants';
-import { sittablesOf, type Sittable } from '../lib/catalog';
+import { averagePercentile, bestRank, sittablesOf, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
 
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
@@ -38,13 +38,13 @@ export function DashboardPage() {
   const now = new Date();
   const rows = sittablesOf(catalog.data?.series ?? [], now);
 
-  const points: TrendPoint[] = (trend.data?.points ?? []).map((point) => ({
+  const sittings = trend.data?.points ?? [];
+  const points: LinePoint[] = sittings.map((point) => ({
     key: point.attemptId,
     label: point.testTitle ?? 'Untitled test',
-    value: point.accuracy,
+    value: point.percentile,
     caption: `${point.score} of ${point.maxMarks} marks`,
   }));
-  const last = trend.data?.points.at(-1);
   const sat = points.length > 0;
 
   let trendRegion;
@@ -56,13 +56,13 @@ export function DashboardPage() {
     trendRegion = (
       <>
         <MetricGroup>
+          <Metric label="Average percentile" value={averagePercentile(sittings)} />
+          <Metric label="Best rank" value={bestRank(sittings)} />
           <Metric label="Tests done" value={trend.data?.testsSat ?? 0} />
-          <Metric label="Last rank" value={last?.rank ?? '—'} />
-          <Metric label="Last accuracy" value={last?.accuracy ?? 0} unit="%" />
         </MetricGroup>
         <section className="flex flex-col gap-3">
-          <SectionHeading title="Accuracy" />
-          <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+          <SectionHeading title="Percentile" />
+          <LinePlot compact points={points} aria-label="Percentile across your tests" />
         </section>
       </>
     );

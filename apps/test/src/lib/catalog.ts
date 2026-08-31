@@ -90,3 +90,10 @@ export const averageAccuracy = (points: readonly { accuracy: number }[]) => {
   const mean = points.reduce((sum, point) => sum + point.accuracy, 0) / points.length;
   return `${Math.round(mean)}`;
 };
+
+/** Bare number over the sittings that HAVE one — a practice retake is unranked, not a zero. */
+export const averagePercentile = (points: readonly { percentile: number | null }[]) => {
+  const ranked = points.map((point) => point.percentile).filter((value) => value !== null);
+  if (ranked.length === 0) return '—';
+  return `${Math.round(ranked.reduce((sum, value) => sum + value, 0) / ranked.length)}`;
+};

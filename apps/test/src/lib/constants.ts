@@ -1,6 +1,12 @@
 import { BarChart3, ClipboardList, Gift, KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
-import { ANSWER_STATE, type AnswerState, type LanguageCode } from '@iace/contracts';
+import {
+  ANSWER_STATE,
+  PERFORMANCE_SCOPES,
+  type AnswerState,
+  type LanguageCode,
+  type PerformanceScope,
+} from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
 /** Route paths. Referenced by the router, the guards and every navigate(). */
@@ -48,6 +54,23 @@ export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attem
 
 /** Every test this student has sat, which is what the Performance tab and the landing both read. */
 export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
+
+/** One report, keyed by what it is OF — the screen swaps scope and paper without a stale read. */
+export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
+  ['me', 'performance', 'report', scope, scopeId] as const;
+
+/** The two the student can answer on their own. SERIES needs a series picker, which AN4 owns. */
+export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
+  [PERFORMANCE_SCOPES.TEST]: 'This test',
+  [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
+};
+
+/** Difficulty bands as the report keys them: `DifficultyStanding.name` carries the enum value. */
+export const DIFFICULTY_LABELS: Readonly<Record<string, string>> = {
+  LOW: 'Low',
+  MEDIUM: 'Medium',
+  HIGH: 'High',
+};
 
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];

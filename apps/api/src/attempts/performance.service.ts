@@ -55,6 +55,7 @@ const REPORT_SELECT = {
   test: {
     select: {
       title: true,
+      evaluationMode: true,
       baseConfig: {
         select: {
           sections: {
@@ -137,6 +138,7 @@ export class PerformanceAnalyticsService {
       scope: query.scope,
       scopeId: scopeIdOf(query),
       label,
+      evaluationMode: anchor?.test.evaluationMode ?? null,
       attemptsCounted: sat.length,
       generatedAt: new Date().toISOString(),
       trajectory: sat.map((row) => toPoint(row, testStats.get(row.testId)?.evaluatedCount ?? null)),

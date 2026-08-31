@@ -4759,6 +4759,7 @@ export class FakePerformancePrisma {
       ...row,
       test: {
         title: this.data.shape.title,
+        evaluationMode: this.data.shape.evaluationMode,
         baseConfig: { sections: [...this.data.shape.sections].sort((a, b) => a.order - b.order) },
       },
       questions: this.data.served

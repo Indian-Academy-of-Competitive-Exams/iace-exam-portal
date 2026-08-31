@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { evaluationModeSchema, testScopeSchema } from './tests';
-import { analyticsBucketSchema, scoreCardSectionSchema, timeUseSchema } from './attempts';
+import {
+  analyticsBucketSchema,
+  scoreCardSectionSchema,
+  timeUseSchema,
+  type PerformancePoint,
+} from './attempts';
 
 // ============================================================================
 // Analytics rollups. Pre-aggregated so the student dashboard and the admin test
@@ -235,6 +240,8 @@ export const performanceReportSchema = z.object({
   /** The id the scope was asked about. Null for ALL_TIME. */
   scopeId: z.string().nullable(),
   label: z.string().nullable(),
+  /** The ANCHOR test's mode, which is what decides whether a cohort standing means anything. */
+  evaluationMode: evaluationModeSchema.nullable(),
   /** Evaluated sittings in scope — what the trajectory plots, and only that. */
   attemptsCounted: z.number().int(),
   generatedAt: z.string(),
@@ -248,6 +255,48 @@ export const performanceReportSchema = z.object({
   time: timeUseSchema,
 });
 export type PerformanceReport = z.infer<typeof performanceReportSchema>;
+
+// ============================================================================
+// Reading a trend the way the Performance screen has to: which papers were sat,
+// which sittings belong to one of them, and which of those went best. Marks are
+// only ever compared WITHIN a test here — across papers they mean nothing.
+// ============================================================================
+
+/** One paper a student has sat, and the sitting that dates it. */
+export interface SatTest {
+  testId: string;
+  title: string | null;
+  /** The most recent sitting of it — what the picker orders by and defaults to. */
+  lastAttemptId: string;
+  lastSatAt: string | null;
+}
+
+/** Distinct papers behind a trend, most recently sat first. Takes the trend oldest-first. */
+export function testsSat(points: readonly PerformancePoint[]): SatTest[] {
+  const seen = new Map<string, SatTest>();
+  for (const point of [...points].reverse()) {
+    if (seen.has(point.testId)) continue;
+    seen.set(point.testId, {
+      testId: point.testId,
+      title: point.testTitle,
+      lastAttemptId: point.attemptId,
+      lastSatAt: point.submittedAt,
+    });
+  }
+  return [...seen.values()];
+}
+
+/** Every sitting of ONE paper, in the order they were sat — the retake line. */
+export const sittingsOf = (points: readonly PerformancePoint[], testId: string) =>
+  points.filter((point) => point.testId === testId);
+
+/** The best-scoring sitting in a set. A tie goes to the earliest: that is when it was reached. */
+export function bestSitting(points: readonly PerformancePoint[]): PerformancePoint | null {
+  return points.reduce<PerformancePoint | null>(
+    (best, point) => (best === null || point.score > best.score ? point : best),
+    null,
+  );
+}
 
 export const PERFORMANCE_ROUTES = {
   me: '/me/performance/report',
