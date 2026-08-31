@@ -9,8 +9,11 @@ import {
 import { api } from './api';
 import { QUERY_KEYS } from './constants';
 
-/** The branch list, unpaged and long-cached: a small list that changes a few times a year. */
-export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
+/** Unpaged and long-cached, and already scoped by the server: a branch outside theirs is not in it. */
+export function useBranchList(options: { activeOnly?: boolean } = {}): {
+  branches: Branch[];
+  isLoading: boolean;
+} {
   const { activeOnly } = options;
 
   const query = useQuery({
@@ -23,28 +26,14 @@ export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
     staleTime: 5 * 60_000,
   });
 
-  return query.data?.items ?? [];
+  return { branches: query.data?.items ?? [], isLoading: query.isLoading };
 }
 
-/** One branch out of the list the server already scoped, so a branch outside it reads as missing. */
-export function useBranch(branchId: string): { branch: Branch | null; isLoading: boolean } {
-  const query = useQuery({
-    queryKey: [...QUERY_KEYS.BRANCHES, { activeOnly: false }],
-    queryFn: () => api.admin.branches.list({ pageSize: PAGE_SIZE_MAX }),
-    staleTime: 5 * 60_000,
-  });
-
-  return {
-    branch: query.data?.items.find((branch) => branch.id === branchId) ?? null,
-    isLoading: query.isLoading,
-  };
+export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
+  return useBranchList(options).branches;
 }
 
-/**
- * The branches a student of this type may sit in — mirrors `studentBranchBlocker` on the server so
- * the picker never offers a branch the save would refuse. NON_IACE sits outside the institute, so
- * every branch is a real answer for them.
- */
+/** Mirrors `studentBranchBlocker` on the server, so the picker never offers a branch the save refuses. */
 export function branchesForStudentType(branches: Branch[], studentType: StudentType): Branch[] {
   if (studentType === STUDENT_TYPE.ONLINE) {
     return branches.filter((branch) => branch.type === BRANCH_TYPE.VIRTUAL);

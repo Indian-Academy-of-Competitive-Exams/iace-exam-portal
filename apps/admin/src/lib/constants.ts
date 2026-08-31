@@ -56,9 +56,10 @@ export const ROUTES = {
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
   BRANCHES: '/branches',
-  /** What ONE branch runs. Opened from a row on the list, which is what makes it a route. */
-  BRANCH_TESTS: (id: string) => `/branches/${id}/tests`,
-  BRANCH_TESTS_PATTERN: '/branches/:branchId/tests',
+  /** What ONE branch runs. Three screens standing in one branch, which rides the URL as `branchId`. */
+  BRANCH_TEST_SERIES: '/branch/test-series',
+  BRANCH_TESTS: '/branch/tests',
+  BRANCH_ACCESS_REQUESTS: '/branch/access-requests',
   EXAMS: '/exams',
   /** The coaching variants. A student and a series both carry the code as free text. */
   PROGRAMS: '/programs',
@@ -376,6 +377,17 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.ACCESS_REQUESTS, label: 'Access requests', icon: KeyRound },
     ],
   },
+  /** Its own section, not a row under Tests: a branch admin lives here and reaches nothing above it. */
+  {
+    label: 'Branch tests',
+    icon: Building2,
+    featureKey: FEATURE_KEYS.BRANCH_TEST_MANAGEMENT,
+    children: [
+      { to: ROUTES.BRANCH_TEST_SERIES, label: 'Test series', icon: Layers },
+      { to: ROUTES.BRANCH_TESTS, label: 'Tests', icon: ClipboardList },
+      { to: ROUTES.BRANCH_ACCESS_REQUESTS, label: 'Access requests', icon: KeyRound },
+    ],
+  },
   {
     label: 'Administration',
     icon: ShieldCheck,
@@ -401,6 +413,9 @@ const BRANCH_ADMIN_ROUTES = new Set<string>([
   ROUTES.STUDENTS,
   ROUTES.IMPORT_STUDENTS,
   ROUTES.BRANCHES,
+  ROUTES.BRANCH_TEST_SERIES,
+  ROUTES.BRANCH_TESTS,
+  ROUTES.BRANCH_ACCESS_REQUESTS,
   ROUTES.AUDIT,
   ROUTES.AUDIT_IMPORTS,
 ]);
@@ -465,4 +480,6 @@ export const PAGE_SIZE_FOR_PICKERS = 100;
  */
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
+  /** The branch the three Branch tests screens stand in, so moving between them keeps it. */
+  BRANCH: 'iace.admin.branch',
 } as const;

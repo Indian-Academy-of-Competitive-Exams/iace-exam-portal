@@ -270,7 +270,7 @@ function BranchActions({
       {/* What makes the branch a route rather than a picker: an admin holding several picks one. */}
       {canConfigure ? (
         <DropdownMenuItem asChild>
-          <Link to={ROUTES.BRANCH_TESTS(branch.id)}>
+          <Link to={`${ROUTES.BRANCH_TEST_SERIES}?branchId=${branch.id}`}>
             <ClipboardList aria-hidden />
             Configure tests
           </Link>

@@ -130,9 +130,36 @@ Three edges that stay true:
 A branch admin's nav: Students (All students, Import students), Branches, Audit. Everything else is
 absent.
 
-**Branch configuration is not a nav row.** It opens from a row on the Branches list, which is what
-makes the branch a route rather than a picker — see part B. An admin holding one branch pays one
-click for that; inventing a second, shape-shifting destination to save it costs more than it saves.
+**Branch configuration IS a nav row — three of them**, revised 2026-08-31 and built the same day.
+The original decision below was made for a reader who visits the screen occasionally; the people who
+actually live here are branch admins, for whom every visit was Students → Branches → find your own
+row → menu → Configure tests. That is not a click, it is a hunt, and it repeats all day.
+
+So: a **Branch tests** section — Test series, Tests, Access requests — gated on
+`BRANCH_TEST_MANAGEMENT` and named in the branch admin's route allow-list.
+
+What this costs, stated rather than hidden:
+
+- **The branch is a picker now, not a path.** A nav row's `to` is a fixed string, so it cannot carry
+  a branch. The branch rides the URL as `?branchId=`, defaults to the viewer's first, and is
+  remembered in `STORAGE_KEYS.BRANCH` so moving between the three keeps it. An admin holding ONE
+  branch — the case this is for — never sees the picker at all.
+- **Three of the four names collide with the Tests section.** A branch admin sees only these, so
+  there is no collision for them; a super admin sees both, and the section name is what separates
+  them.
+- **A pending draft can no longer be intercepted on the way out.** Under one screen with tabs, the
+  tab change was ours to guard; three routes means the nav is the router's, and `useBlocker` needs a
+  data router this app does not mount. Changing branch still asks, and a pinned warning names the
+  count for as long as a draft is held.
+
+The original reasoning, kept because it is still why the branch is not in the path:
+
+> It opens from a row on the Branches list, which is what makes the branch a route rather than a
+> picker. An admin holding one branch pays one click for that; inventing a second, shape-shifting
+> destination to save it costs more than it saves.
+
+The Branches row action stays — it is how a super admin jumps to a branch they picked off the full
+list, and it now carries `?branchId=` into the same screens.
 
 Branch writes stay super-admin only, as they are today: `BranchesController` reads under
 `STUDENT_MANAGEMENT` and creates, updates and deletes under `RequiresSuperAdmin`. A branch admin

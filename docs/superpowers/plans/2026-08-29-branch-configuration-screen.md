@@ -191,6 +191,23 @@ third tab reuses the queue rather than rebuilding it.
 Every pair of screens writing one row now busts both keys: the two series editors, and the two
 timing editors.
 
+## Revised the same day: three nav rows, not one tabbed screen
+
+The plan built `/branches/:branchId/tests` as one `TableFrame` with three tabs, reached from the
+Branches list. It is now three routes under a **Branch tests** nav section — `/branch/test-series`,
+`/branch/tests`, `/branch/access-requests` — because the people who live here are branch admins, and
+for them every visit was a hunt through the Branches list for their own row.
+
+The spec's Navigation section carries the decision and what it costs. In this repo it means:
+
+- `useStandingBranch` (`apps/admin/src/lib/use-standing-branch.ts`) resolves the branch: URL, then
+  `STORAGE_KEYS.BRANCH`, then their first. An id ASKED for and not theirs still says so; a
+  REMEMBERED one they no longer reach falls back quietly.
+- `BranchPicker` renders nothing below two branches, and sits in `TableFrame`'s `toolbar` — the
+  first caller that prop has ever had. The stated reason: it does not narrow the list, it decides
+  which branch's list this is, so it is not a filter and it is shared by all three screens.
+- The tab-change guard is gone with the tabs; the branch-change guard replaces it.
+
 ## Not in this plan
 
 - The series form's "enable everywhere" still switches on branches deliberately switched off. Its

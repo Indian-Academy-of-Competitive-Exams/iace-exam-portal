@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { Clock } from 'lucide-react';
@@ -12,7 +11,7 @@ import {
   type BranchTestRow,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
@@ -37,27 +36,17 @@ import {
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { BranchPicker } from '../components/branch-picker';
 import { ExamStageMultiPicker } from '../components/exam-picker';
 import { TestSeriesMultiPicker } from '../components/access-picker';
 import { StageCell } from '../components/stage-cell';
 import { AccessRequestList } from './access-requests';
 import { NAV_ITEMS, QUERY_KEYS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
 import { opensLabel, toMinutes, toSeconds } from '../lib/schedule-format';
+import { useStandingBranch } from '../lib/use-standing-branch';
 import { useAuth } from '../providers/auth';
-import { useBranch } from '../lib/use-branches';
 
-/** What one branch runs, from the branch's side. The series form writes the same rows. */
-
-const TABS = {
-  SERIES: 'series',
-  TESTS: 'tests',
-  REQUESTS: 'requests',
-} as const;
-
-/** Cleared on every tab change: a search typed against series means nothing against tests. */
-type FilterKey = 'tab' | 'q' | 'enabled' | 'examStageId' | 'testSeriesId' | 'status';
-
-const TAB_FILTERS = { q: '', enabled: '', examStageId: '', testSeriesId: '', status: '' } as const;
+/** What one branch runs: three screens standing in the same branch, which rides the URL between them. */
 
 const branchSeriesKey = (branchId: string) =>
   [...QUERY_KEYS.BRANCH_CONFIG, branchId, 'test-series'] as const;
@@ -65,9 +54,18 @@ const branchSeriesKey = (branchId: string) =>
 const branchTestsKey = (branchId: string) =>
   [...QUERY_KEYS.BRANCH_CONFIG, branchId, 'tests'] as const;
 
-export function BranchTestsPage() {
-  const { branchId = '' } = useParams();
-  const { branch, isLoading } = useBranch(branchId);
+/** The frame all three share. The picker is `toolbar`, not a filter: it picks the list, not a subset. */
+function BranchScreen({
+  title,
+  onLeave,
+  children,
+}: Readonly<{
+  title: string;
+  /** False holds the change — the series screen asks before a branch switch drops its draft. */
+  onLeave?: (branchId: string) => boolean;
+  children: (branch: Branch) => ReactNode;
+}>) {
+  const { branch, branches, isLoading, notYours, choose } = useStandingBranch();
 
   // The screen has a known shape, so it is drawn and held rather than spun at.
   if (isLoading) {
@@ -81,72 +79,39 @@ export function BranchTestsPage() {
     );
   }
 
-  if (!branch) {
+  if (notYours) {
     return (
       <Alert variant="warning">
-        This branch is not one of yours, so there is nothing here to configure. A super admin can
+        That branch is not one of yours, so there is nothing here to configure. A super admin can
         add it to your branches.
       </Alert>
     );
   }
 
-  return <BranchConfiguration branch={branch} />;
-}
-
-function BranchConfiguration({ branch }: Readonly<{ branch: Branch }>) {
-  const filters = useFilters<FilterKey>();
-  const tab = filters.get('tab') || TABS.SERIES;
-  // Held here rather than in the tab: the tab that leaves is unmounted, and the draft with it.
-  const [draft, setDraft] = useState<SeriesDraft>({});
-  const [leaving, setLeaving] = useState<string | null>(null);
-
-  const pending = Object.keys(draft).length;
-  const openTab = (value: string) => filters.set({ tab: value, ...TAB_FILTERS });
-
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: branch.name }]} />}
-      title={branch.name}
-    />
-  );
+  if (!branch) {
+    return (
+      <Alert variant="warning">
+        You have not been given a branch yet, so there is nothing here to configure. A super admin
+        assigns one.
+      </Alert>
+    );
+  }
 
   return (
-    <>
-      <TableFrame
-        header={header}
-        tabs={{
-          value: tab,
-          onValueChange: (value) => (pending > 0 ? setLeaving(value) : openTab(value)),
-          items: [
-            {
-              value: TABS.SERIES,
-              label: 'Test series',
-              content: <SeriesTab branch={branch} draft={draft} setDraft={setDraft} />,
-            },
-            { value: TABS.TESTS, label: 'Tests', content: <TestsTab branch={branch} /> },
-            {
-              value: TABS.REQUESTS,
-              label: 'Access requests',
-              content: <AccessRequestList branchId={branch.id} />,
-            },
-          ],
-        }}
-      />
-
-      <ConfirmDialog
-        open={leaving !== null}
-        onOpenChange={(open) => !open && setLeaving(null)}
-        destructive
-        title="Leave without saving?"
-        description={`Leaving this tab discards ${plural(pending, 'unsaved change')} to what ${branch.name} runs.`}
-        confirmLabel="Leave without saving"
-        onConfirm={() => {
-          setDraft({});
-          if (leaving !== null) openTab(leaving);
-          setLeaving(null);
-        }}
-      />
-    </>
+    <TableFrame
+      header={
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title={title} meta={branch.name} />
+      }
+      toolbar={
+        <BranchPicker
+          branches={branches}
+          value={branch.id}
+          onChange={(next) => (!onLeave || onLeave(next)) && choose(next)}
+        />
+      }
+    >
+      {children(branch)}
+    </TableFrame>
   );
 }
 
@@ -195,7 +160,45 @@ function seriesColumns(
   ];
 }
 
-function SeriesTab({
+export function BranchSeriesPage() {
+  const { choose } = useStandingBranch();
+  const [draft, setDraft] = useState<SeriesDraft>({});
+  const [leaving, setLeaving] = useState<string | null>(null);
+
+  const pending = Object.keys(draft).length;
+
+  return (
+    <>
+      <BranchScreen
+        title="Test series"
+        onLeave={(next) => {
+          if (pending === 0) return true;
+          setLeaving(next);
+          return false;
+        }}
+      >
+        {(branch) => <SeriesList branch={branch} draft={draft} setDraft={setDraft} />}
+      </BranchScreen>
+
+      {/* Switching branch is the one leaving this screen can intercept; the nav belongs to the router. */}
+      <ConfirmDialog
+        open={leaving !== null}
+        onOpenChange={(open) => !open && setLeaving(null)}
+        destructive
+        title="Change branch without saving?"
+        description={`Standing in another branch discards ${plural(pending, 'unsaved change')} to this one.`}
+        confirmLabel="Change branch"
+        onConfirm={() => {
+          setDraft({});
+          if (leaving !== null) choose(leaving);
+          setLeaving(null);
+        }}
+      />
+    </>
+  );
+}
+
+function SeriesList({
   branch,
   draft,
   setDraft,
@@ -294,7 +297,7 @@ function SeriesTab({
           changes.length > 0 ? (
             <Alert variant="warning" className="mb-4 items-center justify-between">
               <span>
-                {`${plural(changes.length, 'unsaved change')} to what ${branch.name} runs. Leaving the screen without saving discards the draft.`}
+                {`${plural(changes.length, 'unsaved change')} to what ${branch.name} runs. Leaving this screen without saving discards the draft.`}
               </span>
               <Button type="button" size="sm" onClick={() => setAsking(true)}>
                 Save changes
@@ -398,7 +401,11 @@ function testColumns(
   ];
 }
 
-function TestsTab({ branch }: Readonly<{ branch: Branch }>) {
+export function BranchTestsPage() {
+  return <BranchScreen title="Tests">{(branch) => <TestsList branch={branch} />}</BranchScreen>;
+}
+
+function TestsList({ branch }: Readonly<{ branch: Branch }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [editing, setEditing] = useState<BranchTestRow | null>(null);
@@ -543,5 +550,17 @@ function MinutesField({
         />
       )}
     </FormField>
+  );
+}
+
+// ============================================================================
+// Access requests — the existing queue, narrowed to this branch's students.
+// ============================================================================
+
+export function BranchAccessRequestsPage() {
+  return (
+    <BranchScreen title="Access requests">
+      {(branch) => <AccessRequestList branchId={branch.id} />}
+    </BranchScreen>
   );
 }
