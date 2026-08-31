@@ -5,11 +5,13 @@ import {
   Avatar,
   Button,
   EmptyState,
+  LoadingState,
   Metric,
   MetricGroup,
   PageFrame,
   PageHeader,
   SectionHeading,
+  Skeleton,
   TrendLine,
   type TrendPoint,
 } from '@iace/ui';
@@ -44,6 +46,37 @@ export function DashboardPage() {
   const last = trend.data?.points.at(-1);
   const sat = points.length > 0;
 
+  let trendRegion;
+  if (trend.isLoading) {
+    trendRegion = <LoadingState />;
+  } else if (sat) {
+    trendRegion = (
+      <>
+        <MetricGroup>
+          <Metric label="Tests done" value={trend.data?.testsSat ?? 0} />
+          <Metric label="Last rank" value={last?.rank ?? '—'} />
+          <Metric label="Last accuracy" value={last?.accuracy ?? 0} unit="%" />
+        </MetricGroup>
+        <section className="flex flex-col gap-3">
+          <SectionHeading title="Accuracy" />
+          <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+        </section>
+      </>
+    );
+  } else {
+    trendRegion = (
+      <EmptyState
+        icon={ClipboardList}
+        title="No tests sat yet"
+        action={
+          <Button asChild>
+            <Link to={ROUTES.TESTS}>Go to your tests</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
   return (
     <PageFrame
       header={
@@ -60,7 +93,7 @@ export function DashboardPage() {
           title={student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
           meta={<span className="tabular-nums">+91 {student?.mobile}</span>}
           action={
-            sat ? (
+            trend.isLoading || sat ? (
               <Button asChild variant="outline">
                 <Link to={ROUTES.PERFORMANCE}>See your performance</Link>
               </Button>
@@ -72,35 +105,16 @@ export function DashboardPage() {
       <div className="flex flex-col gap-8">
         <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 
-        {sat ? (
-          <MetricGroup>
-            <Metric label="Tests done" value={trend.data?.testsSat ?? 0} />
-            <Metric label="Last rank" value={last?.rank ?? '—'} />
-            <Metric label="Last accuracy" value={last?.accuracy ?? 0} unit="%" />
-          </MetricGroup>
-        ) : null}
+        {trendRegion}
 
         <section className="flex flex-col gap-3">
           <SectionHeading title="Next" />
-          <StatusStrip rows={rows} now={now} />
+          {catalog.isLoading ? (
+            <Skeleton variant="row" className="h-40 rounded-lg" />
+          ) : (
+            <StatusStrip rows={rows} now={now} />
+          )}
         </section>
-
-        {sat ? (
-          <section className="flex flex-col gap-3">
-            <SectionHeading title="Accuracy" />
-            <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
-          </section>
-        ) : (
-          <EmptyState
-            icon={ClipboardList}
-            title="No tests sat yet"
-            action={
-              <Button asChild>
-                <Link to={ROUTES.TESTS}>Go to your tests</Link>
-              </Button>
-            }
-          />
-        )}
       </div>
     </PageFrame>
   );
