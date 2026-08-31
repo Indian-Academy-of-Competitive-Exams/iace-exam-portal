@@ -161,7 +161,8 @@ export {
   type RatioPart,
   type RatioValues,
 } from './components/ui/ratio-bar';
-export { PageHeader } from './components/ui/page-header';
+export { PageHeader, type PageHeaderSize } from './components/ui/page-header';
+export { SectionHeading, type SectionHeadingProps } from './components/ui/section-heading';
 export {
   DataTable,
   type DataTableColumn,

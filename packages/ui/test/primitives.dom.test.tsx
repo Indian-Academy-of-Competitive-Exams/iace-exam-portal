@@ -14,6 +14,8 @@ import { Metric } from '../src/components/ui/metric';
 import { MetricGroup } from '../src/components/ui/metric-group';
 import { Inbox } from 'lucide-react';
 import { EmptyState } from '../src/components/ui/empty-state';
+import { SectionHeading } from '../src/components/ui/section-heading';
+import { PageHeader } from '../src/components/ui/page-header';
 
 afterEach(cleanup);
 
@@ -203,5 +205,28 @@ describe('EmptyState', () => {
     );
 
     assert.ok(screen.getByText('Your branch adds them as they open.'));
+  });
+});
+
+describe('SectionHeading', () => {
+  it('is a second-level heading by default, and takes a value beside it', () => {
+    render(<SectionHeading title="Sections" meta="4 sections" />);
+
+    assert.ok(screen.getByRole('heading', { level: 2, name: 'Sections' }));
+    assert.ok(screen.getByText('4 sections'));
+  });
+
+  it('drops a level where it sits under another heading', () => {
+    render(<SectionHeading title="Solution" level={3} />);
+
+    assert.ok(screen.getByRole('heading', { level: 3, name: 'Solution' }));
+  });
+});
+
+describe('PageHeader', () => {
+  it('titles the page at one level, whatever size it is set at', () => {
+    render(<PageHeader title="Performance" size="display" />);
+
+    assert.ok(screen.getByRole('heading', { level: 1, name: 'Performance' }));
   });
 });
