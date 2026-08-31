@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Alert, Badge, RichContent, Tabs, TabsList, TabsTrigger, cn } from '@iace/ui';
+import {
+  Alert,
+  Badge,
+  RichContent,
+  SectionHeading,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  cn,
+} from '@iace/ui';
 import {
   type ExamSection,
   type LanguageCode,
@@ -142,7 +151,7 @@ function ReviewQuestion({
 
       {question.content?.en?.solution ? (
         <div className="flex flex-col gap-2 border-t border-border pt-4">
-          <h3 className="text-sm font-semibold text-foreground">Solution</h3>
+          <SectionHeading title="Solution" level={3} />
           {shown.map((language) => (
             <RichContent
               key={language}

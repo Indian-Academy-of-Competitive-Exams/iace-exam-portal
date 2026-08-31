@@ -121,11 +121,11 @@ function SeriesCard({
     <Card>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <TruncatedText className="text-sm font-semibold text-foreground">
+          <TruncatedText className="text-md font-semibold text-foreground">
             {series.name}
           </TruncatedText>
           {series.examStage ? (
-            <TruncatedText className="text-xs text-muted-foreground">
+            <TruncatedText className="text-sm text-muted-foreground">
               {`${series.examStage.examCode} · ${series.examStage.name}`}
             </TruncatedText>
           ) : null}

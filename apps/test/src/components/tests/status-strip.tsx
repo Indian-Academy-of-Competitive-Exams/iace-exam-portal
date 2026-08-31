@@ -1,4 +1,5 @@
-import { Alert, SectionHeading } from '@iace/ui';
+import { Inbox } from 'lucide-react';
+import { EmptyState, SectionHeading } from '@iace/ui';
 import { continueWith, openNow, upNext, type Sittable } from '../../lib/catalog';
 import { TestTile } from './test-tile';
 
@@ -9,7 +10,7 @@ export function StatusStrip({ rows, now }: Readonly<{ rows: readonly Sittable[];
   const next = upNext(rows);
 
   if (!running && open.length === 0 && next.length === 0) {
-    return <Alert variant="info">Nothing is waiting for you right now.</Alert>;
+    return <EmptyState icon={Inbox} title="Nothing waiting" level={3} />;
   }
 
   return (
