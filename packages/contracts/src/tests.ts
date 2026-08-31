@@ -574,6 +574,38 @@ export const setSeriesTestUnlockSchema = z.object({ unlockAt: z.iso.datetime().n
 export type SetSeriesTestUnlockInput = z.input<typeof setSeriesTestUnlockSchema>;
 export type SetSeriesTestUnlockBody = z.infer<typeof setSeriesTestUnlockSchema>;
 
+/** One test as ONE branch sees it. A test carried by two of its series is two rows, as a student reads it. */
+export const branchTestRowSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  testSeriesId: z.string(),
+  seriesName: z.string(),
+  order: z.number().int().nullable(),
+  unlockAt: z.string().nullable(),
+  lateEntrySec: z.number().int().nullable(),
+  extraTimeSec: z.number().int().nullable(),
+});
+export type BranchTestRow = z.infer<typeof branchTestRowSchema>;
+
+export const branchTestListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  testSeriesId: csvIdQuery(),
+});
+export type BranchTestListQuery = z.infer<typeof branchTestListQuerySchema>;
+export type BranchTestListQueryInput = z.input<typeof branchTestListQuerySchema>;
+
+/** Both null is the plain rules, which is the ABSENCE of a row — a row of nulls says it twice. */
+export const setBranchTestScheduleSchema = z.object({
+  lateEntrySec: z.number().int().min(0).nullable(),
+  extraTimeSec: z.number().int().min(0).nullable(),
+});
+export type SetBranchTestScheduleInput = z.input<typeof setBranchTestScheduleSchema>;
+export type SetBranchTestScheduleBody = z.infer<typeof setBranchTestScheduleSchema>;
+
+/** What the branch ended up with. Both null is what it reads back as when the row went. */
+export const branchTestScheduleSchema = setBranchTestScheduleSchema.extend({ testId: z.string() });
+export type BranchTestSchedule = z.infer<typeof branchTestScheduleSchema>;
+
 /** Assembling REPLACES the draft paper — a merge over rows the admin cannot see is nobody's ask. */
 export const assemblePaperSchema = z.object({
   /** Same seed, same pool, same paper. Omitted means a fresh draw. */

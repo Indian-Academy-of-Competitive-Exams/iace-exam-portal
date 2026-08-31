@@ -1583,6 +1583,17 @@ export interface FakePaperRow {
   status: PaperQuestionStatus;
 }
 
+/** Every narrowing `TestSeriesTest` is read through, from either side of the link. */
+interface FakeSeriesTestWhere {
+  testId?: string;
+  testSeriesId?: string;
+  testSeries?: {
+    id?: { in: string[] };
+    branchConfigs?: { some: { branchId: string; enabled: boolean } };
+  };
+  test?: { title?: { contains?: string } };
+}
+
 /** The configs fake plus the `Test` table, because a test is only ever read through its config. */
 export class FakeTestsPrisma extends FakeConfigPrisma {
   private testSeq = 0;
@@ -1606,6 +1617,11 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     super(configs, sections);
   }
 
+  readonly branch = {
+    findFirst: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.branchNames.find((row) => row.id === where.id) ?? null),
+  };
+
   readonly branchTestConfig = {
     findMany: ({ where }: { where: { enabled: boolean; testSeriesId: { in: string[] } } }) =>
       Promise.resolve(
@@ -1628,9 +1644,13 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     findMany: ({ where }: { where: { testId: string } }) =>
       Promise.resolve(this.branchSchedules.filter((row) => row.testId === where.testId)),
 
-    deleteMany: ({ where }: { where: { testId: string; branchId: { in: string[] } } }) => {
+    deleteMany: ({ where }: { where: { testId: string; branchId: string | { in: string[] } } }) => {
+      const named = (branchId: string) =>
+        typeof where.branchId === 'string'
+          ? where.branchId === branchId
+          : where.branchId.in.includes(branchId);
       const kept = this.branchSchedules.filter(
-        (row) => !(row.testId === where.testId && where.branchId.in.includes(row.branchId)),
+        (row) => !(row.testId === where.testId && named(row.branchId)),
       );
       const count = this.branchSchedules.length - kept.length;
       this.branchSchedules.length = 0;
@@ -1927,26 +1947,77 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       Promise.resolve(this.series.filter((row) => where.id.in.includes(row.id))),
   };
 
+  /** Both sides of the link: `{ testId }` from the test's, a branch's enabled series from the branch's. */
+  private linksMatching(where: FakeSeriesTestWhere): FakeSeriesTestRow[] {
+    const branchId = where.testSeries?.branchConfigs?.some.branchId;
+    const wanted = where.testSeries?.id?.in;
+    const term = where.test?.title?.contains?.toLowerCase();
+
+    const enabledHere = (testSeriesId: string) =>
+      branchId === undefined ||
+      this.branchConfigRows.some(
+        (row) => row.branchId === branchId && row.testSeriesId === testSeriesId && row.enabled,
+      );
+    const titled = (testId: string) =>
+      term === undefined ||
+      (this.tests.find((it) => it.id === testId)?.title ?? '').toLowerCase().includes(term);
+
+    return this.seriesTests
+      .filter(
+        (row) =>
+          (where.testId === undefined || row.testId === where.testId) &&
+          (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId) &&
+          (wanted === undefined || wanted.includes(row.testSeriesId)) &&
+          enabledHere(row.testSeriesId) &&
+          titled(row.testId),
+      )
+      .sort(
+        (a, b) =>
+          this.seriesNameOf(a.testSeriesId).localeCompare(this.seriesNameOf(b.testSeriesId)) ||
+          (a.order ?? 0) - (b.order ?? 0) ||
+          a.testId.localeCompare(b.testId),
+      );
+  }
+
+  private seriesNameOf(testSeriesId: string): string {
+    return this.series.find((row) => row.id === testSeriesId)?.name ?? '';
+  }
+
   readonly testSeriesTest = {
-    findMany: ({ where }: { where: { testId?: string; testSeriesId?: string } }) =>
-      Promise.resolve(
-        this.seriesTests
-          .filter(
-            (row) =>
-              (where.testId === undefined || row.testId === where.testId) &&
-              (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId),
-          )
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          .map((row) => ({
-            ...row,
-            unlockAt: row.unlockAt ?? null,
-            testSeries: { name: this.series.find((s) => s.id === row.testSeriesId)?.name ?? '' },
-            test: {
-              title: this.tests.find((it) => it.id === row.testId)?.title ?? null,
-              _count: { attempts: this.attempts.filter((it) => it.testId === row.testId).length },
-            },
-          })),
-      ),
+    findMany: ({
+      where,
+      skip,
+      take,
+    }: {
+      where: FakeSeriesTestWhere;
+      skip?: number;
+      take?: number;
+    }) => {
+      const branchId = where.testSeries?.branchConfigs?.some.branchId;
+      const matched = this.linksMatching(where);
+      const page = take === undefined ? matched : matched.slice(skip ?? 0, (skip ?? 0) + take);
+
+      return Promise.resolve(
+        page.map((row) => ({
+          ...row,
+          unlockAt: row.unlockAt ?? null,
+          testSeries: { name: this.seriesNameOf(row.testSeriesId) },
+          test: {
+            title: this.tests.find((it) => it.id === row.testId)?.title ?? null,
+            _count: { attempts: this.attempts.filter((it) => it.testId === row.testId).length },
+            branchSchedules: this.branchSchedules.filter(
+              (it) => it.testId === row.testId && it.branchId === branchId,
+            ),
+          },
+        })),
+      );
+    },
+
+    count: ({ where }: { where: FakeSeriesTestWhere }) =>
+      Promise.resolve(this.linksMatching(where).length),
+
+    findFirst: ({ where }: { where: FakeSeriesTestWhere }) =>
+      Promise.resolve(this.linksMatching(where)[0] ?? null),
 
     findUnique: ({ where }: { where: { testSeriesId_testId: FakeSeriesTestKey } }) => {
       const { testSeriesId, testId } = where.testSeriesId_testId;

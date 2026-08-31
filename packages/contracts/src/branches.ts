@@ -69,4 +69,8 @@ export const ADMIN_BRANCH_ROUTES = {
   create: '/admin/branches',
   update: (id: string) => `/admin/branches/${id}`,
   remove: (id: string) => `/admin/branches/${id}`,
+  /** What ONE branch runs. The rows belong to `access` and `tests`; the path is a branch's. */
+  testSeries: (id: string) => `/admin/branches/${id}/test-series`,
+  tests: (id: string) => `/admin/branches/${id}/tests`,
+  testSchedule: (id: string, testId: string) => `/admin/branches/${id}/tests/${testId}/schedule`,
 } as const;

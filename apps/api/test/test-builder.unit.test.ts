@@ -77,7 +77,7 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
       new PaperService(prisma.asService(), configs, fakeScoringOutbox(prisma), new AuditContext()),
       events.asService(),
     ),
-    offering: new OfferingService(prisma.asService(), events.asService()),
+    offering: new OfferingService(prisma.asService(), events.asService(), new AuditContext()),
   };
 }
 

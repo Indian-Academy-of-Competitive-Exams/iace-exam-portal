@@ -289,6 +289,10 @@ export const setBranchSeriesSchema = z.object({
 export type SetBranchSeriesInput = z.input<typeof setBranchSeriesSchema>;
 export type SetBranchSeriesBody = z.infer<typeof setBranchSeriesSchema>;
 
+/** How many rows actually MOVED — a draft re-posted unchanged answers zero. */
+export const branchSeriesSavedSchema = z.object({ changed: z.number().int() });
+export type BranchSeriesSaved = z.infer<typeof branchSeriesSavedSchema>;
+
 /** The switch alone: a branch runs a series indefinitely, and WHEN an exam happens is the test's. */
 export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().optional() });
 export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;

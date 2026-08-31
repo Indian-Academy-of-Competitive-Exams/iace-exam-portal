@@ -5,7 +5,12 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
+  type BranchTestListQuery,
+  type BranchTestRow,
+  type BranchTestSchedule,
   type BranchTestScheduleRow,
+  type Paginated,
+  type SetBranchTestScheduleBody,
   type SetBranchTestSchedulesBody,
   type SeriesTestRow,
   type SetSeriesTestUnlockBody,
@@ -15,6 +20,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { AuditContext } from '../audit';
 import { activationBlocker } from './test-rules';
 
 const OFFERING_SELECT = {
@@ -40,6 +46,32 @@ function partitionBySet(
 
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
+function toBranchTestRow(row: {
+  testSeriesId: string;
+  testId: string;
+  order: number | null;
+  unlockAt: Date | null;
+  testSeries: { name: string };
+  test: { title: string | null; branchSchedules: BranchTiming[] };
+}): BranchTestRow {
+  const schedule = row.test.branchSchedules[0];
+  return {
+    testId: row.testId,
+    title: row.test.title,
+    testSeriesId: row.testSeriesId,
+    seriesName: row.testSeries.name,
+    order: row.order,
+    unlockAt: row.unlockAt?.toISOString() ?? null,
+    lateEntrySec: schedule?.lateEntrySec ?? null,
+    extraTimeSec: schedule?.extraTimeSec ?? null,
+  };
+}
+
+interface BranchTiming {
+  lateEntrySec: number | null;
+  extraTimeSec: number | null;
+}
+
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
 /** How a finalized test is offered: through a series, never on its own. */
@@ -48,6 +80,7 @@ export class OfferingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: DomainEventBus,
+    private readonly auditContext: AuditContext,
   ) {}
 
   async series(testId: string): Promise<TestSeriesLink[]> {
@@ -239,6 +272,93 @@ export class OfferingService {
         },
       ];
     });
+  }
+
+  /** The same rows from the BRANCH's side: what it runs, when each opens, what it changes. */
+  async testsForBranch(
+    branchId: string,
+    query: BranchTestListQuery,
+  ): Promise<Paginated<BranchTestRow>> {
+    await this.requireBranch(branchId);
+    const where: Prisma.TestSeriesTestWhereInput = {
+      testSeries: {
+        branchConfigs: { some: { branchId, enabled: true } },
+        ...(query.testSeriesId ? { id: { in: query.testSeriesId } } : {}),
+      },
+      ...(query.q ? { test: { title: { contains: query.q, mode: 'insensitive' } } } : {}),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.testSeriesTest.findMany({
+        where,
+        select: {
+          testSeriesId: true,
+          testId: true,
+          order: true,
+          unlockAt: true,
+          testSeries: { select: { name: true } },
+          test: {
+            select: {
+              title: true,
+              branchSchedules: {
+                where: { branchId },
+                select: { lateEntrySec: true, extraTimeSec: true },
+              },
+            },
+          },
+        },
+        orderBy: [{ testSeries: { name: 'asc' } }, { order: 'asc' }, { testId: 'asc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.testSeriesTest.count({ where }),
+    ]);
+
+    return { items: rows.map(toBranchTestRow), page: query.page, pageSize: query.pageSize, total };
+  }
+
+  /** One branch's timing on one test. Both fields null deletes the row rather than storing them. */
+  async setBranchSchedule(
+    branchId: string,
+    testId: string,
+    input: SetBranchTestScheduleBody,
+  ): Promise<BranchTestSchedule> {
+    await this.requireBranch(branchId);
+    await this.requireTestAtBranch(branchId, testId);
+
+    const cleared = input.lateEntrySec === null && input.extraTimeSec === null;
+    if (cleared) {
+      await this.prisma.branchTestSchedule.deleteMany({ where: { branchId, testId } });
+    } else {
+      await this.prisma.branchTestSchedule.upsert({
+        where: { branchId_testId: { branchId, testId } },
+        update: input,
+        create: { ...input, branchId, testId },
+      });
+    }
+
+    this.auditContext.setEntityId(testId);
+    for (const testSeriesId of await this.seriesIdsOf(testId)) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    }
+    return { testId, ...input };
+  }
+
+  private async requireBranch(branchId: string): Promise<void> {
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: branchId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!branch) throw new AppException(ErrorCodes.NOT_FOUND, 'No such branch');
+  }
+
+  /** A test this branch cannot reach is not a test it has timings for, so it reads as missing. */
+  private async requireTestAtBranch(branchId: string, testId: string): Promise<void> {
+    const link = await this.prisma.testSeriesTest.findFirst({
+      where: { testId, testSeries: { branchConfigs: { some: { branchId, enabled: true } } } },
+      select: { testId: true },
+    });
+    if (!link) throw new AppException(ErrorCodes.NOT_FOUND, 'This branch does not run that test');
   }
 
   /** Nothing set is no row: the plain rules are the absence of one, never a row full of nulls. */
