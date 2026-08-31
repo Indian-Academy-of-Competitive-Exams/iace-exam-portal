@@ -11,6 +11,7 @@ import {
   TrendLine,
   TruncatedText,
   linkVariants,
+  plural,
   type DataTableColumn,
   type MeasureBar,
   type TrendPoint,
@@ -59,12 +60,12 @@ export function PerformancePage() {
       header={
         <PageHeader
           title="Performance"
-          meta={trend.data ? `${trend.data.testsSat} tests` : undefined}
+          meta={trend.data ? plural(trend.data.testsSat, 'test') : undefined}
         />
       }
     >
       {trend.isLoading ? <LoadingState /> : null}
-      {trend.data && trend.data.points.length === 0 ? (
+      {trend.data?.points.length === 0 ? (
         <Alert variant="info">Sit a test and your performance starts here.</Alert>
       ) : null}
       {trend.data && trend.data.points.length > 0 ? (
@@ -105,9 +106,9 @@ function LatestPaper({ analytics }: Readonly<{ analytics: AttemptAnalytics }>) {
 
   return (
     <div className="flex flex-col gap-8">
-      <h2 className="text-sm font-semibold text-foreground">
-        Last paper
-        <span className="ml-2 font-normal text-muted-foreground">{analytics.testTitle}</span>
+      <h2 className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
+        <span>Last paper</span>
+        <span className="font-normal text-muted-foreground">{analytics.testTitle}</span>
       </h2>
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-foreground">Subjects</h2>

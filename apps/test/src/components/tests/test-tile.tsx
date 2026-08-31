@@ -39,23 +39,34 @@ export function TestTile({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
         )}
 
         <div className="mt-auto">
-          {row.action ? (
-            <Button asChild size="sm" className="w-full">
-              <Link to={ROUTES.TEST_INSTRUCTIONS(test.id)}>{buttonWord(row.action, done)}</Link>
-            </Button>
-          ) : done ? (
-            <Button asChild size="sm" variant="outline" className="w-full">
-              <Link to={ROUTES.TEST_ABOUT(test.id)}>Review</Link>
-            </Button>
-          ) : (
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <LockKeyhole aria-hidden className="size-3.5 shrink-0" />
-              {shutReason(test, now)}
-            </p>
-          )}
+          <TileAction row={row} now={now} done={done} />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Sit it, read it back, or be told plainly why neither is on offer yet. */
+function TileAction({ row, now, done }: Readonly<{ row: Sittable; now: Date; done: boolean }>) {
+  if (row.action) {
+    return (
+      <Button asChild size="sm" className="w-full">
+        <Link to={ROUTES.TEST_INSTRUCTIONS(row.test.id)}>{buttonWord(row.action, done)}</Link>
+      </Button>
+    );
+  }
+  if (done) {
+    return (
+      <Button asChild size="sm" variant="outline" className="w-full">
+        <Link to={ROUTES.TEST_ABOUT(row.test.id)}>Review</Link>
+      </Button>
+    );
+  }
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <LockKeyhole aria-hidden className="size-3.5 shrink-0" />
+      {shutReason(row.test, now)}
+    </p>
   );
 }
 

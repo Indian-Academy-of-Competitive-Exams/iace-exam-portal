@@ -33,6 +33,7 @@ if (!looksLocal && process.env.FORCE_DEV_SEED !== '1') {
 
 // --- the shape of the cohort ------------------------------------------------
 
+/** The blueprint is left UNLOCKED: `locked` is one-way by trigger, and --reset has to undo itself. */
 const MARK = '_cohort_';
 const IDS = {
   branch: `brn${MARK}1`,
@@ -223,9 +224,6 @@ async function writePaper(prisma, stageId, assigned) {
     },
   });
 
-  // Locked AFTER its sections exist: a trigger refuses a shape change to a locked blueprint.
-  await prisma.baseConfig.update({ where: { id: IDS.config }, data: { locked: true } });
-
   const finalizedAt = new Date();
   await prisma.test.create({
     data: {
@@ -303,12 +301,14 @@ async function writeOffering(prisma, stageId) {
 
 // --- the cohort -------------------------------------------------------------
 
-async function writeStudents(prisma, branchId) {
+async function writeStudents(prisma, branchId, examCode) {
   const rows = Array.from({ length: STUDENTS }, (_, index) => ({
     id: IDS.student(index),
     mobile: String(FIRST_MOBILE + index),
     studentType: 'OFFLINE',
     currentBranchId: branchId,
+    // The exam match is how they REACH the series; without it the portal shows them nothing.
+    enrolledExams: [examCode],
     fullName: `Cohort Candidate ${String(index + 1).padStart(3, '0')}`,
     pinIsDefault: true,
   }));
@@ -419,7 +419,7 @@ async function main() {
     const stage = await prisma.examStage.findFirst({
       where: { isActive: true, disposition: 'CONDUCTED' },
       orderBy: [{ examId: 'asc' }, { order: 'asc' }],
-      select: { id: true, stageKey: true },
+      select: { id: true, stageKey: true, exam: { select: { code: true } } },
     });
     if (!stage) {
       console.error('Seed the catalog first — no conducted exam stage to hang a test off.');
@@ -436,7 +436,7 @@ async function main() {
 
     const paper = await writePaper(prisma, stage.id, assigned);
     const branchId = await writeOffering(prisma, stage.id);
-    const students = await writeStudents(prisma, branchId);
+    const students = await writeStudents(prisma, branchId, stage.exam.code);
     const { attempts, items } = await writeSittings(prisma, paper);
 
     console.log(`\nDone, on stage ${stage.stageKey}.`);

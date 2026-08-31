@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils';
+import { TruncatedText } from './truncated-text';
 
 /** Which hue a bar wears. Identity only — a magnitude comparison leaves them all on one. */
 const TONES = {
@@ -32,8 +33,8 @@ export function MeasureBars({ bars, max, className }: Readonly<MeasureBarsProps>
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       {bars.map((bar) => (
-        <div key={bar.key} className="grid grid-cols-[8rem_1fr_4rem] items-center gap-3 text-sm">
-          <span className="truncate text-muted-foreground">{bar.label}</span>
+        <div key={bar.key} className="grid grid-cols-[11rem_1fr_4rem] items-center gap-3 text-sm">
+          <TruncatedText className="text-muted-foreground">{bar.label}</TruncatedText>
           <span className="h-2 rounded-full bg-muted">
             <span
               className={cn('block h-2 rounded-full', TONES[bar.tone ?? 1])}

@@ -19,7 +19,7 @@ export interface TrendLineProps {
 }
 
 /** The drawing box. Fixed, and the SVG scales into whatever width it is given. */
-const BOX = { width: 640, height: 180, padX: 28, padY: 18 } as const;
+const BOX = { width: 1200, height: 220, padX: 32, padY: 22 } as const;
 
 /** Four gridlines read as a scale; more read as graph paper. */
 const GRID = [0, 0.25, 0.5, 0.75, 1] as const;
@@ -43,11 +43,11 @@ export function TrendLine({
   return (
     <svg
       viewBox={`0 0 ${BOX.width} ${BOX.height}`}
-      role="img"
-      className={cn('h-44 w-full', className)}
-      preserveAspectRatio="none"
+      // No `preserveAspectRatio="none"`: stretching turns every marker into an ellipse.
+      className={cn('w-full', className)}
       {...props}
     >
+      <title>{props['aria-label']}</title>
       {GRID.map((step) => (
         <line
           key={step}
@@ -82,7 +82,7 @@ export function TrendLine({
           stroke="var(--chart-surface)"
           strokeWidth={2}
         >
-          <title>{`${point.label}: ${point.value}${unit}${point.caption ? ` — ${point.caption}` : ''}`}</title>
+          <title>{hoverText(point, unit)}</title>
         </circle>
       ))}
 
@@ -92,13 +92,19 @@ export function TrendLine({
           y={Math.max(last.y - 8, 12)}
           textAnchor={last.x > BOX.width - 80 ? 'end' : 'start'}
           fill="var(--chart-ink)"
-          fontSize={12}
+          fontSize={16}
         >
           {`${last.value}${unit}`}
         </text>
       ) : null}
     </svg>
   );
+}
+
+/** What one marker says on hover: its test, its value, and whatever the caller added. */
+function hoverText(point: TrendPoint, unit: string): string {
+  const tail = point.caption === undefined ? '' : ` — ${point.caption}`;
+  return `${point.label}: ${point.value}${unit}${tail}`;
 }
 
 /** A lone point sits in the middle rather than hard against the left edge. */

@@ -31,7 +31,10 @@ export function PageFrame({ header, children, className }: Readonly<PageFramePro
   return (
     <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
-      <div className={cn('relative min-h-0 flex-1 overflow-y-auto', className)}>{children}</div>
+      {/* `pr-2` keeps right-aligned content clear of the scrollbar this very element draws. */}
+      <div className={cn('relative min-h-0 flex-1 overflow-y-auto pr-2', className)}>
+        {children}
+      </div>
     </div>
   );
 }

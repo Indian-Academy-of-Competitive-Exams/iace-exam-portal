@@ -42,7 +42,7 @@ type ScoringRow = Prisma.AttemptGetPayload<{ select: typeof SCORING_SELECT }>;
 type ServedRow = ScoringRow['questions'][number];
 
 /** Ended, however it ended. Re-scoring an EVALUATED sitting is how a dropped question is applied. */
-const SCORABLE: readonly AttemptStatus[] = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];
+const SCORABLE = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
 @Processor(QUEUE_NAMES.SCORING)
 export class ScoringProcessor extends WorkerHost {
@@ -69,7 +69,7 @@ export class ScoringProcessor extends WorkerHost {
       this.logger.warn(`Scoring asked for attempt ${attemptId}, which does not exist`);
       return null;
     }
-    if (!SCORABLE.includes(attempt.status)) return null;
+    if (!SCORABLE.has(attempt.status)) return null;
 
     const unpriced = attempt.questions.filter((row) => row.paperItem === null).length;
     if (unpriced > 0) {

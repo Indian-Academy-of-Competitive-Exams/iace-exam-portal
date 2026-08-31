@@ -4529,8 +4529,8 @@ export class FakeScoringPrisma {
         return b.submittedAt.getTime() - a.submittedAt.getTime();
       };
       const ordered = orderBy?.submittedAt
-        ? matched.sort(byNewest)
-        : matched.sort((a, b) => a.id.localeCompare(b.id));
+        ? matched.toSorted(byNewest)
+        : matched.toSorted((a, b) => a.id.localeCompare(b.id));
       const paged = ordered.slice(skip, take === undefined ? undefined : skip + take);
       return Promise.resolve(
         distinct?.includes('testId') ? uniqueByTest(paged) : paged.map((row) => this.reported(row)),

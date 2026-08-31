@@ -51,13 +51,11 @@ export function TestsPage() {
 
   const now = new Date();
   // Free series have their own tab, so this screen is the paid journey and only that.
-  const series = (catalog.data?.series ?? []).filter(
-    (row) =>
-      row.kind !== TEST_SERIES_KIND.FREE &&
-      (family === ANY_FAMILY || row.examStage?.family === family),
-  );
+  const reaches = (catalog.data?.series ?? []).filter((row) => row.kind !== TEST_SERIES_KIND.FREE);
+  const series = reaches.filter((row) => family === ANY_FAMILY || row.examStage?.family === family);
   const rows = matching(sittablesOf(series, now), params.get(FILTER_KEYS.SEARCH));
   const shut = series.filter((row) => row.canRequestUnlock);
+  const emptiness = emptyReason(reaches.length, rows.length);
 
   return (
     <PageFrame header={<PageHeader title="Tests" meta={plural(rows.length, 'test')} />}>
@@ -105,17 +103,26 @@ export function TestsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          <StatusStrip rows={rows} now={now} />
-          {shelves(series, rows).map(({ row, tests }) => (
-            <SeriesShelf key={row.id} series={row} rows={tests} now={now} />
-          ))}
-          {rows.length === 0 ? (
-            <Alert variant="info">Nothing here matches what you are looking for.</Alert>
-          ) : null}
+          {emptiness === null ? (
+            <>
+              <StatusStrip rows={rows} now={now} />
+              {shelves(series, rows).map(({ row, tests }) => (
+                <SeriesShelf key={row.id} series={row} rows={tests} now={now} />
+              ))}
+            </>
+          ) : (
+            <Alert variant="info">{emptiness}</Alert>
+          )}
         </div>
       )}
     </PageFrame>
   );
+}
+
+/** Reaching nothing and searching for nothing are different facts, and they read differently. */
+function emptyReason(reached: number, showing: number): string | null {
+  if (reached === 0) return 'You have no tests yet. Your branch adds them as they open.';
+  return showing === 0 ? 'Nothing here matches what you are looking for.' : null;
 }
 
 /** A shelf per series, and no shelf for one the search emptied. */
