@@ -618,6 +618,8 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: branchesKey(series.id) });
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
+    // The branch screen reads the same rows from the other side, and would go stale behind this.
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_CONFIG });
   };
 
   const enableEverywhere = useMutation({

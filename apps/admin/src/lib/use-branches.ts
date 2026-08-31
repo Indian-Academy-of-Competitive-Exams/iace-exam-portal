@@ -26,6 +26,20 @@ export function useBranches(options: { activeOnly?: boolean } = {}): Branch[] {
   return query.data?.items ?? [];
 }
 
+/** One branch out of the list the server already scoped, so a branch outside it reads as missing. */
+export function useBranch(branchId: string): { branch: Branch | null; isLoading: boolean } {
+  const query = useQuery({
+    queryKey: [...QUERY_KEYS.BRANCHES, { activeOnly: false }],
+    queryFn: () => api.admin.branches.list({ pageSize: PAGE_SIZE_MAX }),
+    staleTime: 5 * 60_000,
+  });
+
+  return {
+    branch: query.data?.items.find((branch) => branch.id === branchId) ?? null,
+    isLoading: query.isLoading,
+  };
+}
+
 /**
  * The branches a student of this type may sit in — mirrors `studentBranchBlocker` on the server so
  * the picker never offers a branch the save would refuse. NON_IACE sits outside the institute, so

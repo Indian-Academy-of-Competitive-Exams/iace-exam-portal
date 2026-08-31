@@ -10,6 +10,7 @@ import { AccessRequestsPage } from './routes/access-requests';
 import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
+import { BranchTestsPage } from './routes/branch-tests';
 import { ExamsPage } from './routes/exams';
 import { ProgramsPage } from './routes/programs';
 import { QuestionsPage } from './routes/questions';
@@ -51,6 +52,7 @@ export function App() {
           <Route path={ROUTES.IMPORT_STUDENTS} element={<ImportStudentsPage />} />
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
+          <Route path={ROUTES.BRANCH_TESTS_PATTERN} element={<BranchTestsPage />} />
           <Route path={ROUTES.EXAMS} element={<ExamsPage />} />
           <Route path={ROUTES.PROGRAMS} element={<ProgramsPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />

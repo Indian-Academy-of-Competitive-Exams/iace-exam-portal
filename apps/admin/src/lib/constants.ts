@@ -56,6 +56,9 @@ export const ROUTES = {
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
   BRANCHES: '/branches',
+  /** What ONE branch runs. Opened from a row on the list, which is what makes it a route. */
+  BRANCH_TESTS: (id: string) => `/branches/${id}/tests`,
+  BRANCH_TESTS_PATTERN: '/branches/:branchId/tests',
   EXAMS: '/exams',
   /** The coaching variants. A student and a series both carry the code as free text. */
   PROGRAMS: '/programs',
@@ -421,6 +424,8 @@ export const QUERY_KEYS = {
   AUDIT: [ADMIN, 'audit'],
   BASE_CONFIG: [ADMIN, 'base-config'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],
+  /** One branch's own configuration. `test-series-form` writes the same rows and busts this. */
+  BRANCH_CONFIG: [ADMIN, 'branch-config'],
   BRANCH_TIMING: [ADMIN, 'branch-timing'],
   BRANCHES: [ADMIN, 'branches'],
   EXAM_STAGES: [ADMIN, 'exam-stages'],
