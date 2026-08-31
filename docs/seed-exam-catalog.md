@@ -57,7 +57,7 @@ Awareness — imperfect but the section keeps its real name; refine later if nee
   `COMPOSITE_FREE`). All sections have `moduleId = NULL`.
 - **durationSec** = stage duration (min) × 60. **totalQuestions/totalMarks** = section sums
   (display cache). Section `marksPerQuestion`, `negativeMarks`, `meritOrQualifying`,
-  `difficultyMix ({indicative})` come straight from the section rows.
+  `patternNote` (the workbook's `{indicative}` note, read by nothing) come straight from the section rows.
 - Every default config is `isDefault = true`, `version = 1`, `scoringVersion = 1`.
 
 ## Notes / follow-ups

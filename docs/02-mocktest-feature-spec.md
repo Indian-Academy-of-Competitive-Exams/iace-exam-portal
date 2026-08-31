@@ -3,7 +3,7 @@
 **Purpose:** Define the first feature of the IACE platform — online mock tests — built to replace ThinkExam and fix what it does badly.
 **Basis:** Direct study of your live ThinkExam admin + student portals (examprep.iace.co.in), plus your design decisions.
 **Companion doc:** _IACE Learning Platform — V1 Architecture & Build Plan_ (stack, scaling, AWS, 45-day roadmap).
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-31
 
 ---
 
@@ -22,20 +22,20 @@ Everything below serves those four fixes.
 
 ## 2. Replicate / Simplify / Upgrade / Discard
 
-| Area                                                                                                        | Decision                    | Detail                                                                                                                                                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Real-exam student UI (timer, palette, sections, per-question language)                                      | **Replicate**               | This is the student's #1 expectation. Rebuild the standard government-CBT layout faithfully.                                                                                                                                                           |
-| Test-taking UI                                                                                              | **Simplify → two variants** | Replace ThinkExam's theme gallery with just **two** test-screen UIs, chosen per test: the **standard government CBT interface** (all our exam formats share it; V1 focus) and a **generic test UI** for lighter types (daily/sectional/quiz). See §14. |
-| Category / series buckets (nested tree)                                                                     | **Replicate**               | Your tests already live in a nested Category tree (SBI & IBPS PO Prelims, Banking Mains 100 Days, Sectionwise Tests…). Keep it as the series/bucket layer.                                                                                             |
-| Access model                                                                                                | **Simplify**                | Two ways only to grant a test: to a whole **batch/group**, or to **individual students** via a paginated picker (off by default). Plus a shareable generated link. **No products, no access-code system.**                                             |
-| Student portal UI                                                                                           | **Upgrade (don't copy)**    | The current portal is too naive for today. Rebuild it snappy, uncluttered, with proper icons and a repeatable **tour**; make **Report the landing dashboard**. The in-_exam_ screen still mirrors the real government exam.                            |
-| 6-step creation wizard                                                                                      | **Simplify**                | Collapse to a short, saveable flow; a base config pre-fills almost everything.                                                                                                                                                                         |
-| Question → test mapping                                                                                     | **Simplify → Upgrade**      | Replace the flat manual list with **blueprint auto-draw** (subject + difficulty %) plus an easy manual picker.                                                                                                                                         |
-| Candidate creation (many required fields)                                                                   | **Simplify**                | Mobile number is the only mandatory field; details completed after signup.                                                                                                                                                                             |
-| Rank & result generation                                                                                    | **Upgrade**                 | Fully automatic, always-live via Redis leaderboard. No Generate/Regenerate buttons.                                                                                                                                                                    |
-| Question import                                                                                             | **Upgrade**                 | Forgiving importer: preview, row-by-row error report, handles text + image + equation. One central import screen.                                                                                                                                      |
-| Certificates                                                                                                | **Discard**                 | No "Create Certificate" step in V1.                                                                                                                                                                                                                    |
-| Long tail of test settings (bio break, typing test, OMR, essay/AI eval, open-book whitelisting, proctoring) | **Discard for V1**          | Keep only what our exams use.                                                                                                                                                                                                                          |
+| Area                                                                                      | Decision                    | Detail                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Real-exam student UI (timer, palette, sections, per-question language)                    | **Replicate**               | This is the student's #1 expectation. Rebuild the standard government-CBT layout faithfully.                                                                                                                                            |
+| Test-taking UI                                                                            | **Simplify → render modes** | Replace ThinkExam's theme gallery with a small closed set of render modes on the base config (`defaultTestUi`: CBT, OMR, GENERIC, TYPING) over **one** engine, one clock, one paper. See §14.                                           |
+| Category / series buckets                                                                 | **Simplify → flat**         | Their tests live in a nested Category tree. Ours is `TestSeries`: **flat, no nesting**, many-to-many with tests. The tree bought browsing and cost a hierarchy nobody could keep tidy. See §9.                                          |
+| Access model                                                                              | **Simplify**                | Access is to a **series**, never a test, by exam match, program match or one `StudentGrant`, each gated by the student's branch. **There are no groups or batches, and no shareable link.** No products, no access-code system. See §7. |
+| Student portal UI                                                                         | **Upgrade (don't copy)**    | The current portal is too naive for today. Rebuild it snappy, uncluttered, with proper icons and a repeatable **tour**; make **Report the landing dashboard**. The in-_exam_ screen still mirrors the real government exam.             |
+| 6-step creation wizard                                                                    | **Simplify**                | Collapse to a short, saveable flow; a base config pre-fills almost everything.                                                                                                                                                          |
+| Question → test mapping                                                                   | **Simplify → Upgrade**      | Replace the flat manual list with **blueprint auto-draw** (subject + difficulty %) plus an easy manual picker.                                                                                                                          |
+| Candidate creation (many required fields)                                                 | **Simplify**                | Mobile number is the only mandatory field; details completed after signup.                                                                                                                                                              |
+| Rank & result generation                                                                  | **Upgrade**                 | Fully automatic, always-live via Redis leaderboard. No Generate/Regenerate buttons.                                                                                                                                                     |
+| Question import                                                                           | **Upgrade**                 | Forgiving importer: preview, row-by-row error report, handles text + image + equation. One central import screen.                                                                                                                       |
+| Certificates                                                                              | **Discard**                 | No "Create Certificate" step in V1.                                                                                                                                                                                                     |
+| Long tail of test settings (bio break, essay/AI eval, open-book whitelisting, proctoring) | **Discard for V1**          | Keep only what our exams use. **OMR is not in this list** — it is a V1 render mode (§14).                                                                                                                                               |
 
 ---
 
@@ -48,7 +48,7 @@ compresses to **three steps plus a reusable blueprint**, and the blueprint does 
 A library of base configs keyed by exam stage (SSC CGL Tier 1, IBPS PO Prelims, RRB JE…). Each
 holds the blueprint: sections and their subjects, per-section time, marks per question, negative
 marking, total questions, timer template, navigation policy and shuffle rules. Admins rarely touch
-these after setup. `BaseConfigSection.difficultyMix` is **not** a mix the draw reads — it holds the
+these after setup. `BaseConfigSection.patternNote` is **not** a mix the draw reads — it holds the
 exam-pattern workbook's note ("Moderate-Difficult") and nothing in the code reads it.
 
 **Step 1 — Setup.** Name it, pick a base config, choose scope, evaluation mode and paper binding.
@@ -98,7 +98,9 @@ an **automatic score + rank recompute**.
 
 From ThinkExam's Step 2 (Shuffle, Test Options, Time Setting, Generate Rank, Attempt & Resume, plus Bio Break / Report / Whitelist), we keep only the settings our exams need:
 
-**Keep (V1):** randomize question order; randomize answer options (needs stable option IDs); grouping/section-specific numbering; sectional timing (per-section minutes, mandatory, flexible vs locked switching, optional-section count); marks + negative marking **per question** (bulk-settable); pause/resume with a resume limit; secure/full-screen mode; enrollment-number watermark; per-question language toggle; response autosave (we'll do ~20–30s vs their 4 min); **late entry and extra time, per branch per test** (`BranchTestSchedule`) — extra time is where "for handicapped" folds in, as an allowance rather than a separate flow.
+**Keep (V1), and built:** randomize question order; randomize answer options (stable option IDs); section-specific numbering; sectional timing (per-section minutes, flexible vs locked switching, optional-section count); marks + negative marking **per section**; resume (re-entering the running attempt; `Test.maxRetakes` caps how many separate sittings); per-question language toggle; response autosave every ~20–30s (vs their 4 min); a **watermark** carried by the skin (`PAPER`, `SCREEN` or `NONE` — §14); **late entry and extra time, per branch per test** (`BranchTestSchedule`) — extra time is where "for handicapped" folds in, as an allowance rather than a separate flow. Late entry BLOCKS starting the test; the student can still open it and read about it.
+
+**Kept in principle, not yet built:** a resume LIMIT (nothing counts or caps re-entries into one sitting) and secure/full-screen mode.
 
 **Drop (V1):** certificates, typing test, OMR, essay/AI subjective evaluation, open-book website whitelisting, bio-break scheduling, and most niche integration toggles.
 
@@ -126,7 +128,7 @@ Verified on the live report. We ship the core in V1 and fast-follow the rest.
 
 **Data points captured from day one (non-negotiable):** answer-level detail per attempt — option chosen, correct/incorrect, marked-for-review state, and **time spent per question/section** — so analytics can be derived later without re-instrumenting.
 
-**Analytics screen:** if the per-test analytics UI is quick to build, we ship it in this phase; otherwise it's fast-follow (Subject Report, Question Report, Compare-Yourself, time-utilisation, difficulty). Either way the data is already there — no migration needed.
+**Analytics screen: shipped.** The student's Performance screen (`apps/test/src/routes/performance.tsx`) is live. The deeper cuts — Subject Report, Question Report, Compare-Yourself, time-utilisation, difficulty — are still fast-follow, and the six rollup tables that would back them (`StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat`, `ProcessedRollup`) sit in the schema with nothing writing them yet. No migration needed when that lands.
 
 **Ranking:** computed live from a Redis sorted set. Open tests show "your rank as of now, out of N"; fixed-time tests rank only those who attempted in the window. Ties handled per config (allow duplicate ranks / skip after duplicate). Drop/bonus corrections auto-recompute.
 
@@ -156,9 +158,16 @@ read** rather than cached — so a test opens on time with nothing having to bus
 branch's `extraTimeSec` is added to the configured duration once, where the server computes
 `endsAt`.
 
+**Which of the three paths applies depends on the series' `kind`.** `STANDARD` reaches by exam or
+program as above. `FREE` also reaches anyone enrolled in its exam FAMILY, capped at
+`FREE_SERIES_EXAM_CAP` (2) exams' worth so a family is not a skeleton key. `SCHOLARSHIP` reaches
+nobody by exam or program — only an explicit grant, which is what the scholarship import writes. A
+`FREE` series may not sit behind a prerequisite: it is advertised to people who do not have one, so
+a database CHECK refuses the combination.
+
 Reaching a series is not the same as being able to start it. `unlockMode` decides that — `AUTO`
-opens once its prerequisite series is satisfied, `REQUEST` goes through a queue an admin decides,
-`ADMIN` opens for nobody on its own. A locked series is still listed, so the student can see what
+opens on its own, at once or once every test in the prerequisite series is finished, and `REQUEST`
+goes through a queue an admin decides. There are two modes, not three. A locked series is still listed, so the student can see what
 is coming and ask for it. `isTestBlocked` leaves the whole catalog readable and starts nothing.
 `sequentialTests` gates the tests INSIDE a series: the first one not yet sat is open and everything
 after it waits, counted from submitted and evaluated attempts and read fresh on every catalog read,
@@ -207,7 +216,10 @@ never per test, and the only per-student row in the model is the grant.
   at finalize. Per-question marks/negative; status (**active / dropped / bonus**). Per-student
   order comes from `Attempt.shuffleSeed`, not from a second paper.
 - **Attempt** — live state (`startedAt`, server `endsAt`, `sectionState`, `status`, `shuffleSeed`,
-  `resumeCount`) **and** the scored fields. **No separate Result table.**
+  `attemptNo`, `languages`) **and** the scored fields (`score`, counts, `sectionScores`, `lastRank`,
+  `lastPercentile`). **No separate Result table, and no resume counter** — resume is re-entering the
+  running attempt, and `@@unique(testId, studentId, attemptNo)` is what makes two racing starts one
+  sitting.
 - **AttemptQuestion** — only questions the student **interacted with** (composite PK): option
   chosen, state, time; (post-scoring) isCorrect, marksAwarded. The analytics data points, captured
   day one.
@@ -222,8 +234,8 @@ never per test, and the only per-student row in the model is the grant.
 
 ## 9. Decisions locked
 
-- Fixed paper for all students; per-student shuffle of order & options via seed.
-- Difficulty split = test-wide default with per-section override.
+- Paper binding is the fork: **FIXED** freezes one hand-picked paper every student sits; **GENERATED** draws `Test.variantCount` papers at finalize and each attempt reads the one its seed lands on. RANKED forces FIXED. Per-student shuffle of order & options via `Attempt.shuffleSeed` either way.
+- Difficulty is **per section only** — what a section is drawn from, optionally a count per difficulty. There is no test-wide default (§3).
 - Post-start corrections = drop/bonus with automatic recompute; otherwise locked.
 - **Base config locks once used** — once any test created from a base config is attempted, the config + its sections become read-only; to change it, clone into a new config. (Tests are snapshots, so existing ones are unaffected regardless.)
 - Rank/result = always live (Redis), never a manual regenerate.
@@ -236,8 +248,8 @@ never per test, and the only per-student row in the model is the grant.
 - All analytics data points captured from day one; per-test analytics screen built this phase if quick, else fast-follow.
 - Category/test series is **decoupled from creation** — optional, many-to-many, assigned as a separate flow; a test can be attempted individually.
 - Test **status (active/inactive)** and **access (which branches run a series, and when)** are post-creation management actions, not part of the creation flow.
-- Two test-taking UIs, chosen per test: the standard government CBT interface (**primary V1 build**; full mocks; all formats share it) and a generic test UI (**secondary — only if time permits**, for lighter types). The portal/admin app shell is a separate, single modern design system.
-- **Language display is per test** (`languageMode`, defaulted from base config): **SINGLE** (pick one, optional per-question toggle) or **DUAL** (both languages shown together — stem + options — no toggle). All content is already in the JSON; it's purely a render mode. `Test.languages` is the **ordered** list that drives render order.
+- **Render modes, not themes** — `BaseConfig.defaultTestUi` picks one of CBT, OMR, GENERIC, TYPING; `Test.examTemplate` picks the skin (COMFORTABLE or STRICT). One engine underneath all of them. §14 says what is built. The portal/admin app shell is a separate, single modern design system.
+- **Language display is per test** (`languageMode`, defaulted from base config): **SINGLE** (pick one, optional per-question toggle) or **DUAL** (both languages shown together — stem + options — no toggle). All content is already in the JSON; it's purely a render mode. `BaseConfig.languages` is the **ordered** list that drives render order and a test inherits it; `Attempt.languages` records what the student was actually served.
 
 ---
 
@@ -245,8 +257,10 @@ never per test, and the only per-student row in the model is the grant.
 
 1. ✅ Sample import file received and analyzed — redesigned format in §12.
 2. ✅ First exam decided: **SSC CGL Tier 1** — base config in §13.
-3. Confirm the **default difficulty buckets** per section (I've defaulted 30% Low / 50% Med / 20% High — you'll tune these).
-4. Still useful: one real question file with an **image-based** and an **equation** question, so the importer's media handling matches your real content.
+3. ✅ Difficulty settled: **per section only**, as a count per difficulty on what the section draws
+   from. There is no test-wide default to confirm.
+4. Still useful: one real question file with an **image-based** and an **equation** question, so the
+   importer's media handling matches your real content.
 
 ---
 
@@ -303,19 +317,45 @@ Confirmed against the current pattern; IACE validates as the domain expert.
 
 ---
 
-## 14. Test-taking UI — two variants (not a theme gallery)
+## 14. Test-taking UI — render modes over one engine
 
-For the **test-taking screen** we build exactly **two** UIs, chosen per test via config — our tiny replacement for ThinkExam's template gallery:
+There is **one** exam engine: one clock, one paper, one scoring path. Everything below is
+presentation, and that is the whole point — a per-exam theme gallery is what we refused.
 
-1. **Standard government CBT interface** — the faithful real-exam screen (palette, server timer, section tabs, Save & Next / Mark for Review / Clear Response, per-question language). Used for **full-length mock tests** — the V1 focus.
-2. **Generic test UI** — a lighter, modern test-taking screen for simpler types (daily tests, sectional/topic practice, quizzes) that don't need the full exam-hall replica. **Secondary — build only if time permits.** The CBT interface is the primary V1 deliverable; the generic UI is a nice-to-have add-on, never a blocker.
+Two independent axes:
 
-Which UI a test uses is a **config field**, not a separate build per exam. All IACE exam formats (SSC CGL/CHSL, IBPS/SBI Banking, RRB JE/NTPC/Group D, SI/Constable) share the **same** CBT interface; their differences are **config-level, not template-level:**
+**`BaseConfig.defaultTestUi` — how the student ANSWERS.** Four values, and a test inherits the
+config's:
 
-- **Sectional timing on/off + locked vs free section switching** — Banking prelims/mains use sectional timing with locked sections; SSC CGL Tier 1 is one timer, free navigation.
+1. **CBT** — the faithful government-CBT screen: palette, server timer, section tabs,
+   Save & Next / Mark for Review / Clear Response, per-question language. Used for full-length
+   mocks; the V1 focus.
+2. **OMR** — the same paper, answered by **bubbling** rather than picking a radio option: the
+   student darkens a bubble the way they would on a real sheet. It is an INPUT AFFORDANCE ONLY —
+   the engine, the clock, the paper, the navigation and the scoring are the default ones,
+   unchanged. Nothing about an OMR sitting is scored differently.
+3. **GENERIC** — a lighter, modern screen for daily tests, sectional/topic practice and quizzes
+   that do not need the exam-hall replica.
+4. **TYPING** — a typed-answer screen, for the formats that ask for one.
+
+**`Test.examTemplate` — where things SIT.** `COMFORTABLE` or `STRICT`, resolved through one shared
+`EXAM_TEMPLATE_CONFIG` so the admin's preview cannot describe a screen the student does not get. It
+fixes timer position and format, palette side, section switching, and the watermark
+(`PAPER` / `SCREEN` / `NONE`).
+
+**What is built today.** `examTemplate` is done end to end — both templates render
+(`apps/test/src/components/exam/templates/`), the sitting picks one, and the admin previews it.
+`defaultTestUi` is **stored and chosen in the admin base-config form, and the sitting does not yet
+branch on it** — every test renders the one screen. OMR, GENERIC and TYPING are committed V1 intent
+with the field in place; the render modes are still to build.
+
+All IACE exam formats (SSC CGL/CHSL, IBPS/SBI Banking, RRB JE/NTPC/Group D, SI/Constable) share the
+CBT mode; their differences are **config-level, not template-level**:
+
+- **Sectional timing on/off + locked vs free section switching** — Banking prelims/mains use
+  sectional timing with locked sections; SSC CGL Tier 1 is one timer, free navigation.
 - **Optional on-screen calculator** — Banking Mains provides one; SSC does not.
 - Section counts, question counts, and marking — all config.
 
-So the CBT interface is **one** screen parameterized by config — no per-exam theme gallery. A meaningful time saver for the 45-day window.
-
-(Separately, the student portal + admin **app shell** is its own single modern design system — see §5. That's distinct from these two test-taking UIs.)
+(Separately, the student portal + admin **app shell** is its own single modern design system — see
+§5. That is distinct from these render modes.)

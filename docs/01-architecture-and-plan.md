@@ -6,7 +6,7 @@
 **Timeline:** 45 days
 **Team:** One developer (Harshith) + Claude as co-builder
 **Owner:** developer@iace.co.in
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-31
 
 ---
 
@@ -49,7 +49,7 @@ Everything is **TypeScript, end to end**, in a single monorepo so types are shar
 
 ## 3. V1 scope — what "mock tests" means for us
 
-> **Portals:** three — Student (future broad platform), **Test** (this build; test-taking + report, `apps/test`), and Admin. V1 ships the **Test portal + Admin**. Rollout: internal IACE students first (group-based), general public later.
+> **Portals:** three — Student (future broad platform), **Test** (this build; test-taking + report, `apps/test`), and Admin. V1 ships the **Test portal + Admin**. Rollout: internal IACE students first, by branch and enrolment; general public later.
 
 ### In scope for V1
 
@@ -126,7 +126,7 @@ The API is stateless, so we can run 1→N identical containers behind a load bal
 - **Subject → Topic** — two levels only. A topic belongs to one subject, the service checks that a question's topic belongs to its subject, and **anything finer is a free-text tag**. There is no SubTopic table.
 - **ExamFamily (enum) → Exam → ExamStage → BaseConfig (+ modules, sections)** — the STAGE is what everything hangs off, and a BaseConfig is its blueprint. A **Test inherits** that shape rather than copying it: there is no per-test duration, marks or timing, and the way to change the shape is to clone the config. `languageMode` and the shuffle rules are the CONFIG's. A FIXED test's paper is picked by hand and frozen at finalize; a GENERATED test draws `variantCount` papers at finalize. Per-student order/option shuffle via `Attempt.shuffleSeed`; `PaperQuestion.status` handles drop/bonus.
 - **Attempt** holds live state **and** the scored fields (no separate Result table). **AttemptQuestion** stores only interacted questions (composite PK) with the analytics data points.
-- **Access** = **Student → TestSeries → Test** by exam match, program match or `StudentGrant`, each gated by the branch's `BranchTestConfig` — a switch with no window. **No groups, and no student↔test link.** WHEN a test may be started is the test's own: `TestSeriesTest.unlockAt`, plus `BranchTestSchedule` for late entry and extra time. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
+- **Access** = **Student → TestSeries → Test** by exam match, program match or `StudentGrant`, each gated by the branch's `BranchTestConfig` — a switch with no window. **No groups, and no student↔test link.** A series' `kind` widens the first two paths (`FREE` also reaches an enrolled family, capped; `SCHOLARSHIP` reaches only a grant), and `unlockMode` (`AUTO` / `REQUEST`) plus an optional prerequisite series decide whether a reachable series is OPEN. WHEN a test may be started is the test's own: `TestSeriesTest.unlockAt`, plus `BranchTestSchedule` for late entry and extra time — which blocks STARTING a test, never seeing it. **TestSeries** is optional, flat, many-to-many. **No products, orders, or payments in V1.**
 
 Two choices worth calling out: **localized content as JSON** keeps the bank multilingual with zero migration to add a language, while option identity stays stable (an id + `isCorrect` inside the version) so the answer key survives shuffling; and **access is a series-level grant** — no paywall entity, since payments live in a separate portal.
 
@@ -185,7 +185,7 @@ Exam-type **base configs** (seed SSC CGL Tier 1), then config-driven test creati
 The student test-taking experience: instructions screen, section navigation, **language display (single or dual)**, question palette (answered/marked/skipped), client timer, Redis autosave, server-authoritative start/end, and safe submit + auto-submit. This is the heaviest phase — budget accordingly. _Milestone: a student can take a full bilingual sectional-timed test start to finish._
 
 **Phase 4 — Results, rank & access (Days 33–40)**
-BullMQ scoring workers (marks + negative marking), scored fields on `Attempt`, Score Card + Solution Report, live Redis leaderboard for rank/percentile. Access: assign to group/individual + shareable link + in-app notification. _Milestone: a student takes an assigned test and sees a ranked result with solutions._
+BullMQ scoring workers (marks + negative marking), scored fields on `Attempt`, Score Card + Solution Report, live Redis leaderboard for rank/percentile. Access: series-level reach (exam / program / grant) gated by the branch, plus in-app notification. _Milestone: a student takes an assigned test and sees a ranked result with solutions._
 
 **Phase 5 — Hardening & launch (Days 41–45)**
 Load test the live-test path at target concurrency, fix bottlenecks, error monitoring, backups verified, security pass (rate limits, input validation, secrets), basic admin operational dashboard, deploy to production. _Milestone: production launch of V1._
@@ -202,7 +202,7 @@ This is achievable but tight; Phase 3 is the risk. If we slip, the first things 
 - **Results scope:** V1 ships score + solutions + rank/percentile; deep analytics deferred (data captured day one).
 - **Auth:** student mobile-OTP + admin email-OTP; OTP/sessions/devices in Redis.
 - **Media:** images/diagrams in V1 (inline S3 URLs in JSON content); one S3 path via MinIO locally.
-- **Payments:** out of V1 (separate portal). Access = group/individual + link.
+- **Payments:** out of V1 (separate portal). Access = series-level, by exam match, program match or a grant, gated by the branch. No groups, no share link.
 - **Infra/hosting:** decided at the end, AWS-leaning; build cloud-agnostic.
 
 **Still open (none block starting):**
@@ -218,10 +218,19 @@ This is achievable but tight; Phase 3 is the risk. If we slip, the first things 
 
 ---
 
-## 10. Immediate next steps
+## 10. Where the build actually is
+
+**Phases 0–4 are done.** Auth, the question bank and importer, base configs, the test builder, the
+live exam engine, BullMQ scoring, the Redis leaderboard, the score card and solution report, and the
+student test portal (`apps/test`) all ship. Phase 5 — load test at target concurrency, error
+monitoring, backups, security pass, deploy — is what remains.
+
+Built since this plan was written, and not in the roadmap above: branch-scoped admins, the branch
+configuration screens, three kinds of test series (`STANDARD` / `FREE` / `SCHOLARSHIP`), unlock
+modes and the request queue, prerequisite series, generated paper variants, and exam skins.
 
 1. ✅ Stack, data model, and design system locked; repo initialized with docs, `prisma/schema.prisma`, and `packages/ui` tokens.
-2. ✅ Local prerequisites installed: Node 20+, pnpm, Docker, Git.
-3. Scaffold **Phase 0** in the Claude Code terminal — monorepo, docker-compose (Postgres + Redis + MinIO), Prisma, OTP auth, design-system-wired app shells.
+2. ✅ Local prerequisites installed: Node 22.13+ (`.nvmrc` pins 22.23.2), pnpm 11, Docker, Git.
+3. ✅ Phase 0 scaffolded and every phase through 4 delivered.
 
-We're clear to start building Phase 0.
+Next: Phase 5 — hardening and launch.

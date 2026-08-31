@@ -96,11 +96,17 @@ Do not break these — they are why the live test holds at 4–5K:
 - **Access has no groups.** A student reaches a `TestSeries` by an exam match, a program match, or
   an explicit `StudentGrant`, gated by the `BranchTestConfig` row for their branch — a switch with
   no window, so a branch runs a series indefinitely.
+- **A series' `kind` widens the first two paths.** `STANDARD` is the above; `FREE` also reaches
+  anyone enrolled in its exam FAMILY, capped at `FREE_SERIES_EXAM_CAP` exams, and may not sit behind
+  a prerequisite (a CHECK refuses it); `SCHOLARSHIP` reaches only a grant. Reaching is not starting:
+  `unlockMode` is `AUTO` (at once, or once the prerequisite series is finished) or `REQUEST` (a queue
+  an admin decides). A locked series is still LISTED.
 - **Scheduling belongs to the TEST.** `TestSeriesTest.unlockAt` is when it opens inside a series,
-  one instant for every branch; `BranchTestSchedule(branchId, testId)` carries `lateEntrySec`
-  (counted FROM the unlock) and `extraTimeSec`, both null, no row meaning the plain rules. A series
-  has no availability, and `canStart` is derived from the clock on every read. A test that has been
-  sat cannot be taken out of a series.
+  one instant for every branch; `BranchTestSchedule(branchId, testId)` — the tests module owns it —
+  carries `lateEntrySec` (counted FROM the unlock) and `extraTimeSec`, both null, no row meaning the
+  plain rules. It blocks STARTING a test, never seeing one: `assertCanStart` refuses the sitting,
+  `assertReachable` still opens it to read about. A series has no availability, and `canStart` is
+  derived from the clock on every read. A test that has been sat cannot be taken out of a series.
 - **`Branch` is a table.** Super admin writes, everyone managing students reads. `name` is unique
   among live rows only. A branch a student still attends cannot be deleted; a retired branch takes
   no new students.
@@ -118,7 +124,8 @@ Do not break these — they are why the live test holds at 4–5K:
   or the `graft` skill. Git-ignored, so run `graft build` once in a fresh clone.
 - `packages/ui/src/index.ts` — the component inventory.
 - `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
-- `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: test-taking UI variants (§14),
-  language display (§2), student journey and landing page (§5), results and solutions (§6).
+- `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: render modes and skins (§14),
+  access and unlocking (§7), student journey and landing page (§5), results and solutions (§6).
+- `docs/03-shared-architecture.md` — module boundaries, the table-ownership map, the event catalog.
 - `docs/design/design-system.html` — living style guide.
 - `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).

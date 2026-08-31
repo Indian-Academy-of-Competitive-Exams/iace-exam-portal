@@ -255,9 +255,19 @@ Enum ImportSource {
 
 // -- series unlock (sequential Tier1 -> Tier2) ---
 Enum UnlockMode {  // how a series becomes available to a student
-  AUTO  // opens automatically (e.g. on prerequisite completion)
-  REQUEST  // student requests -> admin/auto approves
-  ADMIN  // admin grants explicitly
+  AUTO  // opens on its own: at once, or once every test in the prerequisite series is finished
+  REQUEST  // student asks; an admin answers from the queue
+}
+
+Enum TestSeriesKind {  // which reach paths a series opens
+  STANDARD  // exam match or program match
+  FREE  // also anyone enrolled in the exam FAMILY, capped at FREE_SERIES_EXAM_CAP exams; may NOT carry a prerequisite
+  SCHOLARSHIP  // no derived reach at all — an explicit StudentGrant only
+}
+
+Enum ExamTemplate {  // the skin: where the timer, palette and watermark sit. Presentation only.
+  COMFORTABLE  // timer in the header, palette right, section tabs, paper watermark
+  STRICT  // timer in the section bar and labelled, palette left, section buttons, screen watermark
 }
 
 Enum UnlockState {
@@ -373,7 +383,8 @@ Table BaseConfig {
   optionalSectionCount   int
 
   // -- render / tooling ---
-  defaultTestUi          TestUi [not null, default: 'CBT']
+  defaultTestUi          TestUi [not null, default: 'CBT']  // CBT | OMR | GENERIC | TYPING — render mode, one engine
+  examTemplate           ExamTemplate [not null, default: 'COMFORTABLE']  // the skin a test built from this starts with
   languageMode           LanguageMode [not null, default: 'SINGLE']
   languages              text[] [not null]  // SupportedLanguage values, ordered; DUAL shows all
   shuffleQuestions       boolean [not null, default: true]
@@ -424,7 +435,7 @@ Table BaseConfigSection {
   mandatory         boolean [not null, default: true]
   meritOrQualifying MeritType [not null, default: 'MERIT']
   qualifyingCutoff  decimal(6,2)  // used when sectionalCutoff / QUALIFYING
-  difficultyMix     jsonb
+  patternNote       varchar  // The exam-pattern workbook's note ("Moderate-Difficult"); nothing reads it as a mix
   indexes {
     (baseConfigId, moduleId, order) [unique]  // order is per-MODULE; modules can each restart at 1
     (baseConfigId, id) [unique]  // composite-FK target: a PaperQuestion section must belong to the test's config
@@ -524,6 +535,8 @@ Table Test {
   // draw source — used by the ONE draw engine (at finalize for FIXED, per attempt for GENERATED)
   questionPoolFilter jsonb  // { tags, subjects, topics, sourceYears, excludeSeen }. tags (e.g. ["ssc cgl mock 05"]) narrow the CANDIDATE pool; the config's per-section counts + timing stay authoritative — the engine fills each section to its count from the filtered pool and flags any shortfall (never silently under/over-fills). Manual pick can complete/override.
   drawStrategy   DrawStrategy [not null, default: 'RANDOM']
+  examTemplate   ExamTemplate [not null, default: 'COMFORTABLE']  // the test's own copy of the skin
+  variantCount   int [not null, default: 1]  // GENERATED draws this many papers at finalize; FIXED is 1
 
   status         TestStatus [not null, default: 'DRAFT']
   isLocked       boolean [not null, default: false]  // FIXED: true once the paper is frozen / first attempt
@@ -552,6 +565,7 @@ Table PaperQuestion {  // FIXED (ranked) papers ONLY — the frozen shared paper
   baseConfigSectionId text [not null]  // the CONFIG section this question fills — NOT NULL (TestSectionStat depends on it)
   questionId    text [not null]
   questionVersionId text [not null]  // the frozen version this paper serves (deterministic reproduction)
+  variant       int  [not null, default: 0]  // FIXED has variant 0 alone; GENERATED has Test.variantCount
   order         int  [not null]
   marks         decimal(6,2) [not null]  // copied from the config section at draw
   negativeMarks decimal(6,2) [not null]
@@ -664,7 +678,6 @@ Table Student {
   pinHash           text  // 4-digit login PIN (hashed)
   pinIsDefault      boolean [not null, default: true]  // seeded default PIN not yet changed
   fullName          text
-  preferredLanguage SupportedLanguage [not null, default: 'EN']  // EN | HI | TE
   preTestReady      boolean [not null, default: false]  // mother+father+dob present
   profileCompleted  boolean [not null, default: false]  // full profile (nudge only)
 
@@ -781,14 +794,14 @@ Table TestSeries {  // THE unit of offering — every test reaches students only
   sequentialTests      boolean [not null, default: false]  // intra-series: unlock tests in TestSeriesTest.order (test N+1 after N). OFF by default = all tests available together
   prerequisiteSeriesId text  // cross-series unlock (T2 series requires T1 series) — nullable
   unlockMode           UnlockMode [not null, default: 'AUTO']
-  isFree               boolean [not null, default: false]  // PRICING flag ONLY — free = no payment, NOT open access
+  kind                 TestSeriesKind [not null, default: 'STANDARD']  // STANDARD | FREE | SCHOLARSHIP — see the Note
   createdAt            timestamp [not null, default: `now()`]
   updatedAt            timestamp [not null]
   indexes {
     examStageId
     prerequisiteSeriesId  // reverse: "which series require this one"
   }
-  Note: 'The unit of offering. Access ALWAYS requires branch config plus a matching access path (exam/program derived, or a StudentGrant), even when isFree (free = pricing, not open). A lone test is carried by its own single-test series. programCode NULL = general access; set = program-only.'
+  Note: 'The unit of offering. Access ALWAYS requires branch config plus a matching access path. kind widens WHICH paths: STANDARD = exam or program; FREE also reaches anyone enrolled in the exam FAMILY (capped at FREE_SERIES_EXAM_CAP exams) and may NOT carry a prerequisite (CHECK enforced); SCHOLARSHIP reaches only an explicit StudentGrant. A lone test is carried by its own single-test series. programCode NULL = general access; set = program-only.'
 }
 
 Table StudentSeriesUnlock {  // per-student unlock state for sequential series
