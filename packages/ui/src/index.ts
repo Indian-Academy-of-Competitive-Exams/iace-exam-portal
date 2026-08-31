@@ -161,6 +161,45 @@ export {
   type RatioPart,
   type RatioValues,
 } from './components/ui/ratio-bar';
+export { PLOT_WIDTH, SERIES_SWATCH, type SeriesSlot } from './components/charts/chart-geometry';
+export { ChartFigure, type ChartFigureProps } from './components/charts/chart-figure';
+export {
+  ChartLegend,
+  type ChartLegendItem,
+  type ChartLegendProps,
+} from './components/charts/chart-legend';
+export { ChartTooltip, type ChartTip, type ChartTipRow } from './components/charts/chart-tooltip';
+export {
+  LinePlot,
+  type LinePlotProps,
+  type LinePoint,
+  type PlotBand,
+  type PlotReference,
+} from './components/charts/line-plot';
+export {
+  DistributionPlot,
+  type DistributionBand,
+  type DistributionMarker,
+  type DistributionPlotProps,
+} from './components/charts/distribution-plot';
+export {
+  CompositionBar,
+  type CompositionBarProps,
+  type CompositionSegment,
+  type CompositionTone,
+} from './components/charts/composition-bar';
+export {
+  DivergingBars,
+  type DivergingBarsProps,
+  type DivergingItem,
+} from './components/charts/diverging-bars';
+export { ColumnPlot, type ColumnPlotProps, type PlotColumn } from './components/charts/column-plot';
+export {
+  ComparisonCards,
+  type ComparisonCardsProps,
+  type ComparisonItem,
+} from './components/charts/comparison-cards';
+export { AlignedPlots, type AlignedPlotsProps } from './components/charts/aligned-plots';
 export { PageHeader, type PageHeaderSize } from './components/ui/page-header';
 export { SectionHeading, type SectionHeadingProps } from './components/ui/section-heading';
 export {
