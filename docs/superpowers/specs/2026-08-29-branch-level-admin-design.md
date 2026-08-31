@@ -234,6 +234,13 @@ The series form's "enable everywhere" still switches on branches deliberately sw
 now visible from two screens rather than one, which makes it easier to notice rather than more
 dangerous, and its confirm copy already says what it does.
 
+**A series draft is lost on navigation, decided 2026-08-31.** Once the tabs became three nav rows,
+leaving by the sidebar, a link, or a reload discards a pending draft without asking — only changing
+branch still asks. Catching the rest means `useBlocker`, which needs a data router the app does not
+mount, and converting it for this alone is not worth it. Nothing was written, so a lost draft leaves
+the server exactly as it was, and the pinned warning names the count for as long as one is held.
+This is not a bug to fix; revisit it only if the app moves to a data router for other reasons.
+
 ## Tests
 
 - The batch toggle applies exactly the changes it confirmed and none it did not.
