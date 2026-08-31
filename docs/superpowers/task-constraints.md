@@ -43,6 +43,25 @@ session. Node 22 in the committing shell (`source ~/.nvm/nvm.sh && nvm use 22`).
 
 </commit>
 
+<docs>
+
+**A plan is not a deliverable.** Implementation plans, task briefs, the specs behind them, research
+notes and status reports are scaffolding for one piece of work; they go stale the day it lands, and
+a repo full of them buries the handful of documents somebody actually has to read. Write them under
+`docs/superpowers/plans/` or `docs/superpowers/specs/` — both **gitignored**. Never `git add -f`
+one, and never move one somewhere tracked to get it committed.
+
+**What survives the task goes in the commit body, or into an architectural doc.** A decision worth
+keeping is worth putting where it will be found: `CLAUDE.md`, `docs/0*.md`, `docs/design/`, or this
+file. "It is written down in the plan" is not written down.
+
+Tracked under `docs/` and staying that way: `01-architecture-and-plan`, `02-mocktest-feature-spec`,
+`03-shared-architecture`, `design/design-system.html`, `local-setup`, `seed-exam-catalog`,
+`schema-target.dbml`, `WORKFLOW.md` and this file. Adding a document beside them is a deliberate
+change, not a side effect of finishing a task — ask first.
+
+</docs>
+
 ## Data model
 
 `prisma/schema.prisma` is the target of record and wins on any conflict. Raw SQL for what Prisma

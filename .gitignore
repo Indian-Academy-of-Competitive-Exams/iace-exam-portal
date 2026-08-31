@@ -102,3 +102,20 @@ sonar-project.properties
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+
+# Working files an agent writes to drive a build: implementation plans, task
+# briefs, the specs behind them, research notes, status reports. They are
+# scaffolding for one piece of work and go stale the day it lands, and a repo
+# full of them buries the handful of documents somebody actually has to read.
+# Kept on disk, out of the index. What survives a task goes in the commit body
+# or into an architectural doc under docs/, never into a tracked plan.
+docs/superpowers/plans/
+docs/superpowers/specs/
+
+# The TODO markers lifted out of the source to keep the Sonar gate clean. A
+# backlog, not architecture — and one `git add .` from coming back without this.
+docs/05-question-bank-follow-ups.md
+
+# Local patches to the installed superpowers plugin — this machine's tooling,
+# not the platform's source.
+docs/superpowers/patches/
