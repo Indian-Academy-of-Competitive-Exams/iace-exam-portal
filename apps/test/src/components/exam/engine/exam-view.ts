@@ -11,6 +11,7 @@ import type {
   LanguageMode,
   LiveAnswer,
   PaletteCounts,
+  TestUi,
 } from '@iace/contracts';
 
 /** Submitting, and what the candidate is told before it happens. */
@@ -38,6 +39,8 @@ export interface ExamView {
   watermark: string;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
+  /** How the student answers. CBT picks an option; OMR fills a bubble. One engine under both. */
+  testUi: TestUi;
 
   sections: readonly ExamSection[];
   sectionId: string;
@@ -66,6 +69,8 @@ export interface ExamView {
   openQuestion: (questionId: string) => void;
   nextQuestion: () => void;
   chooseOption: (optionId: string) => void;
+  /** OMR's one write: the option and the flag together, because two records are two saves. */
+  bubbleAnswer: (optionId: string, fill: number) => void;
   markAndNext: () => void;
   clearResponse: () => void;
   openSection: (sectionId: string) => void;

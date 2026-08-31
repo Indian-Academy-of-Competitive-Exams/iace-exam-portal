@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ANSWER_STATE,
+  omrStateFor,
   nextOpenSectionId,
   nextQuestionId,
   openSections,
@@ -121,6 +122,7 @@ export function useExamView({
     watermark,
     languages: paper.languages,
     languageMode: paper.languageMode,
+    testUi: paper.testUi,
 
     sections: paper.sections,
     sectionId,
@@ -147,6 +149,12 @@ export function useExamView({
     openQuestion: move,
     nextQuestion,
     chooseOption: (optionId) => record({ selectedOptionId: optionId }),
+    bubbleAnswer: (optionId, fill) => {
+      const state = omrStateFor(fill);
+      record({ selectedOptionId: optionId, marked: state === ANSWER_STATE.ANSWERED_MARKED });
+      // A full bubble IS Save & Next — the gesture does what the button used to.
+      if (state === ANSWER_STATE.ANSWERED) nextQuestion();
+    },
     markAndNext: () => {
       record({ marked: true });
       nextQuestion();

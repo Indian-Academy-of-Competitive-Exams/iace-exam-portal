@@ -1,11 +1,15 @@
 import {
+  ANSWER_STATE,
   contentLanguageOf,
   LANGUAGE_MODE,
+  omrFillFor,
+  TEST_UI,
   type ExamQuestion,
   type LanguageCode,
   type LanguageMode,
+  type TestUi,
 } from '@iace/contracts';
-import { RichContent, cn } from '@iace/ui';
+import { FillBubble, RichContent, cn } from '@iace/ui';
 import { LANGUAGE_LABELS } from '../../lib/constants';
 import { htmlOf, shownLanguages } from './content';
 
@@ -16,15 +20,27 @@ export function OptionList({
   languages,
   languageMode,
   selectedOptionId,
+  marked,
+  testUi,
   onSelect,
+  onBubble,
 }: Readonly<{
   question: ExamQuestion;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
   selectedOptionId: string | null;
+  marked: boolean;
+  testUi: TestUi;
   onSelect: (optionId: string) => void;
+  onBubble: (optionId: string, fill: number) => void;
 }>) {
   const shown = shownLanguages(languages, languageMode);
+  const bubbling = testUi === TEST_UI.OMR;
+  // Committed: an option is held and the question is not flagged, so the ink is dry.
+  const locked = bubbling && selectedOptionId !== null && !marked;
+  // What the held option's ink says: flagged is half filled, unflagged is committed.
+  const heldFill = omrFillFor(marked ? ANSWER_STATE.ANSWERED_MARKED : ANSWER_STATE.ANSWERED);
+  const fillOf = (optionId: string) => (optionId === selectedOptionId ? heldFill : 0);
 
   return (
     <>
@@ -33,19 +49,30 @@ export function OptionList({
           <li key={option.id}>
             <label
               className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-exam-option border p-3 transition-colors',
+                'flex items-start gap-3 rounded-exam-option border p-3 transition-colors',
+                locked ? 'cursor-default' : 'cursor-pointer',
                 option.id === selectedOptionId
                   ? 'border-exam-option-selected-border bg-exam-option-selected'
                   : 'border-exam-option-border bg-exam-option hover:bg-exam-surface-2',
               )}
             >
-              <input
-                type="radio"
-                name={`q-${question.questionId}`}
-                className="mt-0.5 size-4 shrink-0 accent-[--exam-option-selected-border]"
-                checked={option.id === selectedOptionId}
-                onChange={() => onSelect(option.id)}
-              />
+              {bubbling ? (
+                <FillBubble
+                  className="mt-0.5"
+                  label={String.fromCodePoint(65 + position)}
+                  fill={fillOf(option.id)}
+                  disabled={locked}
+                  onFillChange={(fill) => onBubble(option.id, fill)}
+                />
+              ) : (
+                <input
+                  type="radio"
+                  name={`q-${question.questionId}`}
+                  className="mt-0.5 size-4 shrink-0 accent-[--exam-option-selected-border]"
+                  checked={option.id === selectedOptionId}
+                  onChange={() => onSelect(option.id)}
+                />
+              )}
               <span className="w-5 shrink-0 text-sm font-medium text-exam-ink-muted">
                 {String.fromCodePoint(65 + position)}
               </span>

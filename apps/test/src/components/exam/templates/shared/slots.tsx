@@ -4,6 +4,7 @@
  * Nothing here holds state: every value and every callback comes off the view.
  */
 import { Flag, Eraser, Send } from 'lucide-react';
+import { TEST_UI } from '@iace/contracts';
 import { Alert, Badge, Button, Spinner, TabsList, TabsTrigger, Watermark, cn } from '@iace/ui';
 import { ExamTimer } from '../../exam-timer';
 import { OptionList } from '../../option-list';
@@ -96,7 +97,10 @@ export function Options({ view }: Readonly<ExamSlotProps>) {
       languages={view.languages}
       languageMode={view.languageMode}
       selectedOptionId={view.selectedOptionId}
+      marked={view.marked}
+      testUi={view.testUi}
       onSelect={view.chooseOption}
+      onBubble={view.bubbleAnswer}
     />
   );
 }
@@ -116,17 +120,26 @@ export function Palette({ view }: Readonly<ExamSlotProps>) {
 export function BottomBar({ view }: Readonly<ExamSlotProps>) {
   return (
     <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-exam-border px-exam py-3">
-      <Button type="button" variant="outline" size="sm" onClick={view.markAndNext}>
-        <Flag aria-hidden />
-        Mark for review &amp; next
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={view.clearResponse}>
-        <Eraser aria-hidden />
-        Clear response
-      </Button>
-      <Button type="button" size="sm" onClick={view.nextQuestion}>
-        Save &amp; next
-      </Button>
+      {/* On a bubble sheet the ink carries all three: a part fill flags it, a full one saves and moves. */}
+      {view.testUi === TEST_UI.OMR ? (
+        <Button type="button" size="sm" onClick={view.nextQuestion}>
+          Next
+        </Button>
+      ) : (
+        <>
+          <Button type="button" variant="outline" size="sm" onClick={view.markAndNext}>
+            <Flag aria-hidden />
+            Mark for review &amp; next
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={view.clearResponse}>
+            <Eraser aria-hidden />
+            Clear response
+          </Button>
+          <Button type="button" size="sm" onClick={view.nextQuestion}>
+            Save &amp; next
+          </Button>
+        </>
+      )}
 
       <Button
         type="button"
