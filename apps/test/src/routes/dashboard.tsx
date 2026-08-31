@@ -1,9 +1,28 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Avatar, Button, PageHeader, StatRow, TrendLine, type TrendPoint } from '@iace/ui';
+import { ClipboardList } from 'lucide-react';
+import {
+  Avatar,
+  Button,
+  EmptyState,
+  Metric,
+  MetricGroup,
+  PageFrame,
+  PageHeader,
+  SectionHeading,
+  TrendLine,
+  type TrendPoint,
+} from '@iace/ui';
 import { PreTestPrompt } from '../components/pre-test-prompt';
+import { StatusStrip } from '../components/tests/status-strip';
 import { api } from '../lib/api';
-import { PERFORMANCE_QUERY_KEY, PROFILE_QUERY_KEY, ROUTES } from '../lib/constants';
+import {
+  CATALOG_QUERY_KEY,
+  PERFORMANCE_QUERY_KEY,
+  PROFILE_QUERY_KEY,
+  ROUTES,
+} from '../lib/constants';
+import { sittablesOf } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
 
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
@@ -11,6 +30,10 @@ export function DashboardPage() {
   const { identity: student } = useAuth();
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+
+  const now = new Date();
+  const rows = sittablesOf(catalog.data?.series ?? [], now);
 
   const points: TrendPoint[] = (trend.data?.points ?? []).map((point) => ({
     key: point.attemptId,
@@ -19,39 +42,66 @@ export function DashboardPage() {
     caption: `${point.score} of ${point.maxMarks} marks`,
   }));
   const last = trend.data?.points.at(-1);
+  const sat = points.length > 0;
 
   return (
-    <>
-      <PageHeader
-        leading={
-          <Avatar
-            src={me.data?.profile?.photoUrl}
-            name={student?.fullName}
-            fallback={student?.mobile}
-            size="lg"
-          />
-        }
-        title={student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
-        meta={<span className="tabular-nums">+91 {student?.mobile}</span>}
-        action={
-          <Button asChild variant="outline">
-            <Link to={ROUTES.PERFORMANCE}>See your performance</Link>
-          </Button>
-        }
-      />
+    <PageFrame
+      header={
+        <PageHeader
+          size="display"
+          leading={
+            <Avatar
+              src={me.data?.profile?.photoUrl}
+              name={student?.fullName}
+              fallback={student?.mobile}
+              size="lg"
+            />
+          }
+          title={student?.fullName ? `Welcome, ${student.fullName}` : 'Welcome'}
+          meta={<span className="tabular-nums">+91 {student?.mobile}</span>}
+          action={
+            sat ? (
+              <Button asChild variant="outline">
+                <Link to={ROUTES.PERFORMANCE}>See your performance</Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      }
+    >
+      <div className="flex flex-col gap-8">
+        <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 
-      <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
+        {sat ? (
+          <MetricGroup>
+            <Metric label="Tests done" value={trend.data?.testsSat ?? 0} />
+            <Metric label="Last rank" value={last?.rank ?? '—'} />
+            <Metric label="Last accuracy" value={last?.accuracy ?? 0} unit="%" />
+          </MetricGroup>
+        ) : null}
 
-      {points.length > 0 ? (
-        <section className="mt-6 flex flex-col gap-3">
-          <div className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
-            <StatRow label="Tests done" value={trend.data?.testsSat ?? 0} />
-            <StatRow label="Last rank" value={last?.rank ?? '—'} />
-            <StatRow label="Last accuracy" value={`${last?.accuracy ?? 0}%`} />
-          </div>
-          <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+        <section className="flex flex-col gap-3">
+          <SectionHeading title="Next" />
+          <StatusStrip rows={rows} now={now} />
         </section>
-      ) : null}
-    </>
+
+        {sat ? (
+          <section className="flex flex-col gap-3">
+            <SectionHeading title="Accuracy" />
+            <TrendLine points={points} unit="%" aria-label="Accuracy across your tests" />
+          </section>
+        ) : (
+          <EmptyState
+            icon={ClipboardList}
+            title="No tests sat yet"
+            action={
+              <Button asChild>
+                <Link to={ROUTES.TESTS}>Go to your tests</Link>
+              </Button>
+            }
+          />
+        )}
+      </div>
+    </PageFrame>
   );
 }

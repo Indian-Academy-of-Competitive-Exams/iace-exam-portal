@@ -65,7 +65,7 @@ Every failure here is silent: the page looks built, and the header or the pager 
 - **Scrollbars are styled once, globally** (`components.css`), never per component. Every scroller sits inside a border and a radius, so a platform-width bar lands on the rounded edge and reads as a seam. Thin, muted, inset, and 0px of layout width so a body that starts scrolling does not shift.
 - **A scrollport must also be a containing block — give it `relative`.** An absolutely positioned descendant of a `static` scroller resolves against the nearest positioned ancestor, escapes the scroll and grows the DOCUMENT. `sr-only` is `position: absolute`, which is how a hidden `<legend>` once put a scrollbar across the whole app.
 - **Every ancestor between the frame and the scroller needs `min-h-0`.** A flex child defaults to `min-height: auto` and will not shrink below its content, so one missing `min-h-0` hands the scroll back to the page and the header leaves with it.
-- **A page with no frame is the deviation.** Only a page whose whole body is the header skips one (`dashboard`). `TableFrame`'s `framed={false}` escape has no callers, so using it needs a stated reason.
+- **A page with no frame is the deviation**, and there is no longer an exception — the dashboard grew a body and took a `PageFrame` with it. `TableFrame`'s `framed={false}` escape has no callers, so using it needs a stated reason.
 
 </scrolling>
 
