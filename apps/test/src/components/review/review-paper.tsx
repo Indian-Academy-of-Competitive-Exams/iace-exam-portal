@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Badge, Button, RichContent, Tabs, TabsList, TabsTrigger, cn } from '@iace/ui';
+import { Alert, Badge, RichContent, Tabs, TabsList, TabsTrigger, cn } from '@iace/ui';
 import {
   type ExamSection,
   type LanguageCode,
@@ -198,7 +198,7 @@ function ReviewPalette({
         {([VERDICT.RIGHT, VERDICT.WRONG, VERDICT.LEFT] as const).map((verdict) => (
           <span key={verdict} className="flex items-center justify-between gap-2 text-xs">
             <span className="flex items-center gap-2 text-muted-foreground">
-              <span className={cn('size-3 rounded-sm border', VERDICT_SEAT[verdict])} />
+              <span className={cn('size-3 shrink-0 rounded-sm border', VERDICT_SEAT[verdict])} />
               {VERDICT_LABEL[verdict]}
             </span>
             <span className="font-medium tabular-nums text-foreground">{counted(verdict)}</span>
@@ -206,24 +206,25 @@ function ReviewPalette({
         ))}
       </div>
 
-      <div className="grid min-h-0 grid-cols-6 gap-1.5 overflow-y-auto">
+      <div className="relative grid min-h-0 grid-cols-6 gap-1.5 overflow-y-auto">
         {questions.map((question, seat) => (
-          <Button
+          <button
             key={question.questionId}
             type="button"
-            variant="ghost"
-            size="icon"
-            aria-current={question.questionId === openId}
-            className={cn(
-              'size-8 rounded-sm border text-xs tabular-nums',
-              VERDICT_SEAT[verdictOf(question)],
-              question.questionId === openId && 'ring-2 ring-primary',
-            )}
+            aria-current={question.questionId === openId ? 'true' : undefined}
             onClick={() => onOpen(question.questionId)}
+            className={cn(
+              'flex size-8 items-center justify-center rounded-sm border text-xs tabular-nums',
+              'focus-visible:shadow-focus focus-visible:outline-none',
+              VERDICT_SEAT[verdictOf(question)],
+              // Positional only: an outline, never a fill, so it cannot read as a state.
+              question.questionId === openId &&
+                'outline outline-2 outline-offset-1 outline-primary',
+            )}
           >
             {seat + 1}
             <span className="sr-only">{VERDICT_LABEL[verdictOf(question)]}</span>
-          </Button>
+          </button>
         ))}
       </div>
     </aside>
