@@ -151,8 +151,10 @@ import {
 import {
   PERFORMANCE_ROUTES,
   performanceReportSchema,
+  satSeriesListSchema,
   type PerformanceReport,
   type PerformanceReportQueryInput,
+  type SatSeries,
 } from './stats';
 import {
   ADMIN_TEST_PAPER_ROUTES,
@@ -653,6 +655,10 @@ export function createApiClient(options: ApiClientOptions) {
         request(`${PERFORMANCE_ROUTES.me}${queryString({ ...query })}`, {
           schema: performanceReportSchema,
         }),
+
+      /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
+      performanceSeries: (): Promise<SatSeries[]> =>
+        request(PERFORMANCE_ROUTES.mySeries, { schema: satSeriesListSchema }),
     },
 
     admin: {

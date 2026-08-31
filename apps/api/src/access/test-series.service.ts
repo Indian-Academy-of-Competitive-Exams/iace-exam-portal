@@ -43,6 +43,7 @@ export const AUDITED_SERIES_FIELDS = [
   'examStageId',
   'programCode',
   'sequentialTests',
+  'progressive',
   'prerequisiteSeriesId',
   'unlockMode',
   'kind',
@@ -491,6 +492,7 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
     ...(input.examStageId === undefined ? {} : { examStageId: input.examStageId ?? null }),
     ...(input.programCode === undefined ? {} : { programCode: input.programCode ?? null }),
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
+    ...(input.progressive === undefined ? {} : { progressive: input.progressive }),
     ...(input.prerequisiteSeriesId === undefined
       ? {}
       : { prerequisiteSeriesId: input.prerequisiteSeriesId ?? null }),
@@ -513,6 +515,7 @@ function toSummary(
       : null,
     programCode: row.programCode,
     sequentialTests: row.sequentialTests,
+    progressive: row.progressive,
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     unlockMode: row.unlockMode,
     kind: row.kind,

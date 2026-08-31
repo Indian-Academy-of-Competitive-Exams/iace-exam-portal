@@ -1,10 +1,13 @@
 import { BarChart3, ClipboardList, Gift, KeyRound, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
+import { type BadgeProps } from '@iace/ui';
 import {
   ANSWER_STATE,
+  MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
   type AnswerState,
   type LanguageCode,
+  type MasteryTrend,
   type PerformanceScope,
 } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -59,10 +62,29 @@ export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
   ['me', 'performance', 'report', scope, scopeId] as const;
 
-/** The two the student can answer on their own. SERIES needs a series picker, which AN4 owns. */
+/** Three of the four: ATTEMPT is a single sitting, which the score card already opens on. */
 export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.TEST]: 'This test',
+  [PERFORMANCE_SCOPES.SERIES]: 'This series',
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
+};
+
+/** The series the SERIES scope may be asked about, which only a sitting puts on the list. */
+export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
+
+/** Chart series slots run 1..8 and are assigned, never cycled — a ninth subject shares the last. */
+export const SERIES_SLOT_COUNT = 8;
+
+export const MASTERY_TREND_LABELS: Readonly<Record<MasteryTrend, string>> = {
+  [MASTERY_TRENDS.RISING]: 'Rising',
+  [MASTERY_TRENDS.STEADY]: 'Steady',
+  [MASTERY_TRENDS.SLIDING]: 'Sliding',
+};
+
+export const MASTERY_TREND_BADGE: Readonly<Record<MasteryTrend, BadgeProps['variant']>> = {
+  [MASTERY_TRENDS.RISING]: 'success',
+  [MASTERY_TRENDS.STEADY]: 'neutral',
+  [MASTERY_TRENDS.SLIDING]: 'warning',
 };
 
 /** Difficulty bands as the report keys them: `DifficultyStanding.name` carries the enum value. */

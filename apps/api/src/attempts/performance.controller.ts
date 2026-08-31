@@ -10,6 +10,7 @@ import {
   performanceReportQuerySchema,
   type PerformanceReport,
   type PerformanceReportQuery,
+  type SatSeries,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
@@ -27,6 +28,12 @@ export class MePerformanceController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceReport> {
     return this.performance.report(user.id, query);
+  }
+
+  /** What the SERIES scope may be asked about — a series they have sat, and whether it is a ramp. */
+  @Get('series')
+  series(@CurrentUser() user: AuthenticatedUser): Promise<SatSeries[]> {
+    return this.performance.satSeries(user.id);
   }
 }
 

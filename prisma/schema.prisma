@@ -803,6 +803,8 @@ model TestSeries {
   examStageId          String?
   programCode          String?
   sequentialTests      Boolean        @default(false)
+  // sequentialTests is ORDER; this is DIFFICULTY -- a graded ramp, and the two move independently.
+  progressive          Boolean        @default(false)
   prerequisiteSeriesId String?
   unlockMode           UnlockMode     @default(AUTO)
   // What the series IS, and one of three: only FREE is reached by an enrolled family, and

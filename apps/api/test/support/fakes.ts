@@ -4721,8 +4721,8 @@ export interface FakePerformanceData {
   served: FakeServedAnswerRow[];
   shape: FakeScoredTest;
   students: { id: string; deletedAt: Date | null }[];
-  series: { id: string; name: string }[];
-  seriesTests: { testSeriesId: string; testId: string }[];
+  series: { id: string; name: string; progressive?: boolean }[];
+  seriesTests: { testSeriesId: string; testId: string; order?: number | null }[];
   testStats: {
     testId: string;
     evaluatedCount: number;
@@ -4840,6 +4840,26 @@ export class FakePerformancePrisma {
       ),
   };
 
+  private satBy(testSeriesId: string, studentId: string): boolean {
+    return this.data.seriesTests.some(
+      (link) =>
+        link.testSeriesId === testSeriesId &&
+        this.data.attempts.some((row) => row.testId === link.testId && row.studentId === studentId),
+    );
+  }
+
+  private withRungs(row: { id: string; name: string; progressive?: boolean }) {
+    return {
+      id: row.id,
+      name: row.name,
+      progressive: row.progressive ?? false,
+      tests: this.data.seriesTests
+        .filter((link) => link.testSeriesId === row.id)
+        .map((link) => ({ testId: link.testId, order: link.order ?? null }))
+        .toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    };
+  }
+
   readonly testSeries = {
     findFirst: ({
       where,
@@ -4850,16 +4870,25 @@ export class FakePerformancePrisma {
       };
     }) => {
       const studentId = where.tests.some.test.attempts.some.studentId;
-      const sat = (testSeriesId: string) =>
-        this.data.seriesTests.some(
-          (link) =>
-            link.testSeriesId === testSeriesId &&
-            this.data.attempts.some(
-              (row) => row.testId === link.testId && row.studentId === studentId,
-            ),
-        );
+      const held = this.data.series.find(
+        (row) => row.id === where.id && this.satBy(row.id, studentId),
+      );
+      return Promise.resolve(held === undefined ? null : this.withRungs(held));
+    },
+
+    findMany: ({
+      where,
+    }: {
+      where: {
+        tests: { some: { test: { attempts: { some: { studentId: string } } } } };
+      };
+    }) => {
+      const studentId = where.tests.some.test.attempts.some.studentId;
       return Promise.resolve(
-        this.data.series.find((row) => row.id === where.id && sat(row.id)) ?? null,
+        this.data.series
+          .filter((row) => this.satBy(row.id, studentId))
+          .map((row) => ({ id: row.id, name: row.name, progressive: row.progressive ?? false }))
+          .toSorted((a, b) => a.name.localeCompare(b.name)),
       );
     },
   };

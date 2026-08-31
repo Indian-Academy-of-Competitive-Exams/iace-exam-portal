@@ -4,7 +4,10 @@
  * nobody touched reads as null and never as a zero the student can mistake for a score.
  */
 import {
+  DIFFICULTY_INDEX,
   DIFFICULTY_LEVELS,
+  MASTERY_TRENDS,
+  MASTERY_TREND_MIN_DELTA,
   PAPER_QUESTION_STATUS,
   scoreHistogramSchema,
   type AnalyticsBucket,
@@ -12,10 +15,15 @@ import {
   type CohortCurveBand,
   type DifficultyStanding,
   type MarkComposition,
+  type MasteryPoint,
+  type MasteryTrend,
   type MeasuredBucket,
   type PaperQuestionStatus,
+  type RampStep,
   type ScoreCardSection,
   type SectionalStanding,
+  type SeriesProgression,
+  type SubjectMastery,
 } from '@iace/contracts';
 import { bucketOf, type AnalysedQuestion } from './attempt-analytics';
 
@@ -200,4 +208,84 @@ export function sectionalStandingOf(
       cohortSampleSize: n,
     };
   });
+}
+
+// ----------------------------------------------------------------------------
+// Series progression. The ramp is the series' own order, never the calendar, and
+// a paper's difficulty comes from the grades its questions carry: TestQuestionStat
+// holds the cohort's p-value but no job writes that table yet.
+// ----------------------------------------------------------------------------
+
+/** One sitting as the ramp reads it: which paper, how it placed, and every question served. */
+export interface SatPaper {
+  testId: string;
+  attemptId: string;
+  title: string | null;
+  percentile: number | null;
+  questions: readonly ReportedQuestion[];
+}
+
+/** Oldest-first sittings folded onto the series' rungs; a retaken paper keeps its latest. */
+export function seriesProgressionOf(
+  seriesId: string,
+  order: ReadonlyMap<string, number>,
+  sat: readonly SatPaper[],
+): SeriesProgression {
+  const latest = new Map<string, SatPaper>();
+  for (const paper of sat) {
+    if (order.has(paper.testId)) latest.set(paper.testId, paper);
+  }
+  const rungs = [...latest.values()].sort(
+    (a, b) => (order.get(a.testId) ?? 0) - (order.get(b.testId) ?? 0),
+  );
+
+  return {
+    seriesId,
+    steps: rungs.map(stepOf),
+    subjects: masteryOf(rungs),
+  };
+}
+
+function stepOf(paper: SatPaper): RampStep {
+  const graded = paper.questions.filter((row) => row.difficulty in DIFFICULTY_INDEX);
+  const total = graded.reduce((sum, row) => sum + DIFFICULTY_INDEX[row.difficulty], 0);
+  return {
+    testId: paper.testId,
+    title: paper.title,
+    attemptId: paper.attemptId,
+    percentile: paper.percentile,
+    difficulty: graded.length === 0 ? null : round(total / graded.length),
+    questionCount: paper.questions.length,
+  };
+}
+
+/** Every subject the sequence asked about, each carrying one point per rung so the lines align. */
+function masteryOf(rungs: readonly SatPaper[]): SubjectMastery[] {
+  const names = new Map<string, string>();
+  for (const rung of rungs) {
+    for (const row of rung.questions) names.set(row.subjectId, row.subjectName);
+  }
+
+  return [...names.entries()].map(([subjectId, subjectName]) => {
+    const points = rungs.map((rung) => pointOf(rung, subjectId));
+    const measured = points.filter((point) => point.accuracy !== null);
+    const first = measured.at(0)?.accuracy ?? null;
+    const last = measured.at(-1)?.accuracy ?? null;
+    return { subjectId, subjectName, points, first, last, trend: trendOf(first, last) };
+  });
+}
+
+function pointOf(rung: SatPaper, subjectId: string): MasteryPoint {
+  const held = rung.questions.filter((row) => row.subjectId === subjectId);
+  const bucket = measure(bucketOf(subjectId, subjectId, held));
+  return { testId: rung.testId, accuracy: bucket.accuracy, attempted: bucket.attempted };
+}
+
+/** Two measured rungs are the least a direction can be read off; one is a dot, not a slope. */
+function trendOf(first: number | null, last: number | null): MasteryTrend {
+  if (first === null || last === null) return MASTERY_TRENDS.STEADY;
+  const delta = last - first;
+  if (delta >= MASTERY_TREND_MIN_DELTA) return MASTERY_TRENDS.RISING;
+  if (delta <= -MASTERY_TREND_MIN_DELTA) return MASTERY_TRENDS.SLIDING;
+  return MASTERY_TRENDS.STEADY;
 }

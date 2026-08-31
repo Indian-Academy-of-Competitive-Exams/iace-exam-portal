@@ -10,12 +10,14 @@ import {
   DIFFICULTY_LEVEL,
   ErrorCodes,
   FEATURE_KEYS,
+  MASTERY_TRENDS,
   PAPER_QUESTION_STATUS,
   PERFORMANCE_SCOPES,
   PERMISSION_LEVELS,
   performanceReportQuerySchema,
   performanceReportSchema,
   type AnalyticsBucket,
+  type DifficultyLevel,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { type AuthenticatedUser } from '../src/common/security';
@@ -30,7 +32,9 @@ import {
   difficultyStandingOf,
   measure,
   sectionalStandingOf,
+  seriesProgressionOf,
   type ReportedQuestion,
+  type SatPaper,
 } from '../src/attempts/performance-analytics';
 import {
   FakePerformancePrisma,
@@ -804,5 +808,223 @@ describe('the performance report — the permission on the admin route', () => {
       () => guard.canActivate(context),
       (error: { code?: string }) => error.code === ErrorCodes.FORBIDDEN,
     );
+  });
+});
+
+// --------------------------------------------------------------------------- the ramp and the climb
+// ---------------------------------------------------------------------------
+
+const rung = (over: Partial<SatPaper> & { testId: string }): SatPaper => ({
+  attemptId: `att_${over.testId}`,
+  title: over.testId,
+  percentile: null,
+  questions: [],
+  ...over,
+});
+
+const graded = (
+  subjectId: string,
+  difficulty: DifficultyLevel,
+  isCorrect: boolean | null,
+): ReportedQuestion =>
+  asked({
+    subjectId,
+    subjectName: subjectId,
+    difficulty,
+    isCorrect,
+    answered: isCorrect !== null,
+  });
+
+describe('seriesProgressionOf', () => {
+  const order = new Map([
+    ['tst_a', 0],
+    ['tst_b', 1],
+    ['tst_c', 2],
+  ]);
+
+  /** The ramp is the series' own order; the calendar is what the trajectory already reads. */
+  it('walks the rungs in series order however they were sat', () => {
+    const progression = seriesProgressionOf('ser_1', order, [
+      rung({ testId: 'tst_c', percentile: 71 }),
+      rung({ testId: 'tst_a', percentile: 55 }),
+      rung({ testId: 'tst_b', percentile: 60 }),
+    ]);
+
+    assert.deepEqual(
+      progression.steps.map((step) => step.testId),
+      ['tst_a', 'tst_b', 'tst_c'],
+    );
+    assert.deepEqual(
+      progression.steps.map((step) => step.percentile),
+      [55, 60, 71],
+    );
+  });
+
+  /** TestQuestionStat holds the cohort's p-value but nothing writes it, so the grades are the ramp. */
+  it('reads the difficulty of a paper off the grades its questions carry', () => {
+    const progression = seriesProgressionOf('ser_1', order, [
+      rung({
+        testId: 'tst_a',
+        questions: [
+          graded('sub_q', DIFFICULTY_LEVEL.LOW, true),
+          graded('sub_q', DIFFICULTY_LEVEL.LOW, true),
+        ],
+      }),
+      rung({
+        testId: 'tst_b',
+        questions: [
+          graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, true),
+          graded('sub_q', DIFFICULTY_LEVEL.HIGH, true),
+        ],
+      }),
+    ]);
+
+    assert.equal(progression.steps[0]?.difficulty, 0);
+    assert.equal(progression.steps[1]?.difficulty, 75);
+  });
+
+  it('carries no difficulty at all for a rung that served nothing', () => {
+    const progression = seriesProgressionOf('ser_1', order, [rung({ testId: 'tst_a' })]);
+
+    assert.equal(progression.steps[0]?.difficulty, null);
+    assert.equal(progression.steps[0]?.questionCount, 0);
+  });
+
+  /** The one the screen exists to surface: a subject going backwards while the series runs. */
+  it('reads a subject losing ground across the sequence as sliding', () => {
+    const progression = seriesProgressionOf('ser_1', order, [
+      rung({
+        testId: 'tst_a',
+        questions: [
+          graded('sub_ga', DIFFICULTY_LEVEL.MEDIUM, true),
+          graded('sub_ga', DIFFICULTY_LEVEL.MEDIUM, true),
+          graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, false),
+          graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, false),
+        ],
+      }),
+      rung({
+        testId: 'tst_b',
+        questions: [
+          graded('sub_ga', DIFFICULTY_LEVEL.MEDIUM, true),
+          graded('sub_ga', DIFFICULTY_LEVEL.MEDIUM, false),
+          graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, true),
+          graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, true),
+        ],
+      }),
+    ]);
+    const sliding = progression.subjects.find((subject) => subject.subjectId === 'sub_ga');
+    const rising = progression.subjects.find((subject) => subject.subjectId === 'sub_q');
+
+    assert.equal(sliding?.trend, MASTERY_TRENDS.SLIDING);
+    assert.deepEqual([sliding?.first, sliding?.last], [100, 50]);
+    assert.equal(rising?.trend, MASTERY_TRENDS.RISING);
+  });
+
+  /** A subject nobody touched on a rung is a gap in the line, never a fall to zero. */
+  it('leaves an unattempted rung unmeasured rather than scoring it nothing', () => {
+    const progression = seriesProgressionOf('ser_1', order, [
+      rung({ testId: 'tst_a', questions: [graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, true)] }),
+      rung({ testId: 'tst_b', questions: [graded('sub_q', DIFFICULTY_LEVEL.MEDIUM, null)] }),
+    ]);
+    const subject = progression.subjects[0];
+
+    assert.equal(subject?.points[1]?.accuracy, null);
+    assert.equal(subject?.points[1]?.attempted, 0);
+    assert.equal(subject?.last, 100);
+    assert.equal(subject?.trend, MASTERY_TRENDS.STEADY);
+  });
+
+  /** Three sittings of one paper is still one rung: the ramp has as many rungs as it has papers. */
+  it('keeps the latest sitting of a retaken paper and no more', () => {
+    const progression = seriesProgressionOf('ser_1', order, [
+      rung({ testId: 'tst_a', attemptId: 'att_1', percentile: 40 }),
+      rung({ testId: 'tst_a', attemptId: 'att_2', percentile: 70 }),
+    ]);
+
+    assert.equal(progression.steps.length, 1);
+    assert.equal(progression.steps[0]?.attemptId, 'att_2');
+    assert.equal(progression.steps[0]?.percentile, 70);
+  });
+
+  it('drops a paper the series does not hold', () => {
+    const progression = seriesProgressionOf('ser_1', order, [rung({ testId: 'tst_loose' })]);
+
+    assert.deepEqual(progression.steps, []);
+  });
+});
+
+describe('the performance report — a progressive series', () => {
+  const progressive = {
+    series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }],
+    seriesTests: [
+      { testSeriesId: 'ser_1', testId: 'tst_1', order: 1 },
+      { testSeriesId: 'ser_1', testId: 'tst_2', order: 2 },
+    ],
+  };
+
+  it('carries the climb and the per-subject lines only where the series is a ramp', async () => {
+    const { service } = bench(progressive);
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId: 'ser_1' }),
+    );
+
+    assert.equal(report.progression?.seriesId, 'ser_1');
+    assert.deepEqual(
+      report.progression?.steps.map((step) => step.testId),
+      ['tst_1', 'tst_2'],
+    );
+    assert.ok((report.progression?.subjects.length ?? 0) > 0);
+    assert.equal(
+      report.progression?.subjects.every(
+        (subject) => subject.points.length === report.progression?.steps.length,
+      ),
+      true,
+    );
+  });
+
+  /** The failure this prevents: a ramp view over a flat series, where there is no ramp to climb. */
+  it('carries none of it for a flat series', async () => {
+    const { service } = bench({
+      series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: false }],
+      seriesTests: progressive.seriesTests,
+    });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId: 'ser_1' }),
+    );
+
+    assert.equal(report.progression, null);
+    assert.equal(report.attemptsCounted, 2);
+  });
+
+  it('carries none of it for a scope that is not a series at all', async () => {
+    const { service } = bench(progressive);
+
+    const wide = await service.report(STUDENT, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }));
+    const one = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
+    );
+
+    assert.equal(wide.progression, null);
+    assert.equal(one.progression, null);
+  });
+
+  /** The picker cannot offer a series they never sat: that report would be an empty screen. */
+  it('offers the scope picker only the series the student has sat', async () => {
+    const { service } = bench({
+      series: [
+        { id: 'ser_1', name: 'SSC CGL Foundation', progressive: true },
+        { id: 'ser_2', name: 'Untouched', progressive: false },
+      ],
+      seriesTests: progressive.seriesTests,
+    });
+
+    const offered = await service.satSeries(STUDENT);
+
+    assert.deepEqual(offered, [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }]);
   });
 });

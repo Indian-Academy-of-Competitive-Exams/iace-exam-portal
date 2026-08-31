@@ -74,6 +74,7 @@ interface SeriesFormValues {
   prerequisiteSeriesId: string;
   unlockMode: UnlockMode;
   sequentialTests: boolean;
+  progressive: boolean;
   kind: TestSeriesKind;
 }
 
@@ -99,6 +100,7 @@ function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     prerequisiteSeriesId: detail?.prerequisiteSeriesId ?? '',
     unlockMode: detail?.unlockMode ?? UNLOCK_MODE.AUTO,
     sequentialTests: detail?.sequentialTests ?? false,
+    progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
   };
 }
@@ -113,6 +115,7 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     prerequisiteSeriesId: values.prerequisiteSeriesId || null,
     unlockMode: values.unlockMode,
     sequentialTests: values.sequentialTests,
+    progressive: values.progressive,
     kind: values.kind,
   };
 }
@@ -363,12 +366,18 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <div className="flex flex-col gap-1 sm:col-span-2">
+          <div className="flex flex-col gap-3 sm:col-span-2">
             <SeriesToggle
               form={form}
               name="sequentialTests"
               label="Unlock the tests in order"
               /* ui-copy-ok: rule */ hint="Off opens every test in the series together."
+            />
+            <SeriesToggle
+              form={form}
+              name="progressive"
+              label="Progressive"
+              /* ui-copy-ok: rule */ hint="Each paper harder than the last; students see the climb against the ramp."
             />
           </div>
 
@@ -577,7 +586,7 @@ function SeriesToggle({
   hint,
 }: Readonly<{
   form: UseFormReturn<SeriesFormValues>;
-  name: 'sequentialTests';
+  name: 'sequentialTests' | 'progressive';
   label: string;
   hint?: string;
 }>) {

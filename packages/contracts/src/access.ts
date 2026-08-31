@@ -127,6 +127,8 @@ export const testSeriesSchema = z.object({
   programCode: z.string().nullable(),
   /** Unlock the tests in order rather than opening them together. */
   sequentialTests: z.boolean(),
+  /** A graded ramp: each paper harder than the last. Order is `sequentialTests`, not this. */
+  progressive: z.boolean(),
   prerequisiteSeriesId: z.string().nullable(),
   unlockMode: unlockModeSchema,
   kind: testSeriesKindSchema,
@@ -185,6 +187,7 @@ export const createTestSeriesSchema = z.object({
   /** Set means program-only: a student without the program never reaches it. */
   programCode: z.string().nullish(),
   sequentialTests: z.boolean().optional(),
+  progressive: z.boolean().optional(),
   prerequisiteSeriesId: z.string().nullish(),
   unlockMode: unlockModeSchema.optional(),
   kind: testSeriesKindSchema.optional(),

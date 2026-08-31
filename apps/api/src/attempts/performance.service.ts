@@ -17,7 +17,9 @@ import {
   type PerformanceReport,
   type PerformanceReportQuery,
   type PercentilePoint,
+  type SatSeries,
   type ScoreCardSection,
+  type SeriesProgression,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
@@ -31,13 +33,16 @@ import {
   difficultyStandingOf,
   flagYours,
   sectionalStandingOf,
+  seriesProgressionOf,
   type CohortShape,
   type ReportedQuestion,
+  type SatPaper,
   type SectionCohort,
 } from './performance-analytics';
 
 const NOT_YOURS = 'No such sitting';
 const NO_STUDENT = 'No such student';
+const NO_SERIES = 'No such test series';
 
 /** How many sittings any one report folds in. Beyond this a trajectory is a smear, not a line. */
 const SCOPE_ATTEMPT_CAP = 20;
@@ -125,19 +130,19 @@ export class PerformanceAnalyticsService {
     const rows = anchor === null ? [] : toReported(anchor);
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
-    const [testStats, pValues, sectionCohort, standing, label] = await Promise.all([
+    const [testStats, pValues, sectionCohort, standing, series] = await Promise.all([
       this.testStats(testIds),
       this.pValues(anchor === null ? [] : [anchor.testId]),
       this.sectionCohort(anchor),
       anchor === null ? null : this.leaderboard.liveStanding(anchor.testId, anchor.id),
-      this.labelOf(studentId, query, anchor),
+      this.seriesOf(studentId, query),
     ]);
 
     return {
       studentId,
       scope: query.scope,
       scopeId: scopeIdOf(query),
-      label,
+      label: series?.name ?? anchor?.test.title ?? null,
       evaluationMode: anchor?.test.evaluationMode ?? null,
       attemptsCounted: sat.length,
       generatedAt: new Date().toISOString(),
@@ -147,6 +152,7 @@ export class PerformanceAnalyticsService {
       sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort),
       difficulty: difficultyStandingOf(rows, pValues),
       time: timeUseOf(rows),
+      progression: progressionOf(series, sat),
     };
   }
 
@@ -235,23 +241,70 @@ export class PerformanceAnalyticsService {
     );
   }
 
-  /** What the report is OF, in words — and the owner is in this WHERE too, like every other. */
-  private async labelOf(
+  /** What the report is OF, and the ramp it is read along — the owner is in this WHERE too. */
+  private async seriesOf(
     studentId: string,
     query: PerformanceReportQuery,
-    anchor: ReportRow | null,
-  ): Promise<string | null> {
-    if (query.scope !== PERFORMANCE_SCOPES.SERIES) return anchor?.test.title ?? null;
+  ): Promise<ScopedSeries | null> {
+    if (query.scope !== PERFORMANCE_SCOPES.SERIES) return null;
     const series = await this.prisma.testSeries.findFirst({
       where: {
         id: query.seriesId,
         tests: { some: { test: { attempts: { some: { studentId } } } } },
       },
-      select: { name: true },
+      select: {
+        id: true,
+        name: true,
+        progressive: true,
+        tests: { select: { testId: true, order: true }, orderBy: { order: 'asc' } },
+      },
     });
-    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test series');
-    return series.name;
+    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
+    return {
+      id: series.id,
+      name: series.name,
+      progressive: series.progressive,
+      // A null order is a rung nobody numbered, so it keeps the place the ordered read gave it.
+      order: new Map(series.tests.map((row, index) => [row.testId, row.order ?? index])),
+    };
   }
+
+  /** The scope picker's only honest list: a series they have never sat has no report to show. */
+  async satSeries(studentId: string): Promise<SatSeries[]> {
+    const rows = await this.prisma.testSeries.findMany({
+      where: {
+        tests: {
+          some: { test: { attempts: { some: { studentId, status: ATTEMPT_STATUS.EVALUATED } } } },
+        },
+      },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, progressive: true },
+    });
+    return rows;
+  }
+}
+
+interface ScopedSeries {
+  id: string;
+  name: string;
+  progressive: boolean;
+  order: ReadonlyMap<string, number>;
+}
+
+/** A flat series has no ramp to draw a climb against, so it never carries one. */
+function progressionOf(
+  series: ScopedSeries | null,
+  sat: readonly ReportRow[],
+): SeriesProgression | null {
+  if (!series?.progressive) return null;
+  const papers: SatPaper[] = sat.map((row) => ({
+    testId: row.testId,
+    attemptId: row.id,
+    title: row.test.title,
+    percentile: numberOrNull(row.lastPercentile),
+    questions: toReported(row),
+  }));
+  return seriesProgressionOf(series.id, series.order, papers);
 }
 
 interface TestStatRow {
@@ -274,7 +327,6 @@ function scopeWhere(studentId: string, query: PerformanceReportQuery): Prisma.At
   const sat = { studentId, status: ATTEMPT_STATUS.EVALUATED };
   if (query.scope === PERFORMANCE_SCOPES.ATTEMPT) return { ...sat, id: query.attemptId };
   if (query.scope === PERFORMANCE_SCOPES.TEST) return { ...sat, testId: query.testId };
-  // AN4 adds the progressive gate to this one clause: `testSeries: { progressive: true }`.
   if (query.scope === PERFORMANCE_SCOPES.SERIES) {
     return { ...sat, test: { series: { some: { testSeriesId: query.seriesId } } } };
   }

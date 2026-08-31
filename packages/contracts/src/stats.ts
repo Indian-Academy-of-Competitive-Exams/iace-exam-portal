@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DIFFICULTY_LEVEL, type DifficultyLevel } from './questions';
 import { evaluationModeSchema, testScopeSchema } from './tests';
 import {
   analyticsBucketSchema,
@@ -233,6 +234,79 @@ export const difficultyStandingSchema = measuredBucketSchema.extend({
 });
 export type DifficultyStanding = z.infer<typeof difficultyStandingSchema>;
 
+// ============================================================================
+// Series progression, drawn only for a series an admin has marked `progressive`.
+// A ramp is read two ways: percentile against how hard each paper was graded, and
+// each subject's accuracy over the same ordered papers. Both are ordered by
+// `TestSeriesTest.order` — the ramp is the sequence, not the calendar.
+// ============================================================================
+
+/** A paper's difficulty on one 0..100 scale, averaged over the grades its questions carry. */
+export const DIFFICULTY_INDEX = {
+  [DIFFICULTY_LEVEL.LOW]: 0,
+  [DIFFICULTY_LEVEL.MEDIUM]: 50,
+  [DIFFICULTY_LEVEL.HIGH]: 100,
+} as const satisfies Record<DifficultyLevel, number>;
+
+/** Accuracy points between the first and last measured sitting before a subject counts as moving. */
+export const MASTERY_TREND_MIN_DELTA = 3;
+
+export const MASTERY_TRENDS = {
+  RISING: 'RISING',
+  STEADY: 'STEADY',
+  SLIDING: 'SLIDING',
+} as const;
+export const masteryTrendSchema = z.enum(MASTERY_TRENDS);
+export type MasteryTrend = z.infer<typeof masteryTrendSchema>;
+
+/** One rung: the paper, how hard it was graded, and where the student placed on it. */
+export const rampStepSchema = z.object({
+  testId: z.string(),
+  title: z.string().nullable(),
+  /** The latest sitting of this paper — the rung carries one point, not a retake history. */
+  attemptId: z.string(),
+  percentile: z.number().nullable(),
+  /** Null where the paper served no graded question, which is not an easy paper. */
+  difficulty: z.number().nullable(),
+  questionCount: z.number().int(),
+});
+export type RampStep = z.infer<typeof rampStepSchema>;
+
+/** One subject's accuracy on each rung, in step order and the same length as `steps`. */
+export const masteryPointSchema = z.object({
+  testId: z.string(),
+  accuracy: z.number().nullable(),
+  attempted: z.number().int(),
+});
+export type MasteryPoint = z.infer<typeof masteryPointSchema>;
+
+export const subjectMasterySchema = z.object({
+  subjectId: z.string(),
+  subjectName: z.string(),
+  points: z.array(masteryPointSchema),
+  /** The first and last MEASURED rung, so an unattempted subject is never read as a fall to zero. */
+  first: z.number().nullable(),
+  last: z.number().nullable(),
+  trend: masteryTrendSchema,
+});
+export type SubjectMastery = z.infer<typeof subjectMasterySchema>;
+
+export const seriesProgressionSchema = z.object({
+  seriesId: z.string(),
+  steps: z.array(rampStepSchema),
+  subjects: z.array(subjectMasterySchema),
+});
+export type SeriesProgression = z.infer<typeof seriesProgressionSchema>;
+
+/** A series the student has sat at least one test in — what the scope picker offers. */
+export const satSeriesSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  progressive: z.boolean(),
+});
+export type SatSeries = z.infer<typeof satSeriesSchema>;
+export const satSeriesListSchema = z.array(satSeriesSchema);
+
 /** Never carries a question, an option or an answer key — at any scope, on either path. */
 export const performanceReportSchema = z.object({
   studentId: z.string(),
@@ -253,6 +327,8 @@ export const performanceReportSchema = z.object({
   sections: z.array(sectionalStandingSchema),
   difficulty: z.array(difficultyStandingSchema),
   time: timeUseSchema,
+  /** Only a SERIES scope on a `progressive` series has one; every other report reads null. */
+  progression: seriesProgressionSchema.nullable(),
 });
 export type PerformanceReport = z.infer<typeof performanceReportSchema>;
 
@@ -300,5 +376,7 @@ export function bestSitting(points: readonly PerformancePoint[]): PerformancePoi
 
 export const PERFORMANCE_ROUTES = {
   me: '/me/performance/report',
+  /** The series the picker may offer: one they have sat a test in, so a report cannot be empty. */
+  mySeries: '/me/performance/series',
   ofStudent: (studentId: string) => `/admin/students/${studentId}/performance`,
 } as const;
