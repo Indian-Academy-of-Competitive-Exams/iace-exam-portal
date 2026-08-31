@@ -4726,8 +4726,8 @@ export interface FakePerformanceData {
   testStats: {
     testId: string;
     evaluatedCount: number;
-    sumScore: number;
-    maxScore: number | null;
+    sumScore: number | Prisma.Decimal;
+    maxScore: number | Prisma.Decimal | null;
     scoreHistogram: unknown;
   }[];
   sectionStats: {
@@ -4738,6 +4738,16 @@ export interface FakePerformanceData {
     sumTimeSec: number;
   }[];
   questionStats: { testId: string; paperQuestionId: string; pValue: number | null }[];
+}
+
+/** Postgres sorts NULLs FIRST on a descending order unless the query asks for them last. */
+function newestFirst(nullsLast: boolean) {
+  const rankOf = (row: FakeAttemptRow) => {
+    if (row.submittedAt !== null) return 0;
+    return nullsLast ? 1 : -1;
+  };
+  return (a: FakeAttemptRow, b: FakeAttemptRow) =>
+    rankOf(a) - rankOf(b) || (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0);
 }
 
 /** Hands over the WHOLE served row, answer key and all — leaving it out of a payload is the code's job. */
@@ -4772,6 +4782,7 @@ export class FakePerformancePrisma {
   readonly attempt = {
     findMany: ({
       where,
+      orderBy,
       take,
     }: {
       where: {
@@ -4781,6 +4792,7 @@ export class FakePerformancePrisma {
         testId?: string;
         test?: { series: { some: { testSeriesId: string } } };
       };
+      orderBy?: { submittedAt?: { sort: 'desc'; nulls?: 'first' | 'last' } };
       take?: number;
     }) => {
       const inSeries = where.test?.series.some.testSeriesId;
@@ -4795,24 +4807,28 @@ export class FakePerformancePrisma {
               (link) => link.testSeriesId === inSeries && link.testId === row.testId,
             )),
       );
-      const newestFirst = matched.toSorted(
-        (a, b) => (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0),
-      );
-      return Promise.resolve(newestFirst.slice(0, take).map((row) => this.reported(row)));
+      const ordered = matched.toSorted(newestFirst(orderBy?.submittedAt?.nulls === 'last'));
+      return Promise.resolve(ordered.slice(0, take).map((row) => this.reported(row)));
     },
 
-    aggregate: ({ where }: { where: { testId: string } }) => {
-      const scored = this.data.attempts.filter(
-        (row) => row.testId === where.testId && row.isGraded && row.score !== null,
+    /** Prisma hands back the Decimal the column holds, so a payload leaks one unless it converts. */
+    groupBy: ({
+      where,
+    }: {
+      where: { testId: string; isGraded: boolean; status: AttemptStatus };
+    }) => {
+      const counts = new Map<number, number>();
+      for (const row of this.data.attempts) {
+        const matches =
+          row.testId === where.testId &&
+          row.isGraded === where.isGraded &&
+          row.status === where.status;
+        if (!matches || row.score === null) continue;
+        counts.set(row.score, (counts.get(row.score) ?? 0) + 1);
+      }
+      return Promise.resolve(
+        [...counts].map(([score, count]) => ({ score: new Prisma.Decimal(score), _count: count })),
       );
-      const marks = scored.map((row) => row.score ?? 0);
-      return Promise.resolve({
-        _avg: {
-          score: marks.length === 0 ? null : marks.reduce((a, b) => a + b, 0) / marks.length,
-        },
-        _max: { score: marks.length === 0 ? null : Math.max(...marks) },
-        _count: scored.length,
-      });
     },
   };
 
@@ -4824,8 +4840,27 @@ export class FakePerformancePrisma {
   };
 
   readonly testSeries = {
-    findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.data.series.find((row) => row.id === where.id) ?? null),
+    findFirst: ({
+      where,
+    }: {
+      where: {
+        id?: string;
+        tests: { some: { test: { attempts: { some: { studentId: string } } } } };
+      };
+    }) => {
+      const studentId = where.tests.some.test.attempts.some.studentId;
+      const sat = (testSeriesId: string) =>
+        this.data.seriesTests.some(
+          (link) =>
+            link.testSeriesId === testSeriesId &&
+            this.data.attempts.some(
+              (row) => row.testId === link.testId && row.studentId === studentId,
+            ),
+        );
+      return Promise.resolve(
+        this.data.series.find((row) => row.id === where.id && sat(row.id)) ?? null,
+      );
+    },
   };
 
   readonly testStat = {

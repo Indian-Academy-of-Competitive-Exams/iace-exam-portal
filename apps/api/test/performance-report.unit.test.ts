@@ -17,12 +17,14 @@ import {
   performanceReportSchema,
   type AnalyticsBucket,
 } from '@iace/contracts';
+import { Prisma } from '@prisma/client';
 import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { AdminPerformanceController } from '../src/attempts/performance.controller';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import {
+  cohortShapeOf,
   compositionOf,
   curveBandsOf,
   difficultyStandingOf,
@@ -38,6 +40,7 @@ import {
   makeScoredTest,
   makeServedAnswer,
   mcqOptions,
+  type FakeAttemptRow,
   type FakePerformanceData,
 } from './support/fakes';
 
@@ -208,12 +211,70 @@ describe('curveBandsOf', () => {
 
   it('keeps the top scorer inside the top band rather than off the end of the chart', () => {
     assert.equal(curveBandsOf(histogram, 30).at(-1)?.isYours, true);
+    assert.equal(curveBandsOf(histogram, 44).at(-1)?.isYours, true);
+  });
+
+  /** Negative marking puts a score under the curve's floor, and a screen still needs a marker. */
+  it('holds a score below the first band in the first band', () => {
+    const bands = curveBandsOf(histogram, -4);
+
+    assert.equal(bands.at(0)?.isYours, true);
+    assert.equal(bands.filter((band) => band.isYours).length, 1);
   });
 
   /** No histogram is not a flat distribution: an empty curve is how a screen knows to say so. */
   it('reads a column nothing has written yet as no curve at all', () => {
     assert.deepEqual(curveBandsOf(null, 12), []);
     assert.deepEqual(curveBandsOf({ buckets: 3 }, 12), []);
+  });
+});
+
+describe('cohortShapeOf', () => {
+  /** The convention a rollup writer must match, pinned beside `scoreHistogramSchema`. */
+  it('bands the scores into ascending, contiguous, equal-width columns holding every sitting', () => {
+    const shape = cohortShapeOf([
+      { score: 0, count: 1 },
+      { score: 100, count: 3 },
+      { score: 45.5, count: 2 },
+    ]);
+
+    assert.equal(shape.size, 6);
+    assert.equal(shape.topperScore, 100);
+    assert.equal(shape.averageScore, 65.17);
+    assert.equal(shape.bands.at(0)?.from, 0);
+    assert.equal(shape.bands.at(-1)?.to, 100);
+    assert.equal(
+      shape.bands.every((band, index) => index === 0 || band.from === shape.bands[index - 1]?.to),
+      true,
+    );
+    assert.equal(
+      shape.bands.reduce((sum, band) => sum + band.count, 0),
+      6,
+    );
+  });
+
+  /** Negative marking makes a floor below zero ordinary, and it must not fall off the curve. */
+  it('starts the curve below zero when the cohort scored below zero', () => {
+    const shape = cohortShapeOf([
+      { score: -3.5, count: 2 },
+      { score: 12, count: 1 },
+    ]);
+
+    assert.equal(shape.bands.at(0)?.from, -4);
+    assert.equal(shape.bands.at(0)?.count, 2);
+    assert.equal(
+      shape.bands.reduce((sum, band) => sum + band.count, 0),
+      3,
+    );
+  });
+
+  it('counts no cohort at all where nobody has sat the paper', () => {
+    assert.deepEqual(cohortShapeOf([]), {
+      topperScore: null,
+      averageScore: null,
+      size: 0,
+      bands: [],
+    });
   });
 });
 
@@ -305,7 +366,7 @@ function served(attemptId: string) {
   ];
 }
 
-function bench(overrides: Partial<FakePerformanceData> = {}) {
+function sittings(): FakeAttemptRow[] {
   const older = makeAttempt({
     id: 'att_1',
     testId: 'tst_1',
@@ -345,9 +406,14 @@ function bench(overrides: Partial<FakePerformanceData> = {}) {
     score: 5.5,
   });
 
+  return [older, newer, theirs];
+}
+
+function bench(overrides: Partial<FakePerformanceData> = {}) {
+  const attempts = overrides.attempts ?? sittings();
   const data: FakePerformanceData = {
-    attempts: [older, newer, theirs],
-    served: [...served('att_1'), ...served('att_2'), ...served('att_9')],
+    attempts,
+    served: attempts.flatMap((row) => served(row.id)),
     shape: SHAPE,
     students: [
       { id: STUDENT, deletedAt: null },
@@ -401,8 +467,8 @@ describe('the performance report — one sitting', () => {
     assert.equal(report.sections[0]?.score, 1.5);
   });
 
-  /** No rollup exists yet, so the live aggregate is what makes the curve true today. */
-  it('falls back to the live cohort when no rollup has been written', async () => {
+  /** No job writes a rollup today, so the sittings themselves are what makes the curve true. */
+  it('counts the curve off the sittings when no rollup has been written', async () => {
     const { service } = bench();
 
     const report = await service.report(
@@ -413,7 +479,11 @@ describe('the performance report — one sitting', () => {
     assert.equal(report.cohort?.topperScore, 5.5);
     assert.equal(report.cohort?.averageScore, 3.5);
     assert.equal(report.cohort?.cohortSize, 2);
-    assert.deepEqual(report.cohort?.bands, []);
+    assert.equal(
+      report.cohort?.bands.reduce((sum, band) => sum + band.count, 0),
+      2,
+    );
+    assert.equal(report.cohort?.bands.filter((band) => band.isYours).length, 1);
   });
 
   it('prefers the rollup once one exists, and draws its curve', async () => {
@@ -422,8 +492,8 @@ describe('the performance report — one sitting', () => {
         {
           testId: 'tst_1',
           evaluatedCount: 40,
-          sumScore: 120,
-          maxScore: 6,
+          sumScore: new Prisma.Decimal(120),
+          maxScore: new Prisma.Decimal(6),
           scoreHistogram: [
             { from: 0, to: 3, count: 25 },
             { from: 3, to: 6, count: 15 },
@@ -437,6 +507,7 @@ describe('the performance report — one sitting', () => {
       query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
     );
 
+    assert.equal(performanceReportSchema.safeParse(report).success, true);
     assert.equal(report.cohort?.cohortSize, 40);
     assert.equal(report.cohort?.topperScore, 6);
     assert.equal(report.cohort?.averageScore, 3);
@@ -444,6 +515,34 @@ describe('the performance report — one sitting', () => {
       report.cohort?.bands.map((band) => band.isYours),
       [true, false],
     );
+  });
+
+  /** The rollup wins field by field, so a row without a histogram still keeps its counts. */
+  it('counts the curve off the sittings when the rollup carries no histogram', async () => {
+    const { service } = bench({
+      testStats: [
+        {
+          testId: 'tst_1',
+          evaluatedCount: 40,
+          sumScore: new Prisma.Decimal(120),
+          maxScore: new Prisma.Decimal(6),
+          scoreHistogram: null,
+        },
+      ],
+    });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
+    );
+
+    assert.equal(report.cohort?.cohortSize, 40);
+    assert.equal(report.cohort?.topperScore, 6);
+    assert.equal(
+      report.cohort?.bands.reduce((sum, band) => sum + band.count, 0),
+      2,
+    );
+    assert.equal(report.cohort?.bands.filter((band) => band.isYours).length, 1);
   });
 
   /** The one guarantee that must hold at every scope and on both paths. */
@@ -473,6 +572,96 @@ describe('the performance report — one sitting', () => {
   });
 });
 
+describe('the performance report — one paper sat more than once', () => {
+  const retake = () =>
+    makeAttempt({
+      id: 'att_3',
+      testId: 'tst_1',
+      studentId: STUDENT,
+      attemptNo: 2,
+      isGraded: false,
+      status: ATTEMPT_STATUS.EVALUATED,
+      submittedAt: new Date('2026-08-22T06:00:00.000Z'),
+      score: 3.5,
+      sectionScores: [
+        {
+          baseConfigSectionId: 'sec_1',
+          score: 3.5,
+          correctCount: 2,
+          wrongCount: 1,
+          unattemptedCount: 0,
+          timeSpentSec: 80,
+        },
+      ],
+    });
+
+  /** The failure this prevents: a 6-mark paper reporting 12 marks because it was sat twice. */
+  it('describes the anchor sitting alone, so every figure shares one denominator', async () => {
+    const { service } = bench({ attempts: [...sittings(), retake()] });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
+    );
+
+    assert.equal(report.composition.maxMarks, 6);
+    assert.equal(
+      report.sections.reduce((sum, section) => sum + section.maxMarks, 0),
+      report.composition.maxMarks,
+    );
+    assert.equal(report.sections[0]?.score, 1.5);
+    assert.equal(report.time.totalSec, 95);
+  });
+
+  /** The trajectory is the one series that spans sittings on purpose — it must not shrink. */
+  it('still plots every sitting the scope holds', async () => {
+    const { service } = bench({ attempts: [...sittings(), retake()] });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
+    );
+
+    assert.equal(report.attemptsCounted, 2);
+    assert.deepEqual(
+      report.trajectory.map((point) => point.attemptId),
+      ['att_1', 'att_3'],
+    );
+  });
+
+  /** Postgres puts NULLs first on a descending sort, which made an unsubmitted sitting the newest. */
+  it('never takes a sitting that was never submitted for the newest one', async () => {
+    const abandoned = makeAttempt({
+      id: 'att_4',
+      testId: 'tst_1',
+      studentId: STUDENT,
+      status: ATTEMPT_STATUS.EVALUATED,
+      submittedAt: null,
+      score: 6,
+      lastPercentile: 99,
+      sectionScores: [
+        {
+          baseConfigSectionId: 'sec_1',
+          score: 6,
+          correctCount: 3,
+          wrongCount: 0,
+          unattemptedCount: 0,
+          timeSpentSec: 60,
+        },
+      ],
+    });
+    const { service } = bench({ attempts: [...sittings(), abandoned] });
+
+    const report = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
+    );
+
+    assert.equal(report.trajectory.at(-1)?.attemptId, 'att_1');
+    assert.equal(report.sections[0]?.score, 1.5);
+  });
+});
+
 describe('the performance report — the wider scopes', () => {
   it('plots percentile over the sittings in order, oldest first, and never marks', async () => {
     const { service } = bench();
@@ -487,7 +676,10 @@ describe('the performance report — the wider scopes', () => {
         ['att_2', 88],
       ],
     );
-    assert.equal(JSON.stringify(report.trajectory).includes('score'), false);
+    assert.equal(
+      report.trajectory.some((point) => Object.hasOwn(point, 'score')),
+      false,
+    );
   });
 
   it('carries the n behind each percentile once a rollup has counted the cohort', async () => {

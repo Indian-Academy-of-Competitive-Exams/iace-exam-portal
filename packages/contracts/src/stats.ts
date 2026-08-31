@@ -161,11 +161,22 @@ export const cohortBandSchema = z.object({
 });
 export type CohortBand = z.infer<typeof cohortBandSchema>;
 
+// ============================================================================
+// The banding convention, because a rollup's histogram and the one the report
+// counts off `Attempt` when no rollup exists must be the same curve:
+//
+//   Ascending by `from`, contiguous, equal integer widths. `from` is inclusive
+//   and `to` exclusive, except on the last band, which owns its top edge.
+//   Bands span floor(lowest score) .. ceil(highest score) — negative marking
+//   puts the floor below zero — in ~10 columns, each ceil(span / 10) wide and
+//   never narrower than 1. A score off either end takes the nearest end band.
+// ============================================================================
+
 /** The shape `TestStat.scoreHistogram` holds. Read defensively — the column is free-form JSON. */
 export const scoreHistogramSchema = z.array(cohortBandSchema);
 
 export const cohortCurveBandSchema = cohortBandSchema.extend({
-  /** True on the single band this student's score falls in. */
+  /** True on exactly one band: the one holding this score, or the end band nearest it. */
   isYours: z.boolean(),
 });
 export type CohortCurveBand = z.infer<typeof cohortCurveBandSchema>;
@@ -179,7 +190,7 @@ export const cohortCurveSchema = z.object({
   rank: z.number().int().nullable(),
   percentile: z.number().nullable(),
   cohortSize: z.number().int(),
-  /** Empty until a rollup writes a histogram. An empty curve is not a flat one. */
+  /** The rollup's histogram where one is written, else counted off the sittings; empty means none. */
   bands: z.array(cohortCurveBandSchema),
 });
 export type CohortCurve = z.infer<typeof cohortCurveSchema>;
@@ -224,12 +235,13 @@ export const performanceReportSchema = z.object({
   /** The id the scope was asked about. Null for ALL_TIME. */
   scopeId: z.string().nullable(),
   label: z.string().nullable(),
-  /** Evaluated sittings every figure below is derived from. */
+  /** Evaluated sittings in scope — what the trajectory plots, and only that. */
   attemptsCounted: z.number().int(),
   generatedAt: z.string(),
   trajectory: z.array(percentilePointSchema),
   /** Null wherever the scope spans more than one paper — marks do not compare across papers. */
   cohort: cohortCurveSchema.nullable(),
+  /** The ANCHOR sitting, like everything below it: marks summed across papers are not a paper. */
   composition: markCompositionSchema,
   sections: z.array(sectionalStandingSchema),
   difficulty: z.array(difficultyStandingSchema),

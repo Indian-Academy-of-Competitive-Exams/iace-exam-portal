@@ -8,6 +8,7 @@ import {
   PAPER_QUESTION_STATUS,
   scoreHistogramSchema,
   type AnalyticsBucket,
+  type CohortBand,
   type CohortCurveBand,
   type DifficultyStanding,
   type MarkComposition,
@@ -109,14 +110,79 @@ function measuredPValues(
 /** The cohort's curve with this student's column flagged. Empty in, empty out — never a flat line. */
 export function curveBandsOf(histogram: unknown, score: number): CohortCurveBand[] {
   const parsed = scoreHistogramSchema.safeParse(histogram);
-  if (!parsed.success) return [];
+  return parsed.success ? flagYours(parsed.data, score) : [];
+}
 
-  const bands = parsed.data;
-  const yours = bands.findIndex(
-    (band, index) =>
-      score >= band.from && (score < band.to || (index === bands.length - 1 && score <= band.to)),
-  );
+/** Exactly one column is theirs: a score off either end takes the end band nearest it. */
+export function flagYours(bands: readonly CohortBand[], score: number): CohortCurveBand[] {
+  if (bands.length === 0) return [];
+  const yours = bandIndexOf(bands, score);
   return bands.map((band, index) => ({ ...band, isYours: index === yours }));
+}
+
+function bandIndexOf(bands: readonly CohortBand[], score: number): number {
+  const last = bands.length - 1;
+  const held = bands.findIndex(
+    (band, index) => score >= band.from && (score < band.to || index === last),
+  );
+  if (held !== -1) return held;
+  return score < (bands.at(0)?.from ?? score) ? 0 : last;
+}
+
+/** One distinct score and the sittings that landed on it — a grouped row, without the Decimal. */
+export interface ScoreCount {
+  score: number;
+  count: number;
+}
+
+/** The curve counted off the sittings themselves, in the shape a rollup would have written. */
+export interface CohortShape {
+  topperScore: number | null;
+  averageScore: number | null;
+  size: number;
+  bands: CohortBand[];
+}
+
+/** Columns to aim for, so a 200-mark paper reads in tens rather than in hundreds of them. */
+const COHORT_BAND_TARGET = 10;
+
+/** The banding convention is pinned beside `scoreHistogramSchema`; a rollup writer must match it. */
+export function cohortShapeOf(counted: readonly ScoreCount[]): CohortShape {
+  let size = 0;
+  let total = 0;
+  let lowest = Number.POSITIVE_INFINITY;
+  let highest = Number.NEGATIVE_INFINITY;
+
+  for (const row of counted) {
+    size += row.count;
+    total += row.score * row.count;
+    lowest = Math.min(lowest, row.score);
+    highest = Math.max(highest, row.score);
+  }
+  if (size === 0) return { topperScore: null, averageScore: null, size: 0, bands: [] };
+
+  return {
+    topperScore: highest,
+    averageScore: round(total / size),
+    size,
+    bands: bandsOf(counted, Math.floor(lowest), Math.ceil(highest)),
+  };
+}
+
+function bandsOf(counted: readonly ScoreCount[], lo: number, hi: number): CohortBand[] {
+  const width = Math.max(1, Math.ceil((hi - lo) / COHORT_BAND_TARGET));
+  const columns = Math.max(1, Math.ceil((hi - lo) / width));
+  const counts = Array.from({ length: columns }, () => 0);
+
+  for (const row of counted) {
+    const index = Math.min(Math.floor((row.score - lo) / width), columns - 1);
+    counts[index] = (counts[index] ?? 0) + row.count;
+  }
+  return counts.map((count, index) => ({
+    from: lo + index * width,
+    to: lo + (index + 1) * width,
+    count,
+  }));
 }
 
 /** The student's sections with the cohort's mean laid beside them, and the n each mean is over. */

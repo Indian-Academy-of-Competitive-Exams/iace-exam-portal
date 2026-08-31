@@ -21,15 +21,17 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
-import { cohortAggregate } from './attempt-report.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
 import {
+  cohortShapeOf,
   compositionOf,
   curveBandsOf,
   difficultyStandingOf,
+  flagYours,
   sectionalStandingOf,
+  type CohortShape,
   type ReportedQuestion,
   type SectionCohort,
 } from './performance-analytics';
@@ -108,7 +110,7 @@ export class PerformanceAnalyticsService {
   async report(studentId: string, query: PerformanceReportQuery): Promise<PerformanceReport> {
     const recent = await this.prisma.attempt.findMany({
       where: scopeWhere(studentId, query),
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
       take: SCOPE_ATTEMPT_CAP,
       select: REPORT_SELECT,
     });
@@ -117,16 +119,17 @@ export class PerformanceAnalyticsService {
     }
 
     const sat = recent.toReversed();
+    // Everything but the trajectory describes the anchor, so one payload never mixes two papers.
     const anchor = sat.findLast((row) => row.isGraded) ?? sat.at(-1) ?? null;
-    const rows = sat.flatMap(toReported);
+    const rows = anchor === null ? [] : toReported(anchor);
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
     const [testStats, pValues, sectionCohort, standing, label] = await Promise.all([
       this.testStats(testIds),
-      this.pValues(testIds),
+      this.pValues(anchor === null ? [] : [anchor.testId]),
       this.sectionCohort(anchor),
       anchor === null ? null : this.leaderboard.liveStanding(anchor.testId, anchor.id),
-      this.labelOf(query, anchor),
+      this.labelOf(studentId, query, anchor),
     ]);
 
     return {
@@ -155,9 +158,10 @@ export class PerformanceAnalyticsService {
     if (anchor === null || !ONE_PAPER_SCOPES.has(query.scope)) return null;
 
     const rolled = testStats.get(anchor.testId) ?? null;
-    // The rollup is authoritative once it exists; until a job writes one, the live aggregate is.
-    const live = rolled === null ? await cohortAggregate(this.prisma, anchor.testId) : null;
     const score = Number(anchor.score ?? 0);
+    const rolledBands = curveBandsOf(rolled?.scoreHistogram, score);
+    // The rollup wins field by field; the live count fills in whatever no job has written yet.
+    const live = rolledBands.length === 0 ? await this.liveCohort(anchor.testId) : null;
     const counted = rolled?.evaluatedCount ?? 0;
 
     return {
@@ -168,8 +172,22 @@ export class PerformanceAnalyticsService {
       rank: standing?.rank ?? anchor.lastRank,
       percentile: standing?.percentile ?? numberOrNull(anchor.lastPercentile),
       cohortSize: counted === 0 ? (standing?.cohortSize ?? live?.size ?? 0) : counted,
-      bands: curveBandsOf(rolled?.scoreHistogram, score),
+      bands: rolledBands.length > 0 ? rolledBands : flagYours(live?.bands ?? [], score),
     };
+  }
+
+  /** The distribution counted off the sittings themselves — a cold path, so one grouped read. */
+  private async liveCohort(testId: string): Promise<CohortShape> {
+    const grouped = await this.prisma.attempt.groupBy({
+      by: ['score'],
+      where: { testId, isGraded: true, status: ATTEMPT_STATUS.EVALUATED, score: { not: null } },
+      _count: true,
+    });
+    return cohortShapeOf(
+      grouped.flatMap((row) =>
+        row.score === null ? [] : [{ score: Number(row.score), count: row._count }],
+      ),
+    );
   }
 
   private async testStats(testIds: readonly string[]): Promise<Map<string, TestStatRow>> {
@@ -215,14 +233,18 @@ export class PerformanceAnalyticsService {
     );
   }
 
-  /** What the report is OF, in words. A series is the one scope whose name is not on an attempt. */
+  /** What the report is OF, in words — and the owner is in this WHERE too, like every other. */
   private async labelOf(
+    studentId: string,
     query: PerformanceReportQuery,
     anchor: ReportRow | null,
   ): Promise<string | null> {
     if (query.scope !== PERFORMANCE_SCOPES.SERIES) return anchor?.test.title ?? null;
-    const series = await this.prisma.testSeries.findUnique({
-      where: { id: query.seriesId },
+    const series = await this.prisma.testSeries.findFirst({
+      where: {
+        id: query.seriesId,
+        tests: { some: { test: { attempts: { some: { studentId } } } } },
+      },
       select: { name: true },
     });
     if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test series');
