@@ -12,6 +12,8 @@ import { StepIcon } from '../src/components/ui/step-icon';
 import { PinField } from '../src/components/ui/pin-field';
 import { Metric } from '../src/components/ui/metric';
 import { MetricGroup } from '../src/components/ui/metric-group';
+import { Inbox } from 'lucide-react';
+import { EmptyState } from '../src/components/ui/empty-state';
 
 afterEach(cleanup);
 
@@ -171,5 +173,35 @@ describe('MetricGroup', () => {
 
     assert.ok(screen.getByText('Marks'));
     assert.ok(screen.getByText('Rank'));
+  });
+});
+
+describe('EmptyState', () => {
+  it('names what is absent and carries the way out of it', () => {
+    render(
+      <EmptyState
+        icon={Inbox}
+        title="No tests yet"
+        action={<button type="button">Browse</button>}
+      />,
+    );
+
+    assert.ok(screen.getByRole('heading', { name: 'No tests yet' }));
+    assert.ok(screen.getByRole('button', { name: 'Browse' }));
+  });
+
+  it('renders no hint paragraph when it was given no hint', () => {
+    const { container } = render(<EmptyState icon={Inbox} title="No tests yet" />);
+
+    assert.ok(screen.getByRole('heading', { name: 'No tests yet' }));
+    assert.equal(container.querySelectorAll('p').length, 0);
+  });
+
+  it('carries the hint when there is a rule the reader cannot infer', () => {
+    render(
+      <EmptyState icon={Inbox} title="No tests yet" hint="Your branch adds them as they open." />,
+    );
+
+    assert.ok(screen.getByText('Your branch adds them as they open.'));
   });
 });
