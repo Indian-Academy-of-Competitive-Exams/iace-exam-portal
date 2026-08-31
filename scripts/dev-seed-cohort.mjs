@@ -1,8 +1,8 @@
 /**
  * DEV-ONLY: one finalized test and ~200 submitted sittings for it, so scoring, ranking and the
  * report have something to compute over. Every row carries a `_cohort_` id, so `--reset` purges
- * the cohort and nothing else; marks are left NULL, because filling them is the worker's job.
- * Refuses a DATABASE_URL that is not local. Run: node scripts/dev-seed-cohort.mjs [--reset]
+ * the cohort and nothing else. Marks are left NULL because filling them is the worker's job, and
+ * writing rows directly raises no domain event. Run: node scripts/dev-seed-cohort.mjs [--reset]
  */
 import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
@@ -289,8 +289,18 @@ async function writeOffering(prisma, stageId) {
       unlockAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
     },
   });
-  await prisma.branchTestConfig.create({
-    data: { branchId, testSeriesId: IDS.series, enabled: true },
+  // A row per LIVE branch, as the service's fan-out writes one; only the cohort's is switched on.
+  const branches = await prisma.branch.findMany({
+    where: { deletedAt: null },
+    select: { id: true },
+  });
+  await prisma.branchTestConfig.createMany({
+    data: branches.map((row) => ({
+      branchId: row.id,
+      testSeriesId: IDS.series,
+      enabled: row.id === branchId,
+    })),
+    skipDuplicates: true,
   });
   // A late-entry cap is what lets entry CLOSE, which is what opens the solution gate.
   await prisma.branchTestSchedule.create({
