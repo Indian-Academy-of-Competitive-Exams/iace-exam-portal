@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Card } from './card';
+import { FilterRow, type FilterState, type ListFilter } from './list-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { cn } from '../../lib/utils';
 
@@ -42,6 +43,10 @@ export function PageFrame({ header, children, className }: Readonly<PageFramePro
 export interface PanelFrameProps {
   /** Pinned above the card — usually a `PageHeader`. */
   header?: React.ReactNode;
+  /** Pinned inside the card, above the filters — a banner the body does not own. */
+  toolbar?: React.ReactNode;
+  /** The spec a list screen would declare, and the state driving it. */
+  filters?: { spec: readonly ListFilter[]; state: FilterState };
   /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
   tabs?: TableFrameTabs;
   children?: React.ReactNode;
@@ -49,9 +54,23 @@ export interface PanelFrameProps {
 }
 
 /** `TableFrame` for content that is no table: same card and strip, but the BODY is the scroller. */
-export function PanelFrame({ header, tabs, children, className }: Readonly<PanelFrameProps>) {
+export function PanelFrame({
+  header,
+  toolbar,
+  filters,
+  tabs,
+  children,
+  className,
+}: Readonly<PanelFrameProps>) {
   // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
   const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', className);
+
+  const bar =
+    filters && filters.spec.length > 0 ? (
+      <div className="shrink-0">
+        <FilterRow state={filters.state} filters={filters.spec} />
+      </div>
+    ) : null;
 
   const body = tabs ? (
     <>
@@ -76,7 +95,11 @@ export function PanelFrame({ header, tabs, children, className }: Readonly<Panel
   const frame = (
     <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
-      <Card className={cn(FILLS, 'p-4')}>{body}</Card>
+      <Card className={cn(FILLS, 'p-4')}>
+        {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
+        {bar}
+        {body}
+      </Card>
     </div>
   );
 

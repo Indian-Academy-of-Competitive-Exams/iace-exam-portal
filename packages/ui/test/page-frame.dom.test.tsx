@@ -102,6 +102,62 @@ describe('PanelFrame', () => {
   });
 });
 
+describe('PanelFrame — the filter bar', () => {
+  const state = {
+    values: { q: '', branch: '' },
+    setFilter: () => undefined,
+    clearFilters: () => undefined,
+  };
+  const spec = [
+    { key: 'q', kind: 'search', label: 'Search', primary: true },
+    {
+      key: 'branch',
+      kind: 'choice',
+      label: 'Branch',
+      primary: true,
+      items: [{ value: '', label: 'Any branch' }],
+    },
+  ] as const;
+
+  /** The same bar a list screen draws, in the same place: inside the card, above the body. */
+  it('draws the spec as a bar above the body', () => {
+    render(
+      <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
+        <p>The body</p>
+      </PanelFrame>,
+    );
+
+    assert.ok(screen.getByRole('searchbox', { name: 'Search' }));
+    assert.ok(screen.getByRole('button', { name: 'Branch' }));
+    assert.ok(screen.getByText('The body'));
+  });
+
+  /** A page with nothing to filter must not grow an empty bar where the row would be. */
+  it('draws no bar for a page with no filters', () => {
+    render(
+      <PanelFrame header={<h1>Report</h1>}>
+        <p>The body</p>
+      </PanelFrame>,
+    );
+
+    assert.equal(screen.queryByRole('searchbox'), null);
+    assert.equal(screen.queryByRole('button', { name: 'Clear' }), null);
+    assert.ok(screen.getByText('The body'));
+  });
+
+  it('keeps the body the only scroller when it also carries a bar', () => {
+    const { container } = render(
+      <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
+        <p>The body</p>
+      </PanelFrame>,
+    );
+
+    const scrollers = container.querySelectorAll('.overflow-y-auto');
+    assert.equal(scrollers.length, 1);
+    assert.equal(scrollers[0]?.contains(screen.getByRole('searchbox', { name: 'Search' })), false);
+  });
+});
+
 describe('TableFrame — unframed', () => {
   const tabs = {
     value: 'draft',
