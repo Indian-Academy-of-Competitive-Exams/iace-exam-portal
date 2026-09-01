@@ -7,6 +7,7 @@ import { useDebouncedSearch } from './search-input';
 import { Spinner } from './spinner';
 import { Skeleton } from './skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
+import { useTruncation } from './truncated-text';
 
 /** The closed look every popover-backed field wears, so combobox and date picker cannot drift. */
 export const FIELD_TRIGGER_CLASS = [
@@ -92,6 +93,7 @@ export function ComboboxShell({
   'aria-label': ariaLabel,
   className,
 }: Readonly<ComboboxShellProps>) {
+  const { ref: labelRef, truncated: labelTruncated } = useTruncation<HTMLSpanElement>(triggerLabel);
   // Hooks cannot be conditional; unused, it never starts a timer.
   const { draft: searchDraft, type: typeSearch } = useDebouncedSearch(
     search ?? '',
@@ -116,7 +118,7 @@ export function ComboboxShell({
         disabled={disabled}
         className={cn(FIELD_TRIGGER_CLASS, className)}
       >
-        <span className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
+        <span ref={labelRef} className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
           {triggerLabel}
         </span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -124,12 +126,15 @@ export function ComboboxShell({
     </PopoverPrimitive.Trigger>
   );
 
+  // What the trigger cut, or what a caller says it is standing in for.
+  const revealed = triggerTooltip ?? (labelTruncated ? triggerLabel : null);
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      {triggerTooltip ? (
+      {revealed ? (
         <Tooltip>
           <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-          <TooltipContent>{triggerTooltip}</TooltipContent>
+          <TooltipContent>{revealed}</TooltipContent>
         </Tooltip>
       ) : (
         trigger
@@ -223,16 +228,18 @@ export function ComboboxOption({
       aria-selected={selected}
       onClick={onSelect}
       className={cn(
-        'flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+        'flex w-full items-start justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
         'hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
         muted && 'text-muted-foreground',
       )}
     >
-      <span className="min-w-0">
-        <span className="block truncate">{label}</span>
-        {hint ? <span className="block truncate text-xs text-muted-foreground">{hint}</span> : null}
+      <span className="min-w-0 flex-1">
+        <span className="block break-words">{label}</span>
+        {hint ? (
+          <span className="block break-words text-xs text-muted-foreground">{hint}</span>
+        ) : null}
       </span>
-      {selected ? <Check className="size-4 shrink-0 text-primary" aria-hidden /> : null}
+      {selected ? <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> : null}
     </button>
   );
 }
