@@ -1,9 +1,10 @@
+import * as React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { LoadingState } from '@iace/ui';
 import { ProtectedRoute } from '@iace/app-kit/browser';
 import { useAuth } from './providers/auth';
 import { ROUTES } from './lib/constants';
 import { LoginPage } from './routes/login';
-import { DashboardPage } from './routes/dashboard';
 import { AppShell } from './components/app-shell';
 import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
@@ -16,9 +17,22 @@ import { ExamPage } from './routes/exam';
 import { SubmittedPage } from './routes/submitted';
 import { ScoreCardPage } from './routes/score-card';
 import { ReviewPage } from './routes/review';
-import { PerformancePage } from './routes/performance';
 import { LeaderboardPage } from './routes/leaderboard';
-import { SharedReportPage } from './routes/shared-report';
+
+/** The three screens that draw charts, so the plotting library stays off the first payload. */
+const DashboardPage = React.lazy(() =>
+  import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
+);
+const PerformancePage = React.lazy(() =>
+  import('./routes/performance').then((module) => ({ default: module.PerformancePage })),
+);
+const SharedReportPage = React.lazy(() =>
+  import('./routes/shared-report').then((module) => ({ default: module.SharedReportPage })),
+);
+
+const whileLoading = (page: React.ReactNode) => (
+  <React.Suspense fallback={<LoadingState />}>{page}</React.Suspense>
+);
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
@@ -28,7 +42,7 @@ export function App() {
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       {/* Outside the guard on purpose: a shared report is read by somebody with no account. */}
-      <Route path={ROUTES.SHARED_REPORT_PATTERN} element={<SharedReportPage />} />
+      <Route path={ROUTES.SHARED_REPORT_PATTERN} element={whileLoading(<SharedReportPage />)} />
       <Route
         element={
           <ProtectedRoute
@@ -40,9 +54,9 @@ export function App() {
       >
         <Route path={ROUTES.EXAM_PATTERN} element={<ExamPage />} />
         <Route element={<AppShell />}>
-          <Route path={ROUTES.HOME} element={<DashboardPage />} />
+          <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />)} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
-          <Route path={ROUTES.PERFORMANCE} element={<PerformancePage />} />
+          <Route path={ROUTES.PERFORMANCE} element={whileLoading(<PerformancePage />)} />
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
