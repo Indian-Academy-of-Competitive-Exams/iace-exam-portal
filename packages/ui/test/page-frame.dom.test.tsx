@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { PageFrame, PanelFrame } from '../src/components/ui/table-frame';
+import { PageFrame, PanelFrame, TableFrame } from '../src/components/ui/table-frame';
 
 afterEach(cleanup);
 
@@ -99,5 +99,32 @@ describe('PanelFrame', () => {
     assert.ok(screen.getByRole('tab', { name: 'Compare' }));
     assert.ok(screen.getByText('What they scored'));
     assert.equal(screen.queryByText('Who else sat it'), null);
+  });
+});
+
+describe('TableFrame — unframed', () => {
+  const tabs = {
+    value: 'draft',
+    onValueChange: () => undefined,
+    items: [
+      { value: 'draft', label: 'Draft', content: <p>The form</p> },
+      { value: 'sent', label: 'Sent', content: <p>The record</p> },
+    ],
+  };
+
+  /** The failure this prevents: a TabsList rendered outside a Tabs root, which Radix throws on. */
+  it('still roots its tabs when the frame is turned off', () => {
+    render(<TableFrame framed={false} header={<h1>Questions</h1>} tabs={tabs} />);
+
+    assert.ok(screen.getByRole('tab', { name: 'Draft' }));
+    assert.ok(screen.getByText('The form'));
+    assert.equal(screen.queryByText('The record'), null);
+  });
+
+  it('leaves the scroll to the page, which is the whole point of turning it off', () => {
+    const { container } = render(<TableFrame framed={false} tabs={tabs} />);
+
+    assert.equal(container.querySelector('[data-page-frame]'), null);
+    assert.equal(container.querySelectorAll('.overflow-y-auto').length, 0);
   });
 });

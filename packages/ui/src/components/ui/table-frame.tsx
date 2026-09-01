@@ -145,19 +145,17 @@ export function TableFrame({
     children
   );
 
-  if (!framed) {
-    return (
-      <>
-        {header}
-        <Card className="p-4">
-          {toolbar}
-          {body}
-        </Card>
-      </>
-    );
-  }
+  const unframed = (
+    <>
+      {header}
+      <Card className="p-4">
+        {toolbar}
+        {body}
+      </Card>
+    </>
+  );
 
-  const frame = (
+  const frame = framed ? (
     <TableFrameContext value={true}>
       <div data-page-frame className={FILLS}>
         {header ? <div className="shrink-0">{header}</div> : null}
@@ -167,11 +165,17 @@ export function TableFrame({
         </Card>
       </div>
     </TableFrameContext>
+  ) : (
+    unframed
   );
 
-  // Outside the frame so the strip can sit inside the card while the table stays the scroller.
+  // Both branches pass through here: a TabsList rendered outside a Tabs root throws.
   return tabs ? (
-    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
+    <Tabs
+      value={tabs.value}
+      onValueChange={tabs.onValueChange}
+      className={framed ? FILLS : undefined}
+    >
       {frame}
     </Tabs>
   ) : (
