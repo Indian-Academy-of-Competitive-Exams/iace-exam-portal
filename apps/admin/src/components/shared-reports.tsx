@@ -61,6 +61,16 @@ const sittingItem = (sitting: ShareableSitting) => {
 /** A `YYYY-MM-DD` picked in the browser, read back as the civil date it names, never a zone. */
 const civilInstant = (day: string) => new Date(`${day}T00:00:00Z`);
 
+/** A link that is already dead must not be reported as copied — the toast is the only feedback. */
+function announceMinted(share: PerformanceShare) {
+  if (share.token === null || !share.isLive) {
+    toast.error('Link created, but it has already expired.');
+    return;
+  }
+  void navigator.clipboard.writeText(linkFor(share.token));
+  toast.success('Link created and copied.');
+}
+
 const expiryLine = (expiresOn: string) =>
   expiresOn === ''
     ? 'It never expires.'
@@ -172,8 +182,7 @@ export function SharedReportsCard({
       }),
     onSuccess: async (share) => {
       setCreating(false);
-      if (share.token !== null) void navigator.clipboard.writeText(linkFor(share.token));
-      toast.success('Link created and copied.');
+      announceMinted(share);
       await refresh();
     },
     onError: () => setCreating(false),

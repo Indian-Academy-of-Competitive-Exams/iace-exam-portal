@@ -89,7 +89,13 @@ function Report({ report }: Readonly<{ report: SharedReport }>) {
     <div className="flex flex-col gap-6">
       <Identity report={report} />
       <Headline report={report} />
-      {report.bands.length > 0 ? <Cohort report={report} /> : null}
+      {report.bands.length > 0 ? (
+        <Cohort report={report} />
+      ) : (
+        <Alert variant="info">
+          Too few sittings to show a cohort curve without naming another student.
+        </Alert>
+      )}
       {report.sections.length > 0 ? <Sections report={report} /> : null}
       <Alert variant="info">
         A report the student shared. It shows their own result only — no answer key and no other

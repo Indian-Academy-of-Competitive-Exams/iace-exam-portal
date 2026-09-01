@@ -3,7 +3,7 @@
  * by a token nobody can guess — the mirror image of leaderboard.controller.ts, which asserts it
  * is not public for the same reason. Minting and revoking both require a signed-in identity.
  */
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post } from '@nestjs/common';
 import {
   ActorTypes,
   AUDIT_ACTION,
@@ -41,6 +41,8 @@ export class PublicReportController {
 
   /** The only unauthenticated route to student data: one student's own curated report. */
   @Public()
+  // No freshness directive is heuristically cacheable, so a proxy would outlive a revocation.
+  @Header('Cache-Control', 'no-store')
   @Get(':token')
   read(@Param('token') token: string): Promise<SharedReport> {
     return this.shares.readPublic(token);

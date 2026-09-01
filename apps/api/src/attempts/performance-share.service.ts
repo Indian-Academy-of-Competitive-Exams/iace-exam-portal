@@ -19,17 +19,33 @@ import {
 import { AuditContext } from '../audit';
 import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { redisKeys } from '../redis/redis.keys';
 import { PerformanceAnalyticsService } from './performance.service';
-import { newShareToken, shareExpiresAt, shareIsLive, sharedReportOf } from './performance-share';
+import {
+  newShareToken,
+  shareCacheKey,
+  shareExpiresAt,
+  shareIsLive,
+  sharedReportOf,
+} from './performance-share';
 
 /** One refusal for every way a link can fail, so nothing is learnt from being told no. */
 const NO_SUCH_REPORT = 'This report is not available';
 const NO_SUCH_SITTING = 'No such sitting';
 const NO_SUCH_SHARE = 'No such shared report';
 const NO_SUCH_STUDENT = 'No such student';
+const TOO_MANY_READS = 'This report is being opened too often — try again in a minute';
 
 /** How many sittings the share picker offers. Older than this and nobody is sharing it. */
 const SHAREABLE_SITTING_CAP = 50;
+
+/** Revoking drops the key, so this is only the backstop for expiry and for a DEL that never ran. */
+const SHARED_REPORT_CACHE_SEC = 30;
+
+/** What one link may cost Postgres per window. The cache serves the crowd; this caps the misses. */
+const SHARED_REPORT_READ_CAP = 20;
+const SHARED_REPORT_READ_WINDOW_SEC = 60;
 
 const SHARE_SELECT = {
   id: true,
@@ -57,6 +73,7 @@ export class PerformanceShareService {
     private readonly prisma: PrismaService,
     private readonly analytics: PerformanceAnalyticsService,
     private readonly auditContext: AuditContext,
+    private readonly redis: RedisService,
   ) {}
 
   /** The owner's view: their live and dead links, and the sittings a new one could open. */
@@ -131,6 +148,8 @@ export class PerformanceShareService {
       select: SHARE_SELECT,
     });
     if (!share) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SHARE);
+    // The cache must never outlive the revocation it would otherwise keep serving.
+    await this.redis.del(redisKeys.sharedReport(shareCacheKey(share.token)));
     this.auditContext.setEntityId(studentId);
     return toShare(share, now, true);
   }
@@ -148,6 +167,11 @@ export class PerformanceShareService {
 
   /** The public read. Nothing is loaded until the link has proved it is still open. */
   async readPublic(token: string): Promise<SharedReport> {
+    const cacheKey = shareCacheKey(token);
+    const cached = await this.redis.getJson<SharedReport>(redisKeys.sharedReport(cacheKey));
+    if (cached) return cached;
+    await this.assertUnderReadCap(cacheKey);
+
     const now = new Date();
     const share = await this.prisma.performanceShare.findUnique({
       where: { token },
@@ -179,12 +203,24 @@ export class PerformanceShareService {
       attemptId: sitting.id,
     });
 
-    return sharedReportOf({
+    const shared = sharedReportOf({
       report,
       studentName: sitting.student.fullName,
       branchName: sitting.student.currentBranch?.name ?? null,
       submittedAt: sitting.submittedAt?.toISOString() ?? null,
     });
+    await this.redis.setJson(redisKeys.sharedReport(cacheKey), shared, SHARED_REPORT_CACHE_SEC);
+    return shared;
+  }
+
+  /** A share link is designed to be pasted into a public group, so one link is the thing to cap. */
+  private async assertUnderReadCap(cacheKey: string): Promise<void> {
+    const key = redisKeys.sharedReportReads(cacheKey);
+    const reads = await this.redis.client.incr(key);
+    if (reads === 1) await this.redis.client.expire(key, SHARED_REPORT_READ_WINDOW_SEC);
+    if (reads > SHARED_REPORT_READ_CAP) {
+      throw new AppException(ErrorCodes.RATE_LIMITED, TOO_MANY_READS);
+    }
   }
 }
 

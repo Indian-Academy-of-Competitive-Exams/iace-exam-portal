@@ -48,6 +48,16 @@ const linkFor = (token: string) => `${window.location.origin}${sharedReportPath(
 
 const when = (at: string | null) => (at === null ? null : WHEN.format(new Date(at)));
 
+/** A link that is already dead must not be reported as copied — the toast is the only feedback. */
+function announceMinted(share: PerformanceShare) {
+  if (share.token === null || !share.isLive) {
+    toast.error('Link created, but it has already expired.');
+    return;
+  }
+  void navigator.clipboard.writeText(linkFor(share.token));
+  toast.success('Link created and copied.');
+}
+
 function StatusBadge({ share }: Readonly<{ share: PerformanceShare }>) {
   if (share.isLive) return <Badge variant="success">Live</Badge>;
   return <Badge variant="neutral">{share.revokedAt === null ? 'Expired' : 'Revoked'}</Badge>;
@@ -140,8 +150,7 @@ export function ShareLinks() {
       }),
     onSuccess: async (share) => {
       setCreating(false);
-      if (share.token !== null) void navigator.clipboard.writeText(linkFor(share.token));
-      toast.success('Link created and copied.');
+      announceMinted(share);
       await refresh();
     },
     onError: () => setCreating(false),

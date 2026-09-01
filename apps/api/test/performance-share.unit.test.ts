@@ -51,6 +51,7 @@ const RIVAL = 'stu_2';
 const ADMIN = 'adm_1';
 const RIVAL_NAME = 'Nobody Else';
 const ANSWER_TEXT = 'Option 1 is the right one';
+const REFUSAL = 'This report is not available';
 
 /** Exactly what a token buys. A new key here is a security decision, not a refactor. */
 const PUBLIC_FIELDS = [
@@ -116,7 +117,17 @@ function served(attemptId: string): FakeServedAnswerRow[] {
   ];
 }
 
-function sittings(): FakeAttemptRow[] {
+function sittings(crowd: number): FakeAttemptRow[] {
+  const others = Array.from({ length: crowd }, (_unused, at) =>
+    makeAttempt({
+      id: `att_1${at}`,
+      testId: 'tst_1',
+      studentId: `stu_1${at}`,
+      status: ATTEMPT_STATUS.EVALUATED,
+      submittedAt: new Date('2026-08-29T06:00:00.000Z'),
+      score: 2 + at,
+    }),
+  );
   return [
     makeAttempt({
       id: 'att_1',
@@ -146,14 +157,16 @@ function sittings(): FakeAttemptRow[] {
       submittedAt: new Date('2026-08-29T06:00:00.000Z'),
       score: 5.5,
     }),
+    ...others,
   ];
 }
 
 function bench(
   shares: ReturnType<typeof makeShare>[] = [],
   sitting: Partial<FakeShareSitting> = {},
+  crowd = 0,
 ) {
-  const attempts = sittings();
+  const attempts = sittings(crowd);
   const data: FakePerformanceData = {
     attempts,
     served: attempts.flatMap((row) => served(row.id)),
@@ -168,6 +181,7 @@ function bench(
     sectionStats: [],
     questionStats: [],
   };
+  const redis = new FakeRedis();
   const reportPrisma = new FakePerformancePrisma(data);
   const analytics = new PerformanceAnalyticsService(
     reportPrisma.asService(),
@@ -189,7 +203,13 @@ function bench(
   ]);
   return {
     sharePrisma,
-    service: new PerformanceShareService(sharePrisma.asService(), analytics, new AuditContext()),
+    redis,
+    service: new PerformanceShareService(
+      sharePrisma.asService(),
+      analytics,
+      new AuditContext(),
+      redis.asService(),
+    ),
   };
 }
 
@@ -239,6 +259,14 @@ describe('when a link runs out', () => {
     assert.equal(permanent, null);
     assert.equal(chosen?.toISOString(), '2026-09-10T18:29:59.999Z');
   });
+
+  /** The failure this prevents: minting a link that is dead the moment it is copied. */
+  it('refuses an expiry that has already gone', () => {
+    assert.throws(
+      () => shareExpiresAt('2026-08-20', now),
+      (error: { code?: string }) => error.code === ErrorCodes.VALIDATION_ERROR,
+    );
+  });
 });
 
 // --------------------------------------------------------------------------- what a token buys
@@ -276,22 +304,76 @@ describe('reading a shared report', () => {
 
   /** The cohort reaches the public payload as a distribution: bands and counts, never rows. */
   it('describes the cohort by counts alone', async () => {
-    const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })]);
+    const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })], {}, 3);
 
     const report = await service.readPublic('live-token');
 
-    assert.equal(report.cohortSize, 2);
+    assert.equal(report.cohortSize, 5);
     assert.equal(report.topperScore, 5.5);
     assert.ok(report.bands.length > 0);
     for (const band of report.bands) {
       assert.deepEqual(Object.keys(band).toSorted(), ['count', 'from', 'isYours', 'to']);
     }
   });
+
+  /** The failure this prevents: two sitters, so the topper IS the one other student in the room. */
+  it('publishes no topper, average or curve for a cohort too small to hide in', async () => {
+    const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })]);
+
+    const report = await service.readPublic('live-token');
+
+    assert.equal(report.cohortSize, 2);
+    assert.equal(report.topperScore, null);
+    assert.equal(report.averageScore, null);
+    assert.deepEqual(report.bands, []);
+    assert.equal(report.rank, 58);
+  });
+});
+
+describe('what one link may cost Postgres', () => {
+  /** The failure this prevents: a revoked link still served from a cache until its TTL runs out. */
+  it('drops the cached report the moment the link is revoked', async () => {
+    const { service } = bench([
+      makeShare({ id: 'shr_1', token: 'live-token', attemptId: 'att_1' }),
+    ]);
+
+    await service.readPublic('live-token');
+    await service.revoke(STUDENT, 'shr_1', EVERY_BRANCH);
+
+    await assert.rejects(() => service.readPublic('live-token'), refusedWith(REFUSAL));
+  });
+
+  /** The failure this prevents: N readers of one pasted link, N full-cohort scans on Postgres. */
+  it('serves a repeated read from Redis, and only until the short TTL runs out', async () => {
+    const { service, sharePrisma, redis } = bench([
+      makeShare({ token: 'live-token', attemptId: 'att_1' }),
+    ]);
+
+    const first = await service.readPublic('live-token');
+    sharePrisma.shares.length = 0;
+    const cached = await service.readPublic('live-token');
+    redis.advanceSeconds(31);
+
+    assert.deepEqual(cached, first);
+    await assert.rejects(() => service.readPublic('live-token'), refusedWith(REFUSAL));
+  });
+
+  /** The failure this prevents: an unauthenticated route with no brake on it at all. */
+  it('refuses one link that keeps missing the cache', async () => {
+    const { service } = bench();
+
+    for (let read = 0; read < 20; read += 1) {
+      await assert.rejects(() => service.readPublic('never-minted'), refusedWith(REFUSAL));
+    }
+
+    await assert.rejects(
+      () => service.readPublic('never-minted'),
+      (error: { code?: string }) => error.code === ErrorCodes.RATE_LIMITED,
+    );
+  });
 });
 
 describe('refusing a link', () => {
-  const REFUSAL = 'This report is not available';
-
   it('refuses a revoked token', async () => {
     const { service } = bench([
       makeShare({ token: 'dead-token', revokedAt: new Date('2026-08-31T06:00:00.000Z') }),

@@ -62,6 +62,12 @@ export const redisKeys = {
   /** Held while one worker puts a board back, so a wiped Redis is rebuilt once and not per reader. */
   testLeaderboardRebuild: (testId: string) => `test:leaderboard:${testId}:rebuilding`,
 
+  /** One public report, keyed by a DIGEST of its link — a key name must never carry a credential. */
+  sharedReport: (linkDigest: string) => `share:report:${linkDigest}`,
+
+  /** How often one link has missed that cache in the current window. TTL = what is left of it. */
+  sharedReportReads: (linkDigest: string) => `share:reads:${linkDigest}`,
+
   /** One student's resolved catalog, at one payload shape and both epochs. */
   studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
     `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,
