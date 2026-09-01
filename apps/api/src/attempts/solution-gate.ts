@@ -24,6 +24,20 @@ export interface SolutionGateFacts {
   extraTimeSec: number;
 }
 
+/** The gate's inputs, gathered from the sitting and the window its branches leave open. */
+export function gateFacts(
+  attempt: { test: { evaluationMode: EvaluationMode; baseConfig: { durationSec: number } } },
+  schedule: { scheduled: boolean; closesAt: string | null; extraTimeSec: number },
+): SolutionGateFacts {
+  return {
+    evaluationMode: attempt.test.evaluationMode,
+    scheduled: schedule.scheduled,
+    closesAt: schedule.closesAt,
+    durationSec: attempt.test.baseConfig.durationSec,
+    extraTimeSec: schedule.extraTimeSec,
+  };
+}
+
 export function solutionsOpening(facts: SolutionGateFacts): SolutionsOpening {
   if (facts.evaluationMode === EVALUATION_MODE.PRACTICE) return { state: SOLUTIONS_OPENING.NOW };
   // Standalone: no series arranged it, so there is no cohort whose sitting this could spoil.

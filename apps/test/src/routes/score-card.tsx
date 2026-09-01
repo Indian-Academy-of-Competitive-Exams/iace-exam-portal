@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpenCheck } from 'lucide-react';
+import { BookOpenCheck, ListChecks } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -53,12 +53,20 @@ export function ScoreCardPage() {
           title="Score card"
           meta={card.data ? `${card.data.score} of ${card.data.maxMarks} marks` : undefined}
           action={
-            <Button asChild variant="outline">
-              <Link to={ROUTES.REVIEW(attemptId)}>
-                <BookOpenCheck aria-hidden />
-                Review the paper
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link to={ROUTES.QUESTION_REPORT(attemptId)}>
+                  <ListChecks aria-hidden />
+                  Question report
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to={ROUTES.REVIEW(attemptId)}>
+                  <BookOpenCheck aria-hidden />
+                  Review the paper
+                </Link>
+              </Button>
+            </div>
           }
         />
       }

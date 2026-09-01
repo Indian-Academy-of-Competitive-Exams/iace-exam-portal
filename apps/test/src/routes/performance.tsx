@@ -233,7 +233,7 @@ function Report({
         <DifficultyFigure difficulty={report.difficulty} />
       </div>
 
-      <TimeFigure time={report.time} counts={counts} />
+      <TimeFigure time={report.time} counts={counts} paceIndex={report.paceIndex} />
     </div>
   );
 }

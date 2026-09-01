@@ -198,6 +198,7 @@ function bandsOf(counted: readonly ScoreCount[], lo: number, hi: number): Cohort
 export function sectionalStandingOf(
   sections: readonly ScoreCardSection[],
   cohort: ReadonlyMap<string, SectionCohort>,
+  topper: ReadonlyMap<string, number> = new Map(),
 ): SectionalStanding[] {
   return sections.map((section) => {
     const held = cohort.get(section.baseConfigSectionId);
@@ -207,6 +208,7 @@ export function sectionalStandingOf(
       cohortAverageScore: n === 0 ? null : round((held?.sumScore ?? 0) / n),
       cohortAverageTimeSec: n === 0 ? null : round((held?.sumTimeSec ?? 0) / n),
       cohortSampleSize: n,
+      topperTimeSec: topper.get(section.baseConfigSectionId) ?? null,
     };
   });
 }

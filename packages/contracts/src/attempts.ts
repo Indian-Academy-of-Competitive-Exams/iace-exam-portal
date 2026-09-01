@@ -318,6 +318,7 @@ export const ME_ATTEMPT_ROUTES = {
   scoreCard: (attemptId: string) => `/me/attempts/${attemptId}/scorecard`,
   solutions: (attemptId: string) => `/me/attempts/${attemptId}/solutions`,
   analytics: (attemptId: string) => `/me/attempts/${attemptId}/analytics`,
+  questionReport: (attemptId: string) => `/me/attempts/${attemptId}/question-report`,
   performance: '/me/performance',
 } as const;
 

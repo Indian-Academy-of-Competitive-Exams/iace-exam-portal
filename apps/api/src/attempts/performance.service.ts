@@ -27,6 +27,8 @@ import { LeaderboardService, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
 import { sectionScoresIn } from './score-paper';
 import { timeUseOf } from './attempt-analytics';
+import { NO_TOPPER, topperOf } from './topper';
+import { paceIndexOf } from './question-report';
 import {
   cohortShapeOf,
   compositionOf,
@@ -140,10 +142,11 @@ export class PerformanceAnalyticsService {
     const rows = anchor === null ? [] : toReported(anchor);
     const testIds = [...new Set(sat.map((row) => row.testId))];
 
-    const [testStats, pValues, sectionCohort, standing, series] = await Promise.all([
+    const [testStats, pValues, sectionCohort, topper, standing, series] = await Promise.all([
       this.testStats(testIds),
       this.pValues(anchor === null ? [] : [anchor.testId]),
       this.sectionCohort(anchor),
+      anchor === null ? NO_TOPPER : topperOf(this.prisma, anchor.testId),
       anchor === null ? null : this.leaderboard.liveStanding(anchor.testId, anchor.id),
       this.seriesOf(studentId, query),
     ]);
@@ -159,9 +162,10 @@ export class PerformanceAnalyticsService {
       trajectory: sat.map((row) => toPoint(row, testStats.get(row.testId)?.evaluatedCount ?? null)),
       cohort: await this.curveOf(query, anchor, standing, testStats),
       composition: compositionOf(rows),
-      sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort),
+      sections: sectionalStandingOf(sectionsOf(anchor), sectionCohort, topper.bySection),
       difficulty: difficultyStandingOf(rows, pValues),
       time: timeUseOf(rows),
+      paceIndex: paceOf(rows, anchor === null ? null : (testStats.get(anchor.testId) ?? null)),
       progression: progressionOf(series, sat),
     };
   }
@@ -216,6 +220,7 @@ export class PerformanceAnalyticsService {
         testId: true,
         evaluatedCount: true,
         sumScore: true,
+        sumTimeSec: true,
         maxScore: true,
         scoreHistogram: true,
       },
@@ -320,6 +325,7 @@ function progressionOf(
 interface TestStatRow {
   testId: string;
   evaluatedCount: number;
+  sumTimeSec: bigint;
   sumScore: Prisma.Decimal;
   maxScore: Prisma.Decimal | null;
   scoreHistogram: Prisma.JsonValue;
@@ -394,4 +400,14 @@ function toReported(row: ReportRow): ReportedQuestion[] {
     negativeMarks: Number(question.paperItem?.negativeMarks ?? 0),
     disposition: question.paperItem?.status ?? PAPER_QUESTION_STATUS.ACTIVE,
   }));
+}
+
+/** Their whole paper against the cohort's average one. No rollup, no comparison to draw. */
+function paceOf(
+  rows: readonly ReportedQuestion[],
+  paper: { evaluatedCount: number; sumTimeSec: bigint } | null,
+): number | null {
+  if (paper === null) return null;
+  const spent = rows.reduce((total, row) => total + row.timeSpentSec, 0);
+  return paceIndexOf(spent, Number(paper.sumTimeSec), paper.evaluatedCount);
 }

@@ -176,7 +176,7 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
       section.cohortAverageScore === null
         ? null
         : round(section.score - section.cohortAverageScore),
-    caption: `${section.score} of ${section.maxMarks}`,
+    caption: sectionCaption(section),
   }));
 
   // Without a cohort every delta is null, so the axis would draw nothing the reader can use.
@@ -209,6 +209,16 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
   );
 }
 
+/** Their clock beside the two the rollup now carries: what the field spent here, and the topper. */
+function sectionCaption(section: SectionalStanding): string {
+  const held = [`${section.score} of ${section.maxMarks}`, minutes(section.timeSpentSec)];
+  if (section.cohortAverageTimeSec !== null) {
+    held.push(`cohort ${minutes(section.cohortAverageTimeSec)}`);
+  }
+  if (section.topperTimeSec !== null) held.push(`topper ${minutes(section.topperTimeSec)}`);
+  return held.join(' · ');
+}
+
 /** Accuracy per band, with the cohort's own p-value ticked across it on the same scale. */
 export function DifficultyFigure({
   difficulty,
@@ -239,7 +249,11 @@ export function DifficultyFigure({
 }
 
 /** Reconstructed from the means and the counts, so the shares are of the SAME clock as the total. */
-export function TimeFigure({ time, counts }: Readonly<{ time: TimeUse; counts: PaperCounts }>) {
+export function TimeFigure({
+  time,
+  counts,
+  paceIndex = null,
+}: Readonly<{ time: TimeUse; counts: PaperCounts; paceIndex?: number | null }>) {
   const onCorrect = Math.round(time.avgOnCorrectSec * counts.correct);
   const onWrong = Math.round(time.avgOnWrongSec * counts.wrong);
   const rest = Math.max(0, time.totalSec - onCorrect - onWrong - time.spentOnUnattemptedSec);
@@ -281,7 +295,19 @@ export function TimeFigure({ time, counts }: Readonly<{ time: TimeUse; counts: P
     <ChartFigure
       title="Time"
       meta={`${minutes(time.avgPerQuestionSec)} per question`}
-      figure={<Metric size="md" label="Total" value={minutes(time.totalSec)} />}
+      figure={
+        <div className="flex items-start gap-6">
+          <Metric size="md" label="Total" value={minutes(time.totalSec)} />
+          {paceIndex === null ? null : (
+            <Metric
+              size="md"
+              label="Pace"
+              value={paceIndex}
+              unit={paceIndex > 1 ? 'slower' : 'faster'}
+            />
+          )}
+        </div>
+      }
     >
       <CompositionBar segments={segments} aria-label="How the clock was spent" />
     </ChartFigure>

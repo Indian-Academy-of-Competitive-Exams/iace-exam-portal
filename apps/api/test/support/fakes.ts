@@ -4768,6 +4768,8 @@ export interface FakePerformanceData {
     sumScore: number | Prisma.Decimal;
     maxScore: number | Prisma.Decimal | null;
     scoreHistogram: unknown;
+    sumTimeSec?: number;
+    topperAttemptId?: string | null;
   }[];
   sectionStats: {
     testId: string;
@@ -4776,7 +4778,16 @@ export interface FakePerformanceData {
     sumScore: number;
     sumTimeSec: number;
   }[];
-  questionStats: { testId: string; paperQuestionId: string; pValue: number | null }[];
+  questionStats: {
+    testId: string;
+    paperQuestionId: string;
+    pValue: number | null;
+    attemptedCount?: number;
+    skippedCount?: number;
+    correctCount?: number;
+    sumTimeSec?: number;
+    optionCounts?: unknown;
+  }[];
 }
 
 /** Postgres sorts NULLs FIRST on a descending order unless the query asks for them last. */
@@ -4799,7 +4810,10 @@ export class FakePerformancePrisma {
       test: {
         title: this.data.shape.title,
         evaluationMode: this.data.shape.evaluationMode,
-        baseConfig: { sections: [...this.data.shape.sections].sort((a, b) => a.order - b.order) },
+        baseConfig: {
+          durationSec: this.data.shape.durationSec,
+          sections: [...this.data.shape.sections].sort((a, b) => a.order - b.order),
+        },
       },
       questions: this.data.served
         .filter((served) => served.attemptId === row.id)
@@ -4807,6 +4821,7 @@ export class FakePerformancePrisma {
         .map((served) => ({
           ...served,
           question: {
+            type: served.type,
             difficulty: served.difficulty,
             subject: { id: served.subjectId, name: served.subjectName },
           },
@@ -4820,6 +4835,19 @@ export class FakePerformancePrisma {
   }
 
   readonly attempt = {
+    /** The topper, read for their clock: the whole row, because leaving fields out is the code's job. */
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.data.attempts.find((held) => held.id === where.id);
+      return Promise.resolve(row ? this.reported(row) : null);
+    },
+
+    findFirst: ({ where }: { where: { id: string; studentId: string } }) => {
+      const row = this.data.attempts.find(
+        (held) => held.id === where.id && held.studentId === where.studentId,
+      );
+      return Promise.resolve(row ? this.reported(row) : null);
+    },
+
     findMany: ({
       where,
       orderBy,
@@ -4946,7 +4974,21 @@ export class FakePerformancePrisma {
 
   readonly testStat = {
     findMany: ({ where }: { where: { testId: { in: string[] } } }) =>
-      Promise.resolve(this.data.testStats.filter((row) => where.testId.in.includes(row.testId))),
+      Promise.resolve(
+        this.data.testStats
+          .filter((row) => where.testId.in.includes(row.testId))
+          .map((row) => ({ sumTimeSec: 0, topperAttemptId: null, ...row })),
+      ),
+
+    findUnique: ({ where }: { where: { testId: string } }) => {
+      const row = this.data.testStats.find((held) => held.testId === where.testId);
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve({
+        ...row,
+        sumTimeSec: row.sumTimeSec ?? 0,
+        topperAttemptId: row.topperAttemptId ?? null,
+      });
+    },
   };
 
   readonly testSectionStat = {
@@ -4955,12 +4997,26 @@ export class FakePerformancePrisma {
   };
 
   readonly testQuestionStat = {
-    findMany: ({ where }: { where: { testId: { in: string[] } } }) =>
-      Promise.resolve(
-        this.data.questionStats.filter(
-          (row) => where.testId.in.includes(row.testId) && row.pValue !== null,
-        ),
-      ),
+    findMany: ({ where }: { where: { testId: string | { in: string[] } } }) => {
+      const matches = (testId: string) =>
+        typeof where.testId === 'string'
+          ? testId === where.testId
+          : where.testId.in.includes(testId);
+      // The p-value read asks only for measured rows; the question report wants them all.
+      const measuredOnly = typeof where.testId !== 'string';
+      return Promise.resolve(
+        this.data.questionStats
+          .filter((row) => matches(row.testId) && (!measuredOnly || row.pValue !== null))
+          .map((row) => ({
+            attemptedCount: 0,
+            skippedCount: 0,
+            correctCount: 0,
+            sumTimeSec: 0,
+            optionCounts: null,
+            ...row,
+          })),
+      );
+    },
   };
 
   asService(): PrismaService {

@@ -151,8 +151,10 @@ import {
 import {
   PERFORMANCE_ROUTES,
   performanceReportSchema,
+  questionReportSchema,
   satSeriesListSchema,
   type PerformanceReport,
+  type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
 } from './stats';
@@ -668,6 +670,10 @@ export function createApiClient(options: ApiClientOptions) {
       analytics: (attemptId: string): Promise<AttemptAnalytics> =>
         request(ME_ATTEMPT_ROUTES.analytics(attemptId), { schema: attemptAnalyticsSchema }),
 
+      /** Their paper question by question, beside the cohort's. The key rides the solution gate. */
+      questionReport: (attemptId: string): Promise<QuestionReport> =>
+        request(ME_ATTEMPT_ROUTES.questionReport(attemptId), { schema: questionReportSchema }),
+
       /** Every test this student has sat, oldest first. */
       performance: (): Promise<PerformanceTrend> =>
         request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
@@ -748,6 +754,11 @@ export function createApiClient(options: ApiClientOptions) {
         performance: (id: string, query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
           request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
             schema: performanceReportSchema,
+          }),
+
+        questionReport: (id: string, attemptId: string): Promise<QuestionReport> =>
+          request(PERFORMANCE_ROUTES.questionReportOfStudent(id, attemptId), {
+            schema: questionReportSchema,
           }),
 
         performanceShares: (id: string): Promise<PerformanceShares> =>

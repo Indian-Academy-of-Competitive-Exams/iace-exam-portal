@@ -1,8 +1,10 @@
 import { z } from 'zod';
-import { DIFFICULTY_LEVEL, type DifficultyLevel } from './questions';
-import { evaluationModeSchema, testScopeSchema } from './tests';
+import { DIFFICULTY_LEVEL, difficultyLevelSchema, type DifficultyLevel } from './questions';
+import { evaluationModeSchema, paperQuestionStatusSchema, testScopeSchema } from './tests';
 import {
   analyticsBucketSchema,
+  answerStateSchema,
+  examSectionSchema,
   scoreCardSectionSchema,
   timeUseSchema,
   type PerformancePoint,
@@ -225,6 +227,9 @@ export const sectionalStandingSchema = scoreCardSectionSchema.extend({
   cohortAverageTimeSec: z.number().nullable(),
   /** Sittings behind those two averages. Zero means no rollup, not an empty section. */
   cohortSampleSize: z.number().int(),
+  /** What the paper's topper spent here. Time is not answer-key, so it needs no gate. */
+  topperTimeSec: z.number().int().nullable(),
+  // Rank WITHIN a subject is deliberately absent: per-subject cohort ranking is its own pass.
 });
 export type SectionalStanding = z.infer<typeof sectionalStandingSchema>;
 
@@ -312,6 +317,8 @@ export const satSeriesListSchema = z.array(satSeriesSchema);
 
 /** Never carries a question, an option or an answer key — at any scope, on either path. */
 export const performanceReportSchema = z.object({
+  /** This paper's clock against the cohort's average: above 1 is slower, below 1 faster. */
+  paceIndex: z.number().nullable(),
   studentId: z.string(),
   scope: performanceScopeSchema,
   /** The id the scope was asked about. Null for ALL_TIME. */
@@ -396,9 +403,113 @@ export function bestSitting(points: readonly PerformancePoint[]): PerformancePoi
   );
 }
 
+// ============================================================================
+// The Question Report — one row per served question, the student's own beside
+// the cohort's. Two halves with different rules: the cohort's item-stats are
+// safe the moment they exist, while anything naming the RIGHT answer waits for
+// `solutionsAreOpen`, exactly as the Solution Report does.
+// ============================================================================
+
+/** How hard the cohort ACTUALLY found a question, as opposed to how hard it was authored. */
+export const SYSTEM_DIFFICULTY = { EASY: 'EASY', MEDIUM: 'MEDIUM', HARD: 'HARD' } as const;
+export const systemDifficultySchema = z.enum(SYSTEM_DIFFICULTY);
+export type SystemDifficulty = z.infer<typeof systemDifficultySchema>;
+
+/** Tuned once, here. A p-value is the fraction who got it right, so higher is easier. */
+export const SYSTEM_DIFFICULTY_EASY_FROM = 0.7;
+export const SYSTEM_DIFFICULTY_MEDIUM_FROM = 0.4;
+
+/** No p-value is not a band: nobody has attempted it, so the cohort has not said anything. */
+export function systemDifficultyOf(pValue: number | null): SystemDifficulty | null {
+  if (pValue === null) return null;
+  if (pValue >= SYSTEM_DIFFICULTY_EASY_FROM) return SYSTEM_DIFFICULTY.EASY;
+  return pValue >= SYSTEM_DIFFICULTY_MEDIUM_FROM
+    ? SYSTEM_DIFFICULTY.MEDIUM
+    : SYSTEM_DIFFICULTY.HARD;
+}
+
+/** GATED: past a p-value of one half, the option with the most votes IS the key, no inference. */
+export const optionShareSchema = z.object({
+  optionId: z.string(),
+  /** Its place on the paper, so a screen can say "C" without loading the question. */
+  position: z.number().int(),
+  count: z.number().int(),
+  isCorrect: z.boolean(),
+});
+export type OptionShare = z.infer<typeof optionShareSchema>;
+
+/** One served question: what this student did with it, and what the cohort did with it. */
+export const questionReportRowSchema = z.object({
+  questionId: z.string(),
+  paperQuestionId: z.string().nullable(),
+  order: z.number().int(),
+  baseConfigSectionId: z.string(),
+  state: answerStateSchema,
+  selectedOptionId: z.string().nullable(),
+  typedAnswer: z.string().nullable(),
+  isCorrect: z.boolean().nullable(),
+  marksAwarded: z.number().nullable(),
+  marks: z.number(),
+  negativeMarks: z.number(),
+  disposition: paperQuestionStatusSchema,
+  timeSpentSec: z.number().int(),
+  /** As authored. The cohort's own verdict on the same question is `systemDifficulty`. */
+  predefinedDifficulty: difficultyLevelSchema.nullable(),
+  // -------------------------------------------------------------------------
+  // The cohort's, straight off the rollup. Every one of these is null until a
+  // `TestQuestionStat` row exists — a dash on the screen, never a live count.
+  // -------------------------------------------------------------------------
+  /** Of the sittings served this question, the fraction that answered it. */
+  attemptRate: z.number().nullable(),
+  /** Of those who answered it, the fraction that got it right. */
+  accuracy: z.number().nullable(),
+  cohortAverageTimeSec: z.number().nullable(),
+  systemDifficulty: systemDifficultySchema.nullable(),
+  topperTimeSec: z.number().int().nullable(),
+  topperMarksAwarded: z.number().nullable(),
+  // -------------------------------------------------------------------------
+  // Gated. Empty and null until `solutionsAreOpen`, and absent from the read
+  // that builds the rest — the key is a second query, never a join.
+  // -------------------------------------------------------------------------
+  optionCounts: z.array(optionShareSchema),
+  correctOptionId: z.string().nullable(),
+  /** What a typed answer was compared against. Null for anything with options. */
+  correctAnswer: z.string().nullable(),
+});
+export type QuestionReportRow = z.infer<typeof questionReportRowSchema>;
+
+export const questionReportSchema = z.object({
+  attemptId: z.string(),
+  testId: z.string(),
+  testTitle: z.string().nullable(),
+  /** True once the key may be shown. The gated fields above are populated only then. */
+  solutionsOpen: z.boolean(),
+  /** What to say while it is shut, in the Solution Report's own words. Null once open. */
+  closedReason: z.string().nullable(),
+  /** Sittings behind the cohort columns. Zero means no rollup has run, not an empty cohort. */
+  cohortSize: z.number().int(),
+  /** This paper's time against the cohort's average: above 1 is slower, below 1 is faster. */
+  paceIndex: z.number().nullable(),
+  sections: z.array(examSectionSchema),
+  questions: z.array(questionReportRowSchema),
+});
+export type QuestionReport = z.infer<typeof questionReportSchema>;
+
+/** What the client filters the table by. The rows are all there; this only hides some. */
+export const QUESTION_FILTERS = {
+  ALL: 'all',
+  CORRECT: 'correct',
+  INCORRECT: 'incorrect',
+  UNATTEMPTED: 'unattempted',
+} as const;
+export const questionFilterSchema = z.enum(QUESTION_FILTERS);
+export type QuestionFilter = z.infer<typeof questionFilterSchema>;
+
 export const PERFORMANCE_ROUTES = {
   me: '/me/performance/report',
   /** The series the picker may offer: one they have sat a test in, so a report cannot be empty. */
   mySeries: '/me/performance/series',
   ofStudent: (studentId: string) => `/admin/students/${studentId}/performance`,
+  questionReportOfStudent: (studentId: string, attemptId: string) =>
+    `/admin/students/${studentId}/attempts/${attemptId}/question-report`,
 } as const;

@@ -39,6 +39,8 @@ export const ROUTES = {
   SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
   REVIEW_PATTERN: '/attempts/:attemptId/review',
+  QUESTION_REPORT: (attemptId: string) => `/attempts/${attemptId}/questions`,
+  QUESTION_REPORT_PATTERN: '/attempts/:attemptId/questions',
   PERFORMANCE: '/performance',
   /** Public: no session, no nav, one student's own report opened by a token. */
   SHARED_REPORT_PATTERN: sharedReportPath(':token'),
@@ -64,6 +66,9 @@ export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
 
 /** One sitting's marks, and the worked solutions the gate may still be holding back. */
 export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];
+
+export const questionReportQueryKey = (attemptId: string) =>
+  ['me', 'attempts', attemptId, 'question-report'] as const;
 export const solutionsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'solutions'];
 export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'analytics'];
 

@@ -17,6 +17,7 @@ import { ExamPage } from './routes/exam';
 import { SubmittedPage } from './routes/submitted';
 import { ScoreCardPage } from './routes/score-card';
 import { ReviewPage } from './routes/review';
+import { QuestionReportPage } from './routes/question-report';
 import { LeaderboardPage } from './routes/leaderboard';
 
 /** The three screens that draw charts, so the plotting library stays off the first payload. */
@@ -65,6 +66,7 @@ export function App() {
           <Route path={ROUTES.SUBMITTED_PATTERN} element={<SubmittedPage />} />
           <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ScoreCardPage />} />
           <Route path={ROUTES.REVIEW_PATTERN} element={<ReviewPage />} />
+          <Route path={ROUTES.QUESTION_REPORT_PATTERN} element={<QuestionReportPage />} />
           <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
           <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
         </Route>

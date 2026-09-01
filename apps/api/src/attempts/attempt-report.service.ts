@@ -24,7 +24,7 @@ import {
   type SolutionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService, type TestSchedule } from '../access';
+import { AccessResolverService } from '../access';
 import { StorageService } from '../storage/storage.service';
 import { imageUrlsIn } from './exam-images';
 import {
@@ -37,7 +37,12 @@ import {
 } from './attempt-analytics';
 import { htmlIn, narrowRich, signLocalizedRich, signRich } from './exam-content';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
-import { solutionsAreOpen, solutionsClosedReason, solutionsOpenAt } from './solution-gate';
+import {
+  gateFacts,
+  solutionsAreOpen,
+  solutionsClosedReason,
+  solutionsOpenAt,
+} from './solution-gate';
 import { sectionScoresIn } from './score-paper';
 import { LeaderboardService } from './leaderboard.service';
 import {
@@ -172,7 +177,6 @@ const SOLUTION_SELECT = {
 
 type ScoreCardRow = Prisma.AttemptGetPayload<{ select: typeof SCORE_CARD_SELECT }>;
 type AnalyticsRow = Prisma.AttemptGetPayload<{ select: typeof ANALYTICS_SELECT }>;
-type GateRow = Prisma.AttemptGetPayload<{ select: typeof GATE_SELECT }>;
 type SolutionRow = Prisma.AttemptGetPayload<{ select: typeof SOLUTION_SELECT }>;
 
 @Injectable()
@@ -408,16 +412,6 @@ export async function cohortAggregate(prisma: PrismaService, testId: string) {
 }
 
 const round = (value: number) => Math.round(value * 100) / 100;
-
-function gateFacts(attempt: GateRow, schedule: TestSchedule) {
-  return {
-    evaluationMode: attempt.test.evaluationMode,
-    scheduled: schedule.scheduled,
-    closesAt: schedule.closesAt,
-    durationSec: attempt.test.baseConfig.durationSec,
-    extraTimeSec: schedule.extraTimeSec,
-  };
-}
 
 function toSolutionQuestion(
   row: SolutionRow['questions'][number],
