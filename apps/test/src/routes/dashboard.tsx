@@ -10,6 +10,7 @@ import {
   LinePlot,
   Metric,
   MetricGroup,
+  PLOT_WIDTH_WIDE,
   PageFrame,
   PageHeader,
   SectionHeading,
@@ -27,6 +28,9 @@ import {
 } from '../lib/constants';
 import { averagePercentile, bestRank, sittablesOf, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
+
+/** viewBox units against the wide box a full-width plot uses, not pixels. */
+const TREND_HEIGHT = 280;
 
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
 export function DashboardPage() {
@@ -62,7 +66,13 @@ export function DashboardPage() {
         </MetricGroup>
         <section className="flex flex-col gap-3">
           <SectionHeading title="Percentile" />
-          <LinePlot compact points={points} aria-label="Percentile across your tests" />
+          <LinePlot
+            compact
+            points={points}
+            width={PLOT_WIDTH_WIDE}
+            height={TREND_HEIGHT}
+            aria-label="Percentile across your tests"
+          />
         </section>
       </>
     );

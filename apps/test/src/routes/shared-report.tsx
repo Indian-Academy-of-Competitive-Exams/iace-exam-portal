@@ -13,6 +13,7 @@ import {
   MeasureBars,
   Metric,
   MetricGroup,
+  PageHeader,
   ThemeToggle,
   plural,
   type DistributionMarker,
@@ -22,6 +23,9 @@ import { api } from '../lib/api';
 import { sharedReportQueryKey } from '../lib/constants';
 
 const UNMEASURED = '—';
+
+/** viewBox units against a 1000-wide box: this page is one narrow column, so the plot stays short. */
+const PLOT_HEIGHT = 360;
 
 /** No PageFrame: served outside the app shell, so `data-page-frame` has no shell to flip — it frames itself. */
 export function SharedReportPage() {
@@ -103,35 +107,30 @@ function Identity({ report }: Readonly<{ report: SharedReport }>) {
   const meta = [report.testTitle, report.branchName, sat].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex items-center gap-4">
-      <Avatar name={report.studentName} size="lg" className="size-14 text-lg" />
-      <div className="min-w-0">
-        <h1 className="truncate text-2xl font-bold tracking-tight">
-          {report.studentName ?? 'IACE student'}
-        </h1>
-        {meta ? <div className="mt-0.5 truncate text-sm text-muted-foreground">{meta}</div> : null}
-      </div>
-    </div>
+    <PageHeader
+      size="display"
+      leading={<Avatar name={report.studentName} size="lg" className="size-14 text-lg" />}
+      title={report.studentName ?? 'IACE student'}
+      meta={meta || undefined}
+    />
   );
 }
 
 function Headline({ report }: Readonly<{ report: SharedReport }>) {
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <MetricGroup>
-        <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} />
-        <Metric
-          label="Rank"
-          value={report.rank === null ? UNMEASURED : `#${report.rank}`}
-          unit={report.cohortSize > 0 ? `of ${report.cohortSize}` : undefined}
-        />
-        <Metric
-          label="Percentile"
-          value={report.percentile ?? UNMEASURED}
-          unit={report.percentile === null ? undefined : 'th'}
-        />
-      </MetricGroup>
-    </div>
+    <MetricGroup>
+      <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} />
+      <Metric
+        label="Rank"
+        value={report.rank === null ? UNMEASURED : `#${report.rank}`}
+        unit={report.cohortSize > 0 ? `of ${report.cohortSize}` : undefined}
+      />
+      <Metric
+        label="Percentile"
+        value={report.percentile ?? UNMEASURED}
+        unit={report.percentile === null ? undefined : 'th'}
+      />
+    </MetricGroup>
   );
 }
 
@@ -155,6 +154,7 @@ function Cohort({ report }: Readonly<{ report: SharedReport }>) {
   return (
     <ChartFigure title="Cohort standing" meta={plural(report.cohortSize, 'sitting')}>
       <DistributionPlot
+        height={PLOT_HEIGHT}
         bands={report.bands}
         markers={markers}
         min={report.bands[0]?.from ?? 0}

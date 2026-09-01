@@ -51,7 +51,7 @@ function PodiumSeat({ row }: Readonly<{ row: LeaderboardRow }>) {
       </span>
       <span
         className={cn(
-          'text-xl font-bold tabular-nums',
+          'text-2xl font-semibold tabular-nums tracking-tight',
           top ? 'text-warning-ink' : 'text-foreground',
         )}
       >
@@ -95,7 +95,7 @@ function standingColumns(measure: LeaderboardMeasure): DataTableColumn<Leaderboa
       numeric: true,
       className: 'w-16',
       cell: (row) => (
-        <span className={row.isYou ? 'font-bold text-primary-ink' : ''}>{row.rank}</span>
+        <span className={row.isYou ? 'font-medium text-primary-ink' : ''}>{row.rank}</span>
       ),
     },
     {
@@ -129,7 +129,7 @@ function StudentCell({ row }: Readonly<{ row: LeaderboardRow }>) {
     <div className="flex items-center gap-2.5">
       <Avatar name={row.name} size="sm" />
       <div className="min-w-0">
-        <div className={cn('text-sm font-medium', row.isYou && 'font-bold text-primary-ink')}>
+        <div className={cn('text-sm font-medium', row.isYou && 'text-primary-ink')}>
           <TruncatedText>{row.isYou ? `${row.name} · you` : row.name}</TruncatedText>
         </div>
         <div className={cn('text-2xs text-muted-foreground', row.isYou && 'text-primary-ink/75')}>

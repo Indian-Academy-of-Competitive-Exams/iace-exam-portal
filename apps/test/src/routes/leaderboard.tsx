@@ -28,6 +28,7 @@ import {
   LEADERBOARD_SCOPE_LABELS,
   PERFORMANCE_QUERY_KEY,
   PERFORMANCE_SERIES_QUERY_KEY,
+  PICKER_WIDTH,
   ROUTES,
   leaderboardQueryKey,
 } from '../lib/constants';
@@ -154,7 +155,17 @@ function Body({
 function Board({ board }: Readonly<{ board: Leaderboard }>) {
   if (board.evaluationMode === EVALUATION_MODE.PRACTICE) {
     return (
-      <Alert variant="info">A practice paper is not ranked, so no one is placed against it.</Alert>
+      <EmptyState
+        icon={Trophy}
+        title="Not ranked"
+        // ui-copy-ok: rule
+        hint="A practice paper is never placed against a cohort."
+        action={
+          <Button asChild>
+            <Link to={ROUTES.PERFORMANCE}>Go to your performance</Link>
+          </Button>
+        }
+      />
     );
   }
   if (board.cohortSize === 0) {
@@ -221,9 +232,10 @@ function Pickers({
   if (tests.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       {scope === LEADERBOARD_SCOPES.TEST ? (
         <Combobox
+          className={PICKER_WIDTH.RECORD}
           items={tests.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED }))}
           value={testId}
           onChange={onPickTest}
@@ -233,6 +245,7 @@ function Pickers({
       ) : null}
       {scope === LEADERBOARD_SCOPES.SERIES && series.length > 0 ? (
         <Combobox
+          className={PICKER_WIDTH.RECORD}
           items={series.map((row) => ({ value: row.id, label: row.name }))}
           value={seriesId}
           onChange={onPickSeries}
@@ -241,6 +254,7 @@ function Pickers({
         />
       ) : null}
       <Combobox
+        className={PICKER_WIDTH.SCOPE}
         items={SCOPE_ITEMS}
         value={scope}
         onChange={(next) => onPickScope(next as LeaderboardScope)}
