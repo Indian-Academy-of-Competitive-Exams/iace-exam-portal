@@ -226,6 +226,7 @@ export {
   SET_KINDS,
   holdsASet,
   type SetKind,
+  type FilterState,
   type ListFilter,
   type ListFilterControl,
   type ListFilterMultiControl,

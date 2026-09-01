@@ -67,22 +67,25 @@ export type ListFilter<K extends string = string> =
       render: (control: ListFilterMultiControl) => React.ReactNode;
     });
 
-/** What `useListScreen` returns, declared here so design does not import from app-kit. */
-export interface ListState<TRow> {
+/** The half of a list's state that is only about its filters. A panel has this and no rows. */
+export interface FilterState {
+  values: Readonly<Record<string, ListFilterValue>>;
+  setFilter: (key: string, value: ListFilterValue) => void;
+  clearFilters: () => void;
+  /** Both present offers the reader the choice; omit them and the filters narrow, as always. */
+  matchAny?: boolean;
+  setMatchAny?: (matchAny: boolean) => void;
+}
+
+export interface ListState<TRow> extends FilterState {
   rows: readonly TRow[];
   isLoading: boolean;
   /** Whether a page has ever arrived — the pager stays hidden until one has. */
   hasLoaded: boolean;
-  values: Readonly<Record<string, ListFilterValue>>;
-  setFilter: (key: string, value: ListFilterValue) => void;
-  clearFilters: () => void;
   /** Absent for a list that loads in full. */
   pagination?: PaginationProps;
   /** The other way a long list ends: it scrolls and pages itself, so there is no pager. */
   scroll?: DataTableScroll;
-  /** Both present offers the reader the choice; omit them and the filters narrow, as always. */
-  matchAny?: boolean;
-  setMatchAny?: (matchAny: boolean) => void;
 }
 
 export interface ListViewProps<TRow> {
@@ -105,6 +108,14 @@ export interface ListViewProps<TRow> {
 
 const isSet = (value: ListFilterValue | undefined): boolean =>
   Array.isArray(value) ? value.length > 0 : (value ?? '') !== '';
+
+/** How many of a spec are set. Read by the bar for its badge and by the list for its empty state. */
+export function activeFilterCount(
+  values: FilterState['values'],
+  filters: readonly ListFilter[],
+): number {
+  return filters.filter((filter) => isSet(values[filter.key])).length;
+}
 
 const asText = (value: ListFilterValue | undefined): string =>
   typeof value === 'string' ? value : '';
@@ -181,6 +192,61 @@ function FilterControl({
   return <Combobox {...control} clearable={false} items={filter.items} />;
 }
 
+/** A spec as a bar: primary controls inline, the rest folded, and what Clear drops. */
+export function FilterRow({
+  state,
+  filters,
+  leading,
+}: Readonly<{
+  state: FilterState;
+  filters: readonly ListFilter[];
+  leading?: React.ReactNode;
+}>) {
+  const primary = filters.filter((filter) => filter.primary);
+  const folded = filters.filter((filter) => !filter.primary);
+
+  const bind = (filter: ListFilter) => ({
+    value: state.values[filter.key],
+    onChange: (next: ListFilterValue) => state.setFilter(filter.key, next),
+  });
+
+  // With fewer than two to combine, "all" and "any" ask the same question and the choice is noise.
+  const combinable = filters.filter((filter) => !ALWAYS_NARROWS(filter)).length;
+  const offersMatch = Boolean(state.setMatchAny) && combinable > 1;
+
+  return (
+    <FilterBar
+      leading={leading}
+      activeCount={activeFilterCount(state.values, filters)}
+      advancedCount={activeFilterCount(state.values, folded)}
+      onClear={state.clearFilters}
+      matchAny={state.matchAny}
+      onMatchAnyChange={offersMatch ? state.setMatchAny : undefined}
+      advanced={
+        folded.length > 0
+          ? folded.map((filter) => (
+              <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
+                {(described) => (
+                  <FilterControl filter={filter} naming={described} {...bind(filter)} />
+                )}
+              </Field>
+            ))
+          : undefined
+      }
+    >
+      {primary.map((filter) => (
+        <div key={filter.key} className={filter.width ?? widthOf(filter)}>
+          <FilterControl
+            filter={filter}
+            naming={{ 'aria-label': filter.label }}
+            {...bind(filter)}
+          />
+        </div>
+      ))}
+    </FilterBar>
+  );
+}
+
 /** One list — filters, rows, pager. A screen holds one of these, or one per tab. */
 export function ListView<TRow>({
   list,
@@ -197,54 +263,9 @@ export function ListView<TRow>({
 }: Readonly<ListViewProps<TRow>>) {
   const fills = useInTableFrame();
   const spec = filters ?? [];
-  const primary = spec.filter((filter) => filter.primary);
-  const folded = spec.filter((filter) => !filter.primary);
-
-  const bind = (filter: ListFilter) => ({
-    value: list.values[filter.key],
-    onChange: (next: ListFilterValue) => list.setFilter(filter.key, next),
-  });
-
-  const countSet = (subset: readonly ListFilter[]) =>
-    subset.filter((filter) => isSet(list.values[filter.key])).length;
-  const activeCount = countSet(spec);
-
-  // With fewer than two to combine, "all" and "any" ask the same question and the choice is noise.
-  const combinable = spec.filter((filter) => !ALWAYS_NARROWS(filter)).length;
-  const offersMatch = Boolean(list.setMatchAny) && combinable > 1;
-
+  const activeCount = activeFilterCount(list.values, spec);
   const bar =
-    spec.length > 0 || leading ? (
-      <FilterBar
-        leading={leading}
-        activeCount={activeCount}
-        advancedCount={countSet(folded)}
-        onClear={list.clearFilters}
-        matchAny={list.matchAny}
-        onMatchAnyChange={offersMatch ? list.setMatchAny : undefined}
-        advanced={
-          folded.length > 0
-            ? folded.map((filter) => (
-                <Field key={filter.key} htmlFor={`filter-${filter.key}`} label={filter.label}>
-                  {(described) => (
-                    <FilterControl filter={filter} naming={described} {...bind(filter)} />
-                  )}
-                </Field>
-              ))
-            : undefined
-        }
-      >
-        {primary.map((filter) => (
-          <div key={filter.key} className={filter.width ?? widthOf(filter)}>
-            <FilterControl
-              filter={filter}
-              naming={{ 'aria-label': filter.label }}
-              {...bind(filter)}
-            />
-          </div>
-        ))}
-      </FilterBar>
-    ) : null;
+    spec.length > 0 || leading ? <FilterRow state={list} filters={spec} leading={leading} /> : null;
 
   const head =
     banner || bar ? (
