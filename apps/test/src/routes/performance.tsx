@@ -48,7 +48,6 @@ import {
 } from '../lib/constants';
 import { AttemptCompare } from '../components/performance/attempt-compare';
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
-import { ShareLinks } from '../components/performance/share-links';
 
 const SCOPE_ITEMS = Object.entries(PERFORMANCE_SCOPE_LABELS).map(([value, label]) => ({
   value,
@@ -235,8 +234,6 @@ function Report({
       </div>
 
       <TimeFigure time={report.time} counts={counts} />
-
-      <ShareLinks />
     </div>
   );
 }
