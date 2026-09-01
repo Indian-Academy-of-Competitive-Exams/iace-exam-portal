@@ -30,7 +30,6 @@ export const ATTEMPT_STATUS = {
 } as const;
 export const attemptStatusSchema = z.enum(ATTEMPT_STATUS);
 export type AttemptStatus = z.infer<typeof attemptStatusSchema>;
-export const ATTEMPT_STATUSES = attemptStatusSchema.options;
 
 /** What the palette shows for a question, and what the engine writes back. */
 export const ANSWER_STATE = {

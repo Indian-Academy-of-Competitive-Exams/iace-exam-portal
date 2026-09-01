@@ -41,7 +41,6 @@ export const UNLOCK_STATE = {
 } as const;
 export const unlockStateSchema = z.enum(UNLOCK_STATE);
 export type UnlockState = z.infer<typeof unlockStateSchema>;
-export const UNLOCK_STATES = unlockStateSchema.options;
 
 export const UNLOCK_REQUEST_STATUS = {
   PENDING: 'PENDING',
@@ -50,7 +49,6 @@ export const UNLOCK_REQUEST_STATUS = {
 } as const;
 export const unlockRequestStatusSchema = z.enum(UNLOCK_REQUEST_STATUS);
 export type UnlockRequestStatus = z.infer<typeof unlockRequestStatusSchema>;
-export const UNLOCK_REQUEST_STATUSES = unlockRequestStatusSchema.options;
 
 export const NOTIFICATION_TYPE = {
   TEST_ASSIGNED: 'TEST_ASSIGNED',
@@ -62,7 +60,6 @@ export const NOTIFICATION_TYPE = {
 } as const;
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
-export const NOTIFICATION_TYPES = notificationTypeSchema.options;
 
 /**
  * A coaching variant. Adding one is a row, never a migration.
@@ -230,7 +227,6 @@ export const STUDENT_SERIES_SOURCE = {
 } as const;
 export const studentSeriesSourceSchema = z.enum(STUDENT_SERIES_SOURCE);
 export type StudentSeriesSource = z.infer<typeof studentSeriesSourceSchema>;
-export const STUDENT_SERIES_SOURCES = studentSeriesSourceSchema.options;
 
 /** One series a student reaches, and what opens it — the branch gate has already been applied. */
 export const studentSeriesAccessSchema = z.object({
@@ -500,7 +496,6 @@ export const TEST_BUCKET = {
   DONE: 'DONE',
 } as const;
 export type TestBucket = (typeof TEST_BUCKET)[keyof typeof TEST_BUCKET];
-export const TEST_BUCKETS = Object.values(TEST_BUCKET) as TestBucket[];
 
 const SAT = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 

@@ -18,7 +18,6 @@ export const LEADERBOARD_SCOPES = {
 } as const;
 export const leaderboardScopeSchema = z.enum(LEADERBOARD_SCOPES);
 export type LeaderboardScope = z.infer<typeof leaderboardScopeSchema>;
-export const LEADERBOARD_SCOPE_VALUES = leaderboardScopeSchema.options;
 
 /** Which id each scope is answered by. ALL_TIME needs none — the reader IS the scope. */
 export const LEADERBOARD_SCOPE_FIELD = {

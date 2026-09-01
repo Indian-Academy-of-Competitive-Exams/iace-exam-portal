@@ -114,7 +114,6 @@ export const PERFORMANCE_SCOPES = {
 } as const;
 export const performanceScopeSchema = z.enum(PERFORMANCE_SCOPES);
 export type PerformanceScope = z.infer<typeof performanceScopeSchema>;
-export const PERFORMANCE_SCOPE_VALUES = performanceScopeSchema.options;
 
 /** Which id each scope is answered by. ALL_TIME needs none — the student IS the scope. */
 export const PERFORMANCE_SCOPE_FIELD = {

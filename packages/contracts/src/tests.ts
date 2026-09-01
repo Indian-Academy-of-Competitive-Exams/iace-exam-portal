@@ -95,7 +95,6 @@ export const PAPER_QUESTION_STATUS = {
 } as const;
 export const paperQuestionStatusSchema = z.enum(PAPER_QUESTION_STATUS);
 export type PaperQuestionStatus = z.infer<typeof paperQuestionStatusSchema>;
-export const PAPER_QUESTION_STATUSES = paperQuestionStatusSchema.options;
 
 /** Which slice of the config a scoped test covers. FULL carries none of it. */
 export const testScopeRefSchema = z.object({
