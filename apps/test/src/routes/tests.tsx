@@ -3,19 +3,18 @@
  * rather than an admin data table, so it is a status strip over series shelves, not a ListView.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFilters } from '@iace/app-kit/browser';
+import { useFilterSpec } from '@iace/app-kit/browser';
 import { ClipboardList, LockKeyhole, SearchX } from 'lucide-react';
 import {
   Alert,
   Badge,
   Button,
-  Combobox,
   EmptyState,
-  PageFrame,
   PageHeader,
-  SearchInput,
+  PanelFrame,
   Skeleton,
   plural,
+  type ListFilter,
 } from '@iace/ui';
 import {
   EXAM_FAMILIES,
@@ -29,8 +28,6 @@ import { matching, sittablesOf, type Sittable } from '../lib/catalog';
 import { SeriesShelf } from '../components/tests/series-shelf';
 import { StatusStrip } from '../components/tests/status-strip';
 
-const FILTER_KEYS = { SEARCH: 'q', FAMILY: 'family' } as const;
-
 /** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
 const familyLabel = (family: string) => family.replaceAll('_', '/');
 
@@ -41,11 +38,28 @@ const SKELETON_KEYS = ['a', 'b', 'c'];
 type Emptiness = 'NONE' | 'FILTERED' | null;
 
 export function TestsPage() {
-  const params = useFilters<(typeof FILTER_KEYS)[keyof typeof FILTER_KEYS]>();
-  const family = params.get(FILTER_KEYS.FAMILY);
-
   const queryClient = useQueryClient();
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+
+  const FILTERS = [
+    {
+      key: 'q',
+      kind: 'search',
+      label: 'Search tests',
+      primary: true,
+      placeholder: 'Search your tests',
+    },
+    {
+      key: 'family',
+      kind: 'choice',
+      label: 'Exam',
+      primary: true,
+      items: familyItems(catalog.data?.series ?? []),
+    },
+  ] as const satisfies readonly ListFilter[];
+
+  const filters = useFilterSpec(FILTERS);
+  const family = filters.values.family || ANY_FAMILY;
 
   const ask = useMutation({
     meta: { success: 'Asked. You will hear when it is answered.' },
@@ -57,31 +71,16 @@ export function TestsPage() {
   // Free series have their own tab, so this screen is the paid journey and only that.
   const reaches = (catalog.data?.series ?? []).filter((row) => row.kind !== TEST_SERIES_KIND.FREE);
   const series = reaches.filter((row) => family === ANY_FAMILY || row.examStage?.family === family);
-  const rows = matching(sittablesOf(series, now), params.get(FILTER_KEYS.SEARCH));
+  const rows = matching(sittablesOf(series, now), filters.values.q);
   const shut = series.filter((row) => row.canRequestUnlock);
   const emptiness = emptyReason(reaches.length, rows.length);
 
   return (
-    <PageFrame header={<PageHeader title="Tests" meta={plural(rows.length, 'test')} />}>
+    <PanelFrame
+      header={<PageHeader title="Tests" meta={plural(rows.length, 'test')} />}
+      filters={{ spec: FILTERS, state: filters }}
+    >
       <div className="mb-5 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchInput
-            value={params.get(FILTER_KEYS.SEARCH)}
-            onChange={(next) => params.set({ [FILTER_KEYS.SEARCH]: next })}
-            aria-label="Search your tests"
-            placeholder="Search your tests"
-            className="max-w-sm flex-1"
-          />
-          <Combobox
-            value={family}
-            onChange={(next) => params.set({ [FILTER_KEYS.FAMILY]: next })}
-            items={familyItems(catalog.data?.series ?? [])}
-            placeholder="Any exam"
-            clearable={false}
-            className="w-56"
-          />
-        </div>
-
         {catalog.data?.testBlocked ? (
           /* ui-copy-ok: consequence */
           <Alert variant="danger">
@@ -106,7 +105,7 @@ export function TestsPage() {
         rows={rows}
         now={now}
       />
-    </PageFrame>
+    </PanelFrame>
   );
 }
 

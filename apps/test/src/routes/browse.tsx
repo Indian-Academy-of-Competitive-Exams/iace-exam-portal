@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Gift, Plus } from 'lucide-react';
+import { Gift, Plus, SearchX } from 'lucide-react';
 import {
   FREE_SERIES_EXAM_CAP,
   TEST_SERIES_KIND,
@@ -13,19 +13,34 @@ import {
   Card,
   CardContent,
   EmptyState,
-  PageFrame,
   PageHeader,
+  PanelFrame,
   SectionHeading,
   Skeleton,
   TruncatedText,
   plural,
+  type ListFilter,
 } from '@iace/ui';
+import { useFilterSpec } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { BROWSE_QUERY_KEY, CATALOG_QUERY_KEY } from '../lib/constants';
-import { sittablesOf, type Sittable } from '../lib/catalog';
+import { matching, sittablesOf, type Sittable } from '../lib/catalog';
 import { SeriesShelf } from '../components/tests/series-shelf';
 
 const SKELETON_KEYS = ['a', 'b'];
+
+const FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search free tests',
+    primary: true,
+    placeholder: 'Search by name',
+  },
+] as const satisfies readonly ListFilter[];
+
+/** Reaching nothing and searching for nothing are different facts, and they read differently. */
+type Emptiness = 'NONE' | 'FILTERED' | null;
 
 /** Free content reads exactly as paid content does — the same shelves, in their own tab. */
 export function BrowsePage() {
@@ -33,6 +48,7 @@ export function BrowsePage() {
 
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
   const open = useQuery({ queryKey: BROWSE_QUERY_KEY, queryFn: () => api.me.openSeries() });
+  const filters = useFilterSpec(FILTERS);
 
   const ask = useMutation({
     meta: { success: 'Asked. You will hear when it is answered.' },
@@ -45,14 +61,20 @@ export function BrowsePage() {
 
   const now = new Date();
   const mine = (catalog.data?.series ?? []).filter((row) => row.kind === TEST_SERIES_KIND.FREE);
-  const rows = sittablesOf(mine, now);
+  const rows = matching(sittablesOf(mine, now), filters.values.q);
 
   const examsHeld = open.data?.examsHeld ?? [];
   const atCap = examsHeld.length >= FREE_SERIES_EXAM_CAP;
-  const askable = open.data?.series ?? [];
+  const reachable = open.data?.series ?? [];
+  const askable = matchingSeries(reachable, filters.values.q);
+  const reached = mine.length > 0 || reachable.length > 0;
+  const emptiness = emptyReason(reached, rows.length + askable.length);
 
   return (
-    <PageFrame header={<PageHeader title="Free tests" meta={plural(rows.length, 'test')} />}>
+    <PanelFrame
+      header={<PageHeader title="Free tests" meta={plural(rows.length, 'test')} />}
+      filters={{ spec: FILTERS, state: filters }}
+    >
       {atCap ? (
         /* ui-copy-ok: limit */
         <Alert variant="info" className="mb-5">
@@ -93,13 +115,26 @@ export function BrowsePage() {
             </section>
           ) : null}
 
-          {rows.length === 0 && askable.length === 0 ? (
+          {emptiness === 'NONE' ? (
             <EmptyState icon={Gift} title="No free tests to ask for" />
           ) : null}
+          {emptiness === 'FILTERED' ? <EmptyState icon={SearchX} title="Nothing matches" /> : null}
         </div>
       )}
-    </PageFrame>
+    </PanelFrame>
   );
+}
+
+/** Only the series a name search keeps — the same rule `matching` applies to a test's own title. */
+function matchingSeries<T extends { name: string }>(series: readonly T[], term: string): T[] {
+  const wanted = term.trim().toLowerCase();
+  if (wanted === '') return [...series];
+  return series.filter((row) => row.name.toLowerCase().includes(wanted));
+}
+
+function emptyReason(reached: boolean, showing: number): Emptiness {
+  if (!reached) return 'NONE';
+  return showing === 0 ? 'FILTERED' : null;
 }
 
 function shelves(
