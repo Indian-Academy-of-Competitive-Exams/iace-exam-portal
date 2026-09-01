@@ -62,7 +62,7 @@ interface DistributionRow extends DistributionBand {
 
 const DEFAULT_HEIGHT = 280;
 const X_AXIS_HEIGHT = 22;
-const MARKER_TOP = 6;
+const MARKER_TOP = 14;
 const MARKER_STEP = 15;
 const BIN_GAP = 2;
 const REST_OPACITY = 0.45;

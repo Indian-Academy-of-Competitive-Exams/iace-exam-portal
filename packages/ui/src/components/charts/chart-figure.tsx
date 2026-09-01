@@ -23,7 +23,7 @@ export function ChartFigure({
   className,
 }: Readonly<ChartFigureProps>) {
   return (
-    <figure className={cn('flex flex-col gap-3 bg-chart-surface p-4', className)}>
+    <figure className={cn('flex flex-col gap-3 rounded-lg bg-chart-surface p-4', className)}>
       <figcaption className="flex items-start justify-between gap-4">
         <SectionHeading className="min-w-0" title={title} meta={meta} />
         {figure ? <div className="shrink-0">{figure}</div> : null}
