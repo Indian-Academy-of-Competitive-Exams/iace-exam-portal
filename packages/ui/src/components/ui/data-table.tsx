@@ -37,6 +37,8 @@ export interface DataTableProps<TRow> {
   expand?: DataTableExpand<TRow>;
   /** Given this, the rows scroll in a capped panel that pages as the reader nears its end. */
   scroll?: DataTableScroll;
+  /** Marks a row apart from its neighbours — the reader's own line, a row a filter landed on. */
+  rowClassName?: (row: TRow) => string | undefined;
 }
 
 /** A capped, scrolling panel. Omit the paging pair for a list already holding everything. */
@@ -76,6 +78,7 @@ export function DataTable<TRow>({
   selection,
   expand,
   scroll,
+  rowClassName,
 }: Readonly<DataTableProps<TRow>>) {
   const [open, setOpen] = React.useState<ReadonlySet<string>>(new Set());
 
@@ -144,7 +147,7 @@ export function DataTable<TRow>({
           >
             {rows.map((row) => (
               <React.Fragment key={rowKey(row)}>
-                <TableRow>
+                <TableRow className={rowClassName?.(row)}>
                   {expand ? (
                     <TableCell>
                       <button

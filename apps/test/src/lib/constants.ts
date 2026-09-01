@@ -1,12 +1,16 @@
-import { BarChart3, ClipboardList, Gift, KeyRound, User } from 'lucide-react';
+import { BarChart3, ClipboardList, Gift, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { type BadgeProps } from '@iace/ui';
 import {
   ANSWER_STATE,
+  LEADERBOARD_MEASURES,
+  LEADERBOARD_SCOPES,
   MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
   type AnswerState,
   type LanguageCode,
+  type LeaderboardMeasure,
+  type LeaderboardScope,
   type MasteryTrend,
   type PerformanceScope,
 } from '@iace/contracts';
@@ -35,6 +39,7 @@ export const ROUTES = {
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
   REVIEW_PATTERN: '/attempts/:attemptId/review',
   PERFORMANCE: '/performance',
+  LEADERBOARD: '/leaderboard',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -44,6 +49,7 @@ export const ROUTES = {
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
+  { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
   { to: ROUTES.BROWSE, label: 'Free tests', icon: Gift },
 ];
 
@@ -67,6 +73,29 @@ export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
   [PERFORMANCE_SCOPES.TEST]: 'This test',
   [PERFORMANCE_SCOPES.SERIES]: 'This series',
   [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
+};
+
+/** One board, keyed by what it is OF, so swapping scope or paper never reads a stale one. */
+export const leaderboardQueryKey = (scope: LeaderboardScope, scopeId: string) =>
+  ['me', 'leaderboard', scope, scopeId] as const;
+
+/** Marks rank one paper; across papers only a percentile does. Both are "the number" on a row. */
+export const LEADERBOARD_MEASURE_LABELS: Readonly<Record<LeaderboardMeasure, string>> = {
+  [LEADERBOARD_MEASURES.MARKS]: 'Marks',
+  [LEADERBOARD_MEASURES.PERCENTILE_POINTS]: 'Points',
+};
+
+export const LEADERBOARD_SCOPE_LABELS: Readonly<Record<LeaderboardScope, string>> = {
+  [LEADERBOARD_SCOPES.TEST]: 'This test',
+  [LEADERBOARD_SCOPES.SERIES]: 'Series points',
+  [LEADERBOARD_SCOPES.ALL_TIME]: 'All time',
+};
+
+/** What the three podium seats are called. Nobody says "1st" about a topper. */
+export const PODIUM_LABELS: Readonly<Record<number, string>> = {
+  1: 'Topper',
+  2: '2nd',
+  3: '3rd',
 };
 
 /** The series the SERIES scope may be asked about, which only a sitting puts on the list. */

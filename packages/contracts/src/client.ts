@@ -157,6 +157,12 @@ import {
   type SatSeries,
 } from './stats';
 import {
+  LEADERBOARD_ROUTES,
+  leaderboardSchema,
+  type Leaderboard,
+  type LeaderboardQueryInput,
+} from './leaderboard';
+import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
   finalizeResultSchema,
@@ -659,6 +665,12 @@ export function createApiClient(options: ApiClientOptions) {
       /** Every series they have sat a test in — the SERIES scope has nothing else to offer. */
       performanceSeries: (): Promise<SatSeries[]> =>
         request(PERFORMANCE_ROUTES.mySeries, { schema: satSeriesListSchema }),
+
+      /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
+      leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
+        request(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, {
+          schema: leaderboardSchema,
+        }),
     },
 
     admin: {

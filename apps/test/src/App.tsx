@@ -17,6 +17,7 @@ import { SubmittedPage } from './routes/submitted';
 import { ScoreCardPage } from './routes/score-card';
 import { ReviewPage } from './routes/review';
 import { PerformancePage } from './routes/performance';
+import { LeaderboardPage } from './routes/leaderboard';
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
@@ -39,6 +40,7 @@ export function App() {
           <Route path={ROUTES.HOME} element={<DashboardPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           <Route path={ROUTES.PERFORMANCE} element={<PerformancePage />} />
+          <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />

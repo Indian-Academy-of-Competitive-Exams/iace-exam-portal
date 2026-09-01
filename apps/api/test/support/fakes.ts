@@ -243,6 +243,10 @@ export class FakeRedis {
       return Promise.resolve(seat === -1 ? null : seat);
     },
 
+    /** Best first, inclusive at both ends — the slice a board's podium and neighbourhood are cut from. */
+    zrevrange: (key: string, start: number, stop: number): Promise<string[]> =>
+      Promise.resolve(this.descending(key).slice(start, stop < 0 ? undefined : stop + 1)),
+
     zcount: (key: string, min: string | number, max: string | number): Promise<number> => {
       const low = zBound(min);
       const high = zBound(max);
@@ -4911,6 +4915,150 @@ export class FakePerformancePrisma {
         ),
       ),
   };
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}
+
+// --------------------------------------------------------------------------- the leaderboard board
+// ---------------------------------------------------------------------------
+
+/** One sitting flattened with the student it belongs to — everything a board row could draw on. */
+export interface FakeBoardSitting {
+  id: string;
+  testId: string;
+  studentId: string;
+  isGraded: boolean;
+  status: AttemptStatus;
+  score: number | null;
+  lastRank: number | null;
+  startedAt: Date;
+  submittedAt: Date | null;
+  fullName: string | null;
+  branch: string | null;
+  mobile: string;
+}
+
+export function makeBoardSitting(overrides: Partial<FakeBoardSitting> = {}): FakeBoardSitting {
+  const startedAt = overrides.startedAt ?? new Date('2026-09-01T05:00:00.000Z');
+  return {
+    id: 'att_1',
+    testId: 'tst_1',
+    studentId: 'stu_1',
+    isGraded: true,
+    status: ATTEMPT_STATUS.EVALUATED,
+    score: 60,
+    lastRank: null,
+    startedAt,
+    submittedAt: new Date(startedAt.getTime() + 20 * 60_000),
+    fullName: 'Sai Teja Reddy',
+    branch: 'AMEERPET',
+    mobile: '9876500001',
+    ...overrides,
+  };
+}
+
+/** The papers a board can be asked about, and the series that group them. */
+export interface FakeBoardTest {
+  id: string;
+  title: string | null;
+  evaluationMode: EvaluationMode;
+}
+
+export interface FakeBoardSeries {
+  id: string;
+  name: string;
+  testIds: string[];
+}
+
+/** Rows a ranked aggregate would return. Postgres does that ranking, so a test hands it over. */
+export interface FakeBoardPointsRow {
+  rank: number;
+  points: number;
+  sittings: number;
+  cohort: number;
+  name: string | null;
+  branch: string | null;
+  is_you: boolean;
+  prior_rank: number | null;
+}
+
+export class FakeBoardPrisma {
+  constructor(
+    readonly sittings: FakeBoardSitting[] = [],
+    readonly tests: FakeBoardTest[] = [],
+    readonly series: FakeBoardSeries[] = [],
+    readonly points: FakeBoardPointsRow[] = [],
+  ) {}
+
+  /** What the raw ranking query was asked, so a test can prove it ran rather than guessing. */
+  rawReads = 0;
+
+  private testOf(testId: string): FakeBoardTest {
+    return (
+      this.tests.find((row) => row.id === testId) ?? {
+        id: testId,
+        title: null,
+        evaluationMode: EVALUATION_MODE.RANKED,
+      }
+    );
+  }
+
+  readonly attempt = {
+    findFirst: ({
+      where,
+    }: {
+      where: { testId: string; studentId: string; isGraded: boolean; status: AttemptStatus };
+    }) => {
+      const row = this.sittings.find(
+        (sitting) =>
+          sitting.testId === where.testId &&
+          sitting.studentId === where.studentId &&
+          sitting.isGraded === where.isGraded &&
+          sitting.status === where.status,
+      );
+      if (!row) return Promise.resolve(null);
+      const test = this.testOf(row.testId);
+      return Promise.resolve({
+        id: row.id,
+        lastRank: row.lastRank,
+        test: { title: test.title, evaluationMode: test.evaluationMode },
+      });
+    },
+
+    /** Hands back only what the select asks for: a leak here would be the code's, not the fake's. */
+    findMany: ({ where }: { where: { id: { in: string[] } } }) =>
+      Promise.resolve(
+        this.sittings
+          .filter((row) => where.id.in.includes(row.id))
+          .map((row) => ({
+            id: row.id,
+            score: row.score,
+            lastRank: row.lastRank,
+            student: {
+              fullName: row.fullName,
+              currentBranch: row.branch === null ? null : { name: row.branch },
+            },
+          })),
+      ),
+  };
+
+  readonly testSeries = {
+    findFirst: ({ where }: { where: { id: string } }) => {
+      const row = this.series.find((candidate) => candidate.id === where.id);
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve({
+        name: row.name,
+        tests: row.testIds.map((testId) => ({ testId })),
+      });
+    },
+  };
+
+  $queryRaw() {
+    this.rawReads += 1;
+    return Promise.resolve(this.points);
+  }
 
   asService(): PrismaService {
     return this as unknown as PrismaService;
