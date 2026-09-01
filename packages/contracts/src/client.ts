@@ -163,6 +163,16 @@ import {
   type LeaderboardQueryInput,
 } from './leaderboard';
 import {
+  PERFORMANCE_SHARE_ROUTES,
+  performanceShareSchema,
+  performanceSharesSchema,
+  sharedReportSchema,
+  type CreatePerformanceShareInput,
+  type PerformanceShare,
+  type PerformanceShares,
+  type SharedReport,
+} from './shares';
+import {
   ADMIN_TEST_PAPER_ROUTES,
   ADMIN_TEST_ROUTES,
   finalizeResultSchema,
@@ -505,6 +515,13 @@ export function createApiClient(options: ApiClientOptions) {
     health: (): Promise<HealthResponse> =>
       request('/health', { schema: healthResponseSchema, anonymous: true }),
 
+    /** The one unauthenticated read of student data: a shared report, opened by its token. */
+    sharedReport: (token: string): Promise<SharedReport> =>
+      request(PERFORMANCE_SHARE_ROUTES.public(token), {
+        schema: sharedReportSchema,
+        anonymous: true,
+      }),
+
     auth: {
       /** Student signup or PIN reset, step 1. */
       requestStudentOtp: (input: RequestStudentOtpInput): Promise<OtpRequestResponse> =>
@@ -671,6 +688,23 @@ export function createApiClient(options: ApiClientOptions) {
         request(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, {
           schema: leaderboardSchema,
         }),
+
+      /** Their own links, live and dead, and the sittings a new one could open. */
+      performanceShares: (): Promise<PerformanceShares> =>
+        request(PERFORMANCE_SHARE_ROUTES.mine, { schema: performanceSharesSchema }),
+
+      sharePerformance: (input: CreatePerformanceShareInput): Promise<PerformanceShare> =>
+        request(PERFORMANCE_SHARE_ROUTES.mine, {
+          method: 'POST',
+          body: input,
+          schema: performanceShareSchema,
+        }),
+
+      revokePerformanceShare: (id: string): Promise<PerformanceShare> =>
+        request(PERFORMANCE_SHARE_ROUTES.revokeMine(id), {
+          method: 'POST',
+          schema: performanceShareSchema,
+        }),
     },
 
     admin: {
@@ -715,6 +749,25 @@ export function createApiClient(options: ApiClientOptions) {
         performance: (id: string, query: PerformanceReportQueryInput): Promise<PerformanceReport> =>
           request(`${PERFORMANCE_ROUTES.ofStudent(id)}${queryString({ ...query })}`, {
             schema: performanceReportSchema,
+          }),
+
+        performanceShares: (id: string): Promise<PerformanceShares> =>
+          request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), { schema: performanceSharesSchema }),
+
+        sharePerformance: (
+          id: string,
+          input: CreatePerformanceShareInput,
+        ): Promise<PerformanceShare> =>
+          request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), {
+            method: 'POST',
+            body: input,
+            schema: performanceShareSchema,
+          }),
+
+        revokePerformanceShare: (id: string, shareId: string): Promise<PerformanceShare> =>
+          request(PERFORMANCE_SHARE_ROUTES.revokeOfStudent(id, shareId), {
+            method: 'POST',
+            schema: performanceShareSchema,
           }),
       },
 

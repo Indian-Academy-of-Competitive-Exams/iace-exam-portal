@@ -44,6 +44,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { TestSeriesPicker } from '../components/access-picker';
+import { SharedReportsCard } from '../components/shared-reports';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-format';
 import {
@@ -762,7 +763,12 @@ export function StudentDetailPage() {
           />
         </>
       }
-      after={<SeriesAccessCard detail={detail} />}
+      after={
+        <>
+          <SeriesAccessCard detail={detail} />
+          <SharedReportsCard studentId={detail.id} name={detail.fullName ?? detail.mobile} />
+        </>
+      }
     >
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">

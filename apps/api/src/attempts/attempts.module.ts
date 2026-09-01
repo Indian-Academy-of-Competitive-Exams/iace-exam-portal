@@ -9,6 +9,12 @@ import { AccessModule } from '../access';
 import { AttemptsController } from './attempts.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
 import { MeLeaderboardController } from './leaderboard.controller';
+import {
+  AdminPerformanceShareController,
+  MePerformanceShareController,
+  PublicReportController,
+} from './performance-share.controller';
+import { PerformanceShareService } from './performance-share.service';
 import { LeaderboardViewService } from './leaderboard-view.service';
 import { PerformanceAnalyticsService } from './performance.service';
 import { AttemptsService } from './attempts.service';
@@ -31,6 +37,9 @@ import { SubmitService } from './submit.service';
     MePerformanceController,
     AdminPerformanceController,
     MeLeaderboardController,
+    PublicReportController,
+    MePerformanceShareController,
+    AdminPerformanceShareController,
   ],
   providers: [
     AttemptsService,
@@ -40,6 +49,7 @@ import { SubmitService } from './submit.service';
     LeaderboardService,
     LeaderboardViewService,
     PerformanceAnalyticsService,
+    PerformanceShareService,
     LeaderboardRebuildProcessor,
     ScoringOutbox,
     ScoringProcessor,

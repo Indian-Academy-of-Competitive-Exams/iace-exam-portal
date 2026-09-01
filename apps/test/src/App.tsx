@@ -18,6 +18,7 @@ import { ScoreCardPage } from './routes/score-card';
 import { ReviewPage } from './routes/review';
 import { PerformancePage } from './routes/performance';
 import { LeaderboardPage } from './routes/leaderboard';
+import { SharedReportPage } from './routes/shared-report';
 
 /** Phase 0 routing: a login screen and one authed shell. */
 export function App() {
@@ -26,6 +27,8 @@ export function App() {
   return (
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      {/* Outside the guard on purpose: a shared report is read by somebody with no account. */}
+      <Route path={ROUTES.SHARED_REPORT_PATTERN} element={<SharedReportPage />} />
       <Route
         element={
           <ProtectedRoute

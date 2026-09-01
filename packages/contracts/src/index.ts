@@ -15,6 +15,7 @@ export * from './access';
 export * from './question-versions';
 export * from './stats';
 export * from './leaderboard';
+export * from './shares';
 export * from './imports';
 export * from './questions';
 export * from './health';

@@ -5064,3 +5064,182 @@ export class FakeBoardPrisma {
     return this as unknown as PrismaService;
   }
 }
+
+// --------------------------------------------------------------------------- the public share
+// ---------------------------------------------------------------------------
+
+/** One link, exactly as the column holds it — the fake never decides whether it is still open. */
+export interface FakeShareRow {
+  id: string;
+  token: string;
+  attemptId: string;
+  createdByAdminId: string | null;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
+export function makeShare(overrides: Partial<FakeShareRow> = {}): FakeShareRow {
+  return {
+    id: 'shr_1',
+    token: 'a-token-nobody-guessed',
+    attemptId: 'att_1',
+    createdByAdminId: null,
+    expiresAt: null,
+    revokedAt: null,
+    createdAt: new Date('2026-08-30T06:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+/** A sitting flattened with the identity a shared report is allowed to name, and nothing else. */
+export interface FakeShareSitting {
+  id: string;
+  studentId: string;
+  status: AttemptStatus;
+  submittedAt: Date | null;
+  title: string | null;
+  fullName: string | null;
+  branch: string | null;
+  studentDeletedAt: Date | null;
+}
+
+export function makeShareSitting(overrides: Partial<FakeShareSitting> = {}): FakeShareSitting {
+  return {
+    id: 'att_1',
+    studentId: 'stu_1',
+    status: ATTEMPT_STATUS.EVALUATED,
+    submittedAt: new Date('2026-08-20T06:00:00.000Z'),
+    title: 'SSC CGL Tier 1 — Mock 1',
+    fullName: 'Harshith Diyyala',
+    branch: 'AMEERPET',
+    studentDeletedAt: null,
+    ...overrides,
+  };
+}
+
+interface ShareWhere {
+  id?: string;
+  token?: string;
+  status?: AttemptStatus;
+  studentId?: string;
+  student?: { deletedAt: null };
+  attempt?: { studentId: string };
+}
+
+/** Only the columns a share touches. The report itself is built by the analytics fake beside it. */
+export class FakeSharePrisma {
+  constructor(
+    readonly shares: FakeShareRow[] = [],
+    readonly sittings: FakeShareSitting[] = [],
+  ) {}
+
+  private minted = 0;
+
+  private sittingOf(attemptId: string): FakeShareSitting | undefined {
+    return this.sittings.find((row) => row.id === attemptId);
+  }
+
+  private projected(row: FakeShareRow) {
+    const sitting = this.sittingOf(row.attemptId);
+    return {
+      ...row,
+      attempt: {
+        submittedAt: sitting?.submittedAt ?? null,
+        test: { title: sitting?.title ?? null },
+      },
+    };
+  }
+
+  private ownedBy(row: FakeShareRow, studentId: string): boolean {
+    return this.sittingOf(row.attemptId)?.studentId === studentId;
+  }
+
+  readonly performanceShare = {
+    findUnique: ({ where }: { where: { token: string } }) =>
+      Promise.resolve(this.shares.find((row) => row.token === where.token) ?? null),
+
+    findFirst: ({ where }: { where: ShareWhere }) => {
+      const found = this.shares.find(
+        (row) =>
+          row.id === where.id &&
+          (where.attempt === undefined || this.ownedBy(row, where.attempt.studentId)),
+      );
+      return Promise.resolve(found === undefined ? null : this.projected(found));
+    },
+
+    findMany: ({ where }: { where: { attempt: { studentId: string } } }) =>
+      Promise.resolve(
+        this.shares
+          .filter((row) => this.ownedBy(row, where.attempt.studentId))
+          .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .map((row) => this.projected(row)),
+      ),
+
+    create: ({
+      data,
+    }: {
+      data: {
+        token: string;
+        attemptId: string;
+        createdByAdminId: string | null;
+        expiresAt: Date | null;
+      };
+    }) => {
+      this.minted += 1;
+      const row: FakeShareRow = {
+        ...data,
+        id: `shr_${this.minted}`,
+        revokedAt: null,
+        createdAt: new Date(),
+      };
+      this.shares.push(row);
+      return Promise.resolve(this.projected(row));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: { revokedAt: Date } }) => {
+      const row = this.shares.find((candidate) => candidate.id === where.id)!;
+      row.revokedAt = data.revokedAt;
+      return Promise.resolve(this.projected(row));
+    },
+  };
+
+  readonly attempt = {
+    findFirst: ({ where }: { where: ShareWhere }) => {
+      const found = this.sittings.find(
+        (row) =>
+          row.id === where.id &&
+          (where.status === undefined || row.status === where.status) &&
+          (where.studentId === undefined || row.studentId === where.studentId) &&
+          (where.student === undefined || row.studentDeletedAt === null),
+      );
+      if (found === undefined) return Promise.resolve(null);
+      return Promise.resolve({
+        id: found.id,
+        studentId: found.studentId,
+        submittedAt: found.submittedAt,
+        student: {
+          fullName: found.fullName,
+          currentBranch: found.branch === null ? null : { name: found.branch },
+        },
+      });
+    },
+
+    findMany: ({ where, take }: { where: ShareWhere; take?: number }) =>
+      Promise.resolve(
+        this.sittings
+          .filter((row) => row.studentId === where.studentId && row.status === where.status)
+          .toSorted((a, b) => (b.submittedAt?.getTime() ?? 0) - (a.submittedAt?.getTime() ?? 0))
+          .slice(0, take)
+          .map((row) => ({
+            id: row.id,
+            submittedAt: row.submittedAt,
+            test: { title: row.title },
+          })),
+      ),
+  };
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}

@@ -1,0 +1,190 @@
+/**
+ * Minting, revoking and reading the one unauthenticated door in the platform.
+ *
+ * Every refusal answers in the same words, so nothing is learnt from being told no, and
+ * revocation and expiry are read before any report is loaded.
+ */
+import { Injectable } from '@nestjs/common';
+import {
+  ATTEMPT_STATUS,
+  AppException,
+  ErrorCodes,
+  PERFORMANCE_SCOPES,
+  type CreatePerformanceShareInput,
+  type PerformanceShare,
+  type PerformanceShares,
+  type ShareableSitting,
+  type SharedReport,
+} from '@iace/contracts';
+import { PrismaService } from '../prisma/prisma.service';
+import { PerformanceAnalyticsService } from './performance.service';
+import { newShareToken, shareExpiresAt, shareIsLive, sharedReportOf } from './performance-share';
+
+/** One refusal for every way a link can fail, so nothing is learnt from being told no. */
+const NO_SUCH_REPORT = 'This report is not available';
+const NO_SUCH_SITTING = 'No such sitting';
+const NO_SUCH_SHARE = 'No such shared report';
+
+/** How many sittings the share picker offers. Older than this and nobody is sharing it. */
+const SHAREABLE_SITTING_CAP = 50;
+
+const SHARE_SELECT = {
+  id: true,
+  token: true,
+  attemptId: true,
+  expiresAt: true,
+  revokedAt: true,
+  createdAt: true,
+  attempt: { select: { submittedAt: true, test: { select: { title: true } } } },
+} as const;
+
+interface ShareRow {
+  id: string;
+  token: string;
+  attemptId: string;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+  attempt: { submittedAt: Date | null; test: { title: string | null } };
+}
+
+@Injectable()
+export class PerformanceShareService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics: PerformanceAnalyticsService,
+  ) {}
+
+  /** The owner's view: their live and dead links, and the sittings a new one could open. */
+  async list(studentId: string): Promise<PerformanceShares> {
+    const now = new Date();
+    const [shares, sittings] = await Promise.all([
+      this.prisma.performanceShare.findMany({
+        where: { attempt: { studentId } },
+        orderBy: { createdAt: 'desc' },
+        select: SHARE_SELECT,
+      }),
+      this.prisma.attempt.findMany({
+        where: { studentId, status: ATTEMPT_STATUS.EVALUATED },
+        orderBy: { submittedAt: { sort: 'desc', nulls: 'last' } },
+        take: SHAREABLE_SITTING_CAP,
+        select: { id: true, submittedAt: true, test: { select: { title: true } } },
+      }),
+    ]);
+
+    return {
+      shares: shares.map((row) => toShare(row, now)),
+      sittings: sittings.map(toSitting),
+    };
+  }
+
+  /** A student may only ever share a sitting of their own, and only one that has been marked. */
+  async create(
+    studentId: string,
+    input: CreatePerformanceShareInput,
+    createdByAdminId: string | null,
+  ): Promise<PerformanceShare> {
+    const now = new Date();
+    const sitting = await this.prisma.attempt.findFirst({
+      where: { id: input.attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
+      select: { id: true },
+    });
+    if (!sitting) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SITTING);
+
+    const share = await this.prisma.performanceShare.create({
+      data: {
+        token: newShareToken(),
+        attemptId: sitting.id,
+        createdByAdminId,
+        expiresAt: shareExpiresAt(input.expiresOn, now),
+      },
+      select: SHARE_SELECT,
+    });
+    return toShare(share, now);
+  }
+
+  /** Either party may pull any link to this student's data; a second revoke keeps the first date. */
+  async revoke(studentId: string, shareId: string): Promise<PerformanceShare> {
+    const now = new Date();
+    const share = await this.prisma.performanceShare.findFirst({
+      where: { id: shareId, attempt: { studentId } },
+      select: SHARE_SELECT,
+    });
+    if (!share) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SHARE);
+    if (share.revokedAt !== null) return toShare(share, now);
+
+    const revoked = await this.prisma.performanceShare.update({
+      where: { id: share.id },
+      data: { revokedAt: now },
+      select: SHARE_SELECT,
+    });
+    return toShare(revoked, now);
+  }
+
+  /** The public read. Nothing is loaded until the link has proved it is still open. */
+  async readPublic(token: string): Promise<SharedReport> {
+    const now = new Date();
+    const share = await this.prisma.performanceShare.findUnique({
+      where: { token },
+      select: { attemptId: true, expiresAt: true, revokedAt: true },
+    });
+    if (!share || !shareIsLive(share, now)) {
+      throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_REPORT);
+    }
+
+    const sitting = await this.prisma.attempt.findFirst({
+      where: {
+        id: share.attemptId,
+        status: ATTEMPT_STATUS.EVALUATED,
+        student: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        studentId: true,
+        submittedAt: true,
+        student: {
+          select: { fullName: true, currentBranch: { select: { name: true } } },
+        },
+      },
+    });
+    if (!sitting) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_REPORT);
+
+    const report = await this.analytics.report(sitting.studentId, {
+      scope: PERFORMANCE_SCOPES.ATTEMPT,
+      attemptId: sitting.id,
+    });
+
+    return sharedReportOf({
+      report,
+      studentName: sitting.student.fullName,
+      branchName: sitting.student.currentBranch?.name ?? null,
+      submittedAt: sitting.submittedAt?.toISOString() ?? null,
+    });
+  }
+}
+
+function toShare(row: ShareRow, now: Date): PerformanceShare {
+  return {
+    id: row.id,
+    token: row.token,
+    attemptId: row.attemptId,
+    testTitle: row.attempt.test.title,
+    submittedAt: row.attempt.submittedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+    isLive: shareIsLive(row, now),
+  };
+}
+
+function toSitting(row: {
+  id: string;
+  submittedAt: Date | null;
+  test: { title: string | null };
+}): ShareableSitting {
+  return {
+    attemptId: row.id,
+    testTitle: row.test.title,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+  };
+}

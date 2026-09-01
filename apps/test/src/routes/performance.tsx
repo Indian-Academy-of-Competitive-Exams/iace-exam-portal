@@ -46,6 +46,7 @@ import {
   TrajectoryFigure,
 } from '../components/performance/report-figures';
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
+import { ShareLinks } from '../components/performance/share-links';
 import { paperCounts } from '../lib/performance';
 
 const SCOPE_ITEMS = Object.entries(PERFORMANCE_SCOPE_LABELS).map(([value, label]) => ({
@@ -234,6 +235,8 @@ function Report({
       </div>
 
       <TimeFigure time={report.time} counts={counts} />
+
+      <ShareLinks />
     </div>
   );
 }

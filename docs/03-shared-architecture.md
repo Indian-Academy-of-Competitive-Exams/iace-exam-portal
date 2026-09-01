@@ -117,7 +117,7 @@ may quietly start writing, which is how the boundary erodes.
 | configs                | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                | existing    |
 | audit                  | `RowActionLog`, `ImportLog`                                                                               | existing    |
 | tests                  | `Test`, `TestSeriesTest`, `PaperQuestion`, `BranchTestSchedule`                                           | existing    |
-| attempts (exam engine) | `Attempt`, `AttemptQuestion`, `OutboxEvent`                                                               | existing    |
+| attempts (exam engine) | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`                                           | existing    |
 | notifications          | `Notification`                                                                                            | existing    |
 | — (analytics rollups)  | `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` | provisioned |
 
@@ -127,6 +127,19 @@ student's window. What it does is BLOCK STARTING a test, never hide one: `assert
 the sitting once the branch's late-entry cap has passed, while `assertReachable` still lets the
 student open the test and read about it. Those two guards are the rule, and they are separate on
 purpose.
+
+**`PerformanceShare` is the ONE unauthenticated route to student data in the platform.** A row is a
+revocable public link onto one sitting's curated report, addressed by a 32-byte token from
+`node:crypto` rather than by its cuid id, which is time-ordered and walkable. `GET /public/reports/:token`
+is the only `@Public()` route outside auth and health; minting and revoking both need a signed-in
+identity, and either the student or an admin holding `STUDENT_PERFORMANCE` may revoke. Revocation
+and expiry are read on the same request that would have served the payload, and every refusal —
+unknown, revoked, expired, sitting gone — answers in identical words so nothing is learnt from
+being told no. The payload is a WHITELIST in `packages/contracts/src/shares.ts`: the shared
+student's own name, branch, marks, standing, an ANONYMOUS cohort distribution and section scores.
+Never an answer key, never per-question correctness, never a second student — the leaderboard's
+named rows stay signed-in-only. The attempt FK is `ON DELETE RESTRICT` so a link can never outlive
+what it opens.
 
 **The six analytics models have no owner because no code touches them.** What each one backs is in
 `docs/02-mocktest-feature-spec.md` §6; their columns are in `docs/schema-target.dbml`. `TestQuestionStat` is read

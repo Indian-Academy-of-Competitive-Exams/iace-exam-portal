@@ -39,6 +39,8 @@ export const ROUTES = {
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
   REVIEW_PATTERN: '/attempts/:attemptId/review',
   PERFORMANCE: '/performance',
+  /** Public: no session, no nav, one student's own report opened by a token. */
+  SHARED_REPORT_PATTERN: '/r/:token',
   LEADERBOARD: '/leaderboard',
   PROFILE: '/profile',
   ACCOUNT: '/account',
@@ -97,6 +99,12 @@ export const PODIUM_LABELS: Readonly<Record<number, string>> = {
   2: '2nd',
   3: '3rd',
 };
+
+/** Every link this student has handed out, and the sittings a new one could open. */
+export const PERFORMANCE_SHARES_QUERY_KEY = ['me', 'performance', 'shares'] as const;
+
+/** The public read, keyed by the token so two links never share a cache entry. */
+export const sharedReportQueryKey = (token: string) => ['public', 'report', token] as const;
 
 /** The series the SERIES scope may be asked about, which only a sitting puts on the list. */
 export const PERFORMANCE_SERIES_QUERY_KEY = ['me', 'performance', 'series'] as const;
