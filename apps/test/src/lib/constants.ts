@@ -35,6 +35,11 @@ export const ROUTES = {
   /** Where a sitting lands the moment it ends, while the marking job is still running. */
   SUBMITTED: (attemptId: string) => `/attempts/${attemptId}/submitted`,
   SUBMITTED_PATTERN: '/attempts/:attemptId/submitted',
+  /** One test, whole: five tabs over the sitting a student is asking about. */
+  REPORT: (attemptId: string) => `/attempts/${attemptId}/report`,
+  REPORT_PATTERN: '/attempts/:attemptId/report',
+  REPORT_TAB: (attemptId: string, tab: string) => `/attempts/${attemptId}/report/${tab}`,
+  /** Where a link written before the shell existed lands; each redirects into its tab. */
   SCORE_CARD: (attemptId: string) => `/attempts/${attemptId}/score-card`,
   SCORE_CARD_PATTERN: '/attempts/:attemptId/score-card',
   REVIEW: (attemptId: string) => `/attempts/${attemptId}/review`,
@@ -59,7 +64,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
 ];
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
-export const PICKER_WIDTH = { RECORD: 'w-72', SCOPE: 'w-44' } as const;
+export const PICKER_WIDTH = { REPORT: 'w-96', RECORD: 'w-72', SCOPE: 'w-44' } as const;
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;

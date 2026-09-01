@@ -480,6 +480,7 @@ function signed(question: SolutionQuestion, urls: ReadonlyMap<string, string>): 
 
 const TREND_SELECT = {
   id: true,
+  attemptNo: true,
   testId: true,
   submittedAt: true,
   score: true,
@@ -502,6 +503,7 @@ function toPerformancePoint(row: TrendRow): PerformancePoint {
   const attempted = (row.correctCount ?? 0) + (row.wrongCount ?? 0);
   return {
     attemptId: row.id,
+    attemptNo: row.attemptNo,
     testId: row.testId,
     testTitle: row.test.title,
     submittedAt: row.submittedAt?.toISOString() ?? null,

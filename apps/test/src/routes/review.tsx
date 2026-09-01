@@ -1,8 +1,6 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList } from 'lucide-react';
-import { Alert, Button, LoadingState, PageFrame, PageHeader } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { Alert, LoadingState } from '@iace/ui';
 import {
   AppException,
   ErrorCodes,
@@ -12,10 +10,10 @@ import {
   type SolutionReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, scoreCardQueryKey, solutionsQueryKey } from '../lib/constants';
+import { scoreCardQueryKey, solutionsQueryKey } from '../lib/constants';
 import { ReviewPaper, type ReviewedQuestion } from '../components/review/review-paper';
 
-export function ReviewPage() {
+export function SolutionPanel() {
   const { attemptId = '' } = useParams();
 
   const card = useQuery({
@@ -33,25 +31,7 @@ export function ReviewPage() {
   const shut = refusal?.code === ErrorCodes.FORBIDDEN;
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: card.data?.testTitle ?? 'Review' }]} />
-          }
-          title="Review"
-          meta={card.data ? `${card.data.score} of ${card.data.maxMarks} marks` : undefined}
-          action={
-            <Button asChild variant="outline">
-              <Link to={ROUTES.SCORE_CARD(attemptId)}>
-                <ClipboardList aria-hidden />
-                Score card
-              </Link>
-            </Button>
-          }
-        />
-      }
-    >
+    <>
       {card.isLoading || solutions.isLoading ? <LoadingState /> : null}
       {card.data ? (
         <ReviewPaper
@@ -67,7 +47,7 @@ export function ReviewPage() {
           }
         />
       ) : null}
-    </PageFrame>
+    </>
   );
 }
 

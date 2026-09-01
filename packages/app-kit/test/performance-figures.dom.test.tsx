@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { type CohortCurve, type DifficultyStanding, type PercentilePoint } from '@iace/contracts';
-import { CohortFigure, DifficultyFigure, TrajectoryFigure } from '../browser/performance-figures';
+import {
+  type CohortCurve,
+  type DifficultyStanding,
+  type PercentilePoint,
+  type SectionalStanding,
+} from '@iace/contracts';
+import {
+  CohortFigure,
+  DifficultyFigure,
+  SectionsFigure,
+  TimeFigure,
+  TrajectoryFigure,
+} from '../browser/performance-figures';
 
 afterEach(cleanup);
 
@@ -127,5 +138,77 @@ describe('TrajectoryFigure', () => {
 
     assert.ok(within(container).getAllByText('\u2014').length > 0);
     assert.equal(container.querySelectorAll('circle').length, 0);
+  });
+});
+
+describe('TimeFigure', () => {
+  const clock = {
+    totalSec: 1800,
+    avgPerQuestionSec: 60,
+    avgOnCorrectSec: 50,
+    avgOnWrongSec: 70,
+    spentOnUnattemptedSec: 120,
+  };
+  const counts = { correct: 12, wrong: 6, unattempted: 12, total: 30 };
+
+  /** Above one is slower than the field; the unit says which, so the number needs no sentence. */
+  it('names the pace against the cohort where the rollup has one', () => {
+    render(<TimeFigure time={clock} counts={counts} paceIndex={1.4} />);
+
+    assert.ok(screen.getByText('Pace'));
+    assert.ok(screen.getByText('slower'));
+  });
+
+  it('reads a faster paper as faster', () => {
+    render(<TimeFigure time={clock} counts={counts} paceIndex={0.8} />);
+
+    assert.ok(screen.getByText('faster'));
+  });
+
+  /** No cohort has been counted, so there is no pace to state — and none is stated. */
+  it('leaves the pace out where no cohort has been counted', () => {
+    render(<TimeFigure time={clock} counts={counts} paceIndex={null} />);
+
+    assert.ok(screen.getByText('Total'));
+    assert.equal(screen.queryByText('Pace'), null);
+  });
+});
+
+describe('SectionsFigure', () => {
+  const section = (over: Partial<SectionalStanding> = {}): SectionalStanding => ({
+    baseConfigSectionId: 'sec_1',
+    name: 'Reasoning',
+    order: 1,
+    questionCount: 25,
+    maxMarks: 50,
+    score: 32,
+    correctCount: 16,
+    wrongCount: 4,
+    unattemptedCount: 5,
+    timeSpentSec: 600,
+    cohortAverageScore: 28,
+    cohortAverageTimeSec: 660,
+    cohortSampleSize: 40,
+    topperTimeSec: 480,
+    ...over,
+  });
+
+  /** No rollup has counted this paper, so the two comparison clocks are absent, not zero. */
+  it('says nothing about a cohort nothing has counted', () => {
+    const { container } = render(
+      <SectionsFigure
+        sections={[
+          section({
+            cohortAverageScore: null,
+            cohortAverageTimeSec: null,
+            cohortSampleSize: 0,
+            topperTimeSec: null,
+          }),
+        ]}
+      />,
+    );
+
+    assert.doesNotMatch(container.textContent ?? '', /cohort \d/);
+    assert.doesNotMatch(container.textContent ?? '', /topper \d/);
   });
 });

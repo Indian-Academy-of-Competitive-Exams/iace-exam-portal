@@ -1,15 +1,11 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpenCheck, ListChecks } from 'lucide-react';
 import {
   Alert,
-  Button,
   DataTable,
   LoadingState,
   Metric,
   MetricGroup,
-  PageFrame,
-  PageHeader,
   Progress,
   SectionHeading,
   StatRow,
@@ -17,10 +13,22 @@ import {
   plural,
   type DataTableColumn,
 } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
-import { type ScoreCard, type ScoreCardSection } from '@iace/contracts';
+import {
+  CohortFigure,
+  DifficultyFigure,
+  MarksFigure,
+  TimeFigure,
+  TrajectoryFigure,
+} from '@iace/app-kit/browser';
+import {
+  PERFORMANCE_SCOPES,
+  paperCounts,
+  type PerformanceReport,
+  type ScoreCard,
+  type ScoreCardSection,
+} from '@iace/contracts';
 import { api } from '../lib/api';
-import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
+import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
 
 const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
   {
@@ -36,50 +44,31 @@ const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
   { key: 'time', header: 'Time', cell: (row) => minutes(row.timeSpentSec) },
 ];
 
-export function ScoreCardPage() {
+export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
   const card = useQuery({
     queryKey: scoreCardQueryKey(attemptId),
     queryFn: () => api.me.scoreCard(attemptId),
   });
+  const report = useQuery({
+    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
+    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
+  });
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: card.data?.testTitle ?? 'Score card' }]} />
-          }
-          title="Score card"
-          meta={card.data ? `${card.data.score} of ${card.data.maxMarks} marks` : undefined}
-          action={
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <Link to={ROUTES.QUESTION_REPORT(attemptId)}>
-                  <ListChecks aria-hidden />
-                  Question report
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to={ROUTES.REVIEW(attemptId)}>
-                  <BookOpenCheck aria-hidden />
-                  Review the paper
-                </Link>
-              </Button>
-            </div>
-          }
-        />
-      }
-    >
+    <>
       {card.isLoading ? <LoadingState /> : null}
-      {card.data ? <Result card={card.data} /> : null}
-    </PageFrame>
+      {card.data ? <Result card={card.data} report={report.data ?? null} /> : null}
+    </>
   );
 }
 
-function Result({ card }: Readonly<{ card: ScoreCard }>) {
+function Result({ card, report }: Readonly<{ card: ScoreCard; report: PerformanceReport | null }>) {
   const attempted = card.correctCount + card.wrongCount;
   const accuracy = attempted === 0 ? 0 : Math.round((card.correctCount / attempted) * 100);
+  // A curve exists only where a cohort drew one; a retake or a practice paper has none to show.
+  const curve = report?.cohort && report.cohort.bands.length > 0 ? report.cohort : null;
+  const trajectory = report?.trajectory ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -99,8 +88,7 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
       )}
 
       <MetricGroup>
-        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} />
-        <Metric label="Percentage" value={card.percentage} unit="%" />
+        <Metric label="Percentile" value={card.percentile ?? '—'} />
         <Metric
           label="Rank"
           value={card.rank ?? '—'}
@@ -108,7 +96,10 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
             card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
           }
         />
-        <Metric label="Percentile" value={card.percentile ?? '—'} />
+        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} />
+        <Metric label="Percentage" value={card.percentage} unit="%" />
+        <Metric label="Questions" value={card.totalQuestions} />
+        <Metric label="Duration" value={minutes(card.durationSec)} />
       </MetricGroup>
 
       <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -130,6 +121,22 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
         />
       </div>
 
+      {curve === null ? null : <CohortFigure cohort={curve} />}
+
+      {report === null ? null : (
+        <>
+          <MarksFigure composition={report.composition} counts={paperCounts(report.sections)} />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <DifficultyFigure difficulty={report.difficulty} />
+            <TimeFigure
+              time={report.time}
+              counts={paperCounts(report.sections)}
+              paceIndex={report.paceIndex}
+            />
+          </div>
+        </>
+      )}
+
       <div className="flex min-h-0 flex-col gap-2">
         <SectionHeading title="Sections" />
         <DataTable
@@ -140,6 +147,8 @@ function Result({ card }: Readonly<{ card: ScoreCard }>) {
           empty="This paper had no sections."
         />
       </div>
+
+      {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
     </div>
   );
 }

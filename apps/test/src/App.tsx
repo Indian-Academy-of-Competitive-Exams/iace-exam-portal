@@ -15,17 +15,23 @@ import { TestAboutPage } from './routes/test-about';
 import { TestInstructionsPage } from './routes/test-instructions';
 import { ExamPage } from './routes/exam';
 import { SubmittedPage } from './routes/submitted';
-import { ScoreCardPage } from './routes/score-card';
-import { ReviewPage } from './routes/review';
-import { QuestionReportPage } from './routes/question-report';
+import { SolutionPanel } from './routes/review';
+import { QuestionReportPanel } from './routes/question-report';
+import { LatestReportPage, ReportRedirect, ReportShell } from './routes/report';
 import { LeaderboardPage } from './routes/leaderboard';
 
-/** The three screens that draw charts, so the plotting library stays off the first payload. */
+/** Every screen that draws charts, so the plotting library stays off the first payload. */
 const DashboardPage = React.lazy(() =>
   import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
 );
-const PerformancePage = React.lazy(() =>
-  import('./routes/performance').then((module) => ({ default: module.PerformancePage })),
+const ScoreCardPanel = React.lazy(() =>
+  import('./routes/score-card').then((module) => ({ default: module.ScoreCardPanel })),
+);
+const SubjectPanel = React.lazy(() =>
+  import('./routes/subject-report').then((module) => ({ default: module.SubjectPanel })),
+);
+const ComparePanel = React.lazy(() =>
+  import('./routes/compare').then((module) => ({ default: module.ComparePanel })),
 );
 const SharedReportPage = React.lazy(() =>
   import('./routes/shared-report').then((module) => ({ default: module.SharedReportPage })),
@@ -57,16 +63,26 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />)} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
-          <Route path={ROUTES.PERFORMANCE} element={whileLoading(<PerformancePage />)} />
+          <Route path={ROUTES.PERFORMANCE} element={<LatestReportPage />} />
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
           <Route path={ROUTES.SUBMITTED_PATTERN} element={<SubmittedPage />} />
-          <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ScoreCardPage />} />
-          <Route path={ROUTES.REVIEW_PATTERN} element={<ReviewPage />} />
-          <Route path={ROUTES.QUESTION_REPORT_PATTERN} element={<QuestionReportPage />} />
+          <Route path={ROUTES.REPORT_PATTERN} element={<ReportShell />}>
+            <Route index element={whileLoading(<ScoreCardPanel />)} />
+            <Route path="subjects" element={whileLoading(<SubjectPanel />)} />
+            <Route path="solutions" element={<SolutionPanel />} />
+            <Route path="questions" element={<QuestionReportPanel />} />
+            <Route path="compare" element={whileLoading(<ComparePanel />)} />
+          </Route>
+          <Route path={ROUTES.SCORE_CARD_PATTERN} element={<ReportRedirect tab="" />} />
+          <Route path={ROUTES.REVIEW_PATTERN} element={<ReportRedirect tab="solutions" />} />
+          <Route
+            path={ROUTES.QUESTION_REPORT_PATTERN}
+            element={<ReportRedirect tab="questions" />}
+          />
           <Route path={ROUTES.PROFILE} element={<ProfilePage />} />
           <Route path={ROUTES.ACCOUNT} element={<AccountPage />} />
         </Route>

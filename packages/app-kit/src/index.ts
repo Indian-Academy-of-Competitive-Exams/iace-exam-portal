@@ -27,3 +27,10 @@ export {
   type NavItem,
   type NavLayout,
 } from './nav';
+export {
+  REPORT_TABS,
+  latestSitting,
+  newestFirst,
+  reportTabOf,
+  type ReportTab,
+} from './report-tabs';

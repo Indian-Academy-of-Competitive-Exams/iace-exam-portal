@@ -553,6 +553,7 @@ export type AttemptAnalytics = z.infer<typeof attemptAnalyticsSchema>;
 /** One sat test on the trend line, oldest first — what a chart plots. */
 export const performancePointSchema = z.object({
   attemptId: z.string(),
+  attemptNo: z.number().int(),
   testId: z.string(),
   testTitle: z.string().nullable(),
   submittedAt: z.string().nullable(),

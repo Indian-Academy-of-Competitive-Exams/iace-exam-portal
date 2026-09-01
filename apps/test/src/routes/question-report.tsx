@@ -4,20 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Badge,
-  Combobox,
-  DataTable,
+  ListView,
   LoadingState,
   MeasureBars,
   Metric,
   MetricGroup,
-  PageFrame,
-  PageHeader,
-  SectionHeading,
   TruncatedText,
   type DataTableColumn,
+  type ListFilter,
+  type ListState,
   type MeasureBar,
 } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   QUESTION_FILTERS,
   SYSTEM_DIFFICULTY,
@@ -27,16 +24,23 @@ import {
   type QuestionReportRow,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { NAV_ITEMS, questionReportQueryKey } from '../lib/constants';
+import { questionReportQueryKey } from '../lib/constants';
 
 const DASH = '—';
 
-const FILTERS: readonly { value: QuestionFilter; label: string }[] = [
-  { value: QUESTION_FILTERS.ALL, label: 'All questions' },
-  { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
-  { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
-  { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
-];
+/** The list's own "Any …" row is the empty value, which is how ListView reads a filter as unset. */
+const STATUS_FILTER: ListFilter = {
+  key: 'status',
+  kind: 'choice',
+  label: 'Result',
+  primary: true,
+  items: [
+    { value: '', label: 'Any result' },
+    { value: QUESTION_FILTERS.CORRECT, label: 'Correct' },
+    { value: QUESTION_FILTERS.INCORRECT, label: 'Incorrect' },
+    { value: QUESTION_FILTERS.UNATTEMPTED, label: 'Unattempted' },
+  ],
+};
 
 /** The cohort found it easy, average or hard — their verdict, not the author's. */
 const SYSTEM_TONES: Record<string, 'success' | 'warning' | 'danger'> = {
@@ -52,7 +56,7 @@ const RESULTS = {
   LEFT: { label: 'Skipped', variant: 'neutral' },
 } as const;
 
-export function QuestionReportPage() {
+export function QuestionReportPanel() {
   const { attemptId = '' } = useParams();
   const [filter, setFilter] = useState<QuestionFilter>(QUESTION_FILTERS.ALL);
   const report = useQuery({
@@ -61,23 +65,10 @@ export function QuestionReportPage() {
   });
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs
-              nav={NAV_ITEMS}
-              tail={[{ label: report.data?.testTitle ?? 'Question report' }]}
-            />
-          }
-          title="Question report"
-          meta={report.data ? cohortMeta(report.data) : undefined}
-        />
-      }
-    >
+    <>
       {report.isLoading ? <LoadingState /> : null}
       {report.data ? <Body report={report.data} filter={filter} onFilter={setFilter} /> : null}
-    </PageFrame>
+    </>
   );
 }
 
@@ -96,8 +87,17 @@ function Body({
   );
   const columns = useMemo(() => columnsFor(report.solutionsOpen), [report.solutionsOpen]);
 
+  const list: ListState<QuestionReportRow> = {
+    rows,
+    isLoading: false,
+    hasLoaded: true,
+    values: { status: filter === QUESTION_FILTERS.ALL ? '' : filter },
+    setFilter: (_key, value) => onFilter(chosen(value)),
+    clearFilters: () => onFilter(QUESTION_FILTERS.ALL),
+  };
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 flex-col gap-6">
       {report.closedReason === null ? null : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">{report.closedReason}</Alert>
@@ -106,42 +106,33 @@ function Body({
       <MetricGroup>
         <Metric label="Pace" value={report.paceIndex ?? DASH} unit={paceUnit(report.paceIndex)} />
         <Metric label="Cohort" value={report.cohortSize} unit="sittings" />
+        <Metric label="Questions" value={report.questions.length} />
       </MetricGroup>
 
-      <div className="flex min-h-0 flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <SectionHeading title="Questions" />
-          <Combobox
-            value={filter}
-            onChange={(value) => onFilter(value as QuestionFilter)}
-            items={FILTERS.map((row) => ({ value: row.value, label: row.label }))}
-            clearable={false}
-            aria-label="Show"
-            className="w-48"
-          />
-        </div>
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(row) => row.questionId}
-          isLoading={false}
-          empty={
-            filter === QUESTION_FILTERS.ALL
-              ? 'This paper served no questions.'
-              : 'No question matches that filter.'
-          }
-          expand={
-            report.solutionsOpen
-              ? {
-                  render: (row) => <Distribution row={row} />,
-                  label: (row) => `Answers to question ${row.order}`,
-                }
-              : undefined
-          }
-        />
-      </div>
+      <ListView
+        list={list}
+        filters={[STATUS_FILTER]}
+        columns={columns}
+        rowKey={(row) => row.questionId}
+        empty="This paper served no questions."
+        emptyFiltered="No question matches that filter."
+        expand={
+          report.solutionsOpen
+            ? {
+                render: (row) => <Distribution row={row} />,
+                label: (row) => `Answers to question ${row.order}`,
+              }
+            : undefined
+        }
+      />
     </div>
   );
+}
+
+/** ListView speaks the filter's wire value; the empty one is this table's "any result". */
+function chosen(value: unknown): QuestionFilter {
+  const held = typeof value === 'string' ? value : '';
+  return held === '' ? QUESTION_FILTERS.ALL : (held as QuestionFilter);
 }
 
 /** How the cohort split across the options, and which one the key names. */
@@ -255,10 +246,6 @@ function correctAnswer(row: QuestionReportRow): string {
   if (row.correctAnswer !== null) return row.correctAnswer;
   const correct = row.optionCounts.find((option) => option.isCorrect);
   return correct === undefined ? DASH : `Option ${correct.position}`;
-}
-
-function cohortMeta(report: QuestionReport): string {
-  return `${report.questions.length} questions`;
 }
 
 /** Above one is slower than the field, below it faster; the unit says which without a sentence. */

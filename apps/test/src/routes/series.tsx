@@ -21,6 +21,7 @@ import {
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   INSTITUTE_TIME_ZONE,
+  PERFORMANCE_SCOPES,
   TEST_BUCKET,
   testAction,
   testBucket,
@@ -28,7 +29,14 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY, ROUTES } from '../lib/constants';
+import {
+  CATALOG_QUERY_KEY,
+  NAV_ITEMS,
+  PERFORMANCE_QUERY_KEY,
+  ROUTES,
+  performanceReportQueryKey,
+} from '../lib/constants';
+import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
 import { averageAccuracy, bestRank, seriesProgress, type SeriesProgress } from '../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
@@ -57,6 +65,12 @@ export function SeriesPage() {
 
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
+  // A ramp is only drawn where an admin said the papers harden; every other series has no shape.
+  const report = useQuery({
+    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.SERIES, seriesId),
+    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.SERIES, seriesId }),
+  });
+  const progression = report.data?.progression ?? null;
 
   const series = catalog.data?.series.find((row) => row.id === seriesId);
   const progress = series ? seriesProgress(series) : null;
@@ -113,6 +127,15 @@ export function SeriesPage() {
             <SectionHeading title="Standing" />
             <Standing trend={trend} progress={progress} sat={sat} mean={mean} />
           </aside>
+        </div>
+      ) : null}
+
+      {progression ? (
+        <div className="mt-6 flex flex-col gap-6">
+          <RampFigure progression={progression} />
+          {progression.subjects.length > 0 ? (
+            <MasteryFigure subjects={progression.subjects} />
+          ) : null}
         </div>
       ) : null}
     </PageFrame>
