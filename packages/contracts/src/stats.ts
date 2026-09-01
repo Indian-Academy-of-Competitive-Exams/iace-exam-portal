@@ -140,6 +140,10 @@ export const performanceReportQuerySchema = z
 export type PerformanceReportQuery = z.infer<typeof performanceReportQuerySchema>;
 export type PerformanceReportQueryInput = z.input<typeof performanceReportQuerySchema>;
 
+/** A share as a reader says it: the server keeps 2dp for averaging, a screen shows neither. */
+export const percentLabel = (value: number | null, empty = '\u2014'): string =>
+  value === null ? empty : `${Math.round(value)}%`;
+
 /** A slice with its own n; `accuracy` is NULL when nothing was attempted, never 0. */
 export const measuredBucketSchema = analyticsBucketSchema.extend({
   accuracy: z.number().nullable(),

@@ -11,7 +11,12 @@ import {
   type PlotColumn,
   type SeriesSlot,
 } from '@iace/ui';
-import { type RampStep, type SeriesProgression, type SubjectMastery } from '@iace/contracts';
+import {
+  type RampStep,
+  type SeriesProgression,
+  type SubjectMastery,
+  percentLabel,
+} from '@iace/contracts';
 import { MASTERY_TREND_BADGE, MASTERY_TREND_LABELS, SERIES_SLOT_COUNT } from '../../lib/constants';
 
 const UNMEASURED = '—';
@@ -96,7 +101,7 @@ function SubjectSpark({ subject, slot }: Readonly<{ subject: SubjectMastery; slo
     key: `${subject.subjectId}-${point.testId}-${index}`,
     label: subject.subjectName,
     value: point.accuracy,
-    display: point.accuracy === null ? UNMEASURED : `${point.accuracy}%`,
+    display: point.accuracy === null ? UNMEASURED : percentLabel(point.accuracy),
     caption: plural(point.attempted, 'question'),
   }));
 

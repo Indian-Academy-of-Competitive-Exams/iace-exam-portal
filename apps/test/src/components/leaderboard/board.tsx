@@ -123,7 +123,9 @@ function standingColumns(measure: LeaderboardMeasure): DataTableColumn<Leaderboa
 
 function StudentCell({ row }: Readonly<{ row: LeaderboardRow }>) {
   const under =
-    row.percentile === null ? row.branch : `${row.branch ?? '—'} · ${row.percentile}%ile`;
+    row.percentile === null
+      ? row.branch
+      : `${row.branch ?? '—'} · ${Math.round(row.percentile)}%ile`;
 
   return (
     <div className="flex items-center gap-2.5">

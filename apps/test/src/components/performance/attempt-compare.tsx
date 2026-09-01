@@ -17,6 +17,7 @@ import {
   bestSitting,
   type CohortCurve,
   type PerformancePoint,
+  percentLabel,
 } from '@iace/contracts';
 
 /** viewBox units against the wide box a full-width plot uses, not pixels. */
@@ -56,7 +57,7 @@ export function AttemptCompare({
       max: latest.maxMarks,
       display: String(latest.score),
       segments: marksAgainst(latest.score, latest.maxMarks),
-      caption: `${latest.percentage}% · ${latest.accuracy}% accuracy`,
+      caption: `${percentLabel(latest.percentage)} · ${percentLabel(latest.accuracy)} accuracy`,
       tone: 'current',
     },
     {
@@ -67,7 +68,7 @@ export function AttemptCompare({
       max: best.maxMarks,
       display: String(best.score),
       segments: marksAgainst(best.score, best.maxMarks),
-      caption: `${best.percentage}% · ${best.accuracy}% accuracy`,
+      caption: `${percentLabel(best.percentage)} · ${percentLabel(best.accuracy)} accuracy`,
     },
   ];
 

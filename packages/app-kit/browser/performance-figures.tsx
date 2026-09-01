@@ -1,4 +1,5 @@
 import {
+  Alert,
   ChartFigure,
   ColumnPlot,
   CompositionBar,
@@ -6,6 +7,7 @@ import {
   DivergingBars,
   LinePlot,
   Metric,
+  StatRow,
   plural,
   type CompositionSegment,
   type DistributionMarker,
@@ -23,6 +25,7 @@ import {
   type PercentilePoint,
   type SectionalStanding,
   type TimeUse,
+  percentLabel,
 } from '@iace/contracts';
 
 const UNMEASURED = '—';
@@ -36,7 +39,9 @@ const COLUMN_HEIGHT = 420;
 const difficultyLabel = (name: string) => DIFFICULTY_LABELS[name as DifficultyLevel] ?? name;
 
 const minutes = (seconds: number) =>
-  seconds < SECONDS_PER_MINUTE ? `${seconds}s` : `${Math.round(seconds / SECONDS_PER_MINUTE)} min`;
+  seconds < SECONDS_PER_MINUTE
+    ? `${Math.round(seconds)}s`
+    : `${Math.round(seconds / SECONDS_PER_MINUTE)} min`;
 
 /** Percentile across every sitting the scope holds — marks would be comparing two papers. */
 export function TrajectoryFigure({
@@ -175,14 +180,32 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
     caption: `${section.score} of ${section.maxMarks}`,
   }));
 
+  // Without a cohort every delta is null, so the axis would draw nothing the reader can use.
+  const compared = items.some((item) => item.value !== null);
+
   return (
     <ChartFigure title="Sections" meta={plural(sections.length, 'section')}>
-      <DivergingBars
-        items={items}
-        belowLabel="Below the cohort"
-        aboveLabel="Above the cohort"
-        aria-label="Each section's marks against the cohort average"
-      />
+      {compared ? (
+        <DivergingBars
+          items={items}
+          belowLabel="Below the cohort"
+          aboveLabel="Above the cohort"
+          aria-label="Each section's marks against the cohort average"
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Alert variant="info">No cohort has been counted for this paper yet.</Alert>
+          <div className="flex flex-col gap-2">
+            {sections.map((section) => (
+              <StatRow
+                key={section.baseConfigSectionId}
+                label={section.name}
+                value={`${section.score} of ${section.maxMarks}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </ChartFigure>
   );
 }
@@ -195,7 +218,7 @@ export function DifficultyFigure({
     key: band.key,
     label: difficultyLabel(band.name),
     value: band.accuracy,
-    display: band.accuracy === null ? UNMEASURED : `${band.accuracy}%`,
+    display: percentLabel(band.accuracy, UNMEASURED),
     meta: `${band.attempted} of ${band.total}`,
     marker: band.cohortPValue === null ? null : round(band.cohortPValue * 100),
     markerDisplay:
