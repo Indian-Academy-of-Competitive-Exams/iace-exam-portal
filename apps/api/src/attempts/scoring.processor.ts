@@ -14,11 +14,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, type ScoringJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
+import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 
 const SCORING_SELECT = {
   id: true,
   testId: true,
+  studentId: true,
   status: true,
   isGraded: true,
   startedAt: true,
@@ -51,6 +53,7 @@ export class ScoringProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
+    private readonly rollup: RollupOutbox,
   ) {
     super();
   }
@@ -77,7 +80,7 @@ export class ScoringProcessor extends WorkerHost {
     }
 
     const scored = scorePaper(attempt.questions.map(toScorable));
-    await this.persist(attemptId, scored);
+    const evaluation = await this.persist(attempt, scored);
     await this.leaderboard.rank({
       id: attempt.id,
       testId: attempt.testId,
@@ -86,20 +89,30 @@ export class ScoringProcessor extends WorkerHost {
       startedAt: attempt.startedAt,
       submittedAt: attempt.submittedAt,
     });
+    await this.count(attempt.testId, evaluation);
     return scored;
   }
 
+  /** A first evaluation is folded in; a re-score moved marks already counted, so it asks for a rebuild. */
+  private async count(testId: string, evaluation: string | null): Promise<void> {
+    const asked = evaluation === null ? this.rollup.rebuild(testId) : this.rollup.relay(evaluation);
+    // A queue nobody can reach must not fail a score that committed — the sweeper hands it on.
+    await asked.catch((error: unknown) => {
+      this.logger.error(`Attempt on test ${testId} was scored but not counted`, error);
+    });
+  }
+
   /** One transaction: a sitting whose totals and per-question marks disagree is worse than neither. */
-  private async persist(attemptId: string, scored: PaperScore): Promise<void> {
-    await this.prisma.$transaction([
-      ...this.markQuestions(attemptId, scored),
+  private async persist(attempt: ScoringRow, scored: PaperScore): Promise<string | null> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.markQuestions(tx, attempt.id, scored);
       // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
-      this.prisma.attempt.updateMany({
-        where: { id: attemptId, evaluatedAt: null },
+      const claimed = await tx.attempt.updateMany({
+        where: { id: attempt.id, evaluatedAt: null },
         data: { evaluatedAt: new Date() },
-      }),
-      this.prisma.attempt.update({
-        where: { id: attemptId },
+      });
+      await tx.attempt.update({
+        where: { id: attempt.id },
         data: {
           status: ATTEMPT_STATUS.EVALUATED,
           score: scored.score,
@@ -108,12 +121,36 @@ export class ScoringProcessor extends WorkerHost {
           unattemptedCount: scored.unattemptedCount,
           sectionScores: scored.sections,
         },
-      }),
-    ]);
+      });
+      // The claim's row count IS the signal: one row means nothing had evaluated this before.
+      return claimed.count === 1 ? this.announce(tx, attempt) : null;
+    });
+  }
+
+  /** Written with the score's own transaction: an evaluated sitting always carries one of these. */
+  private async announce(tx: Prisma.TransactionClient, attempt: ScoringRow): Promise<string> {
+    const row = await tx.outboxEvent.create({
+      data: {
+        aggregateType: ROLLUP_REQUEST.AGGREGATE_TYPE,
+        aggregateId: attempt.id,
+        eventType: ROLLUP_REQUEST.EVENT_TYPE,
+        payload: {
+          testId: attempt.testId,
+          studentId: attempt.studentId,
+          isGraded: attempt.isGraded,
+        },
+      },
+      select: { id: true },
+    });
+    return row.id;
   }
 
   /** One statement per distinct outcome, not per question: a 100-mark paper has a handful. */
-  private markQuestions(attemptId: string, scored: PaperScore) {
+  private async markQuestions(
+    tx: Prisma.TransactionClient,
+    attemptId: string,
+    scored: PaperScore,
+  ): Promise<void> {
     const buckets = new Map<string, { row: (typeof scored.questions)[number]; ids: string[] }>();
     for (const question of scored.questions) {
       const outcome = `${String(question.isCorrect)}:${question.marksAwarded}`;
@@ -122,12 +159,12 @@ export class ScoringProcessor extends WorkerHost {
       buckets.set(outcome, held);
     }
 
-    return [...buckets.values()].map((bucket) =>
-      this.prisma.attemptQuestion.updateMany({
+    for (const bucket of buckets.values()) {
+      await tx.attemptQuestion.updateMany({
         where: { attemptId, questionId: { in: bucket.ids } },
         data: { isCorrect: bucket.row.isCorrect, marksAwarded: bucket.row.marksAwarded },
-      }),
-    );
+      });
+    }
   }
 }
 

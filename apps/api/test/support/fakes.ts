@@ -61,6 +61,7 @@ import {
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
+import { RollupOutbox } from '../../src/attempts/rollup-outbox';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
@@ -1561,6 +1562,9 @@ function matchesOutboxWhere(row: FakeOutboxRow, where: FakeOutboxWhere): boolean
   return true;
 }
 
+/** What a caller hands `create`: the row without the three columns the table fills in. */
+type FakeOutboxInput = Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'>;
+
 /** A durable event waiting to be handed to a queue. */
 export interface FakeOutboxRow {
   id: string;
@@ -1788,7 +1792,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   private outboxSeq = 0;
 
   readonly outboxEvent = {
-    create: ({ data }: { data: Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'> }) => {
+    create: ({ data }: { data: FakeOutboxInput }) => {
       this.outboxSeq += 1;
       const created: FakeOutboxRow = {
         ...data,
@@ -1818,7 +1822,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       );
     },
 
-    createMany: ({ data }: { data: Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'>[] }) => {
+    createMany: ({ data }: { data: FakeOutboxInput[] }) => {
       for (const row of data) {
         this.outboxSeq += 1;
         this.outboxEvents.push({
@@ -4697,8 +4701,39 @@ export class FakeScoringPrisma {
     },
   };
 
-  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
-    return Promise.all(work);
+  readonly outboxEvents: FakeOutboxRow[] = [];
+
+  private outboxSeq = 0;
+
+  readonly outboxEvent = {
+    create: ({ data }: { data: FakeOutboxInput }) => {
+      this.outboxSeq += 1;
+      const created: FakeOutboxRow = {
+        ...data,
+        id: `obx_${this.outboxSeq}`,
+        createdAt: new Date(this.outboxSeq),
+        processedAt: null,
+      };
+      this.outboxEvents.push(created);
+      return Promise.resolve({ id: created.id });
+    },
+
+    findMany: ({ where, take }: { where: FakeOutboxWhere; take?: number }) =>
+      Promise.resolve(
+        this.outboxEvents.filter((row) => matchesOutboxWhere(row, where)).slice(0, take),
+      ),
+
+    update: ({ where, data }: { where: { id: string }; data: { processedAt: Date } }) => {
+      const row = this.outboxEvents.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no outbox row ${where.id}`);
+      row.processedAt = data.processedAt;
+      return Promise.resolve(row);
+    },
+  };
+
+  /** Both forms: the scorer's persist is one callback, and the report's reads are a batch. */
+  $transaction<T>(work: Promise<T>[] | ((tx: FakeScoringPrisma) => Promise<T>)): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
   }
 
   asService(): PrismaService {
@@ -5278,4 +5313,553 @@ export class FakeSharePrisma {
   asService(): PrismaService {
     return this as unknown as PrismaService;
   }
+}
+
+// --------------------------------------------------------------------------- the rollup's tables
+// ---------------------------------------------------------------------------
+
+export interface FakeStudentStatRow {
+  studentId: string;
+  testsAttempted: number;
+  testsEvaluated: number;
+  sumScore: number;
+  sumPercentile: number;
+  bestPercentile: number | null;
+  totalAnswered: number;
+  totalCorrect: number;
+  totalWrong: number;
+  totalUnattempted: number;
+  sumTimeSec: number;
+  practiceAttempts: number;
+  lastAttemptAt: Date | null;
+  computedThrough: Date | null;
+  computedAt: Date | null;
+}
+
+export interface FakeStudentSubjectStatRow {
+  studentId: string;
+  subjectId: string;
+  scope: TestScope;
+  evaluationMode: EvaluationMode;
+  attempted: number;
+  correct: number;
+  wrong: number;
+  sumTimeSec: number;
+  computedAt: Date | null;
+}
+
+export interface FakeTestStatRow {
+  testId: string;
+  attemptCount: number;
+  evaluatedCount: number;
+  sumScore: number;
+  maxScore: number | null;
+  minScore: number | null;
+  sumTimeSec: number;
+  scoreHistogram: unknown;
+  topperAttemptId: string | null;
+  attemptsIncluded: number;
+  computedAt: Date | null;
+}
+
+export interface FakeTestSectionStatRow {
+  testId: string;
+  baseConfigSectionId: string;
+  attempted: number;
+  sumScore: number;
+  sumTimeSec: number;
+  computedAt: Date | null;
+}
+
+export interface FakeTestQuestionStatRow {
+  testId: string;
+  paperQuestionId: string;
+  questionId: string;
+  attemptedCount: number;
+  correctCount: number;
+  wrongCount: number;
+  skippedCount: number;
+  sumTimeSec: number;
+  optionCounts: unknown;
+  pValue: number | null;
+  computedAt: Date | null;
+}
+
+export interface FakeProcessedRollupRow {
+  attemptId: string;
+  rollupType: string;
+}
+
+/** The test the fold reads its bucketing off — a rollup never needs more of one than this. */
+export interface FakeRollupTest {
+  id: string;
+  scope: TestScope;
+  evaluationMode: EvaluationMode;
+}
+
+export function makeRollupTest(overrides: Partial<FakeRollupTest> = {}): FakeRollupTest {
+  return {
+    id: 'tst_1',
+    scope: TEST_SCOPE.FULL,
+    evaluationMode: EVALUATION_MODE.RANKED,
+    ...overrides,
+  };
+}
+
+function isIncrement(value: unknown): value is { increment: number | bigint } {
+  return typeof value === 'object' && value !== null && 'increment' in value;
+}
+
+function isIn(value: unknown): value is { in: unknown[] } {
+  return typeof value === 'object' && value !== null && 'in' in value;
+}
+
+/** Prisma's atomic `{ increment }`, and BigInt columns kept as the plain numbers a test reads. */
+function applyWrite(row: Record<string, unknown>, data: Record<string, unknown>): void {
+  for (const [column, value] of Object.entries(data)) {
+    if (isIncrement(value)) {
+      row[column] = Number(row[column] ?? 0) + Number(value.increment);
+    } else {
+      row[column] = typeof value === 'bigint' ? Number(value) : value;
+    }
+  }
+}
+
+/** A compound-key `where` arrives wrapped in its index name; the row it names is flat. */
+function flatWhere(where: Record<string, unknown>): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  for (const [column, value] of Object.entries(where)) {
+    const nested =
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !(value instanceof Date);
+    if (nested && !isIn(value)) Object.assign(flat, value);
+    else flat[column] = value;
+  }
+  return flat;
+}
+
+function matchesRow(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([column, value]) =>
+    isIn(value) ? value.in.includes(row[column]) : row[column] === value,
+  );
+}
+
+/** A typed row read as the loose bag every write below indexes into. */
+const fields = (row: object): Record<string, unknown> => row as Record<string, unknown>;
+
+/** One aggregate table: rows behind a key, and only the writes the rollup makes to them. */
+class FakeStatTable<Row extends object> {
+  readonly rows: Row[] = [];
+
+  constructor(
+    private readonly key: readonly string[],
+    private readonly blank: Record<string, unknown>,
+  ) {}
+
+  private keyOf(row: Record<string, unknown>): string {
+    return this.key.map((column) => String(row[column])).join('|');
+  }
+
+  private held(where: Record<string, unknown>): Row | undefined {
+    const wanted = this.keyOf(flatWhere(where));
+    return this.rows.find((row) => this.keyOf(fields(row)) === wanted);
+  }
+
+  private inserted(data: Record<string, unknown>): Row {
+    const row = { ...this.blank };
+    applyWrite(row, data);
+    this.rows.push(row as Row);
+    return row as Row;
+  }
+
+  readonly findUnique = ({ where }: { where: Record<string, unknown> }) =>
+    Promise.resolve(this.held(where) ?? null);
+
+  readonly findUniqueOrThrow = ({ where }: { where: Record<string, unknown> }) => {
+    const row = this.held(where);
+    if (!row) throw new Error(`no stat row for ${JSON.stringify(where)}`);
+    return Promise.resolve(row);
+  };
+
+  readonly findMany = ({ where = {} }: { where?: Record<string, unknown> } = {}) =>
+    Promise.resolve(this.rows.filter((row) => matchesRow(fields(row), where)));
+
+  readonly upsert = ({
+    where,
+    create,
+    update,
+  }: {
+    where: Record<string, unknown>;
+    create: Record<string, unknown>;
+    update: Record<string, unknown>;
+  }) => {
+    const held = this.held(where);
+    if (held === undefined) return Promise.resolve(this.inserted(create));
+    applyWrite(fields(held), update);
+    return Promise.resolve(held);
+  };
+
+  readonly update = ({
+    where,
+    data,
+  }: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }) => {
+    const held = this.held(where);
+    if (!held) throw new Error(`no stat row for ${JSON.stringify(where)}`);
+    applyWrite(fields(held), data);
+    return Promise.resolve(held);
+  };
+
+  readonly createMany = ({ data }: { data: Record<string, unknown>[] }) => {
+    for (const row of data) this.inserted(row);
+    return Promise.resolve({ count: data.length });
+  };
+
+  readonly deleteMany = ({ where }: { where: Record<string, unknown> }) => {
+    const kept = this.rows.filter((row) => !matchesRow(fields(row), where));
+    const count = this.rows.length - kept.length;
+    this.rows.length = 0;
+    this.rows.push(...kept);
+    return Promise.resolve({ count });
+  };
+}
+
+/** The clauses the rollup narrows `Attempt` by, and nothing else. */
+interface FakeRollupAttemptWhere {
+  id?: string | { in: string[] };
+  testId?: string;
+  studentId?: string;
+  isGraded?: boolean;
+  status?: AttemptStatus;
+  attemptNo?: { lt?: number; gt?: number };
+  evaluatedAt?: Date | { lt: Date } | null;
+  test?: { evaluationMode: EvaluationMode };
+  OR?: FakeRollupAttemptWhere[];
+}
+
+function comparesNumber(value: number, filter: { lt?: number; gt?: number }): boolean {
+  if (filter.lt !== undefined && value >= filter.lt) return false;
+  return filter.gt === undefined || value > filter.gt;
+}
+
+function comparesInstant(at: Date | null, filter: Date | { lt: Date } | null): boolean {
+  if (filter === null) return at === null;
+  if (at === null) return false;
+  return filter instanceof Date ? at.getTime() === filter.getTime() : at < filter.lt;
+}
+
+/** The rollup's whole world, and the scorer's too, so a test can score a sitting and then fold it. */
+export class FakeRollupPrisma {
+  constructor(
+    readonly attempts: FakeAttemptRow[] = [],
+    readonly served: FakeServedAnswerRow[] = [],
+    readonly tests: FakeRollupTest[] = [makeRollupTest()],
+  ) {}
+
+  readonly outboxEvents: FakeOutboxRow[] = [];
+
+  readonly processedRollups: FakeProcessedRollupRow[] = [];
+
+  readonly studentStat = new FakeStatTable<FakeStudentStatRow>(['studentId'], {
+    testsAttempted: 0,
+    testsEvaluated: 0,
+    sumScore: 0,
+    sumPercentile: 0,
+    bestPercentile: null,
+    totalAnswered: 0,
+    totalCorrect: 0,
+    totalWrong: 0,
+    totalUnattempted: 0,
+    sumTimeSec: 0,
+    practiceAttempts: 0,
+    lastAttemptAt: null,
+    computedThrough: null,
+    computedAt: null,
+  });
+
+  readonly studentSubjectStat = new FakeStatTable<FakeStudentSubjectStatRow>(
+    ['studentId', 'subjectId', 'scope', 'evaluationMode'],
+    { attempted: 0, correct: 0, wrong: 0, sumTimeSec: 0, computedAt: null },
+  );
+
+  readonly testStat = new FakeStatTable<FakeTestStatRow>(['testId'], {
+    attemptCount: 0,
+    evaluatedCount: 0,
+    sumScore: 0,
+    maxScore: null,
+    minScore: null,
+    sumTimeSec: 0,
+    scoreHistogram: null,
+    topperAttemptId: null,
+    attemptsIncluded: 0,
+    computedAt: null,
+  });
+
+  readonly testSectionStat = new FakeStatTable<FakeTestSectionStatRow>(
+    ['testId', 'baseConfigSectionId'],
+    { attempted: 0, sumScore: 0, sumTimeSec: 0, computedAt: null },
+  );
+
+  readonly testQuestionStat = new FakeStatTable<FakeTestQuestionStatRow>(
+    ['testId', 'paperQuestionId'],
+    {
+      attemptedCount: 0,
+      correctCount: 0,
+      wrongCount: 0,
+      skippedCount: 0,
+      sumTimeSec: 0,
+      optionCounts: null,
+      pValue: null,
+      computedAt: null,
+    },
+  );
+
+  private outboxSeq = 0;
+
+  readonly outboxEvent = {
+    create: ({ data }: { data: FakeOutboxInput }) => {
+      this.outboxSeq += 1;
+      const created: FakeOutboxRow = {
+        ...data,
+        id: `obx_${this.outboxSeq}`,
+        createdAt: new Date(this.outboxSeq),
+        processedAt: null,
+      };
+      this.outboxEvents.push(created);
+      return Promise.resolve({ id: created.id });
+    },
+
+    findMany: ({ where, take }: { where: FakeOutboxWhere; take?: number }) =>
+      Promise.resolve(
+        this.outboxEvents.filter((row) => matchesOutboxWhere(row, where)).slice(0, take),
+      ),
+
+    update: ({ where, data }: { where: { id: string }; data: { processedAt: Date } }) => {
+      const row = this.outboxEvents.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no outbox row ${where.id}`);
+      row.processedAt = data.processedAt;
+      return Promise.resolve(row);
+    },
+  };
+
+  /** The guard. `createMany` without `skipDuplicates` is how a redelivered fold is refused. */
+  readonly processedRollup = {
+    createMany: ({
+      data,
+      skipDuplicates,
+    }: {
+      data: FakeProcessedRollupRow[];
+      skipDuplicates?: boolean;
+    }) => {
+      const fresh = data.filter(
+        (row) =>
+          !this.processedRollups.some(
+            (held) => held.attemptId === row.attemptId && held.rollupType === row.rollupType,
+          ),
+      );
+      if (fresh.length < data.length && skipDuplicates !== true) {
+        throw uniqueViolation('attemptId_rollupType');
+      }
+      this.processedRollups.push(...fresh);
+      return Promise.resolve({ count: fresh.length });
+    },
+
+    findMany: ({ where = {} }: { where?: { rollupType?: string } } = {}) =>
+      Promise.resolve(
+        this.processedRollups.filter(
+          (row) => where.rollupType === undefined || row.rollupType === where.rollupType,
+        ),
+      ),
+
+    deleteMany: ({
+      where,
+    }: {
+      where: { rollupType?: { in: string[] }; attempt?: { testId?: string; studentId?: string } };
+    }) => {
+      const kept = this.processedRollups.filter((row) => {
+        const sitting = this.attempts.find((candidate) => candidate.id === row.attemptId);
+        const typed = where.rollupType?.in.includes(row.rollupType) ?? true;
+        const scoped =
+          (where.attempt?.testId === undefined || sitting?.testId === where.attempt.testId) &&
+          (where.attempt?.studentId === undefined ||
+            sitting?.studentId === where.attempt.studentId);
+        return !(typed && scoped);
+      });
+      const count = this.processedRollups.length - kept.length;
+      this.processedRollups.length = 0;
+      this.processedRollups.push(...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
+  /** Both selects at once: the scorer's answer key and the fold's subjects off one row. */
+  private joined(row: FakeAttemptRow) {
+    const test = this.tests.find((candidate) => candidate.id === row.testId) ?? makeRollupTest();
+    return {
+      ...row,
+      test: { scope: test.scope, evaluationMode: test.evaluationMode },
+      questions: this.served
+        .filter((served) => served.attemptId === row.id)
+        .sort((a, b) => a.order - b.order)
+        .map((served) => ({
+          ...served,
+          question: { type: served.type, subjectId: served.subjectId },
+          questionVersion: { options: served.options, answerKey: served.answerKey },
+        })),
+    };
+  }
+
+  private matchesId(row: FakeAttemptRow, id: FakeRollupAttemptWhere['id']): boolean {
+    if (id === undefined) return true;
+    return typeof id === 'string' ? row.id === id : id.in.includes(row.id);
+  }
+
+  /** The clauses that are a plain equals, the mode among them because the test carries it. */
+  private sameColumns(row: FakeAttemptRow, where: FakeRollupAttemptWhere): boolean {
+    const asked: [unknown, unknown][] = [
+      [where.testId, row.testId],
+      [where.studentId, row.studentId],
+      [where.isGraded, row.isGraded],
+      [where.status, row.status],
+      [where.test?.evaluationMode, this.modeOf(row)],
+    ];
+    return asked.every(([wanted, held]) => wanted === undefined || wanted === held);
+  }
+
+  private matches(row: FakeAttemptRow, where: FakeRollupAttemptWhere): boolean {
+    if (!this.matchesId(row, where.id)) return false;
+    if (!this.sameColumns(row, where)) return false;
+    if (where.attemptNo && !comparesNumber(row.attemptNo, where.attemptNo)) return false;
+    if (where.evaluatedAt !== undefined && !comparesInstant(row.evaluatedAt, where.evaluatedAt)) {
+      return false;
+    }
+    return where.OR === undefined || where.OR.some((clause) => this.matches(row, clause));
+  }
+
+  private modeOf(row: FakeAttemptRow): EvaluationMode {
+    const test = this.tests.find((candidate) => candidate.id === row.testId);
+    return test?.evaluationMode ?? EVALUATION_MODE.RANKED;
+  }
+
+  readonly attempt = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.attempts.find((candidate) => candidate.id === where.id);
+      return Promise.resolve(row ? this.joined(row) : null);
+    },
+
+    findMany: ({
+      where = {},
+      distinct,
+    }: {
+      where?: FakeRollupAttemptWhere;
+      orderBy?: unknown;
+      distinct?: ('studentId' | 'testId')[];
+      select?: unknown;
+    } = {}) => {
+      // Always ordered as the rollup asks for them: oldest evaluation first, then attempt number.
+      const matched = this.attempts
+        .filter((row) => this.matches(row, where))
+        .toSorted(
+          (a, b) =>
+            (a.evaluatedAt?.getTime() ?? 0) - (b.evaluatedAt?.getTime() ?? 0) ||
+            a.attemptNo - b.attemptNo,
+        );
+      const seen = new Set<string>();
+      const kept = matched.filter((row) => {
+        if (!distinct) return true;
+        const key = distinct.map((column) => row[column]).join('|');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      return Promise.resolve(kept.map((row) => this.joined(row)));
+    },
+
+    count: ({ where }: { where: FakeRollupAttemptWhere }) =>
+      Promise.resolve(this.attempts.filter((row) => this.matches(row, where)).length),
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAttemptRow> }) => {
+      const row = this.attempts.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no attempt ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: FakeRollupAttemptWhere;
+      data: Partial<FakeAttemptRow>;
+    }) => {
+      const matched = this.attempts.filter((row) => this.matches(row, where));
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
+  };
+
+  readonly attemptQuestion = {
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { attemptId: string; questionId: { in: string[] } };
+      data: { isCorrect: boolean | null; marksAwarded: number };
+    }) => {
+      const matched = this.served.filter(
+        (row) => row.attemptId === where.attemptId && where.questionId.in.includes(row.questionId),
+      );
+      for (const row of matched) Object.assign(row, data);
+      return Promise.resolve({ count: matched.length });
+    },
+  };
+
+  private tables(): object[][] {
+    return [
+      this.attempts,
+      this.served,
+      this.outboxEvents,
+      this.processedRollups,
+      this.studentStat.rows,
+      this.studentSubjectStat.rows,
+      this.testStat.rows,
+      this.testSectionStat.rows,
+      this.testQuestionStat.rows,
+    ];
+  }
+
+  /** Both forms, and a throwing callback puts every table back — the guard relies on that. */
+  async $transaction<T>(
+    work: Promise<T>[] | ((tx: FakeRollupPrisma) => Promise<T>),
+  ): Promise<T[] | T> {
+    if (typeof work !== 'function') return Promise.all(work);
+
+    const tables = this.tables();
+    const snapshot = tables.map((rows) => rows.map((row) => structuredClone(row)));
+    try {
+      return await work(this);
+    } catch (error) {
+      tables.forEach((rows, index) => {
+        rows.length = 0;
+        rows.push(...snapshot[index]!);
+      });
+      throw error;
+    }
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}
+
+/** The seam an evaluated sitting reaches the rollup queue through. */
+export function fakeRollupOutbox(
+  prisma: { asService(): PrismaService },
+  queue: FakeQueue,
+): RollupOutbox {
+  return new RollupOutbox(prisma.asService(), queue.asQueue());
 }

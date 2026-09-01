@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
   AppException,
+  EVALUATION_MODE,
   ErrorCodes,
   FORM_LEVEL_FIELD,
   type LanguageCode,
@@ -110,8 +111,8 @@ export class AttemptsService {
           testId: test.id,
           studentId,
           attemptNo,
-          // The cohort rollup fires on one attempt per student, and it is the first.
-          isGraded: attemptNo === 1,
+          // Counts toward a cohort: one attempt per student, the first, and never on a practice paper.
+          isGraded: attemptNo === 1 && test.evaluationMode === EVALUATION_MODE.RANKED,
           startedAt,
           endsAt: deadlineFrom(startedAt, test.baseConfig.durationSec + extraTimeSec),
           shuffleSeed: randomInt(SEED_CEILING),

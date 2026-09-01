@@ -29,6 +29,7 @@ import { QUEUE_NAMES } from './queues';
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_FLUSH }),
     BullModule.registerQueue({ name: QUEUE_NAMES.ATTEMPT_SWEEP }),
     BullModule.registerQueue({ name: QUEUE_NAMES.OUTBOX_PRUNE }),
+    BullModule.registerQueue({ name: QUEUE_NAMES.ROLLUP }),
   ],
   exports: [BullModule],
 })

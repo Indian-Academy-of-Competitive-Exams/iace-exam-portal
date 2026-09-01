@@ -13,6 +13,7 @@ import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { redisKeys } from '../src/redis/redis.keys';
 import {
   FakeQueue,
+  fakeRollupOutbox,
   FakeRedis,
   FakeScoringPrisma,
   FakeStorage,
@@ -101,7 +102,11 @@ function platform(schedule: { scheduled: boolean; closesAt: string | null; extra
     redis,
     rows,
     attempts,
-    scoring: new ScoringProcessor(prisma.asService(), leaderboard),
+    scoring: new ScoringProcessor(
+      prisma.asService(),
+      leaderboard,
+      fakeRollupOutbox(prisma, new FakeQueue()),
+    ),
     reports: new AttemptReportService(
       prisma.asService(),
       access,

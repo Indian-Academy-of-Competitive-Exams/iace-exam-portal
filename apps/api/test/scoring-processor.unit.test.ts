@@ -7,6 +7,7 @@ import {
   FakeQueue,
   FakeRedis,
   FakeScoringPrisma,
+  fakeRollupOutbox,
   makeAttempt,
   makeServedAnswer,
   mcqOptions,
@@ -38,6 +39,7 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
     makeServedAnswer({ questionId: 'q3', order: 3, options: mcqOptions(2) }),
   ];
   const prisma = new FakeScoringPrisma([attempt], served);
+  const rollups = new FakeQueue();
   const redis = new FakeRedis();
   const leaderboard = new LeaderboardService(
     prisma.asService(),
@@ -48,7 +50,11 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
     prisma,
     attempt,
     served,
-    processor: new ScoringProcessor(prisma.asService(), leaderboard),
+    processor: new ScoringProcessor(
+      prisma.asService(),
+      leaderboard,
+      fakeRollupOutbox(prisma, rollups),
+    ),
   };
 }
 

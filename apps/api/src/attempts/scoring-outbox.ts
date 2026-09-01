@@ -9,19 +9,19 @@ import { type Queue } from 'bullmq';
 import { type Prisma } from '@prisma/client';
 import { ATTEMPT_STATUS, type AttemptStatus } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUEUE_NAMES, scoringJobId, type ScoringJobData } from '../queue/queues';
+import {
+  QUEUE_NAMES,
+  RELAY_BATCH,
+  RELAY_GRACE_SEC,
+  scoringJobId,
+  type ScoringJobData,
+} from '../queue/queues';
 
 /** What one attempt's scoring request is called in `OutboxEvent`. */
 export const SCORING_REQUEST = {
   AGGREGATE_TYPE: 'Attempt',
   EVENT_TYPE: 'attempt.scoring_requested',
 } as const;
-
-/** How many stranded requests one relay pass hands on. */
-const RELAY_BATCH = 200;
-
-/** How long a request must sit before a SWEEP takes it: the submit may still be writing answers. */
-const RELAY_GRACE_SEC = 30;
 
 /** Sittings a re-score can still reach. One still in progress will be scored when it ends. */
 const ENDED: readonly AttemptStatus[] = [ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED];

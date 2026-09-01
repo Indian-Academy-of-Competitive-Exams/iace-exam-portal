@@ -16,6 +16,7 @@ import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import {
   FakeQueue,
+  fakeRollupOutbox,
   FakeRedis,
   FakeTestsPrisma,
   makeAttempt,
@@ -87,7 +88,12 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
     busts,
     outbox,
     submit,
-    sweeper: new AttemptSweeperProcessor(prisma.asService(), submit, outbox),
+    sweeper: new AttemptSweeperProcessor(
+      prisma.asService(),
+      submit,
+      outbox,
+      fakeRollupOutbox(prisma, new FakeQueue()),
+    ),
   };
 }
 

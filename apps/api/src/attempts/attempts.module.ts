@@ -25,6 +25,9 @@ import { AttemptFlushProcessor } from './attempt-flush.processor';
 import { AttemptSweeperProcessor } from './attempt-sweeper.processor';
 import { LeaderboardRebuildProcessor } from './leaderboard-rebuild.processor';
 import { LeaderboardService } from './leaderboard.service';
+import { RollupOutbox } from './rollup-outbox';
+import { RollupProcessor } from './rollup.processor';
+import { RollupService } from './rollup.service';
 import { ScoringOutbox } from './scoring-outbox';
 import { ScoringProcessor } from './scoring.processor';
 import { SubmitService } from './submit.service';
@@ -51,13 +54,16 @@ import { SubmitService } from './submit.service';
     PerformanceAnalyticsService,
     PerformanceShareService,
     LeaderboardRebuildProcessor,
+    RollupOutbox,
+    RollupProcessor,
+    RollupService,
     ScoringOutbox,
     ScoringProcessor,
     SubmitService,
     AttemptFlushProcessor,
     AttemptSweeperProcessor,
   ],
-  // ScoringProcessor is NOT here on purpose: an export is how evaluation reaches a request path.
+  // Neither processor is here on purpose: an export is how a worker reaches a request path.
   exports: [
     AttemptsService,
     AttemptPaperService,

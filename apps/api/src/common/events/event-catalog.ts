@@ -10,7 +10,7 @@ import {
 export const DOMAIN_EVENTS = {
   /** A student pressed submit. TODO(docs/03 §6): emit from the exam module. */
   ATTEMPT_SUBMITTED: 'attempt.submitted',
-  /** A scoring job finished. TODO(docs/03 §6): emit from the scoring worker. */
+  /** A first evaluation landed, and the aggregates want it. WIRED — see the scoring worker. */
   SCORING_COMPLETED: 'scoring.completed',
   /** A series was enabled for a branch. TODO(docs/03 §6): emit from access/admin. */
   TEST_ASSIGNED: 'test.assigned',
@@ -58,8 +58,8 @@ export interface ScoringCompletedEvent {
   attemptId: string;
   testId: string;
   studentId: string;
-  /** Serialised Decimal. Never a JS number — marks are exact 0.25 steps. */
-  score: string;
+  /** Which rollups it lands in: a practice sitting never reaches the cohort's three. */
+  isGraded: boolean;
 }
 
 export interface TestAssignedEvent {

@@ -4,10 +4,11 @@ import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, SCORING_RETRY_AFTER_MS } from '../queue/queues';
 import { SAVE_GRACE_SEC } from './attempt-state';
+import { RollupOutbox } from './rollup-outbox';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 
-/** Ends the sittings nobody ended, and hands on the scoring nobody managed to enqueue. */
+/** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
 @Processor(QUEUE_NAMES.ATTEMPT_SWEEP)
 export class AttemptSweeperProcessor extends WorkerHost {
   private readonly logger = new Logger(AttemptSweeperProcessor.name);
@@ -16,6 +17,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly submit: SubmitService,
     private readonly outbox: ScoringOutbox,
+    private readonly rollup: RollupOutbox,
   ) {
     super();
   }
@@ -30,6 +32,9 @@ export class AttemptSweeperProcessor extends WorkerHost {
     // The reconciler: a crash between the commit and the queue leaves a request nobody handed on.
     await this.outbox.relay().catch((error: unknown) => {
       this.logger.error('Relaying the scoring requests nobody handed on failed', error);
+    });
+    await this.rollup.relay().catch((error: unknown) => {
+      this.logger.error('Relaying the evaluations nobody counted failed', error);
     });
     await this.askAgainForUnscored().catch((error: unknown) => {
       this.logger.error('Asking again for the sittings nobody scored failed', error);

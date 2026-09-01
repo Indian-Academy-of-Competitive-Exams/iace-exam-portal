@@ -17,6 +17,7 @@ import { redisKeys } from '../src/redis/redis.keys';
 import {
   FakePerformancePrisma,
   FakeQueue,
+  fakeRollupOutbox,
   FakeRedis,
   FakeScoringPrisma,
   FakeSharePrisma,
@@ -175,7 +176,11 @@ function platform() {
     attempts,
     redis,
     analytics,
-    scoring: new ScoringProcessor(scoringPrisma.asService(), leaderboard),
+    scoring: new ScoringProcessor(
+      scoringPrisma.asService(),
+      leaderboard,
+      fakeRollupOutbox(scoringPrisma, new FakeQueue()),
+    ),
     shares: new PerformanceShareService(
       sharePrisma.asService(),
       analytics,

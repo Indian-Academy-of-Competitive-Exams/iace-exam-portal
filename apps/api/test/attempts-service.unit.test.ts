@@ -5,6 +5,7 @@ import {
   AppException,
   ATTEMPT_STATUS,
   ErrorCodes,
+  EVALUATION_MODE,
   LANGUAGE_CODE,
   LANGUAGE_MODE,
   PAPER_BINDING,
@@ -211,6 +212,16 @@ describe('AttemptsService — starting a sitting', () => {
     const second = await service.start(STUDENT, 'tst_1', {});
     assert.equal(second.attemptNo, 2);
     assert.equal(second.isGraded, false);
+  });
+
+  /** PRACTICE never ranks, so the first sitting of one is not the cohort's either. */
+  it('leaves a practice paper ungraded, first sitting or not', async () => {
+    const { service } = serviceWith(sittable({ evaluationMode: EVALUATION_MODE.PRACTICE }));
+
+    const first = await service.start(STUDENT, 'tst_1', {});
+
+    assert.equal(first.attemptNo, 1);
+    assert.equal(first.isGraded, false);
   });
 
   it('sits a SINGLE paper in the language the student picked', async () => {

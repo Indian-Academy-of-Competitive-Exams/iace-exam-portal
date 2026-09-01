@@ -128,7 +128,8 @@ export function flagYours(bands: readonly CohortBand[], score: number): CohortCu
   return bands.map((band, index) => ({ ...band, isYours: index === yours }));
 }
 
-function bandIndexOf(bands: readonly CohortBand[], score: number): number {
+/** Which column a score belongs in. The rollup writer counts into the band this names. */
+export function bandIndexOf(bands: readonly CohortBand[], score: number): number {
   const last = bands.length - 1;
   const held = bands.findIndex(
     (band, index) => score >= band.from && (score < band.to || index === last),
