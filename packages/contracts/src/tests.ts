@@ -534,7 +534,7 @@ export const paperRowSchema = paperQuestionSchema.extend({
 });
 export type PaperRow = z.infer<typeof paperRowSchema>;
 
-/** One section of the assembled paper, beside the count the config asks it to hold. */
+/** One section of the paper, beside the count the config asks it to hold. */
 export const paperSectionSchema = z.object({
   baseConfigSectionId: z.string(),
   name: z.string(),
@@ -550,13 +550,6 @@ export const testPaperSchema = z.object({
   sections: z.array(paperSectionSchema),
 });
 export type TestPaper = z.infer<typeof testPaperSchema>;
-
-/** Chosen by hand for one section. The draw fills whatever is left of its count. */
-export const manualSectionPickSchema = z.object({
-  baseConfigSectionId: z.string().min(1),
-  questionIds: z.array(z.string().min(1)),
-});
-export type ManualSectionPick = z.infer<typeof manualSectionPickSchema>;
 
 /** One test as the SERIES reads it: what it is called, when it opens there, and whether it is sat. */
 export const seriesTestRowSchema = z.object({
@@ -605,17 +598,6 @@ export type SetBranchTestScheduleBody = z.infer<typeof setBranchTestScheduleSche
 /** What the branch ended up with. Both null is what it reads back as when the row went. */
 export const branchTestScheduleSchema = setBranchTestScheduleSchema.extend({ testId: z.string() });
 export type BranchTestSchedule = z.infer<typeof branchTestScheduleSchema>;
-
-/** Assembling REPLACES the draft paper — a merge over rows the admin cannot see is nobody's ask. */
-export const assemblePaperSchema = z.object({
-  /** Same seed, same pool, same paper. Omitted means a fresh draw. */
-  seed: z.coerce.number().int().min(0).optional(),
-  manual: z.array(manualSectionPickSchema).optional(),
-  /** What to draw FROM. Given here it is also stored: drawing is what commits a spec. */
-  spec: drawSpecSchema.optional(),
-});
-export type AssemblePaperInput = z.input<typeof assemblePaperSchema>;
-export type AssemblePaperBody = z.infer<typeof assemblePaperSchema>;
 
 /** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
 export const finalizeResultSchema = z.object({
@@ -673,7 +655,6 @@ export type OfferResult = z.infer<typeof offerResultSchema>;
 
 export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
-  assemble: (id: string) => `/admin/tests/${id}/paper`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,

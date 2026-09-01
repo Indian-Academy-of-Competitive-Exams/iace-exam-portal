@@ -3,7 +3,6 @@ import { describe, it } from 'node:test';
 import { DIFFICULTY_LEVEL, DRAW_STRATEGY, type DrawStrategy } from '@iace/contracts';
 import {
   drawPaper,
-  manualPickIssues,
   type DrawCandidate,
   type DrawRequest,
   type DrawSection,
@@ -477,58 +476,6 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
       questions.map((row) => row.questionId),
       ['q6', 'q3'],
     );
-  });
-});
-
-describe('manualPickIssues', () => {
-  const sections = [
-    section({ id: 'sec_1', name: 'Reasoning', questionCount: 3, subjectId: 'subject_reasoning' }),
-  ];
-
-  it('passes a pick that fits its section', () => {
-    const picks = pool(2, { subjectId: 'subject_reasoning' });
-
-    assert.deepEqual(manualPickIssues(sections, new Map([['sec_1', picks]])), []);
-  });
-
-  it('refuses more questions than the section holds', () => {
-    const picks = pool(4, { subjectId: 'subject_reasoning' });
-
-    // The failure this prevents: a 3-question section finalized carrying 4.
-    const issues = manualPickIssues(sections, new Map([['sec_1', picks]]));
-    assert.equal(issues.length, 1);
-    assert.match(issues[0]!, /Reasoning holds 3, and 4 were chosen/);
-  });
-
-  it('refuses a question from another subject', () => {
-    const picks = pool(1, { subjectId: 'subject_quant' });
-
-    assert.match(
-      manualPickIssues(sections, new Map([['sec_1', picks]]))[0]!,
-      /not from its subject/,
-    );
-  });
-
-  it('refuses the same question in two sections', () => {
-    const twoSections = [
-      section({ id: 'sec_1', name: 'A', questionCount: 3, subjectId: null }),
-      section({ id: 'sec_2', name: 'B', questionCount: 3, subjectId: null }),
-    ];
-    const shared = pool(1);
-
-    const issues = manualPickIssues(
-      twoSections,
-      new Map([
-        ['sec_1', shared],
-        ['sec_2', shared],
-      ]),
-    );
-
-    assert.match(issues[0]!, /same question in two places/);
-  });
-
-  it('refuses a section this configuration does not have', () => {
-    assert.match(manualPickIssues(sections, new Map([['sec_gone', pool(1)]]))[0]!, /does not have/);
   });
 });
 

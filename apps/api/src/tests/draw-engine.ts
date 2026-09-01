@@ -118,43 +118,6 @@ function pinnedIds(pinned: DrawRequest['pinned']): string[] {
   return [...(pinned?.values() ?? [])].flatMap((picks) => picks.map((pick) => pick.id));
 }
 
-/** What a hand-picked paper has to satisfy before the draw is asked to fill the rest of it. */
-export function manualPickIssues(
-  sections: readonly DrawSection[],
-  pinned: ReadonlyMap<string, readonly DrawCandidate[]>,
-): string[] {
-  const byId = new Map(sections.map((section) => [section.id, section]));
-  const issues: string[] = [];
-  const counts = new Map<string, number>();
-
-  for (const [sectionId, picks] of pinned) {
-    const section = byId.get(sectionId);
-    if (!section) {
-      issues.push('A question was chosen for a section this configuration does not have.');
-      continue;
-    }
-    if (picks.length > section.questionCount) {
-      issues.push(
-        `${section.name} holds ${section.questionCount}, and ${picks.length} were chosen for it.`,
-      );
-    }
-    const offSubject = picks.filter(
-      (pick) => section.subjectId !== null && pick.subjectId !== section.subjectId,
-    );
-    if (offSubject.length > 0) {
-      issues.push(`${offSubject.length} chosen for ${section.name} are not from its subject.`);
-    }
-    for (const pick of picks) counts.set(pick.id, (counts.get(pick.id) ?? 0) + 1);
-  }
-
-  const repeated = [...counts.values()].filter((count) => count > 1).length;
-  if (repeated > 0) {
-    issues.push(`${repeated} chosen twice — a paper cannot ask the same question in two places.`);
-  }
-
-  return issues;
-}
-
 const byOrder = (a: DrawSection, b: DrawSection) => a.order - b.order;
 
 /** Each difficulty to its own count, and a pin is counted against the bucket it belongs to. */

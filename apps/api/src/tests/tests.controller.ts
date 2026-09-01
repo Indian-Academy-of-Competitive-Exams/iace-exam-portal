@@ -14,7 +14,6 @@ import {
 import {
   ActorTypes,
   addPaperQuestionSchema,
-  assemblePaperSchema,
   replacePaperQuestionSchema,
   AUDIT_ACTION,
   AUDIT_FEATURE,
@@ -30,7 +29,6 @@ import {
   testListQuerySchema,
   updateTestSchema,
   type AddPaperQuestionBody,
-  type AssemblePaperBody,
   type ReplacePaperQuestionBody,
   type CreateTestBody,
   type FinalizeResult,
@@ -119,18 +117,6 @@ export class TestsController {
   @Get(':id/paper')
   readPaper(@Param('id') id: string): Promise<TestPaper> {
     return this.paper.read(id);
-  }
-
-  /** Replaces the draft paper: a re-draw is a new paper, not a merge into invisible rows. */
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post(':id/paper')
-  @HttpCode(HttpStatus.OK)
-  assemblePaper(
-    @Param('id') id: string,
-    @Body(new ZodBody(assemblePaperSchema)) body: AssemblePaperBody,
-  ): Promise<TestPaper> {
-    return this.paper.assemble(id, body);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)

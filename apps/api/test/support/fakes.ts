@@ -1572,7 +1572,7 @@ export interface FakeOutboxRow {
   processedAt: Date | null;
 }
 
-/** A row of an assembled paper, before finalize freezes it. */
+/** A row of a draft paper, before finalize freezes it. */
 export interface FakePaperRow {
   id: string;
   testId: string;

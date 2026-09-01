@@ -60,13 +60,25 @@ function serviceWith(
   };
 }
 
-const SEED = 42;
+/** A FIXED paper is picked by hand, so this is how one is built up to the counts its config asks. */
+async function pickWholePaper(service: PaperService): Promise<void> {
+  const picks: [string, string[]][] = [
+    ['sec_1', ['r1', 'r2', 'r3']],
+    ['sec_2', ['q1', 'q2']],
+  ];
+  for (const [baseConfigSectionId, questionIds] of picks) {
+    for (const questionId of questionIds) {
+      await service.addQuestion('tst_1', { baseConfigSectionId, questionId });
+    }
+  }
+}
 
-describe('PaperService — assembling a draft paper', () => {
+describe('PaperService — picking a draft paper by hand', () => {
   it('fills each section to the count its config asks for', async () => {
     const { service, prisma } = serviceWith();
 
-    const paper = await service.assemble('tst_1', { seed: SEED });
+    await pickWholePaper(service);
+    const paper = await service.read('tst_1');
 
     assert.equal(paper.totalQuestions, 5);
     assert.deepEqual(
@@ -82,7 +94,8 @@ describe('PaperService — assembling a draft paper', () => {
   it('pins the version each row serves and copies the section’s marks', async () => {
     const { service } = serviceWith();
 
-    const paper = await service.assemble('tst_1', { seed: SEED });
+    await pickWholePaper(service);
+    const paper = await service.read('tst_1');
 
     for (const row of paper.sections.flatMap((section) => section.questions)) {
       assert.equal(row.questionVersionId, `${row.questionId}_v1`);
@@ -91,16 +104,66 @@ describe('PaperService — assembling a draft paper', () => {
     }
   });
 
-  it('replaces the paper on a re-draw rather than adding to it', async () => {
-    const { service, prisma } = serviceWith();
+  it('puts one on the paper in the next free place', async () => {
+    const kit = serviceWith();
+    const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q')!;
 
-    await service.assemble('tst_1', { seed: SEED });
-    await service.assemble('tst_1', { seed: SEED + 1 });
+    await kit.service.addQuestion('tst_1', {
+      baseConfigSectionId: 'sec_2',
+      questionId: spare.id,
+    });
 
-    // The failure this prevents: a 5-question paper quietly becoming a 10-question one.
-    assert.equal(prisma.paperQuestions.length, 5);
+    const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id)!;
+    assert.equal(added.baseConfigSectionId, 'sec_2');
+    assert.equal(added.marks, 2);
   });
 
+  /** The failure this prevents: a section quietly holding more questions than its config asks for. */
+  it('refuses one more than the section holds', async () => {
+    const kit = serviceWith();
+    await pickWholePaper(kit.service);
+
+    const error = await kit.service
+      .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId: 'q3' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /already holds/);
+  });
+
+  it('refuses a question from another subject than the section draws', async () => {
+    const { service } = serviceWith();
+
+    const error = await service
+      .addQuestion('tst_1', { baseConfigSectionId: 'sec_1', questionId: 'q1' })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  /** A paper pins a version, so a question with none — or out of the bank — has nothing to pin. */
+  it('refuses a question that is not live in the bank', async () => {
+    const { service } = serviceWith([
+      ...bank(6, 'sub_r', 'r'),
+      ...bank(6, 'sub_q', 'q'),
+      makeQuestion({ id: 'unversioned', subjectId: 'sub_q', currentVersionId: null }),
+    ]);
+
+    for (const questionId of ['gone', 'unversioned']) {
+      const error = await service
+        .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId })
+        .catch((e: unknown) => e);
+
+      assert.ok(AppException.is(error));
+      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+      assert.ok(error.fieldErrors?.questionId?.[0]);
+    }
+  });
+});
+
+describe('PaperService — drawing the papers a GENERATED test hands out', () => {
   it('draws only from ACTIVE questions that carry a version', async () => {
     const { service } = serviceWith([
       ...bank(3, 'sub_r', 'r'),
@@ -114,96 +177,19 @@ describe('PaperService — assembling a draft paper', () => {
       makeQuestion({ id: 'unversioned', subjectId: 'sub_q', currentVersionId: null }),
     ]);
 
-    const paper = await service.assemble('tst_1', { seed: SEED });
+    const rows = await service.drawVariants('tst_1', 1);
 
-    const picked = paper.sections.flatMap((section) =>
-      section.questions.map((row) => row.questionId),
-    );
+    const picked = rows.map((row) => row.questionId);
+    assert.equal(picked.length, 5);
     // A paper pins a version, so a question without one has nothing to pin.
     assert.ok(!picked.includes('draft'));
     assert.ok(!picked.includes('unversioned'));
   });
-});
 
-describe('PaperService — manual picks', () => {
-  it('accepts a section chosen by hand and auto-fills the rest', async () => {
-    const { service } = serviceWith();
-
-    const paper = await service.assemble('tst_1', {
-      seed: SEED,
-      manual: [{ baseConfigSectionId: 'sec_1', questionIds: ['r5'] }],
-    });
-
-    const reasoning = paper.sections.find((section) => section.name === 'Reasoning')!;
-    assert.equal(reasoning.questions.length, 3);
-    assert.equal(reasoning.questions[0]?.questionId, 'r5');
-    assert.equal(paper.totalQuestions, 5);
-  });
-
-  it('keeps every pick when one section was chosen for twice', async () => {
-    const { service } = serviceWith();
-
-    const paper = await service.assemble('tst_1', {
-      seed: SEED,
-      manual: [
-        { baseConfigSectionId: 'sec_1', questionIds: ['r5'] },
-        { baseConfigSectionId: 'sec_1', questionIds: ['r6'] },
-      ],
-    });
-
-    // The failure this prevents: the second entry keying over the first, dropping r5 silently.
-    const reasoning = paper.sections.find((section) => section.name === 'Reasoning')!;
-    assert.deepEqual(
-      reasoning.questions.slice(0, 2).map((row) => row.questionId),
-      ['r5', 'r6'],
-    );
-    assert.equal(reasoning.questions.length, 3);
-  });
-
-  it('refuses more hand-picked questions than the section holds', async () => {
-    const { service, prisma } = serviceWith();
-
-    const error = await service
-      .assemble('tst_1', {
-        manual: [{ baseConfigSectionId: 'sec_1', questionIds: ['r1', 'r2', 'r3', 'r4'] }],
-      })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.ok(error.fieldErrors?.manual?.[0]);
-    // Nothing written: a refused paper must not leave half of itself behind.
-    assert.equal(prisma.paperQuestions.length, 0);
-  });
-
-  it('refuses a hand-picked question from another subject', async () => {
-    const { service } = serviceWith();
-
-    const error = await service
-      .assemble('tst_1', { manual: [{ baseConfigSectionId: 'sec_1', questionIds: ['q1'] }] })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-  });
-
-  it('refuses a question that has left the bank', async () => {
-    const { service } = serviceWith();
-
-    const error = await service
-      .assemble('tst_1', { manual: [{ baseConfigSectionId: 'sec_1', questionIds: ['gone'] }] })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-  });
-});
-
-describe('PaperService — what it refuses to assemble', () => {
   it('reports the exact gap when the bank is too thin, and writes nothing', async () => {
     const { service, prisma } = serviceWith([...bank(6, 'sub_r', 'r'), ...bank(1, 'sub_q', 'q')]);
 
-    const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
+    const error = await service.drawVariants('tst_1', 1).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
@@ -228,7 +214,7 @@ describe('PaperService — what it refuses to assemble', () => {
       }),
     );
 
-    const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
+    const error = await service.drawVariants('tst_1', 1).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
@@ -236,69 +222,27 @@ describe('PaperService — what it refuses to assemble', () => {
     assert.equal(prisma.paperQuestions.length, 0);
   });
 
-  /** The failure this prevents: a draw using the stored spec while the screen shows another. */
-  it('draws from the spec it was handed rather than the one on file', async () => {
+  it('refuses a drawn test asked for no papers at all', async () => {
     const { service } = serviceWith();
 
-    // The bank holds no low-difficulty questions, so a spec asking for two must refuse.
-    const error = await service
-      .assemble('tst_1', {
-        seed: SEED,
-        spec: { sections: { sec_2: { mix: { LOW: 2, MEDIUM: 0, HIGH: 0 } } } },
-      })
-      .catch((e: unknown) => e);
+    const error = await service.drawVariants('tst_1', 0).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
+});
 
-  it('stores the spec with the paper it produced, so the two cannot disagree', async () => {
-    const { service, prisma } = serviceWith();
-    const spec = { sections: { sec_2: { mix: { LOW: 0, MEDIUM: 2, HIGH: 0 } } } };
-
-    await service.assemble('tst_1', { seed: SEED, spec });
-
-    assert.deepEqual(prisma.tests[0]!.questionPoolFilter, spec);
-  });
-
-  it('puts one on the paper in the next free place', async () => {
-    const kit = serviceWith();
-    const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q')!;
-
-    await kit.service.addQuestion('tst_1', {
-      baseConfigSectionId: 'sec_2',
-      questionId: spare.id,
-    });
-
-    const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id)!;
-    assert.equal(added.baseConfigSectionId, 'sec_2');
-    assert.equal(added.marks, 2);
-  });
-
-  /** The failure this prevents: a section quietly holding more questions than its config asks for. */
-  it('refuses one more than the section holds', async () => {
-    const kit = serviceWith();
-    await kit.service.assemble('tst_1', { seed: SEED });
-    const spare = kit.prisma.questions.find(
-      (row) =>
-        row.subjectId === 'sub_q' &&
-        !kit.prisma.paperQuestions.some((held) => held.questionId === row.id),
-    )!;
-
-    const error = await kit.service
-      .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId: spare.id })
+describe('PaperService — what it refuses to edit', () => {
+  const addOne = (service: PaperService, testId = 'tst_1') =>
+    service
+      .addQuestion(testId, { baseConfigSectionId: 'sec_2', questionId: 'q1' })
       .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.match(error.message, /already holds/);
-  });
 
   it('refuses a test a student has already sat', async () => {
     const { service, prisma } = serviceWith(undefined, makeTest({ id: 'tst_1', isLocked: true }));
     prisma.attempts.push({ testId: 'tst_1' });
 
-    const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
+    const error = await addOne(service);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
@@ -310,8 +254,8 @@ describe('PaperService — what it refuses to assemble', () => {
       makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED }),
     );
 
-    // There is no ONE paper to assemble for a test whose paper is drawn per attempt.
-    const error = await service.assemble('tst_1', { seed: SEED }).catch((e: unknown) => e);
+    // There is no ONE paper to edit for a test whose paper is drawn per attempt.
+    const error = await addOne(service);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
@@ -320,7 +264,7 @@ describe('PaperService — what it refuses to assemble', () => {
   it('refuses a test that does not exist', async () => {
     const { service } = serviceWith();
 
-    const error = await service.assemble('tst_gone', { seed: SEED }).catch((e: unknown) => e);
+    const error = await addOne(service, 'tst_gone');
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
@@ -328,10 +272,10 @@ describe('PaperService — what it refuses to assemble', () => {
 });
 
 describe('PaperService — one row at a time', () => {
-  /** Draws a whole paper, then hands back the row that holds a Quant question. */
+  /** Picks a whole paper, then hands back the row that holds a Quant question. */
   async function drawn() {
     const kit = serviceWith();
-    await kit.service.assemble('tst_1', { seed: SEED });
+    await pickWholePaper(kit.service);
     const row = kit.prisma.paperQuestions.find((candidate) =>
       candidate.questionId.startsWith('q'),
     )!;

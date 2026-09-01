@@ -186,7 +186,6 @@ import {
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
-  type AssemblePaperInput,
   type ReplacePaperQuestionInput,
   type CreateTestInput,
   type FinalizeResult,
@@ -1142,16 +1141,9 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 
-        /** The draft paper. Assembling REPLACES it — a re-draw is a new paper, not a merge. */
+        /** The draft paper, as it stands: drawn at finalize, then edited a question at a time. */
         readPaper: (id: string): Promise<TestPaper> =>
           request(ADMIN_TEST_PAPER_ROUTES.read(id), { schema: testPaperSchema }),
-
-        assemblePaper: (id: string, input: AssemblePaperInput = {}): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.assemble(id), {
-            method: 'POST',
-            body: input,
-            schema: testPaperSchema,
-          }),
 
         /** One more, in the next free place its section has. */
         addPaperQuestion: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>

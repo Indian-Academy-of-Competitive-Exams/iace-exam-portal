@@ -7,9 +7,7 @@ import {
   FORM_LEVEL_FIELD,
   PAPER_BINDING,
   QUESTION_STATUS,
-  type AssemblePaperBody,
   type BaseConfigDetail,
-  type ManualSectionPick,
   paperFeasibility,
   type DrawShortfall,
   type DrawSpec,
@@ -22,13 +20,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { BaseConfigsService } from '../configs';
-import {
-  drawPaper,
-  manualPickIssues,
-  type DrawCandidate,
-  type DrawSection,
-  type DrawnQuestion,
-} from './draw-engine';
+import { drawPaper, type DrawCandidate, type DrawSection } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
@@ -63,9 +55,9 @@ const PAPER_INCLUDE = {
 } as const satisfies Prisma.PaperQuestionInclude;
 
 export const GENERATED_HAS_NO_PAPER_MESSAGE =
-  'This test draws a fresh paper for each student, so there is no one paper to assemble. Switch it to a fixed paper first.';
+  'This test draws a fresh paper for each student, so there is no one paper to edit. Switch it to a fixed paper first.';
 
-/** Assembles a DRAFT test's paper — drawn, hand-picked, or both. Finalize is what freezes it. */
+/** A test's paper: read, drawn at finalize, or edited a question at a time until the freeze. */
 @Injectable()
 export class PaperService {
   private readonly logger = new Logger(PaperService.name);
@@ -80,51 +72,6 @@ export class PaperService {
   async read(testId: string): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     const config = await this.configs.detail(test.baseConfigId);
-    return this.paperOf(test.id, config);
-  }
-
-  async assemble(testId: string, input: AssemblePaperBody): Promise<TestPaper> {
-    const test = await this.requireTest(testId);
-    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
-
-    const config = await this.configs.detail(test.baseConfigId);
-    const sections = config.sections.map(toDrawSection);
-    // What is on screen wins over what was stored, so a draw never uses a spec being edited.
-    const spec = input.spec ?? (test.questionPoolFilter as DrawSpec | null) ?? null;
-
-    const pinned = await this.resolvePicks(input.manual ?? []);
-    this.assertPicksFit(sections, pinned);
-
-    const pool = await this.poolFor(sections, spec);
-    // Judged before the draw, so a refusal names the difficulty rather than only the section.
-    this.assertBankCanFill(config.sections, spec, pool);
-
-    const result = drawPaper({
-      sections,
-      pool,
-      strategy: test.drawStrategy,
-      spec,
-      seed: input.seed ?? freshSeed(),
-      pinned,
-    });
-
-    if (!result.ok) {
-      throw new AppException(
-        ErrorCodes.DRAW_SHORTFALL,
-        'The bank does not hold enough questions to fill every section of this paper.',
-        {
-          fieldErrors: Object.fromEntries(
-            result.shortfalls.map((gap) => [
-              gap.baseConfigSectionId,
-              [`${gap.sectionName} needs ${gap.needed}, and only ${gap.available} are available.`],
-            ]),
-          ),
-        },
-      );
-    }
-
-    await this.replacePaper(test, result.questions, input.spec);
-
     return this.paperOf(test.id, config);
   }
 
@@ -363,25 +310,6 @@ export class PaperService {
     }
   }
 
-  /** Replaced wholesale: a re-draw is a new paper, not a merge into rows nobody can see. */
-  private async replacePaper(
-    test: { id: string; baseConfigId: string; isLocked: boolean },
-    questions: readonly DrawnQuestion[],
-    spec?: DrawSpec,
-  ): Promise<void> {
-    const { id: testId, baseConfigId } = test;
-    await this.prisma.$transaction(async (tx) => {
-      // First: it reads the paper it is giving the counts back for, and this replaces that paper.
-      await thaw(tx, test);
-      await tx.paperQuestion.deleteMany({ where: { testId } });
-      await tx.paperQuestion.createMany({
-        data: questions.map((row) => ({ ...row, testId, baseConfigId })),
-      });
-      // Stored with the paper it produced, or the two would disagree about what was drawn from.
-      if (spec) await tx.test.update({ where: { id: testId }, data: { questionPoolFilter: spec } });
-    });
-  }
-
   /** Only ACTIVE questions carrying a current version: a paper pins a version, so there must be one. */
   private async poolFor(
     sections: readonly DrawSection[],
@@ -417,52 +345,6 @@ export class PaperService {
       'The bank does not hold enough questions to fill every section of this paper.',
       { fieldErrors: shortfallErrors(gaps) },
     );
-  }
-
-  /** A hand-pick overrides the pool filter: the admin chose this question, not a description of one. */
-  private async resolvePicks(
-    picks: readonly ManualSectionPick[],
-  ): Promise<Map<string, DrawCandidate[]>> {
-    const wanted = [...new Set(picks.flatMap((pick) => pick.questionIds))];
-    if (wanted.length === 0) return new Map();
-
-    const rows = await this.prisma.question.findMany({
-      where: {
-        id: { in: wanted },
-        status: QUESTION_STATUS.ACTIVE,
-        currentVersionId: { not: null },
-      },
-      select: CANDIDATE_SELECT,
-    });
-    const byId = new Map(rows.filter(hasVersion).map((row) => [row.id, toCandidate(row)]));
-
-    const missing = wanted.filter((id) => !byId.has(id));
-    if (missing.length > 0) {
-      const message = `${missing.length} of the chosen questions are no longer in the bank, or have no published version.`;
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-        fieldErrors: { manual: [message] },
-      });
-    }
-
-    // Accumulated, not keyed: two picks for one section are the admin's, not a row to drop.
-    const chosen = new Map<string, DrawCandidate[]>();
-    for (const pick of picks) {
-      const held = chosen.get(pick.baseConfigSectionId) ?? [];
-      held.push(...pick.questionIds.map((id) => byId.get(id)!));
-      chosen.set(pick.baseConfigSectionId, held);
-    }
-    return chosen;
-  }
-
-  private assertPicksFit(
-    sections: readonly DrawSection[],
-    pinned: ReadonlyMap<string, readonly DrawCandidate[]>,
-  ): void {
-    const issues = manualPickIssues(sections, pinned);
-    if (issues.length === 0) return;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, issues[0]!, {
-      fieldErrors: { manual: issues },
-    });
   }
 
   private assertAssemblable(test: { attemptCount: number; paperBinding: string }): void {

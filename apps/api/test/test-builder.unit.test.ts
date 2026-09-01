@@ -81,18 +81,29 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
   };
 }
 
-const SEED = 20260824;
+/** A FIXED paper is picked by hand, so this is how one is built up to the counts its config asks. */
+async function pickWholePaper(paper: PaperService, testId: string): Promise<void> {
+  const picks: [string, string[]][] = [
+    ['sec_1', ['r1', 'r2', 'r3']],
+    ['sec_2', ['q1', 'q2']],
+  ];
+  for (const [baseConfigSectionId, questionIds] of picks) {
+    for (const questionId of questionIds) {
+      await paper.addQuestion(testId, { baseConfigSectionId, questionId });
+    }
+  }
+}
 
 describe('the Phase-2 milestone — a config becomes a publishable mock', () => {
-  it('walks config -> draft -> draw -> finalize -> series -> offered', async () => {
+  it('walks config -> draft -> paper -> finalize -> series -> offered', async () => {
     const { tests, paper, finalizer, offering, prisma } = builder();
 
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     assert.equal(draft.status, TEST_STATUS.DRAFT);
     assert.equal(draft.totalQuestions, 5);
 
-    const drawn = await paper.assemble(draft.id, { seed: SEED });
-    assert.equal(drawn.totalQuestions, 5);
+    await pickWholePaper(paper, draft.id);
+    assert.equal((await paper.read(draft.id)).totalQuestions, 5);
 
     const frozen = await finalizer.finalize(draft.id);
     assert.equal(frozen.finalizedByThisCall, true);
@@ -119,7 +130,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
       .catch((e: unknown) => e);
     assert.ok(AppException.is(beforeFinalize));
 
-    await paper.assemble(draft.id, { seed: SEED });
+    await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
     // Frozen but in no series: still not offerable, because a test reaches a student through one.
@@ -158,21 +169,24 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.ok(AppException.is(atEdit));
   });
 
-  it('one paper per sitting: once it is sat it cannot be redrawn, and a second finalize does nothing', async () => {
+  it('one paper per sitting: once it is sat it cannot be edited, and a second finalize does nothing', async () => {
     const { tests, paper, finalizer, prisma } = builder();
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
-    await paper.assemble(draft.id, { seed: SEED });
+    await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
     const second = await finalizer.finalize(draft.id);
     assert.equal(second.finalizedByThisCall, false);
 
     const before = prisma.paperQuestions.map((row) => row.questionId).sort();
+    const row = prisma.paperQuestions[0]!;
     prisma.attempts.push({ testId: draft.id });
 
-    const redraw = await paper.assemble(draft.id, { seed: SEED + 1 }).catch((e: unknown) => e);
-    assert.ok(AppException.is(redraw));
-    assert.equal(redraw.code, ErrorCodes.CONFLICT);
+    const edit = await paper
+      .replaceQuestion(draft.id, row.id, { questionId: 'r8' })
+      .catch((e: unknown) => e);
+    assert.ok(AppException.is(edit));
+    assert.equal(edit.code, ErrorCodes.CONFLICT);
 
     // Every student shares one paper, and it is the one they started sitting.
     assert.deepEqual(prisma.paperQuestions.map((row) => row.questionId).sort(), before);
@@ -186,7 +200,7 @@ describe('the invariants Phase 2 must not have broken', () => {
   it('gives back the use it counted, so a refreeze does not count the same question twice', async () => {
     const { tests, paper, finalizer, prisma } = builder();
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
-    await paper.assemble(draft.id, { seed: SEED });
+    await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
     const drawn = prisma.paperQuestions.map((row) => row.questionId);
@@ -197,13 +211,18 @@ describe('the invariants Phase 2 must not have broken', () => {
       drawn.map(() => 1),
     );
 
-    // The same seed draws the same paper, so every question here is one that survived the thaw.
-    await paper.assemble(draft.id, { seed: SEED });
+    // Taking one off thaws the paper, and the question goes straight back where it was.
+    const row = prisma.paperQuestions[0]!;
+    await paper.removeQuestion(draft.id, row.id);
     assert.deepEqual(
       counted(),
       drawn.map(() => 0),
     );
 
+    await paper.addQuestion(draft.id, {
+      baseConfigSectionId: row.baseConfigSectionId,
+      questionId: row.questionId,
+    });
     await finalizer.finalize(draft.id);
     assert.deepEqual(
       counted(),
@@ -215,8 +234,8 @@ describe('the invariants Phase 2 must not have broken', () => {
     const { tests, paper, prisma } = builder();
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
-    await paper.assemble(draft.id, { seed: SEED });
-    await paper.assemble(draft.id, { seed: SEED });
+    await pickWholePaper(paper, draft.id);
+    await paper.removeQuestion(draft.id, prisma.paperQuestions[0]!.id);
 
     assert.deepEqual(
       prisma.questions.map((row) => row.fixedUseCount),
@@ -224,15 +243,15 @@ describe('the invariants Phase 2 must not have broken', () => {
     );
   });
 
-  /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the redraw. */
-  it('lets a frozen paper nobody has sat be redrawn, and thaws it in doing so', async () => {
+  /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the edit. */
+  it('lets a frozen paper nobody has sat be edited, and thaws it in doing so', async () => {
     const { tests, paper, finalizer, prisma } = builder();
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
-    await paper.assemble(draft.id, { seed: SEED });
+    await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
     assert.equal(prisma.tests[0]!.isLocked, true);
 
-    await paper.assemble(draft.id, { seed: SEED + 1 });
+    await paper.replaceQuestion(draft.id, prisma.paperQuestions[0]!.id, { questionId: 'r8' });
 
     const test = prisma.tests[0]!;
     assert.equal(test.isLocked, false);
@@ -241,14 +260,26 @@ describe('the invariants Phase 2 must not have broken', () => {
   });
 
   it('a bank too thin stops the milestone at the draw, having written nothing', async () => {
-    const { tests, paper, prisma } = builder([...bank(8, 'sub_r', 'r'), ...bank(1, 'sub_q', 'q')]);
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const { tests, finalizer, prisma } = builder([
+      ...bank(8, 'sub_r', 'r'),
+      ...bank(1, 'sub_q', 'q'),
+    ]);
+    const draft = await tests.create(
+      {
+        baseConfigId: 'cfg_1',
+        title: 'Mock 1',
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+        paperBinding: PAPER_BINDING.GENERATED,
+      },
+      ADMIN,
+    );
 
-    const error = await paper.assemble(draft.id, { seed: SEED }).catch((e: unknown) => e);
+    const error = await finalizer.finalize(draft.id).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
     assert.equal(prisma.paperQuestions.length, 0);
+    assert.equal(prisma.tests[0]!.isLocked, false);
     assert.equal(prisma.configs[0]!.locked, false);
   });
 });
