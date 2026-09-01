@@ -1044,3 +1044,119 @@ describe('the performance report — a progressive series', () => {
     assert.deepEqual(offered, [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }]);
   });
 });
+
+// --------------------------------------------------------------------------- the payload whitelist
+// ---------------------------------------------------------------------------
+
+/** Every key the report may carry, at any depth. Adding one here is a review, never a side effect. */
+const REPORT_FIELDS = [
+  'accuracy',
+  'attemptId',
+  'attempted',
+  'attemptsCounted',
+  'averageScore',
+  'avgOnCorrectSec',
+  'avgOnWrongSec',
+  'avgPerQuestionSec',
+  'bands',
+  'baseConfigSectionId',
+  'cohort',
+  'cohortAverageScore',
+  'cohortAverageTimeSec',
+  'cohortPValue',
+  'cohortQuestionCount',
+  'cohortSampleSize',
+  'cohortSize',
+  'composition',
+  'correct',
+  'correctCount',
+  'count',
+  'difficulty',
+  'earned',
+  'evaluationMode',
+  'first',
+  'from',
+  'generatedAt',
+  'isYours',
+  'key',
+  'label',
+  'last',
+  'lostToUnanswered',
+  'lostToWrong',
+  'marks',
+  'maxMarks',
+  'name',
+  'net',
+  'order',
+  'penalty',
+  'percentile',
+  'points',
+  'progression',
+  'questionCount',
+  'rank',
+  'scope',
+  'scopeId',
+  'score',
+  'sections',
+  'seriesId',
+  'spentOnUnattemptedSec',
+  'steps',
+  'studentId',
+  'subjectId',
+  'subjectName',
+  'subjects',
+  'submittedAt',
+  'testId',
+  'testTitle',
+  'time',
+  'timeSpentSec',
+  'title',
+  'to',
+  'topperScore',
+  'total',
+  'totalSec',
+  'trajectory',
+  'trend',
+  'unattempted',
+  'unattemptedCount',
+  'wrong',
+  'wrongCount',
+];
+
+/** Every key name at every depth, so a field added three levels down is caught like one at the top. */
+function keysIn(value: unknown, found = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) keysIn(item, found);
+  } else if (typeof value === 'object' && value !== null) {
+    for (const [key, held] of Object.entries(value)) {
+      found.add(key);
+      keysIn(held, found);
+    }
+  }
+  return found;
+}
+
+describe('the performance report — the payload whitelist', () => {
+  /** The mirror of the public report's whitelist: a new key here is a decision, not a refactor. */
+  it('carries exactly the fields the contract names and nothing else', async () => {
+    const { service } = bench({
+      series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }],
+      seriesTests: [
+        { testSeriesId: 'ser_1', testId: 'tst_1', order: 1 },
+        { testSeriesId: 'ser_1', testId: 'tst_2', order: 2 },
+      ],
+    });
+
+    // One sitting draws the curve, the ramp draws the progression; together they are the whole shape.
+    const sitting = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId: 'att_1' }),
+    );
+    const ramp = await service.report(
+      STUDENT,
+      query({ scope: PERFORMANCE_SCOPES.SERIES, seriesId: 'ser_1' }),
+    );
+
+    assert.deepEqual([...keysIn(ramp, keysIn(sitting))].toSorted(), REPORT_FIELDS);
+  });
+});

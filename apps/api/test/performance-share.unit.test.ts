@@ -316,6 +316,22 @@ describe('reading a shared report', () => {
     }
   });
 
+  /** The floor is five, not three: four sitters still narrow the topper to one of three rivals. */
+  it('withholds them one sitter short of the floor, and publishes them at it', async () => {
+    const short = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })], {}, 2);
+    const enough = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })], {}, 3);
+
+    const withheld = await short.service.readPublic('live-token');
+    const published = await enough.service.readPublic('live-token');
+
+    assert.equal(withheld.cohortSize, 4);
+    assert.equal(withheld.topperScore, null);
+    assert.equal(withheld.averageScore, null);
+    assert.deepEqual(withheld.bands, []);
+    assert.equal(published.cohortSize, 5);
+    assert.notEqual(published.topperScore, null);
+  });
+
   /** The failure this prevents: two sitters, so the topper IS the one other student in the room. */
   it('publishes no topper, average or curve for a cohort too small to hide in', async () => {
     const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })]);
