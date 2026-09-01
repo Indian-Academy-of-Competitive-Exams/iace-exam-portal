@@ -1,18 +1,18 @@
-import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, Layers, Trophy } from 'lucide-react';
 import {
   Alert,
   Button,
-  Combobox,
   EmptyState,
   LoadingState,
-  PageFrame,
   PageHeader,
+  PanelFrame,
   SectionHeading,
   plural,
+  type ListFilter,
 } from '@iace/ui';
+import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import {
   EVALUATION_MODE,
   LEADERBOARD_SCOPES,
@@ -26,9 +26,9 @@ import {
 import { api } from '../lib/api';
 import {
   LEADERBOARD_SCOPE_LABELS,
+  NAV_ITEMS,
   PERFORMANCE_QUERY_KEY,
   PERFORMANCE_SERIES_QUERY_KEY,
-  PICKER_WIDTH,
   ROUTES,
   leaderboardQueryKey,
 } from '../lib/constants';
@@ -54,13 +54,26 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 }
 
 export function LeaderboardPage() {
-  const [scope, setScope] = React.useState<LeaderboardScope>(LEADERBOARD_SCOPES.TEST);
-  const [picked, setPicked] = React.useState('');
-  const [pickedSeries, setPickedSeries] = React.useState('');
-
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const sat = testsSat(trend.data?.points ?? []);
-  const testId = sat.some((test) => test.testId === picked) ? picked : (sat[0]?.testId ?? '');
+
+  const FILTERS = [
+    { key: 'scope', kind: 'choice', label: 'Board', primary: true, items: SCOPE_ITEMS },
+    {
+      key: 'testId',
+      kind: 'choice',
+      label: 'Test',
+      primary: true,
+      items: [
+        { value: '', label: 'Any test' },
+        ...sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
+      ],
+    },
+  ] as const satisfies readonly ListFilter[];
+
+  const filters = useFilterSpec(FILTERS);
+  const scope = (filters.values.scope || LEADERBOARD_SCOPES.TEST) as LeaderboardScope;
+  const testId = filters.values.testId || (sat[0]?.testId ?? '');
 
   const onSeries = scope === LEADERBOARD_SCOPES.SERIES;
   const series = useQuery({
@@ -69,9 +82,8 @@ export function LeaderboardPage() {
     enabled: onSeries,
   });
   const seriesRows = series.data ?? [];
-  const seriesId = seriesRows.some((row) => row.id === pickedSeries)
-    ? pickedSeries
-    : (seriesRows[0]?.id ?? '');
+  // No picker chooses a series any more; the board reads whichever the student sat most recently.
+  const seriesId = seriesRows[0]?.id ?? '';
 
   const scopeId = scopeIdFor(scope, testId, seriesId);
   const board = useQuery({
@@ -81,28 +93,18 @@ export function LeaderboardPage() {
   });
 
   return (
-    <PageFrame
+    <PanelFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Leaderboard"
           meta={standingMeta(board.data)}
-          action={
-            <Pickers
-              tests={sat}
-              testId={testId}
-              onPickTest={setPicked}
-              series={seriesRows}
-              seriesId={seriesId}
-              onPickSeries={setPickedSeries}
-              scope={scope}
-              onPickScope={setScope}
-            />
-          }
         />
       }
+      filters={{ spec: FILTERS, state: filters }}
     >
       <Body trend={trend} series={series} board={board} tests={sat} onSeries={onSeries} />
-    </PageFrame>
+    </PanelFrame>
   );
 }
 
@@ -207,60 +209,4 @@ function standingMeta(board?: Leaderboard): string | undefined {
   if (!board) return undefined;
   if (board.you === null) return plural(board.cohortSize, 'student');
   return `${ordinal(board.you.rank)} of ${board.cohortSize}`;
-}
-
-/** What the board is OF, chosen in the header: which paper or series, and how wide to read. */
-function Pickers({
-  tests,
-  testId,
-  onPickTest,
-  series,
-  seriesId,
-  onPickSeries,
-  scope,
-  onPickScope,
-}: Readonly<{
-  tests: readonly SatTest[];
-  testId: string;
-  onPickTest: (testId: string) => void;
-  series: readonly SatSeries[];
-  seriesId: string;
-  onPickSeries: (seriesId: string) => void;
-  scope: LeaderboardScope;
-  onPickScope: (scope: LeaderboardScope) => void;
-}>) {
-  if (tests.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {scope === LEADERBOARD_SCOPES.TEST ? (
-        <Combobox
-          className={PICKER_WIDTH.RECORD}
-          items={tests.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED }))}
-          value={testId}
-          onChange={onPickTest}
-          clearable={false}
-          aria-label="Test"
-        />
-      ) : null}
-      {scope === LEADERBOARD_SCOPES.SERIES && series.length > 0 ? (
-        <Combobox
-          className={PICKER_WIDTH.RECORD}
-          items={series.map((row) => ({ value: row.id, label: row.name }))}
-          value={seriesId}
-          onChange={onPickSeries}
-          clearable={false}
-          aria-label="Series"
-        />
-      ) : null}
-      <Combobox
-        className={PICKER_WIDTH.SCOPE}
-        items={SCOPE_ITEMS}
-        value={scope}
-        onChange={(next) => onPickScope(next as LeaderboardScope)}
-        clearable={false}
-        aria-label="Scope"
-      />
-    </div>
-  );
 }
