@@ -291,7 +291,12 @@ describe('a save that races the submit', () => {
     const claim = prisma.attempt.updateMany;
     prisma.attempt.updateMany = async (args) => {
       // The student's last answer lands between the read and the take, as an autosave would.
-      await state.save('stu_1', 'att_1', { revision: 2, answers: [change({ questionId: 'q2' })] });
+      await state.save(
+        'stu_1',
+        'att_1',
+        { revision: 2, answers: [change({ questionId: 'q2' })] },
+        NOW,
+      );
       return claim(args);
     };
 
