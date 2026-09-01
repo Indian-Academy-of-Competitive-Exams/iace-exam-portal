@@ -6,6 +6,9 @@
 
 export const PLOT_WIDTH = 1000;
 
+/** A full-width plot takes this instead, so its type lands the same size as a half-width one's. */
+export const PLOT_WIDTH_WIDE = 2000;
+
 export interface PlotPad {
   left: number;
   right: number;
@@ -80,6 +83,16 @@ export function bandX(
 export function bandWidth(count: number, width: number = PLOT_WIDTH, cap = 96): number {
   const span = width - PLOT_PAD.left - PLOT_PAD.right;
   return Math.min(cap, (span / Math.max(count, 1)) * 0.62);
+}
+
+/** Rough advance width of one character at the size axis labels are set in. */
+const LABEL_CHAR = 11;
+
+/** SVG has no ellipsis: a label wider than its own slot silently smears into its neighbour. */
+export function fitLabel(text: string, slot: number): string {
+  const room = Math.floor(slot / LABEL_CHAR);
+  if (text.length <= room) return text;
+  return `${text.slice(0, Math.max(room - 1, 1))}…`;
 }
 
 export interface PlotScale {

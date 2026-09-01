@@ -8,6 +8,7 @@ import {
   bandWidth,
   bandX,
   barPath,
+  fitLabel,
   scaleY,
   type PlotPad,
   type PlotScale,
@@ -45,9 +46,8 @@ export interface ColumnPlotProps {
 /** Left and right come from the shared pad, so a line plot stacked above lands on the same bands. */
 const PAD: PlotPad = { ...PLOT_PAD, top: 64, bottom: 104 };
 const DEFAULT_HEIGHT = 560;
-const FAINTEST = 0.5;
 
-/** Ordered bands on one hue, light to dark, every value written on its cap. */
+/** One series, one hue: the column's height carries the value, its colour only says which series. */
 export function ColumnPlot({
   columns,
   max = 100,
@@ -63,6 +63,7 @@ export function ColumnPlot({
   const scale: PlotScale = { min, max };
   const floor = height - PAD.bottom;
   const bar = bandWidth(columns.length, width);
+  const slot = (width - PAD.left - PAD.right) / Math.max(columns.length, 1);
 
   const show = (column: PlotColumn, index: number) => () =>
     setTip({
@@ -91,10 +92,10 @@ export function ColumnPlot({
             column={column}
             x={bandX(index, columns.length, PAD, width)}
             width={bar}
+            slot={slot}
             floor={floor}
             top={column.value === null ? floor : scaleY(column.value, scale, height, PAD)}
             markerTop={column.marker == null ? null : scaleY(column.marker, scale, height, PAD)}
-            shade={shadeOf(index, columns.length)}
             fill={SERIES_FILL[series]}
             suffix={suffix}
           />
@@ -127,10 +128,10 @@ interface ColumnProps {
   column: PlotColumn;
   x: number;
   width: number;
+  slot: number;
   floor: number;
   top: number;
   markerTop: number | null;
-  shade: number;
   fill: string;
   suffix: string;
 }
@@ -139,10 +140,10 @@ function Column({
   column,
   x,
   width,
+  slot,
   floor,
   top,
   markerTop,
-  shade,
   fill,
   suffix,
 }: Readonly<ColumnProps>) {
@@ -151,7 +152,6 @@ function Column({
       {column.value === null ? null : (
         <path
           d={barPath({ x: x - width / 2, y: top, width, height: Math.max(floor - top, 0) }, 'top')}
-          fillOpacity={shade}
           className={fill}
         />
       )}
@@ -160,7 +160,7 @@ function Column({
         y={top - 16}
         textAnchor="middle"
         fontSize={28}
-        fontWeight={700}
+        fontWeight={600}
         className="fill-foreground"
       >
         {textFor(column, suffix)}
@@ -169,7 +169,7 @@ function Column({
         <MarkerTick x={x} y={markerTop} width={width} label={column.markerDisplay} />
       )}
       <text x={x} y={floor + 34} textAnchor="middle" fontSize={23} className="fill-chart-ink">
-        {column.label}
+        {fitLabel(column.label, slot)}
       </text>
       {column.meta ? (
         <text
@@ -211,12 +211,6 @@ function MarkerTick({
       ) : null}
     </g>
   );
-}
-
-/** One hue, light to dark across the ordered bands — a ramp, never eight unrelated colours. */
-function shadeOf(index: number, count: number): number {
-  if (count <= 1) return 1;
-  return FAINTEST + (1 - FAINTEST) * (index / (count - 1));
 }
 
 function textFor(column: PlotColumn, suffix: string): string {

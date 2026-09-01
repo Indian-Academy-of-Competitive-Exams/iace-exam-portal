@@ -8,6 +8,7 @@ import {
   SERIES_STROKE,
   SERIES_SWATCH,
   bandX,
+  fitLabel,
   pointX,
   scaleY,
   type PlotPad,
@@ -178,11 +179,11 @@ export function LinePlot({
                   key={`x-${point.key}`}
                   x={point.x}
                   y={box - 12}
-                  textAnchor="middle"
+                  textAnchor={anchorAt(point.index, points.length)}
                   fontSize={22}
                   className="fill-chart-ink"
                 >
-                  {point.label}
+                  {fitLabel(point.label, slot)}
                 </text>
               ) : null,
             )}
@@ -365,6 +366,12 @@ function runsOf(points: readonly PlottedPoint[]): PlottedPoint[][] {
 function quarters(scale: PlotScale): number[] {
   const step = (scale.max - scale.min) / 4;
   return [0, 1, 2, 3, 4].map((n) => Math.round(scale.min + n * step));
+}
+
+/** The end labels turn inward: centred on a point sitting ON the edge, half of one falls off the box. */
+function anchorAt(index: number, count: number): 'start' | 'middle' | 'end' {
+  if (index === 0) return 'start';
+  return index === count - 1 ? 'end' : 'middle';
 }
 
 /** Past six points the axis thins out, and the last one is always named. */

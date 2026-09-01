@@ -43,7 +43,7 @@ export function ComparisonCards({ items, className }: Readonly<ComparisonCardsPr
             </div>
 
             <p className="mt-3 flex items-baseline leading-none">
-              <span className="text-3xl font-bold text-foreground">
+              <span className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
                 {item.display ?? item.value}
               </span>
               <span className="text-base font-semibold text-muted-foreground">/{item.max}</span>
