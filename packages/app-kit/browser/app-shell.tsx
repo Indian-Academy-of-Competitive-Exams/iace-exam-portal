@@ -22,7 +22,7 @@ import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
 /** How wide the content runs beside the sidebar. `wide` caps sprawl, it does not create a margin. */
 const WIDTHS = {
   narrow: 'max-w-5xl',
-  wide: 'max-w-[100rem]',
+  wide: 'max-w-none',
 } as const;
 
 export type ShellWidth = keyof typeof WIDTHS;

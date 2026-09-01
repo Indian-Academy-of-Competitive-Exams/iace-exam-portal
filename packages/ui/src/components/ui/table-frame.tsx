@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
  */
 export const PAGE_CONTENT_CLASS = [
   // Unconditional: a framed page is a flex child, so it shortens to fit the padding.
-  'mx-auto w-full flex-1 overflow-y-auto px-5 py-6',
+  'mx-auto w-full flex-1 overflow-y-auto px-5 py-6 xl:px-8 2xl:px-10',
   'has-[[data-page-frame]]:flex has-[[data-page-frame]]:flex-col',
   'has-[[data-page-frame]]:overflow-hidden',
 ].join(' ');
