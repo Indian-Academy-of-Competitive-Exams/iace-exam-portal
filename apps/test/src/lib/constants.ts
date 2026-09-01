@@ -56,6 +56,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.BROWSE, label: 'Free tests', icon: Gift },
 ];
 
+/** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
+export const PICKER_WIDTH = { RECORD: 'w-72', SCOPE: 'w-44' } as const;
+
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
 

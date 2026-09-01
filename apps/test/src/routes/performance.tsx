@@ -42,6 +42,7 @@ import {
   PERFORMANCE_QUERY_KEY,
   PERFORMANCE_SCOPE_LABELS,
   PERFORMANCE_SERIES_QUERY_KEY,
+  PICKER_WIDTH,
   ROUTES,
   performanceReportQueryKey,
 } from '../lib/constants';
@@ -104,7 +105,7 @@ export function PerformancePage() {
       header={
         <PageHeader
           title="Performance"
-          meta={trend.data ? plural(trend.data.testsSat, 'test') : undefined}
+          meta={reportMeta(trend.data?.testsSat, report.data?.evaluationMode ?? null)}
           action={
             <Pickers
               tests={sat}
@@ -115,7 +116,6 @@ export function PerformancePage() {
               onPickSeries={setPickedSeries}
               scope={scope}
               onPickScope={setScope}
-              report={report.data}
             />
           }
         />
@@ -229,7 +229,7 @@ function Report({
 
       <MarksFigure composition={report.composition} counts={counts} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {report.sections.length > 0 ? <SectionsFigure sections={report.sections} /> : null}
         <DifficultyFigure difficulty={report.difficulty} />
       </div>
@@ -249,7 +249,7 @@ function StandingRow({
   const curve = cohort !== null && cohort.bands.length > 0 ? cohort : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <TrajectoryFigure trajectory={trajectory} />
       {curve ? <CohortFigure cohort={curve} /> : null}
     </div>
@@ -266,7 +266,6 @@ function Pickers({
   onPickSeries,
   scope,
   onPickScope,
-  report,
 }: Readonly<{
   tests: readonly SatTest[];
   testId: string;
@@ -276,15 +275,14 @@ function Pickers({
   onPickSeries: (seriesId: string) => void;
   scope: PerformanceScope;
   onPickScope: (scope: PerformanceScope) => void;
-  report?: PerformanceReport;
 }>) {
   if (tests.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <ModeBadge mode={report?.evaluationMode ?? null} />
+    <div className="flex flex-wrap items-center justify-end gap-2">
       {scope === PERFORMANCE_SCOPES.TEST ? (
         <Combobox
+          className={PICKER_WIDTH.RECORD}
           items={tests.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED }))}
           value={testId}
           onChange={onPickTest}
@@ -294,6 +292,7 @@ function Pickers({
       ) : null}
       {scope === PERFORMANCE_SCOPES.SERIES && series.length > 0 ? (
         <Combobox
+          className={PICKER_WIDTH.RECORD}
           items={series.map((row) => ({ value: row.id, label: row.name }))}
           value={seriesId}
           onChange={onPickSeries}
@@ -302,6 +301,7 @@ function Pickers({
         />
       ) : null}
       <Combobox
+        className={PICKER_WIDTH.SCOPE}
         items={SCOPE_ITEMS}
         value={scope}
         onChange={(next) => onPickScope(next as PerformanceScope)}
@@ -312,8 +312,17 @@ function Pickers({
   );
 }
 
-function ModeBadge({ mode }: Readonly<{ mode: EvaluationMode | null }>) {
-  if (mode === null) return null;
+/** How the paper is marked is a fact about the record, so it rides beside the count, not the pickers. */
+function reportMeta(testsSat: number | undefined, mode: EvaluationMode | null) {
+  if (testsSat === undefined && mode === null) return undefined;
   const ranked = mode === EVALUATION_MODE.RANKED;
-  return <Badge variant={ranked ? 'success' : 'neutral'}>{ranked ? 'Ranked' : 'Practice'}</Badge>;
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      {testsSat === undefined ? null : plural(testsSat, 'test')}
+      {mode === null ? null : (
+        <Badge variant={ranked ? 'success' : 'neutral'}>{ranked ? 'Ranked' : 'Practice'}</Badge>
+      )}
+    </span>
+  );
 }

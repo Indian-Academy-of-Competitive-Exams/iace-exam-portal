@@ -5,6 +5,7 @@ import {
   DistributionPlot,
   DivergingBars,
   LinePlot,
+  Metric,
   plural,
   type CompositionSegment,
   type DistributionMarker,
@@ -26,6 +27,10 @@ import {
 
 const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
+
+/** viewBox units against a 1000-wide box, so a plot in a half-page column lands about 280px tall. */
+const PLOT_HEIGHT = 360;
+const COLUMN_HEIGHT = 420;
 
 /** A band the wire named but no level covers keeps its own name rather than reading as unknown. */
 const difficultyLabel = (name: string) => DIFFICULTY_LABELS[name as DifficultyLevel] ?? name;
@@ -50,14 +55,11 @@ export function TrajectoryFigure({
     <ChartFigure
       title="Percentile"
       meta={plural(trajectory.length, 'sitting')}
-      figure={
-        <span className="text-2xl font-bold tabular-nums text-series-1">
-          {latest?.value ?? UNMEASURED}
-        </span>
-      }
+      figure={<Metric size="md" label="Latest" value={latest?.value ?? UNMEASURED} />}
     >
       <LinePlot
         points={points}
+        height={PLOT_HEIGHT}
         ticks={[0, 25, 50, 75, 100]}
         aria-label="Percentile across the sittings in scope"
       />
@@ -97,12 +99,16 @@ export function CohortFigure({
       title="Cohort standing"
       meta={plural(cohort.cohortSize, 'sitting')}
       figure={
-        <span className="text-2xl font-bold tabular-nums text-series-1">
-          {cohort.rank === null ? UNMEASURED : `#${cohort.rank}`}
-        </span>
+        <Metric
+          size="md"
+          label="Rank"
+          value={cohort.rank === null ? UNMEASURED : `#${cohort.rank}`}
+          unit={cohort.cohortSize > 0 ? `of ${cohort.cohortSize}` : undefined}
+        />
       }
     >
       <DistributionPlot
+        height={PLOT_HEIGHT}
         bands={cohort.bands}
         markers={markers}
         min={cohort.bands[0]?.from ?? 0}
@@ -149,12 +155,7 @@ export function MarksFigure({
       title="Marks"
       meta={`${counts.correct} correct · ${counts.wrong} wrong · ${counts.unattempted} left · penalty −${composition.penalty}`}
       figure={
-        <span className="text-2xl font-bold tabular-nums text-foreground">
-          {composition.net}
-          <span className="text-base font-semibold text-muted-foreground">
-            /{composition.maxMarks}
-          </span>
-        </span>
+        <Metric size="md" label="Net" value={composition.net} unit={`/ ${composition.maxMarks}`} />
       }
     >
       <CompositionBar segments={segments} aria-label="Where this sitting's marks came from" />
@@ -207,6 +208,7 @@ export function DifficultyFigure({
     <ChartFigure title="Difficulty" meta={`${attempted} of ${total} attempted`}>
       <ColumnPlot
         columns={columns}
+        height={COLUMN_HEIGHT}
         suffix="%"
         aria-label="Accuracy by difficulty band, against the cohort"
       />
@@ -257,11 +259,7 @@ export function TimeFigure({ time, counts }: Readonly<{ time: TimeUse; counts: P
     <ChartFigure
       title="Time"
       meta={`${minutes(time.avgPerQuestionSec)} per question`}
-      figure={
-        <span className="text-2xl font-bold tabular-nums text-foreground">
-          {minutes(time.totalSec)}
-        </span>
-      }
+      figure={<Metric size="md" label="Total" value={minutes(time.totalSec)} />}
     >
       <CompositionBar segments={segments} aria-label="How the clock was spent" />
     </ChartFigure>

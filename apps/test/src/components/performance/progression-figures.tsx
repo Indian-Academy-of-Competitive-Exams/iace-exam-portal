@@ -4,6 +4,8 @@ import {
   ChartFigure,
   ColumnPlot,
   LinePlot,
+  Metric,
+  PLOT_WIDTH_WIDE,
   plural,
   type LinePoint,
   type PlotColumn,
@@ -16,6 +18,13 @@ const UNMEASURED = '—';
 const UNTITLED = 'Untitled test';
 const PERCENTILE_TICKS = [0, 25, 50, 75, 100];
 
+/** viewBox units against the wide box the full-width figures use, not pixels. */
+const RAMP_LINE_HEIGHT = 420;
+const RAMP_COLUMN_HEIGHT = 460;
+/** A sparkline is measured in its own narrow box, so its markers do not shrink to specks. */
+const SPARK_WIDTH = 400;
+const SPARK_HEIGHT = 130;
+
 /** Two plots on one x — a percentile line over the difficulty bars, never one dual-axis chart. */
 export function RampFigure({ progression }: Readonly<{ progression: SeriesProgression }>) {
   const { steps } = progression;
@@ -27,11 +36,7 @@ export function RampFigure({ progression }: Readonly<{ progression: SeriesProgre
     <ChartFigure
       title="Percentile against difficulty"
       meta={`${plural(steps.length, 'test')} · percentile ${shift(spanOf(climb))} · difficulty ${shift(spanOf(ramp))}`}
-      figure={
-        <span className="text-2xl font-bold tabular-nums text-series-1">
-          {latest?.value ?? UNMEASURED}
-        </span>
-      }
+      figure={<Metric size="md" label="Latest" value={latest?.value ?? UNMEASURED} />}
     >
       <AlignedPlots
         secondaryLabel="Paper difficulty"
@@ -39,13 +44,20 @@ export function RampFigure({ progression }: Readonly<{ progression: SeriesProgre
           <LinePlot
             points={climb}
             align="bands"
+            width={PLOT_WIDTH_WIDE}
+            height={RAMP_LINE_HEIGHT}
             ticks={PERCENTILE_TICKS}
             xLabels={false}
             aria-label="Percentile on each test in the series order"
           />
         }
         secondary={
-          <ColumnPlot columns={ramp} aria-label="How hard each paper's questions are graded" />
+          <ColumnPlot
+            columns={ramp}
+            width={PLOT_WIDTH_WIDE}
+            height={RAMP_COLUMN_HEIGHT}
+            aria-label="How hard each paper's questions are graded"
+          />
         }
       />
     </ChartFigure>
@@ -103,6 +115,8 @@ function SubjectSpark({ subject, slot }: Readonly<{ subject: SubjectMastery; slo
         points={points}
         compact
         series={slot}
+        width={SPARK_WIDTH}
+        height={SPARK_HEIGHT}
         aria-label={`${subject.subjectName} accuracy across the series`}
       />
     </div>
