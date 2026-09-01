@@ -178,6 +178,8 @@ async function purge(prisma) {
   });
   const attemptIds = attempts.map((row) => row.id);
 
+  // The share FK is RESTRICT, so a link minted while testing blocks the sitting it opens.
+  await prisma.performanceShare.deleteMany({ where: { attemptId: { in: attemptIds } } });
   await prisma.attemptQuestion.deleteMany({ where: { attemptId: { in: attemptIds } } });
   await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: attemptIds } } });
   await prisma.attempt.deleteMany({ where: { id: { in: attemptIds } } });

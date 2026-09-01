@@ -5123,6 +5123,7 @@ interface ShareWhere {
   token?: string;
   status?: AttemptStatus;
   studentId?: string;
+  revokedAt?: null;
   student?: { deletedAt: null };
   attempt?: { studentId: string };
 }
@@ -5197,10 +5198,15 @@ export class FakeSharePrisma {
       return Promise.resolve(this.projected(row));
     },
 
-    update: ({ where, data }: { where: { id: string }; data: { revokedAt: Date } }) => {
-      const row = this.shares.find((candidate) => candidate.id === where.id)!;
-      row.revokedAt = data.revokedAt;
-      return Promise.resolve(this.projected(row));
+    updateMany: ({ where, data }: { where: ShareWhere; data: { revokedAt: Date } }) => {
+      const matched = this.shares.filter(
+        (row) =>
+          row.id === where.id &&
+          (where.attempt === undefined || this.ownedBy(row, where.attempt.studentId)) &&
+          (where.revokedAt === undefined || row.revokedAt === null),
+      );
+      for (const row of matched) row.revokedAt = data.revokedAt;
+      return Promise.resolve({ count: matched.length });
     },
   };
 

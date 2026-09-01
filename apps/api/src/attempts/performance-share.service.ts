@@ -103,22 +103,21 @@ export class PerformanceShareService {
     return toShare(share, now);
   }
 
-  /** Either party may pull any link to this student's data; a second revoke keeps the first date. */
+  /** Either party may pull any link to this student's data; the FIRST revocation is the truth. */
   async revoke(studentId: string, shareId: string): Promise<PerformanceShare> {
     const now = new Date();
+    // `revokedAt: null` in the WHERE is what makes two revokes in flight settle on one date.
+    await this.prisma.performanceShare.updateMany({
+      where: { id: shareId, attempt: { studentId }, revokedAt: null },
+      data: { revokedAt: now },
+    });
+
     const share = await this.prisma.performanceShare.findFirst({
       where: { id: shareId, attempt: { studentId } },
       select: SHARE_SELECT,
     });
     if (!share) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SHARE);
-    if (share.revokedAt !== null) return toShare(share, now);
-
-    const revoked = await this.prisma.performanceShare.update({
-      where: { id: share.id },
-      data: { revokedAt: now },
-      select: SHARE_SELECT,
-    });
-    return toShare(revoked, now);
+    return toShare(share, now);
   }
 
   /** The public read. Nothing is loaded until the link has proved it is still open. */

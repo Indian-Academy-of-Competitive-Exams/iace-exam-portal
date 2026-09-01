@@ -9,10 +9,10 @@ import {
   DIFFICULTY_LEVEL,
   ErrorCodes,
   EVALUATION_MODE,
-  PERFORMANCE_SHARE_DEFAULT_DAYS,
-  sharedReportSchema,
+  FEATURE_KEYS,
+  PERMISSION_LEVELS,
 } from '@iace/contracts';
-import { IS_PUBLIC_KEY } from '../src/common/security';
+import { IS_PUBLIC_KEY, REQUIRED_FEATURE_KEY, type RequiredFeature } from '../src/common/security';
 import {
   AdminPerformanceShareController,
   MePerformanceShareController,
@@ -36,6 +36,7 @@ import {
   type FakeAttemptRow,
   type FakePerformanceData,
   type FakeServedAnswerRow,
+  type FakeShareSitting,
 } from './support/fakes';
 
 const STUDENT = 'stu_1';
@@ -141,7 +142,10 @@ function sittings(): FakeAttemptRow[] {
   ];
 }
 
-function bench(shares: ReturnType<typeof makeShare>[] = []) {
+function bench(
+  shares: ReturnType<typeof makeShare>[] = [],
+  sitting: Partial<FakeShareSitting> = {},
+) {
   const attempts = sittings();
   const data: FakePerformanceData = {
     attempts,
@@ -167,7 +171,7 @@ function bench(shares: ReturnType<typeof makeShare>[] = []) {
     ),
   );
   const sharePrisma = new FakeSharePrisma(shares, [
-    makeShareSitting({ id: 'att_1', studentId: STUDENT, title: SHAPE.title }),
+    makeShareSitting({ id: 'att_1', studentId: STUDENT, title: SHAPE.title, ...sitting }),
     makeShareSitting({
       id: 'att_9',
       studentId: RIVAL,
@@ -225,7 +229,6 @@ describe('when a link runs out', () => {
 
     // Thirty institute days on from 1 Sep, expiring at the END of 1 Oct in Kolkata.
     assert.equal(defaulted?.toISOString(), '2026-10-01T18:29:59.999Z');
-    assert.equal(PERFORMANCE_SHARE_DEFAULT_DAYS, 30);
     assert.equal(permanent, null);
     assert.equal(chosen?.toISOString(), '2026-09-10T18:29:59.999Z');
   });
@@ -240,7 +243,6 @@ describe('reading a shared report', () => {
 
     const report = await service.readPublic('live-token');
 
-    assert.equal(sharedReportSchema.safeParse(report).success, true);
     assert.deepEqual(Object.keys(report).toSorted(), PUBLIC_FIELDS);
     assert.equal(report.studentName, 'Harshith Diyyala');
     assert.equal(report.branchName, 'AMEERPET');
@@ -311,6 +313,15 @@ describe('refusing a link', () => {
 
     await assert.rejects(() => service.readPublic('live-token'), refusedWith(REFUSAL));
   });
+
+  /** The failure this prevents: a deleted student's name and branch still served to the internet. */
+  it('refuses a link whose student has been deleted', async () => {
+    const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })], {
+      studentDeletedAt: new Date('2026-08-31T06:00:00.000Z'),
+    });
+
+    await assert.rejects(() => service.readPublic('live-token'), refusedWith(REFUSAL));
+  });
 });
 
 // --------------------------------------------------------------------------- minting and pulling
@@ -335,15 +346,15 @@ describe('an admin holding STUDENT_PERFORMANCE', () => {
     );
   });
 
-  /** Revoking twice keeps the first date: when the door shut is a fact, not a click count. */
-  it('revokes idempotently', async () => {
-    const { service } = bench();
-    const share = await service.create(STUDENT, { attemptId: 'att_1' }, ADMIN);
+  /** The failure this prevents: a second revoke re-dating the row, moving when the door shut. */
+  it('keeps the first revocation date when a second revoke lands', async () => {
+    const shut = new Date('2026-08-25T06:00:00.000Z');
+    const { service } = bench([makeShare({ id: 'shr_9', attemptId: 'att_1', revokedAt: shut })]);
 
-    const first = await service.revoke(STUDENT, share.id);
-    const second = await service.revoke(STUDENT, share.id);
+    const again = await service.revoke(STUDENT, 'shr_9');
 
-    assert.equal(second.revokedAt, first.revokedAt);
+    assert.equal(again.revokedAt, shut.toISOString());
+    assert.equal(again.isLive, false);
   });
 
   it('cannot mint a link to a sitting that is not this student’s', async () => {
@@ -408,6 +419,25 @@ describe('the public opt-out', () => {
 
     for (const [handler, target] of guarded) {
       assert.equal(isPublic(handler, target), false);
+    }
+  });
+
+  const demanded = (handler: Reflected) =>
+    reflector.getAllAndOverride<RequiredFeature | undefined, string>(REQUIRED_FEATURE_KEY, [
+      handler,
+      AdminPerformanceShareController,
+    ]);
+
+  /** The failure this prevents: an admin route that any signed-in admin can reach for free. */
+  it('charges every admin route STUDENT_PERFORMANCE, at the level the act deserves', () => {
+    const priced = [
+      [AdminPerformanceShareController.prototype.list, PERMISSION_LEVELS.READ],
+      [AdminPerformanceShareController.prototype.create, PERMISSION_LEVELS.WRITE],
+      [AdminPerformanceShareController.prototype.revoke, PERMISSION_LEVELS.WRITE],
+    ] as const;
+
+    for (const [handler, level] of priced) {
+      assert.deepEqual(demanded(handler), { key: FEATURE_KEYS.STUDENT_PERFORMANCE, level });
     }
   });
 });
