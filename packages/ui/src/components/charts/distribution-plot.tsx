@@ -63,6 +63,9 @@ interface DistributionRow extends DistributionBand {
 const DEFAULT_HEIGHT = 280;
 const X_AXIS_HEIGHT = 22;
 const MARKER_TOP = 14;
+
+/** A marker's label is centred on its line, so an edge marker needs half a label of room. */
+const MARKER_SIDE = 44;
 const MARKER_STEP = 15;
 const BIN_GAP = 2;
 const REST_OPACITY = 0.45;
@@ -107,7 +110,12 @@ export function DistributionPlot({
       data={rows}
       height={height}
       barCategoryGap={BIN_GAP}
-      margin={{ top: MARKER_TOP + markers.length * MARKER_STEP, right: 12, bottom: 0, left: 12 }}
+      margin={{
+        top: MARKER_TOP + markers.length * MARKER_STEP,
+        right: MARKER_SIDE,
+        bottom: 0,
+        left: MARKER_SIDE,
+      }}
       style={{ width: '100%', height }}
       className={className}
       {...props}

@@ -39,6 +39,56 @@ export function PageFrame({ header, children, className }: Readonly<PageFramePro
   );
 }
 
+export interface PanelFrameProps {
+  /** Pinned above the card — usually a `PageHeader`. */
+  header?: React.ReactNode;
+  /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
+  tabs?: TableFrameTabs;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+/** `TableFrame` for content that is no table: same card and strip, but the BODY is the scroller. */
+export function PanelFrame({ header, tabs, children, className }: Readonly<PanelFrameProps>) {
+  // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
+  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', className);
+
+  const body = tabs ? (
+    <>
+      {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
+      <TabsList className="-mx-4 mb-4 shrink-0 px-4">
+        {tabs.items.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {tabs.items.map((tab) => (
+        <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
+          {tab.content}
+        </TabsContent>
+      ))}
+    </>
+  ) : (
+    <div className={scroller}>{children}</div>
+  );
+
+  const frame = (
+    <div data-page-frame className={FILLS}>
+      {header ? <div className="shrink-0">{header}</div> : null}
+      <Card className={cn(FILLS, 'p-4')}>{body}</Card>
+    </div>
+  );
+
+  return tabs ? (
+    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
+      {frame}
+    </Tabs>
+  ) : (
+    frame
+  );
+}
+
 export function useInTableFrame(): boolean {
   return React.useContext(TableFrameContext);
 }

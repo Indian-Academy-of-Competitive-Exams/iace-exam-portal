@@ -74,7 +74,7 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
     <div className="flex flex-col gap-6">
       {card.provisional ? (
         /* ui-copy-ok: consequence */
-        <Alert variant="info">
+        <Alert variant="info" dismissible>
           This standing can still move: others can still sit this test. It settles once the test has
           closed for everyone.
         </Alert>
@@ -82,7 +82,7 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
 
       {card.isGraded ? null : (
         /* ui-copy-ok: consequence */
-        <Alert variant="info">
+        <Alert variant="info" dismissible>
           This was a retake, so it is marked but it does not carry a rank.
         </Alert>
       )}
@@ -121,20 +121,20 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         />
       </div>
 
-      {curve === null ? null : <CohortFigure cohort={curve} />}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {report === null ? null : <DifficultyFigure difficulty={report.difficulty} />}
+        {curve === null ? null : <CohortFigure cohort={curve} />}
+      </div>
 
       {report === null ? null : (
-        <>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <MarksFigure composition={report.composition} counts={paperCounts(report.sections)} />
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <DifficultyFigure difficulty={report.difficulty} />
-            <TimeFigure
-              time={report.time}
-              counts={paperCounts(report.sections)}
-              paceIndex={report.paceIndex}
-            />
-          </div>
-        </>
+          <TimeFigure
+            time={report.time}
+            counts={paperCounts(report.sections)}
+            paceIndex={report.paceIndex}
+          />
+        </div>
       )}
 
       <div className="flex min-h-0 flex-col gap-2">

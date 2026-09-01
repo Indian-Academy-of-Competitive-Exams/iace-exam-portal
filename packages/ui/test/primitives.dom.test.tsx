@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { useForm } from 'react-hook-form';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Alert } from '../src/components/ui/alert';
 import { Progress } from '../src/components/ui/progress';
 import { Spinner, LoadingState } from '../src/components/ui/spinner';
 import { Skeleton, SkeletonParagraph } from '../src/components/ui/skeleton';
@@ -234,5 +235,38 @@ describe('PageHeader', () => {
     render(<PageHeader title="Performance" size="display" />);
 
     assert.ok(screen.getByRole('heading', { level: 1, name: 'Performance' }));
+  });
+});
+
+describe('Alert', () => {
+  it('lets a reader put away a notice they have read', () => {
+    render(
+      <Alert variant="info" dismissible>
+        This standing can still move.
+      </Alert>,
+    );
+
+    assert.ok(screen.getByText('This standing can still move.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    assert.equal(screen.queryByText('This standing can still move.'), null);
+  });
+
+  /** The failure this prevents: waving away the one variant that reports something wrong. */
+  it('gives a danger alert no way to be dismissed', () => {
+    render(
+      <Alert variant="danger" dismissible>
+        Your performance did not load.
+      </Alert>,
+    );
+
+    assert.ok(screen.getByText('Your performance did not load.'));
+    assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
+  });
+
+  it('stays where nobody asked for a way to close it', () => {
+    render(<Alert variant="info">A fact they could not infer.</Alert>);
+
+    assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
   });
 });

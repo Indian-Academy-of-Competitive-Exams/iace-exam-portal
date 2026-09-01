@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, PanelTopOpen, X } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 import {
   Button,
   Combobox,
@@ -9,12 +8,7 @@ import {
   LoadingState,
   PageFrame,
   PageHeader,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  PanelFrame,
 } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { REPORT_TABS, latestSitting, newestFirst, reportTabOf } from '@iace/app-kit';
@@ -39,76 +33,43 @@ export function ReportShell() {
   const current = sat.points.find((point) => point.attemptId === attemptId) ?? null;
 
   const tab = reportTabOf(pathname, ROUTES.REPORT(attemptId));
-  const [showTabs, setShowTabs] = useState(true);
 
   return (
-    <PageFrame
+    <PanelFrame
       header={
-        <div className="flex flex-col gap-4">
-          <PageHeader
-            breadcrumbs={
-              <PageCrumbs nav={NAV_ITEMS} tail={[{ label: current?.testTitle ?? 'Report' }]} />
-            }
-            title="Report"
-            meta={current === null ? undefined : marksOf(current)}
-            action={
-              <Combobox
-                value={attemptId}
-                onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
-                items={sat.newestFirst.map((point) => ({
-                  value: point.attemptId,
-                  label: point.testTitle ?? UNTITLED,
-                  hint: sittingHint(point),
-                }))}
-                clearable={false}
-                aria-label="Test"
-                className={PICKER_WIDTH.REPORT}
-              />
-            }
-          />
-          {showTabs ? (
-            <div className="flex items-center gap-2 rounded-lg border bg-card px-4 pt-4">
-              <Tabs
-                value={tab}
-                onValueChange={(next) => navigate(ROUTES.REPORT_TAB(attemptId, next))}
-                className="min-w-0 flex-1"
-              >
-                <TabsList className="-mx-4 px-4">
-                  {REPORT_TABS.map((held) => (
-                    <TabsTrigger key={held.path} value={held.path}>
-                      {held.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="-mt-2 shrink-0"
-                    onClick={() => setShowTabs(false)}
-                  >
-                    <X aria-hidden />
-                    <span className="sr-only">Hide the tabs</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Hide the tabs</TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (
-            <Button variant="outline" className="self-start" onClick={() => setShowTabs(true)}>
-              <PanelTopOpen aria-hidden />
-              {REPORT_TABS.find((held) => held.path === tab)?.label ?? 'Score card'}
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: current?.testTitle ?? 'Report' }]} />
+          }
+          title="Report"
+          meta={current === null ? undefined : marksOf(current)}
+          action={
+            <Combobox
+              value={attemptId}
+              onChange={(next) => navigate(ROUTES.REPORT_TAB(next, tab))}
+              items={sat.newestFirst.map((point) => ({
+                value: point.attemptId,
+                label: point.testTitle ?? UNTITLED,
+                hint: sittingHint(point),
+              }))}
+              clearable={false}
+              aria-label="Test"
+              className={PICKER_WIDTH.REPORT}
+            />
+          }
+        />
       }
-    >
-      <div className="flex flex-col gap-6 pt-6">
-        <Outlet />
-      </div>
-    </PageFrame>
+      tabs={{
+        value: tab,
+        onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
+        // Only the open tab's content renders, and the ROUTER is what decides what that is.
+        items: REPORT_TABS.map((held) => ({
+          value: held.path,
+          label: held.label,
+          content: <Outlet />,
+        })),
+      }}
+    />
   );
 }
 

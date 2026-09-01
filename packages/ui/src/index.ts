@@ -212,12 +212,14 @@ export {
 export {
   TableFrame,
   PageFrame,
+  PanelFrame,
   useInTableFrame,
   PAGE_CONTENT_CLASS,
   type TableFrameProps,
   type TableFrameTab,
   type TableFrameTabs,
   type PageFrameProps,
+  type PanelFrameProps,
 } from './components/ui/table-frame';
 export {
   ListView,

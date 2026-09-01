@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { PageFrame } from '../src/components/ui/table-frame';
+import { PageFrame, PanelFrame } from '../src/components/ui/table-frame';
 
 afterEach(cleanup);
 
@@ -49,5 +49,55 @@ describe('PageFrame', () => {
     );
 
     assert.ok(screen.getByText('body'));
+  });
+});
+
+describe('PanelFrame', () => {
+  const tabs = {
+    value: 'marks',
+    onValueChange: () => undefined,
+    items: [
+      { value: 'marks', label: 'Score card', content: <p>What they scored</p> },
+      { value: 'compare', label: 'Compare', content: <p>Who else sat it</p> },
+    ],
+  };
+
+  /** A list frame scrolls its table; this one has no table, so the card's body scrolls instead. */
+  it('makes its own body the scroller, since nothing inside it is a table', () => {
+    const { container } = render(
+      <PanelFrame header={<h1>Report</h1>}>
+        <p>A stack of figures</p>
+      </PanelFrame>,
+    );
+
+    const scrollers = container.querySelectorAll('.overflow-y-auto');
+    assert.equal(scrollers.length, 1);
+    assert.ok(scrollers[0]?.className.includes('min-h-0'));
+    // Absolutely positioned children resolve against it rather than escaping to the document.
+    assert.ok(scrollers[0]?.className.includes('relative'));
+  });
+
+  it('holds the header still outside the scroller', () => {
+    const { container } = render(
+      <PanelFrame header={<h1>Report</h1>}>
+        <p>A stack of figures</p>
+      </PanelFrame>,
+    );
+
+    assert.ok(screen.getByText('Report'));
+    assert.equal(
+      container.querySelector('.overflow-y-auto')?.contains(screen.getByText('Report')),
+      false,
+    );
+    assert.ok(container.querySelector('[data-page-frame]'));
+  });
+
+  it('shows the open tab and keeps the strip beside the others', () => {
+    render(<PanelFrame header={<h1>Report</h1>} tabs={tabs} />);
+
+    assert.ok(screen.getByRole('tab', { name: 'Score card' }));
+    assert.ok(screen.getByRole('tab', { name: 'Compare' }));
+    assert.ok(screen.getByText('What they scored'));
+    assert.equal(screen.queryByText('Who else sat it'), null);
   });
 });
