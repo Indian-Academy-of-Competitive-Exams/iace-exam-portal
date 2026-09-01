@@ -71,12 +71,13 @@ function StatusBadge({ share }: Readonly<{ share: PerformanceShare }>) {
   return <Badge variant="neutral">{share.revokedAt === null ? 'Expired' : 'Revoked'}</Badge>;
 }
 
+/** Only WRITE is handed a working token, so a READ-only admin gets no actions column at all. */
 function shareColumns(
   canWrite: boolean,
   busy: boolean,
   onRevoke: (share: PerformanceShare) => void,
 ): DataTableColumn<PerformanceShare>[] {
-  return [
+  const columns: DataTableColumn<PerformanceShare>[] = [
     {
       key: 'test',
       header: 'Test',
@@ -101,27 +102,37 @@ function shareColumns(
       className: 'max-w-28',
       cell: (share) => <StatusBadge share={share} />,
     },
+  ];
+  if (!canWrite) return columns;
+
+  return [
+    ...columns,
     {
       key: 'actions',
-      cell: (share) => (
-        <RowActions label={`Actions for the link to ${share.testTitle ?? UNTITLED}`}>
-          <DropdownMenuItem
-            onSelect={() => {
-              void navigator.clipboard.writeText(linkFor(share.token));
-              toast.success('Link copied.');
-            }}
-          >
-            <Copy aria-hidden />
-            Copy link
-          </DropdownMenuItem>
-          {canWrite && share.isLive ? (
-            <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(share)}>
-              <Trash2 aria-hidden />
-              Revoke link
-            </DropdownMenuItem>
-          ) : null}
-        </RowActions>
-      ),
+      cell: (share) => {
+        const link = share.token === null ? null : linkFor(share.token);
+        return (
+          <RowActions label={`Actions for the link to ${share.testTitle ?? UNTITLED}`}>
+            {link === null ? null : (
+              <DropdownMenuItem
+                onSelect={() => {
+                  void navigator.clipboard.writeText(link);
+                  toast.success('Link copied.');
+                }}
+              >
+                <Copy aria-hidden />
+                Copy link
+              </DropdownMenuItem>
+            )}
+            {share.isLive ? (
+              <DropdownMenuItem destructive disabled={busy} onSelect={() => onRevoke(share)}>
+                <Trash2 aria-hidden />
+                Revoke link
+              </DropdownMenuItem>
+            ) : null}
+          </RowActions>
+        );
+      },
     },
   ];
 }
@@ -161,7 +172,7 @@ export function SharedReportsCard({
       }),
     onSuccess: async (share) => {
       setCreating(false);
-      void navigator.clipboard.writeText(linkFor(share.token));
+      if (share.token !== null) void navigator.clipboard.writeText(linkFor(share.token));
       toast.success('Link created and copied.');
       await refresh();
     },

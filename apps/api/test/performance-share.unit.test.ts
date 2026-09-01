@@ -12,7 +12,14 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
 } from '@iace/contracts';
-import { IS_PUBLIC_KEY, REQUIRED_FEATURE_KEY, type RequiredFeature } from '../src/common/security';
+import {
+  EVERY_BRANCH,
+  IS_PUBLIC_KEY,
+  REQUIRED_FEATURE_KEY,
+  type BranchScope,
+  type RequiredFeature,
+} from '../src/common/security';
+import { AuditContext } from '../src/audit';
 import {
   AdminPerformanceShareController,
   MePerformanceShareController,
@@ -182,7 +189,7 @@ function bench(
   ]);
   return {
     sharePrisma,
-    service: new PerformanceShareService(sharePrisma.asService(), analytics),
+    service: new PerformanceShareService(sharePrisma.asService(), analytics, new AuditContext()),
   };
 }
 
@@ -331,9 +338,10 @@ describe('an admin holding STUDENT_PERFORMANCE', () => {
   it('generates a link, then revokes it and closes the door', async () => {
     const { service } = bench();
 
-    const share = await service.create(STUDENT, { attemptId: 'att_1' }, ADMIN);
-    const opened = await service.readPublic(share.token);
-    const revoked = await service.revoke(STUDENT, share.id);
+    const share = await service.create(STUDENT, { attemptId: 'att_1' }, ADMIN, EVERY_BRANCH);
+    const token = share.token ?? '';
+    const opened = await service.readPublic(token);
+    const revoked = await service.revoke(STUDENT, share.id, EVERY_BRANCH);
 
     assert.equal(share.isLive, true);
     assert.equal(share.testTitle, SHAPE.title);
@@ -341,7 +349,7 @@ describe('an admin holding STUDENT_PERFORMANCE', () => {
     assert.equal(revoked.isLive, false);
     assert.notEqual(revoked.revokedAt, null);
     await assert.rejects(
-      () => service.readPublic(share.token),
+      () => service.readPublic(token),
       refusedWith('This report is not available'),
     );
   });
@@ -351,7 +359,7 @@ describe('an admin holding STUDENT_PERFORMANCE', () => {
     const shut = new Date('2026-08-25T06:00:00.000Z');
     const { service } = bench([makeShare({ id: 'shr_9', attemptId: 'att_1', revokedAt: shut })]);
 
-    const again = await service.revoke(STUDENT, 'shr_9');
+    const again = await service.revoke(STUDENT, 'shr_9', EVERY_BRANCH);
 
     assert.equal(again.revokedAt, shut.toISOString());
     assert.equal(again.isLive, false);
@@ -361,19 +369,60 @@ describe('an admin holding STUDENT_PERFORMANCE', () => {
     const { service } = bench();
 
     await assert.rejects(
-      () => service.create(STUDENT, { attemptId: 'att_9' }, ADMIN),
+      () => service.create(STUDENT, { attemptId: 'att_9' }, ADMIN, EVERY_BRANCH),
       refusedWith('No such sitting'),
     );
   });
 
   it('cannot revoke a link belonging to somebody else', async () => {
     const { service } = bench();
-    const share = await service.create(STUDENT, { attemptId: 'att_1' }, ADMIN);
+    const share = await service.create(STUDENT, { attemptId: 'att_1' }, ADMIN, EVERY_BRANCH);
 
     await assert.rejects(
-      () => service.revoke(RIVAL, share.id),
+      () => service.revoke(RIVAL, share.id, EVERY_BRANCH),
       refusedWith('No such shared report'),
     );
+  });
+});
+
+describe('an admin who holds only some branches', () => {
+  const elsewhere: BranchScope = { all: false, branchIds: ['br_other'] };
+
+  /** The failure this prevents: minting a permanent public link to a student nobody let them see. */
+  it('cannot mint, revoke or list a link for a student outside them', async () => {
+    const { service } = bench([
+      makeShare({ id: 'shr_9', token: 'live-token', attemptId: 'att_1' }),
+    ]);
+    const missing = refusedWith('No such student');
+
+    await assert.rejects(
+      () => service.create(STUDENT, { attemptId: 'att_1' }, ADMIN, elsewhere),
+      missing,
+    );
+    await assert.rejects(() => service.revoke(STUDENT, 'shr_9', elsewhere), missing);
+    await assert.rejects(() => service.list(STUDENT, elsewhere, true), missing);
+  });
+
+  it('reaches a student who is in one of them', async () => {
+    const { service } = bench();
+
+    const held = await service.list(STUDENT, { all: false, branchIds: ['br_1'] }, true);
+
+    assert.deepEqual(
+      held.sittings.map((row) => row.attemptId),
+      ['att_1'],
+    );
+  });
+
+  /** The failure this prevents: a READ-only admin copying a working link they cannot take down. */
+  it('is handed no token at READ, and the real one at WRITE', async () => {
+    const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })]);
+
+    const read = await service.list(STUDENT, EVERY_BRANCH, false);
+    const write = await service.list(STUDENT, EVERY_BRANCH, true);
+
+    assert.equal(read.shares[0]?.token, null);
+    assert.equal(write.shares[0]?.token, 'live-token');
   });
 });
 
@@ -381,7 +430,7 @@ describe('the student', () => {
   it('lists their own links and the sittings a new one could open', async () => {
     const { service } = bench([makeShare({ token: 'live-token', attemptId: 'att_1' })]);
 
-    const held = await service.list(STUDENT);
+    const held = await service.list(STUDENT, EVERY_BRANCH, true);
 
     assert.equal(held.shares.length, 1);
     assert.equal(held.shares[0]?.attemptId, 'att_1');

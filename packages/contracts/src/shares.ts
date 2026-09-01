@@ -48,10 +48,10 @@ export const sharedReportSchema = z.object({
 });
 export type SharedReport = z.infer<typeof sharedReportSchema>;
 
-/** A link as the student or the admin who owns it sees it. `token` is theirs to hand out. */
+/** A link as its owner sees it. `token` is null for a reader who may not hand a working one out. */
 export const performanceShareSchema = z.object({
   id: z.string(),
-  token: z.string(),
+  token: z.string().nullable(),
   attemptId: z.string(),
   testTitle: z.string().nullable(),
   submittedAt: z.string().nullable(),

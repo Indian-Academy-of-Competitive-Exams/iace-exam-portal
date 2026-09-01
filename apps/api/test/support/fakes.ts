@@ -4724,7 +4724,7 @@ export interface FakePerformanceData {
   attempts: FakeAttemptRow[];
   served: FakeServedAnswerRow[];
   shape: FakeScoredTest;
-  students: { id: string; deletedAt: Date | null }[];
+  students: { id: string; deletedAt: Date | null; currentBranchId?: string | null }[];
   series: { id: string; name: string; progressive?: boolean }[];
   seriesTests: { testSeriesId: string; testId: string; order?: number | null }[];
   testStats: {
@@ -4838,9 +4838,21 @@ export class FakePerformancePrisma {
   };
 
   readonly student = {
-    findFirst: ({ where }: { where: { id: string; deletedAt: null } }) =>
+    /** The scoped read: a branch filter, and `in: []` matching nobody exactly as Prisma does. */
+    findFirst: ({
+      where,
+    }: {
+      where: { id: string; deletedAt: null; currentBranchId?: { in: string[] } };
+    }) =>
       Promise.resolve(
-        this.data.students.find((row) => row.id === where.id && row.deletedAt === null) ?? null,
+        this.data.students.find(
+          (row) =>
+            row.id === where.id &&
+            row.deletedAt === null &&
+            (where.currentBranchId === undefined ||
+              (typeof row.currentBranchId === 'string' &&
+                where.currentBranchId.in.includes(row.currentBranchId))),
+        ) ?? null,
       ),
   };
 
@@ -5101,6 +5113,7 @@ export interface FakeShareSitting {
   title: string | null;
   fullName: string | null;
   branch: string | null;
+  branchId: string | null;
   studentDeletedAt: Date | null;
 }
 
@@ -5113,6 +5126,7 @@ export function makeShareSitting(overrides: Partial<FakeShareSitting> = {}): Fak
     title: 'SSC CGL Tier 1 — Mock 1',
     fullName: 'Harshith Diyyala',
     branch: 'AMEERPET',
+    branchId: 'br_1',
     studentDeletedAt: null,
     ...overrides,
   };
@@ -5124,6 +5138,8 @@ interface ShareWhere {
   status?: AttemptStatus;
   studentId?: string;
   revokedAt?: null;
+  deletedAt?: null;
+  currentBranchId?: { in: string[] };
   student?: { deletedAt: null };
   attempt?: { studentId: string };
 }
@@ -5243,6 +5259,20 @@ export class FakeSharePrisma {
             test: { title: row.title },
           })),
       ),
+  };
+
+  /** The student behind a sitting, so a branch-scoped admin reads one of another branch as missing. */
+  readonly student = {
+    findFirst: ({ where }: { where: ShareWhere }) => {
+      const sitting = this.sittings.find(
+        (row) => row.studentId === where.id && row.studentDeletedAt === null,
+      );
+      if (sitting === undefined) return Promise.resolve(null);
+      const reachable =
+        where.currentBranchId === undefined ||
+        (sitting.branchId !== null && where.currentBranchId.in.includes(sitting.branchId));
+      return Promise.resolve(reachable ? { id: sitting.studentId } : null);
+    },
   };
 
   asService(): PrismaService {

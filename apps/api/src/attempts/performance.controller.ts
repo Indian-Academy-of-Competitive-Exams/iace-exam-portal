@@ -12,7 +12,13 @@ import {
   type PerformanceReportQuery,
   type SatSeries,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  branchScopeOf,
+  CurrentUser,
+  RequiresFeature,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
 import { PerformanceAnalyticsService } from './performance.service';
 
@@ -42,13 +48,14 @@ export class MePerformanceController {
 export class AdminPerformanceController {
   constructor(private readonly performance: PerformanceAnalyticsService) {}
 
-  /** The same payload the student reads, for any student. Still carries no answer key. */
+  /** The same payload the student reads, for any student in the admin's own branches. */
   @RequiresFeature(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)
   @Get()
   report(
     @Param('studentId') studentId: string,
     @Query(new ZodQuery(performanceReportQuerySchema)) query: PerformanceReportQuery,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceReport> {
-    return this.performance.forStudent(studentId, query);
+    return this.performance.forStudent(studentId, query, branchScopeOf(user));
   }
 }
