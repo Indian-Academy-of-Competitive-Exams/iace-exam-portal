@@ -13,18 +13,22 @@ import {
   type PlotColumn,
 } from '@iace/ui';
 import {
+  DIFFICULTY_LABELS,
   type CohortCurve,
+  type DifficultyLevel,
   type DifficultyStanding,
   type MarkComposition,
+  type PaperCounts,
   type PercentilePoint,
   type SectionalStanding,
   type TimeUse,
 } from '@iace/contracts';
-import { DIFFICULTY_LABELS } from '../../lib/constants';
-import { type PaperCounts } from '../../lib/performance';
 
 const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
+
+/** A band the wire named but no level covers keeps its own name rather than reading as unknown. */
+const difficultyLabel = (name: string) => DIFFICULTY_LABELS[name as DifficultyLevel] ?? name;
 
 const minutes = (seconds: number) =>
   seconds < SECONDS_PER_MINUTE ? `${seconds}s` : `${Math.round(seconds / SECONDS_PER_MINUTE)} min`;
@@ -69,9 +73,12 @@ const standingOf = (point: PercentilePoint) => {
 };
 
 /** Where this sitting fell on the curve the cohort drew. Only ever one paper's. */
-export function CohortFigure({ cohort }: Readonly<{ cohort: CohortCurve }>) {
+export function CohortFigure({
+  cohort,
+  youLabel = 'You',
+}: Readonly<{ cohort: CohortCurve; youLabel?: string }>) {
   const markers: DistributionMarker[] = [
-    { key: 'you', label: 'You', value: cohort.score, tone: 'you' },
+    { key: 'you', label: youLabel, value: cohort.score, tone: 'you' },
   ];
   if (cohort.averageScore !== null) {
     markers.push({
@@ -185,7 +192,7 @@ export function DifficultyFigure({
 }: Readonly<{ difficulty: readonly DifficultyStanding[] }>) {
   const columns: PlotColumn[] = difficulty.map((band) => ({
     key: band.key,
-    label: DIFFICULTY_LABELS[band.name] ?? band.name,
+    label: difficultyLabel(band.name),
     value: band.accuracy,
     display: band.accuracy === null ? UNMEASURED : `${band.accuracy}%`,
     meta: `${band.attempted} of ${band.total}`,

@@ -80,6 +80,12 @@ export const difficultyLevelSchema = z.enum(DIFFICULTY_LEVEL);
 export type DifficultyLevel = z.infer<typeof difficultyLevelSchema>;
 export const DIFFICULTY_LEVELS = difficultyLevelSchema.options;
 
+export const DIFFICULTY_LABELS: Record<DifficultyLevel, string> = {
+  [DIFFICULTY_LEVEL.LOW]: 'Low',
+  [DIFFICULTY_LEVEL.MEDIUM]: 'Medium',
+  [DIFFICULTY_LEVEL.HIGH]: 'High',
+};
+
 export const QUESTION_STATUS = {
   DRAFT: 'DRAFT',
   ACTIVE: 'ACTIVE',

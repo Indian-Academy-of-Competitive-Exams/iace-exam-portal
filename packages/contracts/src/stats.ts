@@ -366,6 +366,25 @@ export function testsSat(points: readonly PerformancePoint[]): SatTest[] {
 export const sittingsOf = (points: readonly PerformancePoint[], testId: string) =>
   points.filter((point) => point.testId === testId);
 
+/** The three counts every anchor-scoped figure divides by. */
+export interface PaperCounts {
+  correct: number;
+  wrong: number;
+  unattempted: number;
+}
+
+/** The anchor's own denominator, summed off its sections so every figure shares one paper. */
+export function paperCounts(sections: readonly SectionalStanding[]): PaperCounts {
+  return sections.reduce<PaperCounts>(
+    (total, section) => ({
+      correct: total.correct + section.correctCount,
+      wrong: total.wrong + section.wrongCount,
+      unattempted: total.unattempted + section.unattemptedCount,
+    }),
+    { correct: 0, wrong: 0, unattempted: 0 },
+  );
+}
+
 /** The best-scoring sitting in a set. A tie goes to the earliest: that is when it was reached. */
 export function bestSitting(points: readonly PerformancePoint[]): PerformancePoint | null {
   return points.reduce<PerformancePoint | null>(

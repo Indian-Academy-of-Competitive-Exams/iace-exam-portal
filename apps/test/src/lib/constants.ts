@@ -125,13 +125,6 @@ export const MASTERY_TREND_BADGE: Readonly<Record<MasteryTrend, BadgeProps['vari
   [MASTERY_TRENDS.SLIDING]: 'warning',
 };
 
-/** Difficulty bands as the report keys them: `DifficultyStanding.name` carries the enum value. */
-export const DIFFICULTY_LABELS: Readonly<Record<string, string>> = {
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-};
-
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];
 

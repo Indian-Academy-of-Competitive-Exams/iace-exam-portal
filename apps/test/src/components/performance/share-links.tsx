@@ -5,12 +5,12 @@ import {
   SHARE_STATUS,
   defaultShareExpiry,
   instituteDayLabel,
+  sittingLabel,
   shareExpiryLine,
   shareStatusOf,
   sharedReportPath,
   todayISO,
   type PerformanceShare,
-  type ShareableSitting,
 } from '@iace/contracts';
 import { absoluteUrl } from '@iace/app-kit/browser';
 import {
@@ -177,7 +177,7 @@ export function ShareLinks() {
               clearable={false}
               value={chosen}
               onChange={setAttemptId}
-              items={sittings.map(sittingItem)}
+              items={sittings.map((row) => ({ value: row.attemptId, label: sittingLabel(row) }))}
             />
           )}
         </Field>
@@ -244,10 +244,4 @@ export function ShareLinks() {
       />
     </div>
   );
-}
-
-function sittingItem(sitting: ShareableSitting) {
-  const sat = instituteDayLabel(sitting.submittedAt);
-  const title = sitting.testTitle ?? UNTITLED;
-  return { value: sitting.attemptId, label: sat === null ? title : `${title} · ${sat}` };
 }

@@ -15,6 +15,7 @@ import {
 } from '@iace/ui';
 import {
   EVALUATION_MODE,
+  paperCounts,
   PERFORMANCE_SCOPES,
   sittingsOf,
   testsSat,
@@ -28,6 +29,14 @@ import {
   type SatSeries,
   type SatTest,
 } from '@iace/contracts';
+import {
+  CohortFigure,
+  DifficultyFigure,
+  MarksFigure,
+  SectionsFigure,
+  TimeFigure,
+  TrajectoryFigure,
+} from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import {
   PERFORMANCE_QUERY_KEY,
@@ -37,17 +46,8 @@ import {
   performanceReportQueryKey,
 } from '../lib/constants';
 import { AttemptCompare } from '../components/performance/attempt-compare';
-import {
-  CohortFigure,
-  DifficultyFigure,
-  MarksFigure,
-  SectionsFigure,
-  TimeFigure,
-  TrajectoryFigure,
-} from '../components/performance/report-figures';
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
 import { ShareLinks } from '../components/performance/share-links';
-import { paperCounts } from '../lib/performance';
 
 const SCOPE_ITEMS = Object.entries(PERFORMANCE_SCOPE_LABELS).map(([value, label]) => ({
   value,

@@ -43,6 +43,14 @@ export { AppProviders } from './app-providers';
 export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
 export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
+export {
+  CohortFigure,
+  DifficultyFigure,
+  MarksFigure,
+  SectionsFigure,
+  TimeFigure,
+  TrajectoryFigure,
+} from './performance-figures';
 export { ProtectedRoute } from './protected-route';
 export { useFilters } from './use-filters';
 export { useFullscreen, type FullscreenHandle } from './use-fullscreen';

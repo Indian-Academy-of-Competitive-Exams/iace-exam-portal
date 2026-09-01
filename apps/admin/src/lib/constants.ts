@@ -21,7 +21,6 @@ import {
   type AuditFeature,
   BRANCH_TYPE,
   type BranchType,
-  type DifficultyLevel,
   type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
@@ -33,6 +32,8 @@ import {
   type MeritType,
   type NavigationPolicy,
   type PaperBinding,
+  PERFORMANCE_SCOPES,
+  type PerformanceScope,
   STUDENT_TYPE,
   type StudentSeriesSource,
   type StudentType,
@@ -293,12 +294,6 @@ export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
   GENERATED: 'Drawn again for each student when their attempt starts',
 };
 
-export const DIFFICULTY_LABELS: Readonly<Record<DifficultyLevel, string>> = {
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-};
-
 export const DRAW_STRATEGY_LABELS: Readonly<Record<DrawStrategy, string>> = {
   RANDOM: 'Random',
   NEWEST_FIRST: 'Newest first',
@@ -461,6 +456,23 @@ export const QUERY_KEYS = {
   TESTS: [ADMIN, 'tests'],
   TOPICS: [ADMIN, 'topics'],
 } as const;
+
+/** The two a named student's report can be asked about here: this app offers no series picker. */
+export const PERFORMANCE_SCOPE_LABELS: Readonly<Record<string, string>> = {
+  [PERFORMANCE_SCOPES.ATTEMPT]: 'This sitting',
+  [PERFORMANCE_SCOPES.ALL_TIME]: 'All time',
+};
+
+/** One student's share links, and the sittings the picker offers — both cards read the one row set. */
+export const studentSharesQueryKey = (studentId: string) =>
+  [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
+
+/** Keyed by what the report is OF, so switching sitting or scope never reads a stale one. */
+export const studentReportQueryKey = (
+  studentId: string,
+  scope: PerformanceScope,
+  scopeId: string,
+) => [...QUERY_KEYS.STUDENT, studentId, 'performance', scope, scopeId] as const;
 
 /** Segments that qualify a key, shared because a picker and the list it feeds must agree. */
 export const QUERY_SCOPES = {

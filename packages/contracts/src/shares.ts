@@ -72,6 +72,15 @@ export const shareableSittingSchema = z.object({
 });
 export type ShareableSitting = z.infer<typeof shareableSittingSchema>;
 
+const UNTITLED_TEST = 'Untitled test';
+
+/** How a sitting is named wherever one is picked: the paper, and the day it was sat. */
+export function sittingLabel(sitting: ShareableSitting): string {
+  const day = instituteDayLabel(sitting.submittedAt);
+  const title = sitting.testTitle ?? UNTITLED_TEST;
+  return day === null ? title : `${title} · ${day}`;
+}
+
 export const performanceSharesSchema = z.object({
   shares: z.array(performanceShareSchema),
   sittings: z.array(shareableSittingSchema),

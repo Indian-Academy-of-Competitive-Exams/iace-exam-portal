@@ -10,9 +10,9 @@ import {
   shareExpiryLine,
   shareStatusOf,
   sharedReportPath,
+  sittingLabel,
   todayISO,
   type PerformanceShare,
-  type ShareableSitting,
 } from '@iace/contracts';
 import { absoluteUrl } from '@iace/app-kit/browser';
 import {
@@ -32,21 +32,13 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { studentSharesQueryKey } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 
 const UNTITLED = 'Untitled test';
 const NO_EXPIRY = 'No expiry';
 
-const sharesKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
-
 const linkFor = (token: string) => absoluteUrl(sharedReportPath(token));
-
-const sittingItem = (sitting: ShareableSitting) => {
-  const sat = instituteDayLabel(sitting.submittedAt);
-  const title = sitting.testTitle ?? UNTITLED;
-  return { value: sitting.attemptId, label: sat === null ? title : `${title} · ${sat}` };
-};
 
 /** A link that is already dead must not be reported as copied — the toast is the only feedback. */
 function announceMinted(share: PerformanceShare) {
@@ -147,7 +139,7 @@ export function SharedReportsCard({
   const canWrite = can(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.WRITE);
 
   const held = useQuery({
-    queryKey: sharesKey(studentId),
+    queryKey: studentSharesQueryKey(studentId),
     queryFn: () => api.admin.students.performanceShares(studentId),
     enabled: canRead,
   });
@@ -156,7 +148,8 @@ export function SharedReportsCard({
     ? attemptId
     : (sittings[0]?.attemptId ?? '');
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: sharesKey(studentId) });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: studentSharesQueryKey(studentId) });
 
   const create = useMutation({
     mutationFn: () =>
@@ -203,7 +196,10 @@ export function SharedReportsCard({
                   value={chosen}
                   onChange={setAttemptId}
                   placeholder="Choose a sitting"
-                  items={sittings.map(sittingItem)}
+                  items={sittings.map((row) => ({
+                    value: row.attemptId,
+                    label: sittingLabel(row),
+                  }))}
                 />
               )}
             </Field>
