@@ -1,20 +1,32 @@
-import * as React from 'react';
-import { cn } from '../../lib/utils';
 import {
-  PLOT_PAD,
-  PLOT_WIDTH,
-  SERIES_FILL,
+  Bar,
+  ComposedChart,
+  LabelList,
+  Line,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type DotItemDotProps,
+  type XAxisTickContentProps,
+} from 'recharts';
+import {
+  AXIS_LINE,
+  BAR_MAX,
+  BAR_RADIUS,
+  CHART_VAR,
+  CURSOR_BAND,
+  PLOT_AXIS_WIDTH,
+  PLOT_MARGIN,
+  PLOT_TEXT,
+  PlotText,
+  PlotTickText,
   SERIES_SWATCH,
-  bandWidth,
-  bandX,
-  barPath,
-  fitLabel,
-  scaleY,
-  type PlotPad,
-  type PlotScale,
+  SERIES_VAR,
+  TIP_WRAPPER,
+  UNMEASURED,
   type SeriesSlot,
-} from './chart-geometry';
-import { ChartTooltip, type ChartTip, type ChartTipRow } from './chart-tooltip';
+} from './chart-theme';
+import { PlotTip, type ChartTipRow } from './chart-tooltip';
 
 export interface PlotColumn {
   key: string;
@@ -36,16 +48,18 @@ export interface ColumnPlotProps {
   min?: number;
   suffix?: string;
   series?: SeriesSlot;
+  /** Pixels. */
   height?: number;
-  /** A wider viewBox for a wider card keeps the type the same size on screen. */
-  width?: number;
   'aria-label': string;
   className?: string;
 }
 
-/** Left and right come from the shared pad, so a line plot stacked above lands on the same bands. */
-const PAD: PlotPad = { ...PLOT_PAD, top: 64, bottom: 104 };
-const DEFAULT_HEIGHT = 560;
+const DEFAULT_HEIGHT = 320;
+const X_AXIS_HEIGHT = 40;
+const META_GAP = 15;
+/** A measured zero still has to be seen and labelled; a null is what draws nothing. */
+const ZERO_STUB = 2;
+const MARKER_OVERHANG = 6;
 
 /** One series, one hue: the column's height carries the value, its colour only says which series. */
 export function ColumnPlot({
@@ -55,167 +69,161 @@ export function ColumnPlot({
   suffix = '',
   series = 1,
   height = DEFAULT_HEIGHT,
-  width = PLOT_WIDTH,
   className,
   ...props
 }: Readonly<ColumnPlotProps>) {
-  const [tip, setTip] = React.useState<ChartTip | null>(null);
-  const scale: PlotScale = { min, max };
-  const floor = height - PAD.bottom;
-  const bar = bandWidth(columns.length, width);
-  const slot = (width - PAD.left - PAD.right) / Math.max(columns.length, 1);
-
-  const show = (column: PlotColumn, index: number) => () =>
-    setTip({
-      x: bandX(index, columns.length, PAD, width) / width,
-      y: (column.value === null ? floor : scaleY(column.value, scale, height, PAD)) / height,
-      title: column.label,
-      rows: rowsFor(column, suffix, SERIES_SWATCH[series]),
-    });
+  const marked = columns.some((column) => column.marker != null);
 
   return (
-    <div className={cn('relative', className)}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" {...props}>
-        <line
-          x1={PAD.left}
-          x2={width - PAD.right}
-          y1={floor}
-          y2={floor}
-          strokeWidth={1}
-          vectorEffect="non-scaling-stroke"
-          className="stroke-chart-axis"
-        />
+    <ComposedChart
+      responsive
+      data={[...columns]}
+      height={height}
+      margin={{ ...PLOT_MARGIN, left: PLOT_AXIS_WIDTH }}
+      style={{ width: '100%', height }}
+      className={className}
+      {...props}
+    >
+      <XAxis
+        dataKey="key"
+        type="category"
+        interval={0}
+        height={X_AXIS_HEIGHT}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        tickMargin={8}
+        tick={<ColumnTick columns={columns} suffix={suffix} />}
+      />
+      <YAxis type="number" domain={[min, max]} hide />
 
-        {columns.map((column, index) => (
-          <Column
-            key={column.key}
-            column={column}
-            x={bandX(index, columns.length, PAD, width)}
-            width={bar}
-            slot={slot}
-            floor={floor}
-            top={column.value === null ? floor : scaleY(column.value, scale, height, PAD)}
-            markerTop={column.marker == null ? null : scaleY(column.marker, scale, height, PAD)}
-            fill={SERIES_FILL[series]}
-            suffix={suffix}
+      <Tooltip
+        isAnimationActive={false}
+        filterNull={false}
+        cursor={CURSOR_BAND}
+        wrapperStyle={TIP_WRAPPER}
+        content={
+          <PlotTip<PlotColumn>
+            title={(column) => column.label}
+            rows={(column) => rowsFor(column, suffix, SERIES_SWATCH[series])}
           />
-        ))}
+        }
+      />
 
-        {columns.map((column, index) => (
-          <rect
-            key={`hit-${column.key}`}
-            x={bandX(index, columns.length, PAD, width) - bar}
-            y={PAD.top}
-            width={bar * 2}
-            height={Math.max(floor - PAD.top, 0)}
-            tabIndex={0}
-            role="img"
-            aria-label={`${column.label}: ${textFor(column, suffix)}`}
-            className="fill-transparent"
-            onPointerEnter={show(column, index)}
-            onFocus={show(column, index)}
-            onPointerLeave={() => setTip(null)}
-            onBlur={() => setTip(null)}
-          />
-        ))}
-      </svg>
-      <ChartTooltip tip={tip} />
-    </div>
-  );
-}
-
-interface ColumnProps {
-  column: PlotColumn;
-  x: number;
-  width: number;
-  slot: number;
-  floor: number;
-  top: number;
-  markerTop: number | null;
-  fill: string;
-  suffix: string;
-}
-
-function Column({
-  column,
-  x,
-  width,
-  slot,
-  floor,
-  top,
-  markerTop,
-  fill,
-  suffix,
-}: Readonly<ColumnProps>) {
-  return (
-    <g>
-      {column.value === null ? null : (
-        <path
-          d={barPath({ x: x - width / 2, y: top, width, height: Math.max(floor - top, 0) }, 'top')}
-          className={fill}
-        />
-      )}
-      <text
-        x={x}
-        y={top - 16}
-        textAnchor="middle"
-        fontSize={28}
-        fontWeight={600}
-        className="fill-foreground"
+      <Bar
+        dataKey="value"
+        fill={SERIES_VAR[series]}
+        radius={[BAR_RADIUS, BAR_RADIUS, 0, 0]}
+        maxBarSize={BAR_MAX}
+        minPointSize={ZERO_STUB}
+        isAnimationActive={false}
       >
-        {textFor(column, suffix)}
-      </text>
-      {markerTop === null ? null : (
-        <MarkerTick x={x} y={markerTop} width={width} label={column.markerDisplay} />
-      )}
-      <text x={x} y={floor + 34} textAnchor="middle" fontSize={23} className="fill-chart-ink">
-        {fitLabel(column.label, slot)}
-      </text>
-      {column.meta ? (
-        <text
-          x={x}
-          y={floor + 64}
-          textAnchor="middle"
-          fontSize={20}
-          className="fill-muted-foreground"
-        >
-          {column.meta}
-        </text>
+        <LabelList
+          position="top"
+          offset={8}
+          className={PLOT_TEXT.value}
+          valueAccessor={(entry) => textFor(entry.payload as PlotColumn, suffix)}
+        />
+      </Bar>
+
+      {marked ? (
+        <Line
+          dataKey="marker"
+          stroke="none"
+          legendType="none"
+          activeDot={false}
+          isAnimationActive={false}
+          dot={<MarkerTick />}
+        />
       ) : null}
-    </g>
+    </ComposedChart>
   );
 }
 
-function MarkerTick({
-  x,
-  y,
-  width,
-  label,
-}: Readonly<{ x: number; y: number; width: number; label?: string }>) {
+interface MarkerTickProps {
+  cx?: number;
+  cy?: number;
+  points?: DotItemDotProps['points'];
+  payload?: PlotColumn;
+}
+
+/** The cohort's own reading, ticked across the column it is compared with. */
+function MarkerTick({ cx, cy, points, payload }: Readonly<MarkerTickProps>) {
+  if (cx === undefined || cy === undefined) return null;
+  const reach = Math.min(BAR_MAX, bandOf(points)) / 2 + MARKER_OVERHANG;
+  const label = payload?.markerDisplay;
+
   return (
     <g>
       <line
-        x1={x - width / 2 - 8}
-        x2={x + width / 2 + 8}
-        y1={y}
-        y2={y}
+        x1={cx - reach}
+        x2={cx + reach}
+        y1={cy}
+        y2={cy}
         strokeWidth={2}
-        strokeDasharray="8 5"
-        vectorEffect="non-scaling-stroke"
-        className="stroke-chart-ink"
+        strokeDasharray="6 4"
+        stroke={CHART_VAR.ink}
       />
-      {label ? (
-        <text x={x + width / 2 + 14} y={y + 7} fontSize={19} className="fill-muted-foreground">
+      {label === undefined ? null : (
+        <PlotText tone="meta" x={cx + reach + 5} y={cy + 4}>
           {label}
-        </text>
-      ) : null}
+        </PlotText>
+      )}
     </g>
   );
+}
+
+type ColumnTickProps = Partial<XAxisTickContentProps> & {
+  columns: readonly PlotColumn[];
+  suffix: string;
+};
+
+function ColumnTick({
+  x,
+  y,
+  payload,
+  width,
+  visibleTicksCount,
+  columns,
+  suffix,
+}: Readonly<ColumnTickProps>) {
+  const column = columns[payload?.index ?? -1];
+  if (column === undefined) return null;
+
+  const slot = visibleTicksCount ?? 0;
+  const room = typeof width === 'number' && slot > 0 ? width / slot : 0;
+  const at = Number(x);
+  const foot = Number(y);
+
+  return (
+    <g>
+      {column.value === null ? (
+        <PlotText tone="value" x={at} y={foot} dy={-16} textAnchor="middle">
+          {textFor(column, suffix)}
+        </PlotText>
+      ) : null}
+      <PlotTickText x={at} y={foot} width={room > 0 ? room : undefined}>
+        {column.label}
+      </PlotTickText>
+      {column.meta === undefined ? null : (
+        <PlotTickText x={at} y={foot + META_GAP} width={room > 0 ? room : undefined} tone="meta">
+          {column.meta}
+        </PlotTickText>
+      )}
+    </g>
+  );
+}
+
+/** A band is the gap between two neighbours; one column alone gets the cap. */
+function bandOf(points: DotItemDotProps['points'] | undefined): number {
+  const first = points?.[0]?.x;
+  const second = points?.[1]?.x;
+  if (first == null || second == null) return BAR_MAX;
+  return Math.abs(second - first);
 }
 
 function textFor(column: PlotColumn, suffix: string): string {
   if (column.display !== undefined) return column.display;
-  if (column.value === null) return '—';
+  if (column.value === null) return UNMEASURED;
   return `${column.value}${suffix}`;
 }
 

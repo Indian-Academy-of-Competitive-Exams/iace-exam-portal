@@ -31,6 +31,7 @@ SI/Constable), replacing ThinkExam.
 - **Server data:** TanStack Query over the typed client from `packages/contracts`.
 - **Design:** Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark via CSS variables. Brand
   palette and its rules: the `ui-conventions` skill.
+- **Charts:** Recharts v3 in `packages/ui/src/components/charts`, on the `--series-*` tokens.
 - **Client state:** Zustand only where React Query does not fit.
 - **DB:** PostgreSQL via Prisma. **Redis:** live test state, leaderboards, OTP, sessions, device
   binding, rate limiting. **Jobs:** BullMQ on Redis.

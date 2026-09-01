@@ -1,7 +1,31 @@
-import * as React from 'react';
-import { cn } from '../../lib/utils';
-import { PLOT_WIDTH, SERIES_FILL, SERIES_SWATCH, barPath, type SeriesSlot } from './chart-geometry';
-import { ChartTooltip, type ChartTip } from './chart-tooltip';
+import {
+  Bar,
+  BarChart,
+  Rectangle,
+  ReferenceDot,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type BarShapeProps,
+  type CartesianViewBox,
+  type LabelProps,
+  type YAxisTickContentProps,
+} from 'recharts';
+import {
+  BAR_MAX,
+  BAR_RADIUS,
+  CHART_VAR,
+  CURSOR_BAND,
+  PlotText,
+  PlotTickText,
+  SERIES_SWATCH,
+  SERIES_VAR,
+  TIP_WRAPPER,
+  UNMEASURED,
+  type SeriesSlot,
+} from './chart-theme';
+import { PlotTip, type ChartTipRow } from './chart-tooltip';
 
 export interface DivergingItem {
   key: string;
@@ -21,19 +45,18 @@ export interface DivergingBarsProps {
   /** Named under the axis so the two directions never rely on hue alone. */
   belowLabel?: string;
   aboveLabel?: string;
-  /** A wider viewBox for a wider card keeps the type the same size on screen. */
-  width?: number;
   'aria-label': string;
   className?: string;
 }
 
-const LABEL_RIGHT = 250;
-const AXIS = 620;
-const REACH = 290;
-const ROW = 84;
-const BAR = 34;
-const TOP = 22;
-const FOOT = 40;
+const LABEL_WIDTH = 132;
+const ROW_HEIGHT = 34;
+const TOP = 8;
+const FOOT = 24;
+const FOOT_GAP = 16;
+const LABEL_GAP = 8;
+
+const isBelow = (item: DivergingItem) => (item.value ?? 0) < 0;
 
 /** Every bar carries its signed value: the middle is what the reader is measured against. */
 export function DivergingBars({
@@ -43,141 +66,169 @@ export function DivergingBars({
   aboveSeries = 1,
   belowLabel,
   aboveLabel,
-  width = PLOT_WIDTH,
   className,
   ...props
 }: Readonly<DivergingBarsProps>) {
-  const [tip, setTip] = React.useState<ChartTip | null>(null);
-  const height = TOP + items.length * ROW + FOOT;
+  const height = TOP + items.length * ROW_HEIGHT + FOOT;
   const ceiling = Math.max(max ?? 0, ...items.map((item) => Math.abs(item.value ?? 0)), 1);
-  const axisBottom = TOP + items.length * ROW;
-
-  const show = (item: DivergingItem, index: number) => () =>
-    setTip({
-      x: AXIS / width,
-      y: (TOP + index * ROW) / height,
-      title: item.label,
-      rows: rowsFor(item, SERIES_SWATCH[(item.value ?? 0) < 0 ? belowSeries : aboveSeries]),
-    });
 
   return (
-    <div className={cn('relative', className)}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" {...props}>
-        <line
-          x1={AXIS}
-          x2={AXIS}
-          y1={TOP - 10}
-          y2={axisBottom + 6}
-          strokeWidth={1}
-          vectorEffect="non-scaling-stroke"
-          className="stroke-chart-axis"
+    <BarChart
+      responsive
+      layout="vertical"
+      data={[...items]}
+      height={height}
+      margin={{ top: TOP, right: 56, bottom: FOOT, left: 0 }}
+      style={{ width: '100%', height }}
+      className={className}
+      {...props}
+    >
+      <XAxis type="number" domain={[-ceiling, ceiling]} hide />
+      <YAxis
+        type="category"
+        dataKey="key"
+        width={LABEL_WIDTH}
+        axisLine={false}
+        tickLine={false}
+        tick={<ItemTick items={items} />}
+      />
+
+      <Tooltip
+        isAnimationActive={false}
+        filterNull={false}
+        cursor={CURSOR_BAND}
+        wrapperStyle={TIP_WRAPPER}
+        content={
+          <PlotTip<DivergingItem>
+            title={(item) => item.label}
+            rows={(item) => rowsFor(item, SERIES_SWATCH[isBelow(item) ? belowSeries : aboveSeries])}
+          />
+        }
+      />
+
+      <ReferenceLine
+        x={0}
+        ifOverflow="visible"
+        stroke={CHART_VAR.axis}
+        label={<DirectionLabels below={belowLabel} above={aboveLabel} />}
+      />
+
+      <Bar
+        dataKey="value"
+        maxBarSize={BAR_MAX}
+        isAnimationActive={false}
+        shape={<DivergingBar below={SERIES_VAR[belowSeries]} above={SERIES_VAR[aboveSeries]} />}
+      />
+
+      {items.map((item) => (
+        <ReferenceDot
+          key={item.key}
+          x={item.value ?? 0}
+          y={item.key}
+          r={0}
+          ifOverflow="visible"
+          fill="none"
+          stroke="none"
+          label={<TipLabel item={item} />}
         />
-
-        {items.map((item, index) => (
-          <DivergingRow
-            key={item.key}
-            item={item}
-            y={TOP + index * ROW}
-            width={(Math.abs(item.value ?? 0) / ceiling) * REACH}
-            fill={SERIES_FILL[(item.value ?? 0) < 0 ? belowSeries : aboveSeries]}
-          />
-        ))}
-
-        {belowLabel ? (
-          <text
-            x={AXIS - 16}
-            y={height - 12}
-            textAnchor="end"
-            fontSize={20}
-            className="fill-chart-ink"
-          >
-            {belowLabel}
-          </text>
-        ) : null}
-        {aboveLabel ? (
-          <text x={AXIS + 16} y={height - 12} fontSize={20} className="fill-chart-ink">
-            {aboveLabel}
-          </text>
-        ) : null}
-
-        {items.map((item, index) => (
-          <rect
-            key={`hit-${item.key}`}
-            x={0}
-            y={TOP + index * ROW}
-            width={width}
-            height={ROW}
-            tabIndex={0}
-            role="img"
-            aria-label={`${item.label}: ${textFor(item)}`}
-            className="fill-transparent"
-            onPointerEnter={show(item, index)}
-            onFocus={show(item, index)}
-            onPointerLeave={() => setTip(null)}
-            onBlur={() => setTip(null)}
-          />
-        ))}
-      </svg>
-      <ChartTooltip tip={tip} />
-    </div>
+      ))}
+    </BarChart>
   );
 }
 
-function DivergingRow({
-  item,
-  y,
-  width,
-  fill,
-}: Readonly<{ item: DivergingItem; y: number; width: number; fill: string }>) {
-  const below = (item.value ?? 0) < 0;
-  const middle = y + ROW / 2;
-  const tip = below ? AXIS - width : AXIS + width;
+type DivergingBarProps = Partial<BarShapeProps> & { below: string; above: string };
+
+/** 4px rounded at the data end, square where it leaves the middle. */
+function DivergingBar({ x, y, width, height, payload, below, above }: Readonly<DivergingBarProps>) {
+  if (x == null || y == null || width == null || height == null) return null;
+  const item = payload as DivergingItem | undefined;
+  const under = item !== undefined && isBelow(item);
+
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill={under ? below : above}
+      radius={under ? [BAR_RADIUS, 0, 0, BAR_RADIUS] : [0, BAR_RADIUS, BAR_RADIUS, 0]}
+    />
+  );
+}
+
+type TipLabelProps = Pick<LabelProps, 'viewBox'> & { item: DivergingItem };
+
+/** The reading rides the tip of its own bar, so a null lands on the middle as a dash. */
+function TipLabel({ item, viewBox }: Readonly<TipLabelProps>) {
+  const span = viewBox as CartesianViewBox | undefined;
+  if (span?.x === undefined || span.y === undefined) return null;
+  const under = isBelow(item);
+
+  return (
+    <PlotText
+      tone="value"
+      x={under ? span.x - LABEL_GAP : span.x + LABEL_GAP}
+      y={span.y + 4}
+      textAnchor={under ? 'end' : 'start'}
+    >
+      {textFor(item)}
+    </PlotText>
+  );
+}
+
+type DirectionLabelsProps = Pick<LabelProps, 'viewBox'> & { below?: string; above?: string };
+
+function DirectionLabels({ below, above, viewBox }: Readonly<DirectionLabelsProps>) {
+  const span = viewBox as CartesianViewBox | undefined;
+  if (span?.x === undefined) return null;
+  const foot = (span.y ?? 0) + (span.height ?? 0) + FOOT_GAP;
 
   return (
     <g>
-      <text
-        x={LABEL_RIGHT}
-        y={middle + 8}
-        textAnchor="end"
-        fontSize={24}
-        className="fill-chart-ink"
-      >
-        {item.label}
-      </text>
-      {item.value === null || width < 1 ? null : (
-        <path
-          d={barPath(
-            { x: below ? AXIS - width : AXIS, y: middle - BAR / 2, width, height: BAR },
-            below ? 'left' : 'right',
-          )}
-          className={fill}
-        />
+      {below === undefined ? null : (
+        <PlotText tone="axis" x={span.x - LABEL_GAP} y={foot} textAnchor="end">
+          {below}
+        </PlotText>
       )}
-      <text
-        x={below ? tip - 12 : tip + 12}
-        y={middle + 8}
-        textAnchor={below ? 'end' : 'start'}
-        fontSize={22}
-        fontWeight={600}
-        className="fill-foreground"
-      >
-        {textFor(item)}
-      </text>
+      {above === undefined ? null : (
+        <PlotText tone="axis" x={span.x + LABEL_GAP} y={foot}>
+          {above}
+        </PlotText>
+      )}
     </g>
+  );
+}
+
+type ItemTickProps = Partial<YAxisTickContentProps> & { items: readonly DivergingItem[] };
+
+function ItemTick({ x, y, payload, items }: Readonly<ItemTickProps>) {
+  const item = items[payload?.index ?? -1];
+  if (item === undefined) return null;
+
+  return (
+    <PlotTickText
+      x={Number(x)}
+      y={Number(y)}
+      width={LABEL_WIDTH - LABEL_GAP}
+      anchor="end"
+      vertical="middle"
+    >
+      {item.label}
+    </PlotTickText>
   );
 }
 
 /** An unmeasured gap is a dash, never a zero-length bar sitting on the middle. */
 function textFor(item: DivergingItem): string {
   if (item.display !== undefined) return item.display;
-  if (item.value === null) return '—';
+  if (item.value === null) return UNMEASURED;
   if (item.value > 0) return `+${item.value}`;
   if (item.value < 0) return `−${Math.abs(item.value)}`;
   return '0';
 }
 
-function rowsFor(item: DivergingItem, swatch: string) {
-  const rows = [{ key: 'value', value: textFor(item), swatch }];
+function rowsFor(item: DivergingItem, swatch: string): ChartTipRow[] {
+  const rows: ChartTipRow[] = [{ key: 'value', value: textFor(item), swatch }];
   if (item.caption === undefined) return rows;
   return [...rows, { key: 'caption', value: item.caption }];
 }

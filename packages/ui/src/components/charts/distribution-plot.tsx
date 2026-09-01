@@ -1,7 +1,28 @@
-import * as React from 'react';
-import { cn } from '../../lib/utils';
-import { PLOT_WIDTH, barPath, type PlotPad } from './chart-geometry';
-import { ChartTooltip, type ChartTip } from './chart-tooltip';
+import {
+  Bar,
+  BarChart,
+  Rectangle,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type BarShapeProps,
+  type CartesianViewBox,
+  type LabelProps,
+  type XAxisTickContentProps,
+} from 'recharts';
+import {
+  AXIS_LINE,
+  BAR_RADIUS,
+  CHART_VAR,
+  CURSOR_BAND,
+  PlotText,
+  SERIES_VAR,
+  TIP_WRAPPER,
+  anchorAt,
+  type PlotTone,
+} from './chart-theme';
+import { PlotTip } from './chart-tooltip';
 
 /** One column of a distribution: `from` inclusive, `to` exclusive, and how many landed in it. */
 export interface DistributionBand {
@@ -28,25 +49,35 @@ export interface DistributionPlotProps {
   axisSuffix?: string;
   /** What a count counts, said in the hover. */
   countLabel?: string;
+  /** Pixels. */
   height?: number;
-  /** A wider viewBox for a wider card keeps the type the same size on screen. */
-  width?: number;
   'aria-label': string;
   className?: string;
 }
 
-const PAD: PlotPad = { left: 44, right: 32, top: 96, bottom: 46 };
-const DEFAULT_HEIGHT = 420;
-const GAP = 3;
+interface DistributionRow extends DistributionBand {
+  key: string;
+  mid: number;
+}
 
-/** The end ticks hang off their own axis otherwise, and the last one gets clipped. */
-const TICK_ANCHORS = ['start', 'middle', 'end'] as const;
+const DEFAULT_HEIGHT = 280;
+const X_AXIS_HEIGHT = 22;
+const MARKER_TOP = 6;
+const MARKER_STEP = 15;
+const BIN_GAP = 2;
+const REST_OPACITY = 0.45;
 
 const MARKER_STROKE = {
-  you: 'stroke-series-1',
-  good: 'stroke-success',
-  neutral: 'stroke-chart-axis',
+  you: SERIES_VAR[1],
+  good: CHART_VAR.success,
+  neutral: CHART_VAR.axis,
 } as const;
+
+const MARKER_TONE = {
+  you: 'value',
+  good: 'axis',
+  neutral: 'axis',
+} as const satisfies Record<keyof typeof MARKER_STROKE, PlotTone>;
 
 /** No bands draws NOTHING: an un-rolled-up histogram is unknown, and a flat one reads as measured. */
 export function DistributionPlot({
@@ -57,134 +88,122 @@ export function DistributionPlot({
   axisSuffix = '',
   countLabel,
   height = DEFAULT_HEIGHT,
-  width = PLOT_WIDTH,
   className,
   ...props
 }: Readonly<DistributionPlotProps>) {
-  const [tip, setTip] = React.useState<ChartTip | null>(null);
-
   if (bands.length === 0) return null;
 
-  const floor = height - PAD.bottom;
-  const span = width - PAD.left - PAD.right;
-  const range = Math.max(max - min, 1);
-  const atX = (value: number) => PAD.left + ((value - min) / range) * span;
-  const tallest = Math.max(...bands.map((band) => band.count), 1);
-
+  const rows: DistributionRow[] = bands.map((band) => ({
+    ...band,
+    key: `${band.from}-${band.to}`,
+    mid: (band.from + band.to) / 2,
+  }));
+  const ticks = [min, Math.round((min + max) / 2), max];
   const unit = axisSuffix ? ` ${axisSuffix}` : '';
-  const show = (band: DistributionBand, index: number) => () =>
-    setTip({
-      x: (atX(band.from) + atX(band.to)) / 2 / width,
-      y: (floor - (band.count / tallest) * (floor - PAD.top)) / height,
-      title: `${band.from}–${band.to}${unit}`,
-      rows: [{ key: `count-${index}`, value: String(band.count), label: countLabel }],
-    });
 
   return (
-    <div className={cn('relative', className)}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" {...props}>
-        {bands.map((band) => (
-          <path
-            key={`${band.from}-${band.to}`}
-            d={barPath(
-              {
-                x: atX(band.from) + GAP / 2,
-                y: floor - (band.count / tallest) * (floor - PAD.top),
-                width: Math.max(atX(band.to) - atX(band.from) - GAP, 1),
-                height: (band.count / tallest) * (floor - PAD.top),
-              },
-              'top',
-            )}
-            className={band.isYours ? 'fill-series-1' : 'fill-muted-foreground/45'}
-          />
-        ))}
+    <BarChart
+      responsive
+      data={rows}
+      height={height}
+      barCategoryGap={BIN_GAP}
+      margin={{ top: MARKER_TOP + markers.length * MARKER_STEP, right: 12, bottom: 0, left: 12 }}
+      style={{ width: '100%', height }}
+      className={className}
+      {...props}
+    >
+      <XAxis
+        dataKey="mid"
+        type="number"
+        domain={[min, max]}
+        ticks={ticks}
+        height={X_AXIS_HEIGHT}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        tickMargin={6}
+        tick={<BandTick count={ticks.length} suffix={axisSuffix} />}
+      />
+      <YAxis type="number" dataKey="count" hide />
 
-        <line
-          x1={PAD.left - 12}
-          x2={width - PAD.right}
-          y1={floor}
-          y2={floor}
-          strokeWidth={1}
-          vectorEffect="non-scaling-stroke"
-          className="stroke-chart-axis"
+      <Tooltip
+        isAnimationActive={false}
+        filterNull={false}
+        cursor={CURSOR_BAND}
+        wrapperStyle={TIP_WRAPPER}
+        content={
+          <PlotTip<DistributionRow>
+            title={(row) => `${row.from}–${row.to}${unit}`}
+            rows={(row) => [{ key: row.key, value: String(row.count), label: countLabel }]}
+          />
+        }
+      />
+
+      <Bar dataKey="count" isAnimationActive={false} shape={<BinBar />} />
+
+      {markers.map((marker, index) => (
+        <ReferenceLine
+          key={marker.key}
+          x={marker.value}
+          ifOverflow="visible"
+          stroke={MARKER_STROKE[marker.tone ?? 'neutral']}
+          strokeWidth={marker.tone === 'you' ? 3 : 2}
+          strokeDasharray={marker.tone === 'neutral' ? '6 5' : undefined}
+          label={<MarkerLabel marker={marker} row={index} />}
         />
-
-        {markers.map((marker, index) => (
-          <MarkerMark
-            key={marker.key}
-            marker={marker}
-            x={atX(marker.value)}
-            top={20 + index * 30}
-            floor={floor}
-          />
-        ))}
-
-        {[min, Math.round((min + max) / 2), max].map((tick, index) => (
-          <text
-            key={tick}
-            x={atX(tick)}
-            y={height - 12}
-            textAnchor={TICK_ANCHORS[index]}
-            fontSize={22}
-            className="fill-chart-ink"
-          >
-            {index === 2 && axisSuffix ? `${tick} ${axisSuffix}` : tick}
-          </text>
-        ))}
-
-        {bands.map((band, index) => (
-          <rect
-            key={`hit-${band.from}-${band.to}`}
-            x={atX(band.from)}
-            y={PAD.top}
-            width={Math.max(atX(band.to) - atX(band.from), 1)}
-            height={Math.max(floor - PAD.top, 0)}
-            tabIndex={0}
-            role="img"
-            aria-label={`${band.from}–${band.to}: ${band.count}`}
-            className="fill-transparent"
-            onPointerEnter={show(band, index)}
-            onFocus={show(band, index)}
-            onPointerLeave={() => setTip(null)}
-            onBlur={() => setTip(null)}
-          />
-        ))}
-      </svg>
-      <ChartTooltip tip={tip} />
-    </div>
+      ))}
+    </BarChart>
   );
 }
 
-function MarkerMark({
-  marker,
-  x,
-  top,
-  floor,
-}: Readonly<{ marker: DistributionMarker; x: number; top: number; floor: number }>) {
-  const tone = marker.tone ?? 'neutral';
+/** The band the reader is standing in wears the hue; the rest of the cohort is a wash. */
+function BinBar({ x, y, width, height, payload }: Readonly<Partial<BarShapeProps>>) {
+  if (x == null || y == null || width == null || height == null) return null;
+  const yours = (payload as DistributionRow | undefined)?.isYours === true;
 
   return (
-    <g>
-      <line
-        x1={x}
-        x2={x}
-        y1={top + 10}
-        y2={floor}
-        strokeWidth={tone === 'you' ? 3 : 2}
-        strokeDasharray={tone === 'neutral' ? '8 6' : undefined}
-        vectorEffect="non-scaling-stroke"
-        className={MARKER_STROKE[tone]}
-      />
-      <text
-        x={x}
-        y={top}
-        textAnchor="middle"
-        fontSize={22}
-        fontWeight={tone === 'you' ? 700 : 400}
-        className={tone === 'you' ? 'fill-foreground' : 'fill-chart-ink'}
-      >
-        {marker.label}
-      </text>
-    </g>
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill={yours ? SERIES_VAR[1] : CHART_VAR.muted}
+      fillOpacity={yours ? 1 : REST_OPACITY}
+      radius={[BAR_RADIUS, BAR_RADIUS, 0, 0]}
+    />
+  );
+}
+
+type MarkerLabelProps = Pick<LabelProps, 'viewBox'> & {
+  marker: DistributionMarker;
+  /** Three markers on close scores would land on each other, so each one takes its own line. */
+  row: number;
+};
+
+function MarkerLabel({ marker, row, viewBox }: Readonly<MarkerLabelProps>) {
+  const span = viewBox as CartesianViewBox | undefined;
+  if (span?.x === undefined) return null;
+
+  return (
+    <PlotText
+      tone={MARKER_TONE[marker.tone ?? 'neutral']}
+      x={span.x}
+      y={MARKER_TOP + row * MARKER_STEP}
+      textAnchor="middle"
+    >
+      {marker.label}
+    </PlotText>
+  );
+}
+
+type BandTickProps = Partial<XAxisTickContentProps> & { count: number; suffix: string };
+
+function BandTick({ x, y, payload, count, suffix }: Readonly<BandTickProps>) {
+  const index = payload?.index ?? 0;
+  const last = index === count - 1;
+
+  return (
+    <PlotText tone="axis" x={x} y={y} dy={10} textAnchor={anchorAt(index, count)}>
+      {last && suffix ? `${payload?.value} ${suffix}` : String(payload?.value ?? '')}
+    </PlotText>
   );
 }

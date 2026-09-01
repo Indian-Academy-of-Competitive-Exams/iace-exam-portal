@@ -31,9 +31,8 @@ import {
 const UNMEASURED = '—';
 const SECONDS_PER_MINUTE = 60;
 
-/** viewBox units against a 1000-wide box, so a plot in a half-page column lands about 280px tall. */
-const PLOT_HEIGHT = 360;
-const COLUMN_HEIGHT = 420;
+const PLOT_HEIGHT = 280;
+const COLUMN_HEIGHT = 320;
 
 /** A band the wire named but no level covers keeps its own name rather than reading as unknown. */
 const difficultyLabel = (name: string) => DIFFICULTY_LABELS[name as DifficultyLevel] ?? name;

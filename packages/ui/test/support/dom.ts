@@ -70,6 +70,19 @@ class StubResizeObserver {
   }
 }
 define('ResizeObserver', StubResizeObserver);
+
+const CHART_WIDTH = 800;
+const CHART_HEIGHT = 320;
+const measure = win.Element.prototype.getBoundingClientRect;
+
+/** jsdom has no layout, and Recharts draws nothing at all inside a box of zero. */
+win.Element.prototype.getBoundingClientRect = function boxOf(this: Element): DOMRect {
+  const box = measure.call(this);
+  if (box.width > 0 || !this.classList.contains('recharts-wrapper')) return box;
+  const declared = Number(this.getAttribute('height'));
+  return new win.DOMRect(0, 0, CHART_WIDTH, declared > 0 ? declared : CHART_HEIGHT);
+};
+
 win.Element.prototype.scrollIntoView = () => {};
 win.HTMLElement.prototype.hasPointerCapture = () => false;
 win.HTMLElement.prototype.releasePointerCapture = () => {};

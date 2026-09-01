@@ -5,7 +5,6 @@ import {
   ColumnPlot,
   LinePlot,
   Metric,
-  PLOT_WIDTH_WIDE,
   plural,
   type LinePoint,
   type PlotColumn,
@@ -23,12 +22,9 @@ const UNMEASURED = '—';
 const UNTITLED = 'Untitled test';
 const PERCENTILE_TICKS = [0, 25, 50, 75, 100];
 
-/** viewBox units against the wide box the full-width figures use, not pixels. */
-const RAMP_LINE_HEIGHT = 420;
-const RAMP_COLUMN_HEIGHT = 460;
-/** A sparkline is measured in its own narrow box, so its markers do not shrink to specks. */
-const SPARK_WIDTH = 400;
-const SPARK_HEIGHT = 130;
+const RAMP_LINE_HEIGHT = 300;
+const RAMP_COLUMN_HEIGHT = 330;
+const SPARK_HEIGHT = 96;
 
 /** Two plots on one x — a percentile line over the difficulty bars, never one dual-axis chart. */
 export function RampFigure({ progression }: Readonly<{ progression: SeriesProgression }>) {
@@ -49,7 +45,6 @@ export function RampFigure({ progression }: Readonly<{ progression: SeriesProgre
           <LinePlot
             points={climb}
             align="bands"
-            width={PLOT_WIDTH_WIDE}
             height={RAMP_LINE_HEIGHT}
             ticks={PERCENTILE_TICKS}
             xLabels={false}
@@ -59,7 +54,6 @@ export function RampFigure({ progression }: Readonly<{ progression: SeriesProgre
         secondary={
           <ColumnPlot
             columns={ramp}
-            width={PLOT_WIDTH_WIDE}
             height={RAMP_COLUMN_HEIGHT}
             aria-label="How hard each paper's questions are graded"
           />
@@ -120,7 +114,6 @@ function SubjectSpark({ subject, slot }: Readonly<{ subject: SubjectMastery; slo
         points={points}
         compact
         series={slot}
-        width={SPARK_WIDTH}
         height={SPARK_HEIGHT}
         aria-label={`${subject.subjectName} accuracy across the series`}
       />

@@ -160,12 +160,7 @@ export {
   type RatioPart,
   type RatioValues,
 } from './components/ui/ratio-bar';
-export {
-  PLOT_WIDTH,
-  PLOT_WIDTH_WIDE,
-  SERIES_SWATCH,
-  type SeriesSlot,
-} from './components/charts/chart-geometry';
+export { SERIES_SWATCH, SERIES_VAR, type SeriesSlot } from './components/charts/chart-theme';
 export { ChartFigure, type ChartFigureProps } from './components/charts/chart-figure';
 export {
   ChartLegend,

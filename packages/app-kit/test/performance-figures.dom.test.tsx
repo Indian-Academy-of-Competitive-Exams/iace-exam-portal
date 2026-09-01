@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { type CohortCurve, type DifficultyStanding, type PercentilePoint } from '@iace/contracts';
 import { CohortFigure, DifficultyFigure, TrajectoryFigure } from '../browser/performance-figures';
 
@@ -51,7 +51,7 @@ const curve = (over: Partial<CohortCurve>): CohortCurve => ({
 describe('DifficultyFigure', () => {
   /** The failure this prevents: a band nobody touched drawn as a 0% they scored. */
   it('reads a band with nothing attempted as unmeasured, never as zero', () => {
-    render(
+    const { container } = render(
       <DifficultyFigure
         difficulty={[
           band({ key: 'LOW', name: 'LOW', accuracy: 80 }),
@@ -69,15 +69,18 @@ describe('DifficultyFigure', () => {
       />,
     );
 
-    assert.ok(screen.getByLabelText('High: —'));
-    assert.equal(screen.queryByLabelText('High: 0%'), null);
-    assert.ok(screen.getByLabelText('Low: 80%'));
+    const view = within(container);
+    assert.ok(view.getByText('—'));
+    assert.equal(view.queryAllByText('0%').length, 0);
+    assert.ok(view.getByText('80%'));
   });
 
   it('names a band by the level it carries', () => {
-    render(<DifficultyFigure difficulty={[band({ key: 'MEDIUM', name: 'MEDIUM' })]} />);
+    const { container } = render(
+      <DifficultyFigure difficulty={[band({ key: 'MEDIUM', name: 'MEDIUM' })]} />,
+    );
 
-    assert.ok(screen.getByLabelText('Medium: 80%'));
+    assert.ok(within(container).getByText('Medium'));
   });
 });
 
@@ -103,7 +106,7 @@ describe('CohortFigure', () => {
 describe('TrajectoryFigure', () => {
   /** An unranked latest sitting must not blank the headline the whole figure is read for. */
   it('headlines the latest MEASURED percentile', () => {
-    render(
+    const { container } = render(
       <TrajectoryFigure
         trajectory={[
           point({ attemptId: 'a1', testTitle: 'Mock 1', percentile: 55 }),
@@ -113,15 +116,16 @@ describe('TrajectoryFigure', () => {
       />,
     );
 
-    assert.ok(screen.getAllByText('71').length > 0);
-    assert.ok(screen.getByLabelText('Mock 3: \u2014'));
-    assert.equal(screen.queryByLabelText('Mock 3: 0'), null);
+    assert.ok(within(container).getAllByText('71').length > 0);
+    assert.equal(container.querySelectorAll('circle').length, 2);
   });
 
   it('reads a trajectory nothing measured as unmeasured, never as zero', () => {
-    render(<TrajectoryFigure trajectory={[point({ testTitle: 'Mock 1', percentile: null })]} />);
+    const { container } = render(
+      <TrajectoryFigure trajectory={[point({ testTitle: 'Mock 1', percentile: null })]} />,
+    );
 
-    assert.ok(screen.getAllByText('\u2014').length > 0);
-    assert.equal(screen.queryByLabelText('Mock 1: 0'), null);
+    assert.ok(within(container).getAllByText('\u2014').length > 0);
+    assert.equal(container.querySelectorAll('circle').length, 0);
   });
 });

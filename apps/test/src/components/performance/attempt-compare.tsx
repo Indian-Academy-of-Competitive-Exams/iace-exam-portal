@@ -4,7 +4,6 @@ import {
   ChartFigure,
   ComparisonCards,
   LinePlot,
-  PLOT_WIDTH_WIDE,
   SectionHeading,
   plural,
   type ComparisonItem,
@@ -20,8 +19,7 @@ import {
   percentLabel,
 } from '@iace/contracts';
 
-/** viewBox units against the wide box a full-width plot uses, not pixels. */
-const RETAKE_HEIGHT = 420;
+const RETAKE_HEIGHT = 300;
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -129,7 +127,6 @@ function RetakeFigure({
       <LinePlot
         points={points}
         max={maxMarks}
-        width={PLOT_WIDTH_WIDE}
         height={RETAKE_HEIGHT}
         reference={reference}
         aria-label="Marks on each sitting of this paper"

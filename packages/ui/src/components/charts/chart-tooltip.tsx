@@ -16,28 +16,21 @@ export interface ChartTipRow {
   swatch?: string;
 }
 
-export interface ChartTooltipProps {
-  tip: ChartTip | null;
+export interface ChartTipCardProps {
+  title: string;
+  rows: readonly ChartTipRow[];
 }
 
-const clamp = (share: number) => Math.min(0.94, Math.max(0.06, share));
-
-/** The hover layer every plot here shares: the value leads, the label follows. */
-export function ChartTooltip({ tip }: Readonly<ChartTooltipProps>) {
-  if (!tip) return null;
-
+/** The one hover card: Recharts positions it for a plot, the composition bar places its own. */
+export function ChartTipCard({ title, rows }: Readonly<ChartTipCardProps>) {
   return (
     <div
       role="tooltip"
-      style={{ left: `${clamp(tip.x) * 100}%`, top: `${clamp(tip.y) * 100}%` }}
-      className={cn(
-        'pointer-events-none absolute z-10 min-w-24 -translate-x-1/2 -translate-y-[calc(100%+10px)]',
-        'rounded-md border border-border bg-popover px-2.5 py-1.5 shadow-md',
-      )}
+      className="min-w-24 rounded-md border border-border bg-popover px-2.5 py-1.5 shadow-md"
     >
-      <p className="text-xs font-medium text-foreground">{tip.title}</p>
+      <p className="text-xs font-medium text-foreground">{title}</p>
       <ul className="mt-0.5 flex flex-col gap-0.5">
-        {tip.rows.map((row) => (
+        {rows.map((row) => (
           <li key={row.key} className="flex items-center gap-1.5 text-xs">
             {row.swatch ? <span className={cn('h-0.5 w-3 rounded-full', row.swatch)} /> : null}
             <span className="font-semibold tabular-nums text-foreground">{row.value}</span>
@@ -47,4 +40,38 @@ export function ChartTooltip({ tip }: Readonly<ChartTooltipProps>) {
       </ul>
     </div>
   );
+}
+
+export interface ChartTooltipProps {
+  tip: ChartTip | null;
+}
+
+const clamp = (share: number) => Math.min(0.94, Math.max(0.06, share));
+
+export function ChartTooltip({ tip }: Readonly<ChartTooltipProps>) {
+  if (!tip) return null;
+
+  return (
+    <div
+      style={{ left: `${clamp(tip.x) * 100}%`, top: `${clamp(tip.y) * 100}%` }}
+      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+10px)]"
+    >
+      <ChartTipCard title={tip.title} rows={tip.rows} />
+    </div>
+  );
+}
+
+export interface PlotTipProps<TRow> {
+  active?: boolean;
+  payload?: ReadonlyArray<{ payload?: TRow }>;
+  title: (row: TRow) => string;
+  rows: (row: TRow) => ChartTipRow[];
+}
+
+/** Recharts hands the hovered row back; each plot says what that row reads as. */
+export function PlotTip<TRow>({ active, payload, title, rows }: Readonly<PlotTipProps<TRow>>) {
+  const row = payload?.[0]?.payload;
+  if (!active || row === undefined) return null;
+
+  return <ChartTipCard title={title(row)} rows={rows(row)} />;
 }

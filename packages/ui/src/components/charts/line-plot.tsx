@@ -1,21 +1,37 @@
 import * as React from 'react';
-import { cn } from '../../lib/utils';
 import {
-  PLOT_PAD,
-  PLOT_PAD_COMPACT,
-  PLOT_WIDTH,
-  SERIES_FILL,
-  SERIES_STROKE,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceArea,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type CartesianViewBox,
+  type LabelProps,
+  type XAxisTickContentProps,
+  type YAxisTickContentProps,
+} from 'recharts';
+import {
+  AXIS_LINE,
+  CHART_VAR,
+  CURSOR_LINE,
+  DOT_RADIUS,
+  DOT_RING,
+  LINE_WIDTH,
+  PLOT_AXIS_WIDTH,
+  PLOT_MARGIN,
+  PlotText,
+  PlotTickText,
   SERIES_SWATCH,
-  bandX,
-  fitLabel,
-  pointX,
-  scaleY,
-  type PlotPad,
-  type PlotScale,
+  SERIES_VAR,
+  TIP_WRAPPER,
+  UNMEASURED,
+  anchorAt,
   type SeriesSlot,
-} from './chart-geometry';
-import { ChartTooltip, type ChartTip } from './chart-tooltip';
+} from './chart-theme';
+import { PlotTip, type ChartTipRow } from './chart-tooltip';
 
 export interface LinePoint {
   key: string;
@@ -53,22 +69,16 @@ export interface LinePlotProps {
   /** `bands` puts each point over the middle of a column band, so it stacks on a ColumnPlot. */
   align?: 'edges' | 'bands';
   xLabels?: boolean;
+  /** Pixels. */
   height?: number;
-  /** A wider viewBox for a wider card keeps the type the same size on screen. */
-  width?: number;
   'aria-label': string;
   className?: string;
 }
 
-interface PlottedPoint extends LinePoint {
-  index: number;
-  x: number;
-  y: number | null;
-}
-
-const DEFAULT_HEIGHT = 420;
-const COMPACT_HEIGHT = 340;
-const MAX_X_LABELS = 6;
+const DEFAULT_HEIGHT = 280;
+const COMPACT_HEIGHT = 88;
+const COMPACT_MARGIN = { top: 12, right: 10, bottom: 8, left: 10 } as const;
+const X_AXIS_HEIGHT = 24;
 
 export function LinePlot({
   points,
@@ -83,300 +93,214 @@ export function LinePlot({
   align = 'edges',
   xLabels = true,
   height,
-  width = PLOT_WIDTH,
   className,
   ...props
 }: Readonly<LinePlotProps>) {
-  const [tip, setTip] = React.useState<ChartTip | null>(null);
-  const pad = compact ? PLOT_PAD_COMPACT : PLOT_PAD;
   const box = height ?? (compact ? COMPACT_HEIGHT : DEFAULT_HEIGHT);
-  const scale: PlotScale = { min, max };
-  const floor = box - pad.bottom;
-  const at = align === 'bands' ? bandX : pointX;
-
-  const plotted: PlottedPoint[] = points.map((point, index) => ({
-    ...point,
-    index,
-    x: at(index, points.length, pad, width),
-    y: point.value === null ? null : scaleY(point.value, scale, box, pad),
-  }));
-  const last = [...plotted].reverse().find((point) => point.y !== null);
-  const slot = (width - pad.left - pad.right) / Math.max(points.length, 1);
-
-  const show = (point: PlottedPoint) => () =>
-    setTip({
-      x: point.x / width,
-      y: (point.y ?? floor) / box,
-      title: point.label,
-      rows: rowsFor(point, suffix, SERIES_SWATCH[series]),
-    });
+  const colour = SERIES_VAR[series];
+  const lastMeasured = [...points].reverse().find((point) => point.value !== null);
+  const activeDot = React.useMemo(
+    () => ({ r: DOT_RADIUS + 2, fill: colour, stroke: CHART_VAR.surface, strokeWidth: DOT_RING }),
+    [colour],
+  );
 
   return (
-    <div className={cn('relative', className)}>
-      <svg viewBox={`0 0 ${width} ${box}`} className="w-full" {...props}>
-        {compact ? null : (
-          <PlotAxes scale={scale} ticks={ticks} height={box} pad={pad} width={width} />
-        )}
+    <LineChart
+      responsive
+      data={[...points]}
+      height={box}
+      margin={compact ? COMPACT_MARGIN : PLOT_MARGIN}
+      style={{ width: '100%', height: box }}
+      className={className}
+      {...props}
+    >
+      {compact ? null : <CartesianGrid horizontal vertical={false} stroke={CHART_VAR.grid} />}
 
-        {band ? (
-          <PlotBandMark band={band} scale={scale} height={box} pad={pad} width={width} />
-        ) : null}
-        {reference ? (
-          <PlotReferenceMark
-            reference={reference}
-            scale={scale}
-            height={box}
-            pad={pad}
-            width={width}
+      <XAxis
+        dataKey="key"
+        type="category"
+        scale={align === 'bands' ? 'band' : 'point'}
+        hide={compact || !xLabels}
+        height={X_AXIS_HEIGHT}
+        axisLine={AXIS_LINE}
+        tickLine={false}
+        tickMargin={6}
+        tickFormatter={(_value, index) => points[index]?.label ?? ''}
+        tick={<PointTick points={points} />}
+      />
+      <YAxis
+        type="number"
+        domain={[min, max]}
+        ticks={ticks === undefined ? undefined : [...ticks]}
+        hide={compact}
+        width={PLOT_AXIS_WIDTH}
+        axisLine={false}
+        tickLine={false}
+        tick={<ValueTick />}
+      />
+
+      {band ? (
+        <ReferenceArea
+          y1={band.from}
+          y2={band.to}
+          ifOverflow="visible"
+          fill={CHART_VAR.muted}
+          fillOpacity={0.15}
+          label={<OverLine text={band.label} />}
+        />
+      ) : null}
+      {reference ? (
+        <ReferenceLine
+          y={reference.value}
+          ifOverflow="visible"
+          stroke={reference.tone === 'good' ? CHART_VAR.success : CHART_VAR.axis}
+          strokeWidth={reference.tone === 'good' ? 2 : 1}
+          strokeDasharray="6 4"
+          label={<OverLine text={reference.label} />}
+        />
+      ) : null}
+
+      <Tooltip
+        isAnimationActive={false}
+        filterNull={false}
+        cursor={CURSOR_LINE}
+        wrapperStyle={TIP_WRAPPER}
+        content={
+          <PlotTip<LinePoint>
+            title={(point) => point.label}
+            rows={(point) => rowsFor(point, suffix, SERIES_SWATCH[series])}
           />
-        ) : null}
+        }
+      />
 
-        {runsOf(plotted).map((run) => (
-          <polyline
-            key={run[0]?.key}
-            points={run.map((point) => `${point.x},${point.y}`).join(' ')}
-            fill="none"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            className={SERIES_STROKE[series]}
+      <Line
+        dataKey="value"
+        type="linear"
+        stroke={colour}
+        strokeWidth={LINE_WIDTH}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        connectNulls={false}
+        isAnimationActive={false}
+        activeDot={activeDot}
+        dot={
+          <PointDot
+            colour={colour}
+            lastKey={lastMeasured?.key}
+            count={points.length}
+            suffix={suffix}
+            labelled={!compact}
           />
-        ))}
-
-        {plotted.map((point) =>
-          point.y === null ? null : (
-            <circle
-              key={point.key}
-              cx={point.x}
-              cy={point.y}
-              r={point.index === last?.index ? 8 : 5}
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-              className={cn(SERIES_FILL[series], 'stroke-chart-surface')}
-            />
-          ),
-        )}
-
-        {last && !compact ? (
-          <text
-            x={Math.min(last.x + 14, width - 6)}
-            y={Math.max((last.y ?? floor) - 16, 20)}
-            textAnchor={last.x > width - 140 ? 'end' : 'start'}
-            fontSize={26}
-            fontWeight={600}
-            className="fill-foreground"
-          >
-            {textFor(last, suffix)}
-          </text>
-        ) : null}
-
-        {compact || !xLabels
-          ? null
-          : plotted.map((point) =>
-              labelled(point.index, points.length) ? (
-                <text
-                  key={`x-${point.key}`}
-                  x={point.x}
-                  y={box - 12}
-                  textAnchor={anchorAt(point.index, points.length)}
-                  fontSize={22}
-                  className="fill-chart-ink"
-                >
-                  {fitLabel(point.label, slot)}
-                </text>
-              ) : null,
-            )}
-
-        {plotted.map((point) => (
-          <rect
-            key={`hit-${point.key}`}
-            x={point.x - slot / 2}
-            y={pad.top}
-            width={slot}
-            height={Math.max(floor - pad.top, 0)}
-            tabIndex={0}
-            role="img"
-            aria-label={`${point.label}: ${textFor(point, suffix)}`}
-            className="fill-transparent"
-            onPointerEnter={show(point)}
-            onFocus={show(point)}
-            onPointerLeave={() => setTip(null)}
-            onBlur={() => setTip(null)}
-          />
-        ))}
-      </svg>
-      <ChartTooltip tip={tip} />
-    </div>
+        }
+      />
+    </LineChart>
   );
 }
 
-interface AxisProps {
-  scale: PlotScale;
-  ticks?: readonly number[];
-  height: number;
-  pad: PlotPad;
-  width: number;
+/** Above the line at its right end: Recharts' own inside positions land the label on top of it. */
+function OverLine({ text, viewBox }: Readonly<{ text: string } & Pick<LabelProps, 'viewBox'>>) {
+  const span = viewBox as CartesianViewBox | undefined;
+  if (span?.x === undefined) return null;
+
+  return (
+    <PlotText tone="meta" x={span.x + (span.width ?? 0) - 4} y={(span.y ?? 0) - 6} textAnchor="end">
+      {text}
+    </PlotText>
+  );
 }
 
-function PlotAxes({ scale, ticks, height, pad, width }: Readonly<AxisProps>) {
-  const lines = ticks ?? quarters(scale);
-  const floor = height - pad.bottom;
+interface PointDotProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: LinePoint;
+  colour: string;
+  lastKey?: string;
+  count: number;
+  suffix: string;
+  labelled: boolean;
+}
+
+/** The last measured point wears the reading; a 2px surface ring keeps every dot legible. */
+function PointDot({
+  cx,
+  cy,
+  index,
+  payload,
+  colour,
+  lastKey,
+  count,
+  suffix,
+  labelled,
+}: Readonly<PointDotProps>) {
+  if (payload?.value == null || cx === undefined || cy === undefined) return null;
+
+  const isLast = payload.key === lastKey;
+  const atEnd = index === count - 1;
 
   return (
     <g>
-      {lines.map((tick) => (
-        <g key={tick}>
-          <line
-            x1={pad.left}
-            x2={width - pad.right}
-            y1={scaleY(tick, scale, height, pad)}
-            y2={scaleY(tick, scale, height, pad)}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-            className="stroke-chart-grid"
-          />
-          <text
-            x={pad.left - 10}
-            y={scaleY(tick, scale, height, pad) + 7}
-            textAnchor="end"
-            fontSize={22}
-            className="fill-chart-ink"
-          >
-            {tick}
-          </text>
-        </g>
-      ))}
-      <line
-        x1={pad.left}
-        x2={width - pad.right}
-        y1={floor}
-        y2={floor}
-        strokeWidth={1}
-        vectorEffect="non-scaling-stroke"
-        className="stroke-chart-axis"
+      <circle
+        cx={cx}
+        cy={cy}
+        r={isLast ? DOT_RADIUS + 2 : DOT_RADIUS}
+        fill={colour}
+        stroke={CHART_VAR.surface}
+        strokeWidth={DOT_RING}
       />
+      {isLast && labelled ? (
+        <PlotText
+          tone="value"
+          x={atEnd ? cx - 8 : cx + 10}
+          y={Math.max(cy - 12, 14)}
+          textAnchor={atEnd ? 'end' : 'start'}
+        >
+          {textFor(payload, suffix)}
+        </PlotText>
+      ) : null}
     </g>
   );
 }
 
-function PlotBandMark({
-  band,
-  scale,
-  height,
-  pad,
-  width,
-}: Readonly<{ band: PlotBand; scale: PlotScale; height: number; pad: PlotPad; width: number }>) {
-  const top = scaleY(band.to, scale, height, pad);
-  const bottom = scaleY(band.from, scale, height, pad);
+type PointTickProps = Partial<XAxisTickContentProps> & { points: readonly LinePoint[] };
+
+function PointTick({ x, y, payload, width, visibleTicksCount, points }: Readonly<PointTickProps>) {
+  const index = payload?.index ?? -1;
+  const label = points[index]?.label;
+  if (label === undefined) return null;
+
+  const slot = visibleTicksCount ?? 0;
+  const room = typeof width === 'number' && slot > 0 ? width / slot : 0;
 
   return (
-    <g>
-      <rect
-        x={pad.left}
-        y={Math.min(top, bottom)}
-        width={width - pad.left - pad.right}
-        height={Math.abs(bottom - top)}
-        className="fill-muted-foreground/15"
-      />
-      <text
-        x={width - pad.right - 6}
-        y={Math.min(top, bottom) - 8}
-        textAnchor="end"
-        fontSize={20}
-        className="fill-chart-ink"
-      >
-        {band.label}
-      </text>
-    </g>
+    <PlotTickText
+      x={Number(x)}
+      y={Number(y)}
+      width={room > 0 ? room : undefined}
+      anchor={anchorAt(index, points.length)}
+    >
+      {label}
+    </PlotTickText>
   );
 }
 
-function PlotReferenceMark({
-  reference,
-  scale,
-  height,
-  pad,
-  width,
-}: Readonly<{
-  reference: PlotReference;
-  scale: PlotScale;
-  height: number;
-  pad: PlotPad;
-  width: number;
-}>) {
-  const y = scaleY(reference.value, scale, height, pad);
-  const good = reference.tone === 'good';
-
+function ValueTick({ x, y, payload, textAnchor }: Readonly<Partial<YAxisTickContentProps>>) {
   return (
-    <g>
-      <line
-        x1={pad.left}
-        x2={width - pad.right}
-        y1={y}
-        y2={y}
-        strokeWidth={good ? 2 : 1}
-        strokeDasharray="10 6"
-        vectorEffect="non-scaling-stroke"
-        className={good ? 'stroke-success' : 'stroke-chart-axis'}
-      />
-      <text
-        x={width - pad.right - 6}
-        y={y - 10}
-        textAnchor="end"
-        fontSize={20}
-        className="fill-chart-ink"
-      >
-        {reference.label}
-      </text>
-    </g>
+    <PlotText tone="axis" x={x} y={y} dy={4} textAnchor={textAnchor}>
+      {String(payload?.value ?? '')}
+    </PlotText>
   );
 }
 
 /** Unmeasured reads as a dash. Coercing it to 0 would claim the student scored nothing. */
 function textFor(point: LinePoint, suffix: string): string {
   if (point.display !== undefined) return point.display;
-  if (point.value === null) return '—';
+  if (point.value === null) return UNMEASURED;
   return `${point.value}${suffix}`;
 }
 
-function rowsFor(point: LinePoint, suffix: string, swatch: string) {
-  const rows = [{ key: 'value', value: textFor(point, suffix), swatch }];
+function rowsFor(point: LinePoint, suffix: string, swatch: string): ChartTipRow[] {
+  const rows: ChartTipRow[] = [{ key: 'value', value: textFor(point, suffix), swatch }];
   if (point.caption === undefined) return rows;
   return [...rows, { key: 'caption', value: point.caption }];
-}
-
-/** Consecutive measured points only: a gap in the data is a gap in the line. */
-function runsOf(points: readonly PlottedPoint[]): PlottedPoint[][] {
-  const runs: PlottedPoint[][] = [];
-  let open: PlottedPoint[] = [];
-
-  for (const point of points) {
-    if (point.y === null) {
-      if (open.length > 1) runs.push(open);
-      open = [];
-      continue;
-    }
-    open.push(point);
-  }
-  if (open.length > 1) runs.push(open);
-  return runs;
-}
-
-function quarters(scale: PlotScale): number[] {
-  const step = (scale.max - scale.min) / 4;
-  return [0, 1, 2, 3, 4].map((n) => Math.round(scale.min + n * step));
-}
-
-/** The end labels turn inward: centred on a point sitting ON the edge, half of one falls off the box. */
-function anchorAt(index: number, count: number): 'start' | 'middle' | 'end' {
-  if (index === 0) return 'start';
-  return index === count - 1 ? 'end' : 'middle';
-}
-
-/** Past six points the axis thins out, and the last one is always named. */
-function labelled(index: number, count: number): boolean {
-  if (count <= MAX_X_LABELS) return true;
-  if (index === count - 1) return true;
-  return index % Math.ceil(count / MAX_X_LABELS) === 0;
 }
