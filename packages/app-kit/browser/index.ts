@@ -17,6 +17,9 @@ export const browserStorage: KeyValueStorage = {
   removeItem: (key) => localStorage.removeItem(key),
 };
 
+/** A path on this origin, whole — what a link somebody copies out of the app has to be. */
+export const absoluteUrl = (path: string): string => `${window.location.origin}${path}`;
+
 /** Broadcast when a refresh fails, so the auth context can drop the session. */
 export const SIGNED_OUT_EVENT = 'iace:signed-out';
 

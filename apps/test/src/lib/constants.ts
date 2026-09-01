@@ -7,6 +7,7 @@ import {
   LEADERBOARD_SCOPES,
   MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
+  sharedReportPath,
   type AnswerState,
   type LanguageCode,
   type LeaderboardMeasure,
@@ -40,7 +41,7 @@ export const ROUTES = {
   REVIEW_PATTERN: '/attempts/:attemptId/review',
   PERFORMANCE: '/performance',
   /** Public: no session, no nav, one student's own report opened by a token. */
-  SHARED_REPORT_PATTERN: '/r/:token',
+  SHARED_REPORT_PATTERN: sharedReportPath(':token'),
   LEADERBOARD: '/leaderboard',
   PROFILE: '/profile',
   ACCOUNT: '/account',

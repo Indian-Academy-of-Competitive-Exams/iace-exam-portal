@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { BadgeCheck } from 'lucide-react';
-import { AppException, ErrorCodes, INSTITUTE_TIME_ZONE, type SharedReport } from '@iace/contracts';
+import { AppException, ErrorCodes, instituteDayLabel, type SharedReport } from '@iace/contracts';
 import {
   Alert,
   Avatar,
@@ -23,14 +23,7 @@ import { sharedReportQueryKey } from '../lib/constants';
 
 const UNMEASURED = '—';
 
-const satOn = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-/** The one screen served without a session, so it carries no app navigation and no second student. */
+/** No PageFrame: served outside the app shell, so `data-page-frame` has no shell to flip — it frames itself. */
 export function SharedReportPage() {
   const { token = '' } = useParams();
   const report = useQuery({
@@ -106,7 +99,7 @@ function Report({ report }: Readonly<{ report: SharedReport }>) {
 }
 
 function Identity({ report }: Readonly<{ report: SharedReport }>) {
-  const sat = report.submittedAt === null ? null : satOn.format(new Date(report.submittedAt));
+  const sat = instituteDayLabel(report.submittedAt);
   const meta = [report.testTitle, report.branchName, sat].filter(Boolean).join(' · ');
 
   return (

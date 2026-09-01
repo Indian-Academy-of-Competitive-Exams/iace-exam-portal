@@ -3,15 +3,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Link2, Trash2 } from 'lucide-react';
 import {
   FEATURE_KEYS,
-  INSTITUTE_TIME_ZONE,
-  PERFORMANCE_SHARE_DEFAULT_DAYS,
   PERMISSION_LEVELS,
-  civilDate,
+  SHARE_STATUS,
+  defaultShareExpiry,
+  instituteDayLabel,
+  shareExpiryLine,
+  shareStatusOf,
   sharedReportPath,
   todayISO,
   type PerformanceShare,
   type ShareableSitting,
 } from '@iace/contracts';
+import { absoluteUrl } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
@@ -34,32 +37,16 @@ import { useAuth } from '../providers/auth';
 
 const UNTITLED = 'Untitled test';
 const NO_EXPIRY = 'No expiry';
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-const when = (at: string | null) => (at === null ? null : WHEN.format(new Date(at)));
 
 const sharesKey = (studentId: string) => [...QUERY_KEYS.STUDENT, studentId, 'shares'] as const;
 
-const defaultExpiry = () =>
-  civilDate(new Date(Date.now() + PERFORMANCE_SHARE_DEFAULT_DAYS * MS_PER_DAY));
-
-const linkFor = (token: string) => `${window.location.origin}${sharedReportPath(token)}`;
+const linkFor = (token: string) => absoluteUrl(sharedReportPath(token));
 
 const sittingItem = (sitting: ShareableSitting) => {
-  const sat = when(sitting.submittedAt);
+  const sat = instituteDayLabel(sitting.submittedAt);
   const title = sitting.testTitle ?? UNTITLED;
   return { value: sitting.attemptId, label: sat === null ? title : `${title} · ${sat}` };
 };
-
-/** A `YYYY-MM-DD` picked in the browser, read back as the civil date it names, never a zone. */
-const civilInstant = (day: string) => new Date(`${day}T00:00:00Z`);
 
 /** A link that is already dead must not be reported as copied — the toast is the only feedback. */
 function announceMinted(share: PerformanceShare) {
@@ -71,14 +58,9 @@ function announceMinted(share: PerformanceShare) {
   toast.success('Link created and copied.');
 }
 
-const expiryLine = (expiresOn: string) =>
-  expiresOn === ''
-    ? 'It never expires.'
-    : `It stops working after ${WHEN.format(civilInstant(expiresOn))}.`;
-
 function StatusBadge({ share }: Readonly<{ share: PerformanceShare }>) {
-  if (share.isLive) return <Badge variant="success">Live</Badge>;
-  return <Badge variant="neutral">{share.revokedAt === null ? 'Expired' : 'Revoked'}</Badge>;
+  const status = shareStatusOf(share);
+  return <Badge variant={status === SHARE_STATUS.LIVE ? 'success' : 'neutral'}>{status}</Badge>;
 }
 
 /** Only WRITE is handed a working token, so a READ-only admin gets no actions column at all. */
@@ -98,13 +80,15 @@ function shareColumns(
       key: 'created',
       header: 'Created',
       className: 'max-w-36',
-      cell: (share) => <TruncatedText>{when(share.createdAt)}</TruncatedText>,
+      cell: (share) => <TruncatedText>{instituteDayLabel(share.createdAt)}</TruncatedText>,
     },
     {
       key: 'expires',
       header: 'Expires',
       className: 'max-w-36',
-      cell: (share) => <TruncatedText>{when(share.expiresAt) ?? NO_EXPIRY}</TruncatedText>,
+      cell: (share) => (
+        <TruncatedText>{instituteDayLabel(share.expiresAt) ?? NO_EXPIRY}</TruncatedText>
+      ),
     },
     {
       key: 'status',
@@ -155,7 +139,7 @@ export function SharedReportsCard({
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const [attemptId, setAttemptId] = useState('');
-  const [expiresOn, setExpiresOn] = useState(defaultExpiry);
+  const [expiresOn, setExpiresOn] = useState(defaultShareExpiry);
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<PerformanceShare | null>(null);
 
@@ -271,7 +255,7 @@ export function SharedReportsCard({
         onOpenChange={(open) => !open && setCreating(false)}
         loading={create.isPending}
         title={`Publish a link to ${name}'s report?`}
-        description={`Anyone holding the link sees their name, branch, marks, rank and section scores for this sitting — no answer key and no other student. ${expiryLine(expiresOn)} Either you or the student can revoke it.`}
+        description={`Anyone holding the link sees their name, branch, marks, rank and section scores for this sitting — no answer key and no other student. ${shareExpiryLine(expiresOn)} Either you or the student can revoke it.`}
         confirmLabel="Create link"
         onConfirm={() => create.mutate()}
       />

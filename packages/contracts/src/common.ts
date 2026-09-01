@@ -27,6 +27,19 @@ export function civilDate(at: Date = new Date()): string {
   return INSTITUTE_CIVIL_DATE.format(at);
 }
 
+/** The one way a civil day is WRITTEN for a reader — `1 Sep 2026`, on the institute's clock. */
+const INSTITUTE_DAY_LABEL = new Intl.DateTimeFormat('en-IN', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+/** Null in, null out, so a nullable column reaches a cell without a ternary at every call site. */
+export function instituteDayLabel(at: Date | string | null): string | null {
+  return at === null ? null : INSTITUTE_DAY_LABEL.format(new Date(at));
+}
+
 /** Parts of an instant as the institute's clock reads them, which is what an offset is derived from. */
 const INSTITUTE_PARTS = new Intl.DateTimeFormat('en-CA', {
   timeZone: INSTITUTE_TIME_ZONE,

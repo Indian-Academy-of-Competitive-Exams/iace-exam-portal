@@ -2,14 +2,17 @@ import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Link2, Trash2 } from 'lucide-react';
 import {
-  INSTITUTE_TIME_ZONE,
-  PERFORMANCE_SHARE_DEFAULT_DAYS,
-  civilDate,
+  SHARE_STATUS,
+  defaultShareExpiry,
+  instituteDayLabel,
+  shareExpiryLine,
+  shareStatusOf,
   sharedReportPath,
   todayISO,
   type PerformanceShare,
   type ShareableSitting,
 } from '@iace/contracts';
+import { absoluteUrl } from '@iace/app-kit/browser';
 import {
   Alert,
   Badge,
@@ -32,21 +35,7 @@ import { PERFORMANCE_SHARES_QUERY_KEY } from '../../lib/constants';
 const UNTITLED = 'Untitled test';
 const NO_EXPIRY = 'No expiry';
 
-const WHEN = new Intl.DateTimeFormat('en-IN', {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const defaultExpiry = () =>
-  civilDate(new Date(Date.now() + PERFORMANCE_SHARE_DEFAULT_DAYS * MS_PER_DAY));
-
-const linkFor = (token: string) => `${window.location.origin}${sharedReportPath(token)}`;
-
-const when = (at: string | null) => (at === null ? null : WHEN.format(new Date(at)));
+const linkFor = (token: string) => absoluteUrl(sharedReportPath(token));
 
 /** A link that is already dead must not be reported as copied — the toast is the only feedback. */
 function announceMinted(share: PerformanceShare) {
@@ -59,8 +48,8 @@ function announceMinted(share: PerformanceShare) {
 }
 
 function StatusBadge({ share }: Readonly<{ share: PerformanceShare }>) {
-  if (share.isLive) return <Badge variant="success">Live</Badge>;
-  return <Badge variant="neutral">{share.revokedAt === null ? 'Expired' : 'Revoked'}</Badge>;
+  const status = shareStatusOf(share);
+  return <Badge variant={status === SHARE_STATUS.LIVE ? 'success' : 'neutral'}>{status}</Badge>;
 }
 
 function shareColumns(
@@ -78,13 +67,15 @@ function shareColumns(
       key: 'created',
       header: 'Created',
       className: 'max-w-36',
-      cell: (share) => <TruncatedText>{when(share.createdAt)}</TruncatedText>,
+      cell: (share) => <TruncatedText>{instituteDayLabel(share.createdAt)}</TruncatedText>,
     },
     {
       key: 'expires',
       header: 'Expires',
       className: 'max-w-36',
-      cell: (share) => <TruncatedText>{when(share.expiresAt) ?? NO_EXPIRY}</TruncatedText>,
+      cell: (share) => (
+        <TruncatedText>{instituteDayLabel(share.expiresAt) ?? NO_EXPIRY}</TruncatedText>
+      ),
     },
     {
       key: 'status',
@@ -126,7 +117,7 @@ function shareColumns(
 export function ShareLinks() {
   const queryClient = useQueryClient();
   const [attemptId, setAttemptId] = React.useState('');
-  const [expiresOn, setExpiresOn] = React.useState(defaultExpiry);
+  const [expiresOn, setExpiresOn] = React.useState(defaultShareExpiry);
   const [creating, setCreating] = React.useState(false);
   const [revoking, setRevoking] = React.useState<PerformanceShare | null>(null);
 
@@ -236,7 +227,7 @@ export function ShareLinks() {
         onOpenChange={(open) => !open && setCreating(false)}
         loading={create.isPending}
         title={`Share your report for ${chosenTitle}?`}
-        description={`Anyone holding the link sees your name, branch, marks, rank and section scores for this sitting — no answer key and no other student. ${expiryLine(expiresOn)} You can revoke it at any time.`}
+        description={`Anyone holding the link sees your name, branch, marks, rank and section scores for this sitting — no answer key and no other student. ${shareExpiryLine(expiresOn)} You can revoke it at any time.`}
         confirmLabel="Create link"
         onConfirm={() => create.mutate()}
       />
@@ -256,15 +247,7 @@ export function ShareLinks() {
 }
 
 function sittingItem(sitting: ShareableSitting) {
-  const sat = when(sitting.submittedAt);
+  const sat = instituteDayLabel(sitting.submittedAt);
   const title = sitting.testTitle ?? UNTITLED;
   return { value: sitting.attemptId, label: sat === null ? title : `${title} · ${sat}` };
 }
-
-/** A `YYYY-MM-DD` picked in the browser, read back as the civil date it names, never a zone. */
-const civilInstant = (day: string) => new Date(`${day}T00:00:00Z`);
-
-const expiryLine = (expiresOn: string) =>
-  expiresOn === ''
-    ? 'It never expires.'
-    : `It stops working after ${WHEN.format(civilInstant(expiresOn))}.`;

@@ -646,9 +646,7 @@ model AttemptQuestion {
   @@index([attemptId, order])
 }
 
-// The only unauthenticated door onto a report. `token` is cryptographic random, never
-// a cuid: a cuid is time-ordered and walkable. Revocation and expiry are read on every
-// request, and the attempt FK is RESTRICT so the link can never outlive what it opens.
+// The only unauthenticated door onto a report: a random token, not a walkable cuid, and a RESTRICT FK so it outlives nothing.
 model PerformanceShare {
   id               String    @id @default(cuid())
   token            String    @unique

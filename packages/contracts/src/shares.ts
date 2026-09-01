@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { civilDate, instituteDayLabel } from './common';
 import { cohortCurveBandSchema } from './stats';
 import { dateOnlySchema } from './students';
 
@@ -96,3 +97,31 @@ export const PERFORMANCE_SHARE_ROUTES = {
 
 /** Where the student portal serves a shared report. The link the student copies is this path. */
 export const sharedReportPath = (token: string) => `/r/${token}`;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Where the expiry picker opens: the default lifetime, as the civil date it lands on. */
+export const defaultShareExpiry = (): string =>
+  civilDate(new Date(Date.now() + PERFORMANCE_SHARE_DEFAULT_DAYS * MS_PER_DAY));
+
+/** A `YYYY-MM-DD` picked in the browser, read back as the civil date it names, never a zone. */
+const civilInstant = (day: string) => new Date(`${day}T00:00:00Z`);
+
+/** What the confirm dialog tells the reader about the lifetime the picker is holding. */
+export const shareExpiryLine = (expiresOn: string): string =>
+  expiresOn === ''
+    ? 'It never expires.'
+    : `It stops working after ${instituteDayLabel(civilInstant(expiresOn))}.`;
+
+/** The three states a link can be read in, derived from what the server derived `isLive` from. */
+export const SHARE_STATUS = {
+  LIVE: 'Live',
+  EXPIRED: 'Expired',
+  REVOKED: 'Revoked',
+} as const;
+export type ShareStatus = (typeof SHARE_STATUS)[keyof typeof SHARE_STATUS];
+
+export function shareStatusOf(share: Pick<PerformanceShare, 'isLive' | 'revokedAt'>): ShareStatus {
+  if (share.isLive) return SHARE_STATUS.LIVE;
+  return share.revokedAt === null ? SHARE_STATUS.EXPIRED : SHARE_STATUS.REVOKED;
+}
