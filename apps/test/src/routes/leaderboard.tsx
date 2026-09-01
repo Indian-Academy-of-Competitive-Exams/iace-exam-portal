@@ -12,7 +12,7 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters, useFilterSpec } from '@iace/app-kit/browser';
 import {
   EVALUATION_MODE,
   LEADERBOARD_SCOPES,
@@ -34,10 +34,13 @@ import {
 } from '../lib/constants';
 import { Podium, Standings } from '../components/leaderboard/board';
 
-const SCOPE_ITEMS = Object.entries(LEADERBOARD_SCOPE_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+// TEST is the empty row, not a labelled one, so an unset URL shows the board it actually defaults to.
+const SCOPE_ITEMS = [
+  { value: '', label: LEADERBOARD_SCOPE_LABELS[LEADERBOARD_SCOPES.TEST] },
+  ...Object.entries(LEADERBOARD_SCOPE_LABELS)
+    .filter(([value]) => value !== LEADERBOARD_SCOPES.TEST)
+    .map(([value, label]) => ({ value, label })),
+];
 
 const UNTITLED = 'Untitled test';
 
@@ -53,37 +56,64 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
   return { scope: LEADERBOARD_SCOPES.ALL_TIME };
 }
 
+const SCOPE_FILTER = {
+  key: 'scope',
+  kind: 'choice',
+  label: 'Board',
+  primary: true,
+  items: SCOPE_ITEMS,
+} as const;
+
 export function LeaderboardPage() {
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const sat = testsSat(trend.data?.points ?? []);
 
-  const FILTERS = [
-    { key: 'scope', kind: 'choice', label: 'Board', primary: true, items: SCOPE_ITEMS },
-    {
-      key: 'testId',
-      kind: 'choice',
-      label: 'Test',
-      primary: true,
-      items: [
-        { value: '', label: 'Any test' },
-        ...sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
-      ],
-    },
-  ] as const satisfies readonly ListFilter[];
-
-  const filters = useFilterSpec(FILTERS);
-  const scope = (filters.values.scope || LEADERBOARD_SCOPES.TEST) as LeaderboardScope;
-  const testId = filters.values.testId || (sat[0]?.testId ?? '');
-
+  // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
+  const rawScope = useFilters<'scope'>().get('scope');
+  const scope = (rawScope || LEADERBOARD_SCOPES.TEST) as LeaderboardScope;
   const onSeries = scope === LEADERBOARD_SCOPES.SERIES;
+
   const series = useQuery({
     queryKey: PERFORMANCE_SERIES_QUERY_KEY,
     queryFn: () => api.me.performanceSeries(),
     enabled: onSeries,
   });
   const seriesRows = series.data ?? [];
-  // No picker chooses a series any more; the board reads whichever the student sat most recently.
-  const seriesId = seriesRows[0]?.id ?? '';
+
+  const TEST_FILTER = {
+    key: 'testId',
+    kind: 'choice',
+    label: 'Test',
+    primary: true,
+    items: [
+      { value: '', label: 'Any test' },
+      ...sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
+    ],
+  } as const;
+
+  const SERIES_FILTER = {
+    key: 'seriesId',
+    kind: 'choice',
+    label: 'Series',
+    primary: true,
+    items: [
+      { value: '', label: 'Any series' },
+      ...seriesRows.map((row) => ({ value: row.id, label: row.name })),
+    ],
+  } as const;
+
+  let FILTERS;
+  if (scope === LEADERBOARD_SCOPES.SERIES) {
+    FILTERS = [SCOPE_FILTER, SERIES_FILTER] as const satisfies readonly ListFilter[];
+  } else if (scope === LEADERBOARD_SCOPES.TEST) {
+    FILTERS = [SCOPE_FILTER, TEST_FILTER] as const satisfies readonly ListFilter[];
+  } else {
+    FILTERS = [SCOPE_FILTER] as const satisfies readonly ListFilter[];
+  }
+
+  const filters = useFilterSpec(FILTERS);
+  const testId = filters.values.testId || (sat[0]?.testId ?? '');
+  const seriesId = filters.values.seriesId || (seriesRows[0]?.id ?? '');
 
   const scopeId = scopeIdFor(scope, testId, seriesId);
   const board = useQuery({
