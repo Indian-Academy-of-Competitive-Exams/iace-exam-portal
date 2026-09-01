@@ -46,7 +46,12 @@ export interface PanelFrameProps {
   /** Pinned inside the card, above the filters — a banner the body does not own. */
   toolbar?: React.ReactNode;
   /** The spec a list screen would declare, and the state driving it. */
-  filters?: { spec: readonly ListFilter[]; state: FilterState };
+  filters?: {
+    spec: readonly ListFilter[];
+    state: FilterState;
+    /** A mandatory scope the body is read through, never one of its filters — first in the bar. */
+    leading?: React.ReactNode;
+  };
   /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
   tabs?: TableFrameTabs;
   children?: React.ReactNode;
@@ -66,9 +71,9 @@ export function PanelFrame({
   const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', className);
 
   const bar =
-    filters && filters.spec.length > 0 ? (
+    filters && (filters.spec.length > 0 || filters.leading) ? (
       <div className="shrink-0">
-        <FilterRow state={filters.state} filters={filters.spec} />
+        <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
       </div>
     ) : null;
 

@@ -4,6 +4,7 @@ import { ClipboardList, Layers, Trophy } from 'lucide-react';
 import {
   Alert,
   Button,
+  Combobox,
   EmptyState,
   LoadingState,
   PageHeader,
@@ -16,6 +17,7 @@ import { PageCrumbs, useFilters, useFilterSpec } from '@iace/app-kit/browser';
 import {
   EVALUATION_MODE,
   LEADERBOARD_SCOPES,
+  leaderboardScopeSchema,
   testsSat,
   type Leaderboard,
   type LeaderboardQueryInput,
@@ -56,21 +58,14 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
   return { scope: LEADERBOARD_SCOPES.ALL_TIME };
 }
 
-const SCOPE_FILTER = {
-  key: 'scope',
-  kind: 'choice',
-  label: 'Board',
-  primary: true,
-  items: SCOPE_ITEMS,
-} as const;
-
 export function LeaderboardPage() {
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const sat = testsSat(trend.data?.points ?? []);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
-  const rawScope = useFilters<'scope'>().get('scope');
-  const scope = (rawScope || LEADERBOARD_SCOPES.TEST) as LeaderboardScope;
+  const scopeParam = useFilters<'scope'>();
+  const parsedScope = leaderboardScopeSchema.safeParse(scopeParam.get('scope'));
+  const scope = parsedScope.success ? parsedScope.data : LEADERBOARD_SCOPES.TEST;
   const onSeries = scope === LEADERBOARD_SCOPES.SERIES;
 
   const series = useQuery({
@@ -80,35 +75,37 @@ export function LeaderboardPage() {
   });
   const seriesRows = series.data ?? [];
 
+  // The empty row falls back to sat[0] (testsSat sorts most-recent-first), so it wears that title.
   const TEST_FILTER = {
     key: 'testId',
     kind: 'choice',
     label: 'Test',
     primary: true,
     items: [
-      { value: '', label: 'Any test' },
+      { value: '', label: sat[0]?.title ?? UNTITLED },
       ...sat.map((test) => ({ value: test.testId, label: test.title ?? UNTITLED })),
     ],
   } as const;
 
+  // Same for seriesRows[0] (satSeries sorts by name) — "First series" is its own literal fallback.
   const SERIES_FILTER = {
     key: 'seriesId',
     kind: 'choice',
     label: 'Series',
     primary: true,
     items: [
-      { value: '', label: 'Any series' },
+      { value: '', label: seriesRows[0]?.name ?? 'First series' },
       ...seriesRows.map((row) => ({ value: row.id, label: row.name })),
     ],
   } as const;
 
   let FILTERS;
   if (scope === LEADERBOARD_SCOPES.SERIES) {
-    FILTERS = [SCOPE_FILTER, SERIES_FILTER] as const satisfies readonly ListFilter[];
+    FILTERS = [SERIES_FILTER] as const satisfies readonly ListFilter[];
   } else if (scope === LEADERBOARD_SCOPES.TEST) {
-    FILTERS = [SCOPE_FILTER, TEST_FILTER] as const satisfies readonly ListFilter[];
+    FILTERS = [TEST_FILTER] as const satisfies readonly ListFilter[];
   } else {
-    FILTERS = [SCOPE_FILTER] as const satisfies readonly ListFilter[];
+    FILTERS = [] as const satisfies readonly ListFilter[];
   }
 
   const filters = useFilterSpec(FILTERS);
@@ -122,6 +119,18 @@ export function LeaderboardPage() {
     enabled: scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== '',
   });
 
+  const boardControl = (
+    <div className="w-44">
+      <Combobox
+        aria-label="Board"
+        clearable={false}
+        value={scope === LEADERBOARD_SCOPES.TEST ? '' : scope}
+        onChange={(next) => scopeParam.set({ scope: next || undefined })}
+        items={SCOPE_ITEMS}
+      />
+    </div>
+  );
+
   return (
     <PanelFrame
       header={
@@ -131,7 +140,9 @@ export function LeaderboardPage() {
           meta={standingMeta(board.data)}
         />
       }
-      filters={{ spec: FILTERS, state: filters }}
+      filters={
+        sat.length > 0 ? { spec: FILTERS, state: filters, leading: boardControl } : undefined
+      }
     >
       <Body trend={trend} series={series} board={board} tests={sat} onSeries={onSeries} />
     </PanelFrame>

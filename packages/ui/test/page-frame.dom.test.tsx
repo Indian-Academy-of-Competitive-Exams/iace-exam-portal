@@ -145,6 +145,35 @@ describe('PanelFrame — the filter bar', () => {
     assert.ok(screen.getByText('The body'));
   });
 
+  /** An empty spec draws the same nothing whether `filters` is entirely absent or just empty. */
+  it('draws no bar for an empty spec with no leading control', () => {
+    const { container } = render(
+      <PanelFrame header={<h1>Report</h1>} filters={{ spec: [], state }}>
+        <p>The body</p>
+      </PanelFrame>,
+    );
+
+    // The header's own `shrink-0` wrapper is the only one — no second one for an empty bar.
+    assert.equal(container.querySelectorAll('.shrink-0').length, 1);
+    assert.ok(screen.getByText('The body'));
+  });
+
+  /** A mandatory scope still needs a bar to sit in, even with nothing beside it to filter. */
+  it('draws the bar for a leading control alone, with an empty spec', () => {
+    const { container } = render(
+      <PanelFrame
+        header={<h1>Report</h1>}
+        filters={{ spec: [], state, leading: <span>Board</span> }}
+      >
+        <p>The body</p>
+      </PanelFrame>,
+    );
+
+    assert.equal(container.querySelectorAll('.shrink-0').length, 2);
+    assert.ok(screen.getByText('Board'));
+    assert.ok(screen.getByText('The body'));
+  });
+
   it('keeps the body the only scroller when it also carries a bar', () => {
     const { container } = render(
       <PanelFrame header={<h1>Report</h1>} filters={{ spec, state }}>
