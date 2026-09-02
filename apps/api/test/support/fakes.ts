@@ -4407,7 +4407,16 @@ function matchesNotification(row: FakeNotificationRow, where: NotificationWhere)
 export class FakeNotificationsPrisma {
   private seq = 0;
 
-  constructor(readonly rows: FakeNotificationRow[] = []) {}
+  constructor(
+    readonly rows: FakeNotificationRow[] = [],
+    private readonly mobiles: Record<string, string> = {},
+  ) {}
+
+  /** Only what `mobileOf` asks for: a live student's number, or nothing. */
+  readonly student = {
+    findFirst: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.mobiles[where.id] ? { mobile: this.mobiles[where.id] } : null),
+  };
 
   asService(): PrismaService {
     return this as unknown as PrismaService;

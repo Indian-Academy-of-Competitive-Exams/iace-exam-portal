@@ -1,4 +1,5 @@
 export { ConsoleMessageSender } from './console-message-sender';
+export { SmsMessageSender } from './sms-message-sender';
 export { MessagingModule } from './messaging.module';
 export {
   MESSAGE_CHANNELS,

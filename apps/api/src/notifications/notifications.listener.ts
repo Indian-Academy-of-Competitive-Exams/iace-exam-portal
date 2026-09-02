@@ -1,12 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NOTIFICATION_TYPE } from '@iace/contracts';
+import { ActorTypes, NOTIFICATION_TYPE } from '@iace/contracts';
 import {
   DOMAIN_EVENTS,
+  type ScoringCompletedEvent,
   type SeriesGrantedEvent,
   type SeriesUnlockedEvent,
   type StudentEnrolmentAddedEvent,
 } from '../common/events/event-catalog';
+import {
+  MESSAGE_CHANNELS,
+  MESSAGE_KINDS,
+  MESSAGE_SENDER,
+  type MessageSender,
+} from '../common/messaging';
 import { NotificationsService } from './notifications.service';
 
 /**
@@ -17,7 +24,47 @@ import { NotificationsService } from './notifications.service';
 export class NotificationsListener {
   private readonly logger = new Logger(NotificationsListener.name);
 
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
+  ) {}
+
+  /** The bell always; the SMS only once a DLT template for it exists, which is a config change. */
+  @OnEvent(DOMAIN_EVENTS.SCORING_COMPLETED)
+  async onScoringCompleted(event: ScoringCompletedEvent): Promise<void> {
+    try {
+      await this.notifications.create({
+        studentId: event.studentId,
+        type: NOTIFICATION_TYPE.RESULT_READY,
+        title: 'Your result is ready',
+        body: 'Open the test to see your score, rank and answers.',
+        testId: event.testId,
+      });
+    } catch (error) {
+      this.logger.error(`Result notification failed for student ${event.studentId}`, error);
+    }
+
+    await this.text(event);
+  }
+
+  /** A number we cannot reach is not a reason to have failed the scoring that got here. */
+  private async text(event: ScoringCompletedEvent): Promise<void> {
+    try {
+      const mobile = await this.notifications.mobileOf(event.studentId);
+      if (!mobile) return;
+
+      await this.sender.send({
+        channel: MESSAGE_CHANNELS.SMS,
+        kind: MESSAGE_KINDS.RESULT_READY,
+        to: mobile,
+        actor: ActorTypes.STUDENT,
+        body: 'Your IACE test result is ready. Sign in to see your score and rank.',
+        data: { testId: event.testId },
+      });
+    } catch (error) {
+      this.logger.error(`Result SMS failed for student ${event.studentId}`, error);
+    }
+  }
 
   @OnEvent(DOMAIN_EVENTS.SERIES_UNLOCKED)
   async onSeriesUnlocked(event: SeriesUnlockedEvent): Promise<void> {

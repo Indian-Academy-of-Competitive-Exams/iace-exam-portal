@@ -12,6 +12,7 @@ import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { redisKeys } from '../src/redis/redis.keys';
 import {
+  FakeEventBus,
   FakeQueue,
   fakeRollupOutbox,
   FakeRedis,
@@ -106,6 +107,7 @@ function platform(schedule: { scheduled: boolean; closesAt: string | null; extra
       prisma.asService(),
       leaderboard,
       fakeRollupOutbox(prisma, new FakeQueue()),
+      new FakeEventBus().asService(),
     ),
     reports: new AttemptReportService(
       prisma.asService(),

@@ -15,6 +15,7 @@ import { PerformanceShareService } from '../src/attempts/performance-share.servi
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { redisKeys } from '../src/redis/redis.keys';
 import {
+  FakeEventBus,
   FakePerformancePrisma,
   FakeQueue,
   fakeRollupOutbox,
@@ -180,6 +181,7 @@ function platform() {
       scoringPrisma.asService(),
       leaderboard,
       fakeRollupOutbox(scoringPrisma, new FakeQueue()),
+      new FakeEventBus().asService(),
     ),
     shares: new PerformanceShareService(
       sharePrisma.asService(),

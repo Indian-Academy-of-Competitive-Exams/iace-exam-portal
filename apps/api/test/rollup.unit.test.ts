@@ -13,6 +13,7 @@ import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
 import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performance-analytics';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import {
+  FakeEventBus,
   FakeQueue,
   FakeRedis,
   FakeRollupPrisma,
@@ -74,7 +75,12 @@ function world(
     prisma,
     queue,
     outbox,
-    scoring: new ScoringProcessor(prisma.asService(), leaderboard, outbox),
+    scoring: new ScoringProcessor(
+      prisma.asService(),
+      leaderboard,
+      outbox,
+      new FakeEventBus().asService(),
+    ),
     rollup: new RollupService(prisma.asService()),
   };
 }

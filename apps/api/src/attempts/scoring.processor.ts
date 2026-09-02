@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
+import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 
 const SCORING_SELECT = {
@@ -54,6 +55,7 @@ export class ScoringProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
     private readonly rollup: RollupOutbox,
+    private readonly events: DomainEventBus,
   ) {
     super();
   }
@@ -90,6 +92,15 @@ export class ScoringProcessor extends WorkerHost {
       submittedAt: attempt.submittedAt,
     });
     await this.count(attempt.testId, evaluation);
+    // Only a FIRST evaluation: a dropped question re-scores every sitting, and nobody wants that twice.
+    if (evaluation !== null) {
+      this.events.emit(DOMAIN_EVENTS.SCORING_COMPLETED, {
+        attemptId: attempt.id,
+        testId: attempt.testId,
+        studentId: attempt.studentId,
+        isGraded: attempt.isGraded,
+      });
+    }
     return scored;
   }
 

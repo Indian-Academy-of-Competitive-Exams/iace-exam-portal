@@ -31,6 +31,12 @@ const secondsLadder = (fallback: number[]) =>
       'must not decrease — each lockout step should be at least as long as the one before',
     );
 
+/** An unset variable and one set to nothing mean the same thing: not configured. */
+const optional = z
+  .string()
+  .optional()
+  .transform((v) => (v === undefined || v.trim() === '' ? undefined : v.trim()));
+
 const csv = z
   .string()
   .optional()
@@ -48,13 +54,10 @@ export const NODE_ENVS = {
   PRODUCTION: 'production',
 } as const;
 
-/**
- * OTP delivery channels. CONSOLE prints the code to the API log and is refused outright in
- * production (see AuthModule); MSG91 is the DLT-registered SMS sender that replaces it.
- */
+/** Outbound delivery. CONSOLE is refused in production; SMS is the aggregator configured below. */
 export const OTP_SENDERS = {
   CONSOLE: 'console',
-  MSG91: 'msg91',
+  SMS: 'sms',
 } as const;
 
 /** A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb. */
@@ -131,15 +134,22 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
 
-  // Delivery providers — placeholders until MSG91 DLT registration lands.
-  MSG91_AUTH_KEY: z.string().optional(),
-  MSG91_SENDER_ID: z.string().optional(),
-  MSG91_OTP_TEMPLATE_ID: z.string().optional(),
+  // The SMS aggregator, named nowhere: a swap is these five values, not a code change.
+  SMS_PROVIDER_URL: optional,
+  SMS_PROVIDER_KEY: optional,
+  SMS_SENDER_ID: z.string().default(''),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+
+  // One DLT template id per message kind. An empty one turns that message off rather than breaking it.
+  SMS_TEMPLATE_OTP: optional,
+  SMS_TEMPLATE_PIN: optional,
+  SMS_TEMPLATE_RESULT_READY: optional,
+  SMS_TEMPLATE_TEST_ASSIGNED: optional,
+  SMS_TEMPLATE_TEST_REMINDER: optional,
 });
 
 /** An empty allowlist reflects whatever origin asks, which is no allowlist at all. */

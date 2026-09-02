@@ -51,6 +51,15 @@ export class NotificationsService {
     return toNotification(row);
   }
 
+  /** Null for a student who has been anonymised or removed — nothing to text, and nothing wrong. */
+  async mobileOf(studentId: string): Promise<string | null> {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { mobile: true },
+    });
+    return student?.mobile ?? null;
+  }
+
   /** One student's own bell, newest first. The id is never taken from the request. */
   async list(studentId: string, query: NotificationListQuery): Promise<Paginated<Notification>> {
     const where: Prisma.NotificationWhereInput = {

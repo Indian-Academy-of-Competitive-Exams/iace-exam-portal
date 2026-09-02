@@ -14,14 +14,16 @@ export const MESSAGE_CHANNELS = {
 
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[keyof typeof MESSAGE_CHANNELS];
 
-/** What the message IS. */
+/** What the message IS. Each one is a DLT template id in env; an unconfigured kind simply does not send. */
 export const MESSAGE_KINDS = {
   OTP: 'otp',
-  /** TODO(docs/03 §10): sent when a scoring job finishes. */
+  /** The PIN a roster import gave a student, which is the only time they are told one. */
+  PIN: 'pin',
+  /** Sent when a scoring job finishes. WIRED — see the notifications listener. */
   RESULT_READY: 'result_ready',
-  /** TODO(docs/03 §10): sent when a test reaches a student. */
+  /** Not wired (docs/03 §10): nothing emits `test.assigned` yet. */
   TEST_ASSIGNED: 'test_assigned',
-  /** TODO(docs/03 §10): sent before a scheduled test starts. */
+  /** Not wired (docs/03 §10): needs a scheduled job reading BranchTestSchedule. */
   TEST_REMINDER: 'test_reminder',
 } as const;
 

@@ -3,7 +3,11 @@ import { describe, it } from 'node:test';
 import { AppException, ErrorCodes, NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { NotificationsListener } from '../src/notifications/notifications.listener';
-import { FakeNotificationsPrisma, type FakeNotificationRow } from './support/fakes';
+import {
+  FakeMessageSender,
+  FakeNotificationsPrisma,
+  type FakeNotificationRow,
+} from './support/fakes';
 
 /**
  * Notifications are a REACTION to something that already happened, so the two guarantees are:
@@ -12,13 +16,45 @@ import { FakeNotificationsPrisma, type FakeNotificationRow } from './support/fak
 
 const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined };
 
-function build(rows: FakeNotificationRow[] = []) {
-  const prisma = new FakeNotificationsPrisma(rows);
+function build(rows: FakeNotificationRow[] = [], mobiles: Record<string, string> = {}) {
+  const prisma = new FakeNotificationsPrisma(rows, mobiles);
   const service = new NotificationsService(prisma.asService());
-  return { prisma, service, listener: new NotificationsListener(service) };
+  const sender = new FakeMessageSender();
+  return { prisma, service, sender, listener: new NotificationsListener(service, sender) };
 }
 
 describe('NotificationsListener — one row per thing that happened', () => {
+  it('tells a student their result is ready, in the bell and by SMS', async () => {
+    const { listener, prisma, sender } = build([], { stu_1: '9876543210' });
+
+    await listener.onScoringCompleted({
+      attemptId: 'att_1',
+      testId: 'tst_1',
+      studentId: 'stu_1',
+      isGraded: true,
+    });
+
+    assert.equal(prisma.rows[0]?.type, NOTIFICATION_TYPE.RESULT_READY);
+    assert.equal(prisma.rows[0]?.testId, 'tst_1');
+    assert.equal(sender.lastMessage.kind, 'result_ready');
+    assert.equal(sender.lastMessage.to, '9876543210');
+  });
+
+  /** An anonymised student still has sittings, and nothing is left to text. */
+  it('writes the bell and sends nothing when there is no number to reach', async () => {
+    const { listener, prisma, sender } = build();
+
+    await listener.onScoringCompleted({
+      attemptId: 'att_1',
+      testId: 'tst_1',
+      studentId: 'stu_1',
+      isGraded: true,
+    });
+
+    assert.equal(prisma.rows.length, 1);
+    assert.equal(sender.sent.length, 0);
+  });
+
   it('writes an unlock the student can tap through to the series', async () => {
     const { listener, prisma } = build();
 
@@ -61,7 +97,7 @@ describe('NotificationsListener — one row per thing that happened', () => {
     const failing = {
       create: () => Promise.reject(new Error('postgres is down')),
     } as unknown as NotificationsService;
-    const listener = new NotificationsListener(failing);
+    const listener = new NotificationsListener(failing, new FakeMessageSender());
 
     await assert.doesNotReject(() =>
       listener.onSeriesUnlocked({ studentId: 'stu_1', testSeriesId: 'srs_1' }),
@@ -71,6 +107,14 @@ describe('NotificationsListener — one row per thing that happened', () => {
     );
     await assert.doesNotReject(() =>
       listener.onSeriesGranted({ studentId: 'stu_1', testSeriesId: 'srs_1' }),
+    );
+    await assert.doesNotReject(() =>
+      listener.onScoringCompleted({
+        attemptId: 'att_1',
+        testId: 'tst_1',
+        studentId: 'stu_1',
+        isGraded: true,
+      }),
     );
   });
 });

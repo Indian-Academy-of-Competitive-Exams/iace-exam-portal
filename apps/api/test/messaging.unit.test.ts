@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ActorTypes } from '@iace/contracts';
 import { ConsoleMessageSender } from '../src/common/messaging/console-message-sender';
+import { SmsMessageSender } from '../src/common/messaging/sms-message-sender';
 import { createMessageSender } from '../src/common/messaging/messaging.module';
 import { MESSAGE_CHANNELS, MESSAGE_KINDS } from '../src/common/messaging';
 import { OtpService } from '../src/auth/otp/otp.service';
@@ -63,8 +64,10 @@ describe('Provider selection', () => {
   // The factory the module's useFactory calls, exercised directly — the guard is the subject, and
   // standing a Nest container up around it would only add a dependency and a way for the test to
   // pass for the wrong reason.
-  const senderFor = (env: Record<string, unknown>) =>
-    createMessageSender(new FakeConfig(env).asService(), new ConsoleMessageSender());
+  const senderFor = (env: Record<string, unknown>) => {
+    const config = new FakeConfig(env).asService();
+    return createMessageSender(config, new ConsoleMessageSender(), new SmsMessageSender(config));
+  };
 
   it('binds the console sender in development', () => {
     const sender = senderFor({ NODE_ENV: 'development', OTP_SENDER: 'console' });
@@ -80,10 +83,21 @@ describe('Provider selection', () => {
     );
   });
 
-  it('refuses a provider that is configured but not implemented', () => {
+  /** A provider selected but not addressed would swallow every OTP silently. */
+  it('refuses the SMS sender until it has somewhere to post to', () => {
     assert.throws(
-      () => senderFor({ NODE_ENV: 'development', OTP_SENDER: 'msg91' }),
-      /not implemented yet/,
+      () => senderFor({ NODE_ENV: 'production', OTP_SENDER: 'sms' }),
+      /SMS_PROVIDER_URL/,
     );
+  });
+
+  it('binds the SMS sender once the provider is addressed', () => {
+    const sender = senderFor({
+      NODE_ENV: 'production',
+      OTP_SENDER: 'sms',
+      SMS_PROVIDER_URL: 'https://sms.example/send',
+    });
+
+    assert.ok(sender instanceof SmsMessageSender);
   });
 });

@@ -4,6 +4,7 @@ import { ATTEMPT_STATUS, PAPER_QUESTION_STATUS } from '@iace/contracts';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import {
+  FakeEventBus,
   FakeQueue,
   FakeRedis,
   FakeScoringPrisma,
@@ -54,6 +55,7 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
       prisma.asService(),
       leaderboard,
       fakeRollupOutbox(prisma, rollups),
+      new FakeEventBus().asService(),
     ),
   };
 }
