@@ -23,6 +23,7 @@ import {
 } from '@iace/contracts';
 import { AuthService } from './auth.service';
 import { CurrentUser, Public, type AuthenticatedUser } from '../common/security';
+import { AuthRateLimit } from '../common/throttling';
 import { deviceFrom } from './device';
 import { ZodBody } from '../common/zod-validation.pipe';
 
@@ -34,6 +35,7 @@ export class AuthController {
 
   /** Step 1 of signup and of a PIN reset — the same endpoint for both. */
   @Public()
+  @AuthRateLimit()
   @Post('student/otp/request')
   @HttpCode(HttpStatus.OK)
   requestStudentOtp(
@@ -44,6 +46,7 @@ export class AuthController {
 
   /** Step 2 — returns a ticket to set a PIN, not a session. */
   @Public()
+  @AuthRateLimit()
   @Post('student/otp/verify')
   @HttpCode(HttpStatus.OK)
   verifyStudentOtp(
@@ -54,6 +57,7 @@ export class AuthController {
 
   /** Step 3 — sets the PIN and signs in. */
   @Public()
+  @AuthRateLimit()
   @Post('student/pin/set')
   @HttpCode(HttpStatus.OK)
   setStudentPin(
@@ -70,6 +74,7 @@ export class AuthController {
 
   /** Every login after signup. No SMS involved. */
   @Public()
+  @AuthRateLimit()
   @Post('student/login')
   @HttpCode(HttpStatus.OK)
   loginStudent(
@@ -82,6 +87,7 @@ export class AuthController {
   // ---- Admins: email + OTP ---------------------------------------------------
 
   @Public()
+  @AuthRateLimit()
   @Post('admin/otp/request')
   @HttpCode(HttpStatus.OK)
   requestAdminOtp(
@@ -91,6 +97,7 @@ export class AuthController {
   }
 
   @Public()
+  @AuthRateLimit()
   @Post('admin/otp/verify')
   @HttpCode(HttpStatus.OK)
   verifyAdminOtp(
@@ -103,6 +110,7 @@ export class AuthController {
   // ---- Session ---------------------------------------------------------------
 
   @Public()
+  @AuthRateLimit()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   refresh(

@@ -68,6 +68,9 @@ export const redisKeys = {
   /** How often one link has missed that cache in the current window. TTL = what is left of it. */
   sharedReportReads: (linkDigest: string) => `share:reads:${linkDigest}`,
 
+  /** One caller's hits in one rate-limit window. The tracker is a subject id or an address, never a credential. */
+  rateLimit: (name: string, tracker: string) => `ratelimit:${name}:${tracker}`,
+
   /** One student's resolved catalog, at one payload shape and both epochs. */
   studentCatalog: (studentId: string, shape: string, epoch: number, studentEpoch: number) =>
     `access:catalog:${studentId}:${shape}:${epoch}.${studentEpoch}`,

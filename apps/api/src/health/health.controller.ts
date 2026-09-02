@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Queue } from 'bullmq';
 import {
   AppException,
@@ -19,6 +20,7 @@ import { Public } from '../common/security';
 const PROBE_TIMEOUT_MS = 2000;
 
 /** Liveness at `/health`, readiness at `/health/ready` — an orchestrator restarts on one and stops routing on the other. */
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   private readonly startedAt = Date.now();

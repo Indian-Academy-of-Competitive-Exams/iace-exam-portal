@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { type NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
@@ -11,11 +12,17 @@ import { corsOrigin, helmetOptions } from './common/security-headers';
 async function bootstrap(): Promise<void> {
   // bodyParser: false so the limits in registerBodyParsers are the only ones that apply — Nest's
   // default parser would otherwise be installed first, and first parser wins.
-  const app = await NestFactory.create(AppModule, { bufferLogs: false, bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: false,
+    bodyParser: false,
+  });
   const config = app.get(AppConfigService);
 
   app.use(helmet(helmetOptions));
   registerBodyParsers(app);
+
+  // What makes `req.ip` the caller rather than the load balancer, which every rate limit counts on.
+  app.set('trust proxy', config.get('TRUST_PROXY_HOPS'));
 
   const origins = config.get('CORS_ORIGINS');
   app.enableCors({

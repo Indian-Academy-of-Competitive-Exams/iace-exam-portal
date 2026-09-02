@@ -16,6 +16,7 @@ import {
   type SubmittedAttempt,
 } from '@iace/contracts';
 import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
+import { SittingRateLimit } from '../common/throttling';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
@@ -62,6 +63,7 @@ export class AttemptsController {
   }
 
   /** Ends the sitting. A second call reports the first one's outcome rather than refusing. */
+  @SittingRateLimit()
   @Post('attempts/:id/submit')
   @HttpCode(HttpStatus.OK)
   submit(
@@ -102,6 +104,7 @@ export class AttemptsController {
   }
 
   /** The autosave. Writes Redis and nothing else — this is the hot path the scaling rules name. */
+  @SittingRateLimit()
   @Patch('attempts/:id/state')
   saveState(
     @Param('id') id: string,

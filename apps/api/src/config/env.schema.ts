@@ -102,6 +102,15 @@ export const envSchema = z.object({
   PIN_LOCKOUT_DECAY_SEC: z.coerce.number().int().positive().default(86400),
   PIN_SETUP_TTL_SEC: z.coerce.number().int().positive().default(600),
 
+  // Rate limits per minute, generous because a branch of two hundred shares one address (.env.example).
+  RATE_LIMIT_DEFAULT_PER_MIN: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_AUTH_PER_MIN: z.coerce.number().int().positive().default(120),
+  RATE_LIMIT_SITTING_PER_MIN: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_SHARE_PER_MIN: z.coerce.number().int().positive().default(60),
+
+  // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.
+  TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
+
   // Request body limits.
   BODY_LIMIT_DEFAULT: byteSize('256kb'),
   BODY_LIMIT_IMPORT: byteSize('10mb'),

@@ -26,6 +26,7 @@ import {
   RequiresFeature,
   type AuthenticatedUser,
 } from '../common/security';
+import { ShareRateLimit } from '../common/throttling';
 import { Audit } from '../audit';
 import { ZodBody } from '../common/zod-validation.pipe';
 import { PerformanceShareService } from './performance-share.service';
@@ -41,6 +42,7 @@ export class PublicReportController {
 
   /** The only unauthenticated route to student data: one student's own curated report. */
   @Public()
+  @ShareRateLimit()
   // No freshness directive is heuristically cacheable, so a proxy would outlive a revocation.
   @Header('Cache-Control', 'no-store')
   @Get(':token')

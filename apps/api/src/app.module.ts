@@ -1,5 +1,6 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
@@ -7,6 +8,7 @@ import { QueueModule } from './queue/queue.module';
 import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './common/events';
 import { MessagingModule } from './common/messaging';
+import { ThrottlingModule } from './common/throttling';
 import { AuditModule, AuditInterceptor, AuditContextMiddleware } from './audit';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -56,6 +58,7 @@ import { RequestIdMiddleware } from './common/request-id';
     TestsModule,
     AttemptsModule,
     HealthModule,
+    ThrottlingModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
@@ -65,6 +68,8 @@ import { RequestIdMiddleware } from './common/request-id';
     { provide: APP_GUARD, useClass: ActorGuard },
     { provide: APP_GUARD, useClass: FeaturePermissionGuard },
     { provide: APP_GUARD, useClass: SuperAdminGuard },
+    // Last: it counts an authenticated caller as themselves, which needs the JWT guard to have run.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule implements NestModule {
