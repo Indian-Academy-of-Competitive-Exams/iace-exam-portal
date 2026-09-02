@@ -12,7 +12,7 @@ import {
   type QuestionLanguage,
   type QuestionType,
 } from '@iace/contracts';
-import { Combobox, Input, SegmentedControl } from '@iace/ui';
+import { Combobox, Input, SegmentedControl, cn } from '@iace/ui';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
 import { SubjectPicker, TopicPicker } from '../taxonomy-picker';
 import {
@@ -23,7 +23,11 @@ import {
 } from './question-scaffold';
 
 /** Dense on purpose: the whole batch's setting is one row, and the rest of the window is the box. */
+/** A choice: a filled chip with nothing to type into. */
 const CONTROL = 'h-8 w-auto min-w-32 max-w-52 border-transparent bg-muted px-2 text-xs shadow-none';
+
+/** Something to type into, told apart from the choices beside it by its outline and its ground. */
+const FIELD = 'h-8 border-input bg-surface px-2 text-xs shadow-none placeholder:italic';
 
 const CAPTION = 'text-[0.625rem] font-semibold uppercase tracking-wide text-muted-foreground';
 
@@ -81,9 +85,9 @@ export function AuthoringHeaderBar({
         <Input
           value={header.tags}
           disabled={disabled}
-          placeholder="Comma separated"
+          placeholder="ssc, time and work"
           aria-label="Tags"
-          className={CONTROL}
+          className={cn(FIELD, 'w-auto min-w-40 max-w-56')}
           onChange={(event) => onHeaderChange({ ...header, tags: event.target.value })}
         />
       </Slot>
@@ -150,7 +154,7 @@ export function AuthoringHeaderBar({
             disabled={disabled}
             inputMode="decimal"
             aria-label="Tolerance"
-            className="h-8 w-24 border-transparent bg-muted px-2 text-xs shadow-none"
+            className={cn(FIELD, 'w-24')}
             onChange={(event) => onStateChange({ ...state, tolerance: event.target.value })}
           />
         </Slot>
