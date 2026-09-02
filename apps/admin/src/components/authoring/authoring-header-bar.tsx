@@ -15,7 +15,12 @@ import {
 import { Combobox, Input, SegmentedControl } from '@iace/ui';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
 import { SubjectPicker, TopicPicker } from '../taxonomy-picker';
-import { type AuthoringHeader, type AuthoringState } from './question-scaffold';
+import {
+  OPTION_COUNTS,
+  withOptionCount,
+  type AuthoringHeader,
+  type AuthoringState,
+} from './question-scaffold';
 
 /** Dense on purpose: the whole batch's setting is one row, and the rest of the window is the box. */
 const CONTROL = 'h-8 w-auto min-w-32 max-w-52 border-transparent bg-muted px-2 text-xs shadow-none';
@@ -109,6 +114,18 @@ export function AuthoringHeaderBar({
           onChange={(value) => onStateChange(retyped(state, value as QuestionType))}
         />
       </Slot>
+
+      {typed ? null : (
+        <Slot caption="Options">
+          <SegmentedControl
+            value={String(state.optionCount)}
+            disabled={disabled}
+            aria-label="How many options"
+            items={OPTION_COUNTS.map((count) => ({ value: String(count), label: String(count) }))}
+            onChange={(value) => onStateChange(withOptionCount(state, Number(value)))}
+          />
+        </Slot>
+      )}
 
       {typed ? (
         <Slot caption="Answer match">

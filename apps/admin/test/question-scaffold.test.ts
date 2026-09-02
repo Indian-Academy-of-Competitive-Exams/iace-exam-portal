@@ -16,12 +16,14 @@ import {
   answerIndexOf,
   emptyState,
   optionKey,
+  OPTION_COUNTS,
   optionLetter,
   tagsIn,
   regionsFor,
   stateFrom,
   taxonomyFor,
   toDraft,
+  withOptionCount,
   type AuthoringHeader,
   type AuthoringState,
 } from '../src/components/authoring/question-scaffold';
@@ -168,6 +170,35 @@ describe('the language toggle', () => {
       regionsFor(state, 'en').map((region) => region.key),
     );
     assert.equal(regionsFor(state, 'te')[1]?.html, '');
+  });
+});
+
+describe('the option count in the header', () => {
+  it('resizes every language at once, so a translation keeps its slots', () => {
+    const grown = withOptionCount(typed(), 6);
+
+    assert.equal(grown.optionCount, 6);
+    assert.equal(grown.content.hi.options.length, 6);
+    assert.equal(grown.content.en.options[0], '<p>25</p>');
+  });
+
+  it('drops the empty ones off the end', () => {
+    const state = withOptionCount(emptyState(), 6);
+
+    assert.equal(withOptionCount(state, 2).optionCount, 2);
+  });
+
+  /** The failure this prevents: a typed option lost to a dropdown, with no way back. */
+  it('will not shrink past an option that says something', () => {
+    const four = typed();
+
+    assert.equal(withOptionCount(four, 2).optionCount, 4);
+    assert.equal(withOptionCount(four, 4).content.en.options[3], '<p>40</p>');
+  });
+
+  it('stops at what a paper prints', () => {
+    assert.deepEqual(OPTION_COUNTS, [2, 3, 4, 5, 6]);
+    assert.equal(withOptionCount(emptyState(), 99).optionCount, MCQ_OPTION_MAX);
   });
 });
 

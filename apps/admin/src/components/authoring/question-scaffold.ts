@@ -192,6 +192,41 @@ export function answerIndexOf(answer: string, optionCount: number): number | nul
   return null;
 }
 
+/** Every seat a paper may print, so the header can offer the count as a choice. */
+export const OPTION_COUNTS = Array.from(
+  { length: MCQ_OPTION_MAX - MCQ_OPTION_MIN + 1 },
+  (_, index) => MCQ_OPTION_MIN + index,
+);
+
+/** The highest seat that says something in any language. Nothing at or below it may be dropped. */
+function lastFilledOption(state: AuthoringState): number {
+  let last = -1;
+  for (const language of LANGUAGE_ORDER) {
+    state.content[language].options.forEach((html, index) => {
+      if (hasText(html)) last = Math.max(last, index);
+    });
+  }
+  return last;
+}
+
+/** Resizes every language at once, and never past an option that says something. */
+export function withOptionCount(state: AuthoringState, count: number): AuthoringState {
+  const floor = Math.max(MCQ_OPTION_MIN, lastFilledOption(state) + 1);
+  const optionCount = Math.min(MCQ_OPTION_MAX, Math.max(floor, count));
+  if (optionCount === state.optionCount) return state;
+
+  const content = { ...state.content };
+  for (const language of LANGUAGE_ORDER) {
+    const existing = content[language];
+    content[language] = {
+      ...existing,
+      options: Array.from({ length: optionCount }, (_, index) => existing.options[index] ?? ''),
+    };
+  }
+
+  return { ...state, optionCount, content };
+}
+
 /** One line of commas into the tags a question carries. Normalising is the schema's job. */
 export function tagsIn(line: string): string[] {
   return line
