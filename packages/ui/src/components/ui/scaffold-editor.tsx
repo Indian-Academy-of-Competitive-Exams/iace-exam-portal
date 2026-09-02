@@ -20,8 +20,10 @@ import {
 import {
   REGION_KIND,
   REGION_NODE,
+  SCAFFOLD_SHAPE,
   ScaffoldDocument,
   ScaffoldRegionNode,
+  whileLoadingScaffold,
   type RegionKind,
 } from './scaffold-region';
 
@@ -131,8 +133,7 @@ function insideRegion(view: EditorView, index: number, atEnd: boolean): number |
   const doc = view.state.doc;
   if (index < 0 || index >= doc.childCount) return null;
 
-  let start = 0;
-  for (let i = 0; i < index; i += 1) start += doc.child(i).nodeSize;
+  const start = startOf(doc, index);
   const node = doc.child(index);
   return atEnd ? start + node.nodeSize - 2 : start + 2;
 }
@@ -224,7 +225,7 @@ export function ScaffoldEditor({
   React.useEffect(() => {
     if (!editor || loaded.current === docKey) return;
     loaded.current = docKey;
-    editor.commands.setContent(docFrom(regions), { emitUpdate: false });
+    whileLoadingScaffold(() => editor.commands.setContent(docFrom(regions), { emitUpdate: false }));
     // Back at the first slot, which after a save is the stem of the next question.
     editor.commands.focus('start');
   }, [editor, docKey, regions]);
@@ -273,11 +274,46 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
   if (event.key === 'ArrowUp' && atEdge(view, 'start')) {
     return moveToRegion(view, index - 1, true);
   }
-  if (event.key === 'Backspace' && context.repeat && atEdge(view, 'start')) {
-    return removeEmpty(view, index, context.repeat);
+  if (event.key === 'Backspace' || event.key === 'Delete') {
+    return onDelete(view, index, event.key, context.repeat);
   }
 
   return false;
+}
+
+/** Deleting clears what a selection covers, or drops the empty slot the caret sits at the top of. */
+function onDelete(
+  view: EditorView,
+  index: number,
+  key: string,
+  repeat: ScaffoldRepeat | undefined,
+): boolean {
+  if (clearAcrossSlots(view)) return true;
+  if (key !== 'Backspace' || !repeat || !atEdge(view, 'start')) return false;
+  return removeEmpty(view, index, repeat);
+}
+
+/** A selection past one slot empties what it covers; deleting it would take the scaffold. */
+function clearAcrossSlots(view: EditorView): boolean {
+  const { selection, doc, schema, tr } = view.state;
+  if (selection.empty) return false;
+
+  const first = doc.resolve(selection.from).index(0);
+  const last = doc.resolve(Math.min(selection.to, doc.content.size - 1)).index(0);
+  if (first >= last) return false;
+
+  // Backwards, so each replacement leaves the positions of the ones before it alone.
+  for (let index = last; index >= first; index -= 1) {
+    const start = startOf(doc, index);
+    tr.replaceWith(
+      start + 1,
+      start + doc.child(index).nodeSize - 1,
+      schema.nodes.paragraph!.create(),
+    );
+  }
+
+  view.dispatch(tr);
+  return moveToRegion(view, first, false);
 }
 
 /** Enter grows the run, leaves the empty slot it just made, or simply moves on. */
@@ -311,7 +347,14 @@ function isLastOfRun(view: EditorView, index: number, repeat: ScaffoldRepeat): b
 
 function isEmpty(view: EditorView, index: number): boolean {
   const node = view.state.doc.child(index);
-  return node.textContent.trim() === '' && node.content.childCount <= 1;
+  if (node.textContent.trim() !== '') return false;
+
+  // A figure or an equation says something without saying any text.
+  let carries = false;
+  node.descendants((child) => {
+    if (child.isLeaf && !child.isText) carries = true;
+  });
+  return !carries;
 }
 
 /** Out of the run and on to what follows it, taking the empty slot that was left behind. */
@@ -319,10 +362,10 @@ function leaveRun(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
   if (runIndexes(view, repeat).length <= repeat.min) return moveToRegion(view, index + 1, false);
 
   const doc = view.state.doc;
-  let start = 0;
-  for (let i = 0; i < index; i += 1) start += doc.child(i).nodeSize;
-
-  view.dispatch(view.state.tr.delete(start, start + doc.child(index).nodeSize));
+  const start = startOf(doc, index);
+  view.dispatch(
+    view.state.tr.delete(start, start + doc.child(index).nodeSize).setMeta(SCAFFOLD_SHAPE, true),
+  );
   relabelRun(view, repeat);
   return moveToRegion(view, index, false);
 }
@@ -333,8 +376,7 @@ function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
   if (inRun.length >= repeat.max) return false;
 
   const { schema, doc, tr } = view.state;
-  let end = 0;
-  for (let i = 0; i <= index; i += 1) end += doc.child(i).nodeSize;
+  const end = startOf(doc, index) + doc.child(index).nodeSize;
 
   const added = schema.nodes[REGION_NODE]!.create(
     {
@@ -345,7 +387,7 @@ function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
     schema.nodes.paragraph!.create(),
   );
 
-  view.dispatch(tr.insert(end, added));
+  view.dispatch(tr.insert(end, added).setMeta(SCAFFOLD_SHAPE, true));
   return moveToRegion(view, index + 1, false);
 }
 
@@ -354,14 +396,13 @@ function removeEmpty(view: EditorView, index: number, repeat: ScaffoldRepeat): b
   const inRun = runIndexes(view, repeat);
   if (!inRun.includes(index) || inRun.length <= repeat.min) return false;
 
+  if (!isEmpty(view, index)) return false;
+
   const doc = view.state.doc;
-  const node = doc.child(index);
-  if (node.textContent.trim() !== '' || node.content.childCount > 1) return false;
-
-  let start = 0;
-  for (let i = 0; i < index; i += 1) start += doc.child(i).nodeSize;
-
-  view.dispatch(view.state.tr.delete(start, start + node.nodeSize));
+  const start = startOf(doc, index);
+  view.dispatch(
+    view.state.tr.delete(start, start + doc.child(index).nodeSize).setMeta(SCAFFOLD_SHAPE, true),
+  );
   relabelRun(view, repeat);
   return moveToRegion(view, index - 1, true);
 }
@@ -381,5 +422,12 @@ function relabelRun(view: EditorView, repeat: ScaffoldRepeat): void {
     seat += 1;
   });
 
-  if (transaction.docChanged) view.dispatch(transaction);
+  if (transaction.docChanged) view.dispatch(transaction.setMeta(SCAFFOLD_SHAPE, true));
+}
+
+/** Where the nth slot begins in the document. */
+function startOf(doc: ProseNode, index: number): number {
+  let start = 0;
+  for (let i = 0; i < index; i += 1) start += doc.child(i).nodeSize;
+  return start;
 }

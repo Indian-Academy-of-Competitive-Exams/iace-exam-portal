@@ -497,3 +497,62 @@
 .scaffold-content .scaffold-body {
   min-width: 0;
 }
+
+/* ============================================================================
+   RICH FIGURE — an image, and the only way a typist can take one back out
+   ========================================================================== */
+.rich-figure {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.rich-figure img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.rich-figure-remove {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background-color: var(--surface);
+  color: var(--foreground-secondary);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  /* Shown on hover and on keyboard focus alike; a control only the mouse can find is not one. */
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.rich-figure:hover .rich-figure-remove,
+.rich-figure-remove:focus-visible,
+.ProseMirror-selectednode .rich-figure-remove {
+  opacity: 1;
+}
+
+.rich-figure-remove:hover {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.rich-figure-remove:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+/* A selected figure says so, so Backspace is an obvious next key rather than a guess. */
+.rich-content .ProseMirror-selectednode,
+.scaffold-content .ProseMirror-selectednode {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

@@ -49,9 +49,24 @@ const labels = () =>
 const regionKeys = () =>
   [...document.querySelectorAll('[data-region]')].map((node) => node.getAttribute('data-region'));
 
+/** What the typist wrote, without the labels, which are the node's own chrome. */
+const bodies = () =>
+  [...document.querySelectorAll('.scaffold-body')].map((node) => node.textContent?.trim() ?? '');
+
 /** Enter moves slot to slot, so the caret gets where it is going the way a typist sends it. */
 function down(box: HTMLElement, times: number): void {
   for (let step = 0; step < times; step += 1) fireEvent.keyDown(box, { key: 'Enter' });
+}
+
+const FIGURE = '<img src="https://iace.invalid/chart.png" data-key="questions/images/chart.png">';
+
+/** What Ctrl+A leaves behind, without depending on the browser's own select-all. */
+function selectWholeDocument(): void {
+  const range = document.createRange();
+  range.selectNodeContents(screen.getByRole('textbox', { name: 'Question' }));
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 describe('the scaffold labels', () => {
@@ -89,6 +104,43 @@ describe('the scaffold labels', () => {
       reported.map((region) => region.label),
       ['Question:', '(A)', '(B)', '(C)', '(D)', 'Answer:'],
     );
+  });
+});
+
+describe('a figure in a slot', () => {
+  const withFigure = () =>
+    mount({
+      onUploadImage: async () => ({ key: 'k', url: 'https://iace.invalid/chart.png' }),
+      regions: [
+        { key: 'stem', label: 'Question:', html: '<p>Which curve is it?</p>' },
+        { key: 'option:0', label: '(A)', html: FIGURE },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+
+  /** The reported gap: a pasted figure could be put in and never taken back out. */
+  it('carries a control that removes it', () => {
+    const { box } = withFigure();
+
+    const remove = screen.getByRole('button', { name: 'Remove image' });
+    fireEvent.mouseDown(remove);
+
+    assert.equal(box.querySelectorAll('img').length, 0);
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
+  });
+
+  /** The failure this prevents: no TEXT read as blank, so Backspace took the slot and the figure. */
+  it('is content, so the slot holding it is not an empty slot', () => {
+    const { box } = withFigure();
+    act(() => {
+      down(box, 1);
+      fireEvent.keyDown(box, { key: 'Backspace' });
+    });
+
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
+    assert.equal(box.querySelectorAll('img').length, 1);
   });
 });
 
@@ -192,6 +244,19 @@ describe('the keyboard', () => {
     });
 
     assert.equal(document.querySelectorAll('[data-region^="option:"]').length, 2);
+  });
+
+  /** The failure this closes: Ctrl+A then Backspace took every slot with it, unrecoverably. */
+  it('empties what a selection covers and leaves the slots standing', () => {
+    const { box } = mount();
+    act(() => {
+      fireEvent.keyDown(box, { key: 'a', ctrlKey: true });
+      selectWholeDocument();
+      fireEvent.keyDown(box, { key: 'Backspace' });
+    });
+
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
+    assert.equal(bodies().join(''), '');
   });
 
   it('saves on Ctrl+Enter rather than typing a line', () => {

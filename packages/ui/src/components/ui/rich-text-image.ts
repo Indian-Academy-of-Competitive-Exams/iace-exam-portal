@@ -13,7 +13,53 @@ export const QuestionImage = Image.extend({
       'data-key': { default: null },
     };
   },
+
+  /** A figure carries its own way out: nothing on screen said Backspace would do it. */
+  addNodeView() {
+    return ({ node, editor, getPos }) => {
+      const figure = document.createElement('span');
+      figure.className = 'rich-figure';
+
+      const image = document.createElement('img');
+      for (const [name, value] of Object.entries(node.attrs)) {
+        const text = asAttribute(value);
+        if (text !== null) image.setAttribute(name, text);
+      }
+      figure.append(image);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'rich-figure-remove';
+      remove.title = REMOVE_IMAGE;
+      remove.setAttribute('aria-label', REMOVE_IMAGE);
+      remove.textContent = '\u00d7';
+      // mousedown, not click: ProseMirror would otherwise move the selection out from under it.
+      remove.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const at = getPos();
+        if (at === undefined) return;
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: at, to: at + node.nodeSize })
+          .run();
+      });
+      figure.append(remove);
+
+      return { dom: figure };
+    };
+  },
 });
+
+const REMOVE_IMAGE = 'Remove image';
+
+/** Only a primitive is an attribute value; anything else would render as "[object Object]". */
+function asAttribute(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
+}
 
 /** Only real image files; a dragged link or a copied cell is not one. */
 export function imageFilesIn(data: DataTransfer | null | undefined): File[] {
