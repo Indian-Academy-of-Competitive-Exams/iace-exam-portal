@@ -15,7 +15,6 @@ export const QuestionImage = Image.extend({
       ...this.parent?.(),
       'data-key': { default: null },
       width: { default: null },
-      height: { default: null },
     };
   },
 
@@ -45,23 +44,22 @@ export const QuestionImage = Image.extend({
             resizing: 'is-resizing',
           },
         },
-        // Redraw the img from the node, so a size set anywhere reaches the element.
+        // Redraw the img from the node, so a width set anywhere reaches the element.
         onUpdate: (next) => {
           const width = asAttribute(next.attrs.width);
-          const height = asAttribute(next.attrs.height);
           if (width) image.setAttribute('width', width);
-          if (height) image.setAttribute('height', height);
+          image.removeAttribute('height');
           return true;
         },
-        onCommit: (width, height) => {
-          editor.commands.updateAttributes(FIGURE_NODE, {
-            width: Math.round(width),
-            height: Math.round(height),
-          });
+        // Width alone: the height is the stylesheet's, which is what keeps the proportions.
+        onCommit: (width) => {
+          image.removeAttribute('height');
+          image.style.removeProperty('height');
+          editor.commands.updateAttributes(FIGURE_NODE, { width: Math.round(width) });
         },
       });
 
-      view.container.append(
+      view.wrapper.append(
         removeControl(
           REMOVE_LABELS.image,
           () => editor.view,

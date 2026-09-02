@@ -509,15 +509,19 @@
   line-height: 0;
 }
 
+/* The frame hugs the image, which is what the corner and the × are pinned to. */
 .rich-figure-frame {
   position: relative;
   display: inline-block;
   max-width: 100%;
+  line-height: 0;
 }
 
+/* `height: auto` is the whole of the aspect lock: only the width is ever stored. */
 .rich-figure img {
+  display: block;
   max-width: 100%;
-  height: auto;
+  height: auto !important;
   border-radius: var(--radius-sm);
 }
 
@@ -581,9 +585,15 @@
   cursor: pointer;
 }
 
-.rich-table-tool:hover {
+.rich-table-tool:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--foreground);
+}
+
+/* Offered only where it means something: outside the table, and on the header row it protects. */
+.rich-table-tool:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .rich-table-tool:focus-visible {

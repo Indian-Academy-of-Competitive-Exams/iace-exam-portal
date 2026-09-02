@@ -156,6 +156,21 @@ describe('tables', () => {
     assert.ok(screen.getByRole('button', { name: 'Remove table' }));
     assert.equal(screen.queryByRole('menuitem', { name: 'Row above' }), null);
   });
+
+  /** The header names the columns; a table that lost it is one nobody can read. */
+  it('will not delete the header row, wherever the caret is', () => {
+    let html = '';
+    show(<RichText value="" onChange={(next) => (html = next)} />);
+    fireEvent.click(screen.getByLabelText('Insert a table'));
+
+    // Freshly inserted, the caret sits in the header — the one row the control refuses.
+    const deleteRow = screen.getByRole('button', { name: 'Delete this row' });
+    assert.equal((deleteRow as HTMLButtonElement).disabled, true);
+
+    fireEvent.mouseDown(deleteRow);
+
+    assert.match(html, /<th/, 'the header survives a press the control was never offering');
+  });
 });
 
 describe('the equation dialog refuses what will not render', () => {

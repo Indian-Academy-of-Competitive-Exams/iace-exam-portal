@@ -24,7 +24,7 @@ const ALLOWED: Readonly<Record<string, readonly string[]>> = {
   TR: [],
   TD: ['colspan', 'rowspan'],
   TH: ['colspan', 'rowspan'],
-  IMG: ['src', 'alt', 'width', 'height'],
+  IMG: ['src', 'alt', 'width'],
   SPAN: [],
 };
 
