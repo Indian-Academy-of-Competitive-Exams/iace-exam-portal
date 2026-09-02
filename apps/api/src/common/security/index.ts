@@ -13,6 +13,7 @@ export {
   IS_PUBLIC_KEY,
   Public,
   REQUIRED_FEATURE_KEY,
+  RequiresAnyFeature,
   RequiresFeature,
   RequiresSuperAdmin,
   SUPER_ADMIN_KEY,

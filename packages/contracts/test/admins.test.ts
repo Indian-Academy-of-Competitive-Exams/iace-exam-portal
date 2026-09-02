@@ -50,6 +50,7 @@ describe('shared vocabularies', () => {
       Object.values(FEATURE_KEYS).sort(),
       [
         'BRANCH_TEST_MANAGEMENT',
+        'QUESTION_AUTHORING',
         'QUESTION_MANAGEMENT',
         'STUDENT_MANAGEMENT',
         'STUDENT_PERFORMANCE',

@@ -191,8 +191,16 @@ describe('the question sheet', () => {
     );
   });
 
-  it('treats an empty option slot as a missing option, not as empty text', () => {
+  it('reads a trailing empty option column as a question with fewer options', () => {
     const row = plan([{ ...MCQ_ROW, option4_en: '' }]).rows[0]!;
+
+    assert.deepEqual(row.issues, []);
+    assert.equal(row.draft?.options.length, 3);
+  });
+
+  it('refuses an empty column with a filled one after it, which is a gap and not a count', () => {
+    const row = plan([{ ...MCQ_ROW, option3_en: '' }]).rows[0]!;
+
     assert.deepEqual(
       row.issues.map((issue) => issue.code),
       [QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID],

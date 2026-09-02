@@ -132,3 +132,13 @@ export function richHtml(html: string): string {
   boxTables(document.body, document);
   return document.body.innerHTML;
 }
+
+/** Whether KaTeX will render this, and why not — strict, unlike the drawing above. */
+export function mathErrorIn(latex: string): string | null {
+  try {
+    katex.renderToString(latex, { throwOnError: true, strict: 'error' });
+    return null;
+  } catch (error) {
+    return (error as Error).message.replace('KaTeX parse error: ', '');
+  }
+}

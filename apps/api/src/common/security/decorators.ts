@@ -21,15 +21,19 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 /** Restrict a route to one identity table — students and admins are separate. */
 export const Actors = (...actors: ActorType[]) => SetMetadata(ACTORS_KEY, actors);
 
-/** What a route demands: a feature, at a level. */
+/** What a route demands: a feature — or any one of several — at a level. */
 export interface RequiredFeature {
-  key: FeatureKey;
+  key: FeatureKey | readonly FeatureKey[];
   level: PermissionLevel;
 }
 
 /** Require a feature permission at a level. Super admins bypass the check. */
 export const RequiresFeature = (key: FeatureKey, level: PermissionLevel) =>
   SetMetadata(REQUIRED_FEATURE_KEY, { key, level } satisfies RequiredFeature);
+
+/** Any ONE of these, for a read two features need — a duplicate endpoint is one that can drift. */
+export const RequiresAnyFeature = (keys: readonly FeatureKey[], level: PermissionLevel) =>
+  SetMetadata(REQUIRED_FEATURE_KEY, { key: keys, level } satisfies RequiredFeature);
 
 /** Restrict a route to super admins, above and beyond any page permission. */
 export const RequiresSuperAdmin = () => SetMetadata(SUPER_ADMIN_KEY, true);

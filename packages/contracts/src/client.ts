@@ -12,6 +12,15 @@ import {
   type PaginationQueryInput,
 } from './envelope';
 import {
+  ADMIN_AUTHORING_ROUTES,
+  authoringSaveResultSchema,
+  authoringStatsSchema,
+  authoringTagsSchema,
+  type AuthoringHistoryQueryInput,
+  type AuthoringSaveResult,
+  type AuthoringStats,
+} from './authoring';
+import {
   ADMIN_AUDIT_ROUTES,
   importLogSchema,
   rowActionSchema,
@@ -1275,6 +1284,40 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: topicSchema,
+          }),
+      },
+
+      /** A typist's own questions. Every route here is scoped to the caller by the server. */
+      authoring: {
+        /** The author's own recent tags, newest first — what the header offers as they type. */
+        tags: (): Promise<string[]> =>
+          request(ADMIN_AUTHORING_ROUTES.tags, { schema: authoringTagsSchema }).then(
+            (result) => result.tags,
+          ),
+
+        stats: (): Promise<AuthoringStats> =>
+          request(ADMIN_AUTHORING_ROUTES.stats, { schema: authoringStatsSchema }),
+
+        history: (query: AuthoringHistoryQueryInput = {}): Promise<Paginated<QuestionSummary>> =>
+          requestPaginated(`${ADMIN_AUTHORING_ROUTES.history}${queryString({ ...query })}`, {
+            schema: questionSummarySchema.array(),
+          }),
+
+        detail: (id: string): Promise<QuestionDetail> =>
+          request(ADMIN_AUTHORING_ROUTES.get(id), { schema: questionDetailSchema }),
+
+        create: (input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
+          request(ADMIN_AUTHORING_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: authoringSaveResultSchema,
+          }),
+
+        update: (id: string, input: QuestionDraftInput): Promise<AuthoringSaveResult> =>
+          request(ADMIN_AUTHORING_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: authoringSaveResultSchema,
           }),
       },
 

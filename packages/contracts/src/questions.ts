@@ -183,6 +183,32 @@ export function hasText(html: string | undefined): boolean {
   return html !== undefined && previewTextOf(html) !== '';
 }
 
+const IMG_TAG = /<img\b[^>]*>/gi;
+const DATA_KEY = /\bdata-key="([^"]+)"/i;
+
+/** The S3 key of every image in a piece of content — what makes two figures the same figure. */
+export function imageKeysIn(html: string): string[] {
+  return (html.match(IMG_TAG) ?? []).flatMap((tag) => DATA_KEY.exec(tag)?.[1] ?? []);
+}
+
+/** Editor output: `<span data-type="inline-math" data-latex="\\frac{a}{b}">`. */
+const MATH_LATEX = /data-latex="([^"]*)"/gi;
+
+/** Attribute values arrive html-escaped, and KaTeX must parse the LaTeX, not the escaping. */
+function unescapeAttribute(value: string): string {
+  return value
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replaceAll('&amp;', '&');
+}
+
+/** Every formula a piece of content carries, in the order they appear. */
+export function latexIn(html: string): string[] {
+  return [...html.matchAll(MATH_LATEX)].map((match) => unescapeAttribute(match[1] ?? ''));
+}
+
 export const questionContentSchema = z.object({
   stem: richContentSchema,
   solution: richContentSchema.optional(),
@@ -298,8 +324,12 @@ export type TopicListQueryInput = z.input<typeof topicListQuerySchema>;
 // on the server is the only place a node is constructed.
 // ============================================================================
 
-/** Four options, as every government CBT paper prints them. */
+/** Four options, as most government CBT papers print them — the count a new question opens with. */
 export const MCQ_OPTION_COUNT = 4;
+
+/** The range a paper can actually print: SBI PO runs A\u2013E, and nothing here goes past F. */
+export const MCQ_OPTION_MIN = 2;
+export const MCQ_OPTION_MAX = 6;
 
 export const MARKS_MAX = 999.99;
 
@@ -346,7 +376,7 @@ export const questionCodeSchema = z
 
 export const questionOptionDraftSchema = z.object({
   /** 1-based authored slot. It survives shuffling and editing; correctness is keyed to it. */
-  position: z.number().int().min(1).max(MCQ_OPTION_COUNT),
+  position: z.number().int().min(1).max(MCQ_OPTION_MAX),
   isCorrect: z.boolean(),
   text: localizedTextSchema,
 });
@@ -373,7 +403,7 @@ export const questionDraftSchema = z.object({
   questionCode: questionCodeSchema.nullable().optional(),
   stem: localizedTextSchema,
   solution: localizedTextSchema.optional(),
-  options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_COUNT).default([]),
+  options: z.array(questionOptionDraftSchema).max(MCQ_OPTION_MAX).default([]),
   answerKey: answerKeyDraftSchema.nullable().optional(),
   tags: z.array(tagSchema).max(TAGS_MAX).default([]),
   /** The `updatedAt` the editor loaded. Sent, it refuses a save built on a stale screen. */

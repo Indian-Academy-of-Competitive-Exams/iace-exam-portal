@@ -131,7 +131,8 @@ function valuesOf(question: QuestionDetail): QuestionFormValues {
     solution[language] = plainTextOf(question.content[language]?.solution);
   }
 
-  const options = Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => {
+  const slots = Math.max(question.options.length, MCQ_OPTION_COUNT);
+  const options = Array.from({ length: slots }, (_, index) => {
     const saved = question.options.find((option) => option.position === index + 1);
     const text = emptyLanguages();
     for (const language of LANGUAGE_ORDER) text[language] = plainTextOf(saved?.text[language]);
@@ -265,6 +266,8 @@ export function QuestionFormPage() {
   const taxonomySettled = loaded !== undefined && loaded.status !== QUESTION_STATUS.DRAFT;
   const topicId = useWatch({ control: form.control, name: 'topicId' });
   const correctOption = useWatch({ control: form.control, name: 'correctOption' });
+  // However many it has: a form that always drew four would drop a fifth on the next save.
+  const optionCount = useWatch({ control: form.control, name: 'options' }).length;
   const answerMode = useWatch({ control: form.control, name: 'answerMode' });
   const difficulty = useWatch({ control: form.control, name: 'difficulty' });
   const status = useWatch({ control: form.control, name: 'status' });
@@ -437,7 +440,7 @@ export function QuestionFormPage() {
 
           {LANGUAGE_ORDER.map((language) => (
             <TabsContent key={language} value={language} className="flex flex-col gap-4">
-              <LanguagePanel form={form} language={language} type={type} />
+              <LanguagePanel form={form} language={language} type={type} options={optionCount} />
             </TabsContent>
           ))}
         </Tabs>
@@ -453,7 +456,7 @@ export function QuestionFormPage() {
                   clearable={false}
                   value={correctOption}
                   onChange={(value) => form.setValue('correctOption', value)}
-                  items={Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => ({
+                  items={Array.from({ length: optionCount }, (_, index) => ({
                     value: String(index + 1),
                     label: `Option ${index + 1}`,
                   }))}
@@ -617,10 +620,12 @@ function LanguagePanel({
   form,
   language,
   type,
+  options,
 }: Readonly<{
   form: UseFormReturn<QuestionFormValues>;
   language: QuestionLanguage;
   type: QuestionFormValues['type'];
+  options: number;
 }>) {
   const label = LANGUAGE_LABELS[language];
 
@@ -634,7 +639,7 @@ function LanguagePanel({
 
       {type === QUESTION_TYPE.SINGLE_MCQ ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          {Array.from({ length: MCQ_OPTION_COUNT }, (_, index) => (
+          {Array.from({ length: options }, (_, index) => (
             <FormField
               key={index}
               form={form}

@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  PenLine,
   CheckCheck,
   ClipboardList,
   FolderTree,
@@ -21,6 +22,7 @@ import {
   type AuditFeature,
   BRANCH_TYPE,
   type BranchType,
+  type DifficultyLevel,
   type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
@@ -30,8 +32,11 @@ import {
   type LanguageCode,
   type LanguageMode,
   type MeritType,
+  type AnswerMode,
   type NavigationPolicy,
   type PaperBinding,
+  type QuestionStatus,
+  type QuestionType,
   PERFORMANCE_SCOPES,
   type PerformanceScope,
   STUDENT_TYPE,
@@ -73,6 +78,11 @@ export const ROUTES = {
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
   QUESTION_PATTERN: '/questions/:id',
+  /** Authoring: one box for typing questions, and the author's own record of what they typed. */
+  AUTHORING_EDITOR: '/authoring',
+  AUTHORING_QUESTION: (id: string) => `/authoring/${id}`,
+  AUTHORING_EDITOR_PATTERN: '/authoring/:id',
+  AUTHORING_HISTORY: '/authoring/history',
   /** Tests. A base config is the stage blueprint every test under it inherits its shape from. */
   BASE_CONFIGS: '/tests/configs',
   BASE_CONFIG_NEW: '/tests/configs/new',
@@ -120,6 +130,40 @@ export const UNLOCK_REQUEST_STATUS_LABELS: Readonly<Record<UnlockRequestStatus, 
   PENDING: 'Waiting',
   APPROVED: 'Approved',
   REJECTED: 'Declined',
+};
+
+/** What each kind of question is called on screen. */
+export const QUESTION_TYPE_LABELS: Readonly<Record<QuestionType, string>> = {
+  SINGLE_MCQ: 'Multiple choice',
+  TEXT_FIELD: 'Typed answer',
+};
+
+/** What a question's state is called on screen. */
+export const QUESTION_STATUS_LABELS: Readonly<Record<QuestionStatus, string>> = {
+  DRAFT: 'Draft',
+  ACTIVE: 'Active',
+  ARCHIVED: 'Archived',
+};
+
+/** Live reads as live; waiting and retired both read as quiet. */
+export const QUESTION_STATUS_VARIANT: Readonly<Record<QuestionStatus, 'neutral' | 'success'>> = {
+  DRAFT: 'neutral',
+  ACTIVE: 'success',
+  ARCHIVED: 'neutral',
+};
+
+/** Harder reads as more urgent, so a page of them scans by colour. */
+export const DIFFICULTY_VARIANT: Readonly<Record<DifficultyLevel, 'success' | 'info' | 'warning'>> =
+  {
+    LOW: 'success',
+    MEDIUM: 'info',
+    HIGH: 'warning',
+  };
+
+/** How a typed answer is compared. */
+export const ANSWER_MODE_LABELS: Readonly<Record<AnswerMode, string>> = {
+  EXACT: 'Exact text',
+  NUMERIC: 'Numeric',
 };
 
 /** What each kind of series is called on screen. */
@@ -361,6 +405,16 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
+  /** Its own section, on a key of its own: a typist gets this and not the bank above it. */
+  {
+    label: 'Authoring',
+    icon: PenLine,
+    featureKey: FEATURE_KEYS.QUESTION_AUTHORING,
+    children: [
+      { to: ROUTES.AUTHORING_EDITOR, label: 'Editor', icon: PenLine },
+      { to: ROUTES.AUTHORING_HISTORY, label: 'History', icon: History },
+    ],
+  },
   {
     label: 'Tests',
     icon: ClipboardList,
@@ -431,6 +485,7 @@ const ADMIN = 'admin';
 /** Every query key this app owns; a raw key that drifts by a character fails silently at invalidation. */
 export const QUERY_KEYS = {
   ADMINS: [ADMIN, 'admins'],
+  AUTHORING: [ADMIN, 'authoring'],
   AUDIT: [ADMIN, 'audit'],
   BASE_CONFIG: [ADMIN, 'base-config'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],
@@ -494,4 +549,6 @@ export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
   /** The branch the three Branch tests screens stand in, so moving between them keeps it. */
   BRANCH: 'iace.admin.branch',
+  /** The question in the box right now. A closed tab loses nothing; only a save writes a row. */
+  AUTHORING_DRAFT: 'iace.admin.authoring',
 } as const;

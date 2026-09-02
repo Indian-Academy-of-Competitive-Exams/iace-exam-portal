@@ -55,16 +55,13 @@ export function checkQuestionImage(
   }
 }
 
+export { imageKeysIn } from '@iace/contracts';
+
 const IMG_TAG = /<img\b[^>]*>/gi;
 const DATA_KEY = /\bdata-key="([^"]+)"/i;
 // A single `\s`, never `\s+`: it backtracks, and `\s?` would match the src inside data-src.
 const SRC_ATTR = /\ssrc="[^"]*"/gi;
 const DATA_URI_SRC = /\ssrc="data:[^"]*"/gi;
-
-/** Every image key quoted by a piece of content, so a page of them signs in one pass. */
-export function imageKeysIn(html: string): string[] {
-  return (html.match(IMG_TAG) ?? []).flatMap((tag) => DATA_KEY.exec(tag)?.[1] ?? []);
-}
 
 /** Strips the transient src before storing: a signed one would rot, and a `data:` one is bytes. */
 export function stripImageSrc(html: string): string {

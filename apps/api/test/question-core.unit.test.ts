@@ -131,9 +131,22 @@ describe('validateQuestion — languages', () => {
 });
 
 describe('validateQuestion — multiple choice', () => {
-  it('needs four options', () => {
-    const draft = mcq({ options: mcq().options.slice(0, 3) });
-    assert.ok(codes(draft).includes(QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID));
+  it('needs at least two, and takes the six an SBI PO paper prints', () => {
+    const one = mcq({ options: mcq().options.slice(0, 1) });
+    assert.ok(codes(one).includes(QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID));
+
+    const three = mcq({ options: mcq().options.slice(0, 3) });
+    assert.ok(!codes(three).includes(QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID));
+  });
+
+  /** A paper draws options in order, so a gap in the seats moves every one after it up a letter. */
+  it('refuses options that skip a slot', () => {
+    const gapped = mcq({
+      options: mcq()
+        .options.filter((option) => option.position !== 3)
+        .map((option) => ({ ...option })),
+    });
+    assert.ok(codes(gapped).includes(QUESTION_VALIDATION_CODE.OPTION_COUNT_INVALID));
   });
 
   it('needs exactly one correct option', () => {

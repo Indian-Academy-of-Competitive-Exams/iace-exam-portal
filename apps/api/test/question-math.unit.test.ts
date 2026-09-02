@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { firstMathError, latexIn, mathErrorIn } from '../src/questions/question-math';
+import { latexIn } from '@iace/contracts';
+import { firstMathError, mathErrorIn } from '../src/questions/question-math';
 
 describe('latexIn', () => {
   it('finds the formulas the editor wrote', () => {

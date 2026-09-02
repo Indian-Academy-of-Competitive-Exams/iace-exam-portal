@@ -4,6 +4,8 @@ import { AppConfigModule } from '../config/config.module';
 import { AppConfigService } from '../config/app-config.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
+import { AuthoringController } from './authoring.controller';
+import { AuthoringService } from './authoring.service';
 import { QuestionImportController } from './question-import.controller';
 import { QuestionImportService } from './question-import.service';
 import { QuestionsController } from './questions.controller';
@@ -27,8 +29,13 @@ import { TaxonomyService } from './taxonomy.service';
       }),
     }),
   ],
-  controllers: [QuestionsController, TaxonomyController, QuestionImportController],
-  providers: [QuestionsService, TaxonomyService, QuestionImportService],
+  controllers: [
+    QuestionsController,
+    TaxonomyController,
+    QuestionImportController,
+    AuthoringController,
+  ],
+  providers: [QuestionsService, TaxonomyService, QuestionImportService, AuthoringService],
   exports: [QuestionsService, TaxonomyService],
 })
 export class QuestionsModule {}

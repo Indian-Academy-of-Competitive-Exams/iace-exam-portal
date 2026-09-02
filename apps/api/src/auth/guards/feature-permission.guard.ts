@@ -1,6 +1,12 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ActorTypes, AppException, ErrorCodes, satisfiesLevel } from '@iace/contracts';
+import {
+  ActorTypes,
+  AppException,
+  ErrorCodes,
+  satisfiesLevel,
+  type FeatureKey,
+} from '@iace/contracts';
 import {
   REQUIRED_FEATURE_KEY,
   type AuthenticatedUser,
@@ -34,13 +40,14 @@ export class FeaturePermissionGuard implements CanActivate {
     }
     if (user.isSuperAdmin) return true;
 
-    const granted = user.permissions[required.key];
-    if (!satisfiesLevel(granted, required.level)) {
-      throw new AppException(
-        ErrorCodes.FORBIDDEN,
-        `You do not have ${required.level} access to ${required.key}`,
-      );
-    }
-    return true;
+    const keys: readonly FeatureKey[] = Array.isArray(required.key)
+      ? required.key
+      : [required.key as FeatureKey];
+    if (keys.some((key) => satisfiesLevel(user.permissions[key], required.level))) return true;
+
+    throw new AppException(
+      ErrorCodes.FORBIDDEN,
+      `You do not have ${required.level} access to ${keys.join(' or ')}`,
+    );
   }
 }

@@ -71,6 +71,11 @@ export const AUDITED_QUESTION_FIELDS = [
 /** Long enough to survive an authoring session; content stores the key, so nothing outlives it. */
 const QUESTION_IMAGE_URL_TTL_SEC = 3600;
 
+/** What a caller may relax. The bank refuses a duplicate; the authoring editor reports it. */
+export interface WriteOptions {
+  allowDuplicate?: boolean;
+}
+
 /** Owns `Question` and `QuestionVersion` (docs/03 §5) — the only module that writes them. */
 @Injectable()
 export class QuestionsService {
@@ -107,9 +112,14 @@ export class QuestionsService {
     return { key, url: await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC) };
   }
 
-  async list(query: QuestionListQuery): Promise<Paginated<QuestionSummary>> {
+  /** `scope` is a narrowing the caller owns — authoring passes the author, and cannot be widened out of it. */
+  async list(
+    query: QuestionListQuery,
+    scope?: Prisma.QuestionWhereInput,
+  ): Promise<Paginated<QuestionSummary>> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;
-    const where = questionWhere(query, matchedIds);
+    const filtered = questionWhere(query, matchedIds);
+    const where = scope ? { AND: [filtered, scope] } : filtered;
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.question.findMany({
@@ -149,10 +159,14 @@ export class QuestionsService {
     return this.signed(toDetail(await this.require(id)));
   }
 
-  async create(draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
+  async create(
+    draft: QuestionDraft,
+    createdById: string,
+    options: WriteOptions = {},
+  ): Promise<QuestionDetail> {
     assertIntakeStatus(draft.status);
     const built = await this.validated(draft);
-    await this.assertNotDuplicate(built.stemHash, null);
+    if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, null);
 
     const row = await this.prisma.$transaction(async (tx) => {
       const question = await tx.question.create({
@@ -178,12 +192,17 @@ export class QuestionsService {
   }
 
   /** A draft still being written is revised in place; anything published gains a version instead. */
-  async update(id: string, draft: QuestionDraft, createdById: string): Promise<QuestionDetail> {
+  async update(
+    id: string,
+    draft: QuestionDraft,
+    createdById: string,
+    options: WriteOptions = {},
+  ): Promise<QuestionDetail> {
     const question = await this.require(id);
     assertScreenIsCurrent(question, draft);
     assertTaxonomySettled(question, draft);
     const built = await this.validated(draft);
-    await this.assertNotDuplicate(built.stemHash, id);
+    if (!options.allowDuplicate) await this.assertNotDuplicate(built.stemHash, id);
 
     const row = await this.prisma.$transaction((tx) =>
       this.writeEdit(tx, id, draft, built, createdById),
@@ -469,6 +488,18 @@ export class QuestionsService {
    * The same question typed twice is the failure the bank exists to prevent: a
    * duplicate splits its own analytics and can be drawn into one paper twice.
    */
+  /** The question this stem repeats, if the bank already holds one. */
+  async duplicateOf(
+    stemHash: string,
+    exceptId: string | null,
+  ): Promise<{ id: string; stemPreview: string } | null> {
+    const existing = await this.prisma.question.findFirst({
+      where: { stemHash, ...(exceptId ? { id: { not: exceptId } } : {}) },
+      include: QUESTION_INCLUDE,
+    });
+    return existing ? { id: existing.id, stemPreview: toSummary(existing).stemPreview } : null;
+  }
+
   private async assertNotDuplicate(stemHash: string, exceptId: string | null): Promise<void> {
     const existing = await this.prisma.question.findFirst({
       where: { stemHash, ...(exceptId ? { id: { not: exceptId } } : {}) },

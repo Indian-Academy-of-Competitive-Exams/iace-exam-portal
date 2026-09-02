@@ -427,3 +427,37 @@
   opacity: var(--watermark-opacity);
   transform: rotate(var(--watermark-angle));
 }
+
+/* ============================================================================
+   SCAFFOLD EDITOR — the labels are node chrome, so they are styled, never typed
+   ========================================================================== */
+.scaffold-content .scaffold-region {
+  display: grid;
+  grid-template-columns: var(--scaffold-label-width) 1fr;
+  column-gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-1) 0;
+}
+
+.scaffold-content .scaffold-region:has(> .scaffold-label:empty) {
+  grid-template-columns: 1fr;
+}
+
+.scaffold-content .scaffold-label {
+  user-select: none;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground-secondary);
+}
+
+.scaffold-content .scaffold-label:empty {
+  display: none;
+}
+
+.scaffold-content .scaffold-body {
+  min-width: 0;
+}
+
+.scaffold-content .scaffold-region + .scaffold-region {
+  border-top: 1px dashed var(--border);
+}

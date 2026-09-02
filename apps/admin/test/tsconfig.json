@@ -1,0 +1,20 @@
+{
+  // Mirrors packages/ui/test: the package tsconfig scopes `include` to src/, and
+  // tsx applies a tsconfig only to files it matches, so src/ is listed too.
+  // `types` is re-stated because the app itself is browser-scoped — the tests
+  // are the only Node code in it.
+  //
+  // `paths` drops the app's `@iace/contracts` -> source mapping on purpose: tsx honours
+  // it, contracts' own package is CommonJS, and a named import off its .ts source then
+  // fails at link time. Through node_modules it is the built package, as everywhere else.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client", "node"],
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../src/**/*.ts", "../src/**/*.tsx"]
+}

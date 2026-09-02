@@ -4,6 +4,7 @@ import {
   DIFFICULTY_LEVEL,
   LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
+  MCQ_OPTION_MAX,
   QUESTION_IMPORT_COLUMNS,
   QUESTION_INTAKE_STATUSES,
   QUESTION_TYPE,
@@ -79,15 +80,22 @@ describe('questionDraftSchema', () => {
     assert.equal(parsed.solution?.te, 'కూడండి.');
   });
 
-  it('refuses more options than a CBT paper prints', () => {
-    const tooMany = draft({
-      options: Array.from({ length: MCQ_OPTION_COUNT + 1 }, (_, i) => ({
+  const withOptions = (count: number) =>
+    draft({
+      options: Array.from({ length: count }, (_, i) => ({
         position: i + 1,
         isCorrect: i === 0,
         text: { en: String(i) },
       })),
     });
-    assert.equal(questionDraftSchema.safeParse(tooMany).success, false);
+
+  it('takes the five and six an SBI PO paper prints', () => {
+    assert.equal(questionDraftSchema.safeParse(withOptions(MCQ_OPTION_COUNT)).success, true);
+    assert.equal(questionDraftSchema.safeParse(withOptions(MCQ_OPTION_MAX)).success, true);
+  });
+
+  it('refuses more options than any paper prints', () => {
+    assert.equal(questionDraftSchema.safeParse(withOptions(MCQ_OPTION_MAX + 1)).success, false);
   });
 });
 

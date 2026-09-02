@@ -2863,6 +2863,9 @@ interface FakeQuestionWhere {
   currentVersion?: unknown;
   /** What an optimistic claim pins itself to: the row as the caller last read it. */
   updatedAt?: Date;
+  /** The authoring scope: an author reaches their own rows and no others. */
+  createdById?: string;
+  createdAt?: { gte?: Date; lte?: Date };
 }
 
 /** A paper or an attempt holding one version of one question. */
@@ -3051,6 +3054,15 @@ export class FakeQuestionBankPrisma {
       if (index === -1) throw new Error(`no question ${where.id}`);
       const [row] = this.questions.splice(index, 1);
       return Promise.resolve(row!);
+    },
+
+    groupBy: ({ by, where }: { by: ['status']; where?: FakeQuestionWhere }) => {
+      const counts = new Map<string, number>();
+      for (const row of this.matching(where)) {
+        const key = String(row[by[0]]);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      return Promise.resolve([...counts].map(([status, _count]) => ({ status, _count })));
     },
 
     /** The same matcher `findMany` uses: a conditional write is a where, not just a list of ids. */
@@ -3242,6 +3254,8 @@ const QUESTION_WHERE_KEYS = [
   'AND',
   'OR',
   'id',
+  'createdById',
+  'createdAt',
   'subjectId',
   'topicId',
   'type',
@@ -3260,10 +3274,18 @@ function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): bo
     return (
       idMatches(row, clause.id) &&
       stemHashMatches(row, clause.stemHash) &&
+      (clause.createdById === undefined || row.createdById === clause.createdById) &&
+      writtenWithin(row, clause.createdAt) &&
       (clause.updatedAt === undefined || row.updatedAt.getTime() === clause.updatedAt.getTime()) &&
       QUESTION_FIELD_CHECKS.every((check) => check(row, clause))
     );
   });
+}
+
+function writtenWithin(row: FakeQuestionRow, range: FakeQuestionWhere['createdAt']): boolean {
+  if (!range) return true;
+  if (range.gte && row.createdAt < range.gte) return false;
+  return !(range.lte && row.createdAt > range.lte);
 }
 
 function subjectIdOf(data: Record<string, unknown>): string {

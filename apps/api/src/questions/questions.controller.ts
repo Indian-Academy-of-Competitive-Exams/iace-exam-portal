@@ -37,7 +37,13 @@ import {
   type QuestionSummary,
   type SetQuestionStatusBody,
 } from '@iace/contracts';
-import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
+import {
+  Actors,
+  CurrentUser,
+  RequiresAnyFeature,
+  RequiresFeature,
+  type AuthenticatedUser,
+} from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { QuestionsService } from './questions.service';
@@ -65,7 +71,10 @@ export class QuestionsController {
 
   /** Before `:id`, or "images" is read as a question id. */
   @Audit(AUDIT_FEATURE.QUESTION, AUDIT_ACTION.CREATE)
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @RequiresAnyFeature(
+    [FEATURE_KEYS.QUESTION_MANAGEMENT, FEATURE_KEYS.QUESTION_AUTHORING],
+    PERMISSION_LEVELS.WRITE,
+  )
   @Post('images')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(QUESTION_IMAGE_FILE_FIELD))

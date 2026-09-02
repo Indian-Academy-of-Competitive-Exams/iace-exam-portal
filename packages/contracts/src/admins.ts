@@ -20,6 +20,7 @@ export const permissionLevelSchema = z.enum(PERMISSION_LEVELS);
 export const FEATURE_KEYS = {
   STUDENT_MANAGEMENT: 'STUDENT_MANAGEMENT',
   QUESTION_MANAGEMENT: 'QUESTION_MANAGEMENT',
+  QUESTION_AUTHORING: 'QUESTION_AUTHORING',
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
   STUDENT_PERFORMANCE: 'STUDENT_PERFORMANCE',
@@ -37,6 +38,10 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.QUESTION_MANAGEMENT]: {
     label: 'Question bank',
     description: 'Questions, their versions, subjects and topics.',
+  },
+  [FEATURE_KEYS.QUESTION_AUTHORING]: {
+    label: 'Authoring',
+    description: 'Entering questions, and the author\u2019s own drafts.',
   },
   [FEATURE_KEYS.TEST_MANAGEMENT]: {
     label: 'Tests',

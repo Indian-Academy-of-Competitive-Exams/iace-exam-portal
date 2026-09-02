@@ -18,5 +18,7 @@ export * from './leaderboard';
 export * from './shares';
 export * from './imports';
 export * from './questions';
+export * from './question-rules';
+export * from './authoring';
 export * from './health';
 export * from './client';

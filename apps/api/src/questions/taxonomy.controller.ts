@@ -21,22 +21,24 @@ import {
   type UpdateSubjectBody,
   type UpdateTopicBody,
 } from '@iace/contracts';
-import { Actors, RequiresFeature } from '../common/security';
+import { Actors, RequiresAnyFeature, RequiresFeature } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TaxonomyService } from './taxonomy.service';
 
-/**
- * Subject and topic. Reading is READ on the question bank because
- * every picker on a question screen needs it; writing is WRITE, because a name
- * added here is a name every question and every draw is filed under.
- */
+/** Both the bank's own screens and the authoring header choose from these lists. */
+const TAXONOMY_READERS = [
+  FEATURE_KEYS.QUESTION_MANAGEMENT,
+  FEATURE_KEYS.QUESTION_AUTHORING,
+] as const;
+
+/** Reading is open to anyone filing a question; writing stays the question bank's. */
 @Controller('admin')
 @Actors(ActorTypes.ADMIN)
 export class TaxonomyController {
   constructor(private readonly taxonomy: TaxonomyService) {}
 
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(TAXONOMY_READERS, PERMISSION_LEVELS.READ)
   @Get('subjects')
   listSubjects(
     @Query(new ZodQuery(subjectListQuerySchema)) query: SubjectListQuery,
@@ -61,7 +63,7 @@ export class TaxonomyController {
     return this.taxonomy.updateSubject(id, body);
   }
 
-  @RequiresFeature(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @RequiresAnyFeature(TAXONOMY_READERS, PERMISSION_LEVELS.READ)
   @Get('topics')
   listTopics(
     @Query(new ZodQuery(topicListQuerySchema)) query: TopicListQuery,
