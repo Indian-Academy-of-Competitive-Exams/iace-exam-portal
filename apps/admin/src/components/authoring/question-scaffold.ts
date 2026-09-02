@@ -40,7 +40,7 @@ export const REGION_LABELS = {
 
 /** The one slot whose value is not what it looks like: the seat, not the text sitting in it. */
 export const ANSWER_HINTS = {
-  SINGLE_MCQ: 'Type the option, not its text — B or 2',
+  SINGLE_MCQ: 'Type the option, not its text — B',
   TEXT_FIELD: 'Type the value a student would enter',
 } as const;
 
