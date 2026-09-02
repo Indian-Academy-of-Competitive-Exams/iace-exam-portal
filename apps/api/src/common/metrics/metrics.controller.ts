@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Headers } from '@nestjs/common';
+import { Controller, Get, Header, Headers, Res } from '@nestjs/common';
+import { type Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { AppConfigService } from '../../config/app-config.service';
@@ -16,13 +17,18 @@ export class MetricsController {
     private readonly config: AppConfigService,
   ) {}
 
+  /** `@Res` because Prometheus parses line-oriented text, and the success envelope is not that. */
   @Public()
   @Get()
-  @Header('Content-Type', PROMETHEUS_CONTENT_TYPE)
   @Header('Cache-Control', 'no-store')
-  scrape(@Headers('authorization') authorization?: string): Promise<string> {
+  async scrape(
+    @Res() response: Response,
+    @Headers('authorization') authorization?: string,
+  ): Promise<void> {
     this.assertScraper(authorization);
-    return this.metrics.scrape();
+
+    response.setHeader('Content-Type', PROMETHEUS_CONTENT_TYPE);
+    response.send(await this.metrics.scrape());
   }
 
   /** No token configured means development, where the schema has already refused this in production. */
