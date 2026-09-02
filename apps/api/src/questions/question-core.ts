@@ -21,6 +21,7 @@ import {
 import { stripImageSrc } from './question-images';
 import { mathErrorIn } from './question-math';
 import { asContentHtml } from './question-content';
+import { sanitizeContentHtml } from './question-sanitize';
 
 /** How a question is stored, and where the shared rules in `@iace/contracts` get KaTeX bound in. */
 
@@ -39,9 +40,11 @@ export interface BuiltQuestion {
 /** Markup is not content: the `<p></p>` an emptied editor box posts is an unanswered field. */
 const blank = (value: string | undefined): boolean => !hasText(value);
 
-/** The one place content is written, so the div root and the src stripping happen here only. */
-const textNode = (value: string | undefined): RichContent =>
-  blank(value) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(value!)) }];
+/** The one place content is written, so sanitizing, the div root and the src stripping happen here only. */
+const textNode = (value: string | undefined): RichContent => {
+  const safe = blank(value) ? '' : sanitizeContentHtml(value!);
+  return blank(safe) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(safe)) }];
+};
 
 /**
  * Text cells to content nodes. A language reaches the row only if it has a stem:

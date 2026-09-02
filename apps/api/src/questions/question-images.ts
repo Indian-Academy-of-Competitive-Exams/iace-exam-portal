@@ -63,6 +63,11 @@ const DATA_KEY = /\bdata-key="([^"]+)"/i;
 const SRC_ATTR = /\ssrc="[^"]*"/gi;
 const DATA_URI_SRC = /\ssrc="data:[^"]*"/gi;
 
+/** Our figures are addressed by key, so an `<img>` without one names a file we cannot serve. */
+export function withoutForeignImages(html: string): string {
+  return html.replace(IMG_TAG, (tag) => (DATA_KEY.test(tag) ? tag : ''));
+}
+
 /** Strips the transient src before storing: a signed one would rot, and a `data:` one is bytes. */
 export function stripImageSrc(html: string): string {
   return html
