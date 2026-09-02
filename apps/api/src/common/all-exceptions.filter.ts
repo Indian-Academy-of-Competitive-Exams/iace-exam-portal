@@ -7,6 +7,7 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import { type Response } from 'express';
+import * as Sentry from '@sentry/nestjs';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import {
@@ -57,10 +58,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       // The only place the real cause exists: the response deliberately does not
       // carry it, so losing it here would mean losing it entirely.
       this.logger.error(line, exception instanceof Error ? exception.stack : String(exception));
+      report(exception, requestId, where);
       return;
     }
     this.logger.debug(`${line} ${error.message}`);
   }
+}
+
+/** Only what a 500 already told the log, tagged with the id the caller was handed. */
+function report(exception: unknown, requestId: string, where: string): void {
+  Sentry.withScope((scope) => {
+    scope.setTag('requestId', requestId);
+    scope.setTag('route', where);
+    Sentry.captureException(exception);
+  });
 }
 
 interface Translated {

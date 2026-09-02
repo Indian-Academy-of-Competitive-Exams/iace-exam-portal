@@ -65,6 +65,7 @@ import { RollupOutbox } from '../../src/attempts/rollup-outbox';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
+import { type MetricsService } from '../../src/common/metrics';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type StorageService } from '../../src/storage/storage.service';
 import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
@@ -6138,4 +6139,21 @@ function matchesBranchFilter(student: FakeStudent, filter: unknown): boolean {
   if (filter === undefined) return true;
   const wanted = (filter as { in?: string[] }).in ?? [];
   return student.currentBranchId !== null && wanted.includes(student.currentBranchId);
+}
+
+/** Counting is not what a submit test is about, so the fake only has to be silent. */
+export class FakeMetrics {
+  readonly submits: string[] = [];
+
+  countSubmit(outcome: string): void {
+    this.submits.push(outcome);
+  }
+
+  observeRequest(): void {
+    // A unit test never goes through the interceptor.
+  }
+
+  asService(): MetricsService {
+    return this as unknown as MetricsService;
+  }
 }

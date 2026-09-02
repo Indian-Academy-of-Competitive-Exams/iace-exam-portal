@@ -20,6 +20,7 @@ import { QUEUE_NAMES } from '../src/queue/queues';
 import {
   FakeCatalogPrisma,
   FakeEventBus,
+  FakeMetrics,
   FakeQueue,
   FakeRedis,
   FakeTestsPrisma,
@@ -133,6 +134,7 @@ function hall() {
       state,
       reach,
       new ScoringOutbox(prisma.asService(), queue.asQueue()),
+      new FakeMetrics().asService(),
     ),
   };
 }

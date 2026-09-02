@@ -117,6 +117,11 @@ export const envSchema = z.object({
   // The privacy notice in force. A record older than this is a student worth asking again.
   CONSENT_VERSION: z.string().default('2026-09-01'),
 
+  // Observability. A scraper identifies itself; Sentry is inert without a DSN (.env.example).
+  METRICS_TOKEN: optional,
+  SENTRY_DSN: optional,
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+
   // Request body limits.
   BODY_LIMIT_DEFAULT: byteSize('256kb'),
   BODY_LIMIT_IMPORT: byteSize('10mb'),
@@ -159,10 +164,19 @@ export const envSchema = z.object({
 const corsIsClosed = (env: z.infer<typeof envSchema>): boolean =>
   env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.CORS_ORIGINS.length > 0;
 
-export const envSchemaChecked = envSchema.refine(corsIsClosed, {
-  path: ['CORS_ORIGINS'],
-  message: 'is required in production — an empty list would let any site call the API',
-});
+/** Live attempt counts and error rates are worth something to somebody who should not have them. */
+const metricsAreGuarded = (env: z.infer<typeof envSchema>): boolean =>
+  env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.METRICS_TOKEN !== undefined;
+
+export const envSchemaChecked = envSchema
+  .refine(corsIsClosed, {
+    path: ['CORS_ORIGINS'],
+    message: 'is required in production — an empty list would let any site call the API',
+  })
+  .refine(metricsAreGuarded, {
+    path: ['METRICS_TOKEN'],
+    message: 'is required in production — /metrics would otherwise answer anybody who asked',
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

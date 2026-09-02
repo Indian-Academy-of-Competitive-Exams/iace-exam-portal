@@ -20,19 +20,23 @@ function env(over: Record<string, string> = {}): Record<string, string> {
   };
 }
 
+/** Everything production insists on, so a test can vary the one thing it is about. */
+const production = (over: Record<string, string> = {}): Record<string, string> =>
+  env({
+    NODE_ENV: NODE_ENVS.PRODUCTION,
+    CORS_ORIGINS: 'https://admin.iace.co.in',
+    METRICS_TOKEN: 'scraper-token',
+    ...over,
+  });
+
 describe('CORS allowlist', () => {
   /** `origin: true` reflects whatever origin asks and answers it with credentials. */
   it('refuses to boot production with no allowlist', () => {
-    assert.throws(
-      () => validateEnv(env({ NODE_ENV: NODE_ENVS.PRODUCTION })),
-      /CORS_ORIGINS.*production/s,
-    );
+    assert.throws(() => validateEnv(production({ CORS_ORIGINS: '' })), /CORS_ORIGINS.*production/s);
   });
 
   it('boots production once the SPAs are named', () => {
-    const parsed = validateEnv(
-      env({ NODE_ENV: NODE_ENVS.PRODUCTION, CORS_ORIGINS: 'https://admin.iace.co.in' }),
-    );
+    const parsed = validateEnv(production({ CORS_ORIGINS: 'https://admin.iace.co.in' }));
 
     assert.deepEqual(parsed.CORS_ORIGINS, ['https://admin.iace.co.in']);
   });
@@ -48,6 +52,20 @@ describe('CORS allowlist', () => {
 
   it('answers only the named origins when there are any', () => {
     assert.deepEqual(corsOrigin(['https://admin.iace.co.in'], true), ['https://admin.iace.co.in']);
+  });
+});
+
+describe('the metrics endpoint', () => {
+  /** Live attempt counts and error rates are worth something to somebody who should not have them. */
+  it('refuses to boot production with no scraper token', () => {
+    assert.throws(
+      () => validateEnv(production({ METRICS_TOKEN: '' })),
+      /METRICS_TOKEN.*production/s,
+    );
+  });
+
+  it('leaves development open, so a local Prometheus needs no secret', () => {
+    assert.equal(validateEnv(env()).METRICS_TOKEN, undefined);
   });
 });
 

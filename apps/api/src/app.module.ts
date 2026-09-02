@@ -9,6 +9,7 @@ import { StorageModule } from './storage/storage.module';
 import { EventsModule } from './common/events';
 import { MessagingModule } from './common/messaging';
 import { ThrottlingModule } from './common/throttling';
+import { MetricsModule } from './common/metrics';
 import { AuditModule, AuditInterceptor, AuditContextMiddleware } from './audit';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -59,6 +60,7 @@ import { RequestIdMiddleware } from './common/request-id';
     AttemptsModule,
     HealthModule,
     ThrottlingModule,
+    MetricsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

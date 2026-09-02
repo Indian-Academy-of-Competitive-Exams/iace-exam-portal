@@ -15,6 +15,7 @@ import { ScoringOutbox, SCORING_REQUEST } from '../src/attempts/scoring-outbox';
 import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import {
+  FakeMetrics,
   FakeQueue,
   fakeRollupOutbox,
   FakeRedis,
@@ -80,7 +81,13 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
     },
   } as never;
   const outbox = new ScoringOutbox(prisma.asService(), queue.asQueue());
-  const submit = new SubmitService(prisma.asService(), state, access, outbox);
+  const submit = new SubmitService(
+    prisma.asService(),
+    state,
+    access,
+    outbox,
+    new FakeMetrics().asService(),
+  );
   return {
     prisma,
     state,

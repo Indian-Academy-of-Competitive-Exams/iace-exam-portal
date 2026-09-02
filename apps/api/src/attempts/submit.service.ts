@@ -19,6 +19,7 @@ import { AccessResolverService } from '../access';
 import { AttemptStateService } from './attempt-state.service';
 import { rowsToFlush, type FlushRow } from './attempt-flush';
 import { ScoringOutbox } from './scoring-outbox';
+import { MetricsService } from '../common/metrics';
 
 const NOT_YOURS = 'No such attempt';
 
@@ -37,15 +38,21 @@ export class SubmitService {
     private readonly state: AttemptStateService,
     private readonly access: AccessResolverService,
     private readonly outbox: ScoringOutbox,
+    private readonly metrics: MetricsService,
   ) {}
 
   /** The student's own. Another student's id reads as missing, never as refused. */
   async submit(studentId: string, attemptId: string): Promise<SubmittedAttempt> {
     const attempt = await this.require(attemptId);
     if (attempt.studentId !== studentId) {
+      this.metrics.countSubmit('refused');
       throw new AppException(ErrorCodes.NOT_FOUND, NOT_YOURS);
     }
-    return this.end(attempt);
+
+    const ended = await this.end(attempt);
+    // The spike everything downstream is sized for, counted where it actually lands.
+    this.metrics.countSubmit('accepted');
+    return ended;
   }
 
   /** The sweeper's. A closed tab must not leave a sitting open forever. */
