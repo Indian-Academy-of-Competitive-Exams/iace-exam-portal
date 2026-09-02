@@ -144,6 +144,41 @@ describe('a figure in a slot', () => {
   });
 });
 
+describe('a slot that says what it is for', () => {
+  const withHint = () =>
+    mount({
+      regions: [
+        { key: 'stem', label: 'Question:', html: '<p>Which is it?</p>' },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'answer', label: 'Answer:', html: '', hint: 'The option, not its text' },
+        { key: 'filled', label: 'Filled:', html: '<p>B</p>', hint: 'Never seen' },
+        { key: 'solution', label: 'Explanation:', html: '' },
+      ],
+    });
+
+  it('shows the hint while the slot is empty', () => {
+    withHint();
+
+    const answer = document.querySelector('[data-region="answer"] p');
+    assert.equal(answer?.getAttribute('data-placeholder'), 'The option, not its text');
+  });
+
+  /** A slot with no hint gets none: the rest of the box is not a row of instructions. */
+  it('says nothing where there is nothing to say', () => {
+    withHint();
+
+    assert.equal(document.querySelector('[data-region="solution"] p.is-empty'), null);
+    assert.equal(document.querySelector('[data-region="stem"] p.is-empty'), null);
+  });
+
+  it('holds its tongue once the slot says something of its own', () => {
+    withHint();
+
+    assert.equal(document.querySelector('[data-region="filled"] p.is-empty'), null);
+  });
+});
+
 describe('the keyboard', () => {
   it('adds the next option on Enter at the last one, once it says something', () => {
     const { box } = mount({
@@ -188,26 +223,47 @@ describe('the keyboard', () => {
   });
 
   /** The trap this closes: with no way out, Enter after the last option adds (E), then (F)… */
-  it('leaves the run on Enter at an empty last option, taking the empty one with it', () => {
+  it('moves on from an empty last option rather than adding another', () => {
     const { box } = mount({
       regions: [
         { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
         { key: 'option:0', label: '(A)', html: '<p>25</p>' },
         { key: 'option:1', label: '(B)', html: '<p>30</p>' },
-        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'option:2', label: '(C)', html: '' },
         { key: 'answer', label: 'Answer:', html: '' },
       ],
     });
     act(() => {
       down(box, 4);
     });
-    assert.equal(document.querySelectorAll('[data-region^="option:"]').length, 4);
-
-    act(() => {
-      down(box, 1);
-    });
 
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
+  });
+
+  /** The failure this prevents: Enter deleted the empty last option, so (D) vanished. */
+  it('keeps an option the typist has not filled in yet', () => {
+    const { box } = mount({
+      regions: [
+        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'option:3', label: '(D)', html: '' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+    act(() => {
+      down(box, 5);
+    });
+
+    assert.deepEqual(regionKeys(), [
+      'stem',
+      'option:0',
+      'option:1',
+      'option:2',
+      'option:3',
+      'answer',
+    ]);
   });
 
   it('removes an empty option on Backspace, and re-letters the rest', () => {
@@ -270,7 +326,16 @@ describe('the keyboard', () => {
   it('cycles the language on Alt+L, the one action that is not Up, Down or Enter', () => {
     let cycled = 0;
     const { box } = mount({ onCycleLanguage: () => (cycled += 1) });
-    fireEvent.keyDown(box, { key: 'l', altKey: true });
+    fireEvent.keyDown(box, { key: 'l', code: 'KeyL', altKey: true });
+
+    assert.equal(cycled, 1);
+  });
+
+  /** The failure this prevents: a Mac sends "¬" for Option+L, and the shortcut never fired. */
+  it('cycles it on a Mac too, where the key is not the letter', () => {
+    let cycled = 0;
+    const { box } = mount({ onCycleLanguage: () => (cycled += 1) });
+    fireEvent.keyDown(box, { key: '\u00ac', code: 'KeyL', altKey: true });
 
     assert.equal(cycled, 1);
   });

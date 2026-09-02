@@ -11,7 +11,6 @@ import {
   QUESTION_IMAGE_MAX_BYTES,
   QUESTION_STATUS,
   QUESTION_TYPE,
-  TAGS_MAX,
   hasText,
   validateQuestion,
   type QuestionDraft,
@@ -23,7 +22,6 @@ import {
   Button,
   Kbd,
   LoadingState,
-  MultiCombobox,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -59,11 +57,14 @@ const IMAGE_LIMITS = {
 
 const PREVIEW_DEBOUNCE_MS = 600;
 
+/** A Mac prints Cmd where every other keyboard prints Ctrl; the editor answers to both. */
+const MOD_KEY = navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl';
+
 const startingHeader = (): AuthoringHeader => ({
   subjectId: '',
   topicId: '',
   difficulty: DIFFICULTY_LEVEL.MEDIUM,
-  tags: [],
+  tags: '',
 });
 
 interface Saved {
@@ -118,11 +119,6 @@ export function AuthoringEditorPage() {
     if (id) return;
     window.localStorage.setItem(storageKey, JSON.stringify({ header, state, language, written }));
   }, [id, storageKey, header, state, language, written]);
-
-  const tags = useQuery({
-    queryKey: [...QUERY_KEYS.AUTHORING, 'tags'],
-    queryFn: () => api.admin.authoring.tags(),
-  });
 
   const draft = useMemo(() => toDraft(state, header), [state, header]);
   const issues = useChecked(draft, header);
@@ -259,21 +255,6 @@ export function AuthoringEditorPage() {
                 lang={language}
                 className="flex-1 rounded-none border-0 shadow-none"
               />
-
-              <div className="flex items-center gap-3 px-4 pb-6">
-                <span className="w-[--scaffold-label-width] shrink-0 rounded-sm border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-foreground-secondary">
-                  Tags
-                </span>
-                <MultiCombobox
-                  value={header.tags}
-                  disabled={readOnly}
-                  placeholder="No tags"
-                  aria-label="Tags"
-                  className="h-8 max-w-72 border-transparent bg-muted px-2 text-xs shadow-none"
-                  items={(tags.data ?? []).map((tag) => ({ value: tag, label: tag }))}
-                  onChange={(next) => setHeader({ ...header, tags: next.slice(0, TAGS_MAX) })}
-                />
-              </div>
             </div>
           </section>
 
@@ -306,9 +287,9 @@ function Legend({ language }: Readonly<{ language: QuestionLanguage }>) {
     <div className="flex flex-none flex-wrap items-center gap-x-5 gap-y-1 border-t border-border bg-surface px-4 py-2 text-xs text-muted-foreground">
       <Shortcut keys={['↑', '↓']}>move</Shortcut>
       <Shortcut keys={['Enter']}>next</Shortcut>
-      <Shortcut keys={['Ctrl', 'Enter']}>save and next</Shortcut>
-      <Shortcut keys={['$', '$']}>maths</Shortcut>
-      <Shortcut keys={['Ctrl', 'V']}>paste an image</Shortcut>
+      <Shortcut keys={[MOD_KEY, 'Enter']}>save and next</Shortcut>
+      <Shortcut keys={['$…$']}>maths</Shortcut>
+      <Shortcut keys={[MOD_KEY, 'V']}>paste an image</Shortcut>
       <Shortcut keys={['Alt', 'L']}>{LANGUAGE_LABELS[language]}</Shortcut>
     </div>
   );
@@ -321,7 +302,7 @@ function Shortcut({
   return (
     <span className="flex items-center gap-1">
       {keys.map((key, index) => (
-        <span key={key} className="flex items-center gap-1">
+        <span key={`${key}:${index}`} className="flex items-center gap-1">
           {index > 0 ? <span aria-hidden>+</span> : null}
           <Kbd>{key}</Kbd>
         </span>

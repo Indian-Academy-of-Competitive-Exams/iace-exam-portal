@@ -5,6 +5,7 @@ import {
   MCQ_OPTION_COUNT,
   MCQ_OPTION_MAX,
   MCQ_OPTION_MIN,
+  TAGS_MAX,
   QUESTION_TYPE,
   emptyTaxonomy,
   hasText,
@@ -35,6 +36,12 @@ export const REGION_LABELS = {
   STEM: '',
   ANSWER: 'Answer',
   SOLUTION: 'Explanation',
+} as const;
+
+/** The one slot whose value is not what it looks like: the seat, not the text sitting in it. */
+export const ANSWER_HINTS = {
+  SINGLE_MCQ: 'Type the option, not its text — B or 2',
+  TEXT_FIELD: 'Type the value a student would enter',
 } as const;
 
 export const optionKey = (index: number) => `${OPTION_PREFIX}${index}`;
@@ -74,7 +81,8 @@ export interface AuthoringHeader {
   subjectId: string;
   topicId: string;
   difficulty: DifficultyLevel;
-  tags: string[];
+  /** As typed: a comma-separated line, kept for every question saved from this session. */
+  tags: string;
 }
 
 const emptyLanguage = (options: number): LanguageContent => ({
@@ -124,6 +132,7 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
       key: REGION_KEYS.ANSWER,
       label: REGION_LABELS.ANSWER,
       kind: REGION_KIND.NAMED,
+      hint: ANSWER_HINTS[state.type],
       html: state.answer,
     },
     {
@@ -183,6 +192,15 @@ export function answerIndexOf(answer: string, optionCount: number): number | nul
   return null;
 }
 
+/** One line of commas into the tags a question carries. Normalising is the schema's job. */
+export function tagsIn(line: string): string[] {
+  return line
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag !== '')
+    .slice(0, TAGS_MAX);
+}
+
 /** Only the languages that say something. An empty Telugu box is not Telugu. */
 function localized(pick: (language: QuestionLanguage) => string): LocalizedText {
   const out: LocalizedText = {};
@@ -210,7 +228,7 @@ export function toDraft(state: AuthoringState, header: AuthoringHeader): Questio
     subjectId: header.subjectId,
     topicId: header.topicId || null,
     difficulty: header.difficulty,
-    tags: header.tags,
+    tags: tagsIn(header.tags),
     stem: localized((language) => state.content[language].stem),
     solution: localized((language) => state.content[language].solution),
     options: isMcq
@@ -273,7 +291,7 @@ export function headerOf(question: QuestionDetail): AuthoringHeader {
     subjectId: question.subject.id,
     topicId: question.topic?.id ?? '',
     difficulty: question.difficulty,
-    tags: question.tags,
+    tags: question.tags.join(', '),
   };
 }
 

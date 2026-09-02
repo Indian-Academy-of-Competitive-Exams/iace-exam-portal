@@ -4,6 +4,7 @@ import {
   ANSWER_MODE,
   DIFFICULTY_LEVEL,
   MCQ_OPTION_MAX,
+  TAGS_MAX,
   QUESTION_TYPE,
   questionDraftSchema,
   validateQuestion,
@@ -16,6 +17,7 @@ import {
   emptyState,
   optionKey,
   optionLetter,
+  tagsIn,
   regionsFor,
   stateFrom,
   taxonomyFor,
@@ -28,7 +30,7 @@ const HEADER: AuthoringHeader = {
   subjectId: 'sub_1',
   topicId: 'top_1',
   difficulty: DIFFICULTY_LEVEL.MEDIUM,
-  tags: ['ssc'],
+  tags: 'ssc, time and work',
 };
 
 /** A question as the box would hold it after a typist filled the English slots. */
@@ -48,6 +50,19 @@ function typed(over: Partial<AuthoringState> = {}): AuthoringState {
     ...over,
   };
 }
+
+describe('the tags line', () => {
+  /** Typed once for the batch, so what the typist wrote has to survive being read back. */
+  it('splits on commas and drops the blanks around them', () => {
+    assert.deepEqual(tagsIn(' ssc , time and work ,, '), ['ssc', 'time and work']);
+    assert.deepEqual(tagsIn(''), []);
+  });
+
+  it('stops at the cap rather than posting a draft the server refuses', () => {
+    const many = Array.from({ length: TAGS_MAX + 3 }, (_, index) => `tag${index}`).join(',');
+    assert.equal(tagsIn(many).length, TAGS_MAX);
+  });
+});
 
 describe('the answer line', () => {
   it('takes a letter or a number and means the same option either way', () => {
@@ -82,7 +97,7 @@ describe('the draft the box builds', () => {
     assert.deepEqual(validateQuestion(parsed, taxonomyFor(HEADER)), []);
     assert.equal(parsed.stem.en, '<p>What is 20% of 150?</p>');
     assert.equal(parsed.options.length, 4);
-    assert.deepEqual(parsed.tags, ['ssc']);
+    assert.deepEqual(parsed.tags, ['ssc', 'time and work']);
   });
 
   it('carries only the languages that say something', () => {

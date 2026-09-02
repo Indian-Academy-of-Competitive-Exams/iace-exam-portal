@@ -5,13 +5,35 @@
  * else — a select-all and a delete included — from changing which slots there are.
  */
 import { Node, mergeAttributes } from '@tiptap/core';
-import { Plugin, type Transaction } from '@tiptap/pm/state';
+import { Plugin, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { type Node as ProseNode } from '@tiptap/pm/model';
 
 export const REGION_NODE = 'scaffoldRegion';
 
 /** Marks the transactions allowed to change the shape: the ones the editor's own commands make. */
 export const SCAFFOLD_SHAPE = 'scaffoldShape';
+
+/** An empty slot says what it is for, from the hint the region carries. */
+function hints(state: EditorState): DecorationSet {
+  const found: Decoration[] = [];
+
+  state.doc.forEach((region, offset) => {
+    const hint = text(region.attrs.hint);
+    if (hint === '') return;
+    const first = region.firstChild;
+    if (!first?.isTextblock || first.content.size > 0) return;
+    // +1 to step inside the region, where its first block begins.
+    found.push(
+      Decoration.node(offset + 1, offset + 1 + first.nodeSize, {
+        class: 'is-empty',
+        'data-placeholder': hint,
+      }),
+    );
+  });
+
+  return DecorationSet.create(state.doc, found);
+}
 
 /** How a slot wears its label: none at all, a seat in a run, or a word standing for the slot. */
 export const REGION_KIND = {
@@ -72,6 +94,7 @@ export const ScaffoldRegionNode = Node.create({
       key: attribute('key', 'data-region'),
       label: attribute('label', 'data-label'),
       kind: { ...attribute('kind', 'data-kind'), default: REGION_KIND.PLAIN },
+      hint: attribute('hint', 'data-hint'),
     };
   },
 
@@ -97,6 +120,7 @@ export const ScaffoldRegionNode = Node.create({
           !tr.docChanged ||
           Boolean(tr.getMeta(SCAFFOLD_SHAPE)) ||
           shapeOf(tr.doc) === shapeOf(state.doc),
+        props: { decorations: hints },
       }),
     ];
   },

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Mathematics } from '@tiptap/extension-mathematics';
 import { Superscript } from '@tiptap/extension-superscript';
 import { Subscript } from '@tiptap/extension-subscript';
 import { TableKit } from '@tiptap/extension-table';
@@ -9,11 +8,12 @@ import { DOMSerializer, type Node as ProseNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
+import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import {
   QuestionImage,
   imageFilesIn,
-  insertUploaded,
+  insertUploadedInto,
   type ImageLimits,
   type UploadImage,
 } from './rich-text-image';
@@ -33,6 +33,8 @@ export interface ScaffoldRegion {
   label: string;
   html: string;
   kind?: RegionKind;
+  /** What goes here, said in the slot while it is empty. A rule or a format, never a description. */
+  hint?: string;
 }
 
 /** A run of slots the keyboard grows and shrinks; the caller names them, so this file holds none. */
@@ -73,7 +75,7 @@ const CONTENT =
 
 /** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
 function takeImages(
-  view: unknown,
+  view: EditorView,
   data: DataTransfer | null,
   upload: UploadImage | undefined,
   limits: ImageLimits | undefined,
@@ -82,8 +84,7 @@ function takeImages(
   const files = imageFilesIn(data);
   if (files.length === 0) return false;
 
-  const editor = (view as unknown as { editor: Parameters<typeof insertUploaded>[0] }).editor;
-  for (const file of files) insertUploaded(editor, file, upload, limits);
+  for (const file of files) insertUploadedInto(view, file, upload, limits);
   return true;
 }
 
@@ -97,7 +98,8 @@ function docFrom(regions: readonly ScaffoldRegion[]): string {
     .map(
       (region) =>
         `<div data-region="${escape(region.key)}" data-label="${escape(region.label)}"` +
-        ` data-kind="${escape(region.kind ?? REGION_KIND.PLAIN)}">` +
+        ` data-kind="${escape(region.kind ?? REGION_KIND.PLAIN)}"` +
+        ` data-hint="${escape(region.hint ?? '')}">` +
         `<div class="scaffold-body">${region.html || '<p></p>'}</div></div>`,
     )
     .join('');
@@ -182,12 +184,11 @@ export function ScaffoldEditor({
       Subscript,
       TableKit.configure({ table: { resizable: true } }),
       ...(onUploadImage ? [QuestionImage] : []),
-      Mathematics.configure({
-        // A half-typed formula shows in red rather than taking the editor down with it.
+      // A half-typed formula shows in red rather than taking the editor down with it.
+      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
+      InlineMathAtDollar.configure({
         katexOptions: { throwOnError: false },
-        inlineOptions: {
-          onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
-        },
+        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
       }),
     ],
     content: docFrom(regions),
@@ -259,7 +260,8 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
     context.onSave?.();
     return true;
   }
-  if (event.key.toLowerCase() === 'l' && event.altKey) {
+  // `code`, not `key`: Option+L on a Mac arrives as "¬", and the shortcut never fired.
+  if (event.code === 'KeyL' && event.altKey) {
     context.onCycleLanguage?.();
     return true;
   }
@@ -316,11 +318,11 @@ function clearAcrossSlots(view: EditorView): boolean {
   return moveToRegion(view, first, false);
 }
 
-/** Enter grows the run, leaves the empty slot it just made, or simply moves on. */
+/** Enter grows the run from a filled slot and otherwise moves on; only Backspace removes one. */
 function onEnter(view: EditorView, index: number, repeat: ScaffoldRepeat | undefined): boolean {
-  if (!repeat || !isLastOfRun(view, index, repeat)) return moveToRegion(view, index + 1, false);
-  if (isEmpty(view, index)) return leaveRun(view, index, repeat);
-  return addAfter(view, index, repeat) || moveToRegion(view, index + 1, false);
+  const grows = repeat && isLastOfRun(view, index, repeat) && !isEmpty(view, index);
+  if (grows) return addAfter(view, index, repeat) || moveToRegion(view, index + 1, false);
+  return moveToRegion(view, index + 1, false);
 }
 
 function atEdge(view: EditorView, edge: 'start' | 'end'): boolean {
@@ -357,9 +359,11 @@ function isEmpty(view: EditorView, index: number): boolean {
   return !carries;
 }
 
-/** Out of the run and on to what follows it, taking the empty slot that was left behind. */
-function leaveRun(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
-  if (runIndexes(view, repeat).length <= repeat.min) return moveToRegion(view, index + 1, false);
+/** Backspace on an empty one takes it and its label away, never leaving a gap in the letters. */
+function removeEmpty(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
+  const inRun = runIndexes(view, repeat);
+  if (!inRun.includes(index) || inRun.length <= repeat.min) return false;
+  if (!isEmpty(view, index)) return false;
 
   const doc = view.state.doc;
   const start = startOf(doc, index);
@@ -367,7 +371,7 @@ function leaveRun(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
     view.state.tr.delete(start, start + doc.child(index).nodeSize).setMeta(SCAFFOLD_SHAPE, true),
   );
   relabelRun(view, repeat);
-  return moveToRegion(view, index, false);
+  return moveToRegion(view, index - 1, true);
 }
 
 /** Enter on the last one adds the next, exactly like adding a list item. */
@@ -389,22 +393,6 @@ function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
 
   view.dispatch(tr.insert(end, added).setMeta(SCAFFOLD_SHAPE, true));
   return moveToRegion(view, index + 1, false);
-}
-
-/** Backspace on an empty one takes it and its label away, never leaving a gap in the letters. */
-function removeEmpty(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
-  const inRun = runIndexes(view, repeat);
-  if (!inRun.includes(index) || inRun.length <= repeat.min) return false;
-
-  if (!isEmpty(view, index)) return false;
-
-  const doc = view.state.doc;
-  const start = startOf(doc, index);
-  view.dispatch(
-    view.state.tr.delete(start, start + doc.child(index).nodeSize).setMeta(SCAFFOLD_SHAPE, true),
-  );
-  relabelRun(view, repeat);
-  return moveToRegion(view, index - 1, true);
 }
 
 /** The letters are positions, not names: dropping (B) makes the old (C) the new (B). */

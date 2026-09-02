@@ -1,17 +1,18 @@
 import * as React from 'react';
 import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Mathematics } from '@tiptap/extension-mathematics';
+import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { Superscript } from '@tiptap/extension-superscript';
 import { Subscript } from '@tiptap/extension-subscript';
 import { TableKit } from '@tiptap/extension-table';
+import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import {
   QuestionImage,
   imageFilesIn,
-  insertUploaded,
+  insertUploadedInto,
   type ImageLimits,
   type UploadImage,
 } from './rich-text-image';
@@ -52,7 +53,7 @@ function documentFrom(value: string): string | JSONContent {
 
 /** True when it swallowed the event, which is what stops ProseMirror inlining the bytes itself. */
 function takeImages(
-  view: unknown,
+  view: EditorView,
   data: DataTransfer | null,
   upload: UploadImage | undefined,
   limits: ImageLimits | undefined,
@@ -61,8 +62,7 @@ function takeImages(
   const files = imageFilesIn(data);
   if (files.length === 0) return false;
 
-  const editor = (view as unknown as { editor: Parameters<typeof insertUploaded>[0] }).editor;
-  for (const file of files) insertUploaded(editor, file, upload, limits);
+  for (const file of files) insertUploadedInto(view, file, upload, limits);
   return true;
 }
 
@@ -105,12 +105,11 @@ export function RichText({
       Subscript,
       ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } })]),
       ...(onUploadImage ? [QuestionImage] : []),
-      Mathematics.configure({
-        // A half-typed formula shows in red rather than taking the editor down with it.
+      // A half-typed formula shows in red rather than taking the editor down with it.
+      BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
+      InlineMathAtDollar.configure({
         katexOptions: { throwOnError: false },
-        inlineOptions: {
-          onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
-        },
+        onClick: (node, pos) => setMath({ latex: String(node.attrs.latex ?? ''), pos }),
       }),
     ],
     content: documentFrom(value),

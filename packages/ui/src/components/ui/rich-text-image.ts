@@ -1,4 +1,5 @@
 import { Image } from '@tiptap/extension-image';
+import { type EditorView } from '@tiptap/pm/view';
 import { type Editor } from '@tiptap/react';
 import { toast } from './toast';
 
@@ -100,6 +101,16 @@ export function insertUploaded(
   upload: UploadImage,
   limits: ImageLimits = {},
 ): void {
+  insertUploadedInto(editor.view, file, upload, limits);
+}
+
+/** The same against the view: paste and drop hold only that, and `view.editor` is undefined. */
+export function insertUploadedInto(
+  view: EditorView,
+  file: File,
+  upload: UploadImage,
+  limits: ImageLimits = {},
+): void {
   const refusal = refusalFor(file, limits);
   if (refusal) {
     toast.error(refusal);
@@ -108,13 +119,12 @@ export function insertUploaded(
 
   // A rejection here was silently swallowed: the server refused the file and nothing said so.
   void upload(file)
-    .then(({ key, url }) =>
-      editor
-        .chain()
-        .focus()
-        .setImage({ src: url, 'data-key': key } as never)
-        .run(),
-    )
+    .then(({ key, url }) => {
+      const type = view.state.schema.nodes.image;
+      if (!type) throw new Error('This field does not take images');
+      view.focus();
+      view.dispatch(view.state.tr.replaceSelectionWith(type.create({ src: url, 'data-key': key })));
+    })
     .catch((error: unknown) =>
       toast.error(error instanceof Error ? error.message : 'That image could not be uploaded'),
     );

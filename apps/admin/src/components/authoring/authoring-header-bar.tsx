@@ -72,6 +72,17 @@ export function AuthoringHeaderBar({
         />
       </Slot>
 
+      <Slot caption="Tags">
+        <Input
+          value={header.tags}
+          disabled={disabled}
+          placeholder="Comma separated"
+          aria-label="Tags"
+          className={CONTROL}
+          onChange={(event) => onHeaderChange({ ...header, tags: event.target.value })}
+        />
+      </Slot>
+
       <Slot caption="Difficulty">
         <Combobox
           value={header.difficulty}

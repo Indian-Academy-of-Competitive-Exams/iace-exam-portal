@@ -433,7 +433,7 @@
    ========================================================================== */
 .scaffold-content .scaffold-region {
   display: grid;
-  grid-template-columns: var(--scaffold-label-width) 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: var(--space-3);
   align-items: start;
   padding: var(--space-1) 0;
@@ -452,7 +452,8 @@
 /* A seat in a run — the letter alone, drawn as the key a candidate will press. */
 .scaffold-content .scaffold-region[data-kind='seat'] {
   grid-template-columns: var(--scaffold-seat-size) 1fr;
-  align-items: center;
+  /* Baseline, not centre: a chip is padded, so its text would otherwise sit below the slot's. */
+  align-items: baseline;
 }
 
 .scaffold-content .scaffold-region[data-kind='seat'] > .scaffold-label {
@@ -466,6 +467,10 @@
   font-size: var(--text-xs);
 }
 
+.scaffold-content .scaffold-region[data-kind='named'] {
+  align-items: baseline;
+}
+
 /* The named slots below the rule — a word standing for what goes beside it. */
 .scaffold-content .scaffold-region[data-kind='named'] > .scaffold-label {
   justify-self: start;
@@ -474,10 +479,6 @@
   border-radius: var(--radius-sm);
   background-color: var(--muted);
   font-size: var(--text-xs);
-}
-
-.scaffold-content .scaffold-region[data-kind='named'] {
-  grid-template-columns: var(--scaffold-label-width) 1fr;
 }
 
 /* The first named slot opens the settled half of the question, below the options. */
@@ -547,6 +548,18 @@
 .rich-figure-remove:focus-visible {
   box-shadow: var(--focus-ring);
   outline: none;
+}
+
+/* Italic, smaller and faded: an instruction the reader cannot mistake for the value itself. */
+.scaffold-content p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-style: italic;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  opacity: 0.75;
 }
 
 /* A selected figure says so, so Backspace is an obvious next key rather than a guess. */
