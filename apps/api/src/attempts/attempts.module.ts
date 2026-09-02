@@ -8,6 +8,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { AttemptsController } from './attempts.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
+import { AdminOverviewController, MeOverviewController } from './overview.controller';
 import { MeLeaderboardController } from './leaderboard.controller';
 import {
   AdminPerformanceShareController,
@@ -22,6 +23,7 @@ import { QuestionReportService } from './question-report.service';
 import { PerformanceShareService } from './performance-share.service';
 import { LeaderboardViewService } from './leaderboard-view.service';
 import { PerformanceAnalyticsService } from './performance.service';
+import { StudentOverviewService } from './overview.service';
 import { AttemptsService } from './attempts.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptReportService } from './attempt-report.service';
@@ -44,6 +46,8 @@ import { SubmitService } from './submit.service';
     AttemptsController,
     MePerformanceController,
     AdminPerformanceController,
+    MeOverviewController,
+    AdminOverviewController,
     MeLeaderboardController,
     PublicReportController,
     MePerformanceShareController,
@@ -60,6 +64,7 @@ import { SubmitService } from './submit.service';
     LeaderboardViewService,
     PerformanceAnalyticsService,
     PerformanceShareService,
+    StudentOverviewService,
     QuestionReportService,
     LeaderboardRebuildProcessor,
     RollupOutbox,

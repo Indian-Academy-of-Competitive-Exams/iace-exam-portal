@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { REPORT_TABS, latestSitting, newestFirst, reportTabOf } from '../src/report-tabs';
+import { REPORT_TABS, newestFirst, reportTabOf } from '../src/report-tabs';
 
 const BASE = '/attempts/att_1/report';
 
@@ -26,18 +26,6 @@ describe('reportTabOf', () => {
   it('names every tab exactly once, so no two triggers answer to one path', () => {
     const paths = REPORT_TABS.map((tab) => tab.path);
     assert.equal(new Set(paths).size, paths.length);
-  });
-});
-
-describe('latestSitting', () => {
-  /** The trend runs oldest to newest, so the last point is the test they just sat. */
-  it('takes the newest sitting from an oldest-first trend', () => {
-    assert.deepEqual(latestSitting([{ id: 'old' }, { id: 'new' }]), { id: 'new' });
-  });
-
-  /** Nobody has sat anything, which is an empty state rather than a report of nothing. */
-  it('has nothing to open where nothing was sat', () => {
-    assert.equal(latestSitting([]), null);
   });
 });
 

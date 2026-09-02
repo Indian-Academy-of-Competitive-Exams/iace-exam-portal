@@ -167,14 +167,17 @@ import {
   type LiveAttemptState,
 } from './attempts';
 import {
+  OVERVIEW_ROUTES,
   PERFORMANCE_ROUTES,
   performanceReportSchema,
   questionReportSchema,
   satSeriesListSchema,
+  studentOverviewSchema,
   type PerformanceReport,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
+  type StudentOverview,
 } from './stats';
 import {
   LEADERBOARD_ROUTES,
@@ -722,6 +725,10 @@ export function createApiClient(options: ApiClientOptions) {
       performanceSeries: (): Promise<SatSeries[]> =>
         request(PERFORMANCE_ROUTES.mySeries, { schema: satSeriesListSchema }),
 
+      /** Their whole career off the two rollup tables: standing, disposition and subjects. */
+      overview: (): Promise<StudentOverview> =>
+        request(OVERVIEW_ROUTES.me, { schema: studentOverviewSchema }),
+
       /** The board, for a signed-in reader only. Never call this from an unauthenticated screen. */
       leaderboard: (query: LeaderboardQueryInput): Promise<Leaderboard> =>
         request(`${LEADERBOARD_ROUTES.me}${queryString({ ...query })}`, {
@@ -794,6 +801,10 @@ export function createApiClient(options: ApiClientOptions) {
           request(PERFORMANCE_ROUTES.questionReportOfStudent(id, attemptId), {
             schema: questionReportSchema,
           }),
+
+        /** The same overall dashboard payload the student reads, behind STUDENT_PERFORMANCE. */
+        overview: (id: string): Promise<StudentOverview> =>
+          request(OVERVIEW_ROUTES.ofStudent(id), { schema: studentOverviewSchema }),
 
         performanceShares: (id: string): Promise<PerformanceShares> =>
           request(PERFORMANCE_SHARE_ROUTES.ofStudent(id), { schema: performanceSharesSchema }),

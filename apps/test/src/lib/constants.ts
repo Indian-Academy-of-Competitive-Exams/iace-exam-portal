@@ -80,6 +80,12 @@ export const analyticsQueryKey = (attemptId: string) => ['me', 'attempts', attem
 /** Every test this student has sat, which is what the Performance tab and the landing both read. */
 export const PERFORMANCE_QUERY_KEY = ['me', 'performance'] as const;
 
+/** The whole career off the two rollup tables — what Performance opens on. */
+export const OVERVIEW_QUERY_KEY = ['me', 'overview'] as const;
+
+/** The subject filter choosing no scope means every scope, the way a `choice` filter's blank does. */
+export const ANY_SCOPE = '';
+
 /** One report, keyed by what it is OF — the screen swaps scope and paper without a stale read. */
 export const performanceReportQueryKey = (scope: PerformanceScope, scopeId: string) =>
   ['me', 'performance', 'report', scope, scopeId] as const;

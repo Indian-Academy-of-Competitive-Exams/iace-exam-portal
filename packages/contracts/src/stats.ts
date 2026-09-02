@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { DIFFICULTY_LEVEL, difficultyLevelSchema, type DifficultyLevel } from './questions';
-import { evaluationModeSchema, paperQuestionStatusSchema, testScopeSchema } from './tests';
+import {
+  EVALUATION_MODE,
+  TEST_SCOPES,
+  evaluationModeSchema,
+  paperQuestionStatusSchema,
+  testScopeSchema,
+  type EvaluationMode,
+  type TestScope,
+} from './tests';
 import {
   analyticsBucketSchema,
   answerStateSchema,
@@ -56,6 +64,136 @@ export const studentSubjectStatSchema = z.object({
   computedAt: z.string(),
 });
 export type StudentSubjectStat = z.infer<typeof studentSubjectStatSchema>;
+
+// ============================================================================
+// The overall dashboard — the READ side of the two tables above, and the only
+// one. It is sums and counts all the way down, so every average is derived here
+// on the way out and nothing new is stored.
+//
+// The two tables answer different questions and must not be crossed:
+// `StudentStat`'s totals count EVERY sitting, ranked and practice together, so
+// only its ranked-gated fields (percentile, score, testsEvaluated) are safe to
+// read per mode. Accuracy and pace per mode come from `StudentSubjectStat`,
+// which keys on the mode. The disposition donut has no per-mode source at all —
+// `StudentSubjectStat` never counted an unattempted question — so it stays
+// lifetime and says so on screen.
+// ============================================================================
+
+/** Below this many questions a subject is a rumour, not a reading — every screen greys it. */
+export const SUBJECT_SAMPLE_FLOOR = 20;
+
+/** The ranked standing, off `StudentStat`. Every average is null at a zero denominator. */
+export const overviewStandingSchema = z.object({
+  /** Every folded sitting, ranked and practice — zero means nothing has been sat at all. */
+  testsAttempted: z.number().int(),
+  testsEvaluated: z.number().int(),
+  practiceAttempts: z.number().int(),
+  /** Provisional: each sitting's percentile was captured against the cohort of that moment. */
+  avgPercentile: z.number().nullable(),
+  bestPercentile: z.number().nullable(),
+  avgScore: z.number().nullable(),
+  lastAttemptAt: z.string().nullable(),
+});
+export type OverviewStanding = z.infer<typeof overviewStandingSchema>;
+
+/** LIFETIME, across ranked and practice alike: `StudentStat` is the only place these three live. */
+export const dispositionSchema = z.object({
+  correct: z.number().int(),
+  wrong: z.number().int(),
+  unattempted: z.number().int(),
+});
+export type Disposition = z.infer<typeof dispositionSchema>;
+
+/** One `StudentSubjectStat` row as the dashboard reads it — counts only, no derived figure. */
+export const subjectTallySchema = z.object({
+  scope: testScopeSchema,
+  evaluationMode: evaluationModeSchema,
+  attempted: z.number().int(),
+  correct: z.number().int(),
+  sumTimeSec: z.number().int(),
+});
+export type SubjectTally = z.infer<typeof subjectTallySchema>;
+
+/** A set of tallies summed to one reading. */
+export const subjectMeasureSchema = z.object({
+  attempted: z.number().int(),
+  correct: z.number().int(),
+  /** Percent. Null at a zero n — a zero would read as every answer wrong. */
+  accuracy: z.number().nullable(),
+  sumTimeSec: z.number().int(),
+  /** Seconds per question ANSWERED, with the time spent on ones left blank folded into it. */
+  pace: z.number().nullable(),
+});
+export type SubjectMeasure = z.infer<typeof subjectMeasureSchema>;
+
+/** Self-referential on purpose: `StudentSubjectStat` holds no cohort, so there is no rank here. */
+export const subjectStandingSchema = z.object({
+  subjectId: z.string(),
+  name: z.string(),
+  /** One per (scope, mode) the student has sat, so a scope filter needs no second call. */
+  tallies: z.array(subjectTallySchema),
+});
+export type SubjectStanding = z.infer<typeof subjectStandingSchema>;
+
+export const modeMeasuresSchema = z.object({
+  [EVALUATION_MODE.RANKED]: subjectMeasureSchema,
+  [EVALUATION_MODE.PRACTICE]: subjectMeasureSchema,
+});
+export type ModeMeasures = z.infer<typeof modeMeasuresSchema>;
+
+export const studentOverviewSchema = z.object({
+  studentId: z.string(),
+  generatedAt: z.string(),
+  standing: overviewStandingSchema,
+  /** Not toggle-bound: there is no per-mode unattempted anywhere to bind it to. */
+  disposition: dispositionSchema,
+  /** What the accuracy and pace tiles read, summed off the subject rows of each mode. */
+  byMode: modeMeasuresSchema,
+  subjects: z.array(subjectStandingSchema),
+});
+export type StudentOverview = z.infer<typeof studentOverviewSchema>;
+
+/** The ONE way tallies become a reading; a null scope sums every one, which is the default. */
+export function measureOf(
+  tallies: readonly SubjectTally[],
+  mode: EvaluationMode,
+  scope: TestScope | null = null,
+): SubjectMeasure {
+  const counted = tallies.filter(
+    (tally) => tally.evaluationMode === mode && (scope === null || tally.scope === scope),
+  );
+  const attempted = counted.reduce((sum, tally) => sum + tally.attempted, 0);
+  const correct = counted.reduce((sum, tally) => sum + tally.correct, 0);
+  const sumTimeSec = counted.reduce((sum, tally) => sum + tally.sumTimeSec, 0);
+
+  return {
+    attempted,
+    correct,
+    accuracy: attempted === 0 ? null : round2((correct / attempted) * 100),
+    sumTimeSec,
+    pace: attempted === 0 ? null : round2(sumTimeSec / attempted),
+  };
+}
+
+/** Every scope sat IN THIS MODE: one sat only in practice must not be offered to a ranked chart. */
+export const scopesSat = (
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+): TestScope[] =>
+  TEST_SCOPES.filter((scope) =>
+    subjects.some((subject) =>
+      subject.tallies.some(
+        (tally) => tally.scope === scope && tally.evaluationMode === mode && tally.attempted > 0,
+      ),
+    ),
+  );
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+export const OVERVIEW_ROUTES = {
+  me: '/me/overview',
+  ofStudent: (studentId: string) => `/admin/students/${studentId}/overview`,
+} as const;
 
 /** One row per test — the cohort aggregate behind the admin report. */
 export const testStatSchema = z.object({

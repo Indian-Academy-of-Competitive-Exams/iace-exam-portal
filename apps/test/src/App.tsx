@@ -17,12 +17,15 @@ import { ExamPage } from './routes/exam';
 import { SubmittedPage } from './routes/submitted';
 import { SolutionPanel } from './routes/review';
 import { QuestionReportPanel } from './routes/question-report';
-import { LatestReportPage, ReportRedirect, ReportShell } from './routes/report';
+import { ReportRedirect, ReportShell } from './routes/report';
 import { LeaderboardPage } from './routes/leaderboard';
 
 /** Every screen that draws charts, so the plotting library stays off the first payload. */
 const DashboardPage = React.lazy(() =>
   import('./routes/dashboard').then((module) => ({ default: module.DashboardPage })),
+);
+const OverviewPage = React.lazy(() =>
+  import('./routes/overview').then((module) => ({ default: module.OverviewPage })),
 );
 const ScoreCardPanel = React.lazy(() =>
   import('./routes/score-card').then((module) => ({ default: module.ScoreCardPanel })),
@@ -63,7 +66,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path={ROUTES.HOME} element={whileLoading(<DashboardPage />)} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
-          <Route path={ROUTES.PERFORMANCE} element={<LatestReportPage />} />
+          <Route path={ROUTES.PERFORMANCE} element={whileLoading(<OverviewPage />)} />
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />

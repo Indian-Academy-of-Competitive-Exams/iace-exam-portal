@@ -40,6 +40,7 @@ export const CHART_VAR = {
   ink: 'var(--chart-ink)',
   muted: 'var(--muted-foreground)',
   success: 'var(--success)',
+  danger: 'var(--destructive)',
 } as const;
 
 /** Nothing measured. Never 0 — a zero would claim the student scored nothing. */

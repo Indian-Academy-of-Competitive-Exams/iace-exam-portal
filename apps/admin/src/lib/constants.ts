@@ -43,7 +43,6 @@ import {
   type StudentSeriesSource,
   type StudentType,
   type TestBuilderStep,
-  type TestScope,
   type TestSeriesKind,
   type UnlockRequestStatus,
   type TestStatus,
@@ -308,19 +307,6 @@ export const LANGUAGE_CODE_LABELS: Readonly<Record<LanguageCode, string>> = {
   EN: 'English',
   HI: 'Hindi',
   TE: 'Telugu',
-};
-
-/** What a test covers. Everything else about its shape comes from its base configuration. */
-export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
-  FULL: 'Full paper',
-  MODULE: 'Module',
-  SECTIONAL: 'Sectional',
-  TOPIC: 'Topic',
-};
-
-export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = {
-  RANKED: 'Ranked',
-  PRACTICE: 'Practice',
 };
 
 export const EVALUATION_MODE_HINTS: Readonly<Record<EvaluationMode, string>> = {

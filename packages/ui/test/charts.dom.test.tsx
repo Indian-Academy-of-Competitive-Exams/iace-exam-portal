@@ -7,6 +7,8 @@ import { ComparisonCards } from '../src/components/charts/comparison-cards';
 import { CompositionBar } from '../src/components/charts/composition-bar';
 import { DistributionPlot } from '../src/components/charts/distribution-plot';
 import { DivergingBars } from '../src/components/charts/diverging-bars';
+import { DonutPlot } from '../src/components/charts/donut-plot';
+import { QuadrantPlot } from '../src/components/charts/quadrant-plot';
 import { LinePlot } from '../src/components/charts/line-plot';
 
 afterEach(cleanup);
@@ -268,5 +270,92 @@ describe('ComparisonCards', () => {
     assert.ok(view.getByText('41'));
     assert.ok(view.getByText('44'));
     assert.ok(view.getByText('21 correct · 3 wrong · 1 left · 18 min'));
+  });
+});
+
+describe('DonutPlot', () => {
+  const LABEL = 'Correct, wrong and unattempted';
+  const SEGMENTS = [
+    { key: 'correct', label: 'Correct', value: 200, tone: 'positive' as const },
+    { key: 'wrong', label: 'Wrong', value: 100, tone: 'negative' as const },
+    { key: 'left', label: 'Unattempted', value: 120, tone: 'neutral' as const },
+  ];
+
+  /** Three slices in three status hues: the legend is what stops identity resting on colour. */
+  it('names and values every slice in its legend', () => {
+    const view = mount(<DonutPlot segments={SEGMENTS} aria-label={LABEL} />);
+
+    assert.ok(view.getByText('Unattempted'));
+    assert.ok(view.getByText('120'));
+  });
+
+  it('writes what the slices are shares OF in the hole', () => {
+    const view = mount(
+      <DonutPlot
+        segments={SEGMENTS}
+        centre={{ value: '48%', label: 'Correct' }}
+        aria-label={LABEL}
+      />,
+    );
+
+    assert.ok(view.getByText('48%'));
+  });
+
+  /** Nothing left blank is a fact worth reading; dropping the slice would leave the reader guessing. */
+  it('keeps a zero slice on the legend, where the ring cannot draw it', () => {
+    const view = mount(
+      <DonutPlot
+        segments={[...SEGMENTS.slice(0, 2), { key: 'left', label: 'Unattempted', value: 0 }]}
+        aria-label={LABEL}
+      />,
+    );
+
+    assert.ok(view.getByText('Unattempted'));
+    assert.ok(view.getByText('0'));
+  });
+});
+
+describe('QuadrantPlot', () => {
+  const LABEL = 'Pace against accuracy';
+  const QUADRANTS = {
+    lowXHighY: 'Fast and accurate',
+    highXHighY: 'Slow and accurate',
+    lowXLowY: 'Fast and inaccurate',
+    highXLowY: 'Slow and inaccurate',
+  };
+  const POINTS = [
+    { key: 'r', label: 'Reasoning', x: 40, y: 75, weight: 40 },
+    { key: 'q', label: 'Quantitative Aptitude', x: 60, y: 50, weight: 60 },
+  ];
+
+  it('labels every dot, so a position never has to be looked up in a legend', () => {
+    const view = mount(
+      <QuadrantPlot
+        points={POINTS}
+        xGuide={50}
+        yGuide={62}
+        quadrants={QUADRANTS}
+        aria-label={LABEL}
+      />,
+    );
+
+    assert.ok(view.getByText('Reasoning'));
+    assert.ok(view.getByText('Quantitative Aptitude'));
+  });
+
+  /** Two guides make four corners, and a corner that is not named is a shape with no meaning. */
+  it('names all four quadrants', () => {
+    const view = mount(
+      <QuadrantPlot
+        points={POINTS}
+        xGuide={50}
+        yGuide={62}
+        quadrants={QUADRANTS}
+        aria-label={LABEL}
+      />,
+    );
+
+    assert.ok(view.getByText('Fast and accurate'));
+    assert.ok(view.getByText('Slow and inaccurate'));
   });
 });

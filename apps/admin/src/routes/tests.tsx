@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import {
+  EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  TEST_SCOPE_LABELS,
   TEST_STATUS,
   TEST_STATUSES,
   type Test,
@@ -27,14 +29,7 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import {
-  EVALUATION_MODE_LABELS,
-  NAV_ITEMS,
-  QUERY_KEYS,
-  ROUTES,
-  TEST_SCOPE_LABELS,
-  TEST_STATUS_LABELS,
-} from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, TEST_STATUS_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker } from '../components/exam-picker';

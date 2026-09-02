@@ -1,17 +1,8 @@
-import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList } from 'lucide-react';
-import {
-  Button,
-  Combobox,
-  EmptyState,
-  LoadingState,
-  PageFrame,
-  PageHeader,
-  PanelFrame,
-} from '@iace/ui';
+import { Combobox, PageHeader, PanelFrame } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
-import { REPORT_TABS, latestSitting, newestFirst, reportTabOf } from '@iace/app-kit';
+import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
 import { INSTITUTE_TIME_ZONE, type PerformancePoint } from '@iace/contracts';
 import { api } from '../lib/api';
 import { NAV_ITEMS, PERFORMANCE_QUERY_KEY, PICKER_WIDTH, ROUTES } from '../lib/constants';
@@ -39,7 +30,13 @@ export function ReportShell() {
       header={
         <PageHeader
           breadcrumbs={
-            <PageCrumbs nav={NAV_ITEMS} tail={[{ label: current?.testTitle ?? 'Report' }]} />
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[
+                { label: 'Performance', to: ROUTES.PERFORMANCE },
+                { label: current?.testTitle ?? 'Report' },
+              ]}
+            />
           }
           title="Report"
           meta={current === null ? undefined : marksOf(current)}
@@ -73,29 +70,6 @@ export function ReportShell() {
   );
 }
 
-/** The Performance nav opens on the last test they sat, the way the report itself is read. */
-export function LatestReportPage() {
-  const sat = useSittings();
-  const latest = latestSitting(sat.points);
-
-  if (sat.isLoading) return <LoadingState />;
-  if (latest) return <Navigate to={ROUTES.REPORT(latest.attemptId)} replace />;
-
-  return (
-    <PageFrame header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Report" />}>
-      <EmptyState
-        icon={ClipboardList}
-        title="No marked tests yet"
-        action={
-          <Button asChild>
-            <Link to={ROUTES.TESTS}>Go to your tests</Link>
-          </Button>
-        }
-      />
-    </PageFrame>
-  );
-}
-
 /** A link written before the shell existed still lands on the tab it was always asking for. */
 export function ReportRedirect({ tab }: Readonly<{ tab: string }>) {
   const { attemptId = '' } = useParams();
@@ -106,7 +80,7 @@ export function ReportRedirect({ tab }: Readonly<{ tab: string }>) {
 function useSittings() {
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const points = trend.data?.points ?? [];
-  return { points, newestFirst: newestFirst(points), isLoading: trend.isLoading };
+  return { points, newestFirst: newestFirst(points) };
 }
 
 const marksOf = (point: PerformancePoint) => `${point.score} of ${point.maxMarks} marks`;

@@ -35,6 +35,14 @@ export const testScopeSchema = z.enum(TEST_SCOPE);
 export type TestScope = z.infer<typeof testScopeSchema>;
 export const TEST_SCOPES = testScopeSchema.options;
 
+/** What a test covers. Everything else about its shape comes from its base configuration. */
+export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
+  FULL: 'Full paper',
+  MODULE: 'Module',
+  SECTIONAL: 'Sectional',
+  TOPIC: 'Topic',
+};
+
 /** RANKED produces a cohort rank and forces a FIXED paper; PRACTICE never ranks. */
 export const EVALUATION_MODE = {
   RANKED: 'RANKED',
@@ -43,6 +51,11 @@ export const EVALUATION_MODE = {
 export const evaluationModeSchema = z.enum(EVALUATION_MODE);
 export type EvaluationMode = z.infer<typeof evaluationModeSchema>;
 export const EVALUATION_MODES = evaluationModeSchema.options;
+
+export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = {
+  RANKED: 'Ranked',
+  PRACTICE: 'Practice',
+};
 
 /** FIXED is drawn once at finalize and shared; GENERATED is drawn per attempt. */
 export const PAPER_BINDING = {

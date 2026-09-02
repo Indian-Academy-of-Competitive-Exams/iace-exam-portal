@@ -3,6 +3,7 @@ import {
   DRAW_STRATEGIES,
   EVALUATION_MODE,
   EVALUATION_MODES,
+  EVALUATION_MODE_LABELS,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
   MAX_PAPER_VARIANTS,
@@ -10,6 +11,7 @@ import {
   PAPER_BINDING,
   TEST_SCOPE,
   TEST_SCOPES,
+  TEST_SCOPE_LABELS,
   allowedPaperBindings,
   type BaseConfigDetail,
   type DrawStrategy,
@@ -32,11 +34,9 @@ import {
   DRAW_STRATEGY_HINTS,
   DRAW_STRATEGY_LABELS,
   EVALUATION_MODE_HINTS,
-  EVALUATION_MODE_LABELS,
   EXAM_TEMPLATE_LABELS,
   PAPER_BINDING_HINTS,
   PAPER_BINDING_LABELS,
-  TEST_SCOPE_LABELS,
 } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
