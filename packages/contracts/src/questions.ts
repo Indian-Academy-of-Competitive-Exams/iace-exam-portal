@@ -770,6 +770,9 @@ export const QUESTION_IMAGE_FILE_FIELD = 'file';
 /** A diagram, not a photograph — 2MB is generous for the pictorial-reasoning art this holds. */
 export const QUESTION_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 
+/** A diagram nobody scaled decodes to hundreds of megabytes in a candidate's browser mid-test. */
+export const QUESTION_IMAGE_MAX_PIXELS = 12_000_000;
+
 /** SVG is absent on purpose: it is a script container, and this renders in the student's browser. */
 export const QUESTION_IMAGE_ACCEPTED_TYPES = [
   'image/jpeg',

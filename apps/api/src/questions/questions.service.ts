@@ -31,6 +31,7 @@ import {
   checkQuestionImage,
   imageKeysIn,
   questionImageKey,
+  type UploadedImage,
 } from './question-images';
 import { escapeForContent, mapQuestionHtml, rewriteQuestionHtml } from './question-content';
 import { AuditContext } from '../audit';
@@ -103,11 +104,11 @@ export class QuestionsService {
   }
 
   /** Hands back the KEY that content quotes, plus a url that only shows what was just picked. */
-  async saveImage(file: { buffer: Buffer; size: number; mimetype: string } | undefined) {
-    checkQuestionImage(file);
+  async saveImage(file: UploadedImage | undefined) {
+    const { buffer, contentType } = checkQuestionImage(file);
 
-    const key = questionImageKey(file.mimetype);
-    await this.storage.upload(key, file.buffer, file.mimetype);
+    const key = questionImageKey(contentType);
+    await this.storage.upload(key, buffer, contentType);
 
     return { key, url: await this.storage.createDownloadUrl(key, QUESTION_IMAGE_URL_TTL_SEC) };
   }

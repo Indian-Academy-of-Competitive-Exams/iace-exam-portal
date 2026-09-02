@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, QUESTION_IMAGE_MAX_BYTES } from '@iace/contracts';
+import { AppException, QUESTION_IMAGE_MAX_BYTES, QUESTION_IMAGE_MAX_PIXELS } from '@iace/contracts';
 import {
   applyImageUrls,
   checkQuestionImage,
   imageKeysIn,
   questionImageKey,
   stripImageSrc,
+  withoutForeignImages,
 } from '../src/questions/question-images';
+import { gifBytes, jpegBytes, pngBytes, webpBytes } from './support/image-bytes';
 
-const file = (over: Partial<{ size: number; mimetype: string }> = {}) => ({
+const file = (over: Partial<{ size: number; mimetype: string; buffer: Buffer }> = {}) => ({
   size: 1024,
   mimetype: 'image/png',
+  buffer: pngBytes(800, 600),
   ...over,
 });
 
@@ -37,19 +40,40 @@ describe('questionImageKey', () => {
 
 describe('checkQuestionImage', () => {
   it('accepts the formats a diagram actually arrives in', () => {
-    for (const mimetype of ['image/png', 'image/jpeg', 'image/webp', 'image/gif']) {
-      assert.doesNotThrow(() => checkQuestionImage(file({ mimetype })));
+    for (const buffer of [
+      pngBytes(800, 600),
+      jpegBytes(800, 600),
+      gifBytes(80, 60),
+      webpBytes(80, 60),
+    ]) {
+      assert.doesNotThrow(() => checkQuestionImage(file({ buffer })));
     }
   });
 
-  /** An SVG is a script container, and this renders in a candidate's browser mid-test. */
-  it('refuses SVG, however much it looks like an image', () => {
-    assert.throws(() => checkQuestionImage(file({ mimetype: 'image/svg+xml' })), AppException.is);
+  /** The name is the uploader's choice; the bytes are not, so the bytes decide. */
+  it('reports what the file really is, not what it was called', () => {
+    const image = checkQuestionImage(file({ mimetype: 'image/png', buffer: jpegBytes(640, 480) }));
+
+    assert.equal(image.contentType, 'image/jpeg');
   });
 
-  it('refuses a type nobody asked for', () => {
-    for (const mimetype of ['application/pdf', 'text/html', 'application/zip']) {
-      assert.throws(() => checkQuestionImage(file({ mimetype })), AppException.is);
+  /** An SVG is a script container, and this renders in a candidate's browser mid-test. */
+  it('refuses an SVG dressed as a PNG', () => {
+    const buffer = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>');
+
+    assert.throws(
+      () => checkQuestionImage(file({ mimetype: 'image/png', buffer })),
+      AppException.is,
+    );
+  });
+
+  it('refuses bytes that are not an image at all', () => {
+    for (const buffer of [
+      Buffer.from('<!doctype html><script>alert(1)</script>'),
+      Buffer.from('%PDF-1.7'),
+      Buffer.from([0x4d, 0x5a, 0x90, 0x00]),
+    ]) {
+      assert.throws(() => checkQuestionImage(file({ buffer })), AppException.is);
     }
   });
 
@@ -68,6 +92,26 @@ describe('checkQuestionImage', () => {
     assert.doesNotThrow(() => checkQuestionImage(file({ size: QUESTION_IMAGE_MAX_BYTES })));
   });
 
+  /** Small on disk, ruinous once drawn: this is what a decompression bomb looks like. */
+  it('refuses an image too big to draw, however few bytes it took', () => {
+    assert.throws(
+      () => checkQuestionImage(file({ size: 40_000, buffer: pngBytes(20_000, 20_000) })),
+      (error: unknown) => {
+        assert.ok(AppException.is(error));
+        assert.match(error.message, /20000×20000/);
+        return true;
+      },
+    );
+  });
+
+  it('accepts one exactly at the pixel cap', () => {
+    const edge = Math.sqrt(QUESTION_IMAGE_MAX_PIXELS);
+
+    assert.doesNotThrow(() =>
+      checkQuestionImage(file({ buffer: pngBytes(Math.floor(edge), Math.floor(edge)) })),
+    );
+  });
+
   it('refuses an empty file rather than storing nothing', () => {
     assert.throws(() => checkQuestionImage(file({ size: 0 })), AppException.is);
   });
@@ -81,6 +125,15 @@ describe('checkQuestionImage', () => {
         return true;
       },
     );
+  });
+});
+
+describe('withoutForeignImages', () => {
+  it('keeps an image of ours and drops one naming a file we do not hold', () => {
+    const html =
+      '<p><img data-key="questions/images/a.png"><img src="https://evil.test/p.png"></p>';
+
+    assert.equal(withoutForeignImages(html), '<p><img data-key="questions/images/a.png"></p>');
   });
 });
 

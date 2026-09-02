@@ -24,6 +24,7 @@ import {
   makeSubject,
   makeTopic,
 } from './support/fakes';
+import { pngBytes } from './support/image-bytes';
 
 const ADMIN = 'adm_1';
 
@@ -838,14 +839,11 @@ describe('saveImage', () => {
       storage as never,
     );
 
-    const saved = await questions.saveImage({
-      buffer: Buffer.from('png-bytes'),
-      size: 9,
-      mimetype: 'image/png',
-    });
+    const buffer = pngBytes(800, 600);
+    const saved = await questions.saveImage({ buffer, size: buffer.length, mimetype: 'image/png' });
 
     assert.ok(saved.key.startsWith('questions/images/'));
-    assert.equal(storage.objects.get(saved.key)?.toString(), 'png-bytes');
+    assert.deepEqual(storage.objects.get(saved.key), buffer);
     assert.ok(saved.url.includes(saved.key), 'the url has to point at what was just stored');
   });
 

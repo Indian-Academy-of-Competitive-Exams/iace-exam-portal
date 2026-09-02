@@ -4,7 +4,9 @@ import {
   ErrorCodes,
   QUESTION_IMAGE_ACCEPTED_TYPES,
   QUESTION_IMAGE_MAX_BYTES,
+  QUESTION_IMAGE_MAX_PIXELS,
 } from '@iace/contracts';
+import { sniffImage, type SniffedImage } from './image-bytes';
 
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -19,40 +21,54 @@ export function questionImageKey(contentType: string): string {
   return `questions/images/${randomUUID()}.${EXTENSIONS[contentType] ?? 'bin'}`;
 }
 
-/** Whether this file may be stored, and why not if it may not. */
-export function checkQuestionImage(
-  file: { size: number; mimetype: string } | undefined,
-): asserts file is { size: number; mimetype: string } {
-  if (!file) {
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, 'Choose an image to upload', {
-      fieldErrors: { file: ['Choose an image to upload'] },
-    });
-  }
+export interface UploadedImage {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+}
 
-  const accepted: readonly string[] = QUESTION_IMAGE_ACCEPTED_TYPES;
-  if (!accepted.includes(file.mimetype)) {
-    const readable = accepted.map((type) => type.split('/')[1]?.toUpperCase()).join(', ');
-    throw new AppException(
-      ErrorCodes.VALIDATION_ERROR,
-      `That file type is not accepted here. Upload one of: ${readable}.`,
-      { fieldErrors: { file: ['Not an accepted file type'] } },
-    );
-  }
+/** The bytes, plus what they turned out to be — the one thing that reaches storage. */
+export interface CheckedImage extends SniffedImage {
+  buffer: Buffer;
+}
+
+const refuse = (message: string, field: string): never => {
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, { fieldErrors: { file: [field] } });
+};
+
+/** What may be stored, and why not if it may not. The BYTES decide the type — the browser only guessed. */
+export function checkQuestionImage(file: UploadedImage | undefined): CheckedImage {
+  if (!file) return refuse('Choose an image to upload', 'Choose an image to upload');
+  if (file.size === 0) return refuse('That file is empty', 'That file is empty');
 
   if (file.size > QUESTION_IMAGE_MAX_BYTES) {
     const mb = QUESTION_IMAGE_MAX_BYTES / 1024 / 1024;
-    throw new AppException(
-      ErrorCodes.VALIDATION_ERROR,
+    return refuse(
       `That image is larger than ${mb}MB. Export it smaller, or save it as a PNG.`,
-      { fieldErrors: { file: ['That image is too large'] } },
+      'That image is too large',
     );
   }
 
-  if (file.size === 0) {
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That file is empty', {
-      fieldErrors: { file: ['That file is empty'] },
-    });
+  const image = sniffImage(file.buffer);
+  if (!image) {
+    const readable = QUESTION_IMAGE_ACCEPTED_TYPES.map((type) =>
+      type.split('/')[1]?.toUpperCase(),
+    ).join(', ');
+    return refuse(
+      `That file is not an image, whatever it is named. Upload one of: ${readable}.`,
+      'Not an accepted file type',
+    );
   }
+
+  const megapixels = QUESTION_IMAGE_MAX_PIXELS / 1_000_000;
+  if (image.width * image.height > QUESTION_IMAGE_MAX_PIXELS) {
+    return refuse(
+      `That image is ${image.width}×${image.height}. Scale it under ${megapixels} megapixels — a figure never needs that many.`,
+      'That image is too large to draw',
+    );
+  }
+
+  return { ...image, buffer: file.buffer };
 }
 
 export { imageKeysIn } from '@iace/contracts';
