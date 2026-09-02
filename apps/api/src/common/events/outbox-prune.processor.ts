@@ -6,7 +6,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
-import { QUEUE_NAMES } from '../../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY } from '../../queue/queues';
 
 /** Long enough to answer "was this attempt's scoring ever asked for?" and no longer. */
 export const OUTBOX_RETENTION_DAYS = 7;
@@ -18,7 +18,9 @@ export const OUTBOX_PRUNE_PAGE = 1000;
 export const OUTBOX_PRUNE_MAX_PAGES = 100;
 
 @Injectable()
-@Processor(QUEUE_NAMES.OUTBOX_PRUNE)
+@Processor(QUEUE_NAMES.OUTBOX_PRUNE, {
+  concurrency: QUEUE_POLICY[QUEUE_NAMES.OUTBOX_PRUNE].concurrency,
+})
 export class OutboxPruneProcessor extends WorkerHost {
   private readonly logger = new Logger(OutboxPruneProcessor.name);
 

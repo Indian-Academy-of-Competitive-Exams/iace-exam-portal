@@ -9,6 +9,45 @@ export const QUEUE_NAMES = {
   ROLLUP: 'rollup',
 } as const;
 
+export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
+
+const DAY_SEC = 24 * 60 * 60;
+
+/** How hard each queue is worked and how long a failure is kept. 6B retunes this table under load. */
+export const QUEUE_POLICY = {
+  // The submit spike. One at a time would drain a hall of five thousand one sitting at a time.
+  [QUEUE_NAMES.SCORING]: { concurrency: 8, attempts: 5, backoffMs: 5000 },
+  // Folds land on the same test's aggregate rows, so a wide fan-out only buys lock contention.
+  [QUEUE_NAMES.ROLLUP]: { concurrency: 2, attempts: 5, backoffMs: 5000 },
+  // Holds its own per-test lock; a second worker is for a second test, never the same one.
+  [QUEUE_NAMES.LEADERBOARD_REBUILD]: { concurrency: 2, attempts: 3, backoffMs: 2000 },
+  // Scheduled sweeps over one shared set. Two at once would fight over the same keys.
+  [QUEUE_NAMES.ATTEMPT_FLUSH]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+  [QUEUE_NAMES.ATTEMPT_SWEEP]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+  [QUEUE_NAMES.AUDIT_ARCHIVE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+  [QUEUE_NAMES.OUTBOX_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+} as const satisfies Record<
+  QueueName,
+  { concurrency: number; attempts: number; backoffMs: number }
+>;
+
+/** A job that ran out of attempts is the dead letter: kept a week, because nobody watches on the day. */
+export const FAILED_JOB_RETENTION = { age: 7 * DAY_SEC, count: 5000 } as const;
+
+/** A success is evidence for an hour, and then it is only taking up memory Redis may not evict. */
+export const COMPLETED_JOB_RETENTION = { age: 3600, count: 1000 } as const;
+
+/** Everything one queue needs registering: retention, retries and the backoff between them. */
+export function jobOptionsFor(queue: QueueName) {
+  const { attempts, backoffMs } = QUEUE_POLICY[queue];
+  return {
+    attempts,
+    backoff: { type: 'exponential', delay: backoffMs },
+    removeOnComplete: { ...COMPLETED_JOB_RETENTION },
+    removeOnFail: { ...FAILED_JOB_RETENTION },
+  };
+}
+
 /** Payload for a scoring job. Kept to ids — workers re-read from Postgres. */
 export interface ScoringJobData {
   attemptId: string;

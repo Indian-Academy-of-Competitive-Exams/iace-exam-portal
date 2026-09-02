@@ -2,12 +2,14 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUEUE_NAMES } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AttemptStateService } from './attempt-state.service';
 import { rowsToFlush } from './attempt-flush';
 
 /** Redis to `AttemptQuestion` on a timer. A failed run costs the durable copy a minute, not answers. */
-@Processor(QUEUE_NAMES.ATTEMPT_FLUSH)
+@Processor(QUEUE_NAMES.ATTEMPT_FLUSH, {
+  concurrency: QUEUE_POLICY[QUEUE_NAMES.ATTEMPT_FLUSH].concurrency,
+})
 export class AttemptFlushProcessor extends WorkerHost {
   private readonly logger = new Logger(AttemptFlushProcessor.name);
 

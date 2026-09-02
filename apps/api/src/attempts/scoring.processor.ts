@@ -12,7 +12,7 @@ import {
   type QuestionOption,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUEUE_NAMES, type ScoringJobData } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
@@ -46,7 +46,7 @@ type ServedRow = ScoringRow['questions'][number];
 /** Ended, however it ended. Re-scoring an EVALUATED sitting is how a dropped question is applied. */
 const SCORABLE = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
 
-@Processor(QUEUE_NAMES.SCORING)
+@Processor(QUEUE_NAMES.SCORING, { concurrency: QUEUE_POLICY[QUEUE_NAMES.SCORING].concurrency })
 export class ScoringProcessor extends WorkerHost {
   private readonly logger = new Logger(ScoringProcessor.name);
 

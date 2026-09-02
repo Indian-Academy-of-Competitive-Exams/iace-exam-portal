@@ -2,10 +2,10 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
-import { QUEUE_NAMES, ROLLUP_JOBS, type RollupJobData } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY, ROLLUP_JOBS, type RollupJobData } from '../queue/queues';
 import { RollupService } from './rollup.service';
 
-@Processor(QUEUE_NAMES.ROLLUP)
+@Processor(QUEUE_NAMES.ROLLUP, { concurrency: QUEUE_POLICY[QUEUE_NAMES.ROLLUP].concurrency })
 export class RollupProcessor extends WorkerHost {
   private readonly logger = new Logger(RollupProcessor.name);
 

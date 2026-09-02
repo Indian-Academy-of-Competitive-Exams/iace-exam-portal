@@ -2,14 +2,16 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ATTEMPT_STATUS } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUEUE_NAMES, SCORING_RETRY_AFTER_MS } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY, SCORING_RETRY_AFTER_MS } from '../queue/queues';
 import { SAVE_GRACE_SEC } from './attempt-state';
 import { RollupOutbox } from './rollup-outbox';
 import { SCORING_REQUEST, ScoringOutbox } from './scoring-outbox';
 import { SubmitService } from './submit.service';
 
 /** Ends the sittings nobody ended, and hands on the scoring and counting nobody enqueued. */
-@Processor(QUEUE_NAMES.ATTEMPT_SWEEP)
+@Processor(QUEUE_NAMES.ATTEMPT_SWEEP, {
+  concurrency: QUEUE_POLICY[QUEUE_NAMES.ATTEMPT_SWEEP].concurrency,
+})
 export class AttemptSweeperProcessor extends WorkerHost {
   private readonly logger = new Logger(AttemptSweeperProcessor.name);
 

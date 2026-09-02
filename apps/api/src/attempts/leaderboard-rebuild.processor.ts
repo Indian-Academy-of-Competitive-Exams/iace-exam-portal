@@ -2,10 +2,12 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { type Job } from 'bullmq';
-import { QUEUE_NAMES, type LeaderboardRebuildJobData } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY, type LeaderboardRebuildJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
 
-@Processor(QUEUE_NAMES.LEADERBOARD_REBUILD)
+@Processor(QUEUE_NAMES.LEADERBOARD_REBUILD, {
+  concurrency: QUEUE_POLICY[QUEUE_NAMES.LEADERBOARD_REBUILD].concurrency,
+})
 export class LeaderboardRebuildProcessor extends WorkerHost {
   private readonly logger = new Logger(LeaderboardRebuildProcessor.name);
 

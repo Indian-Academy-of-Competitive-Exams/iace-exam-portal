@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
 import { StorageService } from '../storage/storage.service';
-import { QUEUE_NAMES } from '../queue/queues';
+import { QUEUE_NAMES, QUEUE_POLICY } from '../queue/queues';
 import { AuditService } from './audit.service';
 import { AUDIT_RETENTION_DAYS, archiveKeyFor, dayToArchive, toNdjson } from './audit-archive';
 import {
@@ -37,7 +37,9 @@ function nextInstituteMidnight(from: Date): Date {
 }
 
 @Injectable()
-@Processor(QUEUE_NAMES.AUDIT_ARCHIVE)
+@Processor(QUEUE_NAMES.AUDIT_ARCHIVE, {
+  concurrency: QUEUE_POLICY[QUEUE_NAMES.AUDIT_ARCHIVE].concurrency,
+})
 export class AuditArchiveProcessor extends WorkerHost {
   private readonly logger = new Logger(AuditArchiveProcessor.name);
 
