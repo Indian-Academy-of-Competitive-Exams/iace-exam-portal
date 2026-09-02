@@ -256,6 +256,9 @@ interface KeyContext {
 
 /** Enter never splits a slot — the key that would break the shape moves the caret instead. */
 function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext): boolean {
+  // An input method owns these first: Enter commits its candidate and the arrows pick one.
+  if (view.composing || event.isComposing) return false;
+
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     context.onSave?.();
     return true;

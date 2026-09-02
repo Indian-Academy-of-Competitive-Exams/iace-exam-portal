@@ -315,6 +315,21 @@ describe('the keyboard', () => {
     assert.equal(bodies().join(''), '');
   });
 
+  /** Hindi and Telugu are typed through an input method, whose Enter and arrows come first. */
+  it('keeps out of the way while an input method is composing', () => {
+    let saved = 0;
+    let cycled = 0;
+    const { box } = mount({ onSave: () => (saved += 1), onCycleLanguage: () => (cycled += 1) });
+
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true, isComposing: true });
+    fireEvent.keyDown(box, { key: 'l', code: 'KeyL', altKey: true, isComposing: true });
+
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
+    assert.equal(saved, 0);
+    assert.equal(cycled, 0);
+  });
+
   it('saves on Ctrl+Enter rather than typing a line', () => {
     let saved = 0;
     const { box } = mount({ onSave: () => (saved += 1) });
