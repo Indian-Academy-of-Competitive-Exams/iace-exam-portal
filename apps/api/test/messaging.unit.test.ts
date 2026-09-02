@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import { ActorTypes } from '@iace/contracts';
 import { ConsoleMessageSender } from '../src/common/messaging/console-message-sender';
 import { SmsMessageSender } from '../src/common/messaging/sms-message-sender';
+import { EmailMessageSender } from '../src/common/messaging/email-message-sender';
+import { RoutedMessageSender } from '../src/common/messaging/routed-message-sender';
 import { createMessageSender } from '../src/common/messaging/messaging.module';
 import { MESSAGE_CHANNELS, MESSAGE_KINDS } from '../src/common/messaging';
 import { OtpService } from '../src/auth/otp/otp.service';
@@ -66,7 +68,12 @@ describe('Provider selection', () => {
   // pass for the wrong reason.
   const senderFor = (env: Record<string, unknown>) => {
     const config = new FakeConfig(env).asService();
-    return createMessageSender(config, new ConsoleMessageSender(), new SmsMessageSender(config));
+    return createMessageSender(
+      config,
+      new ConsoleMessageSender(),
+      new SmsMessageSender(config),
+      new EmailMessageSender(config),
+    );
   };
 
   it('binds the console sender in development', () => {
@@ -91,13 +98,27 @@ describe('Provider selection', () => {
     );
   });
 
-  it('binds the SMS sender once the provider is addressed', () => {
+  /** An admin signs in by email, so a deployment with no SMTP host cannot let anybody in. */
+  it('refuses to boot with SMS configured and email not', () => {
+    assert.throws(
+      () =>
+        senderFor({
+          NODE_ENV: 'production',
+          OTP_SENDER: 'sms',
+          SMS_PROVIDER_URL: 'https://sms.example/send',
+        }),
+      /SMTP_HOST/,
+    );
+  });
+
+  it('routes by channel once both providers are addressed', () => {
     const sender = senderFor({
       NODE_ENV: 'production',
       OTP_SENDER: 'sms',
       SMS_PROVIDER_URL: 'https://sms.example/send',
+      SMTP_HOST: 'smtp.example',
     });
 
-    assert.ok(sender instanceof SmsMessageSender);
+    assert.ok(sender instanceof RoutedMessageSender);
   });
 });

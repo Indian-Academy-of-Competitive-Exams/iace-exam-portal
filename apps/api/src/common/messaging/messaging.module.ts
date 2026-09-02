@@ -4,6 +4,8 @@ import { AppConfigService } from '../../config/app-config.service';
 import { OTP_SENDERS } from '../../config/env.schema';
 import { ConsoleMessageSender } from './console-message-sender';
 import { SmsMessageSender } from './sms-message-sender';
+import { EmailMessageSender } from './email-message-sender';
+import { RoutedMessageSender } from './routed-message-sender';
 import { MESSAGE_SENDER, type MessageSender } from './message-sender';
 
 /** Selects the outbound delivery provider. */
@@ -11,8 +13,9 @@ export function createMessageSender(
   config: AppConfigService,
   consoleSender: ConsoleMessageSender,
   smsSender: SmsMessageSender,
+  emailSender: EmailMessageSender,
 ): MessageSender {
-  // The env var is still named OTP_SENDER, though it now selects for every kind.
+  // The env var is still named OTP_SENDER, though it now selects for every kind and both channels.
   const channel = config.get('OTP_SENDER');
 
   if (channel === OTP_SENDERS.CONSOLE) {
@@ -25,7 +28,11 @@ export function createMessageSender(
   if (!config.get('SMS_PROVIDER_URL')) {
     throw new Error('OTP_SENDER=sms needs SMS_PROVIDER_URL — see .env.example.');
   }
-  return smsSender;
+  // Refused here rather than at the first admin login, which is the worst time to find out.
+  if (!config.get('SMTP_HOST')) {
+    throw new Error('OTP_SENDER=sms needs SMTP_HOST too — an admin signs in by email.');
+  }
+  return new RoutedMessageSender(smsSender, emailSender);
 }
 
 /**
@@ -38,9 +45,10 @@ export function createMessageSender(
   providers: [
     ConsoleMessageSender,
     SmsMessageSender,
+    EmailMessageSender,
     {
       provide: MESSAGE_SENDER,
-      inject: [AppConfigService, ConsoleMessageSender, SmsMessageSender],
+      inject: [AppConfigService, ConsoleMessageSender, SmsMessageSender, EmailMessageSender],
       useFactory: createMessageSender,
     },
   ],
