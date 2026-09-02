@@ -126,35 +126,34 @@ describe('tables', () => {
   it('offers a table on a field that holds blocks', () => {
     show(<RichText value="" onChange={noop} />);
 
-    assert.ok(screen.getByLabelText('Table'));
+    assert.ok(screen.getByLabelText('Insert a table'));
   });
 
   /** A table cannot live in one line, so an MCQ option is not offered one. */
   it('offers none on a single-line field', () => {
     show(<RichText value="" onChange={noop} singleLine />);
 
-    assert.equal(screen.queryByLabelText('Table'), null);
+    assert.equal(screen.queryByLabelText('Insert a table'), null);
   });
 
-  it('inserts a real table, with a header row', async () => {
+  it('inserts a real table, with a header row', () => {
     let html = '';
     show(<RichText value="" onChange={(next) => (html = next)} />);
 
-    // Radix opens a menu on pointerDown, not click.
-    fireEvent.pointerDown(screen.getByLabelText('Table'), { button: 0 });
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Insert a table' }));
+    fireEvent.click(screen.getByLabelText('Insert a table'));
 
     assert.match(html, /<table/);
     assert.match(html, /<th/, 'the first row is headers, which is what a data question needs');
   });
 
-  /** Out of a table those actions apply to nothing, and the rule is to leave them out. */
-  it('offers only Insert while the caret is outside a table', async () => {
-    show(<RichText value="<p>plain</p>" onChange={noop} />);
-    fireEvent.pointerDown(screen.getByLabelText('Table'), { button: 0 });
+  /** The failure this prevents: one menu for whichever table the caret was in, and no second table. */
+  it('leaves rows, columns and delete to the table itself', () => {
+    show(<RichText value="" onChange={noop} />);
 
-    assert.ok(await screen.findByRole('menuitem', { name: 'Insert a table' }));
-    assert.equal(screen.queryByRole('menuitem', { name: 'Delete table' }), null);
+    fireEvent.click(screen.getByLabelText('Insert a table'));
+
+    assert.ok(screen.getByRole('button', { name: 'Add a row below' }));
+    assert.ok(screen.getByRole('button', { name: 'Remove table' }));
     assert.equal(screen.queryByRole('menuitem', { name: 'Row above' }), null);
   });
 });

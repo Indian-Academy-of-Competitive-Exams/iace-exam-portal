@@ -7,6 +7,7 @@ import { Subscript } from '@tiptap/extension-subscript';
 import { TableKit } from '@tiptap/extension-table';
 import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
+import { TableTools } from './rich-text-table';
 import { useFormDisabled } from './form-panel';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import {
@@ -103,7 +104,7 @@ export function RichText({
       ),
       Superscript,
       Subscript,
-      ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } })]),
+      ...(singleLine ? [] : [TableKit.configure({ table: { resizable: true } }), TableTools]),
       ...(onUploadImage ? [QuestionImage] : []),
       // A half-typed formula shows in red rather than taking the editor down with it.
       BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),

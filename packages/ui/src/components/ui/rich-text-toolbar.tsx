@@ -27,13 +27,6 @@ import {
 import { Label } from './label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { insertUploaded, type ImageLimits, type UploadImage } from './rich-text-image';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './dropdown-menu';
 
 /** The mark buttons, in the order a writer reaches for them. */
 const MARKS = [
@@ -85,72 +78,6 @@ function ToolButton({
 }
 
 /** In a table the row and column actions apply; out of one only inserting does. */
-function TableMenu({ editor }: Readonly<{ editor: Editor }>) {
-  const inTable = editor.isActive('table');
-  type Chain = ReturnType<Editor['chain']>;
-  // `.run()` is what commits it — a chain that is only built does nothing at all.
-  const run = (act: (chain: Chain) => Chain) => () => {
-    act(editor.chain().focus()).run();
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Table"
-          className={cn(
-            'flex size-7 items-center justify-center rounded-sm text-muted-foreground',
-            'transition-colors hover:bg-muted hover:text-foreground',
-            'focus-visible:shadow-focus focus-visible:outline-none [&_svg]:size-4',
-            inTable && 'bg-muted text-foreground',
-          )}
-        >
-          <TableIcon aria-hidden />
-        </button>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start">
-        {inTable ? null : (
-          <DropdownMenuItem
-            onSelect={run((chain) => chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))}
-          >
-            Insert a table
-          </DropdownMenuItem>
-        )}
-
-        {inTable ? (
-          <>
-            <DropdownMenuItem onSelect={run((chain) => chain.addRowBefore())}>
-              Row above
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={run((chain) => chain.addRowAfter())}>
-              Row below
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={run((chain) => chain.addColumnBefore())}>
-              Column left
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={run((chain) => chain.addColumnAfter())}>
-              Column right
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteRow())}>
-              Delete row
-            </DropdownMenuItem>
-            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteColumn())}>
-              Delete column
-            </DropdownMenuItem>
-            <DropdownMenuItem destructive onSelect={run((chain) => chain.deleteTable())}>
-              Delete table
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/** Parsed strictly to JUDGE it, rendered loosely to SHOW it — a half-typed formula still previews. */
 function parse(latex: string): { html: string; error: string | null } {
   const html = katex.renderToString(latex || '', { throwOnError: false, displayMode: false });
   if (!latex.trim()) return { html, error: null };
@@ -244,7 +171,11 @@ export interface RichTextToolbarProps {
   /** Absent means this field takes no images, so no button offers one. */
   onUploadImage?: UploadImage;
   imageLimits?: ImageLimits;
+  className?: string;
 }
+
+/** What a question's table starts as; rows and columns are added from the table itself. */
+const NEW_TABLE = { rows: 3, cols: 3, withHeaderRow: true } as const;
 
 export function RichTextToolbar({
   editor,
@@ -253,8 +184,12 @@ export function RichTextToolbar({
   onMathChange,
   onUploadImage,
   imageLimits,
+  className,
 }: Readonly<RichTextToolbarProps>) {
   const fileRef = React.useRef<HTMLInputElement>(null);
+  type Chain = ReturnType<Editor['chain']>;
+  // `.run()` is what commits it — a chain that is only built does nothing at all.
+  const run = (act: (chain: Chain) => Chain) => act(editor.chain().focus()).run();
 
   const choose = (file: File | undefined) => {
     if (file && onUploadImage) insertUploaded(editor, file, onUploadImage, imageLimits);
@@ -271,7 +206,12 @@ export function RichTextToolbar({
   };
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-0.5 border-b border-border pb-2">
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-0.5 border-b border-border bg-surface py-2',
+        className,
+      )}
+    >
       {MARKS.map(({ name, label, Icon }) => (
         <ToolButton
           key={name}
@@ -296,7 +236,15 @@ export function RichTextToolbar({
             </ToolButton>
           ))}
 
-      {singleLine ? null : <TableMenu editor={editor} />}
+      {singleLine ? null : (
+        <ToolButton
+          label="Insert a table"
+          active={false}
+          onClick={() => run((chain) => chain.insertTable(NEW_TABLE))}
+        >
+          <TableIcon aria-hidden />
+        </ToolButton>
+      )}
 
       <ToolButton
         label="Equation"

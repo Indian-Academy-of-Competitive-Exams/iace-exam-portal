@@ -131,6 +131,12 @@ describe('a figure in a slot', () => {
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
   });
 
+  it('carries a corner to drag, so a figure is not stuck at whatever size it arrived', () => {
+    const { box } = withFigure();
+
+    assert.equal(box.querySelectorAll('.rich-figure-handle').length, 1);
+  });
+
   /** The failure this prevents: no TEXT read as blank, so Backspace took the slot and the figure. */
   it('is content, so the slot holding it is not an empty slot', () => {
     const { box } = withFigure();
@@ -176,6 +182,56 @@ describe('a slot that says what it is for', () => {
     withHint();
 
     assert.equal(document.querySelector('[data-region="filled"] p.is-empty'), null);
+  });
+});
+
+describe('a table in a slot', () => {
+  /** The reported gap: a table's controls lived in one toolbar menu, so a second table had none. */
+  it('carries its own controls, without a menu to find first', () => {
+    const { box } = mount({
+      regions: [
+        {
+          key: 'stem',
+          label: 'Question:',
+          html: '<table><tbody><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>',
+        },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+    assert.equal(box.querySelectorAll('table').length, 1);
+
+    for (const name of ['Add a row below', 'Add a column to the right', 'Delete this row']) {
+      assert.ok(screen.getByRole('button', { name }));
+    }
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Remove table' }));
+
+    assert.equal(box.querySelectorAll('table').length, 0);
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'answer']);
+  });
+
+  /** One bar per table, so the second one is reachable without moving the caret to the first. */
+  it('gives each table its own bar', () => {
+    mount({
+      regions: [
+        {
+          key: 'stem',
+          label: 'Question:',
+          html:
+            '<table><tbody><tr><td><p>1</p></td></tr></tbody></table>' +
+            '<p>and</p>' +
+            '<table><tbody><tr><td><p>2</p></td></tr></tbody></table>',
+        },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+
+    assert.equal(document.querySelectorAll('.rich-table-tools').length, 2);
+    assert.equal(screen.getAllByRole('button', { name: 'Remove table' }).length, 2);
   });
 });
 

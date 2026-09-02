@@ -1,6 +1,8 @@
+import { ResizableNodeView } from '@tiptap/core';
 import { Image } from '@tiptap/extension-image';
 import { type EditorView } from '@tiptap/pm/view';
 import { type Editor } from '@tiptap/react';
+import { REMOVE_LABELS, removeControl } from './rich-text-remove';
 import { toast } from './toast';
 
 /** What the app does with the bytes. `packages/ui` carries no api client, so this is passed in. */
@@ -12,48 +14,70 @@ export const QuestionImage = Image.extend({
     return {
       ...this.parent?.(),
       'data-key': { default: null },
+      width: { default: null },
+      height: { default: null },
     };
   },
 
-  /** A figure carries its own way out: nothing on screen said Backspace would do it. */
+  /** A figure carries its own way out and its own corner to drag, the way a document does. */
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      const figure = document.createElement('span');
-      figure.className = 'rich-figure';
-
       const image = document.createElement('img');
       for (const [name, value] of Object.entries(node.attrs)) {
         const text = asAttribute(value);
         if (text !== null) image.setAttribute(name, text);
       }
-      figure.append(image);
 
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'rich-figure-remove';
-      remove.title = REMOVE_IMAGE;
-      remove.setAttribute('aria-label', REMOVE_IMAGE);
-      remove.textContent = '\u00d7';
-      // mousedown, not click: ProseMirror would otherwise move the selection out from under it.
-      remove.addEventListener('mousedown', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const at = getPos();
-        if (at === undefined) return;
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from: at, to: at + node.nodeSize })
-          .run();
+      const view = new ResizableNodeView({
+        element: image,
+        node,
+        editor,
+        getPos,
+        options: {
+          // The corner alone: a figure keeps its proportions, and a paper is read at one width.
+          directions: ['bottom-right'],
+          preserveAspectRatio: true,
+          min: { width: IMAGE_MIN_PX, height: IMAGE_MIN_PX },
+          className: {
+            container: 'rich-figure',
+            wrapper: 'rich-figure-frame',
+            handle: 'rich-figure-handle',
+            resizing: 'is-resizing',
+          },
+        },
+        // Redraw the img from the node, so a size set anywhere reaches the element.
+        onUpdate: (next) => {
+          const width = asAttribute(next.attrs.width);
+          const height = asAttribute(next.attrs.height);
+          if (width) image.setAttribute('width', width);
+          if (height) image.setAttribute('height', height);
+          return true;
+        },
+        onCommit: (width, height) => {
+          editor.commands.updateAttributes(FIGURE_NODE, {
+            width: Math.round(width),
+            height: Math.round(height),
+          });
+        },
       });
-      figure.append(remove);
 
-      return { dom: figure };
+      view.container.append(
+        removeControl(
+          REMOVE_LABELS.image,
+          () => editor.view,
+          () => getPos(),
+        ),
+      );
+
+      return view;
     };
   },
 });
 
-const REMOVE_IMAGE = 'Remove image';
+const FIGURE_NODE = 'image';
+
+/** Below this a figure is a dot nobody can grab, let alone read. */
+const IMAGE_MIN_PX = 40;
 
 /** Only a primitive is an attribute value; anything else would render as "[object Object]". */
 function asAttribute(value: unknown): string | null {

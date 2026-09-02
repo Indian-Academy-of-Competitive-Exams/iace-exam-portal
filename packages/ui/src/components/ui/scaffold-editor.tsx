@@ -8,6 +8,7 @@ import { DOMSerializer, type Node as ProseNode } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
+import { TableTools } from './rich-text-table';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import {
@@ -183,6 +184,7 @@ export function ScaffoldEditor({
       Superscript,
       Subscript,
       TableKit.configure({ table: { resizable: true } }),
+      TableTools,
       ...(onUploadImage ? [QuestionImage] : []),
       // A half-typed formula shows in red rather than taking the editor down with it.
       BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
@@ -235,6 +237,8 @@ export function ScaffoldEditor({
     <div className={cn(SHELL, disabled && 'bg-disabled', className)} data-focus-ring="wrapper">
       {editor && !disabled ? (
         <RichTextToolbar
+          // Pinned: the box runs the height of the column, and the tools have to stay reachable.
+          className="sticky top-0 z-[--z-sticky] px-3"
           editor={editor}
           math={math}
           onMathChange={setMath}

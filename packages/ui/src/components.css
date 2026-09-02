@@ -500,7 +500,7 @@
 }
 
 /* ============================================================================
-   RICH FIGURE — an image, and the only way a typist can take one back out
+   RICH FIGURE AND TABLE — the way a block is resized, and the way it is taken out
    ========================================================================== */
 .rich-figure {
   position: relative;
@@ -509,12 +509,89 @@
   line-height: 0;
 }
 
+.rich-figure-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
 .rich-figure img {
   max-width: 100%;
+  height: auto;
   border-radius: var(--radius-sm);
 }
 
-.rich-figure-remove {
+/* The corner a mouse grabs. Shown with the figure, so nothing is dragged by accident. */
+.rich-figure-handle {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 1px solid var(--surface);
+  border-radius: var(--radius-sm);
+  background-color: var(--ring);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.rich-figure:hover .rich-figure-handle,
+.rich-figure.is-resizing .rich-figure-handle,
+.ProseMirror-selectednode .rich-figure-handle {
+  opacity: 1;
+}
+
+/* A table's own controls, hanging off its top-right without taking a line of its own. */
+.rich-table-tools {
+  position: relative;
+  z-index: var(--z-sticky);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-1);
+  height: 0;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.rich-table-tools > * {
+  position: relative;
+  top: calc(-1 * var(--space-3));
+}
+
+.rich-table-tools .rich-remove {
+  position: relative;
+  top: calc(-1 * var(--space-3));
+  right: 0;
+  /* It rides the bar's own fade rather than its own, or it would sit alone over the table. */
+  opacity: 1;
+}
+
+.rich-table-tool {
+  padding: 0 var(--space-1-5);
+  height: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
+  color: var(--foreground-secondary);
+  font-size: var(--text-xs);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rich-table-tool:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+.rich-table-tool:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.rich-remove {
   position: absolute;
   top: var(--space-1);
   right: var(--space-1);
@@ -529,37 +606,33 @@
   font-size: var(--text-sm);
   line-height: 1;
   cursor: pointer;
+  z-index: var(--z-sticky);
   /* Shown on hover and on keyboard focus alike; a control only the mouse can find is not one. */
   opacity: 0;
   transition: opacity 120ms ease-out;
 }
 
-.rich-figure:hover .rich-figure-remove,
-.rich-figure-remove:focus-visible,
-.ProseMirror-selectednode .rich-figure-remove {
+.rich-figure:hover .rich-remove,
+.rich-remove:focus-visible,
+.ProseMirror-selectednode .rich-remove {
   opacity: 1;
 }
 
-.rich-figure-remove:hover {
+/* The bar sits BEFORE the table it belongs to, so the table's hover is read forwards. */
+.rich-table-tools:hover,
+.rich-table-tools:focus-within,
+.rich-table-tools:has(+ .tableWrapper:hover) {
+  opacity: 1;
+}
+
+.rich-remove:hover {
   border-color: var(--destructive);
   color: var(--destructive);
 }
 
-.rich-figure-remove:focus-visible {
+.rich-remove:focus-visible {
   box-shadow: var(--focus-ring);
   outline: none;
-}
-
-/* Italic, smaller and faded: an instruction the reader cannot mistake for the value itself. */
-.scaffold-content p.is-empty::before {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  font-style: italic;
-  font-size: var(--text-xs);
-  color: var(--muted-foreground);
-  opacity: 0.75;
 }
 
 /* A selected figure says so, so Backspace is an obvious next key rather than a guess. */
