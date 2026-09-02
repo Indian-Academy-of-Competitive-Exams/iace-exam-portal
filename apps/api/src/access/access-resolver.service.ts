@@ -34,7 +34,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v6';
+const CATALOG_SHAPE = 'v7';
 
 const catalogInclude = (branchId: string | null) =>
   ({
@@ -51,6 +51,9 @@ const catalogInclude = (branchId: string | null) =>
           select: {
             id: true,
             title: true,
+            baseConfig: {
+              select: { durationSec: true, totalQuestions: true, totalMarks: true },
+            },
             branchSchedules: {
               // No branch, no row, which is already what "no row" means: the plain timing rules.
               where: { branchId: { in: branchId === null ? [] : [branchId] } },
@@ -67,6 +70,10 @@ type CatalogRow = Prisma.TestSeriesGetPayload<{ include: ReturnType<typeof catal
 interface ResolvedTest {
   id: string;
   title: string | null;
+  /** What the paper IS, not what this student may do with it — static, so it caches safely. */
+  durationSec: number;
+  totalQuestions: number;
+  totalMarks: number;
   order: number | null;
   /** The window, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
@@ -423,6 +430,9 @@ function toResolvedTest(
   return {
     id: link.test.id,
     title: link.test.title,
+    durationSec: link.test.baseConfig.durationSec,
+    totalQuestions: link.test.baseConfig.totalQuestions,
+    totalMarks: Number(link.test.baseConfig.totalMarks),
     order: link.order,
     ...window,
     attemptStatus: sittings.get(link.test.id) ?? null,

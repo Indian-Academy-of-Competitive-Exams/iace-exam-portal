@@ -3740,15 +3740,26 @@ export function makeBranchConfig(
   };
 }
 
-/** The `Test` columns the catalog reads. The tests module owns the real table. */
+/** The `Test` columns the catalog reads, plus the base config facts it joins in. */
 export interface FakeTestRow {
   id: string;
   title: string | null;
   status: TestStatus;
+  durationSec: number;
+  totalQuestions: number;
+  totalMarks: number;
 }
 
 export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
-  return { id: 'tst_1', title: 'Mock 1', status: TEST_STATUS.ACTIVE, ...overrides };
+  return {
+    id: 'tst_1',
+    title: 'Mock 1',
+    status: TEST_STATUS.ACTIVE,
+    durationSec: 3600,
+    totalQuestions: 100,
+    totalMarks: 200,
+    ...overrides,
+  };
 }
 
 export interface FakeSeriesTestRow {
@@ -3817,7 +3828,14 @@ interface CatalogSeriesWhere extends CatalogReachWhere {
 interface CatalogInclude {
   tests: {
     where: { test: { status: TestStatus } };
-    select: { test: { select: { branchSchedules: { where: { branchId: { in: string[] } } } } } };
+    select: {
+      test: {
+        select: {
+          branchSchedules: { where: { branchId: { in: string[] } } };
+          baseConfig: { select: { durationSec: true; totalQuestions: true; totalMarks: true } };
+        };
+      };
+    };
   };
 }
 
@@ -4229,6 +4247,11 @@ export class FakeCatalogPrisma {
               test: {
                 id: test.id,
                 title: test.title,
+                baseConfig: {
+                  durationSec: test.durationSec,
+                  totalQuestions: test.totalQuestions,
+                  totalMarks: new Prisma.Decimal(test.totalMarks),
+                },
                 branchSchedules: this.data.branchSchedules.filter(
                   (schedule) =>
                     schedule.testId === test.id && branchIds.includes(schedule.branchId),

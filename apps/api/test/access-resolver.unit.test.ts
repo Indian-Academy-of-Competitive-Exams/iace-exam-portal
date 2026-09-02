@@ -373,6 +373,35 @@ describe('AccessResolverService — when a test opens', () => {
   });
 });
 
+describe('AccessResolverService — what the paper is', () => {
+  /** THE failure this prevents: a shut window must not blank out what the paper itself is. */
+  it('reports duration, questions and marks though the window has shut', async () => {
+    const { resolver } = build(
+      reachable({
+        seriesTests: [
+          {
+            testSeriesId: 'srs_1',
+            testId: 'tst_1',
+            order: 1,
+            unlockAt: new Date('2026-05-01T00:00:00.000Z'),
+          },
+        ],
+        branchSchedules: [
+          { branchId: BRANCH, testId: 'tst_1', lateEntrySec: 3600, extraTimeSec: null },
+        ],
+        tests: [
+          makeTestRow({ id: 'tst_1', durationSec: 5400, totalQuestions: 90, totalMarks: 180 }),
+        ],
+      }),
+    );
+
+    const test = (await resolver.catalog('stu_1', NOW)).series[0]?.tests[0];
+
+    assert.equal(test?.canStart, false);
+    assert.deepEqual([test?.durationSec, test?.totalQuestions, test?.totalMarks], [5400, 90, 180]);
+  });
+});
+
 describe('AccessResolverService — the order the catalog comes back in', () => {
   /** Two series can share a name; without the id tiebreak they swap places between reads. */
   it('breaks a tie on id, so the same catalog reads the same way twice', async () => {

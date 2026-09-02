@@ -449,6 +449,10 @@ export function testIsOpen(window: TestWindow, now: Date): boolean {
 export const studentCatalogTestSchema = z.object({
   id: z.string(),
   title: z.string().nullable(),
+  /** What the paper IS, not what this student may do with it — static, so it caches safely. */
+  durationSec: z.number().int(),
+  totalQuestions: z.number().int(),
+  totalMarks: z.number(),
   /** Position in the series. Ordering only — sequential gating is the series' own flag. */
   order: z.number().int().nullable(),
   /** When this test opens inside its series. Null is open from the moment the series is reached. */

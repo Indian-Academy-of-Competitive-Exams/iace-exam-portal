@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CalendarClock, CircleCheck, LockKeyhole } from 'lucide-react';
-import { Badge, Button, Card, CardContent, TruncatedText } from '@iace/ui';
+import { Badge, Button, Card, CardContent, TruncatedText, plural } from '@iace/ui';
 import {
   ATTEMPT_STATUS,
   INSTITUTE_TIME_ZONE,
@@ -30,6 +30,11 @@ export function TestTile({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
           </TruncatedText>
           <TruncatedText className="text-sm text-muted-foreground">{row.seriesName}</TruncatedText>
         </Link>
+
+        <p className="text-xs text-muted-foreground">
+          {plural(test.totalQuestions, 'question')} · {test.totalMarks} marks ·{' '}
+          {Math.round(test.durationSec / 60)} minutes
+        </p>
 
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           {test.order === null ? null : <span className="tabular-nums">Test {test.order}</span>}

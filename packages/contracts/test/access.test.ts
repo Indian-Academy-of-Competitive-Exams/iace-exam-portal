@@ -32,6 +32,9 @@ const SERIES = {
     {
       id: 'tst_1',
       title: 'Mock 1',
+      durationSec: 3600,
+      totalQuestions: 100,
+      totalMarks: 200,
       order: 1,
       opensAt: null,
       closesAt: null,
@@ -151,6 +154,9 @@ describe('testBucket', () => {
   const test = (over: Partial<StudentCatalogTest> = {}): StudentCatalogTest => ({
     id: 'tst_1',
     title: 'Mock 1',
+    durationSec: 3600,
+    totalQuestions: 100,
+    totalMarks: 200,
     order: 1,
     opensAt: null,
     closesAt: null,
