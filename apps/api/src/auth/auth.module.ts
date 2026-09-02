@@ -12,6 +12,7 @@ import { SessionService } from './session.service';
 import { TokenService } from './token.service';
 import { OtpService } from './otp/otp.service';
 import { PinService } from './pin/pin.service';
+import { StartingPinService } from './pin/starting-pin.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ActorGuard } from './guards/actor.guard';
 import { FeaturePermissionGuard } from './guards/feature-permission.guard';
@@ -38,6 +39,7 @@ import { FeaturePermissionGuard } from './guards/feature-permission.guard';
     SessionService,
     OtpService,
     PinService,
+    StartingPinService,
     JwtAuthGuard,
     ActorGuard,
     FeaturePermissionGuard,
@@ -49,6 +51,7 @@ import { FeaturePermissionGuard } from './guards/feature-permission.guard';
     TokenService,
     SessionService,
     PinService,
+    StartingPinService,
     JwtAuthGuard,
     ActorGuard,
     FeaturePermissionGuard,

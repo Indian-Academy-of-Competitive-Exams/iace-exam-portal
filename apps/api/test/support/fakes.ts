@@ -70,7 +70,8 @@ import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type StorageService } from '../../src/storage/storage.service';
 import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
 import { type DeviceContext } from '../../src/auth/auth.types';
-import { type AuthService } from '../../src/auth/auth.service';
+import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
+import { type PinService } from '../../src/auth/pin/pin.service';
 import {
   type DomainEventBus,
   type DomainEventName,
@@ -2415,10 +2416,12 @@ export interface FakeBranch {
 }
 
 /** Auth as students and imports use it: one call, to hash a starting PIN. */
-export function fakeAuth(): AuthService {
-  return {
-    hashPin: (pin: string) => Promise.resolve(`hash:${pin}`),
-  } as unknown as AuthService;
+/** The REAL service over a fake hash and sender: a starting PIN is a rule worth exercising, not stubbing. */
+export function fakeStartingPins(
+  sender: MessageSender = new FakeMessageSender(),
+  hash: (pin: string) => Promise<string> = (pin) => Promise.resolve(`hash:${pin}`),
+): StartingPinService {
+  return new StartingPinService({ hash } as unknown as PinService, sender);
 }
 
 /** A roster CSV with the demanded columns filled, so a test varies only what it is about. */
@@ -5459,6 +5462,79 @@ export interface FakeStudentSubjectStatRow {
   wrong: number;
   sumTimeSec: number;
   computedAt: Date | null;
+}
+
+/** One `StudentSubjectStat` row with the subject name the overview joins to. */
+export interface FakeOverviewSubjectRow {
+  studentId: string;
+  subjectId: string;
+  subjectName: string;
+  scope: TestScope;
+  evaluationMode: EvaluationMode;
+  attempted: number;
+  correct: number;
+  sumTimeSec: number;
+}
+
+export interface FakeOverviewData {
+  stats: FakeStudentStatRow[];
+  subjects: FakeOverviewSubjectRow[];
+  students: { id: string; deletedAt: Date | null; currentBranchId: string | null }[];
+}
+
+/** The dashboard's whole world, handing back Decimal and BigInt exactly as Prisma does. */
+export class FakeOverviewPrisma {
+  constructor(private readonly data: FakeOverviewData) {}
+
+  readonly studentStat = {
+    findUnique: ({ where }: { where: { studentId: string } }) => {
+      const row = this.data.stats.find((held) => held.studentId === where.studentId);
+      if (!row) return Promise.resolve(null);
+      return Promise.resolve({
+        ...row,
+        sumScore: new Prisma.Decimal(row.sumScore),
+        sumPercentile: new Prisma.Decimal(row.sumPercentile),
+        bestPercentile: row.bestPercentile === null ? null : new Prisma.Decimal(row.bestPercentile),
+        sumTimeSec: BigInt(row.sumTimeSec),
+      });
+    },
+  };
+
+  readonly studentSubjectStat = {
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(
+        this.data.subjects
+          .filter((row) => row.studentId === where.studentId)
+          .map((row) => ({
+            subjectId: row.subjectId,
+            scope: row.scope,
+            evaluationMode: row.evaluationMode,
+            attempted: row.attempted,
+            correct: row.correct,
+            sumTimeSec: BigInt(row.sumTimeSec),
+            subject: { name: row.subjectName },
+          })),
+      ),
+  };
+
+  readonly student = {
+    /** The scoped read: a branch filter, and `in: []` matching nobody exactly as Prisma does. */
+    findFirst: ({
+      where,
+    }: {
+      where: { id: string; deletedAt: null; currentBranchId?: { in: string[] } };
+    }) =>
+      Promise.resolve(
+        this.data.students.find(
+          (row) =>
+            row.id === where.id &&
+            row.deletedAt === null &&
+            (where.currentBranchId === undefined ||
+              (row.currentBranchId !== null &&
+                where.currentBranchId.in.includes(row.currentBranchId))),
+        ) ?? null,
+      ),
+  };
 }
 
 export interface FakeTestStatRow {

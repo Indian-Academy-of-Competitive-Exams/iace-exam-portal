@@ -3,12 +3,12 @@ import { describe, it } from 'node:test';
 import { BRANCH_TYPE, pinSchema } from '@iace/contracts';
 import { MESSAGE_KINDS } from '../src/common/messaging';
 import { AuditService } from '../src/audit/audit.service';
-import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
 import { type StudentGrantsService } from '../src/access';
 import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakeMessageSender,
+  fakeStartingPins,
   FakePrisma,
   FakeStorage,
   makeBranch,
@@ -16,10 +16,6 @@ import {
   roster,
   type FakeStudent,
 } from './support/fakes';
-
-/** The PIN itself is hashed, so the hash records the plaintext it was given — that is what is checked. */
-const fakeAuth = (): AuthService =>
-  ({ hashPin: (pin: string) => Promise.resolve(`hashed:${pin}`) }) as unknown as AuthService;
 
 const fakeGrants = (): StudentGrantsService =>
   ({ grantMany: () => Promise.resolve() }) as unknown as StudentGrantsService;
@@ -33,11 +29,11 @@ function build(students: FakeStudent[] = []) {
   const sender = new FakeMessageSender();
   const service = new ImportsService(
     prisma.asService(),
-    fakeAuth(),
+    // The real minting, over a hash that records the plaintext it was given.
+    fakeStartingPins(sender, (pin) => Promise.resolve(`hashed:${pin}`)),
     new FakeStorage() as never,
     new AuditService(prisma.asService(), new FakeStorage() as never),
     fakeGrants(),
-    sender,
   );
   return { prisma, sender, service };
 }
@@ -105,11 +101,10 @@ describe('the PIN a roster import issues', () => {
     const failing = { send: () => Promise.reject(new Error('provider is down')) };
     const withFailingSender = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      fakeStartingPins(failing),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      failing,
     );
 
     const result = await withFailingSender.commitStudents(

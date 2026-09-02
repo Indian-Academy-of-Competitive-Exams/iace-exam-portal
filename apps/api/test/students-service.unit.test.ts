@@ -2,6 +2,7 @@ import { EVERY_BRANCH } from '../src/common/security';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, BRANCH_TYPE, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
+import { MESSAGE_KINDS } from '../src/common/messaging';
 import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
 import { type ExamsService } from '../src/configs';
@@ -9,8 +10,9 @@ import { type StorageService } from '../src/storage/storage.service';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import {
-  fakeAuth,
+  fakeStartingPins,
   FakeCodeCatalog,
+  FakeMessageSender,
   FakeEventBus,
   FakePrisma,
   FakeSeriesFanOut,
@@ -53,11 +55,13 @@ function serviceWith(
   const exams = new FakeExams(usableExams);
   const programs = new FakeCodeCatalog(usablePrograms);
   const events = new FakeEventBus();
+  const sender = new FakeMessageSender();
   return {
     prisma,
     exams,
     programs,
     events,
+    sender,
     service: new StudentsService(
       prisma.asService(),
       undefined as unknown as StorageService,
@@ -67,7 +71,7 @@ function serviceWith(
         new FakeSeriesFanOut().asService(),
         new AuditContext(),
       ),
-      fakeAuth(),
+      fakeStartingPins(sender),
       programs.asService(),
       new AuditContext(),
       events.asService(),
@@ -93,8 +97,33 @@ describe('StudentsService.create — the type is the caller’s, never the servi
 
     await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE }, EVERY_BRANCH);
 
-    assert.equal(prisma.students[0]?.pinHash, 'hash:9000');
+    assert.match(prisma.students[0]?.pinHash ?? '', /^hash:\d{4}$/);
     assert.equal(prisma.students[0]?.pinIsDefault, true);
+  });
+
+  /** A roster in the wrong hands used to BE the list of PINs: each one was the mobile it belonged to. */
+  it('does not derive that PIN from the number it belongs to', async () => {
+    const { service, prisma } = serviceWith([]);
+
+    await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE }, EVERY_BRANCH);
+
+    const pin = (prisma.students[0]?.pinHash ?? '').replace('hash:', '');
+    assert.ok(!'9000000020'.startsWith(pin), `${pin} is the first digits of their own number`);
+  });
+
+  /** Nobody can derive it any more, so a PIN nobody was told is an account nobody can open. */
+  it('texts that PIN to the student it was issued to', async () => {
+    const { service, prisma, sender } = serviceWith([]);
+
+    await service.create({ mobile: '9000000020', studentType: STUDENT_TYPE.ONLINE }, EVERY_BRANCH);
+
+    assert.equal(sender.lastMessage.kind, MESSAGE_KINDS.PIN);
+    assert.equal(sender.lastMessage.to, '9000000020');
+    assert.equal(
+      `hash:${String(sender.lastMessage.data?.pin)}`,
+      prisma.students[0]?.pinHash,
+      'the PIN they were told has to be the one that was stored',
+    );
   });
 
   /** The PIN is the institute's, not theirs, so the roster must still chase them to change it. */

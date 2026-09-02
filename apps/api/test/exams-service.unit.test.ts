@@ -15,7 +15,7 @@ import { SUPER_ADMIN_KEY } from '../src/common/security';
 import { StudentsService } from '../src/students';
 import { AuditContext } from '../src/audit';
 import {
-  fakeAuth,
+  fakeStartingPins,
   FakeEventBus,
   FakePrisma,
   makeExam,
@@ -34,7 +34,7 @@ function serviceWith(exams: FakeExam[] = [makeExam()], students: FakeStudent[] =
       null as never,
       null as never,
       null as never,
-      fakeAuth(),
+      fakeStartingPins(),
       null as never,
       null as never,
       new FakeEventBus().asService(),

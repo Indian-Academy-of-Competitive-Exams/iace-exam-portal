@@ -7,7 +7,7 @@ import { BranchesService } from '../src/branches/branches.service';
 import { StudentsService } from '../src/students/students.service';
 import { AuditContext } from '../src/audit';
 import {
-  fakeAuth,
+  fakeStartingPins,
   FakeConfig,
   FakeEventBus,
   FakePrisma,
@@ -123,7 +123,7 @@ function studentsWith(student = makeStudent()) {
       null as never,
       null as never,
       null as never,
-      fakeAuth(),
+      fakeStartingPins(),
       null as never,
       null as never,
       new FakeEventBus().asService(),
@@ -211,7 +211,7 @@ describe('the counts the configs module asks for', () => {
       null as never,
       null as never,
       null as never,
-      fakeAuth(),
+      fakeStartingPins(),
       null as never,
       null as never,
       new FakeEventBus().asService(),

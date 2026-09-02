@@ -2,6 +2,6 @@
 export { AuthModule } from './auth.module';
 export { AuthService } from './auth.service';
 export { deviceFrom } from './device';
-export { defaultPinFor } from './pin/default-pin';
-export { randomPin } from './pin/random-pin';
+/** A starting PIN is random, hashed like any other, and readable exactly once — on its way out. */
+export { StartingPinService, type StartingPin } from './pin/starting-pin.service';
 export { type DeviceContext } from './auth.types';

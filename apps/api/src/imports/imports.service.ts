@@ -1,6 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
-  ActorTypes,
   AUDIT_ACTION,
   AUDIT_FEATURE,
   IMPORT_LOG_STATUS,
@@ -19,7 +18,7 @@ import {
   ErrorCodes,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthService, randomPin } from '../auth';
+import { StartingPinService, type StartingPin } from '../auth';
 import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
@@ -30,26 +29,12 @@ import { EVERY_BRANCH, type BranchScope } from '../common/security';
 
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
-import {
-  MESSAGE_CHANNELS,
-  MESSAGE_KINDS,
-  MESSAGE_SENDER,
-  type MessageSender,
-} from '../common/messaging';
 import { toDateColumn } from '../common/time/institute-day';
 
 /**
  * How many PINs to hash at once. Node's default libuv threadpool is 4 threads, so more would queue
  * anyway while multiplying the transient memory.
  */
-const HASH_CONCURRENCY = 4;
-
-/** A PIN and its hash, together only for as long as it takes to write one and text the other. */
-interface MintedPin {
-  mobile?: string;
-  pin: string;
-  hash: string;
-}
 
 /** What a run had written when it closed. A failure carries the same shape — it wrote rows too. */
 interface RunOutcome {
@@ -66,11 +51,10 @@ export class ImportsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auth: AuthService,
+    private readonly startingPins: StartingPinService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
     private readonly grants: StudentGrantsService,
-    @Inject(MESSAGE_SENDER) private readonly sender: MessageSender,
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
@@ -124,7 +108,7 @@ export class ImportsService {
     let created = 0;
     const studentIds: string[] = [];
     const rowActions: { entityId: string; action: AuditAction }[] = [];
-    const issued: MintedPin[] = [];
+    const issued: StartingPin[] = [];
     const written = (): RunOutcome => ({
       feature: AUDIT_FEATURE.STUDENT,
       rowActions,
@@ -138,8 +122,12 @@ export class ImportsService {
     });
 
     try {
-      const minted = await this.mintStartingPins(
-        plan.rows.filter((row) => row.action === 'create' && row.mobile).map((row) => row.mobile!),
+      const minted = byMobile(
+        await this.startingPins.mint(
+          plan.rows
+            .filter((row) => row.action === 'create' && row.mobile)
+            .map((row) => row.mobile!),
+        ),
       );
 
       for (const row of plan.rows) {
@@ -162,7 +150,7 @@ export class ImportsService {
             pinIsDefault: true,
           },
         });
-        if (pin) issued.push({ ...pin, mobile: row.mobile });
+        if (pin) issued.push(pin);
         created += 1;
         studentIds.push(student.id);
         rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
@@ -178,7 +166,7 @@ export class ImportsService {
     }
 
     await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
-    await this.announcePins(issued);
+    await this.startingPins.announce(issued);
 
     return {
       ...plan.summary,
@@ -220,7 +208,7 @@ export class ImportsService {
     let updated = 0;
     const rowActions: { entityId: string; action: AuditAction }[] = [];
     // Only rows that were actually written: a PIN texted for a row that failed opens nothing.
-    const issued: MintedPin[] = [];
+    const issued: StartingPin[] = [];
     // A thunk, not a value: the failure path has to close on the rows the loop already wrote.
     const written = (): RunOutcome => ({
       feature: AUDIT_FEATURE.STUDENT,
@@ -233,10 +221,12 @@ export class ImportsService {
       // Hashed up front, and in parallel. argon2 is deliberately ~13ms a go, so doing it inside the
       // write loop made a 1,000-row roster thirteen seconds of a single request sitting idle on one
       // core.
-      const minted = await this.mintStartingPins(
-        plan.rows
-          .filter((row) => row.willReceiveDefaultPin && row.mobile)
-          .map((row) => row.mobile!),
+      const minted = byMobile(
+        await this.startingPins.mint(
+          plan.rows
+            .filter((row) => row.willReceiveDefaultPin && row.mobile)
+            .map((row) => row.mobile!),
+        ),
       );
 
       for (const row of plan.rows) {
@@ -253,7 +243,7 @@ export class ImportsService {
         rowActions.push(done);
 
         const pin = row.willReceiveDefaultPin ? minted.get(row.mobile) : undefined;
-        if (pin) issued.push({ ...pin, mobile: row.mobile });
+        if (pin) issued.push(pin);
       }
     } catch (error) {
       await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
@@ -264,7 +254,7 @@ export class ImportsService {
     }
 
     await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
-    await this.announcePins(issued);
+    await this.startingPins.announce(issued);
 
     return { ...plan.summary, created, updated, skipped: plan.summary.invalid };
   }
@@ -350,40 +340,6 @@ export class ImportsService {
       await this.contextFor(fetched.table, EVERY_BRANCH),
     );
     return { ...plan, fileErrors: [...fetched.errors, ...plan.fileErrors] };
-  }
-
-  /** Mobile -> a fresh PIN and its hash. Bounded: argon2 is memory-hard, and 1,000 at once wants ~19GB. */
-  private async mintStartingPins(mobiles: string[]): Promise<Map<string, MintedPin>> {
-    const minted = new Map<string, MintedPin>();
-
-    for (let start = 0; start < mobiles.length; start += HASH_CONCURRENCY) {
-      const batch = mobiles.slice(start, start + HASH_CONCURRENCY).map((mobile) => ({
-        mobile,
-        pin: randomPin(),
-      }));
-      const hashes = await Promise.all(batch.map(({ pin }) => this.auth.hashPin(pin)));
-      batch.forEach(({ mobile, pin }, index) => minted.set(mobile, { pin, hash: hashes[index]! }));
-    }
-
-    return minted;
-  }
-
-  /** The one time a PIN is readable, sent AFTER the run is durable and taking nothing down with it. */
-  private async announcePins(issued: readonly MintedPin[]): Promise<void> {
-    for (const { mobile, pin } of issued) {
-      await this.sender
-        .send({
-          channel: MESSAGE_CHANNELS.SMS,
-          kind: MESSAGE_KINDS.PIN,
-          to: mobile!,
-          actor: ActorTypes.STUDENT,
-          body: `${pin} is your IACE PIN. Sign in with your mobile number and change it.`,
-          data: { pin },
-        })
-        .catch((error: unknown) => {
-          this.logger.error(`Starting PIN not delivered to ${mobile}`, error);
-        });
-    }
   }
 
   /**
@@ -541,4 +497,9 @@ const SCHOLARSHIP_NEEDS_EVERY_BRANCH =
 function assertReachesEveryBranch(scope: BranchScope): void {
   if (scope.all) return;
   throw new AppException(ErrorCodes.FORBIDDEN, SCHOLARSHIP_NEEDS_EVERY_BRANCH);
+}
+
+/** The importer decides row by row, so the minted PINs are indexed by the number they belong to. */
+function byMobile(issued: readonly StartingPin[]): Map<string, StartingPin> {
+  return new Map(issued.map((pin) => [pin.mobile, pin]));
 }

@@ -15,12 +15,12 @@ import {
   type QuestionImportColumnKey,
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
-import { type AuthService } from '../src/auth';
 import { ImportsService } from '../src/imports/imports.service';
 import { type StudentGrantsService } from '../src/access';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
   FakeMessageSender,
+  fakeStartingPins,
   FakePrisma,
   FakeQuestionBankPrisma,
   FakeStorage,
@@ -111,9 +111,9 @@ describe('AuditService.recordImportRows', () => {
   });
 });
 
-const fakeAuth = (
-  hashPin: (pin: string) => Promise<string> = (pin) => Promise.resolve(`hash:${pin}`),
-) => ({ hashPin }) as unknown as AuthService;
+/** A hash that refuses is how a run is made to die partway, which is what one test is about. */
+const startingPins = (hash?: (pin: string) => Promise<string>) =>
+  fakeStartingPins(new FakeMessageSender(), hash);
 
 /** The scholarship path is not what these tests exercise, so the grants service is a stand-in. */
 const fakeGrants = () =>
@@ -129,11 +129,10 @@ describe('ImportsService — a preview writes nothing at all', () => {
     const storage = new FakeStorage();
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
     await service.previewStudents(Buffer.from(roster('mobile\n9876543210')), EVERY_BRANCH);
@@ -163,11 +162,10 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     const storage = new FakeStorage();
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
     const result = await service.commitStudents(
@@ -227,11 +225,10 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     const prisma = importPrisma();
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(() => Promise.reject(new Error('argon2 unavailable'))),
+      startingPins(() => Promise.reject(new Error('argon2 unavailable'))),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
     await assert.rejects(
@@ -258,11 +255,10 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     prisma.studentWriteLimit = 2;
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
     await assert.rejects(
@@ -305,11 +301,10 @@ describe('ImportsService.commitStudents — what an import run actually left beh
     } as unknown as AuditService;
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       new FakeStorage() as never,
       throwingAudit,
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
     const result = await service.commitStudents(
@@ -343,11 +338,10 @@ describe('ImportsService — a failed close preserves what openRun already recor
     const prisma = new FakePrisma();
     const service = new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
     const opened = await prisma.importLog.create({
       data: {
@@ -502,11 +496,10 @@ describe('ImportsService — the branches the admin uploading may write into', (
   const serviceOn = (prisma: ReturnType<typeof importPrisma>) =>
     new ImportsService(
       prisma.asService(),
-      fakeAuth(),
+      startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeGrants(),
-      new FakeMessageSender(),
     );
 
   /** The failure this prevents: a scope reaching the planner on preview but not on commit. */

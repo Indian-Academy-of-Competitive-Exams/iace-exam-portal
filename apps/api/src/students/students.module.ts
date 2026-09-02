@@ -18,7 +18,7 @@ import { StudentConsentListener } from './student-consent.listener';
     PrismaModule,
     StorageModule,
     AppConfigModule,
-    // For `hashPin`: a student added by hand is given a starting PIN, hashed the one way.
+    // For the starting PIN: a student added by hand is issued one the same way a roster is.
     AuthModule,
     BranchesModule,
     forwardRef(() => ConfigsModule),
