@@ -1,9 +1,14 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/app-config.service';
+import { evictionRisk } from './eviction-policy';
 
 /** The value is never read — a lock is the key's existence. */
 const LOCK_HELD = '1';
+
+/** Reconnect backoff: quick enough for a restart, slow enough not to storm a Redis that is still down. */
+const RETRY_STEP_MS = 200;
+const RETRY_CEILING_MS = 5000;
 
 /**
  * The application Redis connection: OTP codes, sessions, device binding, rate limiting, live test
@@ -12,20 +17,42 @@ const LOCK_HELD = '1';
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
+  private readonly isProduction: boolean;
   readonly client: Redis;
 
   constructor(config: AppConfigService) {
+    this.isProduction = config.isProduction;
     this.client = new Redis(config.get('REDIS_URL'), {
       lazyConnect: true,
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
+      retryStrategy: (attempt) => Math.min(attempt * RETRY_STEP_MS, RETRY_CEILING_MS),
     });
     this.client.on('error', (error: Error) => this.logger.error(`Redis error: ${error.message}`));
   }
 
   async onModuleInit(): Promise<void> {
     await this.client.connect();
+    await this.guardEvictionPolicy();
     this.logger.log('Connected to Redis');
+  }
+
+  /** Refuses to boot production against a Redis that may evict, rather than losing sittings later. */
+  private async guardEvictionPolicy(): Promise<void> {
+    const risk = evictionRisk(await this.maxmemoryPolicy());
+    if (!risk) return;
+    if (risk.fatal && this.isProduction) throw new Error(risk.message);
+    this.logger.warn(risk.message);
+  }
+
+  /** Null when the command is refused, which managed Redis often does — unknown, not safe. */
+  private async maxmemoryPolicy(): Promise<string | null> {
+    try {
+      const reported: unknown = await this.client.config('GET', 'maxmemory-policy');
+      return Array.isArray(reported) && typeof reported[1] === 'string' ? reported[1] : null;
+    } catch {
+      return null;
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

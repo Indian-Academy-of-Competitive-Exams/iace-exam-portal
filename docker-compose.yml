@@ -33,7 +33,10 @@ services:
     image: redis:7-alpine
     container_name: iace-redis
     restart: unless-stopped
-    command: ['redis-server', '--appendonly', 'yes']
+    # noeviction matches production: live attempt state, leaderboards, OTP and sessions are all
+    # here, so a key dropped under memory pressure is a lost sitting, not a cache miss. AOF is what
+    # survives a restart mid-test.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
     ports:
       - '${REDIS_PORT:-6379}:6379'
     volumes:

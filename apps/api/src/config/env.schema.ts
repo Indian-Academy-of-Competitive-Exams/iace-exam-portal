@@ -133,6 +133,15 @@ export const envSchema = z.object({
   SMTP_FROM: z.string().optional(),
 });
 
+/** An empty allowlist reflects whatever origin asks, which is no allowlist at all. */
+const corsIsClosed = (env: z.infer<typeof envSchema>): boolean =>
+  env.NODE_ENV !== NODE_ENVS.PRODUCTION || env.CORS_ORIGINS.length > 0;
+
+export const envSchemaChecked = envSchema.refine(corsIsClosed, {
+  path: ['CORS_ORIGINS'],
+  message: 'is required in production — an empty list would let any site call the API',
+});
+
 export type Env = z.infer<typeof envSchema>;
 
 /**
@@ -140,7 +149,7 @@ export type Env = z.infer<typeof envSchema>;
  * surface as a mystery 500 an hour into a live test.
  */
 export function validateEnv(raw: Record<string, unknown>): Env {
-  const parsed = envSchema.safeParse(raw);
+  const parsed = envSchemaChecked.safeParse(raw);
   if (parsed.success) return parsed.data;
 
   const details = parsed.error.issues

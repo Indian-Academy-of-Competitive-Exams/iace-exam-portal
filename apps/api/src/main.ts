@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { AppConfigService } from './config/app-config.service';
 import { REQUEST_ID_HEADER } from './common/request-id';
 import { registerBodyParsers } from './common/body-parsers';
+import { corsOrigin, helmetOptions } from './common/security-headers';
 
 async function bootstrap(): Promise<void> {
   // bodyParser: false so the limits in registerBodyParsers are the only ones that apply — Nest's
@@ -13,12 +14,12 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false, bodyParser: false });
   const config = app.get(AppConfigService);
 
-  app.use(helmet());
+  app.use(helmet(helmetOptions));
   registerBodyParsers(app);
 
   const origins = config.get('CORS_ORIGINS');
   app.enableCors({
-    origin: origins.length > 0 ? origins : true,
+    origin: corsOrigin(origins, config.isProduction),
     credentials: true,
     // Without this the browser hides the header, and the SPA could not report
     // the request id for a response it never got to parse.
