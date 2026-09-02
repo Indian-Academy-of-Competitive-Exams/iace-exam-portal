@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Button, Progress, TruncatedText, linkVariants, plural } from '@iace/ui';
+import { Progress, TruncatedText, linkVariants, plural } from '@iace/ui';
 import { ROUTES } from '../../lib/constants';
 import { seriesProgress, type Sittable } from '../../lib/catalog';
 import { type StudentCatalogSeries } from '@iace/contracts';
@@ -17,18 +17,13 @@ export function SeriesShelf({ series, rows, now }: Readonly<SeriesShelfProps>) {
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
-            <TruncatedText className="text-md font-semibold">{series.name}</TruncatedText>
-          </Link>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {progress.done} of {plural(progress.total, 'test')} done
-          </span>
-        </div>
-        <Button asChild size="sm" variant="outline">
-          <Link to={ROUTES.SERIES(series.id)}>Open series</Link>
-        </Button>
+      <div className="flex min-w-0 flex-col gap-1">
+        <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
+          <TruncatedText className="text-md font-semibold">{series.name}</TruncatedText>
+        </Link>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {progress.done} of {plural(progress.total, 'test')} done
+        </span>
       </div>
 
       <Progress value={progress.percent} size="sm" aria-label={`Progress through ${series.name}`} />

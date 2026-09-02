@@ -1,7 +1,12 @@
 import { Link } from 'react-router-dom';
 import { CalendarClock, CircleCheck, LockKeyhole } from 'lucide-react';
 import { Badge, Button, Card, CardContent, TruncatedText } from '@iace/ui';
-import { INSTITUTE_TIME_ZONE, TEST_BUCKET, type StudentCatalogTest } from '@iace/contracts';
+import {
+  ATTEMPT_STATUS,
+  INSTITUTE_TIME_ZONE,
+  TEST_BUCKET,
+  type StudentCatalogTest,
+} from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { type Sittable } from '../../lib/catalog';
 
@@ -25,6 +30,13 @@ export function TestTile({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
           </TruncatedText>
           <TruncatedText className="text-sm text-muted-foreground">{row.seriesName}</TruncatedText>
         </Link>
+
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          {test.order === null ? null : <span className="tabular-nums">Test {test.order}</span>}
+          {/* The Done badge already says a finished sitting is finished. */}
+          {done || test.order === null ? null : <span aria-hidden>·</span>}
+          {done ? null : <span>{sittingState(row)}</span>}
+        </p>
 
         {done ? (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -68,6 +80,13 @@ function TileAction({ row, now, done }: Readonly<{ row: Sittable; now: Date; don
       {shutReason(row.test, now)}
     </p>
   );
+}
+
+/** Where an unfinished sitting stands — a state the action button only implies. */
+function sittingState(row: Sittable): string {
+  if (row.test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS) return 'In progress';
+  if (row.test.attemptStatus === ATTEMPT_STATUS.SUBMITTED) return 'Awaiting marks';
+  return 'Not started';
 }
 
 function whenLine(test: StudentCatalogTest, now: Date): string {
