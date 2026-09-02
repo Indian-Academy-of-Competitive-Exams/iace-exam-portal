@@ -3,6 +3,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { AuthModule } from '../auth';
 import { AuditModule } from '../audit';
 import { AccessModule } from '../access';
+import { MessagingModule } from '../common/messaging';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { AppConfigModule } from '../config/config.module';
@@ -21,6 +22,8 @@ import { ImportsService } from './imports.service';
     StorageModule,
     AuditModule,
     AccessModule,
+    // A roster import is the one time a PIN is readable, and the only time it is ever sent.
+    MessagingModule,
     /** The upload ceiling, applied WHILE the body arrives. */
     MulterModule.registerAsync({
       imports: [AppConfigModule],
