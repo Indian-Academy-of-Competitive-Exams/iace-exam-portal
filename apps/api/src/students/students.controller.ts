@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   AUDIT_FEATURE,
   AUDIT_ACTION,
@@ -11,6 +21,7 @@ import {
   studentListQuerySchema,
   updateStudentSchema,
   type CreateStudentBody,
+  type ErasureReceipt,
   type Paginated,
   type SetStudentActiveBody,
   type SetStudentTestBlockedBody,
@@ -30,6 +41,7 @@ import {
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit, TOGGLE_ACTIONS } from '../audit';
 import { StudentsService } from './students.service';
+import { StudentPrivacyService } from './student-privacy.service';
 
 /**
  * The admin-side student directory. `@Actors(ADMIN)` is the hard boundary — a student's
@@ -38,7 +50,10 @@ import { StudentsService } from './students.service';
 @Controller('admin/students')
 @Actors(ActorTypes.ADMIN)
 export class StudentsController {
-  constructor(private readonly students: StudentsService) {}
+  constructor(
+    private readonly students: StudentsService,
+    private readonly privacy: StudentPrivacyService,
+  ) {}
 
   /** Returns the list shape the response interceptor splits into data + meta. */
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -85,6 +100,15 @@ export class StudentsController {
     @Body(new ZodBody(setStudentActiveSchema)) body: SetStudentActiveBody,
   ): Promise<StudentDetail> {
     return this.students.setActive(id, body.isActive);
+  }
+
+  /** An erasure request, actioned. Irreversible, and every sitting they sat is left standing. */
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.DELETE)
+  @RequiresSuperAdmin()
+  @Post(':id/erasure')
+  @HttpCode(HttpStatus.OK)
+  erase(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser): Promise<ErasureReceipt> {
+    return this.privacy.anonymize(id, branchScopeOf(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, TOGGLE_ACTIONS.tests)

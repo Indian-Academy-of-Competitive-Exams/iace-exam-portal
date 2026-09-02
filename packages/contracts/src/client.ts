@@ -65,6 +65,15 @@ import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
   ME_ROUTES,
+  consentStateSchema,
+  consentStatusSchema,
+  erasureReceiptSchema,
+  studentDataExportSchema,
+  type ConsentState,
+  type ConsentStatus,
+  type ErasureReceipt,
+  type RecordConsentInput,
+  type StudentDataExport,
   meSchema,
   type ChangePinInput,
   type DocumentKind,
@@ -596,6 +605,22 @@ export function createApiClient(options: ApiClientOptions) {
     /** The signed-in student's own account. No ids — the token is the subject. */
     me: {
       profile: (): Promise<Me> => request(ME_ROUTES.profile, { schema: meSchema }),
+
+      consent: (): Promise<ConsentStatus> =>
+        request(ME_ROUTES.consent, { schema: consentStatusSchema }),
+
+      recordConsent: (input: RecordConsentInput): Promise<ConsentState> =>
+        request(ME_ROUTES.consent, {
+          method: 'POST',
+          body: input,
+          schema: consentStateSchema,
+        }),
+
+      dataExport: (): Promise<StudentDataExport> =>
+        request(ME_ROUTES.dataExport, { schema: studentDataExportSchema }),
+
+      erasure: (): Promise<ErasureReceipt> =>
+        request(ME_ROUTES.erasure, { method: 'POST', schema: erasureReceiptSchema }),
 
       update: (input: UpdateMeInput): Promise<Me> =>
         request(ME_ROUTES.update, { method: 'PATCH', body: input, schema: meSchema }),

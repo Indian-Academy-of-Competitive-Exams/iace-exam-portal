@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AppConfigModule } from '../config/config.module';
 import { StorageModule } from '../storage/storage.module';
 import { AuthModule } from '../auth';
 import { BranchesModule } from '../branches';
@@ -7,6 +8,8 @@ import { ConfigsModule } from '../configs';
 import { type AccessModule } from '../access';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
+import { StudentPrivacyService } from './student-privacy.service';
+import { StudentConsentListener } from './student-consent.listener';
 
 @Module({
   // Identity documents are stored as keys; every read signs them. ConfigsModule is a cycle:
@@ -14,6 +17,7 @@ import { StudentsService } from './students.service';
   imports: [
     PrismaModule,
     StorageModule,
+    AppConfigModule,
     // For `hashPin`: a student added by hand is given a starting PIN, hashed the one way.
     AuthModule,
     BranchesModule,
@@ -25,7 +29,7 @@ import { StudentsService } from './students.service';
     ),
   ],
   controllers: [StudentsController],
-  providers: [StudentsService],
-  exports: [StudentsService],
+  providers: [StudentsService, StudentPrivacyService, StudentConsentListener],
+  exports: [StudentsService, StudentPrivacyService],
 })
 export class StudentsModule {}

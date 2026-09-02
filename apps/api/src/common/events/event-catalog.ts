@@ -32,6 +32,8 @@ export const DOMAIN_EVENTS = {
   STUDENT_ENROLMENT_ADDED: 'student.enrolment_added',
   /** An admin filed a grant against a student. WIRED — see access. */
   SERIES_GRANTED: 'series.granted',
+  /** A student finished signing up and has an account for the first time. WIRED — see students. */
+  STUDENT_SIGNED_UP: 'student.signed_up',
 } as const;
 
 export type DomainEventName = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
@@ -118,6 +120,10 @@ export interface SeriesGrantedEvent {
   testSeriesId: string;
 }
 
+export interface StudentSignedUpEvent {
+  studentId: string;
+}
+
 /**
  * Name → payload. `emit` is typed off this, so an event cannot be published with the wrong shape
  * and a handler cannot claim a shape the producer never sends.
@@ -135,4 +141,5 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.SERIES_UNLOCKED]: SeriesUnlockedEvent;
   [DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED]: StudentEnrolmentAddedEvent;
   [DOMAIN_EVENTS.SERIES_GRANTED]: SeriesGrantedEvent;
+  [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;
 }

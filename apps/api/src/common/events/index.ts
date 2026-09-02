@@ -15,5 +15,6 @@ export {
   type StudentAccessChangedEvent,
   type StudentEnrolmentAddedEvent,
   type StudentPinResetEvent,
+  type StudentSignedUpEvent,
   type TestAssignedEvent,
 } from './event-catalog';

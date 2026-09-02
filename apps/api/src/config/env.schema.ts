@@ -114,6 +114,9 @@ export const envSchema = z.object({
   // Proxies in front. 0 trusts nothing; behind a load balancer this MUST be its hop count.
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 
+  // The privacy notice in force. A record older than this is a student worth asking again.
+  CONSENT_VERSION: z.string().default('2026-09-01'),
+
   // Request body limits.
   BODY_LIMIT_DEFAULT: byteSize('256kb'),
   BODY_LIMIT_IMPORT: byteSize('10mb'),

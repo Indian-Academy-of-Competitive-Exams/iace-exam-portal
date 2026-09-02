@@ -8,3 +8,6 @@ export {
   type ProfileCompletionFields,
   type ProfileDocumentColumn,
 } from './student-flags';
+
+/** DPDP: consent, the copy a student may take away, and erasure as anonymisation. */
+export { StudentPrivacyService } from './student-privacy.service';

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -20,28 +21,35 @@ import {
   ActorTypes,
   type AuthSessionResponse,
   type ChangePinBody,
+  type ConsentState,
+  type ConsentStatus,
   DOCUMENT_FILE_FIELD,
   type DocumentKind,
+  type ErasureReceipt,
   type Me,
   type Notification,
   type NotificationListQuery,
   type OpenSeriesList,
   type Paginated,
+  type RecordConsentBody,
   type SeriesUnlockRequest,
   type StudentCatalog,
+  type StudentDataExport,
   type UpdateMeBody,
   changePinSchema,
   documentKindSchema,
   notificationListQuerySchema,
+  recordConsentSchema,
   updateMeSchema,
 } from '@iace/contracts';
-import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
+import { Actors, CurrentUser, EVERY_BRANCH, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
 import { AccessResolverService, UnlocksService } from '../access';
 import { NotificationsService } from '../notifications';
 import { MeService } from './me.service';
+import { StudentPrivacyService } from '../students';
 
 /**
  * The signed-in student's own account. No ids in any route — the subject is always
@@ -63,7 +71,39 @@ export class MeController {
     private readonly access: AccessResolverService,
     private readonly unlocks: UnlocksService,
     private readonly notifications: NotificationsService,
+    private readonly privacy: StudentPrivacyService,
   ) {}
+
+  /** What they have agreed to, beside what the notice says today — the SPA compares the two. */
+  @Get('consent')
+  consent(@CurrentUser() user: AuthenticatedUser): Promise<ConsentStatus> {
+    return this.privacy.status(user.id);
+  }
+
+  /** Answering the notice again. Append-only: this never edits what was agreed to before. */
+  @Post('consent')
+  @HttpCode(HttpStatus.OK)
+  recordConsent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodBody(recordConsentSchema)) body: RecordConsentBody,
+  ): Promise<ConsentState> {
+    return this.privacy.record(user.id, body);
+  }
+
+  /** Everything held about them, in one read. */
+  @Get('data-export')
+  @Header('Cache-Control', 'no-store')
+  dataExport(@CurrentUser() user: AuthenticatedUser): Promise<StudentDataExport> {
+    return this.privacy.export(user.id);
+  }
+
+  /** Irreversible, and not a delete: the sittings stay, and nothing in them names anybody. */
+  @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.DELETE)
+  @Post('erasure')
+  @HttpCode(HttpStatus.OK)
+  erase(@CurrentUser() user: AuthenticatedUser): Promise<ErasureReceipt> {
+    return this.privacy.anonymize(user.id, EVERY_BRANCH);
+  }
 
   @Get()
   profile(@CurrentUser() user: AuthenticatedUser): Promise<Me> {

@@ -116,6 +116,8 @@ export class AuthService {
     // the point of a reset — and clears any lockout the student hit first.
     await this.sessions.revokeAll(ActorTypes.STUDENT, student.id);
     await this.pin.clearFailures(mobile);
+    // Completing signup IS the consent event; who records it is not auth's business.
+    if (!existing) this.events.emit(DOMAIN_EVENTS.STUDENT_SIGNED_UP, { studentId: student.id });
     this.announcePinReset(student.id, mobile, PIN_RESET_REASONS.OTP_RESET);
 
     const identity = this.studentIdentity(student);

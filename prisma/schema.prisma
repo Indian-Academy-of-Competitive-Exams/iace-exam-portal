@@ -691,11 +691,15 @@ model Student {
   isActive         Boolean      @default(true)
   isTestBlocked    Boolean      @default(false)
   deletedAt        DateTime?    @db.Timestamptz(3)
+  // Set by an erasure request. deletedAt says the account is closed; this says the PII is gone,
+  // and the two are separate facts a regulator asks about separately.
+  anonymizedAt     DateTime?    @db.Timestamptz(3)
   createdById      String?
   createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   profile        StudentProfile?
+  consents       StudentConsent[]
   currentBranch  Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
   attempts       Attempt[]
   grants         StudentGrant[]
@@ -711,6 +715,7 @@ model Student {
   @@index([enrolledExams], type: Gin)
   @@index([programs], type: Gin)
   @@index([currentBranchId])
+  @@index([anonymizedAt])
 }
 
 // Aadhaar/PAN images are never stored here — only the verification status.
@@ -734,6 +739,31 @@ model StudentProfile {
   updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// DPDP §6: what the student agreed to, when, and to which version of the notice.
+enum ConsentPurpose {
+  // The one purpose V1 has: running the platform for them. A second is a row, never a migration
+  // of this enum -- add the value, not a column.
+  PLATFORM
+}
+
+// Append-only. A withdrawal is a new row with granted=false, never an edit of the row that
+// granted it: "what did they agree to, and when" has to survive being answered differently later.
+// Deferred (docs/superpowers plan, 6A WS3.6): parental consent for minors. DOB is already captured
+// on StudentProfile, so a MINOR purpose and a guardian column are additive when that lands.
+model StudentConsent {
+  id         String         @id @default(cuid())
+  studentId  String
+  purpose    ConsentPurpose
+  // The notice this answers, e.g. "2026-09-01". Meaningless to compare across purposes.
+  version    String
+  granted    Boolean
+  recordedAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, purpose, recordedAt])
 }
 
 // The first super admin is inserted by SQL — nothing in the codebase creates one.

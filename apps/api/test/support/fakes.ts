@@ -471,6 +471,8 @@ export interface FakeStudent {
   updatedAt: Date;
   profile: FakeProfile | null;
   deletedAt: Date | null;
+  /** Set by an erasure request. Separate from deletedAt: closed and erased are different facts. */
+  anonymizedAt?: Date | null;
 }
 
 export function makeProfile(overrides: Partial<FakeProfile> = {}): FakeProfile {
@@ -5972,4 +5974,168 @@ export function fakeRollupOutbox(
   queue: FakeQueue,
 ): RollupOutbox {
   return new RollupOutbox(prisma.asService(), queue.asQueue());
+}
+
+// ----------------------------------------------------------------------------
+// StudentPrivacyService — consent rows, one profile and the sittings that survive erasure
+// ----------------------------------------------------------------------------
+
+export interface FakeConsentRow {
+  id: string;
+  studentId: string;
+  purpose: 'PLATFORM';
+  version: string;
+  granted: boolean;
+  recordedAt: Date;
+}
+
+export interface FakePrivacyProfile {
+  studentId: string;
+  motherName?: string | null;
+  fatherName?: string | null;
+  dob?: Date | null;
+  email?: string | null;
+  address?: string | null;
+  gender?: string | null;
+  photoUrl?: string | null;
+  tenthMarksheetUrl?: string | null;
+  educationDetails?: unknown;
+  pastExamHistory?: unknown;
+  aadhaarVerified?: boolean;
+  panVerified?: boolean;
+}
+
+export interface FakePrivacyAttempt {
+  id: string;
+  studentId: string;
+  testId: string;
+  status?: string;
+  startedAt?: Date | null;
+  submittedAt?: Date | null;
+  score?: number | null;
+  lastPercentile?: number | null;
+  createdAt?: Date;
+}
+
+export interface FakePrivacyWorld {
+  students?: FakeStudent[];
+  branches?: FakeBranch[];
+  profiles?: FakePrivacyProfile[];
+  attempts?: FakePrivacyAttempt[];
+  /** Makes every consent write throw, which is the only way to prove a signup survives one. */
+  failing?: boolean;
+}
+
+export class FakePrivacyPrisma {
+  readonly students: FakeStudent[];
+  readonly branches: FakeBranch[];
+  readonly profiles: FakePrivacyProfile[];
+  readonly attempts: FakePrivacyAttempt[];
+  readonly consents: FakeConsentRow[] = [];
+  private seq = 0;
+
+  constructor(private readonly world: FakePrivacyWorld = {}) {
+    this.students = world.students ?? [];
+    this.branches = world.branches ?? [];
+    this.profiles = world.profiles ?? [];
+    this.attempts = world.attempts ?? [];
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(work: (tx: FakePrivacyPrisma) => Promise<T>): Promise<T> {
+    return work(this);
+  }
+
+  readonly studentConsent = {
+    create: ({ data }: { data: Omit<FakeConsentRow, 'id' | 'recordedAt'> }) => {
+      if (this.world.failing) return Promise.reject(new Error('postgres is down'));
+      this.seq += 1;
+      const row: FakeConsentRow = { ...data, id: `csn_${this.seq}`, recordedAt: new Date() };
+      this.consents.push(row);
+      return Promise.resolve(row);
+    },
+
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(
+        this.consents
+          .filter((row) => row.studentId === where.studentId)
+          .slice()
+          .reverse(),
+      ),
+  };
+
+  readonly student = {
+    findFirst: ({ where }: { where: Record<string, unknown> }) => {
+      const found = this.students.find(
+        (student) =>
+          student.id === where.id &&
+          (where.deletedAt === undefined || student.deletedAt === null) &&
+          matchesBranchFilter(student, where.currentBranchId),
+      );
+      if (!found) return Promise.resolve(null);
+      const branch = this.branches.find((row) => row.id === found.currentBranchId);
+      return Promise.resolve({
+        ...found,
+        profile: this.profiles.find((row) => row.studentId === found.id) ?? null,
+        currentBranch: branch ? { name: branch.name } : null,
+      });
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const student = this.students.find((row) => row.id === where.id);
+      Object.assign(student as object, data);
+      return Promise.resolve(student);
+    },
+  };
+
+  readonly studentProfile = {
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { studentId: string };
+      data: Record<string, unknown>;
+    }) => {
+      for (const profile of this.profiles.filter((row) => row.studentId === where.studentId)) {
+        // Prisma's DbNull sentinel means "write SQL NULL", which is a null on the fake.
+        Object.assign(profile, Object.fromEntries(Object.entries(data).map(nulled)));
+      }
+      return Promise.resolve({ count: 1 });
+    },
+  };
+
+  readonly attempt = {
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(
+        this.attempts
+          .filter((row) => row.studentId === where.studentId)
+          .map((row) => ({
+            status: 'EVALUATED',
+            startedAt: null,
+            submittedAt: null,
+            lastPercentile: null,
+            createdAt: new Date(),
+            ...row,
+            test: { title: `Test ${row.testId}` },
+          })),
+      ),
+
+    count: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(this.attempts.filter((row) => row.studentId === where.studentId).length),
+  };
+}
+
+const nulled = ([key, value]: [string, unknown]): [string, unknown] => [
+  key,
+  value !== null && typeof value === 'object' ? null : value,
+];
+
+/** `undefined` means the caller applied no branch narrowing at all. */
+function matchesBranchFilter(student: FakeStudent, filter: unknown): boolean {
+  if (filter === undefined) return true;
+  const wanted = (filter as { in?: string[] }).in ?? [];
+  return student.currentBranchId !== null && wanted.includes(student.currentBranchId);
 }
