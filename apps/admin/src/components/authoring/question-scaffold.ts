@@ -19,7 +19,7 @@ import {
   type QuestionType,
   type TaxonomyContext,
 } from '@iace/contracts';
-import { type ScaffoldRegion, type ScaffoldRepeat } from '@iace/ui/scaffold-editor';
+import { type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { REGION_KIND } from '@iace/ui/scaffold-region';
 
 /** The box read as slots, never as text between delimiters, into the draft the sheet also builds. */
@@ -49,14 +49,6 @@ export const optionKey = (index: number) => `${OPTION_PREFIX}${index}`;
 export const optionLetter = (index: number) => String.fromCodePoint(A_CODE + index);
 
 const A_CODE = 65;
-
-export const OPTION_REPEAT: ScaffoldRepeat = {
-  prefix: OPTION_PREFIX,
-  keyOf: optionKey,
-  labelAt: optionLetter,
-  min: MCQ_OPTION_MIN,
-  max: MCQ_OPTION_MAX,
-};
 
 /** What one language holds. Everything outside this is shared across all three. */
 export interface LanguageContent {

@@ -11,7 +11,6 @@ import {
   type QuestionDraft,
 } from '@iace/contracts';
 import {
-  OPTION_REPEAT,
   REGION_KEYS,
   answerIndexOf,
   emptyState,
@@ -200,6 +199,18 @@ describe('the option count in the header', () => {
     assert.deepEqual(OPTION_COUNTS, [2, 3, 4, 5, 6]);
     assert.equal(withOptionCount(emptyState(), 99).optionCount, MCQ_OPTION_MAX);
   });
+
+  /** The count is the header's alone, so the letters follow it and nothing else. */
+  it('letters the slots straight off the count', () => {
+    const six = withOptionCount(emptyState(), 6);
+
+    assert.deepEqual(
+      regionsFor(six, 'en')
+        .filter((region) => region.key.startsWith('option:'))
+        .map((region) => region.label),
+      ['A', 'B', 'C', 'D', 'E', 'F'],
+    );
+  });
 });
 
 describe('the option run', () => {
@@ -219,11 +230,5 @@ describe('the option run', () => {
     assert.equal(grown.content.hi.options.length, 5);
     assert.equal(answerIndexOf(grown.answer, grown.optionCount), 4);
     assert.equal(questionDraftSchema.parse(toDraft(grown, HEADER)).options[4]?.isCorrect, true);
-  });
-
-  it('stops where a paper stops, and is lettered the way a paper letters it', () => {
-    assert.equal(OPTION_REPEAT.max, MCQ_OPTION_MAX);
-    assert.equal(optionLetter(0), 'A');
-    assert.equal(optionLetter(MCQ_OPTION_MAX - 1), 'F');
   });
 });

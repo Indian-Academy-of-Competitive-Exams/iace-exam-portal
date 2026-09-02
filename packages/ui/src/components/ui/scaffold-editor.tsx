@@ -9,6 +9,7 @@ import { TextSelection } from '@tiptap/pm/state';
 import { type EditorView } from '@tiptap/pm/view';
 import { cn } from '../../lib/utils';
 import { TableTools } from './rich-text-table';
+import { Transliterate, writeIn, type IndicScript } from './rich-text-transliterate';
 import { BlockMathAtDollars, InlineMathAtDollar } from './rich-text-math';
 import { RichTextToolbar, type MathDraft } from './rich-text-toolbar';
 import {
@@ -21,7 +22,6 @@ import {
 import {
   REGION_KIND,
   REGION_NODE,
-  SCAFFOLD_SHAPE,
   ScaffoldDocument,
   ScaffoldRegionNode,
   whileLoadingScaffold,
@@ -38,26 +38,17 @@ export interface ScaffoldRegion {
   hint?: string;
 }
 
-/** A run of slots the keyboard grows and shrinks; the caller names them, so this file holds none. */
-export interface ScaffoldRepeat {
-  /** A slot belongs to the run when its key starts with this. */
-  prefix: string;
-  keyOf: (index: number) => string;
-  labelAt: (index: number) => string;
-  min: number;
-  max: number;
-}
-
 export interface ScaffoldEditorProps {
   regions: readonly ScaffoldRegion[];
   /** Changing it reloads the box from `regions` — a different question, or the same one in another language. */
   docKey: string;
   onChange: (regions: ScaffoldRegion[]) => void;
-  repeat?: ScaffoldRepeat;
   /** Ctrl+Enter. */
   onSave?: () => void;
   /** The one action that is not Up, Down or Enter, because a language is a mode over the whole box. */
   onCycleLanguage?: () => void;
+  /** Turns Roman letters into this script as they are typed. Null types them through. */
+  script?: IndicScript | null;
   onUploadImage?: UploadImage;
   imageLimits?: ImageLimits;
   disabled?: boolean;
@@ -154,11 +145,11 @@ export function ScaffoldEditor({
   regions,
   docKey,
   onChange,
-  repeat,
   onSave,
   onCycleLanguage,
   onUploadImage,
   imageLimits,
+  script = null,
   disabled = false,
   lang,
   'aria-label': label,
@@ -169,10 +160,10 @@ export function ScaffoldEditor({
   const settled = React.useRef(false);
   // Created once, so its handlers read these rather than closing over the first render's props.
   const emit = React.useRef(onChange);
-  const run = React.useRef<KeyContext>({ repeat, onSave, onCycleLanguage });
+  const run = React.useRef<KeyContext>({ onSave, onCycleLanguage });
   React.useEffect(() => {
     emit.current = onChange;
-    run.current = { repeat, onSave, onCycleLanguage };
+    run.current = { onSave, onCycleLanguage };
   });
 
   const editor = useEditor({
@@ -185,6 +176,7 @@ export function ScaffoldEditor({
       Subscript,
       TableKit.configure({ table: { resizable: true } }),
       TableTools,
+      Transliterate,
       ...(onUploadImage ? [QuestionImage] : []),
       // A half-typed formula shows in red rather than taking the editor down with it.
       BlockMathAtDollars.configure({ katexOptions: { throwOnError: false } }),
@@ -223,6 +215,11 @@ export function ScaffoldEditor({
     editor?.setEditable(!disabled, false);
   }, [editor, disabled]);
 
+  // A transaction, not a ref: the plugin carries the script and the editor is built once.
+  React.useEffect(() => {
+    if (editor) writeIn(editor.view, script);
+  }, [editor, script]);
+
   // Keyed, not compared: only another question or another language may discard what is typed.
   const loaded = React.useRef(docKey);
   React.useEffect(() => {
@@ -253,7 +250,6 @@ export function ScaffoldEditor({
 }
 
 interface KeyContext {
-  repeat?: ScaffoldRepeat;
   onSave?: () => void;
   onCycleLanguage?: () => void;
 }
@@ -275,7 +271,7 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
 
   const index = regionIndexAt(view);
 
-  if (event.key === 'Enter' && !event.shiftKey) return onEnter(view, index, context.repeat);
+  if (event.key === 'Enter' && !event.shiftKey) return moveToRegion(view, index + 1, false);
 
   if (event.key === 'ArrowDown' && atEdge(view, 'end')) {
     return moveToRegion(view, index + 1, false);
@@ -283,23 +279,9 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
   if (event.key === 'ArrowUp' && atEdge(view, 'start')) {
     return moveToRegion(view, index - 1, true);
   }
-  if (event.key === 'Backspace' || event.key === 'Delete') {
-    return onDelete(view, index, event.key, context.repeat);
-  }
+  if (event.key === 'Backspace' || event.key === 'Delete') return clearAcrossSlots(view);
 
   return false;
-}
-
-/** Deleting clears what a selection covers, or drops the empty slot the caret sits at the top of. */
-function onDelete(
-  view: EditorView,
-  index: number,
-  key: string,
-  repeat: ScaffoldRepeat | undefined,
-): boolean {
-  if (clearAcrossSlots(view)) return true;
-  if (key !== 'Backspace' || !repeat || !atEdge(view, 'start')) return false;
-  return removeEmpty(view, index, repeat);
 }
 
 /** A selection past one slot empties what it covers; deleting it would take the scaffold. */
@@ -325,13 +307,6 @@ function clearAcrossSlots(view: EditorView): boolean {
   return moveToRegion(view, first, false);
 }
 
-/** Enter grows the run from a filled slot and otherwise moves on; only Backspace removes one. */
-function onEnter(view: EditorView, index: number, repeat: ScaffoldRepeat | undefined): boolean {
-  const grows = repeat && isLastOfRun(view, index, repeat) && !isEmpty(view, index);
-  if (grows) return addAfter(view, index, repeat) || moveToRegion(view, index + 1, false);
-  return moveToRegion(view, index + 1, false);
-}
-
 function atEdge(view: EditorView, edge: 'start' | 'end'): boolean {
   const { $from, empty } = view.state.selection;
   if (!empty) return false;
@@ -339,85 +314,6 @@ function atEdge(view: EditorView, edge: 'start' | 'end'): boolean {
   if (!region) return false;
   const start = $from.start(1);
   return edge === 'start' ? $from.pos === start + 1 : $from.pos === start + region.content.size - 1;
-}
-
-function runIndexes(view: EditorView, repeat: ScaffoldRepeat): number[] {
-  const found: number[] = [];
-  view.state.doc.forEach((node, _pos, index) => {
-    if (String(node.attrs.key ?? '').startsWith(repeat.prefix)) found.push(index);
-  });
-  return found;
-}
-
-function isLastOfRun(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
-  const inRun = runIndexes(view, repeat);
-  return inRun.length > 0 && inRun.at(-1) === index;
-}
-
-function isEmpty(view: EditorView, index: number): boolean {
-  const node = view.state.doc.child(index);
-  if (node.textContent.trim() !== '') return false;
-
-  // A figure or an equation says something without saying any text.
-  let carries = false;
-  node.descendants((child) => {
-    if (child.isLeaf && !child.isText) carries = true;
-  });
-  return !carries;
-}
-
-/** Backspace on an empty one takes it and its label away, never leaving a gap in the letters. */
-function removeEmpty(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
-  const inRun = runIndexes(view, repeat);
-  if (!inRun.includes(index) || inRun.length <= repeat.min) return false;
-  if (!isEmpty(view, index)) return false;
-
-  const doc = view.state.doc;
-  const start = startOf(doc, index);
-  view.dispatch(
-    view.state.tr.delete(start, start + doc.child(index).nodeSize).setMeta(SCAFFOLD_SHAPE, true),
-  );
-  relabelRun(view, repeat);
-  return moveToRegion(view, index - 1, true);
-}
-
-/** Enter on the last one adds the next, exactly like adding a list item. */
-function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
-  const inRun = runIndexes(view, repeat);
-  if (inRun.length >= repeat.max) return false;
-
-  const { schema, doc, tr } = view.state;
-  const end = startOf(doc, index) + doc.child(index).nodeSize;
-
-  const added = schema.nodes[REGION_NODE]!.create(
-    {
-      key: repeat.keyOf(inRun.length),
-      label: repeat.labelAt(inRun.length),
-      kind: REGION_KIND.SEAT,
-    },
-    schema.nodes.paragraph!.create(),
-  );
-
-  view.dispatch(tr.insert(end, added).setMeta(SCAFFOLD_SHAPE, true));
-  return moveToRegion(view, index + 1, false);
-}
-
-/** The letters are positions, not names: dropping (B) makes the old (C) the new (B). */
-function relabelRun(view: EditorView, repeat: ScaffoldRepeat): void {
-  const transaction = view.state.tr;
-  let seat = 0;
-
-  view.state.doc.forEach((node, pos) => {
-    if (!String(node.attrs.key ?? '').startsWith(repeat.prefix)) return;
-    transaction.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      key: repeat.keyOf(seat),
-      label: repeat.labelAt(seat),
-    });
-    seat += 1;
-  });
-
-  if (transaction.docChanged) view.dispatch(transaction.setMeta(SCAFFOLD_SHAPE, true));
 }
 
 /** Where the nth slot begins in the document. */

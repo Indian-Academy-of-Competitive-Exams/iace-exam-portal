@@ -153,6 +153,11 @@ export { Pagination, type PaginationProps } from './components/ui/pagination';
 export { Watermark, type WatermarkProps } from './components/ui/watermark';
 export { RichContent, type RichContentProps } from './components/ui/rich-content';
 export { mathErrorIn, richHtml } from './lib/rich-html';
+export {
+  INDIC_SCRIPTS,
+  transliterate,
+  type IndicScript,
+} from './components/ui/rich-text-transliterate';
 export { Progress, type ProgressProps, type ProgressSize } from './components/ui/progress';
 export {
   MeasureBars,

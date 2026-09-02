@@ -499,6 +499,18 @@
   min-width: 0;
 }
 
+/* Italic, smaller and faded: an instruction the reader cannot mistake for the value itself. */
+.scaffold-content p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-style: italic;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  opacity: 0.75;
+}
+
 /* ============================================================================
    RICH FIGURE AND TABLE — the way a block is resized, and the way it is taken out
    ========================================================================== */

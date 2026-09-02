@@ -1,22 +1,10 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import {
-  ScaffoldEditor,
-  type ScaffoldRegion,
-  type ScaffoldRepeat,
-} from '../src/components/ui/scaffold-editor';
+import { ScaffoldEditor, type ScaffoldRegion } from '../src/components/ui/scaffold-editor';
 import { TooltipProvider } from '../src/components/ui/tooltip';
 
 afterEach(cleanup);
-
-const REPEAT: ScaffoldRepeat = {
-  prefix: 'option:',
-  keyOf: (index) => `option:${index}`,
-  labelAt: (index) => `(${String.fromCodePoint(65 + index)})`,
-  min: 2,
-  max: 6,
-};
 
 const REGIONS: ScaffoldRegion[] = [
   { key: 'stem', label: 'Question:', html: '<p>What is 20% of 150?</p>' },
@@ -35,7 +23,6 @@ function mount(props: Partial<React.ComponentProps<typeof ScaffoldEditor>> = {})
         regions={REGIONS}
         docKey="one"
         onChange={(regions) => changes.push(regions)}
-        repeat={REPEAT}
         {...props}
       />
     </TooltipProvider>,
@@ -85,25 +72,15 @@ describe('the scaffold labels', () => {
   });
 
   it('are not part of what the box reports, so a label can never reach a question', () => {
-    const { changes, box } = mount({
-      regions: [
-        ...REGIONS.slice(0, 3),
-        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 4);
-    });
+    mount();
 
-    const reported = changes.at(-1) ?? [];
-    assert.ok(reported.length > 0);
-    assert.ok(reported.every((region) => !region.html.includes('scaffold-label')));
-    assert.equal(reported[0]?.html, '<p>What is 20% of 150?</p>');
-    assert.deepEqual(
-      reported.map((region) => region.label),
-      ['Question:', '(A)', '(B)', '(C)', '(D)', 'Answer:'],
-    );
+    const stem = document.querySelector('[data-region="stem"] .scaffold-body');
+    assert.equal(stem?.textContent, 'What is 20% of 150?');
+
+    // Every label sits outside every body, which is what keeps it out of the html.
+    for (const label of document.querySelectorAll('.scaffold-label')) {
+      assert.equal(label.closest('.scaffold-body'), null);
+    }
   });
 });
 
@@ -236,126 +213,15 @@ describe('a table in a slot', () => {
 });
 
 describe('the keyboard', () => {
-  it('adds the next option on Enter at the last one, once it says something', () => {
-    const { box } = mount({
-      regions: [
-        ...REGIONS.slice(0, 3),
-        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
+  /** How many options there are is the header's, so no key in the box may add or drop one. */
+  it('walks the slots without ever changing how many there are', () => {
+    const { box } = mount();
     act(() => {
-      down(box, 4);
-    });
-
-    assert.deepEqual(regionKeys(), [
-      'stem',
-      'option:0',
-      'option:1',
-      'option:2',
-      'option:3',
-      'answer',
-    ]);
-    assert.equal(labels().at(-2), '(D)');
-  });
-
-  it('stops adding where a paper stops', () => {
-    const { box } = mount({
-      regions: [
-        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
-        ...Array.from({ length: 6 }, (_, index) => ({
-          key: `option:${index}`,
-          label: `(${String.fromCodePoint(65 + index)})`,
-          html: `<p>${index}</p>`,
-        })),
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 7);
-    });
-
-    assert.equal(regionKeys().filter((key) => key?.startsWith('option:')).length, 6);
-  });
-
-  /** The trap this closes: with no way out, Enter after the last option adds (E), then (F)… */
-  it('moves on from an empty last option rather than adding another', () => {
-    const { box } = mount({
-      regions: [
-        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
-        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
-        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
-        { key: 'option:2', label: '(C)', html: '' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 4);
+      down(box, 6);
+      fireEvent.keyDown(box, { key: 'Backspace' });
     });
 
     assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
-  });
-
-  /** The failure this prevents: Enter deleted the empty last option, so (D) vanished. */
-  it('keeps an option the typist has not filled in yet', () => {
-    const { box } = mount({
-      regions: [
-        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
-        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
-        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
-        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
-        { key: 'option:3', label: '(D)', html: '' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 5);
-    });
-
-    assert.deepEqual(regionKeys(), [
-      'stem',
-      'option:0',
-      'option:1',
-      'option:2',
-      'option:3',
-      'answer',
-    ]);
-  });
-
-  it('removes an empty option on Backspace, and re-letters the rest', () => {
-    const { box } = mount({
-      regions: [
-        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
-        { key: 'option:0', label: '(A)', html: '' },
-        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
-        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 1);
-      fireEvent.keyDown(box, { key: 'Backspace' });
-    });
-
-    assert.deepEqual(labels(), ['Question:', '(A)', '(B)', 'Answer:']);
-    assert.equal(document.querySelectorAll('[data-region^="option:"]').length, 2);
-  });
-
-  it('keeps the last two options, because a choice needs two', () => {
-    const { box } = mount({
-      regions: [
-        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
-        { key: 'option:0', label: '(A)', html: '' },
-        { key: 'option:1', label: '(B)', html: '' },
-        { key: 'answer', label: 'Answer:', html: '' },
-      ],
-    });
-    act(() => {
-      down(box, 1);
-      fireEvent.keyDown(box, { key: 'Backspace' });
-    });
-
-    assert.equal(document.querySelectorAll('[data-region^="option:"]').length, 2);
   });
 
   /** The failure this closes: Ctrl+A then Backspace took every slot with it, unrecoverably. */

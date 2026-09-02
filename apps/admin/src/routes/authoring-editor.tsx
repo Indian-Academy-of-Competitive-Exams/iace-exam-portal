@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Maximize2, Minimize2, Save } from 'lucide-react';
+import { Keyboard, Maximize2, Minimize2, Save } from 'lucide-react';
 import {
   DEFAULT_LANGUAGE,
   DIFFICULTY_LEVEL,
@@ -10,7 +10,6 @@ import {
   QUESTION_IMAGE_ACCEPTED_TYPES,
   QUESTION_IMAGE_MAX_BYTES,
   QUESTION_STATUS,
-  QUESTION_TYPE,
   hasText,
   validateQuestion,
   type QuestionDraft,
@@ -25,7 +24,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  INDIC_SCRIPTS,
   mathErrorIn,
+  type IndicScript,
 } from '@iace/ui';
 import { ScaffoldEditor, type ScaffoldRegion } from '@iace/ui/scaffold-editor';
 import { api } from '../lib/api';
@@ -38,7 +39,6 @@ import {
   checksFor,
 } from '../components/authoring/authoring-preview';
 import {
-  OPTION_REPEAT,
   emptyState,
   headerOf,
   regionsFor,
@@ -72,7 +72,15 @@ interface Saved {
   state: AuthoringState;
   language: QuestionLanguage;
   written: number;
+  /** The typist's own setting, kept because it is about their keyboard and not this question. */
+  romanised: boolean;
 }
+
+/** Which script a language is written in. English is typed as it is read. */
+const SCRIPT_OF: Readonly<Partial<Record<QuestionLanguage, IndicScript>>> = {
+  hi: INDIC_SCRIPTS.DEVANAGARI,
+  te: INDIC_SCRIPTS.TELUGU,
+};
 
 export function AuthoringEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +95,7 @@ export function AuthoringEditorPage() {
     restored?.language ?? DEFAULT_LANGUAGE,
   );
   const [written, setWritten] = useState(restored?.written ?? 0);
+  const [romanised, setRomanised] = useState(restored?.romanised ?? true);
   const [duplicate, setDuplicate] = useState<string | null>(null);
   // Bumped whenever the box must be rebuilt: a language, a type, or a question loaded into it.
   const [boxVersion, setBoxVersion] = useState(0);
@@ -117,8 +126,11 @@ export function AuthoringEditorPage() {
   // A closed tab loses nothing, and nothing half-written reaches the bank: only a save writes a row.
   useEffect(() => {
     if (id) return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ header, state, language, written }));
-  }, [id, storageKey, header, state, language, written]);
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({ header, state, language, written, romanised }),
+    );
+  }, [id, storageKey, header, state, language, written, romanised]);
 
   const draft = useMemo(() => toDraft(state, header), [state, header]);
   const issues = useChecked(draft, header);
@@ -154,6 +166,7 @@ export function AuthoringEditorPage() {
     },
   });
 
+  const script = romanised ? (SCRIPT_OF[language] ?? null) : null;
   const blocking = issues.length > 0;
   const readOnly = Boolean(id) && editing.data?.status !== QUESTION_STATUS.DRAFT;
   const canSave = !blocking && !readOnly && !save.isPending;
@@ -201,26 +214,16 @@ export function AuthoringEditorPage() {
         }}
         onLanguageChange={switchLanguage}
         actions={
-          <>
-            <Button type="button" size="sm" disabled={!canSave} onClick={() => save.mutate()}>
-              <Save aria-hidden />
-              {id ? 'Save' : 'Save and next'}
-            </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={immersive ? 'Leave full screen' : 'Full screen'}
-                  onClick={toggleFocus}
-                >
-                  {immersive ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{immersive ? 'Leave full screen' : 'Full screen'}</TooltipContent>
-            </Tooltip>
-          </>
+          <EditorActions
+            language={language}
+            romanised={romanised}
+            immersive={immersive}
+            canSave={canSave}
+            saveLabel={id ? 'Save' : 'Save and next'}
+            onSave={() => save.mutate()}
+            onRomanised={() => setRomanised((on) => !on)}
+            onFocus={toggleFocus}
+          />
         }
       />
 
@@ -244,7 +247,6 @@ export function AuthoringEditorPage() {
                 regions={regionsFor(state, language)}
                 docKey={`${id ?? 'new'}:${language}:${state.type}:${boxVersion}`}
                 onChange={onRegions}
-                repeat={state.type === QUESTION_TYPE.SINGLE_MCQ ? OPTION_REPEAT : undefined}
                 onSave={() => {
                   if (canSave) save.mutate();
                 }}
@@ -253,6 +255,7 @@ export function AuthoringEditorPage() {
                 imageLimits={IMAGE_LIMITS}
                 disabled={readOnly}
                 lang={language}
+                script={script}
                 className="flex-1 rounded-none border-0 shadow-none"
               />
             </div>
@@ -270,6 +273,73 @@ export function AuthoringEditorPage() {
 
       <Legend language={language} />
     </div>
+  );
+}
+
+/** The header's right-hand end. Its own component, so the page reads as a page. */
+function EditorActions({
+  language,
+  romanised,
+  immersive,
+  canSave,
+  saveLabel,
+  onSave,
+  onRomanised,
+  onFocus,
+}: Readonly<{
+  language: QuestionLanguage;
+  romanised: boolean;
+  immersive: boolean;
+  canSave: boolean;
+  saveLabel: string;
+  onSave: () => void;
+  onRomanised: () => void;
+  onFocus: () => void;
+}>) {
+  return (
+    <>
+      {SCRIPT_OF[language] ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={romanised ? 'default' : 'ghost'}
+              size="icon"
+              aria-pressed={romanised}
+              aria-label="Type in Roman letters"
+              onClick={onRomanised}
+            >
+              <Keyboard aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {romanised
+              ? `Typing dhanyavaad writes it in ${LANGUAGE_LABELS[language]}`
+              : 'Roman letters stay as they are typed'}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+
+      <Button type="button" size="sm" disabled={!canSave} onClick={onSave}>
+        <Save aria-hidden />
+        {saveLabel}
+      </Button>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={immersive ? 'Leave full screen' : 'Full screen'}
+            onClick={onFocus}
+          >
+            {immersive ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{immersive ? 'Leave full screen' : 'Full screen'}</TooltipContent>
+      </Tooltip>
+    </>
   );
 }
 
