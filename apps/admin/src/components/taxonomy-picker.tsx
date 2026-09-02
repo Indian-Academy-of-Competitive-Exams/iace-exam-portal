@@ -23,6 +23,7 @@ interface PickerProps {
   disabled?: boolean;
   id?: string;
   'aria-label'?: string;
+  className?: string;
 }
 
 export function SubjectPicker(props: Readonly<PickerProps>) {

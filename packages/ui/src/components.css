@@ -435,12 +435,56 @@
   display: grid;
   grid-template-columns: var(--scaffold-label-width) 1fr;
   column-gap: var(--space-3);
-  align-items: baseline;
+  align-items: start;
   padding: var(--space-1) 0;
 }
 
-.scaffold-content .scaffold-region:has(> .scaffold-label:empty) {
+/* A stem is the question itself: it needs no word in front of it to be read as one. */
+.scaffold-content .scaffold-region[data-kind='plain'] {
   grid-template-columns: 1fr;
+  padding-bottom: var(--space-3);
+}
+
+.scaffold-content .scaffold-region[data-kind='plain'] > .scaffold-label {
+  display: none;
+}
+
+/* A seat in a run — the letter alone, drawn as the key a candidate will press. */
+.scaffold-content .scaffold-region[data-kind='seat'] {
+  grid-template-columns: var(--scaffold-seat-size) 1fr;
+  align-items: center;
+}
+
+.scaffold-content .scaffold-region[data-kind='seat'] > .scaffold-label {
+  display: grid;
+  place-items: center;
+  width: var(--scaffold-seat-size);
+  height: var(--scaffold-seat-size);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* The named slots below the rule — a word standing for what goes beside it. */
+.scaffold-content .scaffold-region[data-kind='named'] > .scaffold-label {
+  justify-self: start;
+  padding: var(--space-0-5) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.scaffold-content .scaffold-region[data-kind='named'] {
+  grid-template-columns: var(--scaffold-label-width) 1fr;
+}
+
+/* The first named slot opens the settled half of the question, below the options. */
+.scaffold-content .scaffold-region[data-kind='seat'] + .scaffold-region[data-kind='named'] {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
 }
 
 .scaffold-content .scaffold-label {
@@ -450,14 +494,6 @@
   color: var(--foreground-secondary);
 }
 
-.scaffold-content .scaffold-label:empty {
-  display: none;
-}
-
 .scaffold-content .scaffold-body {
   min-width: 0;
-}
-
-.scaffold-content .scaffold-region + .scaffold-region {
-  border-top: 1px dashed var(--border);
 }

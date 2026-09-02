@@ -1,5 +1,13 @@
 import { type FeatureKey } from '@iace/contracts';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Menu, X } from 'lucide-react';
 import {
@@ -26,6 +34,19 @@ const WIDTHS = {
 } as const;
 
 export type ShellWidth = keyof typeof WIDTHS;
+
+/** A page whose work IS the window. Declared by the page: only the screen knows. */
+const WorkspaceContext = createContext<((immersive: boolean | null) => void) | null>(null);
+
+/** Runs the page flush, and while `immersive` takes the top bar and rail too. Both come back. */
+export function useWorkspace(immersive: boolean): void {
+  const setWorkspace = useContext(WorkspaceContext);
+
+  useEffect(() => {
+    setWorkspace?.(immersive);
+    return () => setWorkspace?.(null);
+  }, [setWorkspace, immersive]);
+}
 
 export interface AppShellProps {
   /** In the order this app's user works through them. Empty draws no sidebar and no drawer. */
@@ -68,12 +89,15 @@ export function AppShell({
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [panelOpen, setPanelOpen] = useState(false);
+  // null: no workspace on screen. false: one, with the chrome. true: one that has taken the window.
+  const [workspace, setWorkspace] = useState<boolean | null>(null);
   const { pathname } = useLocation();
 
   const items = useMemo(() => filterNavByPermission(nav, can), [nav, can]);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
-  const hasNav = items.length > 0;
+  const immersive = workspace === true;
+  const hasNav = items.length > 0 && !immersive;
 
   const home = (
     <Link
@@ -87,36 +111,38 @@ export function AppShell({
   return (
     // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      <header className="flex-none border-b border-border bg-surface">
-        <div className="flex items-center gap-3 px-4 py-2">
-          {/* Below the rail there is no nav in the page at all, so the button is the only
+      {immersive ? null : (
+        <header className="flex-none border-b border-border bg-surface">
+          <div className="flex items-center gap-3 px-4 py-2">
+            {/* Below the rail there is no nav in the page at all, so the button is the only
               way in. Above it the rail is present and the toggle lives on its edge. */}
-          {hasNav && !isDesktop ? (
-            <Button
-              variant="ghost"
-              size="iconSm"
-              aria-label="Open navigation"
-              aria-expanded={panelOpen}
-              onClick={() => setPanelOpen(true)}
-            >
-              <Menu aria-hidden />
-            </Button>
-          ) : null}
+            {hasNav && !isDesktop ? (
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label="Open navigation"
+                aria-expanded={panelOpen}
+                onClick={() => setPanelOpen(true)}
+              >
+                <Menu aria-hidden />
+              </Button>
+            ) : null}
 
-          {home}
-          {brandSuffix}
+            {home}
+            {brandSuffix}
 
-          <div className="flex flex-1 items-center justify-end gap-1">
-            <ThemeToggle />
-            <UserMenu
-              label={userLabel}
-              avatar={userAvatar}
-              items={userMenuItems}
-              onSignOut={onSignOut}
-            />
+            <div className="flex flex-1 items-center justify-end gap-1">
+              <ThemeToggle />
+              <UserMenu
+                label={userLabel}
+                avatar={userAvatar}
+                items={userMenuItems}
+                onSignOut={onSignOut}
+              />
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
@@ -156,7 +182,16 @@ export function AppShell({
         ) : null}
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className={cn(PAGE_CONTENT_CLASS, WIDTHS[width])}>{children}</div>
+          {/* No padding and no cap while immersive: the page asked for the window, not a column in it. */}
+          <div
+            className={
+              workspace === null
+                ? cn(PAGE_CONTENT_CLASS, WIDTHS[width])
+                : 'flex min-h-0 w-full flex-1 flex-col overflow-hidden'
+            }
+          >
+            <WorkspaceContext.Provider value={setWorkspace}>{children}</WorkspaceContext.Provider>
+          </div>
         </main>
       </div>
 

@@ -7,6 +7,14 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 export const REGION_NODE = 'scaffoldRegion';
 
+/** How a slot wears its label: none at all, a seat in a run, or a word standing for the slot. */
+export const REGION_KIND = {
+  PLAIN: 'plain',
+  SEAT: 'seat',
+  NAMED: 'named',
+} as const;
+export type RegionKind = (typeof REGION_KIND)[keyof typeof REGION_KIND];
+
 /** The top node accepts nothing but slots, so a paste can never land text beside the scaffold. */
 export const ScaffoldDocument = Node.create({
   name: 'doc',
@@ -26,6 +34,7 @@ export const ScaffoldRegionNode = Node.create({
     return {
       key: { default: '', parseHTML: (element) => element.dataset.region ?? '' },
       label: { default: '', parseHTML: (element) => element.dataset.label ?? '' },
+      kind: { default: REGION_KIND.PLAIN, parseHTML: (element) => element.dataset.kind ?? '' },
     };
   },
 
@@ -40,6 +49,7 @@ export const ScaffoldRegionNode = Node.create({
       mergeAttributes(HTMLAttributes, {
         'data-region': String(node.attrs.key ?? ''),
         'data-label': label,
+        'data-kind': String(node.attrs.kind ?? REGION_KIND.PLAIN),
         class: 'scaffold-region',
       }),
       ['span', { class: 'scaffold-label', contenteditable: 'false' }, label],

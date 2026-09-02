@@ -14,6 +14,7 @@
     "./tailwind.preset": "./tailwind.preset.js",
     "./rich-text": "./src/components/ui/rich-text.tsx",
     "./scaffold-editor": "./src/components/ui/scaffold-editor.tsx",
+    "./scaffold-region": "./src/components/ui/scaffold-region.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./components/*": "./src/components/ui/*.tsx",
     "./test-support/dom": "./test/support/dom.ts"

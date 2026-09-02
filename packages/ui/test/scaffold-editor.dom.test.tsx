@@ -70,7 +70,13 @@ describe('the scaffold labels', () => {
   });
 
   it('are not part of what the box reports, so a label can never reach a question', () => {
-    const { changes, box } = mount();
+    const { changes, box } = mount({
+      regions: [
+        ...REGIONS.slice(0, 3),
+        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
     act(() => {
       down(box, 4);
     });
@@ -87,8 +93,14 @@ describe('the scaffold labels', () => {
 });
 
 describe('the keyboard', () => {
-  it('adds the next option on Enter at the last one', () => {
-    const { box } = mount();
+  it('adds the next option on Enter at the last one, once it says something', () => {
+    const { box } = mount({
+      regions: [
+        ...REGIONS.slice(0, 3),
+        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
     act(() => {
       down(box, 4);
     });
@@ -107,10 +119,12 @@ describe('the keyboard', () => {
   it('stops adding where a paper stops', () => {
     const { box } = mount({
       regions: [
-        ...REGIONS.slice(0, 4),
-        { key: 'option:3', label: '(D)', html: '' },
-        { key: 'option:4', label: '(E)', html: '' },
-        { key: 'option:5', label: '(F)', html: '' },
+        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
+        ...Array.from({ length: 6 }, (_, index) => ({
+          key: `option:${index}`,
+          label: `(${String.fromCodePoint(65 + index)})`,
+          html: `<p>${index}</p>`,
+        })),
         { key: 'answer', label: 'Answer:', html: '' },
       ],
     });
@@ -119,6 +133,29 @@ describe('the keyboard', () => {
     });
 
     assert.equal(regionKeys().filter((key) => key?.startsWith('option:')).length, 6);
+  });
+
+  /** The trap this closes: with no way out, Enter after the last option adds (E), then (F)… */
+  it('leaves the run on Enter at an empty last option, taking the empty one with it', () => {
+    const { box } = mount({
+      regions: [
+        { key: 'stem', label: 'Question:', html: '<p>Stem</p>' },
+        { key: 'option:0', label: '(A)', html: '<p>25</p>' },
+        { key: 'option:1', label: '(B)', html: '<p>30</p>' },
+        { key: 'option:2', label: '(C)', html: '<p>35</p>' },
+        { key: 'answer', label: 'Answer:', html: '' },
+      ],
+    });
+    act(() => {
+      down(box, 4);
+    });
+    assert.equal(document.querySelectorAll('[data-region^="option:"]').length, 4);
+
+    act(() => {
+      down(box, 1);
+    });
+
+    assert.deepEqual(regionKeys(), ['stem', 'option:0', 'option:1', 'option:2', 'answer']);
   });
 
   it('removes an empty option on Backspace, and re-letters the rest', () => {

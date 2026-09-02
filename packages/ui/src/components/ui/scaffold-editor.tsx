@@ -17,13 +17,20 @@ import {
   type ImageLimits,
   type UploadImage,
 } from './rich-text-image';
-import { REGION_NODE, ScaffoldDocument, ScaffoldRegionNode } from './scaffold-region';
+import {
+  REGION_KIND,
+  REGION_NODE,
+  ScaffoldDocument,
+  ScaffoldRegionNode,
+  type RegionKind,
+} from './scaffold-region';
 
 /** One slot: what it is called, and what is in it. `label` is chrome the caret never enters. */
 export interface ScaffoldRegion {
   key: string;
   label: string;
   html: string;
+  kind?: RegionKind;
 }
 
 /** A run of slots the keyboard grows and shrinks; the caller names them, so this file holds none. */
@@ -87,7 +94,8 @@ function docFrom(regions: readonly ScaffoldRegion[]): string {
   return regions
     .map(
       (region) =>
-        `<div data-region="${escape(region.key)}" data-label="${escape(region.label)}">` +
+        `<div data-region="${escape(region.key)}" data-label="${escape(region.label)}"` +
+        ` data-kind="${escape(region.kind ?? REGION_KIND.PLAIN)}">` +
         `<div class="scaffold-body">${region.html || '<p></p>'}</div></div>`,
     )
     .join('');
@@ -105,6 +113,7 @@ export function regionsOf(editor: Editor): ScaffoldRegion[] {
     out.push({
       key: String(node.attrs.key ?? ''),
       label: String(node.attrs.label ?? ''),
+      kind: String(node.attrs.kind ?? REGION_KIND.PLAIN) as RegionKind,
       html: holder.innerHTML === '<p></p>' ? '' : holder.innerHTML,
     });
   });
@@ -231,8 +240,8 @@ export function ScaffoldEditor({
           imageLimits={imageLimits}
         />
       ) : null}
-      {/* No scroller of its own: the page scrolls, so a long question never strands the panel beside it. */}
-      <EditorContent editor={editor} className="min-h-64 p-3" />
+      {/* No scroller of its own: the panel scrolls, so a long question never strands the box. */}
+      <EditorContent editor={editor} className="min-h-64 flex-1 p-3 [&>.ProseMirror]:min-h-full" />
     </div>
   );
 }
@@ -256,12 +265,7 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
 
   const index = regionIndexAt(view);
 
-  if (event.key === 'Enter' && !event.shiftKey) {
-    if (context.repeat && isLastOfRun(view, index, context.repeat)) {
-      return addAfter(view, index, context.repeat) || moveToRegion(view, index + 1, false);
-    }
-    return moveToRegion(view, index + 1, false);
-  }
+  if (event.key === 'Enter' && !event.shiftKey) return onEnter(view, index, context.repeat);
 
   if (event.key === 'ArrowDown' && atEdge(view, 'end')) {
     return moveToRegion(view, index + 1, false);
@@ -274,6 +278,13 @@ function handleKey(view: EditorView, event: KeyboardEvent, context: KeyContext):
   }
 
   return false;
+}
+
+/** Enter grows the run, leaves the empty slot it just made, or simply moves on. */
+function onEnter(view: EditorView, index: number, repeat: ScaffoldRepeat | undefined): boolean {
+  if (!repeat || !isLastOfRun(view, index, repeat)) return moveToRegion(view, index + 1, false);
+  if (isEmpty(view, index)) return leaveRun(view, index, repeat);
+  return addAfter(view, index, repeat) || moveToRegion(view, index + 1, false);
 }
 
 function atEdge(view: EditorView, edge: 'start' | 'end'): boolean {
@@ -298,6 +309,24 @@ function isLastOfRun(view: EditorView, index: number, repeat: ScaffoldRepeat): b
   return inRun.length > 0 && inRun.at(-1) === index;
 }
 
+function isEmpty(view: EditorView, index: number): boolean {
+  const node = view.state.doc.child(index);
+  return node.textContent.trim() === '' && node.content.childCount <= 1;
+}
+
+/** Out of the run and on to what follows it, taking the empty slot that was left behind. */
+function leaveRun(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
+  if (runIndexes(view, repeat).length <= repeat.min) return moveToRegion(view, index + 1, false);
+
+  const doc = view.state.doc;
+  let start = 0;
+  for (let i = 0; i < index; i += 1) start += doc.child(i).nodeSize;
+
+  view.dispatch(view.state.tr.delete(start, start + doc.child(index).nodeSize));
+  relabelRun(view, repeat);
+  return moveToRegion(view, index, false);
+}
+
 /** Enter on the last one adds the next, exactly like adding a list item. */
 function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): boolean {
   const inRun = runIndexes(view, repeat);
@@ -308,7 +337,11 @@ function addAfter(view: EditorView, index: number, repeat: ScaffoldRepeat): bool
   for (let i = 0; i <= index; i += 1) end += doc.child(i).nodeSize;
 
   const added = schema.nodes[REGION_NODE]!.create(
-    { key: repeat.keyOf(inRun.length), label: repeat.labelAt(inRun.length) },
+    {
+      key: repeat.keyOf(inRun.length),
+      label: repeat.labelAt(inRun.length),
+      kind: REGION_KIND.SEAT,
+    },
     schema.nodes.paragraph!.create(),
   );
 

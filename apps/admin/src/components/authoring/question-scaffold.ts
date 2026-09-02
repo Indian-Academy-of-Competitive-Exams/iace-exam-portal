@@ -19,6 +19,7 @@ import {
   type TaxonomyContext,
 } from '@iace/contracts';
 import { type ScaffoldRegion, type ScaffoldRepeat } from '@iace/ui/scaffold-editor';
+import { REGION_KIND } from '@iace/ui/scaffold-region';
 
 /** The box read as slots, never as text between delimiters, into the draft the sheet also builds. */
 
@@ -31,21 +32,21 @@ export const REGION_KEYS = {
 export const OPTION_PREFIX = 'option:';
 
 export const REGION_LABELS = {
-  STEM: 'Question:',
-  ANSWER: 'Answer:',
-  SOLUTION: 'Explanation:',
+  STEM: '',
+  ANSWER: 'Answer',
+  SOLUTION: 'Explanation',
 } as const;
 
 export const optionKey = (index: number) => `${OPTION_PREFIX}${index}`;
+/** The seat, as a candidate reads it off the paper. */
 export const optionLetter = (index: number) => String.fromCodePoint(A_CODE + index);
-export const optionLabel = (index: number) => `(${optionLetter(index)})`;
 
 const A_CODE = 65;
 
 export const OPTION_REPEAT: ScaffoldRepeat = {
   prefix: OPTION_PREFIX,
   keyOf: optionKey,
-  labelAt: optionLabel,
+  labelAt: optionLetter,
   min: MCQ_OPTION_MIN,
   max: MCQ_OPTION_MAX,
 };
@@ -105,16 +106,32 @@ export function regionsFor(state: AuthoringState, language: QuestionLanguage): S
     state.type === QUESTION_TYPE.SINGLE_MCQ
       ? Array.from({ length: state.optionCount }, (_, index) => ({
           key: optionKey(index),
-          label: optionLabel(index),
+          label: optionLetter(index),
+          kind: REGION_KIND.SEAT,
           html: content.options[index] ?? '',
         }))
       : [];
 
   return [
-    { key: REGION_KEYS.STEM, label: REGION_LABELS.STEM, html: content.stem },
+    {
+      key: REGION_KEYS.STEM,
+      label: REGION_LABELS.STEM,
+      kind: REGION_KIND.PLAIN,
+      html: content.stem,
+    },
     ...options,
-    { key: REGION_KEYS.ANSWER, label: REGION_LABELS.ANSWER, html: state.answer },
-    { key: REGION_KEYS.SOLUTION, label: REGION_LABELS.SOLUTION, html: content.solution },
+    {
+      key: REGION_KEYS.ANSWER,
+      label: REGION_LABELS.ANSWER,
+      kind: REGION_KIND.NAMED,
+      html: state.answer,
+    },
+    {
+      key: REGION_KEYS.SOLUTION,
+      label: REGION_LABELS.SOLUTION,
+      kind: REGION_KIND.NAMED,
+      html: content.solution,
+    },
   ];
 }
 

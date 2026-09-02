@@ -3,7 +3,7 @@ import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PAGE_CONTENT_CLASS, ThemeProvider, TooltipProvider } from '@iace/ui';
-import { AppShell } from '../browser/app-shell';
+import { AppShell, useWorkspace } from '../browser/app-shell';
 import { type NavItem } from '../src';
 
 afterEach(cleanup);
@@ -39,6 +39,63 @@ function renderShell(props: Partial<React.ComponentProps<typeof AppShell>> = {})
     </MemoryRouter>,
   );
 }
+
+function Workspace({ immersive }: Readonly<{ immersive: boolean }>) {
+  useWorkspace(immersive);
+  return <p>Editor</p>;
+}
+
+function renderWorkspace(immersive: boolean) {
+  setDesktop(true);
+  return render(
+    <MemoryRouter>
+      <ThemeProvider>
+        <TooltipProvider>
+          <AppShell nav={NAV} userLabel="admin@iace.co.in" onSignOut={() => {}}>
+            <Workspace immersive={immersive} />
+          </AppShell>
+        </TooltipProvider>
+      </ThemeProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe('a workspace page', () => {
+  it('keeps the chrome until the page asks for the window', () => {
+    renderWorkspace(false);
+
+    assert.ok(screen.getByRole('navigation', { name: 'Sections' }));
+    assert.ok(screen.getByRole('link', { name: /IACE/ }));
+  });
+
+  /** What full screen is FOR: nothing on the glass but the work and the bar that drives it. */
+  it('takes the rail and the branding away while immersive', () => {
+    renderWorkspace(true);
+
+    assert.equal(screen.queryByRole('navigation', { name: 'Sections' }) === null, true);
+    assert.equal(screen.queryByRole('link', { name: /IACE/ }) === null, true);
+    assert.ok(screen.getByText('Editor'));
+  });
+
+  it('gives the chrome back when the page leaves', () => {
+    const { rerender } = renderWorkspace(true);
+    assert.equal(screen.queryByRole('navigation', { name: 'Sections' }) === null, true);
+
+    rerender(
+      <MemoryRouter>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AppShell nav={NAV} userLabel="admin@iace.co.in" onSignOut={() => {}}>
+              <p>Page</p>
+            </AppShell>
+          </TooltipProvider>
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+
+    assert.ok(screen.getByRole('navigation', { name: 'Sections' }));
+  });
+});
 
 describe('AppShell', () => {
   /** The lockup replaces the Overview and Home nav rows, so it has to be the way back. */

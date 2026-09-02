@@ -132,8 +132,9 @@
   /* Rendered math, relative to the text around it: at 13px a superscript is 9px and unreadable. */
   --math-scale: 1.25;
 
-  /* Wide enough for "Explanation:", so every slot's text starts on one line. */
-  --scaffold-label-width: 6.5rem;
+  /* Wide enough for the longest slot word, so every slot's text starts on one line. */
+  --scaffold-label-width: 4.5rem;
+  --scaffold-seat-size: 1.5rem;
 
   /* ==========================================================================
      3. SPACING — 4px base, no off-grid values

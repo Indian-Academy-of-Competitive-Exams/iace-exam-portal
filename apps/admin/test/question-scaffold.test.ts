@@ -15,7 +15,7 @@ import {
   answerIndexOf,
   emptyState,
   optionKey,
-  optionLabel,
+  optionLetter,
   regionsFor,
   stateFrom,
   taxonomyFor,
@@ -124,12 +124,12 @@ describe('the language toggle', () => {
     const english = typed();
     const hindi = stateFrom(english, 'hi', [
       { key: REGION_KEYS.STEM, label: '', html: '<p>150 का 20% कितना है?</p>' },
-      { key: optionKey(0), label: '(A)', html: '<p>२५</p>' },
-      { key: optionKey(1), label: '(B)', html: '<p>३०</p>' },
-      { key: optionKey(2), label: '(C)', html: '<p>३५</p>' },
-      { key: optionKey(3), label: '(D)', html: '<p>४०</p>' },
-      { key: REGION_KEYS.ANSWER, label: 'Answer:', html: '<p>b</p>' },
-      { key: REGION_KEYS.SOLUTION, label: 'Explanation:', html: '' },
+      { key: optionKey(0), label: 'A', html: '<p>२५</p>' },
+      { key: optionKey(1), label: 'B', html: '<p>३०</p>' },
+      { key: optionKey(2), label: 'C', html: '<p>३५</p>' },
+      { key: optionKey(3), label: 'D', html: '<p>४०</p>' },
+      { key: REGION_KEYS.ANSWER, label: 'Answer', html: '<p>b</p>' },
+      { key: REGION_KEYS.SOLUTION, label: 'Explanation', html: '' },
     ]);
 
     assert.equal(hindi.optionCount, 4);
@@ -162,11 +162,11 @@ describe('the option run', () => {
       { key: REGION_KEYS.STEM, label: '', html: '<p>Stem</p>' },
       ...Array.from({ length: 5 }, (_, index) => ({
         key: optionKey(index),
-        label: optionLabel(index),
+        label: optionLetter(index),
         html: `<p>${index}</p>`,
       })),
-      { key: REGION_KEYS.ANSWER, label: 'Answer:', html: '<p>e</p>' },
-      { key: REGION_KEYS.SOLUTION, label: 'Explanation:', html: '' },
+      { key: REGION_KEYS.ANSWER, label: 'Answer', html: '<p>e</p>' },
+      { key: REGION_KEYS.SOLUTION, label: 'Explanation', html: '' },
     ]);
 
     assert.equal(grown.optionCount, 5);
@@ -175,9 +175,9 @@ describe('the option run', () => {
     assert.equal(questionDraftSchema.parse(toDraft(grown, HEADER)).options[4]?.isCorrect, true);
   });
 
-  it('stops where a paper stops', () => {
+  it('stops where a paper stops, and is lettered the way a paper letters it', () => {
     assert.equal(OPTION_REPEAT.max, MCQ_OPTION_MAX);
-    assert.equal(optionLabel(0), '(A)');
-    assert.equal(optionLabel(MCQ_OPTION_MAX - 1), '(F)');
+    assert.equal(optionLetter(0), 'A');
+    assert.equal(optionLetter(MCQ_OPTION_MAX - 1), 'F');
   });
 });

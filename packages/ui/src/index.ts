@@ -15,6 +15,7 @@ export {
   type StepperState,
   type StepperStep,
 } from './components/ui/stepper';
+export { Kbd, type KbdProps } from './components/ui/kbd';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
 export { FilterBar, type FilterBarProps } from './components/ui/filter-bar';
@@ -61,6 +62,11 @@ export {
   type SearchInputProps,
 } from './components/ui/search-input';
 export { Textarea, type TextareaProps } from './components/ui/textarea';
+export {
+  SegmentedControl,
+  type SegmentedControlProps,
+  type SegmentedItem,
+} from './components/ui/segmented-control';
 export { Separator, type SeparatorProps } from './components/ui/separator';
 export {
   Skeleton,

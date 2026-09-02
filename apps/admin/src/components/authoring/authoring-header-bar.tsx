@@ -2,145 +2,156 @@ import {
   ANSWER_MODE,
   ANSWER_MODES,
   DIFFICULTY_LEVELS,
+  LANGUAGE_LABELS,
+  LANGUAGE_ORDER,
   MCQ_OPTION_COUNT,
   QUESTION_TYPE,
   QUESTION_TYPES,
-  TAGS_MAX,
   type AnswerMode,
   type DifficultyLevel,
+  type QuestionLanguage,
   type QuestionType,
 } from '@iace/contracts';
-import { Combobox, Field, Input, MultiCombobox } from '@iace/ui';
+import { Combobox, Input, SegmentedControl } from '@iace/ui';
 import { ANSWER_MODE_LABELS, QUESTION_TYPE_LABELS } from '../../lib/constants';
 import { SubjectPicker, TopicPicker } from '../taxonomy-picker';
 import { type AuthoringHeader, type AuthoringState } from './question-scaffold';
 
-/** Set once and kept for every question after it — fifty quant questions touch this row once. */
+/** Dense on purpose: the whole batch's setting is one row, and the rest of the window is the box. */
+const CONTROL = 'h-8 w-auto min-w-32 max-w-52 border-transparent bg-muted px-2 text-xs shadow-none';
+
+const CAPTION = 'text-[0.625rem] font-semibold uppercase tracking-wide text-muted-foreground';
+
 export function AuthoringHeaderBar({
   header,
   state,
-  tagOptions,
+  language,
+  counter,
+  actions,
   disabled,
   onHeaderChange,
   onStateChange,
+  onLanguageChange,
 }: Readonly<{
   header: AuthoringHeader;
   state: AuthoringState;
-  tagOptions: readonly string[];
+  language: QuestionLanguage;
+  /** Which question of this batch is in the box — a value, not a label. */
+  counter: string;
+  actions: React.ReactNode;
   disabled: boolean;
   onHeaderChange: (next: AuthoringHeader) => void;
   onStateChange: (next: AuthoringState) => void;
+  onLanguageChange: (next: QuestionLanguage) => void;
 }>) {
   const typed = state.type === QUESTION_TYPE.TEXT_FIELD;
 
   return (
-    <div className="grid grid-cols-2 gap-3 border-b border-border pb-4 md:grid-cols-3 xl:grid-cols-6">
-      <Field htmlFor="authoring-subject" label="Subject">
-        {(control) => (
-          <SubjectPicker
-            {...control}
-            value={header.subjectId}
-            placeholder="Choose a subject"
-            disabled={disabled}
-            onChange={(subjectId) => onHeaderChange({ ...header, subjectId, topicId: '' })}
-          />
-        )}
-      </Field>
+    <div className="flex flex-none flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-2">
+      <Slot caption="Subject">
+        <SubjectPicker
+          value={header.subjectId}
+          placeholder="Choose a subject"
+          disabled={disabled}
+          className={CONTROL}
+          aria-label="Subject"
+          onChange={(subjectId) => onHeaderChange({ ...header, subjectId, topicId: '' })}
+        />
+      </Slot>
 
-      <Field htmlFor="authoring-topic" label="Topic" /* ui-copy-ok: rule */ hint="Optional">
-        {(control) => (
-          <TopicPicker
-            {...control}
-            value={header.topicId}
-            subjectId={header.subjectId}
-            placeholder="Choose a topic"
-            clearable
-            disabled={disabled}
-            onChange={(topicId) => onHeaderChange({ ...header, topicId })}
-          />
-        )}
-      </Field>
+      <Slot caption="Topic">
+        <TopicPicker
+          value={header.topicId}
+          subjectId={header.subjectId}
+          placeholder="Any topic"
+          clearable
+          disabled={disabled}
+          className={CONTROL}
+          aria-label="Topic"
+          onChange={(topicId) => onHeaderChange({ ...header, topicId })}
+        />
+      </Slot>
 
-      <Field htmlFor="authoring-difficulty" label="Difficulty">
-        {(control) => (
-          <Combobox
-            {...control}
-            value={header.difficulty}
-            disabled={disabled}
-            items={DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level }))}
-            onChange={(value) =>
-              onHeaderChange({ ...header, difficulty: value as DifficultyLevel })
-            }
-          />
-        )}
-      </Field>
+      <Slot caption="Difficulty">
+        <Combobox
+          value={header.difficulty}
+          disabled={disabled}
+          clearable={false}
+          className={CONTROL}
+          aria-label="Difficulty"
+          items={DIFFICULTY_LEVELS.map((level) => ({ value: level, label: level }))}
+          onChange={(value) => onHeaderChange({ ...header, difficulty: value as DifficultyLevel })}
+        />
+      </Slot>
 
-      <Field htmlFor="authoring-type" label="Type">
-        {(control) => (
-          <Combobox
-            {...control}
-            value={state.type}
-            disabled={disabled}
-            items={QUESTION_TYPES.map((type) => ({
-              value: type,
-              label: QUESTION_TYPE_LABELS[type],
-            }))}
-            onChange={(value) => onStateChange(retyped(state, value as QuestionType))}
-          />
-        )}
-      </Field>
-
-      <Field
-        htmlFor="authoring-tags"
-        label="Tags"
-        /* ui-copy-ok: rule */ hint={`Kept for every question saved from here; ${TAGS_MAX} at most`}
-      >
-        {(control) => (
-          <MultiCombobox
-            {...control}
-            value={header.tags}
-            disabled={disabled}
-            placeholder="No tags"
-            items={tagOptions.map((tag) => ({ value: tag, label: tag }))}
-            onChange={(tags) => onHeaderChange({ ...header, tags: tags.slice(0, TAGS_MAX) })}
-          />
-        )}
-      </Field>
+      <Slot caption="Type">
+        <Combobox
+          value={state.type}
+          disabled={disabled}
+          clearable={false}
+          className={CONTROL}
+          aria-label="Type"
+          items={QUESTION_TYPES.map((type) => ({
+            value: type,
+            label: QUESTION_TYPE_LABELS[type],
+          }))}
+          onChange={(value) => onStateChange(retyped(state, value as QuestionType))}
+        />
+      </Slot>
 
       {typed ? (
-        <Field htmlFor="authoring-answer-mode" label="Answer match">
-          {(control) => (
-            <Combobox
-              {...control}
-              value={state.answerMode}
-              disabled={disabled}
-              items={ANSWER_MODES.map((mode) => ({ value: mode, label: ANSWER_MODE_LABELS[mode] }))}
-              onChange={(value) =>
-                onStateChange({ ...state, answerMode: value as AnswerMode, tolerance: '' })
-              }
-            />
-          )}
-        </Field>
+        <Slot caption="Answer match">
+          <Combobox
+            value={state.answerMode}
+            disabled={disabled}
+            clearable={false}
+            className={CONTROL}
+            aria-label="Answer match"
+            items={ANSWER_MODES.map((mode) => ({ value: mode, label: ANSWER_MODE_LABELS[mode] }))}
+            onChange={(value) =>
+              onStateChange({ ...state, answerMode: value as AnswerMode, tolerance: '' })
+            }
+          />
+        </Slot>
       ) : null}
 
       {typed && state.answerMode === ANSWER_MODE.NUMERIC ? (
-        <Field
-          htmlFor="authoring-tolerance"
-          label="Tolerance"
-          /* ui-copy-ok: rule */ hint="Counted either side of the answer; blank means none"
-        >
-          {(control) => (
-            <Input
-              {...control}
-              value={state.tolerance}
-              disabled={disabled}
-              inputMode="decimal"
-              onChange={(event) => onStateChange({ ...state, tolerance: event.target.value })}
-            />
-          )}
-        </Field>
+        <Slot caption="Tolerance">
+          <Input
+            value={state.tolerance}
+            disabled={disabled}
+            inputMode="decimal"
+            aria-label="Tolerance"
+            className="h-8 w-24 border-transparent bg-muted px-2 text-xs shadow-none"
+            onChange={(event) => onStateChange({ ...state, tolerance: event.target.value })}
+          />
+        </Slot>
       ) : null}
+
+      <div className="ml-auto flex items-center gap-3">
+        <span className="text-xs tabular-nums text-muted-foreground">{counter}</span>
+        <SegmentedControl
+          value={language}
+          onChange={(value) => onLanguageChange(value as QuestionLanguage)}
+          aria-label="Language"
+          items={LANGUAGE_ORDER.map((code) => ({
+            value: code,
+            label: code.toUpperCase(),
+            name: LANGUAGE_LABELS[code],
+          }))}
+        />
+        {actions}
+      </div>
     </div>
+  );
+}
+
+function Slot({ caption, children }: Readonly<{ caption: string; children: React.ReactNode }>) {
+  return (
+    <label className="flex items-center gap-2">
+      <span className={CAPTION}>{caption}</span>
+      {children}
+    </label>
   );
 }
 
