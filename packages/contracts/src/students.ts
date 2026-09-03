@@ -199,9 +199,6 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   profileCompleted: optionalBooleanQuery(),
   /** Students with no enrolment and no program: they can reach no test, so they are a to-do list. */
   noAccess: optionalBooleanQuery(),
-  /** Enrolled on or after / on or before. Inclusive at both ends. */
-  joinedFrom: dateOnlySchema.optional(),
-  joinedTo: dateOnlySchema.optional(),
   sort: z.enum(STUDENT_SORT_VALUES).optional().default(STUDENT_SORTS.RECENT),
   match: matchModeQuery(),
 });

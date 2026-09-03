@@ -123,31 +123,6 @@ describe('studentWhere — access-shaped filters', () => {
   });
 });
 
-describe('studentWhere — joined between', () => {
-  it('covers the WHOLE of the last day, as the day runs at the institute', () => {
-    const [condition] = conditionsFor({ joinedFrom: '2026-08-03', joinedTo: '2026-08-03' });
-    const range = (condition as { createdAt: { gte: Date; lte: Date } }).createdAt;
-
-    // The 3rd in IST, so the bounds are 05:30 either side of the UTC day of the same name.
-    assert.equal(range.gte.toISOString(), '2026-08-02T18:30:00.000Z');
-    assert.equal(range.lte.toISOString(), '2026-08-03T18:29:59.999Z');
-    assert.ok(new Date('2026-08-03T16:00:00.000Z') <= range.lte);
-    assert.ok(new Date('2026-08-02T19:00:00.000Z') >= range.gte);
-  });
-
-  it('accepts an open-ended range at either end', () => {
-    const from = conditionsFor({ joinedFrom: '2026-01-01' })[0] as { createdAt: object };
-    const to = conditionsFor({ joinedTo: '2026-01-01' })[0] as { createdAt: object };
-
-    assert.deepEqual(Object.keys(from.createdAt), ['gte']);
-    assert.deepEqual(Object.keys(to.createdAt), ['lte']);
-  });
-
-  it('leaves createdAt alone when no range was given', () => {
-    assert.equal(conditionsFor().length, 0);
-  });
-});
-
 /** Every case here once silently LOST a filter. */
 describe('studentWhere — filters COMBINE rather than overwrite each other', () => {
   it('keeps the branch filter when a status is chosen too', () => {
@@ -199,10 +174,11 @@ describe('studentWhere — filters COMBINE rather than overwrite each other', ()
       isTestBlocked: 'false',
       preTestReady: 'false',
       neverSignedIn: 'true',
-      joinedFrom: '2026-01-01',
+      course: 'SSC',
+      programCode: 'FOUNDATION',
     });
 
-    assert.equal(conditions.length, 7, 'every filter must survive');
+    assert.equal(conditions.length, 8, 'every filter must survive');
   });
 
   it('searches a mobile number and a name together', () => {

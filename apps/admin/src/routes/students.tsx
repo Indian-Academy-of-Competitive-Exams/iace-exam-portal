@@ -14,7 +14,6 @@ import {
   STUDENT_SORTS,
   STUDENT_TYPE,
   STUDENT_TYPES,
-  todayISO,
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
@@ -244,8 +243,6 @@ export function StudentsPage() {
         { value: 'false', label: 'Has an enrolment or program' },
       ],
     },
-    { key: 'joinedFrom', kind: 'date', label: 'Enrolled from', max: todayISO() },
-    { key: 'joinedTo', kind: 'date', label: 'Enrolled until', max: todayISO() },
   ] as const;
 
   const students = useListScreen({
@@ -259,8 +256,6 @@ export function StudentsPage() {
       preTestReady: asBooleanParam(values.preTestReady),
       profileCompleted: asBooleanParam(values.profileCompleted),
       noAccess: asBooleanParam(values.noAccess),
-      joinedFrom: values.joinedFrom || undefined,
-      joinedTo: values.joinedTo || undefined,
       sort: (values.sort || undefined) as StudentSort | undefined,
       ...STATUS_QUERY[(values.status || 'all') as StatusFilter],
     }),

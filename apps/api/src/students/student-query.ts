@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
 import { branchScopeWhere, type BranchScope } from '../common/security';
-import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
 
 /** Turns the roster's filters into a Prisma query. */
 export function studentWhere(
@@ -12,7 +11,7 @@ export function studentWhere(
   /** What the match toggle governs. */
   const chosen: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => chosen.push(condition);
-  /** What narrows the roster whichever mode is chosen: the search box and the date range. */
+  /** What narrows the roster whichever mode is chosen: the search box, and the caller's scope. */
   const always: Prisma.StudentWhereInput[] = [];
 
   if (query.isActive !== undefined) add({ isActive: query.isActive });
@@ -33,9 +32,6 @@ export function studentWhere(
   // ALWAYS, never among the conditions `match=any` ORs: a second filter would widen it back.
   const reachable = branchScopeWhere(scope);
   if (reachable) always.push({ currentBranchId: reachable });
-
-  const joined = dateRange(query.joinedFrom, query.joinedTo);
-  if (joined) always.push(joined);
 
   const search = query.q?.trim();
   if (search) {
@@ -72,21 +68,6 @@ function signedInFilter(neverSignedIn: boolean): Prisma.StudentWhereInput {
   return neverSignedIn
     ? { OR: [{ pinHash: null }, { pinIsDefault: true }] }
     : { pinHash: { not: null }, pinIsDefault: false };
-}
-
-/** An inclusive day range over a timestamp column. */
-function dateRange(
-  from: string | undefined,
-  to: string | undefined,
-): Prisma.StudentWhereInput | null {
-  if (!from && !to) return null;
-
-  return {
-    createdAt: {
-      ...(from ? { gte: startOfInstituteDay(from) } : {}),
-      ...(to ? { lte: endOfInstituteDay(to) } : {}),
-    },
-  };
 }
 
 /** Ordering, always tie-broken by id. */
