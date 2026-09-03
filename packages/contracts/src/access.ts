@@ -3,7 +3,7 @@ import { ATTEMPT_STATUS, attemptStatusSchema, type AttemptStatus } from './attem
 import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from './common';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
-import { examFamilySchema } from './exams';
+import { examCourseSchema } from './exams';
 
 // ============================================================================
 // Access. A student reaches a series by exam match, by program match or by an
@@ -18,7 +18,7 @@ export const UNLOCK_MODE = {
   /** Never opens on its own — the student asks and an admin answers. */
   REQUEST: 'REQUEST',
 } as const;
-/** STANDARD reaches by exam or program; FREE also by an enrolled family; SCHOLARSHIP only by a grant. */
+/** STANDARD reaches by exam or program; FREE also by an enrolled course; SCHOLARSHIP only by a grant. */
 export const TEST_SERIES_KIND = {
   STANDARD: 'STANDARD',
   FREE: 'FREE',
@@ -26,7 +26,7 @@ export const TEST_SERIES_KIND = {
 } as const;
 export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
 
-/** How many EXAMS a student may hold FREE-series access across by asking: a family is many exams. */
+/** How many EXAMS a student may hold FREE-series access across by asking: a course is many exams. */
 export const FREE_SERIES_EXAM_CAP = 2;
 export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
 export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
@@ -120,7 +120,7 @@ export const testSeriesSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   examStageId: z.string().nullable(),
-  /** Null is exam or family access; set means the student must carry the program. */
+  /** Null is exam or course access; set means the student must carry the program. */
   programCode: z.string().nullable(),
   /** Unlock the tests in order rather than opening them together. */
   sequentialTests: z.boolean(),
@@ -179,7 +179,7 @@ export type TestSeriesListQueryInput = z.input<typeof testSeriesListQuerySchema>
 export const createTestSeriesSchema = z.object({
   name: seriesNameSchema,
   description: z.string().trim().max(500).optional(),
-  /** The stage this belongs to. Null is a series that spans a family rather than one paper. */
+  /** The stage this belongs to. Null is a series that spans a course rather than one paper. */
   examStageId: z.string().nullish(),
   /** Set means program-only: a student without the program never reaches it. */
   programCode: z.string().nullish(),
@@ -475,7 +475,7 @@ export const studentCatalogSeriesSchema = z.object({
       id: z.string(),
       name: z.string(),
       examCode: z.string(),
-      family: examFamilySchema,
+      course: examCourseSchema,
     })
     .nullable(),
   programCode: z.string().nullable(),

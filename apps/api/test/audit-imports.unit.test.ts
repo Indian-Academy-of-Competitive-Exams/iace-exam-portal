@@ -515,7 +515,7 @@ describe('ImportsService — the branches the admin uploading may write into', (
 
     const result = await serviceOn(prisma).commitStudents(
       Buffer.from(
-        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs\n' +
           '9876543210,Asha,ONLINE,ONLINE,SSC,,\n' +
           '9876543211,Bela,ONLINE,KUKATPALLY,SSC,,',
       ),
@@ -539,7 +539,7 @@ describe('ImportsService — the branches the admin uploading may write into', (
 
     const plan = await serviceOn(prisma).previewStudents(
       Buffer.from(
-        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs\n' +
           '9876543211,Bela,ONLINE,KUKATPALLY,SSC,,',
       ),
       held,

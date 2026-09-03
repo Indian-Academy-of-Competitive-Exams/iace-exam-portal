@@ -14,12 +14,12 @@ import {
   type DrawSpec,
   type DrawStrategy,
   EVALUATION_MODE,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   EXAM_MODE,
   EXAM_TEMPLATE,
   ErrorCodes,
   type EvaluationMode,
-  type ExamFamily,
+  type ExamCourse,
   type ExamMode,
   type ExamTemplate,
   type FeatureKey,
@@ -460,7 +460,7 @@ export interface FakeStudent {
   fullName: string | null;
   studentType: StudentType;
   enrolledExams: string[];
-  enrolledFamilies: ExamFamily[];
+  enrolledCourses: ExamCourse[];
   programs: string[];
   currentBranchId: string | null;
   preTestReady: boolean;
@@ -508,7 +508,7 @@ export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
     fullName: null,
     studentType: STUDENT_TYPE.ONLINE,
     enrolledExams: [],
-    enrolledFamilies: [],
+    enrolledCourses: [],
     programs: [],
     currentBranchId: null,
     preTestReady: false,
@@ -946,8 +946,8 @@ export class FakePrisma {
     return {
       ...row,
       exam: exam
-        ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
-        : { id: row.examId, code: '', name: '', family: EXAM_FAMILY.SSC },
+        ? { id: exam.id, code: exam.code, name: exam.name, course: exam.course }
+        : { id: row.examId, code: '', name: '', course: EXAM_COURSE.SSC },
     };
   }
 
@@ -1387,8 +1387,8 @@ export class FakeConfigPrisma {
         stageKey: stage?.stageKey ?? '',
         name: stage?.name ?? '',
         exam: exam
-          ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
-          : { id: '', code: '', name: '', family: EXAM_FAMILY.SSC },
+          ? { id: exam.id, code: exam.code, name: exam.name, course: exam.course }
+          : { id: '', code: '', name: '', course: EXAM_COURSE.SSC },
       },
       sections: this.sections
         .filter((section) => section.baseConfigId === row.id)
@@ -2369,8 +2369,8 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         stageKey: stage?.stageKey ?? '',
         name: stage?.name ?? '',
         exam: exam
-          ? { id: exam.id, code: exam.code, name: exam.name, family: exam.family }
-          : { id: '', code: '', name: '', family: EXAM_FAMILY.SSC },
+          ? { id: exam.id, code: exam.code, name: exam.name, course: exam.course }
+          : { id: '', code: '', name: '', course: EXAM_COURSE.SSC },
       },
     };
   }
@@ -2426,7 +2426,7 @@ export function fakeStartingPins(
 
 /** A roster CSV with the demanded columns filled, so a test varies only what it is about. */
 export function roster(csv: string): string {
-  const REQUIRED_HEADERS = 'Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs';
+  const REQUIRED_HEADERS = 'Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs';
   const REQUIRED_CELLS = 'ONLINE,ONLINE,SSC,,';
   const [header, ...rows] = csv.split('\n');
   return [`${header},${REQUIRED_HEADERS}`, ...rows.map((row) => `${row},${REQUIRED_CELLS}`)].join(
@@ -2449,7 +2449,7 @@ export function makeBranch(overrides: Partial<FakeBranch> = {}): FakeBranch {
 
 export interface FakeExam {
   id: string;
-  family: ExamFamily;
+  course: ExamCourse;
   name: string;
   code: string;
   description: string | null;
@@ -2461,7 +2461,7 @@ export interface FakeExam {
 export function makeExam(overrides: Partial<FakeExam> = {}): FakeExam {
   return {
     id: 'exam_1',
-    family: EXAM_FAMILY.SSC,
+    course: EXAM_COURSE.SSC,
     name: 'SSC CGL',
     code: 'SSC CGL',
     description: null,
@@ -2515,7 +2515,7 @@ interface StageWhere {
   name?: Contains;
   stageKey?: Contains;
   examId?: KeyFilter;
-  exam?: { family?: ExamFamily; code?: Contains };
+  exam?: { course?: ExamCourse; code?: Contains };
   disposition?: StageDisposition;
   isActive?: boolean;
 }
@@ -2533,7 +2533,7 @@ function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]
     holds(stage.name, where.name) &&
     holds(stage.stageKey, where.stageKey) &&
     matchesKey(stage.examId, where.examId) &&
-    (where.exam?.family === undefined || exam?.family === where.exam.family) &&
+    (where.exam?.course === undefined || exam?.course === where.exam.course) &&
     holds(exam?.code, where.exam?.code) &&
     (where.disposition === undefined || stage.disposition === where.disposition) &&
     (where.isActive === undefined || stage.isActive === where.isActive)
@@ -2543,7 +2543,7 @@ function matchesStage(stage: FakeExamStage, where: StageWhere, exams: FakeExam[]
 interface ExamWhere {
   name?: { contains: string; mode?: 'insensitive' };
   code?: { in: string[] };
-  family?: KeyFilter;
+  course?: KeyFilter;
   isActive?: boolean;
 }
 
@@ -2551,7 +2551,7 @@ function matchesExam(exam: FakeExam, where: ExamWhere): boolean {
   return (
     (where.name ? exam.name.toLowerCase().includes(where.name.contains.toLowerCase()) : true) &&
     (where.code ? where.code.in.includes(exam.code) : true) &&
-    matchesKey(exam.family, where.family) &&
+    matchesKey(exam.course, where.course) &&
     (where.isActive === undefined || exam.isActive === where.isActive)
   );
 }
@@ -3843,7 +3843,7 @@ interface CatalogReachWhere {
   unlockRequests?: { some: { studentId: string; status: string } };
   programCode?: null | { in: string[] };
   kind?: TestSeriesKind;
-  examStage?: { exam: { code?: { in: string[] }; family?: { in: ExamFamily[] } } };
+  examStage?: { exam: { code?: { in: string[] }; course?: { in: ExamCourse[] } } };
 }
 
 interface CatalogSeriesWhere extends CatalogReachWhere {
@@ -4224,24 +4224,24 @@ export class FakeCatalogPrisma {
       const code = this.examCodeOf(row.examStageId);
       return code !== null && filter.exam.code.in.includes(code);
     }
-    if (filter.exam.family) {
-      const family = this.examFamilyOf(row.examStageId);
-      return family !== null && filter.exam.family.in.includes(family);
+    if (filter.exam.course) {
+      const course = this.examCourseOf(row.examStageId);
+      return course !== null && filter.exam.course.in.includes(course);
     }
     return true;
   }
 
   /** The shape a `select: { examStage: { exam: ... } }` expects back. */
   private stageOf(examStageId: string | null) {
-    const family = this.examFamilyOf(examStageId);
+    const course = this.examCourseOf(examStageId);
     const code = this.examCodeOf(examStageId);
-    return family === null && code === null ? null : { exam: { family, code } };
+    return course === null && code === null ? null : { exam: { course, code } };
   }
 
-  private examFamilyOf(examStageId: string | null): ExamFamily | null {
+  private examCourseOf(examStageId: string | null): ExamCourse | null {
     const stage = this.data.stages.find((candidate) => candidate.id === examStageId);
     const exam = this.data.exams.find((candidate) => candidate.id === stage?.examId);
-    return exam?.family ?? null;
+    return exam?.course ?? null;
   }
 
   private examCodeOf(examStageId: string | null): string | null {

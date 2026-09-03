@@ -89,7 +89,7 @@ enum TimerTemplate {
   PER_ITEM_TIMED
 }
 
-enum ExamFamily {
+enum ExamCourse {
   SSC
   RRB
   BANKING
@@ -196,7 +196,7 @@ enum ImportSource {
 }
 
 /**
- * STANDARD reaches by exam or program; FREE also by family; SCHOLARSHIP only by a grant.
+ * STANDARD reaches by exam or program; FREE also by course; SCHOLARSHIP only by a grant.
  */
 enum TestSeriesKind {
   STANDARD
@@ -265,12 +265,12 @@ enum ActorType {
 }
 
 // ============================================================================
-// Exam taxonomy — ExamFamily (enum) → Exam → ExamStage
+// Exam taxonomy — ExamCourse (enum) → Exam → ExamStage
 // ============================================================================
 
 model Exam {
   id          String     @id @default(cuid())
-  family      ExamFamily
+  course      ExamCourse
   // Student.enrolledExams holds these codes, so a code is never re-used.
   code        String     @unique
   name        String
@@ -281,7 +281,7 @@ model Exam {
 
   stages ExamStage[]
 
-  @@index([family])
+  @@index([course])
 }
 
 // The Stage/Paper level — what carries a base config, a series and a test.
@@ -677,7 +677,7 @@ model Student {
   mobile           String
   externalRef      String?
   studentType      StudentType
-  enrolledFamilies ExamFamily[] @default([])
+  enrolledCourses  ExamCourse[] @default([])
   // Program.code values — the student is a candidate for these.
   programs         String[]     @default([])
   // Exam.code values, app-validated against Exam.
@@ -711,7 +711,7 @@ model Student {
 
   @@index([mobile])
   @@index([externalRef])
-  @@index([enrolledFamilies], type: Gin)
+  @@index([enrolledCourses], type: Gin)
   @@index([enrolledExams], type: Gin)
   @@index([programs], type: Gin)
   @@index([currentBranchId])
@@ -845,7 +845,7 @@ model Program {
 }
 
 // The unit of offering — a test reaches students only through a series.
-// programCode null = exam/family access; set = program-only.
+// programCode null = exam/course access; set = program-only.
 model TestSeries {
   id                   String         @id @default(cuid())
   name                 String
@@ -857,7 +857,7 @@ model TestSeries {
   progressive          Boolean        @default(false)
   prerequisiteSeriesId String?
   unlockMode           UnlockMode     @default(AUTO)
-  // What the series IS, and one of three: only FREE is reached by an enrolled family, and
+  // What the series IS, and one of three: only FREE is reached by an enrolled course, and
   // only SCHOLARSHIP is reached by nothing but an import's grant. A FREE series waits on
   // nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
   kind                 TestSeriesKind @default(STANDARD)

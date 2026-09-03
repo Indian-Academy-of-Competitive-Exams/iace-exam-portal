@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   ATTEMPT_STATUS,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   ErrorCodes,
   STUDENT_TYPE,
   TEST_SERIES_KIND,
@@ -760,9 +760,9 @@ describe('UnlocksService.listRequests', () => {
 
 /** Asking for a FREE series nobody reaches: the one way in for a student outside the institute. */
 
-const FAMILIES = [EXAM_FAMILY.SSC, EXAM_FAMILY.RRB, EXAM_FAMILY.BANKING] as const;
+const FAMILIES = [EXAM_COURSE.SSC, EXAM_COURSE.RRB, EXAM_COURSE.BANKING] as const;
 
-/** Three FREE series, one per family, and a student who reaches none of them. */
+/** Three FREE series, one per course, and a student who reaches none of them. */
 function outsider(over: FakeCatalogData = {}): FakeCatalogData {
   return {
     students: [
@@ -770,20 +770,20 @@ function outsider(over: FakeCatalogData = {}): FakeCatalogData {
         id: 'stu_1',
         currentBranchId: null,
         enrolledExams: [],
-        enrolledFamilies: [],
+        enrolledCourses: [],
         studentType: STUDENT_TYPE.NON_IACE,
       }),
     ],
-    exams: FAMILIES.map((family) =>
-      makeExam({ id: `exam_${family}`, family, code: family, name: family }),
+    exams: FAMILIES.map((course) =>
+      makeExam({ id: `exam_${course}`, course, code: course, name: course }),
     ),
-    stages: FAMILIES.map((family) =>
-      makeExamStage({ id: `stage_${family}`, examId: `exam_${family}`, stageKey: `${family}_T1` }),
+    stages: FAMILIES.map((course) =>
+      makeExamStage({ id: `stage_${course}`, examId: `exam_${course}`, stageKey: `${course}_T1` }),
     ),
-    series: FAMILIES.map((family) =>
+    series: FAMILIES.map((course) =>
       makeSeries({
-        id: `srs_${family}`,
-        examStageId: `stage_${family}`,
+        id: `srs_${course}`,
+        examStageId: `stage_${course}`,
         kind: TEST_SERIES_KIND.FREE,
       }),
     ),
@@ -803,7 +803,7 @@ describe('asking for a FREE series nobody reaches', () => {
     const { service, resolver } = build(outsider());
     assert.deepEqual((await resolver.catalog('stu_1', NOW)).series, []);
 
-    const request = await service.request('stu_1', `srs_${EXAM_FAMILY.SSC}`);
+    const request = await service.request('stu_1', `srs_${EXAM_COURSE.SSC}`);
 
     assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
   });
@@ -815,7 +815,7 @@ describe('asking for a FREE series nobody reaches', () => {
         series: [
           makeSeries({
             id: 'srs_scholar',
-            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.SCHOLARSHIP,
           }),
         ],
@@ -834,7 +834,7 @@ describe('asking for a FREE series nobody reaches', () => {
         series: [
           makeSeries({
             id: 'srs_std',
-            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.STANDARD,
           }),
         ],
@@ -849,52 +849,52 @@ describe('asking for a FREE series nobody reaches', () => {
 
   it('approving writes a GRANT, and the series is theirs on the next read', async () => {
     const { service, resolver, listener, events, world } = build(outsider());
-    const request = await service.request('stu_1', `srs_${EXAM_FAMILY.SSC}`);
+    const request = await service.request('stu_1', `srs_${EXAM_COURSE.SSC}`);
 
     await service.decide(request.id, ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
     await deliverBusts(events, listener);
 
     assert.deepEqual(
       world.grants.map((grant) => grant.testSeriesId),
-      [`srs_${EXAM_FAMILY.SSC}`],
+      [`srs_${EXAM_COURSE.SSC}`],
     );
     assert.deepEqual(
       (await resolver.catalog('stu_1', NOW)).series.map((series) => series.id),
-      [`srs_${EXAM_FAMILY.SSC}`],
+      [`srs_${EXAM_COURSE.SSC}`],
     );
   });
 
   it('refuses a third exam', async () => {
     const { service } = build(
       outsider({
-        grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],
+        grants: [grantOf(`srs_${EXAM_COURSE.SSC}`), grantOf(`srs_${EXAM_COURSE.RRB}`)],
       }),
     );
 
     await assert.rejects(
-      () => service.request('stu_1', `srs_${EXAM_FAMILY.BANKING}`),
+      () => service.request('stu_1', `srs_${EXAM_COURSE.BANKING}`),
       (error: AppException) => error.code === ErrorCodes.VALIDATION_ERROR,
     );
   });
 
   /** Otherwise five asks queue across five exams and every one of them is approvable. */
   it('counts an ask still waiting toward the cap', async () => {
-    const { service } = build(outsider({ grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`)] }));
-    await service.request('stu_1', `srs_${EXAM_FAMILY.RRB}`);
+    const { service } = build(outsider({ grants: [grantOf(`srs_${EXAM_COURSE.SSC}`)] }));
+    await service.request('stu_1', `srs_${EXAM_COURSE.RRB}`);
 
     await assert.rejects(
-      () => service.request('stu_1', `srs_${EXAM_FAMILY.BANKING}`),
+      () => service.request('stu_1', `srs_${EXAM_COURSE.BANKING}`),
       (error: AppException) => error.code === ErrorCodes.VALIDATION_ERROR,
     );
   });
 
   /** The whole change: SSC holds CGL, CHSL and MTS, and two of them are two, not one. */
-  it('counts two exams inside ONE family as two', async () => {
-    const oneFamily: FakeCatalogData = {
+  it('counts two exams inside ONE course as two', async () => {
+    const oneCourse: FakeCatalogData = {
       exams: [
-        makeExam({ id: 'exam_cgl', family: EXAM_FAMILY.SSC, code: 'SSC CGL', name: 'SSC CGL' }),
-        makeExam({ id: 'exam_chsl', family: EXAM_FAMILY.SSC, code: 'SSC CHSL', name: 'SSC CHSL' }),
-        makeExam({ id: 'exam_mts', family: EXAM_FAMILY.SSC, code: 'SSC MTS', name: 'SSC MTS' }),
+        makeExam({ id: 'exam_cgl', course: EXAM_COURSE.SSC, code: 'SSC CGL', name: 'SSC CGL' }),
+        makeExam({ id: 'exam_chsl', course: EXAM_COURSE.SSC, code: 'SSC CHSL', name: 'SSC CHSL' }),
+        makeExam({ id: 'exam_mts', course: EXAM_COURSE.SSC, code: 'SSC MTS', name: 'SSC MTS' }),
       ],
       stages: [
         makeExamStage({ id: 'stage_cgl', examId: 'exam_cgl', stageKey: 'CGL_T1' }),
@@ -910,7 +910,7 @@ describe('asking for a FREE series nobody reaches', () => {
       ),
       grants: [grantOf('srs_cgl'), grantOf('srs_chsl')],
     };
-    const { service } = build(outsider(oneFamily));
+    const { service } = build(outsider(oneCourse));
 
     await assert.rejects(
       () => service.request('stu_1', 'srs_mts'),
@@ -921,18 +921,18 @@ describe('asking for a FREE series nobody reaches', () => {
   it('lets a second series on an exam they already hold through', async () => {
     const { service } = build(
       outsider({
-        grants: [grantOf(`srs_${EXAM_FAMILY.SSC}`), grantOf(`srs_${EXAM_FAMILY.RRB}`)],
+        grants: [grantOf(`srs_${EXAM_COURSE.SSC}`), grantOf(`srs_${EXAM_COURSE.RRB}`)],
         series: [
-          ...FAMILIES.map((family) =>
+          ...FAMILIES.map((course) =>
             makeSeries({
-              id: `srs_${family}`,
-              examStageId: `stage_${family}`,
+              id: `srs_${course}`,
+              examStageId: `stage_${course}`,
               kind: TEST_SERIES_KIND.FREE,
             }),
           ),
           makeSeries({
             id: 'srs_ssc_two',
-            examStageId: `stage_${EXAM_FAMILY.SSC}`,
+            examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.FREE,
           }),
         ],

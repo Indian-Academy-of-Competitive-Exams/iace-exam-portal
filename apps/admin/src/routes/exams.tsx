@@ -4,10 +4,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import {
-  DEFAULT_EXAM_FAMILY,
+  DEFAULT_EXAM_COURSE,
   DEFAULT_EXAM_MODE,
   DEFAULT_STAGE_DISPOSITION,
-  EXAM_FAMILIES,
+  EXAM_COURSES,
   EXAM_MODES,
   STAGE_DISPOSITIONS,
   createExamSchema,
@@ -17,7 +17,7 @@ import {
   type CreateExamInput,
   type CreateExamStageInput,
   type Exam,
-  type ExamFamily,
+  type ExamCourse,
   type ExamMode,
   type ExamStage,
   type StageDisposition,
@@ -46,13 +46,13 @@ import {
 } from '@iace/ui';
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
-import { familyLabel, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { courseLabel, NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
 import { ExamPicker } from '../components/exam-picker';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 
-const NEW_EXAM_FIELDS = ['family', 'name', 'code'] as const;
-const EDIT_EXAM_FIELDS = ['family', 'name', 'code'] as const;
+const NEW_EXAM_FIELDS = ['course', 'name', 'code'] as const;
+const EDIT_EXAM_FIELDS = ['course', 'name', 'code'] as const;
 
 /** AP_TS_POLICE reads as AP/TS POLICE — the underscore is a Prisma enum's constraint, not a name. */
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
@@ -62,7 +62,7 @@ function examColumns(
   onEdit: (exam: Exam) => void,
 ): DataTableColumn<Exam>[] {
   return [
-    { key: 'family', header: 'Family', cell: (exam) => familyLabel(exam.family) },
+    { key: 'course', header: 'Course', cell: (exam) => courseLabel(exam.course) },
     {
       key: 'name',
       header: 'Exam',
@@ -96,12 +96,12 @@ function examColumns(
 const EXAM_FILTERS = [
   { key: 'q', kind: 'search', label: 'Search exams', placeholder: 'Search exams', primary: true },
   {
-    key: 'family',
+    key: 'course',
     kind: 'multi',
-    label: 'Filter by family',
+    label: 'Filter by course',
     primary: true,
-    placeholder: 'Any family',
-    items: EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) })),
+    placeholder: 'Any course',
+    items: EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) })),
   },
 ] as const;
 
@@ -131,7 +131,7 @@ export function ExamsPage() {
     filters: EXAM_FILTERS,
     toQuery: (values) => ({
       q: values.q || undefined,
-      family: values.family as Exam['family'][],
+      course: values.course as Exam['course'][],
     }),
     fetchPage: (params) => api.admin.exams.list(params),
   });
@@ -216,10 +216,10 @@ function NewExamDialog({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateExamInput>({
     resolver: zodResolver(createExamSchema),
-    defaultValues: { family: DEFAULT_EXAM_FAMILY, name: '', code: '' },
+    defaultValues: { course: DEFAULT_EXAM_COURSE, name: '', code: '' },
   });
 
-  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? DEFAULT_EXAM_FAMILY;
+  const chosenCourse = useWatch({ control: form.control, name: 'course' }) ?? DEFAULT_EXAM_COURSE;
 
   const create = useMutation({
     meta: { success: 'Exam created.', fields: NEW_EXAM_FIELDS },
@@ -238,16 +238,16 @@ function NewExamDialog({
       submitLabel="Create"
       loading={create.isPending}
     >
-      <FormField form={form} name="family" label="Family">
+      <FormField form={form} name="course" label="Course">
         {(control) => (
           <Combobox
             id={control.id}
             aria-describedby={control['aria-describedby']}
             aria-invalid={control['aria-invalid']}
             clearable={false}
-            value={chosenFamily}
-            onChange={(next) => form.setValue('family', next as ExamFamily, { shouldDirty: true })}
-            items={EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) }))}
+            value={chosenCourse}
+            onChange={(next) => form.setValue('course', next as ExamCourse, { shouldDirty: true })}
+            items={EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }))}
           />
         )}
       </FormField>
@@ -279,10 +279,10 @@ function EditExamDialog({
 }: Readonly<{ exam: Exam; onDone: () => void; onClose: () => void }>) {
   const form = useForm<UpdateExamInput>({
     resolver: zodResolver(updateExamSchema),
-    defaultValues: { family: exam.family, name: exam.name, code: exam.code },
+    defaultValues: { course: exam.course, name: exam.name, code: exam.code },
   });
 
-  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? exam.family;
+  const chosenCourse = useWatch({ control: form.control, name: 'course' }) ?? exam.course;
 
   const save = useMutation({
     meta: { success: 'Exam saved.', fields: EDIT_EXAM_FIELDS },
@@ -303,16 +303,16 @@ function EditExamDialog({
       submitLabel="Save"
       loading={save.isPending}
     >
-      <FormField form={form} name="family" label="Family">
+      <FormField form={form} name="course" label="Course">
         {(control) => (
           <Combobox
             id={control.id}
             aria-describedby={control['aria-describedby']}
             aria-invalid={control['aria-invalid']}
             clearable={false}
-            value={chosenFamily}
-            onChange={(next) => form.setValue('family', next as ExamFamily, { shouldDirty: true })}
-            items={EXAM_FAMILIES.map((value) => ({ value, label: familyLabel(value) }))}
+            value={chosenCourse}
+            onChange={(next) => form.setValue('course', next as ExamCourse, { shouldDirty: true })}
+            items={EXAM_COURSES.map((value) => ({ value, label: courseLabel(value) }))}
           />
         )}
       </FormField>

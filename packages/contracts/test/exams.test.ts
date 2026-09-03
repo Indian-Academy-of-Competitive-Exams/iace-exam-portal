@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import {
   ADMIN_EXAM_ROUTES,
   ADMIN_EXAM_STAGE_ROUTES,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   STAGE_DISPOSITION,
   createExamSchema,
   createExamStageSchema,
@@ -20,23 +20,23 @@ import {
 describe('createExamSchema', () => {
   it('normalises the code on the way in', () => {
     assert.deepEqual(
-      createExamSchema.parse({ family: EXAM_FAMILY.SSC, name: 'SSC CGL', code: ' ssc  cgl ' }),
-      { family: EXAM_FAMILY.SSC, name: 'SSC CGL', code: 'SSC CGL' },
+      createExamSchema.parse({ course: EXAM_COURSE.SSC, name: 'SSC CGL', code: ' ssc  cgl ' }),
+      { course: EXAM_COURSE.SSC, name: 'SSC CGL', code: 'SSC CGL' },
     );
   });
 
   it('refuses a code that cannot be tidied into the canonical form', () => {
     assert.equal(
-      createExamSchema.safeParse({ family: EXAM_FAMILY.SSC, name: 'SSC CGL', code: 'SSC-CGL' })
+      createExamSchema.safeParse({ course: EXAM_COURSE.SSC, name: 'SSC CGL', code: 'SSC-CGL' })
         .success,
       false,
     );
   });
 
-  /** The family is a fixed set, not a table: onboarding a new one is a migration. */
-  it('refuses a family nothing in the schema names', () => {
+  /** The course is a fixed set, not a table: onboarding a new one is a migration. */
+  it('refuses a course nothing in the schema names', () => {
     assert.equal(
-      createExamSchema.safeParse({ family: 'UPSC', name: 'UPSC CSE', code: 'UPSC CSE' }).success,
+      createExamSchema.safeParse({ course: 'UPSC', name: 'UPSC CSE', code: 'UPSC CSE' }).success,
       false,
     );
   });
@@ -45,7 +45,7 @@ describe('createExamSchema', () => {
   it('trims the name but leaves its shape alone', () => {
     assert.equal(
       createExamSchema.parse({
-        family: EXAM_FAMILY.RRB,
+        course: EXAM_COURSE.RRB,
         name: '  RRB Junior Engineer ',
         code: 'RRB JE',
       }).name,
@@ -55,7 +55,7 @@ describe('createExamSchema', () => {
 
   it('refuses a name of one character', () => {
     assert.equal(
-      createExamSchema.safeParse({ family: EXAM_FAMILY.SSC, name: 'S', code: 'SSC' }).success,
+      createExamSchema.safeParse({ course: EXAM_COURSE.SSC, name: 'S', code: 'SSC' }).success,
       false,
     );
   });

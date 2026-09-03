@@ -18,7 +18,7 @@
 -- referenced from documentation, from support conversations and from the next
 -- seed pass, and a generated id would make each of those a lookup.
 --
--- The full catalog (4 families, 43 exams, 122 stages, 30 default configs) lives in
+-- The full catalog (4 courses, 43 exams, 122 stages, 30 default configs) lives in
 -- prisma/seed.catalog.sql — generated from Exam_Pattern_Base_Configurations.xlsx and run
 -- right after this file by `pnpm db:seed`. This file keeps the hand-curated rows: the
 -- super admin, the branches, and the SSC CGL default config the app was first built on.
@@ -93,7 +93,7 @@ ON CONFLICT DO NOTHING;
 -- Tier 2 is PARTIAL rather than CONDUCTED because it is a compound paper: its
 -- objective modules can be sat as a mock, and the DEST typing module cannot.
 -- ---------------------------------------------------------------------------
-INSERT INTO "Exam" ("id", "family", "code", "name", "description")
+INSERT INTO "Exam" ("id", "course", "code", "name", "description")
 VALUES ('exam_ssc_cgl', 'SSC', 'SSC CGL', 'Combined Graduate Level',
         'SSC Combined Graduate Level examination')
 ON CONFLICT DO NOTHING;

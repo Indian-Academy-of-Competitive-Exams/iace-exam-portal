@@ -35,7 +35,7 @@ const CONFIG_INCLUDE = {
       id: true,
       stageKey: true,
       name: true,
-      exam: { select: { id: true, code: true, name: true, family: true } },
+      exam: { select: { id: true, code: true, name: true, course: true } },
     },
   },
   _count: { select: { tests: true } },

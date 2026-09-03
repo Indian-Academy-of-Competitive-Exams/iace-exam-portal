@@ -287,7 +287,7 @@ describe('the columns an admin actually writes', () => {
 
   /** A required column must be PRESENT; whether its cell may be blank is a separate rule. */
   const ALL_HEADERS =
-    "Mobile Number,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs,Mother's Name,Date of Birth,Gender";
+    "Mobile Number,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs,Mother's Name,Date of Birth,Gender";
 
   const sheet = (...cells: string[]) => `${ALL_HEADERS}\n${cells.join(',')}`;
 
@@ -304,7 +304,7 @@ describe('the columns an admin actually writes', () => {
     assert.deepEqual(row?.errors, []);
     assert.equal(row?.studentType, 'OFFLINE');
     assert.equal(row?.currentBranchId, 'br_ameerpet');
-    assert.deepEqual(row?.enrolledFamilies, ['SSC']);
+    assert.deepEqual(row?.enrolledCourses, ['SSC']);
     assert.deepEqual(row?.enrolledExams, ['SSC CGL', 'RRB JE']);
     assert.deepEqual(row?.programs, ['SSC FOUNDATION']);
   });
@@ -477,7 +477,7 @@ describe('planStudentImport — the branches the admin uploading may write into'
   it('fails the row naming a branch the admin does not hold, and keeps the rest', () => {
     const plan = planStudentImport(
       readCsvTable(
-        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs\n' +
           '9876543210,Asha,OFFLINE,KUKATPALLY,SSC,,\n' +
           '9876543211,Bela,OFFLINE,AMEERPET,SSC,,',
       ),
@@ -503,7 +503,7 @@ describe('planStudentImport — the branches the admin uploading may write into'
 
     const plan = planStudentImport(
       readCsvTable(
-        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs\n' +
           '9000000001,Renamed,OFFLINE,AMEERPET,SSC,,',
       ),
       elsewhere,
@@ -515,7 +515,7 @@ describe('planStudentImport — the branches the admin uploading may write into'
   it('lets an admin who reaches every branch write any of them', () => {
     const plan = planStudentImport(
       readCsvTable(
-        'Mobile,Full Name,Student Type,Branch Name,Enrolled Families,Enrolled Exams,Programs\n' +
+        'Mobile,Full Name,Student Type,Branch Name,Enrolled Courses,Enrolled Exams,Programs\n' +
           '9876543210,Asha,ONLINE,ONLINE,SSC,,',
       ),
       context(),

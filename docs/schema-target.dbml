@@ -56,7 +56,7 @@
 // RowActionLog/ImportLog ~7 yrs (compliance); Notification ~90 days;
 // OutboxEvent = prune after processedAt + grace.
 // Partition the big append-only tables by time once volume justifies it.
-// GIN indexes (tags, enrolledExams[], enrolledFamilies[]) must be FORCED in
+// GIN indexes (tags, enrolledExams[], enrolledCourses[]) must be FORCED in
 // Prisma (`@@index([...], type: Gin)`) and verified with EXPLAIN — importers
 // drop the index `type` and a B-tree can't serve array-containment (`@>`).
 // Enum arrays are written `text[]` here for dbdiagram; in Prisma they become the
@@ -143,7 +143,7 @@ Enum TimerTemplate {  // drives the CBT engine — from the workbook Config Lege
                            // psychometric stages as COMPOSITE_FREE / duration n/a. Verify per cycle before use.
 }
 
-Enum ExamFamily {  // the 4 exam families — fixed set, no DB table. Add a value in a migration if a new family is ever onboarded.
+Enum ExamCourse {  // the 4 exam courses — fixed set, no DB table. Add a value in a migration if a new course is ever onboarded.
   SSC
   RRB
   BANKING
@@ -320,22 +320,22 @@ Enum ActorType {
 
 
 //  ============================================================================
-// EXAM TAXONOMY — Family -> Exam -> Stage [NEW LAYER]
+// EXAM TAXONOMY — Course -> Exam -> Stage [NEW LAYER]
 // Source of truth: Exam_Pattern_Base_Configurations.xlsx
-// (4 families, 43 exams, 122 stages). Existing `ExamType` becomes `Exam`.
+// (4 courses, 43 exams, 122 stages). Existing `ExamType` becomes `Exam`.
 //  ============================================================================
 
 Table Exam {  // Exam level: CGL, CHSL, PO, SO...
   id          text [pk]
-  family      ExamFamily [not null]  // constant enum (no ExamFamily table)
+  course      ExamCourse [not null]  // constant enum (no ExamCourse table)
   code        text [unique, not null]  // "SSC_CGL" — the value stored in Student.enrolledExams[]
   name        text [not null]
   description text
   isActive    boolean [not null, default: true]
   createdAt   timestamp [not null, default: `now()`]
   updatedAt   timestamp [not null]
-  indexes { family }
-  Note: 'Student.enrolledExams[] references Exam.code (string array/GIN — multi-valued, app-validated). family is a constant enum, not a FK.'
+  indexes { course }
+  Note: 'Student.enrolledExams[] references Exam.code (string array/GIN — multi-valued, app-validated). course is a constant enum, not a FK.'
 }
 
 Table ExamStage {  // the Stage/Paper level — carries the base config
@@ -668,7 +668,7 @@ Table Student {
   mobile            text [unique, not null]  // only mandatory field; editable by ADMIN only
   externalRef       text [unique]  // main-portal id — idempotent SCRIPT re-sync
   studentType       StudentType [not null]  // import-mandatory
-  enrolledFamilies  text[] [not null]  // ExamFamily[] (GIN) — enrolled families (SSC/RRB/Banking/Police); multi-enroll. Real ExamFamily enum array in Prisma; text[] here for dbdiagram.
+  enrolledCourses  text[] [not null]  // ExamCourse[] (GIN) — enrolled courses (SSC/RRB/Banking/Police); multi-enroll. Real ExamCourse enum array in Prisma; text[] here for dbdiagram.
   programs          text[]  // Program.code[] the student is a candidate for (e.g. ["RIP"]) — GIN
   enrolledExams     text[] [not null]  // Exam.code[] (GIN) — exam/exam-type level; multi-exam; validate vs Exam
   // no-groups: ad-hoc access is via the StudentGrant escape-hatch table (not a group membership array)
@@ -691,11 +691,11 @@ Table Student {
   createdAt         timestamp [not null, default: `now()`]
   updatedAt         timestamp [not null]
   indexes {
-    enrolledFamilies [type: gin]
+    enrolledCourses [type: gin]
     enrolledExams    [type: gin]
     currentBranchId
   }
-  Note: 'AUTH CHANGE required: login allowed while isActive && deletedAt IS NULL. isTestBlocked only gates attempt-start (today isActive=false wrongly blocks login — decouple). enrolledFamilies = ExamFamily enum values (constant set); enrolledExams reference immutable Exam.code — codes must never be re-used; app-validated. Direct grants -> StudentGrant.'
+  Note: 'AUTH CHANGE required: login allowed while isActive && deletedAt IS NULL. isTestBlocked only gates attempt-start (today isActive=false wrongly blocks login — decouple). enrolledCourses = ExamCourse enum values (constant set); enrolledExams reference immutable Exam.code — codes must never be re-used; app-validated. Direct grants -> StudentGrant.'
 }
 
 Table StudentProfile {
@@ -790,7 +790,7 @@ Table TestSeries {  // THE unit of offering — every test reaches students only
   name                 text [not null]
   description          text
   examStageId          text  // stage-level product (e.g. SSC CGL T1 series)
-  programCode          text  // NULL = general (exam/family access); set = program-only (needs programCode IN student.programs)
+  programCode          text  // NULL = general (exam/course access); set = program-only (needs programCode IN student.programs)
   sequentialTests      boolean [not null, default: false]  // intra-series: unlock tests in TestSeriesTest.order (test N+1 after N). OFF by default = all tests available together
   prerequisiteSeriesId text  // cross-series unlock (T2 series requires T1 series) — nullable
   unlockMode           UnlockMode [not null, default: 'AUTO']
@@ -1244,10 +1244,10 @@ Ref: TestQuestionStat.questionId      > Question.id
 // Reference only; the tables above already reflect all of this. Kept separate so
 // the inline comments can describe the CURRENT structure without carrying diffs.
 // ----------------------------------------------------------------------------
-// EXAM FAMILY -> CONSTANT
-// - Dropped the ExamFamily table; ExamFamily is now a constant enum
-// (SSC/RRB/BANKING/AP_TS_POLICE). Exam.family is an enum column (was a familyId
-// FK); Student.enrolledFamilies is an ExamFamily[] enum array.
+// EXAM COURSE -> CONSTANT
+// - Dropped the ExamCourse table; ExamCourse is now a constant enum
+// (SSC/RRB/BANKING/AP_TS_POLICE). Exam.course is an enum column (was an FK);
+// Student.enrolledCourses is an ExamCourse[] enum array.
 //
 // ACCESS: GROUPS -> DERIVED (no-groups variant)
 // - Removed Group / StudentGroupGrant / GroupTestSeries / GroupBranch. Access is
@@ -1307,7 +1307,7 @@ Ref: TestQuestionStat.questionId      > Question.id
 // + query-driven indexes + partial uniques + no-hard-delete codified in header.
 //
 // FIELD TRIMS (latest pass)
-// - Dropped redundant/low-value fields: ExamFamily(order,isActive via table removal),
+// - Dropped redundant/low-value fields: ExamCourse(order,isActive via table removal),
 // ExamStage.meritOrQualifying, Question.isActive/source, TestSeries.isSingleton/
 // shareSlug, Attempt.resumeCount, Student.baseBranchId/createdVia,
 // StudentSeriesUnlock.state/source. BaseConfig slimmed (sectional/marks/negative/

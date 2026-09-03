@@ -648,7 +648,7 @@ export function createApiClient(options: ApiClientOptions) {
         }),
 
       /** Every series this student reaches, with what is open right now. */
-      /** The FREE series they could ask for, with what the family cap has already spent. */
+      /** The FREE series they could ask for, with what the course cap has already spent. */
       openSeries: (): Promise<OpenSeriesList> =>
         request(ME_ROUTES.openSeries, { schema: openSeriesListSchema }),
 

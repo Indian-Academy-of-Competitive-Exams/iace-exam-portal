@@ -41,7 +41,7 @@ export const branchNameSchema = canonicalNameSchema({ max: BRANCH_NAME_MAX, labe
 // ============================================================================
 // Suggested names for tests and series. A name here is NOT a canonical name:
 // it is mixed case and carries punctuation, so none of the rules above apply.
-// The shape is `Lead words — Kind NN`, and the number is what keeps one family
+// The shape is `Lead words — Kind NN`, and the number is what keeps one course
 // of names apart. Offered to the admin only; nothing on the server enforces it.
 // ============================================================================
 

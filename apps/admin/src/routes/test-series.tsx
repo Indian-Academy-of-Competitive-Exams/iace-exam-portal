@@ -184,7 +184,7 @@ export function TestSeriesPage() {
   );
 }
 
-/** A series with no stage spans a family rather than one paper, which is a fact, not a gap. */
+/** A series with no stage spans a course rather than one paper, which is a fact, not a gap. */
 /**
  * How far the series actually reaches. Every branch has a row from the moment the series was
  * created, so the denominator is every centre and "0 of 12" means nobody can sit it yet.

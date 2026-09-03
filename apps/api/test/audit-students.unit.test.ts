@@ -26,7 +26,7 @@ describe('the student audit diff', () => {
       'fullName',
       'studentType',
       'enrolledExams',
-      'enrolledFamilies',
+      'enrolledCourses',
       'programs',
       'currentBranchId',
       'isActive',

@@ -26,7 +26,7 @@ describe('the exam audit diff', () => {
   it('covers every column an exam edit can change', () => {
     assert.deepEqual(
       [...AUDITED_EXAM_FIELDS],
-      ['family', 'name', 'code', 'description', 'isActive'],
+      ['course', 'name', 'code', 'description', 'isActive'],
     );
   });
 
@@ -36,7 +36,7 @@ describe('the exam audit diff', () => {
    */
   it('reports a code change', () => {
     const before = {
-      family: 'SSC',
+      course: 'SSC',
       name: 'SSC CGL',
       code: 'SSC CGL',
       description: null,

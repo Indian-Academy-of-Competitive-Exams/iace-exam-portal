@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { examFamilySchema } from './exams';
+import { examCourseSchema } from './exams';
 import { genderSchema, studentTypeSchema } from './students';
 
 // ============================================================================
@@ -55,7 +55,7 @@ export const studentImportRowSchema = z.object({
   branchName: z.string().nullable(),
   /** Resolved from the name against the live branch list. Null while the name did not match. */
   currentBranchId: z.string().nullable(),
-  enrolledFamilies: z.array(examFamilySchema),
+  enrolledCourses: z.array(examCourseSchema),
   enrolledExams: z.array(z.string()),
   programs: z.array(z.string()),
   profile: studentImportProfileSchema,
@@ -210,11 +210,12 @@ export const STUDENT_IMPORT_COLUMNS = [
     aliases: ['branchname', 'branch', 'centre', 'center', 'branchcentre'],
   },
   {
-    key: 'enrolledFamilies',
-    header: 'Enrolled Families',
+    key: 'enrolledCourses',
+    header: 'Enrolled Courses',
     width: 24,
     required: true,
-    aliases: ['enrolledfamilies', 'enrolledfamily', 'families', 'family', 'examfamily'],
+    // Claimed by neither: 'course' meant Programs, so a stale sheet must fail, not land here.
+    aliases: ['enrolledcourses', 'enrolledcourse', 'examcourse', 'examcourses'],
   },
   {
     key: 'enrolledExams',
@@ -228,7 +229,7 @@ export const STUDENT_IMPORT_COLUMNS = [
     header: 'Programs',
     width: 26,
     required: true,
-    aliases: ['programs', 'program', 'programcodes', 'programcode', 'course', 'courses'],
+    aliases: ['programs', 'program', 'programcodes', 'programcode'],
   },
   {
     key: 'motherName',
@@ -277,9 +278,9 @@ export const STUDENT_IMPORT_COLUMNS = [
 /** How a cell holding several codes is written — any of these, so either style imports. */
 export const IMPORT_LIST_SEPARATORS = /[,;|/\n]+/;
 
-/** A row naming none of family, exam or program creates a student who reaches nothing. */
+/** A row naming none of course, exam or program creates a student who reaches nothing. */
 export const NO_ACCESS_ROUTE_MESSAGE =
-  'This row reaches no test series — give it an enrolled family, an enrolled exam or a program.';
+  'This row reaches no test series — give it an enrolled course, an enrolled exam or a program.';
 
 export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];

@@ -17,9 +17,9 @@ import {
   type ListFilter,
 } from '@iace/ui';
 import {
-  EXAM_FAMILIES,
+  EXAM_COURSES,
   TEST_SERIES_KIND,
-  type ExamFamily,
+  type ExamCourse,
   type StudentCatalogSeries,
 } from '@iace/contracts';
 import { api } from '../lib/api';
@@ -29,7 +29,7 @@ import { SeriesShelf } from '../components/tests/series-shelf';
 import { StatusStrip } from '../components/tests/status-strip';
 
 /** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
-const familyLabel = (family: string) => family.replaceAll('_', '/');
+const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 const ANY_FAMILY = '';
 const SKELETON_KEYS = ['a', 'b', 'c'];
@@ -50,16 +50,16 @@ export function TestsPage() {
       placeholder: 'Search your tests',
     },
     {
-      key: 'family',
+      key: 'course',
       kind: 'choice',
       label: 'Exam',
       primary: true,
-      items: familyItems(catalog.data?.series ?? []),
+      items: courseItems(catalog.data?.series ?? []),
     },
   ] as const satisfies readonly ListFilter[];
 
   const filters = useFilterSpec(FILTERS);
-  const family = filters.values.family || ANY_FAMILY;
+  const course = filters.values.course || ANY_FAMILY;
 
   const ask = useMutation({
     meta: { success: 'Asked. You will hear when it is answered.' },
@@ -70,7 +70,7 @@ export function TestsPage() {
   const now = new Date();
   // Free series have their own tab, so this screen is the paid journey and only that.
   const reaches = (catalog.data?.series ?? []).filter((row) => row.kind !== TEST_SERIES_KIND.FREE);
-  const series = reaches.filter((row) => family === ANY_FAMILY || row.examStage?.family === family);
+  const series = reaches.filter((row) => course === ANY_FAMILY || row.examStage?.course === course);
   const rows = matching(sittablesOf(series, now), filters.values.q);
   const shut = series.filter((row) => row.canRequestUnlock);
   const emptiness = emptyReason(reaches.length, rows.length);
@@ -190,16 +190,16 @@ function shelves(
     .filter(({ tests }) => tests.length > 0);
 }
 
-/** Only the families this student actually reaches; a filter offering nothing is noise. */
-function familyItems(series: readonly StudentCatalogSeries[]) {
+/** Only the courses this student actually reaches; a filter offering nothing is noise. */
+function courseItems(series: readonly StudentCatalogSeries[]) {
   const held = new Set(
-    series.map((row) => row.examStage?.family).filter((one): one is ExamFamily => Boolean(one)),
+    series.map((row) => row.examStage?.course).filter((one): one is ExamCourse => Boolean(one)),
   );
   return [
     { value: ANY_FAMILY, label: 'Any exam' },
-    ...EXAM_FAMILIES.filter((one) => held.has(one)).map((one) => ({
+    ...EXAM_COURSES.filter((one) => held.has(one)).map((one) => ({
       value: one,
-      label: familyLabel(one),
+      label: courseLabel(one),
     })),
   ];
 }

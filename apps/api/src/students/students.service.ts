@@ -6,7 +6,7 @@ import {
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
-  type ExamFamily,
+  type ExamCourse,
   type Gender,
   type CreateStudentBody,
   type Paginated,
@@ -43,7 +43,7 @@ export const AUDITED_STUDENT_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
-  'enrolledFamilies',
+  'enrolledCourses',
   'programs',
   'currentBranchId',
   'isActive',
@@ -216,7 +216,7 @@ export class StudentsService {
         fullName: input.fullName ?? null,
         studentType: input.studentType,
         enrolledExams: input.enrolledExams ?? [],
-        enrolledFamilies: input.enrolledFamilies ?? [],
+        enrolledCourses: input.enrolledCourses ?? [],
         programs: input.programs ?? [],
         currentBranchId: input.currentBranchId ?? null,
         pinHash: issued.hash,
@@ -298,7 +298,7 @@ export class StudentsService {
       ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
       ...(input.studentType === undefined ? {} : { studentType: input.studentType }),
       ...(input.enrolledExams ? { enrolledExams: input.enrolledExams } : {}),
-      ...(input.enrolledFamilies ? { enrolledFamilies: input.enrolledFamilies } : {}),
+      ...(input.enrolledCourses ? { enrolledCourses: input.enrolledCourses } : {}),
       ...(input.programs ? { programs: input.programs } : {}),
       ...(input.currentBranchId === undefined ? {} : { currentBranchId: input.currentBranchId }),
       ...(profilePatch
@@ -438,7 +438,7 @@ export class StudentsService {
     fullName: string | null;
     studentType: StudentType;
     enrolledExams: string[];
-    enrolledFamilies: ExamFamily[];
+    enrolledCourses: ExamCourse[];
     isActive: boolean;
     isTestBlocked: boolean;
     pinHash: string | null;
@@ -453,7 +453,7 @@ export class StudentsService {
       fullName: row.fullName,
       studentType: row.studentType,
       enrolledExams: row.enrolledExams,
-      enrolledFamilies: row.enrolledFamilies,
+      enrolledCourses: row.enrolledCourses,
       isActive: row.isActive,
       isTestBlocked: row.isTestBlocked,
       // The hash itself never leaves this method — only whether one exists. A PIN the INSTITUTE set is
@@ -472,7 +472,7 @@ interface AuditedStudentColumns {
   fullName: string | null;
   studentType: StudentType;
   enrolledExams: string[];
-  enrolledFamilies: ExamFamily[];
+  enrolledCourses: ExamCourse[];
   programs: string[];
   currentBranchId: string | null;
   isActive: boolean;
@@ -486,7 +486,7 @@ function auditFieldsOf(row: AuditedStudentColumns): AuditedStudentColumns {
     fullName: row.fullName,
     studentType: row.studentType,
     enrolledExams: row.enrolledExams,
-    enrolledFamilies: row.enrolledFamilies,
+    enrolledCourses: row.enrolledCourses,
     programs: row.programs,
     currentBranchId: row.currentBranchId,
     isActive: row.isActive,

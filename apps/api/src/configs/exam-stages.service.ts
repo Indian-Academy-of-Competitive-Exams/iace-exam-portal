@@ -25,7 +25,7 @@ import {
 } from './exam-rules';
 
 const STAGE_INCLUDE = {
-  exam: { select: { id: true, code: true, name: true, family: true } },
+  exam: { select: { id: true, code: true, name: true, course: true } },
   _count: { select: { baseConfigs: true, tests: true, series: true } },
 } as const satisfies Prisma.ExamStageInclude;
 
@@ -57,7 +57,7 @@ export class ExamStagesService {
         { exam: { code: { contains: term, mode: 'insensitive' } } },
       ]),
       ...(query.examId ? { examId: { in: query.examId } } : {}),
-      ...(query.family ? { exam: { family: query.family } } : {}),
+      ...(query.course ? { exam: { course: query.course } } : {}),
       ...(query.disposition ? { disposition: query.disposition } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
     };

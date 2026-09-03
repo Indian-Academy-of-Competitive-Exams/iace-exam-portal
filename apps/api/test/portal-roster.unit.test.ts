@@ -38,7 +38,7 @@ describe('portalTable', () => {
           fullName: 'Asha',
           studentType: 'ONLINE',
           branchName: 'ONLINE',
-          enrolledFamilies: 'SSC',
+          enrolledCourses: 'SSC',
         },
       ]),
       context(),

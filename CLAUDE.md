@@ -64,7 +64,7 @@ Do not break these — they are why the live test holds at 4–5K:
 - **StudentProfile** (1:1). `preTestReady` = mother's name + father's name + DOB; prompt before a
   test. `profileCompleted` only drives a nudge — never block on it. Aadhaar and PAN are
   `aadhaarVerified`/`panVerified` booleans; the images are never stored, so the only upload is the photo.
-- **Exam taxonomy: `ExamFamily` (enum) → `Exam` → `ExamStage`.** The STAGE is the level everything
+- **Exam taxonomy: `ExamCourse` (enum) → `Exam` → `ExamStage`.** The STAGE is the level everything
   hangs off — a base config, a test series and a test all point at one. `Exam.code` is what
   `Student.enrolledExams` stores, and `ExamStage.stageKey` is unique table-wide because seeds and
   the exam-pattern workbook address a stage by it. Neither can change once something carries it. A

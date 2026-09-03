@@ -16,9 +16,18 @@ const MIGRATION = readFileSync(
   'utf8',
 );
 
+const COURSE_RENAME = readFileSync(
+  join(
+    __dirname,
+    '../../../prisma/migrations/20260903060000_an_exam_belongs_to_a_course_not_a_family/migration.sql',
+  ),
+  'utf8',
+);
+
 const REQUIRED_ARRAYS = [
   ['BaseConfig', 'languages', '"SupportedLanguage"'],
   ['Attempt', 'languages', '"SupportedLanguage"'],
+  // The name THAT migration wrote; a later one renamed it, NOT NULL and default intact.
   ['Student', 'enrolledFamilies', '"ExamFamily"'],
   ['Student', 'enrolledExams', 'TEXT'],
 ] as const;
@@ -283,4 +292,37 @@ describe('a locked config', () => {
       );
     });
   }
+});
+
+// --------------------------------------------------------------------------- family -> course
+// ---------------------------------------------------------------------------
+
+/** Prisma regenerates a rename as DROP + ADD, which empties the column in silence. */
+describe('the course rename moves no data', () => {
+  for (const object of [
+    '"Exam" RENAME COLUMN "family"',
+    '"Student" RENAME COLUMN "enrolledFamilies"',
+  ]) {
+    it(`renames ${object.split('"')[3]} rather than replacing it`, () => {
+      assert.match(COURSE_RENAME, new RegExp(`ALTER TABLE ${escapeForRegex(object)}`));
+    });
+  }
+
+  it('renames the enum type, so the values are untouched', () => {
+    assert.match(COURSE_RENAME, /ALTER TYPE "ExamFamily" RENAME TO "ExamCourse"/);
+  });
+
+  /** The one statement that would lose every enrolment in the database. */
+  it('drops nothing at all', () => {
+    assert.doesNotMatch(COURSE_RENAME, /DROP\s+(COLUMN|TYPE|TABLE)/i);
+  });
+
+  /** Prisma derives an index name from its column, so a stale one reads as drift forever. */
+  it('brings both indexes along', () => {
+    assert.match(COURSE_RENAME, /ALTER INDEX "Exam_family_idx" RENAME TO "Exam_course_idx"/);
+    assert.match(
+      COURSE_RENAME,
+      /ALTER INDEX "Student_enrolledFamilies_idx" RENAME TO "Student_enrolledCourses_idx"/,
+    );
+  });
 });

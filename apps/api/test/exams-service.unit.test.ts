@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   ErrorCodes,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   examListQuerySchema,
   type ExamListQuery,
   type ExamListQueryInput,
@@ -72,26 +72,26 @@ describe('ExamsService — listing', () => {
     assert.equal((await service.list(listQuery({ activeOnly: 'true' }))).total, 1);
   });
 
-  it('narrows to one family', async () => {
+  it('narrows to one course', async () => {
     const { service } = serviceWith([
-      makeExam({ id: 'exam_1', family: EXAM_FAMILY.SSC }),
-      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
+      makeExam({ id: 'exam_1', course: EXAM_COURSE.SSC }),
+      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', course: EXAM_COURSE.RRB }),
     ]);
 
-    const page = await service.list(listQuery({ family: EXAM_FAMILY.RRB }));
+    const page = await service.list(listQuery({ course: EXAM_COURSE.RRB }));
 
     assert.equal(page.total, 1);
     assert.equal(page.items[0]?.code, 'RRB JE');
   });
 
-  it('narrows to any of the families chosen', async () => {
+  it('narrows to any of the courses chosen', async () => {
     const { service } = serviceWith([
-      makeExam({ id: 'exam_1', family: EXAM_FAMILY.SSC }),
-      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
-      makeExam({ id: 'exam_3', code: 'IBPS PO', name: 'IBPS PO', family: EXAM_FAMILY.BANKING }),
+      makeExam({ id: 'exam_1', course: EXAM_COURSE.SSC }),
+      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', course: EXAM_COURSE.RRB }),
+      makeExam({ id: 'exam_3', code: 'IBPS PO', name: 'IBPS PO', course: EXAM_COURSE.BANKING }),
     ]);
 
-    const page = await service.list(listQuery({ family: [EXAM_FAMILY.RRB, EXAM_FAMILY.BANKING] }));
+    const page = await service.list(listQuery({ course: [EXAM_COURSE.RRB, EXAM_COURSE.BANKING] }));
 
     assert.equal(page.total, 2);
     assert.deepEqual(
@@ -100,15 +100,15 @@ describe('ExamsService — listing', () => {
     );
   });
 
-  /** An emptied filter is "any family", so it must not narrow the list to nothing. */
-  it('lists every exam when the family filter is emptied', async () => {
+  /** An emptied filter is "any course", so it must not narrow the list to nothing. */
+  it('lists every exam when the course filter is emptied', async () => {
     const { service } = serviceWith([
-      makeExam({ id: 'exam_1', family: EXAM_FAMILY.SSC }),
-      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
+      makeExam({ id: 'exam_1', course: EXAM_COURSE.SSC }),
+      makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', course: EXAM_COURSE.RRB }),
     ]);
 
-    assert.equal((await service.list(listQuery({ family: [] }))).total, 2);
-    assert.equal((await service.list(listQuery({ family: '' }))).total, 2);
+    assert.equal((await service.list(listQuery({ course: [] }))).total, 2);
+    assert.equal((await service.list(listQuery({ course: '' }))).total, 2);
   });
 
   it('returns dates as strings, never Date objects', async () => {
@@ -123,7 +123,7 @@ describe('ExamsService — creating', () => {
     const { service, prisma } = serviceWith([]);
 
     const created = await service.create({
-      family: EXAM_FAMILY.SSC,
+      course: EXAM_COURSE.SSC,
       name: 'SSC CHSL',
       code: 'SSC CHSL',
     });
@@ -142,7 +142,7 @@ describe('ExamsService — creating', () => {
 
     await assert.rejects(
       () =>
-        service.create({ family: EXAM_FAMILY.SSC, name: 'Staff Selection CGL', code: 'SSC CGL' }),
+        service.create({ course: EXAM_COURSE.SSC, name: 'Staff Selection CGL', code: 'SSC CGL' }),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.equal(error.code, ErrorCodes.CONFLICT);
@@ -156,7 +156,7 @@ describe('ExamsService — creating', () => {
     const { service } = serviceWith([makeExam({ name: 'SSC CGL', code: 'SSC CGL' })]);
 
     await assert.rejects(
-      () => service.create({ family: EXAM_FAMILY.SSC, name: 'SSC CGL', code: 'SSC CGL TIER 1' }),
+      () => service.create({ course: EXAM_COURSE.SSC, name: 'SSC CGL', code: 'SSC CGL TIER 1' }),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.ok(error.fieldErrors?.name);

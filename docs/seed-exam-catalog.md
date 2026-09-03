@@ -1,7 +1,7 @@
 # Seed — exam catalog (mapping decisions)
 
 `prisma/seed.catalog.sql` seeds the full exam catalog from
-`Exam_Pattern_Base_Configurations.xlsx`: **4 families, 43 exams, 122 stages, 7 subjects,
+`Exam_Pattern_Base_Configurations.xlsx`: **4 courses, 43 exams, 122 stages, 7 subjects,
 30 default base-configs, 91 section-configs**. It runs after `prisma/seed.sql` via
 `pnpm db:seed`, is **idempotent** (`ON CONFLICT DO NOTHING`), and uses **stable
 readable ids** (`exam_ssc_cgl`, `stage_ssc_cgl_t1`, `config_ssc_cgl_t1`,
@@ -47,7 +47,7 @@ Awareness — imperfect but the section keeps its real name; refine later if nee
 - **Ids:** readable strings (per your instruction — the schema default is cuid, but the
   established seed convention is stable readable ids; workbook Stage Keys go into
   `stageKey`/`code` columns, not the PK).
-- **Languages / languageMode:** family-aware — SSC → `[EN,HI]` **DUAL** (bilingual render);
+- **Languages / languageMode:** course-aware — SSC → `[EN,HI]` **DUAL** (bilingual render);
   RRB → `[EN,HI]` (+`TE` for regional) SINGLE; Banking → `[EN,HI]` SINGLE; AP&TS Police →
   `[EN,TE]` SINGLE. **Urdu is dropped** (not in `SupportedLanguage`); regional languages
   beyond Telugu are not modelled.

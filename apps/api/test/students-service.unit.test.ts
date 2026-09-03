@@ -1,7 +1,7 @@
 import { EVERY_BRANCH } from '../src/common/security';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, BRANCH_TYPE, ErrorCodes, EXAM_FAMILY, STUDENT_TYPE } from '@iace/contracts';
+import { AppException, BRANCH_TYPE, ErrorCodes, EXAM_COURSE, STUDENT_TYPE } from '@iace/contracts';
 import { MESSAGE_KINDS } from '../src/common/messaging';
 import { StudentsService } from '../src/students/students.service';
 import { BranchesService } from '../src/branches/branches.service';
@@ -312,44 +312,41 @@ describe('StudentsService.create — the type is the caller’s, never the servi
   });
 });
 
-describe('StudentsService — a whole exam family', () => {
-  /**
-   * A family is coarser than an enrolment: a student coached across every SSC paper carries the
-   * family rather than a dozen codes. The resolver reads both, so both have to be writable.
-   */
-  it('stores the families a student is coached across', async () => {
+describe('StudentsService — a whole exam course', () => {
+  /** A course is coarser than an enrolment; the resolver reads both, so both must be writable. */
+  it('stores the courses a student is coached across', async () => {
     const { service, prisma } = serviceWith([]);
 
     await service.create(
       {
         mobile: '9000000010',
         studentType: STUDENT_TYPE.ONLINE,
-        enrolledFamilies: [EXAM_FAMILY.SSC],
+        enrolledCourses: [EXAM_COURSE.SSC],
       },
       EVERY_BRANCH,
     );
 
-    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
+    assert.deepEqual(prisma.students[0]?.enrolledCourses, [EXAM_COURSE.SSC]);
   });
 
   it('replaces them wholesale, down to none', async () => {
     const { service, prisma } = serviceWith([
-      makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC, EXAM_FAMILY.RRB] }),
+      makeStudent({ id: 'stu_1', enrolledCourses: [EXAM_COURSE.SSC, EXAM_COURSE.RRB] }),
     ]);
 
-    await service.update('stu_1', { enrolledFamilies: [EXAM_FAMILY.RRB] }, EVERY_BRANCH);
+    await service.update('stu_1', { enrolledCourses: [EXAM_COURSE.RRB] }, EVERY_BRANCH);
 
-    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.RRB]);
+    assert.deepEqual(prisma.students[0]?.enrolledCourses, [EXAM_COURSE.RRB]);
   });
 
   it('leaves them alone when the patch omits them', async () => {
     const { service, prisma } = serviceWith([
-      makeStudent({ id: 'stu_1', enrolledFamilies: [EXAM_FAMILY.SSC] }),
+      makeStudent({ id: 'stu_1', enrolledCourses: [EXAM_COURSE.SSC] }),
     ]);
 
     await service.update('stu_1', { fullName: 'Ravi Kumar' }, EVERY_BRANCH);
 
-    assert.deepEqual(prisma.students[0]?.enrolledFamilies, [EXAM_FAMILY.SSC]);
+    assert.deepEqual(prisma.students[0]?.enrolledCourses, [EXAM_COURSE.SSC]);
   });
 });
 
@@ -789,7 +786,7 @@ describe('StudentsService — the branches the admin asking may reach', () => {
           mobile: '9000000009',
           studentType: STUDENT_TYPE.OFFLINE,
           currentBranchId: 'br_9',
-          enrolledFamilies: [EXAM_FAMILY.SSC],
+          enrolledCourses: [EXAM_COURSE.SSC],
         } as never,
         held,
       )
@@ -812,7 +809,7 @@ describe('StudentsService — the branches the admin asking may reach', () => {
           mobile: '9000000009',
           studentType: STUDENT_TYPE.OFFLINE,
           currentBranchId: 'br_1',
-          enrolledFamilies: [EXAM_FAMILY.SSC],
+          enrolledCourses: [EXAM_COURSE.SSC],
         } as never,
         held,
       )

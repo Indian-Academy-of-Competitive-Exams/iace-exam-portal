@@ -4,23 +4,23 @@ import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 
 // ============================================================================
-// Exam taxonomy — Family → Exam → Stage. The stage is the level that carries a
+// Exam taxonomy — Course → Exam → Stage. The stage is the level that carries a
 // base config, a series and a test; nothing attaches to an exam directly.
 // ============================================================================
 
-/** A fixed set, not a table. Onboarding a new family is a migration. */
-export const EXAM_FAMILY = {
+/** A fixed set, not a table. Onboarding a new course is a migration. */
+export const EXAM_COURSE = {
   SSC: 'SSC',
   RRB: 'RRB',
   BANKING: 'BANKING',
   AP_TS_POLICE: 'AP_TS_POLICE',
 } as const;
-export const examFamilySchema = z.enum(EXAM_FAMILY);
-export type ExamFamily = z.infer<typeof examFamilySchema>;
-export const EXAM_FAMILIES = examFamilySchema.options;
+export const examCourseSchema = z.enum(EXAM_COURSE);
+export type ExamCourse = z.infer<typeof examCourseSchema>;
+export const EXAM_COURSES = examCourseSchema.options;
 
 /** What a new exam opens on. Named, not the list's head, so reordering the enum cannot move it. */
-export const DEFAULT_EXAM_FAMILY = EXAM_FAMILY.SSC;
+export const DEFAULT_EXAM_COURSE = EXAM_COURSE.SSC;
 
 /** How a stage is delivered. Only CBT and OMR are scorable here. */
 export const EXAM_MODE = {
@@ -83,7 +83,7 @@ export const examCodeSchema = canonicalNameSchema({ max: EXAM_CODE_MAX, label: '
 
 export const examSchema = z.object({
   id: z.string(),
-  family: examFamilySchema,
+  course: examCourseSchema,
   /** What `Student.enrolledExams` holds, so it is never reused for another exam. */
   code: z.string(),
   name: z.string(),
@@ -95,21 +95,21 @@ export const examSchema = z.object({
 });
 export type Exam = z.infer<typeof examSchema>;
 
-/** Families lead the hierarchy, so they narrow the exams — but never drop one already chosen. */
-export function examsInFamilies<T extends { code: string; family: ExamFamily }>(
+/** Courses lead the hierarchy, so they narrow the exams — but never drop one already chosen. */
+export function examsInCourses<T extends { code: string; course: ExamCourse }>(
   exams: readonly T[],
-  families: readonly ExamFamily[],
+  courses: readonly ExamCourse[],
   alreadyChosen: readonly string[] = [],
 ): T[] {
-  if (families.length === 0) return [...exams];
-  const wanted = new Set(families);
+  if (courses.length === 0) return [...exams];
+  const wanted = new Set(courses);
   const chosen = new Set(alreadyChosen);
-  return exams.filter((exam) => wanted.has(exam.family) || chosen.has(exam.code));
+  return exams.filter((exam) => wanted.has(exam.course) || chosen.has(exam.code));
 }
 
 export const examListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
-  family: csvQuery(examFamilySchema),
+  course: csvQuery(examCourseSchema),
   /** Pickers offer active exams only; the admin screen shows all. */
   activeOnly: optionalBooleanQuery(),
 });
@@ -117,7 +117,7 @@ export type ExamListQuery = z.infer<typeof examListQuerySchema>;
 export type ExamListQueryInput = z.input<typeof examListQuerySchema>;
 
 export const createExamSchema = z.object({
-  family: examFamilySchema,
+  course: examCourseSchema,
   code: examCodeSchema,
   name: examNameSchema,
   description: z.string().trim().max(500).optional(),
@@ -127,7 +127,7 @@ export type CreateExamBody = z.infer<typeof createExamSchema>;
 
 /** The code is refused server-side once an enrolment stores it — see `examEditBlocker`. */
 export const updateExamSchema = z.object({
-  family: examFamilySchema.optional(),
+  course: examCourseSchema.optional(),
   code: examCodeSchema.optional(),
   name: examNameSchema.optional(),
   description: z.string().trim().max(500).nullish(),
@@ -184,7 +184,7 @@ export const examRefSchema = z.object({
   id: z.string(),
   code: z.string(),
   name: z.string(),
-  family: examFamilySchema,
+  course: examCourseSchema,
 });
 export type ExamRef = z.infer<typeof examRefSchema>;
 
@@ -211,7 +211,7 @@ export const examStageListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   /** Several, because a screen filtering on several exams narrows its stage list by all of them. */
   examId: csvIdQuery(),
-  family: examFamilySchema.optional(),
+  course: examCourseSchema.optional(),
   disposition: stageDispositionSchema.optional(),
   activeOnly: optionalBooleanQuery(),
 });

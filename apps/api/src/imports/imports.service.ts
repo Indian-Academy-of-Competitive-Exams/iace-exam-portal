@@ -475,7 +475,7 @@ function accessOf(row: StudentImportRow, studentType: StudentType) {
   return {
     studentType,
     ...(row.currentBranchId ? { currentBranch: { connect: { id: row.currentBranchId } } } : {}),
-    enrolledFamilies: row.enrolledFamilies,
+    enrolledCourses: row.enrolledCourses,
     enrolledExams: row.enrolledExams,
     programs: row.programs,
   };

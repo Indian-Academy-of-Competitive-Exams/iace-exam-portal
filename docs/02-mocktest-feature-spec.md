@@ -184,7 +184,7 @@ branch's `extraTimeSec` is added to the configured duration once, where the serv
 
 **Which of the three paths applies depends on the series' `kind`.** `STANDARD` reaches by exam or
 program as above. `FREE` also reaches anyone enrolled in its exam FAMILY, capped at
-`FREE_SERIES_EXAM_CAP` (2) exams' worth so a family is not a skeleton key. `SCHOLARSHIP` reaches
+`FREE_SERIES_EXAM_CAP` (2) exams' worth so a course is not a skeleton key. `SCHOLARSHIP` reaches
 nobody by exam or program — only an explicit grant, which is what the scholarship import writes. A
 `FREE` series may not sit behind a prerequisite: it is advertised to people who do not have one, so
 a database CHECK refuses the combination.
@@ -220,7 +220,7 @@ never per test, and the only per-student row in the model is the grant.
   stored**, so the photo is the only upload. `preTestReady` (mother's + father's name + DOB)
   prompts before a test; `profileCompleted` only drives a nudge and **never blocks**.
 - **Exam / ExamStage / BaseConfig (+ BaseConfigModule, BaseConfigSection)** — the taxonomy is
-  `ExamFamily` (enum) → `Exam` → `ExamStage`, and the STAGE is what everything hangs off. A
+  `ExamCourse` (enum) → `Exam` → `ExamStage`, and the STAGE is what everything hangs off. A
   BaseConfig is a stage's blueprint and a Test **inherits** its shape rather than copying it.
   Marks, negative marks, timing and merit/qualifying are **per section**. A config locks at the
   first finalize built from it; the way to change a locked one is to clone it.

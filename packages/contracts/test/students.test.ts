@@ -17,7 +17,7 @@ const summary = {
   fullName: 'Ravi Kumar',
   studentType: STUDENT_TYPE.OFFLINE,
   enrolledExams: ['SSC CGL'],
-  enrolledFamilies: [],
+  enrolledCourses: [],
   isActive: true,
   isTestBlocked: false,
   hasSignedIn: true,

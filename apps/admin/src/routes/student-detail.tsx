@@ -5,14 +5,14 @@ import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { FileText, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
-  EXAM_FAMILIES,
-  examsInFamilies,
+  EXAM_COURSES,
+  examsInCourses,
   GENDERS,
   STUDENT_SERIES_SOURCE,
   STUDENT_TYPE,
   STUDENT_TYPES,
   todayISO,
-  type ExamFamily,
+  type ExamCourse,
   type Gender,
   type StudentDetail,
   type UpdateStudentBody,
@@ -48,7 +48,7 @@ import { StudentPerformanceCard } from '../components/student-performance';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
-  familyLabel,
+  courseLabel,
   GENDER_LABELS,
   NAV_ITEMS,
   QUERY_KEYS,
@@ -65,7 +65,7 @@ interface FormValues {
   fullName: string;
   studentType: StudentType;
   enrolledExams: string[];
-  enrolledFamilies: ExamFamily[];
+  enrolledCourses: ExamCourse[];
   currentBranchId: string;
   motherName: string;
   fatherName: string;
@@ -79,7 +79,7 @@ const FORM_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
-  'enrolledFamilies',
+  'enrolledCourses',
   'currentBranchId',
   'motherName',
   'fatherName',
@@ -120,7 +120,7 @@ function toFormValues(student: StudentDetail): FormValues {
     fullName: student.fullName ?? '',
     studentType: student.studentType,
     enrolledExams: [...student.enrolledExams],
-    enrolledFamilies: [...student.enrolledFamilies],
+    enrolledCourses: [...student.enrolledCourses],
     currentBranchId: student.currentBranchId ?? '',
     motherName: student.profile?.motherName ?? '',
     fatherName: student.profile?.fatherName ?? '',
@@ -196,7 +196,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
   // it must still resolve to a name rather than the raw id the active list no longer carries.
   const allBranches = useBranches();
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
-  const enrolledFamilies = useWatch({ control: form.control, name: 'enrolledFamilies' }) ?? [];
+  const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const branch = useBranchChoice(studentType);
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
@@ -231,26 +231,26 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
         </Field>
 
         <Field
-          htmlFor="enrolledFamilies"
-          label="Enrolled families"
-          error={form.formState.errors.enrolledFamilies?.message}
+          htmlFor="enrolledCourses"
+          label="Enrolled courses"
+          error={form.formState.errors.enrolledCourses?.message}
         >
           {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
             <MultiCombobox
               id={id}
               aria-describedby={describedBy}
               aria-invalid={invalid}
-              value={enrolledFamilies}
+              value={enrolledCourses}
               onChange={(next) =>
-                form.setValue('enrolledFamilies', next as ExamFamily[], { shouldDirty: true })
+                form.setValue('enrolledCourses', next as ExamCourse[], { shouldDirty: true })
               }
-              items={EXAM_FAMILIES.map((family) => ({
-                value: family,
-                label: familyLabel(family),
+              items={EXAM_COURSES.map((course) => ({
+                value: course,
+                label: courseLabel(course),
               }))}
               chips={false}
-              placeholder="No families yet"
-              emptyLabel="No family matches that"
+              placeholder="No courses yet"
+              emptyLabel="No course matches that"
             />
           )}
         </Field>
@@ -267,7 +267,7 @@ function AccessCard({ form }: Readonly<{ form: UseFormReturn<FormValues> }>) {
               aria-invalid={invalid}
               value={enrolledExams}
               onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-              items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
+              items={examsInCourses(exams, enrolledCourses, enrolledExams).map((exam) => ({
                 value: exam.code,
                 label: exam.code,
                 hint: exam.name,
@@ -610,7 +610,7 @@ export function StudentDetailPage() {
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
-      enrolledFamilies: [],
+      enrolledCourses: [],
       currentBranchId: '',
       motherName: '',
       fatherName: '',
@@ -646,8 +646,8 @@ export function StudentDetailPage() {
         ...(form.formState.dirtyFields.enrolledExams
           ? { enrolledExams: values.enrolledExams }
           : {}),
-        ...(form.formState.dirtyFields.enrolledFamilies
-          ? { enrolledFamilies: values.enrolledFamilies }
+        ...(form.formState.dirtyFields.enrolledCourses
+          ? { enrolledCourses: values.enrolledCourses }
           : {}),
         profile: {
           motherName: orNull(values.motherName),

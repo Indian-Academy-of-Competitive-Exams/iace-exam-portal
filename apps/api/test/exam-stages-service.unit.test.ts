@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import {
   AppException,
   ErrorCodes,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   EXAM_MODE,
   STAGE_DISPOSITION,
   examStageListQuerySchema,
@@ -35,13 +35,13 @@ const listQuery = (over: Partial<ExamStageListQueryInput> = {}): ExamStageListQu
   examStageListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
 
 describe('ExamStagesService — listing', () => {
-  it('names the exam and its family on every row, so a stage never reads bare', async () => {
+  it('names the exam and its course on every row, so a stage never reads bare', async () => {
     const { service } = serviceWith();
 
     const [stage] = (await service.list(listQuery())).items;
 
     assert.equal(stage?.exam.code, 'SSC CGL');
-    assert.equal(stage?.exam.family, EXAM_FAMILY.SSC);
+    assert.equal(stage?.exam.course, EXAM_COURSE.SSC);
   });
 
   it('narrows to one exam', async () => {
@@ -91,8 +91,8 @@ describe('ExamStagesService — listing', () => {
     assert.equal((await service.list(listQuery({ examId: [] }))).total, 2);
   });
 
-  /** The Exams screen filters by family; a stage reaches one only through its exam. */
-  it('narrows to one family, through the exam above it', async () => {
+  /** The Exams screen filters by course; a stage reaches one only through its exam. */
+  it('narrows to one course, through the exam above it', async () => {
     const { service } = serviceWith(
       [
         makeExamStage({ id: 'stage_1', examId: 'exam_1' }),
@@ -100,11 +100,11 @@ describe('ExamStagesService — listing', () => {
       ],
       [
         makeExam(),
-        makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', family: EXAM_FAMILY.RRB }),
+        makeExam({ id: 'exam_2', code: 'RRB JE', name: 'RRB JE', course: EXAM_COURSE.RRB }),
       ],
     );
 
-    const page = await service.list(listQuery({ family: EXAM_FAMILY.RRB }));
+    const page = await service.list(listQuery({ course: EXAM_COURSE.RRB }));
 
     assert.equal(page.total, 1);
     assert.equal(page.items[0]?.exam.code, 'RRB JE');

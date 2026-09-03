@@ -5,7 +5,7 @@ import {
   AppException,
   type AttemptStatus,
   ErrorCodes,
-  type ExamFamily,
+  type ExamCourse,
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
@@ -38,7 +38,7 @@ const CATALOG_SHAPE = 'v7';
 
 const catalogInclude = (branchId: string | null) =>
   ({
-    examStage: { select: { id: true, name: true, exam: { select: { code: true, family: true } } } },
+    examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
     prerequisiteSeries: { select: { name: true } },
     // The `access` → `Test` seam docs/03 §4 records: the tests module does not exist yet, so
     // there is no facade to ask and the read is made here.
@@ -89,7 +89,7 @@ interface ResolvedSeries {
   id: string;
   name: string;
   description: string | null;
-  examStage: { id: string; name: string; examCode: string; family: ExamFamily } | null;
+  examStage: { id: string; name: string; examCode: string; course: ExamCourse } | null;
   programCode: string | null;
   kind: TestSeriesKind;
   sequentialTests: boolean;
@@ -402,7 +402,7 @@ function toResolved(
           id: row.examStage.id,
           name: row.examStage.name,
           examCode: row.examStage.exam.code,
-          family: row.examStage.exam.family,
+          course: row.examStage.exam.course,
         }
       : null,
     programCode: row.programCode,

@@ -126,7 +126,7 @@ export class StudentPrivacyService {
         studentType: student.studentType,
         branch: student.currentBranch?.name ?? null,
         enrolledExams: student.enrolledExams,
-        enrolledFamilies: student.enrolledFamilies,
+        enrolledCourses: student.enrolledCourses,
         programs: student.programs,
         createdAt: student.createdAt.toISOString(),
       },

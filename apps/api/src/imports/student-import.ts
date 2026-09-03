@@ -1,5 +1,5 @@
 import {
-  EXAM_FAMILIES,
+  EXAM_COURSES,
   GENDERS,
   IMPORT_LIST_SEPARATORS,
   IMPORT_MAX_ROWS,
@@ -12,7 +12,7 @@ import {
   mobileSchema,
   personNameSchema,
   type BranchType,
-  type ExamFamily,
+  type ExamCourse,
   type Gender,
   type StudentImportColumn,
   type StudentImportColumnKey,
@@ -242,15 +242,15 @@ function readBranch(
   return { branchName: name, currentBranchId: branch.id };
 }
 
-/** The families this row names, and the ones that are not families at all. */
-function readFamilies(row: CsvRow): { families: ExamFamily[]; error?: string } {
-  const values = readList(row, 'enrolledFamilies').map((value) => value.replaceAll(' ', '_'));
-  const known = new Set<string>(EXAM_FAMILIES);
+/** The courses this row names, and the ones that are not courses at all. */
+function readCourses(row: CsvRow): { courses: ExamCourse[]; error?: string } {
+  const values = readList(row, 'enrolledCourses').map((value) => value.replaceAll(' ', '_'));
+  const known = new Set<string>(EXAM_COURSES);
   const unknown = unknownOf(values, known);
   if (unknown.length > 0) {
-    return { families: [], error: `Not an exam family: ${unknown.join(', ')}.` };
+    return { courses: [], error: `Not an exam course: ${unknown.join(', ')}.` };
   }
-  return { families: values as ExamFamily[] };
+  return { courses: values as ExamCourse[] };
 }
 
 /** The optional profile columns. A bad value is an error; a blank one is simply absent. */
@@ -319,7 +319,7 @@ function planRow(
   const number = readMobile(row, seenInFile);
   const type = readStudentType(row);
   const branch = readBranch(row, context, type.studentType);
-  const families = readFamilies(row);
+  const courses = readCourses(row);
   const { profile, errors: profileErrors } = readProfile(row);
 
   const enrolledExams = readList(row, 'enrolledExams');
@@ -338,10 +338,10 @@ function planRow(
     type.error,
     branch.error,
     theirStudent(context.scope, existing),
-    families.error,
+    courses.error,
     unknownExams.length > 0 ? `No such exam code: ${unknownExams.join(', ')}.` : undefined,
     unknownPrograms.length > 0 ? `No such program code: ${unknownPrograms.join(', ')}.` : undefined,
-    reachesNothing(families.families, enrolledExams, programs),
+    reachesNothing(courses.courses, enrolledExams, programs),
     ...profileErrors,
   ].filter((error): error is string => error !== undefined);
 
@@ -354,7 +354,7 @@ function planRow(
     studentType: type.studentType,
     branchName: branch.branchName,
     currentBranchId: branch.currentBranchId,
-    enrolledFamilies: families.families,
+    enrolledCourses: courses.courses,
     enrolledExams,
     programs,
     profile,
@@ -367,13 +367,13 @@ function planRow(
   };
 }
 
-/** Family, exam OR program — any one grants access, so none of the three opens nothing. */
+/** Course, exam OR program — any one grants access, so none of the three opens nothing. */
 function reachesNothing(
-  families: ExamFamily[],
+  courses: ExamCourse[],
   enrolledExams: string[],
   programs: string[],
 ): string | undefined {
-  const routes = [families, enrolledExams, programs];
+  const routes = [courses, enrolledExams, programs];
   return routes.some((route) => route.length > 0) ? undefined : NO_ACCESS_ROUTE_MESSAGE;
 }
 

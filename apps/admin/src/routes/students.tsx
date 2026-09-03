@@ -6,8 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Upload, UserPlus } from 'lucide-react';
 import {
   BRANCH_TYPE,
-  EXAM_FAMILIES,
-  examsInFamilies,
+  EXAM_COURSES,
+  examsInCourses,
   FEATURE_KEYS,
   MOBILE_DIGITS,
   PERMISSION_LEVELS,
@@ -18,7 +18,7 @@ import {
   createStudentSchema,
   normaliseMobile,
   type CreateStudentInput,
-  type ExamFamily,
+  type ExamCourse,
   type StudentSort,
   type StudentSummary,
   type StudentType,
@@ -48,7 +48,7 @@ import {
   useTruncation,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { familyLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
+import { courseLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { useBranchChoice, useBranches } from '../lib/use-branches';
@@ -381,7 +381,7 @@ const NEW_STUDENT_FIELDS = [
   'fullName',
   'studentType',
   'enrolledExams',
-  'enrolledFamilies',
+  'enrolledCourses',
   'currentBranchId',
 ] as const;
 
@@ -397,13 +397,13 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
       fullName: '',
       studentType: STUDENT_TYPE.ONLINE,
       enrolledExams: [],
-      enrolledFamilies: [],
+      enrolledCourses: [],
       currentBranchId: '',
     },
   });
 
   const enrolledExams = useWatch({ control: form.control, name: 'enrolledExams' }) ?? [];
-  const enrolledFamilies = useWatch({ control: form.control, name: 'enrolledFamilies' }) ?? [];
+  const enrolledCourses = useWatch({ control: form.control, name: 'enrolledCourses' }) ?? [];
   const currentBranchId = useWatch({ control: form.control, name: 'currentBranchId' }) ?? '';
   const studentType = useWatch({ control: form.control, name: 'studentType' });
   const exams = useExams({ activeOnly: true });
@@ -423,7 +423,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         fullName: values.fullName?.trim() ? values.fullName.trim() : undefined,
         studentType: values.studentType,
         enrolledExams: values.enrolledExams?.length ? values.enrolledExams : undefined,
-        enrolledFamilies: values.enrolledFamilies?.length ? values.enrolledFamilies : undefined,
+        enrolledCourses: values.enrolledCourses?.length ? values.enrolledCourses : undefined,
         // An untouched picker is "not recorded"; '' is not a branch id the server could resolve.
         currentBranchId: chosenBranchId || undefined,
       }),
@@ -481,22 +481,22 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
         )}
       </FormField>
 
-      <FormField form={form} name="enrolledFamilies" label="Enrolled families">
+      <FormField form={form} name="enrolledCourses" label="Enrolled courses">
         {({ id, 'aria-describedby': describedBy, 'aria-invalid': invalid }) => (
           <MultiCombobox
             id={id}
             aria-describedby={describedBy}
             aria-invalid={invalid}
-            value={enrolledFamilies}
+            value={enrolledCourses}
             onChange={(next) =>
-              form.setValue('enrolledFamilies', next as ExamFamily[], { shouldDirty: true })
+              form.setValue('enrolledCourses', next as ExamCourse[], { shouldDirty: true })
             }
-            items={EXAM_FAMILIES.map((family) => ({
-              value: family,
-              label: familyLabel(family),
+            items={EXAM_COURSES.map((course) => ({
+              value: course,
+              label: courseLabel(course),
             }))}
             placeholder="None yet"
-            emptyLabel="No family matches that"
+            emptyLabel="No course matches that"
           />
         )}
       </FormField>
@@ -509,7 +509,7 @@ function NewStudentDialog({ open, onClose }: Readonly<{ open: boolean; onClose: 
             aria-invalid={invalid}
             value={enrolledExams}
             onChange={(next) => form.setValue('enrolledExams', next, { shouldDirty: true })}
-            items={examsInFamilies(exams, enrolledFamilies, enrolledExams).map((exam) => ({
+            items={examsInCourses(exams, enrolledCourses, enrolledExams).map((exam) => ({
               value: exam.code,
               label: exam.code,
               hint: exam.name,

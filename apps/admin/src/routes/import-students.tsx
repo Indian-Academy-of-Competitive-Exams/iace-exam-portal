@@ -250,7 +250,7 @@ function ImportRow({ row }: Readonly<{ row: StudentImportRow }>) {
       <TableCell>
         {/* What actually opens a series for them, so it is checked before the commit. */}
         <BadgeList
-          items={[...row.enrolledFamilies, ...row.enrolledExams, ...row.programs]}
+          items={[...row.enrolledCourses, ...row.enrolledExams, ...row.programs]}
           label={(code) => code}
           max={2}
           empty={<span className="text-muted-foreground">Nothing</span>}

@@ -175,7 +175,7 @@ export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> =
 /** What choosing each kind does, which the name alone does not say. */
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
   STANDARD: 'Reached by an exam enrolment or a program',
-  FREE: 'Also reached by everyone enrolled in its exam family',
+  FREE: 'Also reached by everyone enrolled in its exam course',
   SCHOLARSHIP: 'Reached only by candidates imported into it',
 };
 
@@ -187,7 +187,7 @@ export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>>
 };
 
 /** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
-export const familyLabel = (family: string) => family.replaceAll('_', '/');
+export const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 /** What each branch type is called on screen. */
 export const BRANCH_TYPE_LABELS: Readonly<Record<BranchType, string>> = {

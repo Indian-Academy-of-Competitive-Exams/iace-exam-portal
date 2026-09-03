@@ -1,6 +1,6 @@
 
 -- ===========================================================================
--- Full exam catalog — 4 families, 43 exams, 122 stages, 30 default configs.
+-- Full exam catalog — 4 courses, 43 exams, 122 stages, 30 default configs.
 -- Generated from Exam_Pattern_Base_Configurations.xlsx. Idempotent (ON CONFLICT DO NOTHING).
 -- Ids are stable readable strings (same convention as the rows above).
 -- Mode->disposition & section->subject mappings documented in docs/seed-exam-catalog.md.
@@ -16,7 +16,7 @@ INSERT INTO "Subject" ("id","name","code") VALUES
   ('subject_computer','COMPUTER KNOWLEDGE','COMPUTER_KNOWLEDGE')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO "Exam" ("id","family","code","name") VALUES
+INSERT INTO "Exam" ("id","course","code","name") VALUES
   ('exam_ssc_cgl','SSC','SSC CGL','SSC CGL'),
   ('exam_ssc_chsl','SSC','SSC CHSL','SSC CHSL'),
   ('exam_ssc_mts_havaldar','SSC','SSC MTS HAVALDAR','SSC MTS & Havaldar'),

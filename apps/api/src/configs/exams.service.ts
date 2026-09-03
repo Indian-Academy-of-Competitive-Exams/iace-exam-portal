@@ -6,7 +6,7 @@ import {
   fieldDiff,
   type CreateExamBody,
   type Exam,
-  type ExamFamily,
+  type ExamCourse,
   type ExamListQuery,
   type Paginated,
   type UpdateExamBody,
@@ -24,7 +24,7 @@ import {
 
 interface ExamRow {
   id: string;
-  family: ExamFamily;
+  course: ExamCourse;
   name: string;
   code: string;
   description: string | null;
@@ -38,7 +38,7 @@ const EXAM_INCLUDE = {
 } as const satisfies Prisma.ExamInclude;
 
 /** What an exam's audit diff covers — every column an edit can change. */
-export const AUDITED_EXAM_FIELDS = ['family', 'name', 'code', 'description', 'isActive'] as const;
+export const AUDITED_EXAM_FIELDS = ['course', 'name', 'code', 'description', 'isActive'] as const;
 
 /** Owns `Exam` — the only module that writes it. */
 @Injectable()
@@ -64,7 +64,7 @@ export class ExamsService {
         { code: { contains: term, mode: 'insensitive' } },
         { name: { contains: term, mode: 'insensitive' } },
       ]),
-      ...(query.family ? { family: { in: query.family } } : {}),
+      ...(query.course ? { course: { in: query.course } } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
     };
 
@@ -72,7 +72,7 @@ export class ExamsService {
       this.prisma.exam.findMany({
         where,
         include: EXAM_INCLUDE,
-        orderBy: [{ family: 'asc' }, { name: 'asc' }],
+        orderBy: [{ course: 'asc' }, { name: 'asc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
@@ -87,7 +87,7 @@ export class ExamsService {
 
     const exam = await this.prisma.exam.create({
       data: {
-        family: input.family,
+        course: input.course,
         name: input.name,
         code: input.code,
         description: input.description ?? null,
@@ -103,8 +103,8 @@ export class ExamsService {
     // The diff, not the body: a PATCH that re-sends the current code is not a code change, and
     // treating it as one would make the row uneditable forever.
     const changes = {
-      ...(input.family !== undefined && input.family !== exam.family
-        ? { family: input.family }
+      ...(input.course !== undefined && input.course !== exam.course
+        ? { course: input.course }
         : {}),
       ...(input.name !== undefined && input.name !== exam.name ? { name: input.name } : {}),
       ...(input.code !== undefined && input.code !== exam.code ? { code: input.code } : {}),
@@ -211,7 +211,7 @@ export class ExamsService {
 function toExam(row: ExamRow): Exam {
   return {
     id: row.id,
-    family: row.family,
+    course: row.course,
     name: row.name,
     code: row.code,
     description: row.description,

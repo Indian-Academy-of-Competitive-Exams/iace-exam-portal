@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   AppException,
-  EXAM_FAMILY,
+  EXAM_COURSE,
   ErrorCodes,
   type StudentCatalog,
   TEST_STATUS,
@@ -132,8 +132,8 @@ describe('AccessResolverService — how a series is reached', () => {
     assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
   });
 
-  /** A family is what the institute coaches across, never an entitlement to a paper. */
-  it('gives nothing on an exam family alone', async () => {
+  /** A course is what the institute coaches across, never an entitlement to a paper. */
+  it('gives nothing on an exam course alone', async () => {
     const { resolver } = build(
       reachable({
         students: [
@@ -141,7 +141,7 @@ describe('AccessResolverService — how a series is reached', () => {
             id: 'stu_1',
             currentBranchId: BRANCH,
             enrolledExams: [],
-            enrolledFamilies: [EXAM_FAMILY.SSC],
+            enrolledCourses: [EXAM_COURSE.SSC],
           }),
         ],
       }),

@@ -18,7 +18,7 @@ const SERIES = {
   id: 'srs_1',
   name: 'SSC CGL Tier 1 mocks',
   description: null,
-  examStage: { id: 'stage_1', name: 'Tier 1', examCode: 'SSC CGL', family: 'SSC' },
+  examStage: { id: 'stage_1', name: 'Tier 1', examCode: 'SSC CGL', course: 'SSC' },
   programCode: null,
   kind: TEST_SERIES_KIND.STANDARD,
   sequentialTests: false,

@@ -5,7 +5,7 @@ import {
   configTotalsOf,
   createBaseConfigSchema,
   updateBaseConfigSchema,
-  EXAM_FAMILY,
+  EXAM_COURSE,
 } from '../src/index';
 
 describe('baseConfigSchema', () => {
@@ -16,7 +16,7 @@ describe('baseConfigSchema', () => {
       id: 's1',
       stageKey: 'SSC_CGL_T1',
       name: 'Tier 1',
-      exam: { id: 'e1', code: 'SSC CGL', name: 'SSC CGL', family: EXAM_FAMILY.SSC },
+      exam: { id: 'e1', code: 'SSC CGL', name: 'SSC CGL', course: EXAM_COURSE.SSC },
     },
     name: 'SSC CGL Tier 1',
     isDefault: true,
