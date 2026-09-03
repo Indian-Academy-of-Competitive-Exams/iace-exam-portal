@@ -94,6 +94,33 @@ describe('studentWhere — access-shaped filters', () => {
   it('drops the branch filter when it names none', () => {
     assert.deepEqual(conditionsFor({ branchId: '' }), []);
   });
+
+  /** What an import wrote onto the student, and the only way to see who is on a program. */
+  it('finds the students on a program', () => {
+    assertHas({ programCode: 'FOUNDATION' }, { programs: { hasSome: ['FOUNDATION'] } });
+  });
+
+  it('takes several programs at once', () => {
+    assertHas(
+      { programCode: 'FOUNDATION,CRASH' },
+      { programs: { hasSome: ['FOUNDATION', 'CRASH'] } },
+    );
+  });
+
+  /** The course a STANDARD series reaches them by, so this is the roster behind an offering. */
+  it('finds the students enrolled on a course', () => {
+    assertHas({ course: 'SSC' }, { enrolledCourses: { hasSome: ['SSC'] } });
+  });
+
+  /** Both are set-valued: naming none means every student, never none of them. */
+  it('drops the program and course filters when they name none', () => {
+    assert.deepEqual(conditionsFor({ programCode: '', course: '' }), []);
+  });
+
+  /** The enum is checked at the edge, so a typo is a 400 and never a silently empty roster. */
+  it('refuses a course that is not one', () => {
+    assert.throws(() => query({ course: 'BANKING_TYPO' }));
+  });
 });
 
 describe('studentWhere — joined between', () => {

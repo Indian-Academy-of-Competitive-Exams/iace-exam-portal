@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   civilDate,
   csvIdQuery,
+  csvQuery,
   matchModeQuery,
   mobileSchema,
   optionalBooleanQuery,
@@ -183,6 +184,10 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   q: searchQuery(),
   /** Everyone whose current branch these are — "who do these centres teach". */
   branchId: csvIdQuery(),
+  /** `Program.code` values an import wrote onto the student. */
+  programCode: csvIdQuery(),
+  /** The courses they are enrolled on, which is what a STANDARD series reaches them by. */
+  course: csvQuery(examCourseSchema),
   isActive: optionalBooleanQuery(),
   isTestBlocked: optionalBooleanQuery(),
   /** Admin-created students who have never set a PIN of their own. */

@@ -161,3 +161,48 @@ export function TestSeriesMultiPicker({
     />
   );
 }
+
+/** The same catalog as `ProgramPicker`, for a filter choosing several at once. */
+export function ProgramMultiPicker({
+  value,
+  onChange,
+  placeholder = 'Any program',
+  ...control
+}: Readonly<{
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+}>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: [...QUERY_KEYS.PROGRAMS, QUERY_SCOPES.PICKER, search],
+    fetchPage: (page) =>
+      api.admin.programs.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
+  });
+
+  return (
+    <MultiCombobox
+      {...control}
+      chips={false}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      items={pages.items.map((program) => ({
+        value: program.code,
+        label: program.code,
+        hint: program.name,
+      }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search programs"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No program matches that"
+    />
+  );
+}

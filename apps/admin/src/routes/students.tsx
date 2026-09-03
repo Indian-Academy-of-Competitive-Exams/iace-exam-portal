@@ -45,8 +45,10 @@ import {
   digitsOnly,
   linkVariants,
   type DataTableColumn,
+  type ListFilterMultiControl,
   useTruncation,
 } from '@iace/ui';
+import { ProgramMultiPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { courseLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -200,6 +202,19 @@ export function StudentsPage() {
       items: branches.map((option) => ({ value: option.id, label: option.name })),
     },
     {
+      key: 'course',
+      kind: 'multi',
+      label: 'Course',
+      placeholder: 'Any course',
+      items: EXAM_COURSES.map((course) => ({ value: course, label: courseLabel(course) })),
+    },
+    {
+      key: 'programCode',
+      kind: 'customMulti',
+      label: 'Program',
+      render: (control: ListFilterMultiControl) => <ProgramMultiPicker {...control} />,
+    },
+    {
       key: 'preTestReady',
       kind: 'choice',
       label: 'Pre-test details',
@@ -239,6 +254,8 @@ export function StudentsPage() {
     toQuery: (values) => ({
       q: values.q || undefined,
       branchId: values.branchId,
+      course: values.course,
+      programCode: values.programCode,
       preTestReady: asBooleanParam(values.preTestReady),
       profileCompleted: asBooleanParam(values.profileCompleted),
       noAccess: asBooleanParam(values.noAccess),
