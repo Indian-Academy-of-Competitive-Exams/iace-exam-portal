@@ -171,14 +171,16 @@ export const ANSWER_MODE_LABELS: Readonly<Record<AnswerMode, string>> = {
 export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> = {
   STANDARD: 'Standard',
   FREE: 'Free',
-  SCHOLARSHIP: 'Scholarship',
+  PROGRAM: 'Program',
+  EVENT: 'Event',
 };
 
 /** What choosing each kind does, which the name alone does not say. */
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
   STANDARD: 'Reached by an exam enrolment or a program',
   FREE: 'Also reached by everyone enrolled in its exam course',
-  SCHOLARSHIP: 'Reached only by candidates imported into it',
+  PROGRAM: 'Reached only by an enrolled program',
+  EVENT: 'Reached only by candidates imported into it',
 };
 
 /** What opens a series for a student, in the words an admin would use for it. */

@@ -808,15 +808,15 @@ describe('asking for a FREE series nobody reaches', () => {
     assert.equal(request.status, UNLOCK_REQUEST_STATUS.PENDING);
   });
 
-  /** A scholarship intake names its candidates; putting a hand up is not being named. */
-  it('refuses a SCHOLARSHIP series', async () => {
+  /** An event intake names its candidates; putting a hand up is not being named. */
+  it('refuses an EVENT series', async () => {
     const { service } = build(
       outsider({
         series: [
           makeSeries({
             id: 'srs_scholar',
             examStageId: `stage_${EXAM_COURSE.SSC}`,
-            kind: TEST_SERIES_KIND.SCHOLARSHIP,
+            kind: TEST_SERIES_KIND.EVENT,
           }),
         ],
       }),

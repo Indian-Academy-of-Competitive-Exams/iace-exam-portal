@@ -18,11 +18,12 @@ export const UNLOCK_MODE = {
   /** Never opens on its own — the student asks and an admin answers. */
   REQUEST: 'REQUEST',
 } as const;
-/** STANDARD reaches by exam or program; FREE also by an enrolled course; SCHOLARSHIP only by a grant. */
+/** STANDARD reaches by exam or program; FREE also by an enrolled course; PROGRAM only by program; EVENT only by a grant. */
 export const TEST_SERIES_KIND = {
   STANDARD: 'STANDARD',
   FREE: 'FREE',
-  SCHOLARSHIP: 'SCHOLARSHIP',
+  PROGRAM: 'PROGRAM',
+  EVENT: 'EVENT',
 } as const;
 export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
 
@@ -158,7 +159,7 @@ export function seriesNameKind(input: {
   const program = input.programCode?.trim();
   if (program) return program;
   if (input.kind === TEST_SERIES_KIND.FREE) return 'Free Mocks';
-  if (input.kind === TEST_SERIES_KIND.SCHOLARSHIP) return 'Scholarship Test';
+  if (input.kind === TEST_SERIES_KIND.EVENT) return 'Scholarship Test';
   return 'Mock Test Series';
 }
 
