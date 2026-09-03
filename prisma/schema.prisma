@@ -514,6 +514,11 @@ model Test {
   createdById        String?
   createdAt          DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  testSeriesId       String?
+  seriesOrder        Int?
+  opensAt            DateTime?      @db.Timestamptz(3)
+  lateEntrySec       Int?
+  extraTimeSec       Int?
 
   baseConfig      BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
   examStage       ExamStage            @relation(fields: [examStageId], references: [id])
@@ -526,11 +531,13 @@ model Test {
   sectionStats    TestSectionStat[]
   questionStats   TestQuestionStat[]
   programUnlocks  TestProgramUnlock[]
+  testSeries      TestSeries?          @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
   @@index([examStageId])
   @@index([status])
+  @@index([testSeriesId])
 }
 
 // One paper. A FIXED test has exactly one, at variant 0; a GENERATED test has
@@ -864,6 +871,8 @@ model TestSeries {
   eventId              String?
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  branchIds            String[]       @default([])
+  isEnabled            Boolean        @default(false)
 
   examStage          ExamStage?            @relation(fields: [examStageId], references: [id], onDelete: Restrict)
   program            Program?              @relation(fields: [programCode], references: [code], onDelete: Restrict)
@@ -871,6 +880,7 @@ model TestSeries {
   dependentSeries    TestSeries[]          @relation("SeriesPrerequisite")
   event              Event?                @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tests              TestSeriesTest[]
+  directTests        Test[]
   grants             StudentGrant[]
   unlocks            StudentSeriesUnlock[]
   unlockRequests     SeriesUnlockRequest[]
