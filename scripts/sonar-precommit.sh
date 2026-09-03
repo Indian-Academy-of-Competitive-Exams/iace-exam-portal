@@ -6,14 +6,19 @@
 # could not.
 #
 # SonarQube costs ~2GB of RAM, so it does not sit running all day. A stopped
-# container is not a reason to commit ungated: the hook STARTS it, waits for it,
-# and scans. It stays up afterwards, so only the first commit of a session pays.
+# container is not a reason to commit ungated: the hook STARTS it, scans, and
+# STOPS it again, so the memory is spent only while a commit is being checked.
 #
-# Two deliberate escapes, because a gate that cannot be got past when it is
+# It only ever stops what it started — a server you had up for the dashboard is
+# yours and stays. It also leaves the server running when the gate FAILS, since
+# that is the moment you need to go and read why.
+#
+# Three deliberate escapes, because a gate that cannot be got past when it is
 # wrong stops being a gate and starts being a reason to use --no-verify on
 # everything:
 #   - no staged .ts/.tsx under the scanned dirs  -> nothing to scan
 #   - SKIP_SONAR=1                               -> explicit, deliberate skip
+#   - SONAR_KEEP_UP=1                            -> scan, but leave it running
 #
 # Everything else BLOCKS: no token, a server that will not come up, or a
 # reachable server saying the quality gate failed.
@@ -41,11 +46,23 @@ fi
 
 up() { curl -fsS -m 5 "$host/api/system/status" 2>/dev/null | grep -q '"status":"UP"'; }
 
+# Whether WE started it. Only then is it ours to stop again.
+ours=0
+release() {
+  [ "$ours" = "1" ] || return 0
+  [ "${SONAR_KEEP_UP:-}" = "1" ] && { echo "sonar: left running (SONAR_KEEP_UP=1)"; return 0; }
+  echo "sonar: stopping the container the hook started…"
+  docker stop sonarqube >/dev/null 2>&1 || true
+}
+
 # Elasticsearch takes the time here, not the web server, so the wait is generous.
 if ! up; then
   echo "sonar: $host is down — starting the container…" >&2
   docker compose --profile sonar up -d sonarqube >/dev/null 2>&1 \
     || docker start sonarqube >/dev/null 2>&1 || true
+  ours=1
+  # A commit interrupted mid-scan must not leave 2GB behind.
+  trap release INT TERM
 
   for _ in $(seq 1 "${SONAR_START_TIMEOUT:-90}"); do
     up && break
@@ -54,6 +71,7 @@ if ! up; then
 fi
 
 if ! up; then
+  release
   echo "" >&2
   echo "sonar: $host would not come up — NOT committing ungated." >&2
   echo "       Start it by hand (docker compose --profile sonar up -d sonarqube)," >&2
@@ -81,7 +99,11 @@ if [ "$gate" != "OK" ]; then
   echo "" >&2
   echo "sonar: QUALITY GATE ${gate:-UNREADABLE} — $host/dashboard?id=iace-platform" >&2
   echo "       Fix the new issues, or commit with SKIP_SONAR=1 if this is wrong." >&2
+  # Deliberately still running: the dashboard is where you go next, and stopping
+  # the server on the one path that sends you to it would be its own small cruelty.
+  [ "$ours" = "1" ] && echo "       (left running so you can read it; docker stop sonarqube)" >&2
   exit 1
 fi
 
+release
 echo "sonar: quality gate OK"
