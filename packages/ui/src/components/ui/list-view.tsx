@@ -9,6 +9,7 @@ import {
 } from './data-table';
 import { DatePicker } from './date-picker';
 import { Field } from './field';
+import { NotchedField } from './notched-field';
 import { FilterBar } from './filter-bar';
 import { MultiCombobox } from './multi-combobox';
 import { Pagination, type PaginationProps } from './pagination';
@@ -177,6 +178,7 @@ function FilterControl({
   if (filter.kind === 'search') {
     return (
       <SearchInput
+        id={naming.id}
         aria-label={filter.label}
         placeholder={filter.placeholder}
         value={control.value}
@@ -235,13 +237,14 @@ export function FilterRow({
       }
     >
       {primary.map((filter) => (
-        <div key={filter.key} className={filter.width ?? widthOf(filter)}>
-          <FilterControl
-            filter={filter}
-            naming={{ 'aria-label': filter.label }}
-            {...bind(filter)}
-          />
-        </div>
+        <NotchedField
+          key={filter.key}
+          className={filter.width ?? widthOf(filter)}
+          htmlFor={`filter-${filter.key}`}
+          label={filter.label}
+        >
+          {({ id }) => <FilterControl filter={filter} naming={{ id }} {...bind(filter)} />}
+        </NotchedField>
       ))}
     </FilterBar>
   );

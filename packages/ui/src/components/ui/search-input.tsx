@@ -112,6 +112,7 @@ export interface SearchInputProps {
   onChange: (next: string) => void;
   /** Names the field. The magnifier is decoration; it announces nothing. */
   'aria-label': string;
+  id?: string;
   placeholder?: string;
   /** Milliseconds of quiet before the search runs. */
   delay?: number;
@@ -125,6 +126,7 @@ export function SearchInput({
   placeholder,
   delay = SEARCH_DEBOUNCE_MS,
   className,
+  id,
   'aria-label': ariaLabel,
 }: Readonly<SearchInputProps>) {
   const { draft, type, flush, clear } = useDebouncedSearch(value, onChange, delay);
@@ -132,6 +134,7 @@ export function SearchInput({
   return (
     <Input
       type="search"
+      id={id}
       aria-label={ariaLabel}
       placeholder={placeholder}
       value={draft}

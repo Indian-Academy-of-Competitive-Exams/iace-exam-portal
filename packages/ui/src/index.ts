@@ -18,6 +18,7 @@ export {
 export { Kbd, type KbdProps } from './components/ui/kbd';
 export { Label } from './components/ui/label';
 export { Field, type FieldProps } from './components/ui/field';
+export { NotchedField, type NotchedFieldProps } from './components/ui/notched-field';
 export { FilterBar, type FilterBarProps } from './components/ui/filter-bar';
 export {
   FormActions,
