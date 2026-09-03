@@ -25,12 +25,27 @@ describe('Breadcrumbs', () => {
     assert.equal(container.firstChild, null);
   });
 
-  it('marks the last crumb as the page, and never links it', () => {
+  it('marks the last crumb as the page when it is where you already are', () => {
     render(<Breadcrumbs items={TRAIL} renderLink={link} />);
 
     const current = screen.getByText('Asha Kumari');
     assert.equal(current.getAttribute('aria-current'), 'page');
     assert.equal(current.tagName, 'SPAN');
+  });
+
+  /** A record shown through a tab: the last crumb is the record, which is not this page. */
+  it('links the last crumb when it carries a route of its own', () => {
+    render(
+      <Breadcrumbs
+        items={[...TRAIL.slice(0, 2), { label: 'Asha Kumari', to: '/students/stu_1' }]}
+        renderLink={link}
+      />,
+    );
+
+    const current = screen.getByRole('link', { name: 'Asha Kumari' });
+    assert.equal(current.getAttribute('href'), '/students/stu_1');
+    // It is a different destination, so claiming to BE the current page would be a lie.
+    assert.equal(current.getAttribute('aria-current'), null);
   });
 
   /** A section groups screens without being one, so it is text rather than a link. */

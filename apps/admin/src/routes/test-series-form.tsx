@@ -234,7 +234,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       header={
         <>
           <PageHeader
-            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+            breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={existing ? [{ label: title }] : []} />}
             title={title}
             action={
               isEditing ? undefined : (

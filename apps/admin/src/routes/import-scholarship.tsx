@@ -79,7 +79,15 @@ export function ImportScholarshipPage() {
       className="lg:overflow-hidden"
       header={
         <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: 'Candidates' }]} />}
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[
+                { label: series.data?.name ?? 'Series', to: ROUTES.TEST_SERIES_DETAIL(id) },
+                { label: 'Candidates' },
+              ]}
+            />
+          }
           title="Import candidates"
           meta={series.data?.name}
         />

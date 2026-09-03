@@ -83,7 +83,12 @@ export function SeriesPage() {
     <PageFrame
       header={
         <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: series?.name ?? 'Series' }]} />}
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[{ label: 'Tests', to: ROUTES.TESTS }, { label: series?.name ?? 'Series' }]}
+            />
+          }
           title={series?.name ?? 'Series'}
           meta={progress ? `${progress.done} of ${plural(progress.total, 'test')} done` : undefined}
           action={

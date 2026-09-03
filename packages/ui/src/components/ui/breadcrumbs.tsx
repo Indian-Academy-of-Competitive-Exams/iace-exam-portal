@@ -54,8 +54,8 @@ export function Breadcrumbs({ items, renderLink, className }: Readonly<Breadcrum
               {index > 0 ? (
                 <ChevronRight className="size-3.5 shrink-0 opacity-60" aria-hidden />
               ) : null}
-              {/* The page you are on is never a link to itself. */}
-              {last || !item.to ? (
+              {/* A self-link is stripped by the caller, which is the layer that knows where it is. */}
+              {item.to === undefined ? (
                 <span
                   className={cn(last && 'font-medium text-foreground')}
                   aria-current={last ? 'page' : undefined}
@@ -63,7 +63,7 @@ export function Breadcrumbs({ items, renderLink, className }: Readonly<Breadcrum
                   {item.label}
                 </span>
               ) : (
-                renderLink(item.to, item.label, LINK)
+                renderLink(item.to, item.label, cn(LINK, last && 'font-medium text-foreground'))
               )}
             </li>
           );

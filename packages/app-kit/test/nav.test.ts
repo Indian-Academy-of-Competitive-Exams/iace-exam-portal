@@ -243,9 +243,9 @@ describe('navTrail', () => {
     });
   });
 
-  /** One crumb is the page you are on, which the title already says. */
-  it('says nothing for a top-level screen', () => {
-    assert.deepEqual(navTrail(NAV, '/audit'), []);
+  /** One crumb is not a trail, but that is `Breadcrumbs`' call: a screen may still add a record. */
+  it('hands back a top-level screen as the one crumb it is', () => {
+    assert.deepEqual(navTrail(NAV, '/audit'), [{ label: 'Audit log', to: '/audit' }]);
   });
 
   it('says nothing for a route the nav does not own', () => {

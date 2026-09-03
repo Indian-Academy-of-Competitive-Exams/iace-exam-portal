@@ -107,7 +107,7 @@ function firstScreenIn(item: NavItem): string | undefined {
   return undefined;
 }
 
-/** The trail to `pathname`, always with one crumb you can follow back. A one-item trail is none. */
+/** The trail to `pathname`, however short — a screen adds its record, and `Breadcrumbs` decides. */
 export function navTrail(items: readonly NavItem[], pathname: string): Crumb[] {
   const active = activeNavPath(items, pathname);
   if (active === undefined) return [];
@@ -125,7 +125,6 @@ export function navTrail(items: readonly NavItem[], pathname: string): Crumb[] {
   };
 
   const trail = walk(items, []) ?? [];
-  if (trail.length < 2) return [];
 
   // An ancestor pointing at the current page is a link that goes nowhere, and a back arrow to here.
   const last = trail.at(-1);
