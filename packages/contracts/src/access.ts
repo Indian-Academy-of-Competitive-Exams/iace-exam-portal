@@ -18,7 +18,7 @@ export const UNLOCK_MODE = {
   /** Never opens on its own — the student asks and an admin answers. */
   REQUEST: 'REQUEST',
 } as const;
-/** STANDARD reaches by exam or program; FREE also by an enrolled course; PROGRAM only by program; EVENT only by a grant. */
+/** STANDARD reaches by exam or program; FREE also by an enrolled course; PROGRAM only by program; EVENT only the candidates on its Event. */
 export const TEST_SERIES_KIND = {
   STANDARD: 'STANDARD',
   FREE: 'FREE',

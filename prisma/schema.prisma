@@ -195,7 +195,7 @@ enum ImportSource {
   SELF_SIGNUP
 }
 
-// STANDARD reaches by exam or program; FREE also by course; PROGRAM only by program; EVENT only by a grant.
+// STANDARD reaches by exam or program; FREE also by course; PROGRAM only by program; EVENT only its event's candidates.
 enum TestSeriesKind {
   STANDARD
   FREE
@@ -866,7 +866,7 @@ model TestSeries {
   progressive          Boolean        @default(false)
   prerequisiteSeriesId String?
   unlockMode           UnlockMode     @default(AUTO)
-  // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only by a grant; a FREE series waits on nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
+  // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event; a FREE series waits on nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
   kind                 TestSeriesKind @default(STANDARD)
   eventId              String?
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
