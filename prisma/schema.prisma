@@ -525,6 +525,7 @@ model Test {
   stat            TestStat?
   sectionStats    TestSectionStat[]
   questionStats   TestQuestionStat[]
+  programUnlocks  TestProgramUnlock[]
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -697,16 +698,17 @@ model Student {
   createdAt        DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
-  profile        StudentProfile?
-  consents       StudentConsent[]
-  currentBranch  Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
-  attempts       Attempt[]
-  grants         StudentGrant[]
-  unlocks        StudentSeriesUnlock[]
-  unlockRequests SeriesUnlockRequest[]
-  notifications  Notification[]
-  stat           StudentStat?
-  subjectStats   StudentSubjectStat[]
+  profile          StudentProfile?
+  consents         StudentConsent[]
+  currentBranch    Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  attempts         Attempt[]
+  grants           StudentGrant[]
+  unlocks          StudentSeriesUnlock[]
+  unlockRequests   SeriesUnlockRequest[]
+  notifications    Notification[]
+  stat             StudentStat?
+  subjectStats     StudentSubjectStat[]
+  eventCandidacies EventCandidate[]
 
   @@index([mobile])
   @@index([externalRef])
@@ -840,7 +842,8 @@ model Program {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  series TestSeries[]
+  series      TestSeries[]
+  testUnlocks TestProgramUnlock[]
 }
 
 // The unit of offering — a test reaches students only through a series.
@@ -858,6 +861,7 @@ model TestSeries {
   unlockMode           UnlockMode     @default(AUTO)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only by a grant; a FREE series waits on nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
   kind                 TestSeriesKind @default(STANDARD)
+  eventId              String?
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -865,6 +869,7 @@ model TestSeries {
   program            Program?              @relation(fields: [programCode], references: [code], onDelete: Restrict)
   prerequisiteSeries TestSeries?           @relation("SeriesPrerequisite", fields: [prerequisiteSeriesId], references: [id], onDelete: Restrict)
   dependentSeries    TestSeries[]          @relation("SeriesPrerequisite")
+  event              Event?                @relation(fields: [eventId], references: [id], onDelete: Restrict)
   tests              TestSeriesTest[]
   grants             StudentGrant[]
   unlocks            StudentSeriesUnlock[]
@@ -875,6 +880,7 @@ model TestSeries {
   @@index([examStageId])
   @@index([programCode])
   @@index([prerequisiteSeriesId])
+  @@index([eventId])
 }
 
 model TestSeriesTest {
@@ -972,6 +978,46 @@ model BranchTestSchedule {
 
   @@id([branchId, testId])
   @@index([testId])
+}
+
+// Who an EVENT series reaches: sitters, some of whom are not students yet — unlike a program, which is a fact about being one.
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  candidates EventCandidate[]
+  series     TestSeries[]
+}
+
+model EventCandidate {
+  eventId   String
+  studentId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, studentId])
+  @@index([studentId])
+}
+
+// Per-program stagger on when one test opens, on top of TestSeriesTest.unlockAt.
+model TestProgramUnlock {
+  testId      String
+  programCode String
+  opensAt     DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  test    Test    @relation(fields: [testId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programCode], references: [code], onDelete: Restrict)
+
+  @@id([testId, programCode])
+  @@index([programCode])
 }
 
 // ============================================================================
