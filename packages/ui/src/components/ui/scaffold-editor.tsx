@@ -80,9 +80,14 @@ function takeImages(
   return true;
 }
 
-const ESCAPED: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const ESCAPED: Readonly<Record<string, string>> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+};
 
-const escape = (value: string) => value.replace(/[&<>"]/g, (char) => ESCAPED[char]!);
+const escape = (value: string) => value.replace(/[&<>"]/g, (char) => ESCAPED[char] ?? char);
 
 /** Html in, and `regionsOf` gives html back: one shape, however a slot was built. */
 function docFrom(regions: readonly ScaffoldRegion[]): string {
@@ -293,14 +298,14 @@ function clearAcrossSlots(view: EditorView): boolean {
   const last = doc.resolve(Math.min(selection.to, doc.content.size - 1)).index(0);
   if (first >= last) return false;
 
+  // The schema this editor is built on always defines a paragraph; without one there is no doc.
+  const paragraph = schema.nodes.paragraph;
+  if (paragraph === undefined) return false;
+
   // Backwards, so each replacement leaves the positions of the ones before it alone.
   for (let index = last; index >= first; index -= 1) {
     const start = startOf(doc, index);
-    tr.replaceWith(
-      start + 1,
-      start + doc.child(index).nodeSize - 1,
-      schema.nodes.paragraph!.create(),
-    );
+    tr.replaceWith(start + 1, start + doc.child(index).nodeSize - 1, paragraph.create());
   }
 
   view.dispatch(tr);

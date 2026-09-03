@@ -68,10 +68,11 @@ async function* pagesOf(prisma: PrismaClient): AsyncGenerator<QuestionRow[]> {
         currentVersion: { select: { content: true, options: true, answerKey: true } },
       },
     });
-    if (page.length === 0) return;
+    const last = page.at(-1);
+    if (last === undefined) return;
 
     yield page;
-    cursor = page.at(-1)!.id;
+    cursor = last.id;
   }
 }
 

@@ -73,10 +73,11 @@ function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
 export function TestBuilderPage() {
   const { id } = useParams();
   const existing = id !== undefined;
+  const testId = id ?? '';
 
   const test = useQuery({
-    queryKey: TEST_KEY(id ?? ''),
-    queryFn: () => api.admin.tests.detail(id!),
+    queryKey: TEST_KEY(testId),
+    queryFn: () => api.admin.tests.detail(testId),
     enabled: existing,
   });
 

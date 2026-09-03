@@ -106,10 +106,11 @@ export function AuthoringEditorPage() {
   const immersive = focusedAt !== null && fullscreen.exits === focusedAt;
   useWorkspace(immersive);
 
+  const editingId = id ?? '';
   const editing = useQuery({
     queryKey: [...QUERY_KEYS.AUTHORING, id],
-    queryFn: () => api.admin.authoring.detail(id!),
-    enabled: Boolean(id),
+    queryFn: () => api.admin.authoring.detail(editingId),
+    enabled: editingId !== '',
   });
 
   const loadedId = useRef<string | null>(null);
@@ -174,7 +175,7 @@ export function AuthoringEditorPage() {
   const cycleLanguage = useCallback(() => {
     setLanguage((current) => {
       const at = LANGUAGE_ORDER.indexOf(current);
-      return LANGUAGE_ORDER[(at + 1) % LANGUAGE_ORDER.length]!;
+      return LANGUAGE_ORDER[(at + 1) % LANGUAGE_ORDER.length] ?? current;
     });
     setBoxVersion((version) => version + 1);
   }, []);

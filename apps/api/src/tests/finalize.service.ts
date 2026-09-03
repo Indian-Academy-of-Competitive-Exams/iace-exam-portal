@@ -177,9 +177,10 @@ export class FinalizeService {
       sections,
       paper.map((row) => row.baseConfigSectionId),
     );
-    if (issues.length === 0) return;
+    const [first] = issues;
+    if (first === undefined) return;
 
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, issues[0]!, {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { [FORM_LEVEL_FIELD]: issues },
     });
   }

@@ -19,6 +19,9 @@ export const examFamilySchema = z.enum(EXAM_FAMILY);
 export type ExamFamily = z.infer<typeof examFamilySchema>;
 export const EXAM_FAMILIES = examFamilySchema.options;
 
+/** What a new exam opens on. Named, not the list's head, so reordering the enum cannot move it. */
+export const DEFAULT_EXAM_FAMILY = EXAM_FAMILY.SSC;
+
 /** How a stage is delivered. Only CBT and OMR are scorable here. */
 export const EXAM_MODE = {
   CBT: 'CBT',
@@ -33,6 +36,8 @@ export const examModeSchema = z.enum(EXAM_MODE);
 export type ExamMode = z.infer<typeof examModeSchema>;
 export const EXAM_MODES = examModeSchema.options;
 
+export const DEFAULT_EXAM_MODE = EXAM_MODE.CBT;
+
 /** Whether a stage can carry a mock at all. Only CONDUCTED and PARTIAL get configs. */
 export const STAGE_DISPOSITION = {
   /** Pure objective CBT or OMR — a full mock, auto-scored. */
@@ -45,6 +50,8 @@ export const STAGE_DISPOSITION = {
 export const stageDispositionSchema = z.enum(STAGE_DISPOSITION);
 export type StageDisposition = z.infer<typeof stageDispositionSchema>;
 export const STAGE_DISPOSITIONS = stageDispositionSchema.options;
+
+export const DEFAULT_STAGE_DISPOSITION = STAGE_DISPOSITION.CONDUCTED;
 
 /**
  * The language values a config, an attempt and a student's preference are STORED as.

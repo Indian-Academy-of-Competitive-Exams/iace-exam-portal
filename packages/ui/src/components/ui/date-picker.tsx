@@ -152,6 +152,12 @@ function todayWhereTheUserIs(): string {
   return LOCAL_CIVIL_DATE.format(new Date());
 }
 
+/** The same day off the clock rather than the string, so the calendar always has a month to open on. */
+function monthOfToday() {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() };
+}
+
 const MONTH_LABEL = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
   month: 'long',
@@ -222,7 +228,7 @@ export function DatePicker({
   const selected = parseISODate(value);
   const today = todayWhereTheUserIs();
 
-  const opening = selected ?? parseISODate(today)!;
+  const opening = selected ?? parseISODate(today) ?? monthOfToday();
   const [view, setView] = React.useState({ year: opening.year, month: opening.month });
   const [mode, setMode] = React.useState<CalendarMode>('day');
   const [focused, setFocused] = React.useState(value || today);
@@ -230,7 +236,7 @@ export function DatePicker({
   // Re-seeded on every open, so reopening lands on the chosen month rather than wherever it was left.
   const onOpen = (next: boolean) => {
     if (next) {
-      const from = parseISODate(value) ?? parseISODate(today)!;
+      const from = parseISODate(value) ?? parseISODate(today) ?? monthOfToday();
       setView({ year: from.year, month: from.month });
       setFocused(value || today);
       setMode('day');
@@ -243,7 +249,8 @@ export function DatePicker({
     const iso = nextFocusedDate(focused || today, event.key, event.shiftKey);
     if (iso === null) return;
     event.preventDefault();
-    const parts = parseISODate(iso)!;
+    const parts = parseISODate(iso);
+    if (parts === null) return;
     setFocused(iso);
     setView({ year: parts.year, month: parts.month });
   };
@@ -428,8 +435,8 @@ function DayGrid({
         </tr>
       </thead>
       <tbody>
-        {weeksOf(monthGrid(view.year, view.month)).map((week) => (
-          <tr key={week[0]!.iso}>
+        {weeksOf(monthGrid(view.year, view.month)).map((week, index) => (
+          <tr key={week[0]?.iso ?? index}>
             {week.map((cell) => (
               <td key={cell.iso} className="p-[1px]">
                 <DayCell

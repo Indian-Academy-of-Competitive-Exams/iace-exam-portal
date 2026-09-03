@@ -59,12 +59,13 @@ export function bucketsBy(
   keyOf: (row: AnalysedQuestion) => string,
   nameOf: (row: AnalysedQuestion) => string,
 ): AnalyticsBucket[] {
-  const grouped = new Map<string, AnalysedQuestion[]>();
+  const grouped = new Map<string, [AnalysedQuestion, ...AnalysedQuestion[]]>();
   for (const row of rows) {
     const key = keyOf(row);
-    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+    const held = grouped.get(key);
+    grouped.set(key, held === undefined ? [row] : [...held, row]);
   }
-  return [...grouped.entries()].map(([key, held]) => bucketOf(key, nameOf(held[0]!), held));
+  return [...grouped.entries()].map(([key, held]) => bucketOf(key, nameOf(held[0]), held));
 }
 
 /** Every difficulty, including one the paper never asked — an empty band is a fact too. */

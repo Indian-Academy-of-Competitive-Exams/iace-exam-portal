@@ -5,8 +5,8 @@ import { addDays, endOfDay, startOfDay } from 'date-fns';
 import { INSTITUTE_TIME_ZONE, civilDate } from '@iace/contracts';
 
 function atInstitute(day: string): TZDate {
-  const [year, month, date] = day.split('-').map(Number);
-  return new TZDate(year!, month! - 1, date!, INSTITUTE_TIME_ZONE);
+  const [year = 0, month = 1, date = 1] = day.split('-').map(Number);
+  return new TZDate(year, month - 1, date, INSTITUTE_TIME_ZONE);
 }
 
 /** The instant `YYYY-MM-DD` begins at the institute. */

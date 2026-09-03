@@ -123,10 +123,11 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
 export function TestSeriesFormPage() {
   const { id } = useParams();
   const existing = id !== undefined;
+  const seriesId = id ?? '';
 
   const series = useQuery({
-    queryKey: seriesKey(id ?? ''),
-    queryFn: () => api.admin.testSeries.detail(id!),
+    queryKey: seriesKey(seriesId),
+    queryFn: () => api.admin.testSeries.detail(seriesId),
     enabled: existing,
   });
 

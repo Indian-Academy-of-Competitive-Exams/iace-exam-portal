@@ -42,7 +42,7 @@ const blank = (value: string | undefined): boolean => !hasText(value);
 
 /** The one place content is written, so sanitizing, the div root and the src stripping happen here only. */
 const textNode = (value: string | undefined): RichContent => {
-  const safe = blank(value) ? '' : sanitizeContentHtml(value!);
+  const safe = value === undefined || blank(value) ? '' : sanitizeContentHtml(value);
   return blank(safe) ? [] : [{ type: 'TEXT', text: asContentHtml(stripImageSrc(safe)) }];
 };
 
@@ -83,7 +83,7 @@ function normaliseAnswerKey(
   const answers: LocalizedText = {};
   for (const language of languages) {
     const answer = answerKey.answers[language];
-    if (!blank(answer)) answers[language] = answer!.trim();
+    if (answer !== undefined && !blank(answer)) answers[language] = answer.trim();
   }
 
   return {

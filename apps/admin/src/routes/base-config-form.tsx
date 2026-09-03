@@ -300,10 +300,11 @@ const BANNER_HANDLED_ELSEWHERE = ['sections', 'durationSec'] as const;
 export function BaseConfigFormPage() {
   const { id } = useParams();
   const existing = id !== undefined;
+  const configId = id ?? '';
 
   const config = useQuery({
     queryKey: [...QUERY_KEYS.BASE_CONFIG, id],
-    queryFn: () => api.admin.baseConfigs.detail(id!),
+    queryFn: () => api.admin.baseConfigs.detail(configId),
     enabled: existing,
   });
 
@@ -379,7 +380,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
 
   const clone = useMutation({
     meta: { success: 'Configuration cloned.' },
-    mutationFn: () => api.admin.baseConfigs.clone(detail!.id, {}),
+    mutationFn: () => api.admin.baseConfigs.clone(detail?.id ?? '', {}),
     onSuccess: (copy: BaseConfigDetail) => {
       setAsking(false);
       navigate(ROUTES.BASE_CONFIG(copy.id));

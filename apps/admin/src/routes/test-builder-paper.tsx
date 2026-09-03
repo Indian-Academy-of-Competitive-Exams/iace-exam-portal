@@ -134,6 +134,13 @@ export function PaperStep({
   );
 }
 
+/** One lookup, so the badge and the label it carries cannot disagree about the pick. */
+function refusalOf(stranded: Readonly<Record<string, PickRefusal>>, questionId: string) {
+  const refusal = stranded[questionId];
+  if (refusal === undefined) return null;
+  return <Badge variant="warning">{STRANDED_LABELS[refusal]}</Badge>;
+}
+
 function paperColumns(
   onRemove: (row: PaperRow) => void,
   sat: boolean,
@@ -172,9 +179,7 @@ function paperColumns(
             <span className="text-xs text-muted-foreground">
               {`${row.question.difficulty.toLowerCase()} · ${row.marks} marks`}
             </span>
-            {stranded[row.questionId] ? (
-              <Badge variant="warning">{STRANDED_LABELS[stranded[row.questionId]!]}</Badge>
-            ) : null}
+            {refusalOf(stranded, row.questionId)}
           </span>
         </span>
       ),

@@ -18,7 +18,12 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
   const out = [...items];
   for (let i = out.length - 1; i > 0; i -= 1) {
     const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j]!, out[i]!];
+    const held = out[i];
+    const other = out[j];
+    // Both are inside the array by the loop's own bounds; the guard is what makes that provable.
+    if (held === undefined || other === undefined) continue;
+    out[i] = other;
+    out[j] = held;
   }
   return out;
 }

@@ -174,7 +174,7 @@ export function answerIndexOf(answer: string, optionCount: number): number | nul
   if (typed.length === 0) return null;
 
   if (/^[a-z]$/.test(typed)) {
-    const index = typed.codePointAt(0)! - A_CODE - 32;
+    const index = (typed.codePointAt(0) ?? 0) - A_CODE - 32;
     return index < optionCount ? index : null;
   }
   if (/^\d+$/.test(typed)) {

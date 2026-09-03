@@ -37,8 +37,8 @@ export function languagesFor(
   picked: readonly LanguageCode[] | undefined,
 ): LanguageCode[] {
   if (mode === LANGUAGE_MODE.DUAL) return [...offered];
-  const wanted = (picked ?? []).filter((language) => offered.includes(language));
-  return wanted.length > 0 ? [wanted[0]!] : offered.slice(0, 1);
+  const first = (picked ?? []).find((language) => offered.includes(language));
+  return first === undefined ? offered.slice(0, 1) : [first];
 }
 
 /** The order THIS student sees: sections in the config's order, shuffled within each one. */

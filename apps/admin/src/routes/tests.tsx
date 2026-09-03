@@ -203,7 +203,7 @@ function deleteDescription(test: Test): string {
 /** `a, b and c` — a list read as a sentence, because that is what the dialog is. */
 function sentenceOf(parts: readonly string[]): string {
   const lead = parts.slice(0, -1).join(', ');
-  const last = parts.at(-1)!;
+  const last = parts.at(-1) ?? '';
   const joined = lead === '' ? last : `${lead} and ${last}`;
   return joined.charAt(0).toUpperCase() + joined.slice(1);
 }

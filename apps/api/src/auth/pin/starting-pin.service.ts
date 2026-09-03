@@ -41,8 +41,10 @@ export class StartingPinService {
       const batch = mobiles
         .slice(start, start + HASH_CONCURRENCY)
         .map((mobile) => ({ mobile, pin: randomPin() }));
-      const hashes = await Promise.all(batch.map(({ pin }) => this.pin.hash(pin)));
-      batch.forEach((issued, index) => minted.push({ ...issued, hash: hashes[index]! }));
+      const hashed = await Promise.all(
+        batch.map(async (issued) => ({ ...issued, hash: await this.pin.hash(issued.pin) })),
+      );
+      minted.push(...hashed);
     }
 
     return minted;

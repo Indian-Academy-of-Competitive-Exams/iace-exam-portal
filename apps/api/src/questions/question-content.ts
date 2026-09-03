@@ -47,13 +47,13 @@ export function rewriteQuestionHtml(detail: QuestionDetail, visit: Html): Questi
   } as QuestionDetail;
 }
 
-const ESCAPED: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+const ESCAPED: Readonly<Record<string, string>> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
 
 const DIV_TAG = /<(\/?)div\b[^<>]*>/gi;
 
 /** The characters content escapes on the way in, so a search for them looks for what was stored. */
 export function escapeForContent(text: string): string {
-  return text.replaceAll(/[&<>]/g, (char) => ESCAPED[char]!);
+  return text.replaceAll(/[&<>]/g, (char) => ESCAPED[char] ?? char);
 }
 
 /** A cell as the editor would have written it: one paragraph a line, and nothing interpreted. */
@@ -71,7 +71,8 @@ export function htmlFromPlainText(text: string): string {
 /** Whether ONE div wraps the whole thing — `<div>a</div><p>b</p>` opens on one but is two roots. */
 function isSingleDivRoot(html: string): boolean {
   const tags = [...html.matchAll(DIV_TAG)];
-  if (tags.length === 0 || tags[0]!.index !== 0 || tags[0]![1] === '/') return false;
+  const [opening] = tags;
+  if (opening?.index !== 0 || opening[1] === '/') return false;
 
   let depth = 0;
   for (const tag of tags) {

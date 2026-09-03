@@ -71,8 +71,8 @@ const jpeg: Reader = (buffer) => {
   let at = 2;
   while (at + 9 < buffer.length) {
     if (buffer[at] !== 0xff) return null;
-    const marker = buffer[at + 1]!;
-    if (isFrameHeader(marker)) {
+    const marker = buffer[at + 1];
+    if (marker !== undefined && isFrameHeader(marker)) {
       return {
         contentType: 'image/jpeg',
         width: buffer.readUInt16BE(at + 7),

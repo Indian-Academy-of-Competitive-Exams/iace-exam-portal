@@ -52,10 +52,28 @@ const INSTITUTE_PARTS = new Intl.DateTimeFormat('en-CA', {
   second: '2-digit',
 });
 
-function instituteFieldsAt(at: Date): Record<string, number> {
-  const fields: Record<string, number> = {};
+interface InstituteFields {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+const INSTITUTE_FIELDS = ['year', 'month', 'day', 'hour', 'minute', 'second'] as const;
+
+/** The formatter above asks for all six, so a missing one is a broken Intl, not a bad instant. */
+function instituteFieldsAt(at: Date): InstituteFields {
+  const held = new Map<string, number>();
   for (const part of INSTITUTE_PARTS.formatToParts(at)) {
-    if (part.type !== 'literal') fields[part.type] = Number(part.value);
+    if (part.type !== 'literal') held.set(part.type, Number(part.value));
+  }
+  const fields = {} as InstituteFields;
+  for (const name of INSTITUTE_FIELDS) {
+    const value = held.get(name);
+    if (value === undefined) throw new Error(`Intl gave no ${name} for ${INSTITUTE_TIME_ZONE}`);
+    fields[name] = value;
   }
   return fields;
 }
@@ -63,7 +81,7 @@ function instituteFieldsAt(at: Date): Record<string, number> {
 /** Derived per instant rather than hard-coded, so a zone that ever gains a DST rule still works. */
 function instituteOffsetMs(at: Date): number {
   const f = instituteFieldsAt(at);
-  const asIfUtc = Date.UTC(f.year!, f.month! - 1, f.day!, f.hour! % 24, f.minute!, f.second!);
+  const asIfUtc = Date.UTC(f.year, f.month - 1, f.day, f.hour % 24, f.minute, f.second);
   return asIfUtc - Math.floor(at.getTime() / 1000) * 1000;
 }
 
@@ -71,15 +89,15 @@ function instituteOffsetMs(at: Date): number {
 export function instituteWallTime(at: Date): string {
   const f = instituteFieldsAt(at);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${f.year}-${pad(f.month!)}-${pad(f.day!)}T${pad(f.hour! % 24)}:${pad(f.minute!)}`;
+  return `${f.year}-${pad(f.month)}-${pad(f.day)}T${pad(f.hour % 24)}:${pad(f.minute)}`;
 }
 
 /** `YYYY-MM-DDTHH:mm` read as the institute's clock, back to the instant it names. */
 export function fromInstituteWallTime(wallTime: string): Date {
-  const [datePart, timePart = '00:00'] = wallTime.split('T');
-  const [year, month, day] = datePart!.split('-').map(Number);
-  const [hour, minute] = timePart.split(':').map(Number);
-  const naive = Date.UTC(year!, month! - 1, day!, hour ?? 0, minute ?? 0);
+  const [datePart = '', timePart = '00:00'] = wallTime.split('T');
+  const [year = 0, month = 1, day = 1] = datePart.split('-').map(Number);
+  const [hour = 0, minute = 0] = timePart.split(':').map(Number);
+  const naive = Date.UTC(year, month - 1, day, hour, minute);
   return new Date(naive - instituteOffsetMs(new Date(naive)));
 }
 

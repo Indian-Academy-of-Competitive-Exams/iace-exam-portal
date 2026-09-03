@@ -30,7 +30,7 @@ const ROMAN_LETTER = /[A-Za-z]/;
 /** The run of Roman letters immediately behind the caret, which is the word being written. */
 function romanTail(text: string): string {
   let start = text.length;
-  while (start > 0 && ROMAN_LETTER.test(text[start - 1]!)) start -= 1;
+  while (start > 0 && ROMAN_LETTER.test(text[start - 1] ?? '')) start -= 1;
   return text.slice(start);
 }
 
@@ -47,7 +47,7 @@ const DIGIT_ZERO = { devanagari: 0x0966, telugu: 0x0c66 } as const;
 
 const asArabicDigits = (text: string) =>
   text.replace(INDIC_DIGITS, (digit) => {
-    const code = digit.codePointAt(0)!;
+    const code = digit.codePointAt(0) ?? 0;
     return String(code - (code >= DIGIT_ZERO.telugu ? DIGIT_ZERO.telugu : DIGIT_ZERO.devanagari));
   });
 

@@ -78,6 +78,9 @@ const TIMING_KEY = (testId: string) => [...QUERY_KEYS.BRANCH_TIMING, testId] as 
 
 type TimingDraft = Readonly<Record<string, { lateEntry: string; extraTime: string }>>;
 
+/** A branch with no row yet still has two boxes on screen, and both start empty. */
+const NO_TIMING = { lateEntry: '', extraTime: '' } as const;
+
 const draftOf = (rows: readonly BranchTestScheduleRow[]): TimingDraft =>
   Object.fromEntries(
     rows.map((row) => [
@@ -131,7 +134,10 @@ export function BranchTimingStep({ detail }: Readonly<{ detail: TestDetail }>) {
   });
 
   const set = (branchId: string, field: 'lateEntry' | 'extraTime', value: string) =>
-    setDraft({ ...held, [branchId]: { ...held[branchId]!, [field]: digitsOnly(value) } });
+    setDraft({
+      ...held,
+      [branchId]: { ...(held[branchId] ?? NO_TIMING), [field]: digitsOnly(value) },
+    });
 
   if (timing.isLoading) return <SkeletonParagraph lines={3} />;
 

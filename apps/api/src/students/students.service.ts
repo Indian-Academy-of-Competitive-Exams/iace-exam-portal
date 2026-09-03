@@ -208,6 +208,8 @@ export class StudentsService {
 
     // The same starting PIN the importer issues: random, and told to them rather than derived.
     const [issued] = await this.startingPins.mint([input.mobile]);
+    if (issued === undefined) throw new Error('No starting PIN was minted for the new student');
+
     const student = await this.prisma.student.create({
       data: {
         mobile: input.mobile,
@@ -217,13 +219,13 @@ export class StudentsService {
         enrolledFamilies: input.enrolledFamilies ?? [],
         programs: input.programs ?? [],
         currentBranchId: input.currentBranchId ?? null,
-        pinHash: issued!.hash,
+        pinHash: issued.hash,
         pinIsDefault: true,
       },
     });
 
     // After the row, never before it: a PIN texted for a create that threw opens nothing.
-    await this.startingPins.announce([issued!]);
+    await this.startingPins.announce([issued]);
     return this.detail(student.id, EVERY_BRANCH);
   }
 

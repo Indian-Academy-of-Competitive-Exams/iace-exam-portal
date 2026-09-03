@@ -166,7 +166,7 @@ export class PaperService {
           baseConfigId: test.baseConfigId,
           baseConfigSectionId: section.id,
           questionId: question.id,
-          questionVersionId: question.currentVersionId!,
+          questionVersionId: question.currentVersionId,
           order,
           marks: section.marksPerQuestion,
           negativeMarks: section.negativeMarks,
@@ -194,7 +194,7 @@ export class PaperService {
       await thaw(tx, test);
       await tx.paperQuestion.update({
         where: { id: rowId },
-        data: { questionId: question.id, questionVersionId: question.currentVersionId! },
+        data: { questionId: question.id, questionVersionId: question.currentVersionId },
       });
     });
 
@@ -290,7 +290,7 @@ export class PaperService {
         fieldErrors: { questionId: [WRONG_SUBJECT_MESSAGE] },
       });
     }
-    return question;
+    return { ...question, currentVersionId: question.currentVersionId };
   }
 
   /** `@@unique([testId, questionId])` would refuse it, and a constraint error is not a message. */

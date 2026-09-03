@@ -229,12 +229,13 @@ export function QuestionFormPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const existing = id !== undefined;
+  const questionId = id ?? '';
   // A new question opens ready to type; one that already exists opens read-only.
   const [isEditing, setIsEditing] = useState(!existing);
 
   const question = useQuery({
     queryKey: [...QUERY_KEYS.QUESTION, id],
-    queryFn: () => api.admin.questions.detail(id!),
+    queryFn: () => api.admin.questions.detail(questionId),
     enabled: existing,
   });
 
@@ -251,7 +252,7 @@ export function QuestionFormPage() {
     meta: { success: existing ? 'Question saved.' : 'Question added.' },
     mutationFn: (values: QuestionFormValues) =>
       existing
-        ? api.admin.questions.update(id!, toDraft(values, loaded))
+        ? api.admin.questions.update(questionId, toDraft(values, loaded))
         : api.admin.questions.create(toDraft(values)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.QUESTIONS });

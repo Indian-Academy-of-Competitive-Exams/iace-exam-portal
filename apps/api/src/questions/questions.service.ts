@@ -475,8 +475,9 @@ export class QuestionsService {
     });
 
     const issues = validateQuestion(draft, taxonomy);
-    if (issues.length > 0) {
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, issues[0]!.message, {
+    const [first] = issues;
+    if (first !== undefined) {
+      throw new AppException(ErrorCodes.VALIDATION_ERROR, first.message, {
         fieldErrors: fieldErrorsOf(issues),
         details: issues,
       });

@@ -11,6 +11,7 @@ import {
   type StudentImportPlan,
   type StudentImportResult,
   type StudentImportRow,
+  type StudentType,
   type ScholarshipImportPlan,
   type ScholarshipImportResult,
   STUDENT_TYPE,
@@ -124,9 +125,9 @@ export class ImportsService {
     try {
       const minted = byMobile(
         await this.startingPins.mint(
-          plan.rows
-            .filter((row) => row.action === 'create' && row.mobile)
-            .map((row) => row.mobile!),
+          plan.rows.flatMap((row) =>
+            row.action === 'create' && row.mobile !== null ? [row.mobile] : [],
+          ),
         ),
       );
 
@@ -223,9 +224,9 @@ export class ImportsService {
       // core.
       const minted = byMobile(
         await this.startingPins.mint(
-          plan.rows
-            .filter((row) => row.willReceiveDefaultPin && row.mobile)
-            .map((row) => row.mobile!),
+          plan.rows.flatMap((row) =>
+            row.willReceiveDefaultPin && row.mobile !== null ? [row.mobile] : [],
+          ),
         ),
       );
 
@@ -264,10 +265,15 @@ export class ImportsService {
     row: StudentImportRow,
     startingPin: { pinHash?: string; pinIsDefault?: boolean },
   ): Promise<{ entityId: string; action: AuditAction }> {
+    const { mobile, studentType } = row;
+    if (mobile === null || studentType === null) {
+      throw new Error(`Row ${row.line} reached the commit without a mobile or a student type`);
+    }
+
     const profile = profileData(row);
     // Never downgraded: a row not carrying all three leaves whatever was already true.
     const readiness = isPreTestReady(row.profile) ? { preTestReady: true } : {};
-    const access = accessOf(row);
+    const access = accessOf(row, studentType);
 
     if (row.existingStudentId) {
       await this.prisma.student.update({
@@ -286,7 +292,7 @@ export class ImportsService {
 
     const student = await this.prisma.student.create({
       data: {
-        mobile: row.mobile!,
+        mobile,
         fullName: row.fullName,
         ...access,
         ...(profile ? { profile: { create: profile } } : {}),
@@ -465,9 +471,9 @@ export class ImportsService {
 }
 
 /** By relation, not the raw FK: Prisma refuses an unchecked id beside the nested profile write. */
-function accessOf(row: StudentImportRow) {
+function accessOf(row: StudentImportRow, studentType: StudentType) {
   return {
-    studentType: row.studentType!,
+    studentType,
     ...(row.currentBranchId ? { currentBranch: { connect: { id: row.currentBranchId } } } : {}),
     enrolledFamilies: row.enrolledFamilies,
     enrolledExams: row.enrolledExams,

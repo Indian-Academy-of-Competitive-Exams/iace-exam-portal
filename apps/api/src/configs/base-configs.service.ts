@@ -302,9 +302,10 @@ export class BaseConfigsService {
     durationSec?: number,
   ): void {
     const issues = configShapeIssues(timerTemplate, sections, modules, durationSec);
-    if (issues.length === 0) return;
+    const [first] = issues;
+    if (first === undefined) return;
 
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, issues[0]!, {
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, first, {
       fieldErrors: { sections: issues },
     });
   }

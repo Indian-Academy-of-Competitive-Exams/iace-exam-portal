@@ -266,10 +266,12 @@ function checkTypedAnswer(draft: QuestionDraft, issues: ValidationIssue[]): void
   if (answerKey.mode === ANSWER_MODE.NUMERIC) {
     for (const language of LANGUAGE_ORDER) {
       const answer = answerKey.answers[language];
-      if (blank(answer) || Number.isFinite(Number(answer!.trim()))) continue;
+      if (answer === undefined || blank(answer)) continue;
+      const typed = answer.trim();
+      if (Number.isFinite(Number(typed))) continue;
       issues.push({
         code: CODE.ANSWER_NOT_NUMERIC,
-        message: `"${answer!.trim()}" is not a number, and this answer is compared as one`,
+        message: `"${typed}" is not a number, and this answer is compared as one`,
         field: `answerKey.answers.${language}`,
         column: `answer_${language}`,
       });

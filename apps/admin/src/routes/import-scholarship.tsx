@@ -71,7 +71,8 @@ export function ImportScholarshipPage() {
   };
 
   const plan = preview.data;
-  const canCommit = Boolean(file) && Boolean(plan) && plan!.summary.total > plan!.summary.invalid;
+  const canCommit =
+    file !== null && plan !== undefined && plan.summary.total > plan.summary.invalid;
 
   return (
     <PageFrame

@@ -52,12 +52,12 @@ function monthFromName(name: string): number | null {
 function fromNamedMonth(value: string): string | null {
   const dayFirst = /^(\d{1,2})[\s\-/.]+([A-Za-z]{3,})[\s\-/.,]+(\d{4})$/.exec(value);
   if (dayFirst) {
-    const month = monthFromName(dayFirst[2]!);
+    const month = monthFromName(dayFirst[2] ?? '');
     return month ? assemble(Number(dayFirst[3]), month, Number(dayFirst[1])) : null;
   }
   const monthFirst = /^([A-Za-z]{3,})[\s\-/.]+(\d{1,2})[\s\-/.,]+(\d{4})$/.exec(value);
   if (monthFirst) {
-    const month = monthFromName(monthFirst[1]!);
+    const month = monthFromName(monthFirst[1] ?? '');
     return month ? assemble(Number(monthFirst[3]), month, Number(monthFirst[2])) : null;
   }
   return null;

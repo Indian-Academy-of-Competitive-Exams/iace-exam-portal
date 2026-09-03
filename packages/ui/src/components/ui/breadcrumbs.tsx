@@ -22,12 +22,12 @@ const LINK = [
 ].join(' ');
 
 /** The nearest ancestor that can actually be navigated to. */
-function parentOf(items: readonly BreadcrumbItem[]): BreadcrumbItem | undefined {
+function parentOf(items: readonly BreadcrumbItem[]): (BreadcrumbItem & { to: string }) | undefined {
   // slice already copies, so reversing in place is not reversing the caller's array.
   return items
     .slice(0, -1)
     .reverse()
-    .find((item) => item.to !== undefined);
+    .find((item): item is BreadcrumbItem & { to: string } => item.to !== undefined);
 }
 
 /** The full trail from `sm` up; below it the parent alone, since a wrapped trail costs rows. */
@@ -42,7 +42,7 @@ export function Breadcrumbs({ items, renderLink, className }: Readonly<Breadcrum
       {parent ? (
         <span className="flex items-center gap-1.5 sm:hidden">
           <ArrowLeft className="size-4 shrink-0" aria-hidden />
-          {renderLink(parent.to!, parent.label, LINK)}
+          {renderLink(parent.to, parent.label, LINK)}
         </span>
       ) : null}
 

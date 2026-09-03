@@ -4,6 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import {
+  DEFAULT_EXAM_FAMILY,
+  DEFAULT_EXAM_MODE,
+  DEFAULT_STAGE_DISPOSITION,
   EXAM_FAMILIES,
   EXAM_MODES,
   STAGE_DISPOSITIONS,
@@ -213,10 +216,10 @@ function NewExamDialog({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; onDone: () => void }>) {
   const form = useForm<CreateExamInput>({
     resolver: zodResolver(createExamSchema),
-    defaultValues: { family: EXAM_FAMILIES[0], name: '', code: '' },
+    defaultValues: { family: DEFAULT_EXAM_FAMILY, name: '', code: '' },
   });
 
-  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? EXAM_FAMILIES[0]!;
+  const chosenFamily = useWatch({ control: form.control, name: 'family' }) ?? DEFAULT_EXAM_FAMILY;
 
   const create = useMutation({
     meta: { success: 'Exam created.', fields: NEW_EXAM_FIELDS },
@@ -634,9 +637,9 @@ function NewStageDialog({
   });
   const chosenExam = useWatch({ control: form.control, name: 'examId' }) ?? '';
 
-  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? EXAM_MODES[0]!;
+  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? DEFAULT_EXAM_MODE;
   const chosenDisposition =
-    useWatch({ control: form.control, name: 'disposition' }) ?? STAGE_DISPOSITIONS[0]!;
+    useWatch({ control: form.control, name: 'disposition' }) ?? DEFAULT_STAGE_DISPOSITION;
 
   const create = useMutation({
     meta: { success: 'Stage added.', fields: NEW_STAGE_FIELDS },
@@ -737,9 +740,9 @@ function EditStageDialog({
     },
   });
 
-  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? EXAM_MODES[0]!;
+  const chosenMode = useWatch({ control: form.control, name: 'mode' }) ?? DEFAULT_EXAM_MODE;
   const chosenDisposition =
-    useWatch({ control: form.control, name: 'disposition' }) ?? STAGE_DISPOSITIONS[0]!;
+    useWatch({ control: form.control, name: 'disposition' }) ?? DEFAULT_STAGE_DISPOSITION;
 
   const save = useMutation({
     meta: { success: 'Stage saved.', fields: EDIT_STAGE_FIELDS },
