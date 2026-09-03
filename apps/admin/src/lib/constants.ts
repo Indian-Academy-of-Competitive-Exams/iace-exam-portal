@@ -178,17 +178,17 @@ export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> =
 
 /** What choosing each kind does, which the name alone does not say. */
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
-  STANDARD: 'Reached by an exam enrolment or a program',
+  STANDARD: 'Reached by an enrolment in the exam its stage belongs to',
   FREE: 'Also reached by everyone enrolled in its exam course',
-  PROGRAM: 'Not yet choosable — its reach rules are not built',
-  EVENT: 'Reached only by candidates imported into it',
+  PROGRAM: 'Reached only by students carrying the program it names',
+  EVENT: 'Not choosable yet — a series is joined to an event by importing candidates',
 };
 
-/** What an admin may pick by hand today; PROGRAM's own reach rules land in a later change. */
+/** What an admin may pick by hand; EVENT waits on a screen that can create an event. */
 export const SELECTABLE_TEST_SERIES_KINDS = [
   TEST_SERIES_KIND.STANDARD,
   TEST_SERIES_KIND.FREE,
-  TEST_SERIES_KIND.EVENT,
+  TEST_SERIES_KIND.PROGRAM,
 ] as const;
 
 /** What opens a series for a student, in the words an admin would use for it. */

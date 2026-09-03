@@ -3324,6 +3324,8 @@ export interface FakeSeriesRow {
   prerequisiteSeriesId: string | null;
   unlockMode: UnlockMode;
   kind: TestSeriesKind;
+  eventId: string | null;
+  branchIds: string[];
   createdAt: Date;
   _count: { tests: number };
 }
@@ -3373,6 +3375,8 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     prerequisiteSeriesId: null,
     unlockMode: UNLOCK_MODE.AUTO,
     kind: TEST_SERIES_KIND.STANDARD,
+    eventId: null,
+    branchIds: [],
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
     _count: { tests: overrides._count?.tests ?? 0 },

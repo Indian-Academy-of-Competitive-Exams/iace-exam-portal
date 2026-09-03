@@ -301,6 +301,109 @@ describe('TestSeriesService — what a series may point at', () => {
     await assert.rejects(() => series.remove('srs_1'), AppException.is);
   });
 });
+/** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */
+describe('TestSeriesService — a kind and its columns say the same thing', () => {
+  const PROGRAM = 'SSC CGL FOUNDATION';
+  const withProgram = () => build({ programs: [makeProgram()] });
+
+  it('creates a program series that names its program', async () => {
+    const { series } = withProgram();
+
+    const created = await series.create(
+      draft({ kind: TEST_SERIES_KIND.PROGRAM, programCode: PROGRAM }),
+    );
+
+    assert.equal(created.kind, TEST_SERIES_KIND.PROGRAM);
+    assert.equal(created.programCode, PROGRAM);
+  });
+
+  /** FREE is the one kind whose reach is the course, so it is the one kind that may span none. */
+  it('creates a free series with no stage at all', async () => {
+    const { series } = build();
+
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE, examStageId: null }));
+
+    assert.equal(created.examStageId, null);
+    assert.equal(created.kind, TEST_SERIES_KIND.FREE);
+  });
+
+  for (const [what, input, field] of [
+    [
+      'a program series naming no program',
+      { kind: TEST_SERIES_KIND.PROGRAM, programCode: null },
+      'programCode',
+    ],
+    [
+      'a program on a series of some other kind',
+      { kind: TEST_SERIES_KIND.STANDARD, programCode: PROGRAM },
+      'kind',
+    ],
+    ['a series that is not free and has no stage', { examStageId: null }, 'examStageId'],
+    [
+      'an event series, which nothing here can give an event to',
+      { kind: TEST_SERIES_KIND.EVENT },
+      'kind',
+    ],
+  ] as const) {
+    it(`refuses ${what}, on the field that fixes it`, async () => {
+      const { series } = withProgram();
+
+      const error = await series.create(draft(input)).catch((e: unknown) => e);
+
+      assert.ok(AppException.is(error));
+      assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+      assert.ok(error.fieldErrors?.[field], `expected the failure to name ${field}`);
+    });
+  }
+
+  it('leaves an event series that already holds its event editable', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],
+    });
+
+    const updated = await series.update('srs_1', { name: 'Scholarship round two' });
+
+    assert.equal(updated.name, 'Scholarship round two');
+  });
+
+  /** eventId is not writable, so a kind change is the only way the pair could come apart. */
+  it('refuses taking an event series off its event by changing the kind', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],
+    });
+
+    const error = await series
+      .update('srs_1', { kind: TEST_SERIES_KIND.STANDARD })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.kind);
+  });
+
+  /** Only STANDARD reaches branch by branch, and the message says how many would lose it. */
+  it('refuses making a series that runs at branches free', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
+    });
+
+    const error = await series
+      .update('srs_1', { kind: TEST_SERIES_KIND.FREE })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.fieldErrors?.kind?.[0] ?? '', /2 branches/);
+  });
+
+  it('leaves a standard series that runs at branches alone', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
+    });
+
+    const updated = await series.update('srs_1', { name: 'Tier 1 mocks' });
+
+    assert.equal(updated.name, 'Tier 1 mocks');
+  });
+});
 
 describe('ProgramsService', () => {
   it('creates a program and normalises its code', async () => {

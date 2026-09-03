@@ -29,6 +29,22 @@ import { ProgramsService } from './programs.service';
 const FREE_WAITS_ON_NOTHING_MESSAGE =
   'A free series is offered to every enrolled student, so it cannot wait on another series. Clear the prerequisite, or make this a standard series.';
 
+/** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
+const KIND_PAIRING_MESSAGES = {
+  NEEDS_A_STAGE:
+    'Only a free series spans a whole course. Choose the stage this one belongs to, or make it free.',
+  PROGRAM_NEEDS_ITS_PROGRAM:
+    'A program series is reached only by students carrying a program, so it has to name one.',
+  PROGRAM_IS_ITS_OWN_KIND:
+    'A series naming a program is reached only by students carrying it, which is what the Program kind is. Choose Program, or clear the program.',
+  EVENT_CANNOT_BE_CHOSEN:
+    'An event series is reached only by the candidates on its event, and a series is joined to an event by importing them rather than here. Choose another kind.',
+  EVENT_IS_ITS_OWN_KIND: 'This series is joined to an event, so its kind stays Event.',
+} as const;
+
+const branchesAreStandardOnly = (count: number) =>
+  `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'}, and changing its kind would take it away from them.`;
+
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
   _count: { select: { tests: true } },
@@ -145,6 +161,14 @@ export class TestSeriesService {
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
     this.assertFreeWaitsOnNothing(input.kind, input.prerequisiteSeriesId ?? null);
+    // A new series carries neither yet: there is no way to write an event or a branch here.
+    this.assertKindHoldsTogether({
+      kind: input.kind ?? TEST_SERIES_KIND.STANDARD,
+      examStageId: input.examStageId ?? null,
+      programCode: input.programCode ?? null,
+      eventId: null,
+      branchIds: [],
+    });
 
     const id = await this.prisma.$transaction(async (tx) => {
       const series = await tx.testSeries.create({
@@ -187,6 +211,14 @@ export class TestSeriesService {
         ? series.prerequisiteSeriesId
         : (input.prerequisiteSeriesId ?? null),
     );
+    // Against what the row WILL hold: eventId and branchIds are not writable, so they are its own.
+    this.assertKindHoldsTogether({
+      kind: input.kind ?? series.kind,
+      examStageId: settledValue(input.examStageId, series.examStageId),
+      programCode: settledValue(input.programCode, series.programCode),
+      eventId: series.eventId,
+      branchIds: series.branchIds,
+    });
 
     const changes = columnsOf(input);
     const updated = await this.prisma.testSeries.update({
@@ -428,6 +460,14 @@ export class TestSeriesService {
     return toBranchConfig(row);
   }
 
+  /** Answered here so a form marks the field: a raw CHECK violation can only leave as a 500. */
+  private assertKindHoldsTogether(shape: SeriesPairing): void {
+    const fieldErrors = kindPairingErrors(shape);
+    const message = Object.values(fieldErrors)[0]?.[0];
+    if (message === undefined) return;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, { fieldErrors });
+  }
+
   /** FREE is offered to everyone enrolled, so one behind a prerequisite is offered and then refused. */
   private assertFreeWaitsOnNothing(
     kind: TestSeriesKind | undefined,
@@ -483,6 +523,47 @@ export class TestSeriesService {
     }
     return counts;
   }
+}
+
+/** The four columns a series' kind implies something about, as the row will hold them. */
+interface SeriesPairing {
+  kind: TestSeriesKind;
+  examStageId: string | null;
+  programCode: string | null;
+  eventId: string | null;
+  branchIds: readonly string[];
+}
+
+/** An absent key keeps what the column holds; an explicit null clears it. */
+function settledValue(next: string | null | undefined, held: string | null): string | null {
+  return next === undefined ? held : (next ?? null);
+}
+
+/** Every disagreement at once, so a form marks each field rather than one save at a time. */
+function kindPairingErrors(shape: SeriesPairing): Record<string, string[]> {
+  const found: [field: string, message: string][] = [];
+
+  if (shape.kind !== TEST_SERIES_KIND.FREE && shape.examStageId === null)
+    found.push(['examStageId', KIND_PAIRING_MESSAGES.NEEDS_A_STAGE]);
+
+  const isProgram = shape.kind === TEST_SERIES_KIND.PROGRAM;
+  if (isProgram && shape.programCode === null)
+    found.push(['programCode', KIND_PAIRING_MESSAGES.PROGRAM_NEEDS_ITS_PROGRAM]);
+  if (!isProgram && shape.programCode !== null)
+    found.push(['kind', KIND_PAIRING_MESSAGES.PROGRAM_IS_ITS_OWN_KIND]);
+
+  const isEvent = shape.kind === TEST_SERIES_KIND.EVENT;
+  if (isEvent && shape.eventId === null)
+    found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_CANNOT_BE_CHOSEN]);
+  if (!isEvent && shape.eventId !== null)
+    found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_IS_ITS_OWN_KIND]);
+
+  if (shape.kind !== TEST_SERIES_KIND.STANDARD && shape.branchIds.length > 0)
+    found.push(['kind', branchesAreStandardOnly(shape.branchIds.length)]);
+
+  const errors: Record<string, string[]> = {};
+  for (const [field, message] of found) errors[field] = [...(errors[field] ?? []), message];
+  return errors;
 }
 
 function columnsOf(input: Partial<CreateTestSeriesBody>) {

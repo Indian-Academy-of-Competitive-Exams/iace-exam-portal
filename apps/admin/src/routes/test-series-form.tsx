@@ -89,7 +89,89 @@ const SERVER_FIELDS = [
   'programCode',
   'prerequisiteSeriesId',
   'unlockMode',
+  'kind',
 ] as const;
+
+/** A kind nobody may choose still has to READ back, or an existing series opens blank. */
+function kindItems(held: TestSeriesKind) {
+  const offered: readonly TestSeriesKind[] = SELECTABLE_TEST_SERIES_KINDS.includes(
+    held as (typeof SELECTABLE_TEST_SERIES_KINDS)[number],
+  )
+    ? SELECTABLE_TEST_SERIES_KINDS
+    : [...SELECTABLE_TEST_SERIES_KINDS, held];
+
+  return offered.map((value) => ({
+    value,
+    label: TEST_SERIES_KIND_LABELS[value],
+    hint: TEST_SERIES_KIND_HINTS[value],
+  }));
+}
+
+/** A program belongs to the Program kind alone, so it leaves with the kind that carried it. */
+function chooseKind(form: UseFormReturn<SeriesFormValues>, next: TestSeriesKind): void {
+  form.setValue('kind', next, { shouldDirty: true });
+  if (next !== TEST_SERIES_KIND.PROGRAM) form.setValue('programCode', '', { shouldDirty: true });
+}
+
+/** Who the series is for. Both follow the kind, so no admin can assemble one the server refuses. */
+function SeriesTargets({
+  form,
+  detail,
+  onPickStage,
+}: Readonly<{
+  form: UseFormReturn<SeriesFormValues>;
+  detail: TestSeriesSummary | null;
+  onPickStage: (chosen: StageChoice | null) => void;
+}>) {
+  const kind = useWatch({ control: form.control, name: 'kind' });
+  const examStageId = useWatch({ control: form.control, name: 'examStageId' });
+  const programCode = useWatch({ control: form.control, name: 'programCode' });
+  const spansACourse = kind === TEST_SERIES_KIND.FREE;
+
+  return (
+    <>
+      <FormField
+        form={form}
+        name="examStageId"
+        label="Stage"
+        /* ui-copy-ok: rule */ hint={
+          spansACourse ? 'Optional' : 'Only a free series goes without one'
+        }
+      >
+        {(control) => (
+          <ExamStagePicker
+            id={control.id}
+            value={examStageId}
+            clearable={spansACourse}
+            selectedLabel={
+              detail?.examStage
+                ? `${detail.examStage.examCode} / ${detail.examStage.name}`
+                : undefined
+            }
+            placeholder={spansACourse ? 'Any stage' : 'Choose a stage'}
+            onPick={onPickStage}
+            onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
+          />
+        )}
+      </FormField>
+
+      {kind === TEST_SERIES_KIND.PROGRAM ? (
+        <FormField form={form} name="programCode" label="Program">
+          {(control) => (
+            <ProgramPicker
+              id={control.id}
+              value={programCode}
+              clearable={false}
+              placeholder="Choose a program"
+              selectedLabel={detail?.programCode ?? undefined}
+              onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
+            />
+          )}
+        </FormField>
+      ) : null}
+    </>
+  );
+}
 
 function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
   return {
@@ -111,7 +193,8 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     name: values.name,
     description: values.description.trim(),
     examStageId: values.examStageId || null,
-    programCode: values.programCode || null,
+    // Only a program series carries one, so the field it came from cannot outlive the kind.
+    programCode: values.kind === TEST_SERIES_KIND.PROGRAM ? values.programCode || null : null,
     prerequisiteSeriesId: values.prerequisiteSeriesId || null,
     unlockMode: values.unlockMode,
     sequentialTests: values.sequentialTests,
@@ -279,40 +362,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <FormField
-            form={form}
-            name="examStageId"
-            label="Stage"
-            /* ui-copy-ok: rule */ hint="Optional"
-          >
-            {(control) => (
-              <ExamStagePicker
-                id={control.id}
-                value={examStageId}
-                clearable
-                selectedLabel={
-                  detail?.examStage
-                    ? `${detail.examStage.examCode} / ${detail.examStage.name}`
-                    : undefined
-                }
-                placeholder="Any stage"
-                onPick={setStage}
-                onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
-              />
-            )}
-          </FormField>
-
-          <FormField form={form} name="programCode" label="Program">
-            {(control) => (
-              <ProgramPicker
-                id={control.id}
-                value={programCode}
-                clearable
-                selectedLabel={detail?.programCode ?? undefined}
-                onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
-              />
-            )}
-          </FormField>
+          <SeriesTargets form={form} detail={detail} onPickStage={setStage} />
 
           <FormField
             form={form}
@@ -390,14 +440,8 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
                 aria-invalid={control['aria-invalid']}
                 clearable={false}
                 value={kind}
-                onChange={(next) =>
-                  form.setValue('kind', next as TestSeriesKind, { shouldDirty: true })
-                }
-                items={SELECTABLE_TEST_SERIES_KINDS.map((value) => ({
-                  value,
-                  label: TEST_SERIES_KIND_LABELS[value],
-                  hint: TEST_SERIES_KIND_HINTS[value],
-                }))}
+                onChange={(next) => chooseKind(form, next as TestSeriesKind)}
+                items={kindItems(detail?.kind ?? TEST_SERIES_KIND.STANDARD)}
               />
             )}
           </FormField>
