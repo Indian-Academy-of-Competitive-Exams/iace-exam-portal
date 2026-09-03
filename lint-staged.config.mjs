@@ -17,6 +17,10 @@
 export default {
   '*.{ts,tsx,js,jsx,mjs,cjs,json,css,md,yml,yaml}': ['prettier --write'],
 
+  // Shell is what prettier cannot parse and eslint never sees — the hooks included.
+  '*.sh': ['shellcheck'],
+  '.husky/{pre-commit,commit-msg}': ['shellcheck'],
+
   // Prisma's own formatter, for the one file prettier does not understand.
   // Same bargain as prettier --write: it fixes rather than complains, and
   // lint-staged re-stages what it changed.

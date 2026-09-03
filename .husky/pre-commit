@@ -1,8 +1,9 @@
+#!/bin/sh
 # Format, lint and typecheck what is about to be committed (docs/03 §11).
 # See lint-staged.config.mjs for why lint and typecheck are workspace-wide.
-#!/bin/sh
 
 export NVM_DIR="$HOME/.nvm"
+# shellcheck source=/dev/null
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 pnpm exec lint-staged
@@ -13,6 +14,7 @@ node scripts/check-comments.mjs
 # No screen explaining what it already says. See the script.
 node scripts/check-ui-copy.mjs
 
-# A real SonarQube scan + quality gate. Skips itself when nothing it scans is
-# staged, when the server is down, or with SKIP_SONAR=1. See the script.
+# A real SonarQube scan + quality gate. Starts the server when it is down and
+# stops it again afterwards. Skips only when nothing it scans is staged, or with
+# SKIP_SONAR=1. See the script.
 bash scripts/sonar-precommit.sh
