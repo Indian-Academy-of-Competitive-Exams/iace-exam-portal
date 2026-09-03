@@ -24,6 +24,14 @@ const COURSE_RENAME = readFileSync(
   'utf8',
 );
 
+const ACCESS_CONSTRAINTS = readFileSync(
+  join(
+    __dirname,
+    '../../../prisma/migrations/20260904110000_the_new_access_shape_holds_itself_together/migration.sql',
+  ),
+  'utf8',
+);
+
 const REQUIRED_ARRAYS = [
   ['BaseConfig', 'languages', '"SupportedLanguage"'],
   ['Attempt', 'languages', '"SupportedLanguage"'],
@@ -324,5 +332,27 @@ describe('the course rename moves no data', () => {
       COURSE_RENAME,
       /ALTER INDEX "Student_enrolledFamilies_idx" RENAME TO "Student_enrolledCourses_idx"/,
     );
+  });
+});
+
+// --------------------------------------------------------------------- a series and its kind
+// ---------------------------------------------------------------------------
+
+/** A row contradicting its own kind raises nothing; it resolves to the wrong students. */
+describe('a series cannot contradict its kind', () => {
+  for (const [constraint, prevents] of [
+    ['TestSeries_branches_are_standard_only', 'a branch list on a kind that reaches past branches'],
+    ['TestSeries_only_free_spans_no_stage', 'a non-FREE series with no stage to match against'],
+    ['TestSeries_program_kind_names_its_program', 'a programCode and the PROGRAM kind parting'],
+    ['TestSeries_event_kind_names_its_event', 'an eventId and the EVENT kind parting'],
+  ] as const) {
+    it(`refuses ${prevents}`, () => {
+      assert.match(ACCESS_CONSTRAINTS, new RegExp(`ADD CONSTRAINT "${constraint}"\\s+CHECK`));
+    });
+  }
+
+  /** No btree answers array containment, so the STANDARD arm scans every series without this. */
+  it('seeks the branch list rather than scanning every series to find it', () => {
+    assert.match(ACCESS_CONSTRAINTS, /CREATE INDEX "TestSeries_branchIds_idx"[\s\S]*?USING GIN/);
   });
 });

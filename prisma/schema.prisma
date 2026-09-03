@@ -891,6 +891,7 @@ model TestSeries {
   @@index([programCode])
   @@index([prerequisiteSeriesId])
   @@index([eventId])
+  @@index([branchIds], type: Gin)
 }
 
 model TestSeriesTest {
