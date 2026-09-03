@@ -142,15 +142,14 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => (v === '' ? undefined : v)),
 
-  // The SMS aggregator, named nowhere: a swap is these five values, not a code change.
+  // The SMS aggregator, named nowhere: a swap is these three values, not a code change.
   SMS_PROVIDER_URL: optional,
   SMS_PROVIDER_KEY: optional,
   SMS_SENDER_ID: z.string().default(''),
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASSWORD: z.string().optional(),
-  SMTP_FROM: z.string().optional(),
+
+  // The Gmail account an admin's OTP comes from. MAIL_PASSWORD is a Google app password.
+  MAIL_USER: optional,
+  MAIL_PASSWORD: optional,
 
   // One DLT template id per message kind. An empty one turns that message off rather than breaking it.
   SMS_TEMPLATE_OTP: optional,

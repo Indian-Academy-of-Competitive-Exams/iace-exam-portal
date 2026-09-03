@@ -12,11 +12,8 @@ import {
 import { FakeConfig, FakeMessageSender } from './support/fakes';
 
 const CONFIGURED = {
-  SMTP_HOST: 'smtp.example',
-  SMTP_PORT: 587,
-  SMTP_USER: 'iace',
-  SMTP_PASSWORD: 'secret',
-  SMTP_FROM: 'no-reply@iace.co.in',
+  MAIL_USER: 'no-reply@iace.co.in',
+  MAIL_PASSWORD: 'abcd efgh ijkl mnop',
 };
 
 function message(over: Partial<OutboundMessage> = {}): OutboundMessage {
@@ -48,7 +45,7 @@ function sender(env: Record<string, unknown> = CONFIGURED) {
 }
 
 describe('EmailMessageSender', () => {
-  it('sends from the configured address, with the subject the caller wrote', async () => {
+  it('sends from the authenticated account, with the subject the caller wrote', async () => {
     const { built, posted } = sender();
 
     await built.send(message());
@@ -61,7 +58,7 @@ describe('EmailMessageSender', () => {
     });
   });
 
-  /** A student's OTP arriving at an SMTP relay would be a message nobody ever reads. */
+  /** A student's OTP arriving in a mailbox would be a message nobody ever reads. */
   it('refuses a channel it cannot deliver', async () => {
     const { built, posted } = sender();
 
@@ -73,7 +70,16 @@ describe('EmailMessageSender', () => {
   it('says which variable is missing rather than failing obscurely', async () => {
     const unaddressed = new EmailMessageSender(new FakeConfig({}).asService());
 
-    await assert.rejects(unaddressed.send(message()), /SMTP_HOST/);
+    await assert.rejects(unaddressed.send(message()), /MAIL_USER/);
+  });
+
+  /** Gmail takes no unauthenticated connection, so a user without its app password cannot send. */
+  it('refuses an account with no app password', async () => {
+    const halfSet = new EmailMessageSender(
+      new FakeConfig({ MAIL_USER: 'no-reply@iace.co.in' }).asService(),
+    );
+
+    await assert.rejects(halfSet.send(message()), /MAIL_PASSWORD/);
   });
 });
 

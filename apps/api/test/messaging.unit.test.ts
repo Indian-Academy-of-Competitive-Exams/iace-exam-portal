@@ -98,7 +98,7 @@ describe('Provider selection', () => {
     );
   });
 
-  /** An admin signs in by email, so a deployment with no SMTP host cannot let anybody in. */
+  /** An admin signs in by email, so a deployment with no mail account cannot let anybody in. */
   it('refuses to boot with SMS configured and email not', () => {
     assert.throws(
       () =>
@@ -107,7 +107,7 @@ describe('Provider selection', () => {
           OTP_SENDER: 'sms',
           SMS_PROVIDER_URL: 'https://sms.example/send',
         }),
-      /SMTP_HOST/,
+      /MAIL_USER/,
     );
   });
 
@@ -116,7 +116,8 @@ describe('Provider selection', () => {
       NODE_ENV: 'production',
       OTP_SENDER: 'sms',
       SMS_PROVIDER_URL: 'https://sms.example/send',
-      SMTP_HOST: 'smtp.example',
+      MAIL_USER: 'no-reply@iace.co.in',
+      MAIL_PASSWORD: 'abcd efgh ijkl mnop',
     });
 
     assert.ok(sender instanceof RoutedMessageSender);

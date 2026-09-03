@@ -29,8 +29,10 @@ export function createMessageSender(
     throw new Error('OTP_SENDER=sms needs SMS_PROVIDER_URL — see .env.example.');
   }
   // Refused here rather than at the first admin login, which is the worst time to find out.
-  if (!config.get('SMTP_HOST')) {
-    throw new Error('OTP_SENDER=sms needs SMTP_HOST too — an admin signs in by email.');
+  if (!config.get('MAIL_USER') || !config.get('MAIL_PASSWORD')) {
+    throw new Error(
+      'OTP_SENDER=sms needs MAIL_USER and MAIL_PASSWORD too — an admin signs in by email.',
+    );
   }
   return new RoutedMessageSender(smsSender, emailSender);
 }

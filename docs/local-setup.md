@@ -70,7 +70,7 @@ The defaults in `.env.example` are wired to the docker‑compose services, so **
 - **Database / Redis / MinIO** point at `localhost` on the compose ports (5432 / 6379 / 9000). `DATABASE_URL` is what Prisma reads.
 - **JWT secrets & `PIN_PEPPER`** ship as `dev_only_…` placeholders (min length 24). Fine for solo local work; generate real ones with `openssl rand -base64 48` for anything shared.
 - **OTP delivery is `console`** — in dev, OTP codes are **printed to the API log**, not sent by SMS/email. That's how you log in locally (see §6).
-- **MSG91 / SMTP** are blank (real SMS/email providers — leave empty locally).
+- **`SMS_PROVIDER_*` / `MAIL_*`** are blank (the real SMS and Gmail credentials — leave empty locally).
 - **`SONAR_*`** blank → the pre‑commit Sonar scan skips itself. Set them only if you run a local SonarQube.
 - **`VITE_API_URL`** is the only var the frontends read (`http://localhost:3000`).
 

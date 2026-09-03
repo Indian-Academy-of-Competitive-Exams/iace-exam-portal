@@ -38,7 +38,7 @@ export class SmsMessageSender implements MessageSender {
   async send(message: OutboundMessage): Promise<void> {
     if (message.channel !== MESSAGE_CHANNELS.SMS) {
       throw new Error(
-        `No provider is configured for ${message.channel}. Set SMTP_* and wire an email sender.`,
+        `No provider is configured for ${message.channel}. Set MAIL_* and wire an email sender.`,
       );
     }
 

@@ -1,15 +1,12 @@
 /**
- * Email, which is how an admin signs in. Placeholder in the same sense the SMS
- * sender is: SMTP is the protocol every provider speaks, so host, port,
- * credentials and the from-address are env and choosing one changes no code.
+ * Email, which is how an admin signs in. Gmail through nodemailer's well-known
+ * service preset: host, port and TLS come from the preset, so the account and
+ * its app password are the whole configuration.
  */
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { AppConfigService } from '../../config/app-config.service';
 import { MESSAGE_CHANNELS, type MessageSender, type OutboundMessage } from './message-sender';
-
-/** The implicit-TLS port. Everything else negotiates STARTTLS, which nodemailer does on its own. */
-const IMPLICIT_TLS_PORT = 465;
 
 @Injectable()
 export class EmailMessageSender implements MessageSender, OnModuleDestroy {
@@ -29,7 +26,8 @@ export class EmailMessageSender implements MessageSender, OnModuleDestroy {
     }
 
     await this.connection().sendMail({
-      from: this.config.get('SMTP_FROM'),
+      // Gmail rewrites the from-address to the account that authenticated, so there is nothing else to set.
+      from: this.config.get('MAIL_USER'),
       to: message.to,
       subject: message.subject ?? 'IACE',
       text: message.body,
@@ -40,22 +38,20 @@ export class EmailMessageSender implements MessageSender, OnModuleDestroy {
   private connection(): Transporter {
     if (this.transport) return this.transport;
 
-    const host = this.config.get('SMTP_HOST');
-    if (!host) throw new Error('SMTP_HOST is not set.');
+    const user = this.config.get('MAIL_USER');
+    if (!user) throw new Error('MAIL_USER is not set.');
 
-    const port = this.config.get('SMTP_PORT');
-    const user = this.config.get('SMTP_USER');
-    const pass = this.config.get('SMTP_PASSWORD');
+    const pass = this.config.get('MAIL_PASSWORD');
+    if (!pass) throw new Error('MAIL_PASSWORD is not set.');
 
+    // `secure` is what the Gmail preset already sets; naming it keeps the TLS guarantee visible.
     this.transport = createTransport({
-      host,
-      port,
-      secure: port === IMPLICIT_TLS_PORT,
+      service: 'gmail',
+      secure: true,
       pool: true,
-      // An unauthenticated relay is a real deployment — an internal one, or a sidecar.
-      ...(user ? { auth: { user, pass } } : {}),
+      auth: { user, pass },
     });
-    this.logger.log(`Email ready: ${host}:${port}`);
+    this.logger.log(`Email ready: ${user}`);
 
     return this.transport;
   }

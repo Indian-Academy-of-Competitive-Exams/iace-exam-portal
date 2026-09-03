@@ -74,8 +74,7 @@ export class OtpService {
       actor,
       subject: 'Your IACE verification code',
       body: `${code} is your IACE verification code. It expires in ${ttlSec} seconds.`,
-      // The provider fills its DLT-registered template from these; `body` is
-      // what a console or SMTP sender shows when there is no template.
+      // The SMS provider fills its DLT template from these; console and email send `body` as written.
       data: { code, ttlSec },
     });
 
