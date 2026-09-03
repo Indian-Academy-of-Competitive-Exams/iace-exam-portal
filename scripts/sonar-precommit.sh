@@ -5,14 +5,18 @@
 # terminal and one made by an agent alike, which the previous PreToolUse gate
 # could not.
 #
-# Three deliberate escapes, because a gate that cannot be got past when it is
+# SonarQube costs ~2GB of RAM, so it does not sit running all day. A stopped
+# container is not a reason to commit ungated: the hook STARTS it, waits for it,
+# and scans. It stays up afterwards, so only the first commit of a session pays.
+#
+# Two deliberate escapes, because a gate that cannot be got past when it is
 # wrong stops being a gate and starts being a reason to use --no-verify on
 # everything:
 #   - no staged .ts/.tsx under the scanned dirs  -> nothing to scan
-#   - server unreachable or no token             -> warn, do not block
 #   - SKIP_SONAR=1                               -> explicit, deliberate skip
 #
-# What it does NOT skip is a reachable server saying the quality gate failed.
+# Everything else BLOCKS: no token, a server that will not come up, or a
+# reachable server saying the quality gate failed.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel); cd "$root"
@@ -30,12 +34,31 @@ host=${SONAR_HOST_URL:-$(env_val SONAR_HOST_URL)}
 token=${SONAR_TOKEN:-$(env_val SONAR_TOKEN)}
 
 if [ -z "$host" ] || [ -z "$token" ]; then
-  echo "sonar: SONAR_HOST_URL / SONAR_TOKEN not set — skipping (see .env.example)" >&2
-  exit 0
+  echo "sonar: SONAR_HOST_URL / SONAR_TOKEN not set — see .env.example" >&2
+  echo "       Set them, or commit with SKIP_SONAR=1 if this is deliberate." >&2
+  exit 1
 fi
-if ! curl -fsS -m 5 -o /dev/null "$host/api/system/status" 2>/dev/null; then
-  echo "sonar: $host unreachable — skipping (start the container to enable the gate)" >&2
-  exit 0
+
+up() { curl -fsS -m 5 "$host/api/system/status" 2>/dev/null | grep -q '"status":"UP"'; }
+
+# Elasticsearch takes the time here, not the web server, so the wait is generous.
+if ! up; then
+  echo "sonar: $host is down — starting the container…" >&2
+  docker compose --profile sonar up -d sonarqube >/dev/null 2>&1 \
+    || docker start sonarqube >/dev/null 2>&1 || true
+
+  for _ in $(seq 1 "${SONAR_START_TIMEOUT:-90}"); do
+    up && break
+    sleep 1
+  done
+fi
+
+if ! up; then
+  echo "" >&2
+  echo "sonar: $host would not come up — NOT committing ungated." >&2
+  echo "       Start it by hand (docker compose --profile sonar up -d sonarqube)," >&2
+  echo "       or commit with SKIP_SONAR=1 if this is deliberate." >&2
+  exit 1
 fi
 
 # Coverage first, or the scan uploads a stale lcov and the coverage condition
@@ -54,11 +77,11 @@ node_modules/.bin/sonar-scanner-npm \
 gate=$(curl -fsS -u "$token:" "$host/api/qualitygates/project_status?projectKey=iace-platform" 2>/dev/null \
   | sed -n 's/.*"status":"\([A-Z]*\)".*/\1/p' | head -1)
 
-if [ "$gate" = "ERROR" ]; then
+if [ "$gate" != "OK" ]; then
   echo "" >&2
-  echo "sonar: QUALITY GATE FAILED — $host/dashboard?id=iace-platform" >&2
+  echo "sonar: QUALITY GATE ${gate:-UNREADABLE} — $host/dashboard?id=iace-platform" >&2
   echo "       Fix the new issues, or commit with SKIP_SONAR=1 if this is wrong." >&2
   exit 1
 fi
 
-echo "sonar: quality gate ${gate:-unknown}"
+echo "sonar: quality gate OK"

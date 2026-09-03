@@ -87,7 +87,39 @@ services:
       "
     restart: 'no'
 
+  # Not part of the stack: `docker compose up` leaves it alone, and the pre-commit
+  # gate starts it on demand. It costs ~2GB, which is five times the rest together.
+  #   docker compose --profile sonar up -d sonarqube
+  #   docker stop sonarqube
+  sonarqube:
+    image: sonarqube@sha256:9dfc19385a3b7647e7585013d8c94ae2322228c6b217a1c641199f07f86b12ab
+    container_name: sonarqube
+    profiles: ['sonar']
+    restart: 'no'
+    environment:
+      # Three JVMs, none of which needs a production heap to scan one repository.
+      SONAR_WEB_JAVAOPTS: '-Xmx512m -Xms128m'
+      SONAR_CE_JAVAOPTS: '-Xmx512m -Xms128m'
+      # Elasticsearch refuses an Xms that differs from its Xmx.
+      SONAR_SEARCH_JAVAOPTS: '-Xmx512m -Xms512m'
+    # A full scan peaked at 1.76G with the heaps above; the rest is headroom, not budget.
+    mem_limit: 2500m
+    ports:
+      - '${SONAR_PORT:-9004}:9000'
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+
 volumes:
   postgres-data:
   redis-data:
   minio-data:
+  # Created before SonarQube was in this file; external so the analysis history,
+  # the project and its token survive being adopted by compose.
+  sonarqube_data:
+    external: true
+  sonarqube_extensions:
+    external: true
+  sonarqube_logs:
+    external: true
