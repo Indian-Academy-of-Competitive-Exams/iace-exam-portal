@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -46,7 +46,7 @@ import {
 import { TestSeriesPicker } from '../components/access-picker';
 import { StudentPerformanceCard } from '../components/student-performance';
 import { api } from '../lib/api';
-import { WHEN_FORMATTER } from '../lib/audit-format';
+import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
   familyLabel,
   GENDER_LABELS,
@@ -627,10 +627,14 @@ export function StudentDetailPage() {
   const gender = useWatch({ control: form.control, name: 'gender' }) ?? '';
   const dob = useWatch({ control: form.control, name: 'dob' }) ?? '';
 
-  // Seeded on load and only when the id changes, or a refetch wipes an in-progress edit.
+  // Seeded once per student: a refetch of the same one would wipe an in-progress edit.
+  const seededId = useRef<string | null>(null);
   useEffect(() => {
-    if (student.data) form.reset(toFormValues(student.data));
-  }, [student.data?.id]);
+    const loaded = student.data;
+    if (!loaded || seededId.current === loaded.id) return;
+    seededId.current = loaded.id;
+    form.reset(toFormValues(loaded));
+  }, [student.data, form]);
 
   const save = useMutation({
     meta: { success: 'Saved.', fields: FORM_FIELDS },

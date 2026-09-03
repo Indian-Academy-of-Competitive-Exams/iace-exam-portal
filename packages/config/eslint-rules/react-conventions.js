@@ -33,6 +33,9 @@ export const noHardcodedRoute = {
   },
 };
 
+/** Testing-library helpers that DISPATCH a focus event rather than calling `.focus()` on a node. */
+const TEST_EVENT_SOURCES = new Set(['fireEvent', 'userEvent']);
+
 /** Radix restores focus against the pointer/keyboard heuristic; calling focus() defeats it. */
 export const noManualFocus = {
   meta: {
@@ -48,6 +51,8 @@ export const noManualFocus = {
   create(context) {
     return {
       'CallExpression[callee.property.name="focus"]'(node) {
+        // `fireEvent.focus(el)` and `userEvent.focus(el)` dispatch an event; they focus nothing.
+        if (TEST_EVENT_SOURCES.has(node.callee.object?.name)) return;
         context.report({ node, messageId: 'manualFocus' });
       },
     };

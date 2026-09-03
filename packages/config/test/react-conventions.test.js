@@ -32,7 +32,13 @@ ruleTester.run('no-hardcoded-route', noHardcodedRoute, {
 });
 
 ruleTester.run('no-manual-focus', noManualFocus, {
-  valid: [screen('ref.current.select(); return <p />;'), screen('element.blur(); return <p />;')],
+  valid: [
+    screen('ref.current.select(); return <p />;'),
+    screen('element.blur(); return <p />;'),
+    // A test dispatching a focus EVENT is not a control focusing itself.
+    screen('fireEvent.focus(row); return <p />;'),
+    screen('userEvent.focus(row); return <p />;'),
+  ],
 
   invalid: [
     { code: screen('ref.current.focus(); return <p />;'), errors: [{ messageId: 'manualFocus' }] },

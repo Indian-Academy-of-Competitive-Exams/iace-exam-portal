@@ -1,4 +1,4 @@
-import { WHEN_FORMATTER } from './audit-format';
+import { WHEN_FORMATTER } from './audit-vocabulary';
 
 /** The API speaks seconds and every screen speaks minutes, so the conversion lives here alone. */
 

@@ -40,13 +40,8 @@ export function createBrowserTokenStore(storageKey: string): TokenStore {
 // --- the web app scaffolding ------------------------------------------------
 // These compose @iace/ui and react-router-dom, which is why they are not in `src/`.
 export { AppProviders } from './app-providers';
-export {
-  AppShell,
-  useWorkspace,
-  type AppShellProps,
-  type NavItem,
-  type ShellWidth,
-} from './app-shell';
+export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
+export { useWorkspace } from './app-shell/use-workspace';
 export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
 export {

@@ -1,14 +1,7 @@
 import { type FeatureKey } from '@iace/contracts';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { WorkspaceContext } from './app-shell/use-workspace';
 import { ChevronRight, Menu, X } from 'lucide-react';
 import {
   Brandmark,
@@ -34,19 +27,6 @@ const WIDTHS = {
 } as const;
 
 export type ShellWidth = keyof typeof WIDTHS;
-
-/** A page whose work IS the window. Declared by the page: only the screen knows. */
-const WorkspaceContext = createContext<((immersive: boolean | null) => void) | null>(null);
-
-/** Runs the page flush, and while `immersive` takes the top bar and rail too. Both come back. */
-export function useWorkspace(immersive: boolean): void {
-  const setWorkspace = useContext(WorkspaceContext);
-
-  useEffect(() => {
-    setWorkspace?.(immersive);
-    return () => setWorkspace?.(null);
-  }, [setWorkspace, immersive]);
-}
 
 export interface AppShellProps {
   /** In the order this app's user works through them. Empty draws no sidebar and no drawer. */

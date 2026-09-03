@@ -19,7 +19,7 @@ import {
 } from '@iace/ui';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { WHEN_FORMATTER } from '../lib/audit-format';
+import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { NAV_ITEMS, QUERY_KEYS, UNLOCK_REQUEST_STATUS_LABELS } from '../lib/constants';
 
 const REQUEST_FILTERS = [

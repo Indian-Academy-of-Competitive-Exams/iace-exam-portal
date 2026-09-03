@@ -29,7 +29,8 @@ import {
 } from '@iace/ui';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
-import { ACTION_BADGE_VARIANT, ChangedCell, WHEN_FORMATTER } from '../lib/audit-format';
+import { ChangedCell } from '../lib/audit-format';
+import { ACTION_BADGE_VARIANT, WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
 import {

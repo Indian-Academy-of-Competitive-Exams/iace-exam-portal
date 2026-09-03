@@ -33,11 +33,8 @@ import { api } from '../lib/api';
 import { QUERY_KEYS, STORAGE_KEYS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { AuthoringHeaderBar } from '../components/authoring/authoring-header-bar';
-import {
-  AuthoringChecks,
-  AuthoringPreview,
-  checksFor,
-} from '../components/authoring/authoring-preview';
+import { AuthoringChecks, AuthoringPreview } from '../components/authoring/authoring-preview';
+import { checksFor } from '../components/authoring/authoring-checks';
 import {
   emptyState,
   headerOf,

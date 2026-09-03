@@ -1,32 +1,9 @@
 import { Link } from 'react-router-dom';
-import { INSTITUTE_TIME_ZONE, type AuditAction, type RowAction } from '@iace/contracts';
+import { type RowAction } from '@iace/contracts';
 import { Badge, BadgeList, linkVariants, TruncatedText } from '@iace/ui';
 import { ROUTES } from './constants';
 
 /** One rendering of a `RowAction`, shared by every screen that shows one. */
-
-export const WHEN_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  timeZone: INSTITUTE_TIME_ZONE,
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-/** The same badge vocabulary as the rest of the app: what undoes something reads as a warning or worse. */
-export const ACTION_BADGE_VARIANT: Readonly<
-  Record<AuditAction, 'neutral' | 'success' | 'warning' | 'danger' | 'info'>
-> = {
-  CREATE: 'success',
-  UPDATE: 'neutral',
-  DELETE: 'danger',
-  ACTIVATE: 'success',
-  DEACTIVATE: 'warning',
-  BLOCK: 'danger',
-  UNBLOCK: 'success',
-  IMPORT: 'info',
-};
 
 function formatDiffValue(value: unknown): string {
   if (value === null || value === undefined) return '—';

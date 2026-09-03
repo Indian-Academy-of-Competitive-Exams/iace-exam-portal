@@ -3,7 +3,8 @@ import { afterEach, describe, it } from 'node:test';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PAGE_CONTENT_CLASS, ThemeProvider, TooltipProvider } from '@iace/ui';
-import { AppShell, useWorkspace } from '../browser/app-shell';
+import { AppShell } from '../browser/app-shell';
+import { useWorkspace } from '../browser/app-shell/use-workspace';
 import { type NavItem } from '../src';
 
 afterEach(cleanup);
