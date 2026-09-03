@@ -60,6 +60,8 @@ export const ROUTES = {
   STUDENTS: '/students',
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_PATTERN: '/students/:id',
+  STUDENT_PERFORMANCE: (id: string) => `/students/${id}/performance`,
+  STUDENT_PERFORMANCE_PATTERN: '/students/:id/performance',
   BRANCHES: '/branches',
   /** What ONE branch runs. Three screens standing in one branch, which rides the URL as `branchId`. */
   BRANCH_TEST_SERIES: '/branch/test-series',

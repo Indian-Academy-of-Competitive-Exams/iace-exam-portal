@@ -42,7 +42,7 @@ function queryFor(scope: PerformanceScope, scopeId: string): PerformanceReportQu
 }
 
 /** The same figures the student reads, over the same payload, for a student an admin may see. */
-export function StudentPerformanceCard({ studentId }: Readonly<{ studentId: string }>) {
+export function StudentPerformancePanel({ studentId }: Readonly<{ studentId: string }>) {
   const { can } = useAuth();
   const [scope, setScope] = useState<PerformanceScope>(PERFORMANCE_SCOPES.ATTEMPT);
   const [picked, setPicked] = useState('');

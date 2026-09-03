@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
-import { FileText, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { BarChart3, FileText, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   EXAM_COURSES,
   examsInCourses,
+  FEATURE_KEYS,
   GENDERS,
   STUDENT_SERIES_SOURCE,
   STUDENT_TYPE,
@@ -44,7 +45,6 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { TestSeriesPicker } from '../components/access-picker';
-import { StudentPerformanceCard } from '../components/student-performance';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
@@ -52,6 +52,7 @@ import {
   GENDER_LABELS,
   NAV_ITEMS,
   QUERY_KEYS,
+  ROUTES,
   SERIES_SOURCE_LABELS,
   STUDENT_TYPE_LABELS,
 } from '../lib/constants';
@@ -597,6 +598,7 @@ function StudentStateSwitches({ detail }: Readonly<{ detail: StudentDetail }>) {
 
 export function StudentDetailPage() {
   const { id = '' } = useParams();
+  const { can } = useAuth();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -751,6 +753,14 @@ export function StudentDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {/* Outside the fieldset, so suspending a sign-in never waits on Edit. */}
                 <StudentStateSwitches detail={detail} />
+                {can(FEATURE_KEYS.STUDENT_PERFORMANCE) ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={ROUTES.STUDENT_PERFORMANCE(detail.id)}>
+                      <BarChart3 aria-hidden />
+                      Performance
+                    </Link>
+                  </Button>
+                ) : null}
                 {!isEditing ? (
                   <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                     <Pencil aria-hidden />
@@ -767,12 +777,7 @@ export function StudentDetailPage() {
           />
         </>
       }
-      after={
-        <>
-          <SeriesAccessCard detail={detail} />
-          <StudentPerformanceCard studentId={detail.id} />
-        </>
-      }
+      after={<SeriesAccessCard detail={detail} />}
     >
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">

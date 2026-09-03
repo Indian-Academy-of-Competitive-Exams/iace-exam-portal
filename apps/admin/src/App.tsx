@@ -6,6 +6,7 @@ import { LoginPage } from './routes/login';
 import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
+import { StudentPerformancePage } from './routes/student-performance';
 import { AccessRequestsPage } from './routes/access-requests';
 import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
@@ -53,6 +54,7 @@ export function App() {
           {/* Before the :id route, or "import" would be read as a student id. */}
           <Route path={ROUTES.IMPORT_STUDENTS} element={<ImportStudentsPage />} />
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
+          <Route path={ROUTES.STUDENT_PERFORMANCE_PATTERN} element={<StudentPerformancePage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
           {/* One branch at a time, chosen by `?branchId=` — a nav row cannot carry one in its path. */}
           <Route path={ROUTES.BRANCH_TEST_SERIES} element={<BranchSeriesPage />} />
