@@ -44,7 +44,7 @@ describe('toNdjson', () => {
     const lines = gunzipSync(buffer).toString('utf8').trim().split('\n');
 
     assert.equal(lines.length, 1);
-    assert.equal(JSON.parse(lines[0]!).note, 'first\nsecond');
+    assert.equal(JSON.parse(lines[0] ?? '{}').note, 'first\nsecond');
   });
 
   it('produces empty output for empty input, not a blank line', () => {

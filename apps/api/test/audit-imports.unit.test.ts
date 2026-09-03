@@ -432,7 +432,7 @@ describe('QuestionImportService.commit — the rows a question sheet leaves behi
     const { prisma, service } = questionBank();
 
     await service.preview(questionSheet('What is 20% of 150?', 'What is 30% of 200?'), 'adm_1');
-    const logId = prisma.importLogs[0]!.id as string;
+    const logId = prisma.importLogs[0]?.id as string;
 
     const result = await service.commit(logId, QUESTION_STATUS.DRAFT);
 
@@ -460,7 +460,7 @@ describe('QuestionImportService.commit — the rows a question sheet leaves behi
     const { prisma, service } = questionBank();
 
     await service.preview(questionSheet('What is 20% of 150?'), 'adm_1');
-    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.DRAFT);
+    await service.commit(prisma.importLogs[0]?.id as string, QUESTION_STATUS.DRAFT);
 
     assert.equal(prisma.rowActionLogs[0]?.changed, null);
   });
@@ -472,7 +472,7 @@ describe('QuestionImportService.commit — the status the run lands in', () => {
     const { prisma, service } = questionBank();
     await service.preview(questionSheet('What is 20% of 150?', 'What is 30% of 200?'), 'adm_1');
 
-    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.DRAFT);
+    await service.commit(prisma.importLogs[0]?.id as string, QUESTION_STATUS.DRAFT);
 
     assert.equal(prisma.questions.length, 2);
     for (const question of prisma.questions) {
@@ -484,7 +484,7 @@ describe('QuestionImportService.commit — the status the run lands in', () => {
     const { prisma, service } = questionBank();
     await service.preview(questionSheet('What is 20% of 150?'), 'adm_1');
 
-    await service.commit(prisma.importLogs[0]!.id as string, QUESTION_STATUS.ACTIVE);
+    await service.commit(prisma.importLogs[0]?.id as string, QUESTION_STATUS.ACTIVE);
 
     assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.ACTIVE);
   });

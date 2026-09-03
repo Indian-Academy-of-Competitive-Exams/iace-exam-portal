@@ -47,7 +47,10 @@ function mount(search: string) {
       </QueryClientProvider>
     </MemoryRouter>,
   );
-  return () => list!;
+  return () => {
+    assert.ok(list);
+    return list;
+  };
 }
 
 const url = () => screen.getByTestId('url').textContent ?? '';
@@ -185,7 +188,10 @@ describe('useListScreen — filters that are nobody\u2019s link', () => {
         </QueryClientProvider>
       </MemoryRouter>,
     );
-    return () => list!;
+    return () => {
+      assert.ok(list);
+      return list;
+    };
   }
 
   /** The failure this prevents: one section's topic filter surviving into the next section's. */

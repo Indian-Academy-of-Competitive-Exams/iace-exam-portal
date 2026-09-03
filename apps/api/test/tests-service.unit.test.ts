@@ -17,15 +17,16 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
 import {
-  type FakeBaseConfigRow,
-  type FakeSectionRow,
-  type FakeSeriesTestRow,
-  type FakeTestModelRow,
   FakeEventBus,
   FakeTestsPrisma,
   makeBaseConfig,
   makeSection,
   makeTest,
+  rowAt,
+  type FakeBaseConfigRow,
+  type FakeSectionRow,
+  type FakeSeriesTestRow,
+  type FakeTestModelRow,
 } from './support/fakes';
 
 const ADMIN = 'adm_1';
@@ -131,7 +132,7 @@ describe('TestsService — creating a draft from a config', () => {
 
     // The composite FK is what keeps a test and its blueprint on one stage; the body has no say.
     assert.equal(created.examStageId, 'stage_2');
-    assert.equal(prisma.tests[0]!.examStageId, 'stage_2');
+    assert.equal(prisma.tests[0]?.examStageId, 'stage_2');
   });
 
   it('defaults to a full, ranked, fixed, randomly drawn paper', async () => {
@@ -286,7 +287,7 @@ describe('TestsService — editing and removing', () => {
     const renamed = await service.update('tst_1', { title: 'Mock 1 (revised)' });
     assert.equal(renamed.title, 'Mock 1 (revised)');
     // A rename moves no question, so it must not thaw the paper it was allowed to leave alone.
-    assert.equal(prisma.tests[0]!.isLocked, true);
+    assert.equal(prisma.tests[0]?.isLocked, true);
   });
 
   /** A generated test with one paper IS a fixed test, and every student would sit the same one. */
@@ -315,7 +316,7 @@ describe('TestsService — editing and removing', () => {
       paperBinding: PAPER_BINDING.GENERATED,
     });
 
-    assert.ok(prisma.tests[0]!.variantCount > 1);
+    assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
   });
 
   /** The failure this prevents: a generated test built before the count refusing every edit. */
@@ -331,7 +332,7 @@ describe('TestsService — editing and removing', () => {
 
     await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
 
-    assert.ok(prisma.tests[0]!.variantCount > 1);
+    assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
   });
 
   /** One paper is what fixed MEANS, so the count is held there rather than argued about. */
@@ -340,7 +341,7 @@ describe('TestsService — editing and removing', () => {
 
     await service.update('tst_1', { variantCount: 12 });
 
-    assert.equal(prisma.tests[0]!.variantCount, 1);
+    assert.equal(prisma.tests[0]?.variantCount, 1);
   });
 
   /** THE failure this prevents: a re-skin silently un-finalizing a paper it moves no question in. */
@@ -352,8 +353,8 @@ describe('TestsService — editing and removing', () => {
     const updated = await service.update('tst_1', { examTemplate: EXAM_TEMPLATE.STRICT });
 
     assert.equal(updated.examTemplate, EXAM_TEMPLATE.STRICT);
-    assert.equal(prisma.tests[0]!.isLocked, true);
-    assert.equal(prisma.tests[0]!.status, TEST_STATUS.ACTIVE);
+    assert.equal(prisma.tests[0]?.isLocked, true);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
   });
 
   /** A student who sat the comfortable screen must not have their test re-skinned under them. */
@@ -378,7 +379,7 @@ describe('TestsService — editing and removing', () => {
 
     await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
 
-    const test = prisma.tests[0]!;
+    const test = rowAt(prisma.tests);
     assert.equal(test.isLocked, false);
     assert.equal(test.finalizedAt, null);
     // An unfrozen test cannot be offered, so it stops being offered rather than going incoherent.

@@ -6,6 +6,7 @@ import { RedisThrottlerStorage } from '../src/common/throttling/redis-throttler.
 import { RATE_LIMITS, notMarkedWith, RATE_LIMIT_KEY } from '../src/common/throttling/rate-limits';
 import type { AuthenticatedUser } from '../src/common/security';
 import type { RedisService } from '../src/redis/redis.service';
+import { rowAt } from './support/fakes';
 
 const student = (id: string): AuthenticatedUser =>
   ({ id, actor: ActorTypes.STUDENT }) as AuthenticatedUser;
@@ -29,7 +30,7 @@ function fakeRedis(over: { failing?: boolean } = {}) {
         },
         exec: async () => {
           if (over.failing) throw new Error('redis is down');
-          const key = keys[0]!;
+          const key = rowAt(keys);
           return [
             [null, hits.get(key)],
             [null, ttls.get(key) ?? -1],

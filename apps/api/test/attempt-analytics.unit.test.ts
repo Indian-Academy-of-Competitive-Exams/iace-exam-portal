@@ -19,6 +19,7 @@ import {
   makeAttempt,
   makeScoredTest,
   makeServedAnswer,
+  rowAt,
 } from './support/fakes';
 
 function asked(overrides: Partial<AnalysedQuestion> = {}): AnalysedQuestion {
@@ -292,7 +293,7 @@ describe('the analytics one sitting can be asked for', () => {
 
   it('refuses a paper nobody has marked yet', async () => {
     const { service, prisma, mine } = bench();
-    prisma.attempts[0]!.status = ATTEMPT_STATUS.SUBMITTED;
+    rowAt(prisma.attempts).status = ATTEMPT_STATUS.SUBMITTED;
 
     await assert.rejects(() => service.analytics(STUDENT, mine.id));
   });

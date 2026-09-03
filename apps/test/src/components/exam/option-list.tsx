@@ -91,8 +91,8 @@ export function OptionList({
         ))}
       </ol>
 
-      {languageMode !== LANGUAGE_MODE.DUAL && languages.length > 1 ? (
-        <p className="text-xs text-exam-ink-muted">{`Shown in ${LANGUAGE_LABELS[shown[0]!]}`}</p>
+      {languageMode !== LANGUAGE_MODE.DUAL && languages.length > 1 && shown[0] ? (
+        <p className="text-xs text-exam-ink-muted">{`Shown in ${LANGUAGE_LABELS[shown[0]]}`}</p>
       ) : null}
     </>
   );

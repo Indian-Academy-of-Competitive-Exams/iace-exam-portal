@@ -13,6 +13,14 @@ import { redisKeys } from '../src/redis/redis.keys';
 import { FakePrisma, FakeRedis, FakeStorage, makeAdmin } from './support/fakes';
 import { startOfInstituteDay } from '../src/common/time/institute-day';
 
+/** The object the run said it wrote. A missing key or body is the failure, not the gunzip. */
+function archiveOf(storage: { objects: Map<string, Buffer> }, result: { key: string } | null) {
+  assert.ok(result, 'the run reported no archive');
+  const body = storage.objects.get(result.key);
+  assert.ok(body, `nothing was stored at ${result.key}`);
+  return body;
+}
+
 const NOW = new Date('2026-04-10T02:00:00Z');
 const OLD_DAY = new Date('2026-03-11T09:00:00Z');
 
@@ -55,7 +63,7 @@ describe('AuditArchiveProcessor', () => {
     assert.equal(result?.rows, 3);
     assert.equal(result?.key, 'audit/row-actions/2026/03/11.ndjson.gz');
     assert.equal(
-      gunzipSync(storage.objects.get(result!.key)!).toString('utf8').trim().split('\n').length,
+      gunzipSync(archiveOf(storage, result)).toString('utf8').trim().split('\n').length,
       3,
     );
     assert.equal(prisma.rowActionLogs.length, 0);
@@ -190,7 +198,7 @@ describe('AuditArchiveProcessor', () => {
 
     const result = await job.archiveOneDay(NOW);
 
-    const lines = gunzipSync(storage.objects.get(result!.key)!)
+    const lines = gunzipSync(archiveOf(storage, result))
       .toString('utf8')
       .trim()
       .split('\n')
@@ -344,7 +352,7 @@ describe('AuditArchiveProcessor', () => {
 
     assert.equal(result?.rows, total);
     assert.equal(
-      gunzipSync(storage.objects.get(result!.key)!).toString('utf8').trim().split('\n').length,
+      gunzipSync(archiveOf(storage, result)).toString('utf8').trim().split('\n').length,
       total,
     );
     assert.equal(prisma.rowActionLogs.length, 0);

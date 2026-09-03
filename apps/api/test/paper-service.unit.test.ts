@@ -106,14 +106,16 @@ describe('PaperService — picking a draft paper by hand', () => {
 
   it('puts one on the paper in the next free place', async () => {
     const kit = serviceWith();
-    const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q')!;
+    const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q');
+    assert.ok(spare);
 
     await kit.service.addQuestion('tst_1', {
       baseConfigSectionId: 'sec_2',
       questionId: spare.id,
     });
 
-    const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id)!;
+    const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id);
+    assert.ok(added);
     assert.equal(added.baseConfigSectionId, 'sec_2');
     assert.equal(added.marks, 2);
   });
@@ -276,9 +278,8 @@ describe('PaperService — one row at a time', () => {
   async function drawn() {
     const kit = serviceWith();
     await pickWholePaper(kit.service);
-    const row = kit.prisma.paperQuestions.find((candidate) =>
-      candidate.questionId.startsWith('q'),
-    )!;
+    const row = kit.prisma.paperQuestions.find((candidate) => candidate.questionId.startsWith('q'));
+    assert.ok(row);
     return { ...kit, row };
   }
 
@@ -288,12 +289,14 @@ describe('PaperService — one row at a time', () => {
       (question) =>
         question.subjectId === 'sub_q' &&
         !prisma.paperQuestions.some((held) => held.questionId === question.id),
-    )!;
+    );
+    assert.ok(spare);
     const length = prisma.paperQuestions.length;
 
     await service.replaceQuestion('tst_1', row.id, { questionId: spare.id });
 
-    const after = prisma.paperQuestions.find((candidate) => candidate.id === row.id)!;
+    const after = prisma.paperQuestions.find((candidate) => candidate.id === row.id);
+    assert.ok(after);
     assert.equal(after.questionId, spare.id);
     assert.equal(after.questionVersionId, spare.currentVersionId);
     assert.equal(after.order, row.order);
@@ -318,7 +321,8 @@ describe('PaperService — one row at a time', () => {
     const { service, prisma, row } = await drawn();
     const other = prisma.paperQuestions.find(
       (candidate) => candidate.questionId.startsWith('q') && candidate.id !== row.id,
-    )!;
+    );
+    assert.ok(other);
 
     const error = await service
       .replaceQuestion('tst_1', row.id, { questionId: other.questionId })

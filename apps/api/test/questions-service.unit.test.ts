@@ -23,6 +23,7 @@ import {
   makeQuestion,
   makeSubject,
   makeTopic,
+  rowAt,
 } from './support/fakes';
 import { pngBytes } from './support/image-bytes';
 
@@ -260,7 +261,7 @@ describe('QuestionsService.update — what versioning is for', () => {
     const { questions, prisma } = build();
     const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
 
-    const pinned = prisma.versions[0]!;
+    const pinned = rowAt(prisma.versions);
     const pinnedContent = JSON.stringify(pinned.content);
     const pinnedOptions = JSON.stringify(pinned.options);
 
@@ -691,7 +692,7 @@ describe('QuestionsService.update — a save that changes nothing', () => {
     prisma.question.findUnique = (args: { where: { id: string } }) => {
       const row = read(args);
       reads += 1;
-      if (reads === 2) prisma.questions[0]!.updatedAt = new Date(Date.now() + 1000);
+      if (reads === 2) rowAt(prisma.questions).updatedAt = new Date(Date.now() + 1000);
       return row;
     };
 

@@ -19,6 +19,13 @@ function mount(values: [number, number, number] = [7, 11, 7]) {
 
 const handles = () => screen.getAllByRole('slider');
 
+/** The handle a key is aimed at; a missing one is a broken render, not a failed key. */
+const handleAt = (index = 0) => {
+  const handle = handles()[index];
+  assert.ok(handle);
+  return handle;
+};
+
 describe('RatioBar', () => {
   it('shows each part with the count it holds', () => {
     mount();
@@ -31,7 +38,7 @@ describe('RatioBar', () => {
   it('moves a handle with the arrow keys', () => {
     const onChange = mount();
 
-    fireEvent.keyDown(handles()[0]!, { key: 'ArrowRight' });
+    fireEvent.keyDown(handleAt(), { key: 'ArrowRight' });
 
     assert.deepEqual(onChange.mock.calls[0]?.arguments, [[8, 10, 7]]);
   });
@@ -39,7 +46,7 @@ describe('RatioBar', () => {
   it('takes from one side and gives to the other, leaving the third alone', () => {
     const onChange = mount();
 
-    fireEvent.keyDown(handles()[1]!, { key: 'ArrowLeft' });
+    fireEvent.keyDown(handleAt(1), { key: 'ArrowLeft' });
 
     // The second handle governs medium and high; low is not its business.
     assert.deepEqual(onChange.mock.calls[0]?.arguments, [[7, 10, 8]]);
@@ -62,7 +69,7 @@ describe('RatioBar', () => {
   it('stops at nought rather than borrowing from the part beyond it', () => {
     const onChange = mount([0, 18, 7]);
 
-    fireEvent.keyDown(handles()[0]!, { key: 'ArrowLeft' });
+    fireEvent.keyDown(handleAt(), { key: 'ArrowLeft' });
 
     assert.deepEqual(onChange.mock.calls[0]?.arguments, [[0, 18, 7]]);
   });
@@ -70,8 +77,8 @@ describe('RatioBar', () => {
   it('takes a handle to its own end on Home and End', () => {
     const onChange = mount();
 
-    fireEvent.keyDown(handles()[0]!, { key: 'Home' });
-    fireEvent.keyDown(handles()[0]!, { key: 'End' });
+    fireEvent.keyDown(handleAt(), { key: 'Home' });
+    fireEvent.keyDown(handleAt(), { key: 'End' });
 
     assert.deepEqual(onChange.mock.calls[0]?.arguments, [[0, 18, 7]]);
     assert.deepEqual(onChange.mock.calls[1]?.arguments, [[18, 0, 7]]);
@@ -90,8 +97,10 @@ describe('RatioBar', () => {
 
   /** jsdom measures nothing, so the track is given a width for the drag to resolve against. */
   function measured() {
-    const handle = handles()[0]!;
-    handle.parentElement!.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
+    const handle = handles()[0];
+    assert.ok(handle);
+    assert.ok(handle.parentElement);
+    handle.parentElement.getBoundingClientRect = () => ({ left: 0, width: 250 }) as DOMRect;
     return handle;
   }
 
@@ -134,7 +143,8 @@ describe('RatioBar', () => {
     const onChange = mock.fn();
     render(<RatioBar parts={PARTS} values={[7, 11, 7]} total={25} onChange={onChange} disabled />);
 
-    const handle = screen.getAllByRole('slider')[0]!;
+    const handle = screen.getAllByRole('slider')[0];
+    assert.ok(handle);
     fireEvent.keyDown(handle, { key: 'ArrowRight' });
 
     assert.equal(handle.getAttribute('tabindex'), '-1');

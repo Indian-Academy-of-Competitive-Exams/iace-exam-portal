@@ -16,15 +16,16 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
 import {
-  type FakePaperRow,
-  type FakeSectionRow,
-  FakeTestsPrisma,
+  FakeEventBus,
   fakeScoringOutbox,
+  FakeTestsPrisma,
   makeBaseConfig,
   makeQuestion,
   makeSection,
   makeTest,
-  FakeEventBus,
+  rowAt,
+  type FakePaperRow,
+  type FakeSectionRow,
   type FakeTestModelRow,
 } from './support/fakes';
 
@@ -85,7 +86,7 @@ describe('FinalizeService — freezing a fixed paper', () => {
 
     assert.equal(result.finalizedByThisCall, true);
     assert.equal(result.frozenQuestions, 5);
-    const test = prisma.tests[0]!;
+    const test = rowAt(prisma.tests);
     assert.equal(test.isLocked, true);
     assert.ok(test.finalizedAt);
     assert.equal(test.version, 1);
@@ -97,7 +98,7 @@ describe('FinalizeService — freezing a fixed paper', () => {
 
     await service.finalize('tst_1');
 
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 
   it('counts each frozen question once against the bank', async () => {
@@ -137,7 +138,7 @@ describe('FinalizeService — a second finalize', () => {
       prisma.questions.map((question) => question.fixedUseCount),
       [1, 1, 1, 1, 1],
     );
-    assert.equal(prisma.tests[0]!.version, 1);
+    assert.equal(prisma.tests[0]?.version, 1);
   });
 
   it('lets exactly one of two concurrent finalizes do the work', async () => {
@@ -147,7 +148,7 @@ describe('FinalizeService — a second finalize', () => {
 
     // Both read version 0; only the one whose conditional update still matched may write.
     assert.equal([a, b].filter((result) => result.finalizedByThisCall).length, 1);
-    assert.equal(prisma.tests[0]!.version, 1);
+    assert.equal(prisma.tests[0]?.version, 1);
     assert.deepEqual(
       prisma.questions.map((question) => question.fixedUseCount),
       [1, 1, 1, 1, 1],
@@ -163,8 +164,8 @@ describe('FinalizeService — what it refuses to freeze', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.tests[0]!.isLocked, false);
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.tests[0]?.isLocked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 
   it('refuses a section short of the count its config asks for', async () => {
@@ -176,13 +177,13 @@ describe('FinalizeService — what it refuses to freeze', () => {
 
     assert.ok(AppException.is(error));
     assert.match(error.message, /Quant holds 1 of the 2/);
-    assert.equal(prisma.tests[0]!.isLocked, false);
+    assert.equal(prisma.tests[0]?.isLocked, false);
   });
 
   it('refuses a paper holding rows for a section the config no longer has', async () => {
     const stray = [
       ...wholePaper(),
-      { ...wholePaper()[0]!, id: 'pq_stray', baseConfigSectionId: 'sec_gone', order: 6 },
+      { ...rowAt(wholePaper()), id: 'pq_stray', baseConfigSectionId: 'sec_gone', order: 6 },
     ];
     const { service } = serviceWith(stray);
 
@@ -198,9 +199,9 @@ describe('FinalizeService — what it refuses to freeze', () => {
     await service.finalize('tst_1').catch(() => undefined);
 
     // The refusal happens INSIDE the transaction, so nothing it had already written survives.
-    assert.equal(prisma.tests[0]!.isLocked, false);
-    assert.equal(prisma.tests[0]!.version, 0);
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.tests[0]?.isLocked, false);
+    assert.equal(prisma.tests[0]?.version, 0);
+    assert.equal(prisma.configs[0]?.locked, false);
     assert.deepEqual(
       prisma.questions.map((question) => question.fixedUseCount),
       [0, 0, 0, 0, 0],
@@ -292,7 +293,7 @@ describe('FinalizeService — a test drawn per student', () => {
 
     const result = await service.finalize('tst_1');
 
-    assert.equal(prisma.tests[0]!.isLocked, true);
+    assert.equal(prisma.tests[0]?.isLocked, true);
     assert.equal(result.frozenQuestions, 15);
     assert.deepEqual(
       [0, 1, 2].map(
@@ -315,7 +316,7 @@ describe('FinalizeService — a test drawn per student', () => {
   it('leaves the frozen paper alone when it loses the freeze', async () => {
     const frozen = wholePaper('tst_1');
     const built = generated(3, () => {
-      Object.assign(built.prisma.tests[0]!, {
+      Object.assign(rowAt(built.prisma.tests), {
         isLocked: true,
         version: 1,
         finalizedAt: new Date(),
@@ -335,7 +336,7 @@ describe('FinalizeService — a test drawn per student', () => {
 
     await service.finalize('tst_1');
 
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 });
 

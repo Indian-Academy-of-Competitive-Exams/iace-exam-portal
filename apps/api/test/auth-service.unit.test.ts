@@ -17,15 +17,16 @@ import { PinService } from '../src/auth/pin/pin.service';
 import { SessionService } from '../src/auth/session.service';
 import { TokenService } from '../src/auth/token.service';
 import {
+  FakeAdminsService,
   FakeConfig,
   FakeEventBus,
   FakeMessageSender,
   FakePrisma,
   FakeRedis,
-  NO_DEVICE,
-  FakeAdminsService,
   makeAdmin,
   makeStudent,
+  NO_DEVICE,
+  rowAt,
   type FakeAdmin,
   type FakeStudent,
 } from './support/fakes';
@@ -136,7 +137,7 @@ describe('AuthService — student login', () => {
   it('refuses a deactivated account, even with the correct PIN', async () => {
     const ctx = build();
     await signUp(ctx, MOBILE, '4813');
-    ctx.prisma.students[0]!.isActive = false;
+    rowAt(ctx.prisma.students).isActive = false;
 
     await assert.rejects(
       () => ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE),
@@ -151,7 +152,7 @@ describe('AuthService — student login', () => {
   it('signs a test-blocked student in, and says so on the identity', async () => {
     const ctx = build();
     await signUp(ctx, MOBILE, '4813');
-    ctx.prisma.students[0]!.isTestBlocked = true;
+    rowAt(ctx.prisma.students).isTestBlocked = true;
 
     const { identity } = await ctx.auth.loginStudent(MOBILE, '4813', NO_DEVICE);
 
@@ -437,7 +438,7 @@ describe('AuthService — refresh and me', () => {
     const ctx = build();
     const session = await signUp(ctx, MOBILE, '4813');
     const claims = await ctx.tokens.verifyAccess(session.tokens.accessToken);
-    ctx.prisma.students[0]!.preTestReady = true;
+    rowAt(ctx.prisma.students).preTestReady = true;
 
     const identity = await ctx.auth.me({
       id: claims.sub,
@@ -456,7 +457,7 @@ describe('AuthService — refresh and me', () => {
   it('refuses to refresh once the account is gone or deactivated', async () => {
     const ctx = build();
     const session = await signUp(ctx, MOBILE, '4813');
-    ctx.prisma.students[0]!.isActive = false;
+    rowAt(ctx.prisma.students).isActive = false;
 
     await assert.rejects(
       () => ctx.auth.refresh(session.tokens.refreshToken, NO_DEVICE),

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DIFFICULTY_LEVEL, DRAW_STRATEGY, type DrawStrategy } from '@iace/contracts';
+import { rowAt } from './support/fakes';
 import {
   drawPaper,
   type DrawCandidate,
@@ -427,7 +428,7 @@ describe('drawPaper — the seed', () => {
 describe('drawPaper — a paper the admin has had a hand in', () => {
   it('keeps every hand-picked question and draws only the rest', () => {
     const bank = pool(20);
-    const chosen = [bank[3]!, bank[7]!];
+    const chosen = [rowAt(bank, 3), rowAt(bank, 7)];
 
     const questions = questionsOf(
       draw({
@@ -454,7 +455,7 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
     ];
 
     const questions = questionsOf(
-      draw({ sections, pool: bank, pinned: new Map([['sec_2', [bank[0]!]]]) }),
+      draw({ sections, pool: bank, pinned: new Map([['sec_2', [rowAt(bank)]]]) }),
     );
 
     assert.equal(new Set(questions.map((row) => row.questionId)).size, 4);
@@ -468,7 +469,7 @@ describe('drawPaper — a paper the admin has had a hand in', () => {
       draw({
         sections: [section({ id: 'sec_1', questionCount: 2 })],
         pool: bank,
-        pinned: new Map([['sec_1', [bank[5]!, bank[2]!]]]),
+        pinned: new Map([['sec_1', [rowAt(bank, 5), rowAt(bank, 2)]]]),
       }),
     );
 

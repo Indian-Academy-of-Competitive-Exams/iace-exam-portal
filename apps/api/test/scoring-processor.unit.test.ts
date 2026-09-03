@@ -7,11 +7,12 @@ import {
   FakeEventBus,
   FakeQueue,
   FakeRedis,
-  FakeScoringPrisma,
   fakeRollupOutbox,
+  FakeScoringPrisma,
   makeAttempt,
   makeServedAnswer,
   mcqOptions,
+  rowAt,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
 } from './support/fakes';
@@ -121,7 +122,11 @@ describe('ScoringProcessor — what it writes', () => {
     const { attempt, served, processor } = sitting();
     await processor.score(attempt.id);
 
-    served[1]!.paperItem = { marks: 2, negativeMarks: 0.5, status: PAPER_QUESTION_STATUS.DROPPED };
+    rowAt(served, 1).paperItem = {
+      marks: 2,
+      negativeMarks: 0.5,
+      status: PAPER_QUESTION_STATUS.DROPPED,
+    };
     await processor.score(attempt.id);
 
     // The wrong answer is paid rather than penalised: 2 + 2 + 0, not 2 − 0.5 + 0.
@@ -146,7 +151,7 @@ describe('ScoringProcessor — what it writes', () => {
 
   it('scores a question the paper never priced at nothing, rather than crashing on it', async () => {
     const { attempt, served, processor } = sitting();
-    served[0]!.paperItem = null;
+    rowAt(served).paperItem = null;
 
     await processor.score(attempt.id);
 

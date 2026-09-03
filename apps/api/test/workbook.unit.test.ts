@@ -5,6 +5,7 @@ import { AppException, STUDENT_IMPORT_COLUMNS } from '@iace/contracts';
 import { looksLikeWorkbook, readUploadedTable } from '../src/common/importing';
 import { buildStudentTemplate } from '../src/imports/workbook';
 import { columnValue } from '../src/imports/student-import';
+import { rowAt } from './support/fakes';
 
 /** Builds a real .xlsx in memory — no fixture files, no disk. */
 async function workbook(rows: unknown[][], sheetName = 'Students'): Promise<Buffer> {
@@ -162,7 +163,7 @@ describe('buildStudentTemplate', () => {
     }
 
     assert.ok(table.rows.length > 0, 'the sample must show at least one example row');
-    assert.equal(columnValue(table.rows[0]!, 'mobile'), '9876543210');
+    assert.equal(columnValue(rowAt(table.rows), 'mobile'), '9876543210');
   });
 
   /**

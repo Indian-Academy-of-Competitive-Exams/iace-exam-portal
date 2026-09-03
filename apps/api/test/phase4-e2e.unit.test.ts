@@ -65,7 +65,7 @@ function sitting(id: string): FakeAttemptRow {
     testId: TEST_ID,
     status: ATTEMPT_STATUS.SUBMITTED,
     startedAt: STARTED,
-    submittedAt: new Date(STARTED.getTime() + MINUTES[id]! * 60_000),
+    submittedAt: new Date(STARTED.getTime() + (MINUTES[id] ?? 0) * 60_000),
     score: null,
   });
 }

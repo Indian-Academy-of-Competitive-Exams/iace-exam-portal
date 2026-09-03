@@ -21,6 +21,7 @@ import {
   makeQuestion,
   makeSection,
   makeTest,
+  rowAt,
   type FakeAttemptQuestionRow,
   type FakePaperRow,
 } from './support/fakes';
@@ -168,7 +169,7 @@ describe('dropping a question on a paper somebody has already sat', () => {
   it('asks once per sitting, however many rows of that question it served', async () => {
     const { prisma, service } = bench();
     prisma.attemptQuestions.push({
-      ...served()[0]!,
+      ...rowAt(served()),
       questionId: 'q1',
       paperQuestionId: 'pq_1_v1',
       order: 2,

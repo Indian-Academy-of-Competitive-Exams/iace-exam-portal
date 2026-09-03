@@ -272,8 +272,8 @@ describe('buildContent', () => {
       }),
     );
 
-    assert.deepEqual(Object.keys(built.options[0]!.text), ['en', 'hi']);
-    assert.equal(built.options[1]!.isCorrect, true);
+    assert.deepEqual(Object.keys(built.options[0]?.text ?? {}), ['en', 'hi']);
+    assert.equal(built.options[1]?.isCorrect, true);
   });
 
   it('keeps a tolerance only where it is compared as a number', () => {

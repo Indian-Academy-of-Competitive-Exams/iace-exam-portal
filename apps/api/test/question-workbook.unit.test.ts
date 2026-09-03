@@ -57,7 +57,9 @@ describe('the question import template', () => {
 
   it('writes exactly the columns the parser matches on', async () => {
     const workbook = await template();
-    const header = workbook.getWorksheet(QUESTION_IMPORT_SHEETS.QUESTIONS)!.getRow(1);
+    const sheet = workbook.getWorksheet(QUESTION_IMPORT_SHEETS.QUESTIONS);
+    assert.ok(sheet);
+    const header = sheet.getRow(1);
 
     const written: string[] = [];
     header.eachCell((cell) => written.push(String(cell.value)));
@@ -76,7 +78,7 @@ describe('the question import template', () => {
 
     assert.equal(table.rows.length, 2);
     assert.ok(table.headers.includes('stemen'));
-    assert.match(String(table.rows[0]!.values.stemen), /20% of 150/);
+    assert.match(String(table.rows[0]?.values.stemen), /20% of 150/);
   });
 
   it('names a topic range per subject, so a repeated topic cannot collide', async () => {
@@ -93,7 +95,8 @@ describe('the question import template', () => {
 
   it('wires the cascade: topic follows the subject on its own row', async () => {
     const workbook = await template();
-    const sheet = workbook.getWorksheet(QUESTION_IMPORT_SHEETS.QUESTIONS)!;
+    const sheet = workbook.getWorksheet(QUESTION_IMPORT_SHEETS.QUESTIONS);
+    assert.ok(sheet);
 
     const topicColumn = columnLetter(
       QUESTION_IMPORT_COLUMNS.findIndex((column) => column.key === 'topic') + 1,
@@ -104,8 +107,8 @@ describe('the question import template', () => {
 
     const validation = sheet.getCell(`${topicColumn}2`).dataValidation;
     assert.equal(validation?.type, 'list');
-    assert.match(validation!.formulae[0] as string, /INDIRECT/);
-    assert.match(validation!.formulae[0] as string, new RegExp(`\\$${subjectColumn}\\$2`));
+    assert.match(String(validation?.formulae[0]), /INDIRECT/);
+    assert.match(String(validation?.formulae[0]), new RegExp(`\\$${subjectColumn}\\$2`));
   });
 
   it('turns a name with spaces into a usable Excel range name', () => {

@@ -53,7 +53,10 @@ function mount() {
       </QueryClientProvider>
     </MemoryRouter>,
   );
-  return () => list!;
+  return () => {
+    assert.ok(list);
+    return list;
+  };
 }
 
 const rows = () => screen.getByTestId('rows').textContent ?? '';

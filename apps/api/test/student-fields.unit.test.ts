@@ -30,7 +30,8 @@ describe('dobSchema', () => {
     for (const future of [shift(1), shift(400), '2999-01-01']) {
       const parsed = dobSchema.safeParse(future);
       assert.equal(parsed.success, false, `expected ${future} to be refused`);
-      if (!parsed.success) assert.match(parsed.error.issues[0]!.message, /cannot be in the future/);
+      if (!parsed.success)
+        assert.match(parsed.error.issues[0]?.message ?? '', /cannot be in the future/);
     }
   });
 
@@ -72,7 +73,7 @@ describe('personNameSchema', () => {
   it('REFUSES a comma — the spreadsheet artefact that prompted this', () => {
     const parsed = personNameSchema.safeParse('Kumari, Asha');
     assert.equal(parsed.success, false);
-    if (!parsed.success) assert.match(parsed.error.issues[0]!.message, /letters only/);
+    if (!parsed.success) assert.match(parsed.error.issues[0]?.message ?? '', /letters only/);
   });
 
   it('refuses digits and symbols', () => {

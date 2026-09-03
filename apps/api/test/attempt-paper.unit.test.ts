@@ -123,7 +123,7 @@ describe('AttemptPaperService — what a candidate is allowed to see', () => {
     const paper = await service.paper(STUDENT, 'att_1');
 
     // The stem and the solution sit in one content object; only the stem is the student's to read.
-    assert.deepEqual(Object.keys(paper.questions[0]!.content.en!), ['stem']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.content.en ?? {}), ['stem']);
     assert.ok(!JSON.stringify(paper).includes('Because.'));
   });
 
@@ -146,7 +146,7 @@ describe('AttemptPaperService — what a candidate is allowed to see', () => {
     const paper = await service.paper(STUDENT, 'att_1');
 
     // Scoring compares ids, never positions — which is what makes shuffling safe at all.
-    const ids = paper.questions[0]!.options.map((option) => option.id).sort();
+    const ids = paper.questions[0]?.options.map((option) => option.id).sort();
     assert.deepEqual(ids, ['q1_v1_a', 'q1_v1_b', 'q1_v1_c', 'q1_v1_d']);
   });
 });
@@ -218,8 +218,8 @@ describe('AttemptPaperService — language', () => {
     const paper = await service.paper(STUDENT, 'att_1');
 
     // A student sitting in Hindi is not handed the English paper alongside it.
-    assert.deepEqual(Object.keys(paper.questions[0]!.content), ['hi']);
-    assert.deepEqual(Object.keys(paper.questions[0]!.options[0]!.text), ['hi']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.content ?? {}), ['hi']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.options[0]?.text ?? {}), ['hi']);
   });
 
   it('carries both when the sitting is bilingual', async () => {
@@ -230,7 +230,7 @@ describe('AttemptPaperService — language', () => {
 
     const paper = await service.paper(STUDENT, 'att_1');
 
-    assert.deepEqual(Object.keys(paper.questions[0]!.content).sort(), ['en', 'hi']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.content ?? {}).sort(), ['en', 'hi']);
     assert.equal(paper.languageMode, LANGUAGE_MODE.DUAL);
   });
 
@@ -240,8 +240,8 @@ describe('AttemptPaperService — language', () => {
     const paper = await service.paper(STUDENT, 'att_1');
 
     // The stem has Telugu; the options do not, and an empty key would render as a blank option.
-    assert.deepEqual(Object.keys(paper.questions[0]!.content).sort(), ['en', 'te']);
-    assert.deepEqual(Object.keys(paper.questions[0]!.options[0]!.text), ['en']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.content ?? {}).sort(), ['en', 'te']);
+    assert.deepEqual(Object.keys(paper.questions[0]?.options[0]?.text ?? {}), ['en']);
   });
 });
 

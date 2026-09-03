@@ -169,7 +169,7 @@ describe('OfferingService — offering a test', () => {
     const status = await service.setStatus('tst_1', TEST_STATUS.ACTIVE);
 
     assert.equal(status, TEST_STATUS.ACTIVE);
-    assert.equal(prisma.tests[0]!.status, TEST_STATUS.ACTIVE);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
   });
 
   it('refuses to offer a test no series carries', async () => {
@@ -181,7 +181,7 @@ describe('OfferingService — offering a test', () => {
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /only through a series/);
-    assert.equal(prisma.tests[0]!.status, TEST_STATUS.DRAFT);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.DRAFT);
   });
 
   it('refuses to offer a test whose paper is not frozen', async () => {
@@ -193,7 +193,7 @@ describe('OfferingService — offering a test', () => {
 
     assert.ok(AppException.is(error));
     assert.match(error.message, /Finalize this test/);
-    assert.equal(prisma.tests[0]!.status, TEST_STATUS.DRAFT);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.DRAFT);
   });
 
   it('retires a test without asking anything of it', async () => {
@@ -204,7 +204,7 @@ describe('OfferingService — offering a test', () => {
     // Withdrawing an offer needs no series and no frozen paper — only offering does.
     await service.setStatus('tst_1', TEST_STATUS.INACTIVE);
 
-    assert.equal(prisma.tests[0]!.status, TEST_STATUS.INACTIVE);
+    assert.equal(prisma.tests[0]?.status, TEST_STATUS.INACTIVE);
   });
 
   it('tells the catalog cache when a test stops being offered', async () => {

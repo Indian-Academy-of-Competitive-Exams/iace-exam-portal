@@ -19,7 +19,8 @@ export default defineConfig([
     rules: {
       // Locked, not inherited: recommended only WARNS on `any`, and a warning gets scrolled past.
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
+      // An error now the backlog is cleared: as a warning it grew back to 250 unread.
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

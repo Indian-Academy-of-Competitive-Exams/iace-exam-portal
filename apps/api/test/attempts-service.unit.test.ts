@@ -15,15 +15,16 @@ import { AttemptsService } from '../src/attempts/attempts.service';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import { type AccessResolverService } from '../src/access';
 import {
-  type FakeAttemptRow,
-  type FakePaperRow,
-  type FakeTestModelRow,
+  FakeRedis,
   FakeTestsPrisma,
   makeAttempt,
   makeBaseConfig,
   makeSection,
   makeTest,
-  FakeRedis,
+  rowAt,
+  type FakeAttemptRow,
+  type FakePaperRow,
+  type FakeTestModelRow,
 } from './support/fakes';
 
 const STUDENT = 'stu_1';
@@ -140,7 +141,7 @@ describe('AttemptsService — starting a sitting', () => {
     const spread = [
       ...paper(),
       ...[4, 5, 6].map((n) => ({
-        ...paper()[0]!,
+        ...rowAt(paper()),
         id: `pq_${n}`,
         baseConfigSectionId: 'sec_2',
         questionId: `q${n}`,
@@ -206,7 +207,7 @@ describe('AttemptsService — starting a sitting', () => {
     assert.equal(first.attemptNo, 1);
     assert.equal(first.isGraded, true);
 
-    prisma.attemptRows[0]!.status = ATTEMPT_STATUS.SUBMITTED;
+    rowAt(prisma.attemptRows).status = ATTEMPT_STATUS.SUBMITTED;
 
     // The cohort rollup fires on one attempt per student, so a retake must not carry it.
     const second = await service.start(STUDENT, 'tst_1', {});
@@ -359,11 +360,11 @@ describe('AttemptsService — the blueprint stops moving', () => {
   /** The failure this prevents: a config edited to a different shape under a paper being sat. */
   it('locks the config when the first student starts', async () => {
     const { service, prisma } = serviceWith();
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
 
     await service.start(STUDENT, 'tst_1', {});
 
-    assert.equal(prisma.configs[0]!.locked, true);
+    assert.equal(prisma.configs[0]?.locked, true);
   });
 
   /** Every student on one test shares one config row, so a write per start would serialise them. */
@@ -380,7 +381,7 @@ describe('AttemptsService — the blueprint stops moving', () => {
     await service.start(STUDENT, 'tst_1', {});
 
     assert.equal(writes, 0);
-    assert.equal(prisma.configs[0]!.locked, true);
+    assert.equal(prisma.configs[0]?.locked, true);
   });
 
   /** A resume is not a start, and a sitting already under way has locked it long since. */
@@ -390,7 +391,7 @@ describe('AttemptsService — the blueprint stops moving', () => {
 
     await service.start(STUDENT, 'tst_1', {});
 
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 });
 

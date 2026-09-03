@@ -28,7 +28,7 @@ describe('randomPin', () => {
     for (let i = 0; i < 2000; i += 1) {
       randomPin()
         .split('')
-        .forEach((digit, at) => seen[at]!.add(digit));
+        .forEach((digit, at) => seen[at]?.add(digit));
     }
 
     for (const position of seen) assert.equal(position.size, 10);

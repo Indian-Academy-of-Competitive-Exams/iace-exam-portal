@@ -217,7 +217,7 @@ describe('a locked config', () => {
     it(`still allows ${column} to change, so clone-to-evolve works`, () => {
       const guard = /IF OLD\."locked" AND \(([\s\S]*?)\) THEN/.exec(MIGRATION);
       assert.ok(guard, 'the locked-config guard is missing');
-      assert.doesNotMatch(guard[1]!, new RegExp(`"${column}"`));
+      assert.doesNotMatch(guard[1] ?? '', new RegExp(`"${column}"`));
     });
   }
 

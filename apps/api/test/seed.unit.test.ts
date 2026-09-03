@@ -10,7 +10,7 @@ import { describe, it } from 'node:test';
  */
 const SEED = readFileSync(join(__dirname, '../../../prisma/seed.sql'), 'utf8');
 
-const SEEDED_TABLES = [...SEED.matchAll(/INSERT INTO "(\w+)"/g)].map((match) => match[1]!);
+const SEEDED_TABLES = [...SEED.matchAll(/INSERT INTO "(\w+)"/g)].map((match) => match[1] ?? '');
 
 /** The file's own header explains why an arbiter is wrong, so it quotes the thing it forbids. */
 const STATEMENTS = SEED.replace(/^\s*--.*$/gm, '');
@@ -82,7 +82,8 @@ describe('the seed is safe to run again', () => {
   it('guards every insert it makes', () => {
     assert.ok(SEEDED_TABLES.length > 0);
     for (const table of SEEDED_TABLES) {
-      const statement = new RegExp(`INSERT INTO "${table}"[\\s\\S]*?;`).exec(SEED)!;
+      const statement = new RegExp(`INSERT INTO "${table}"[\\s\\S]*?;`).exec(SEED);
+      assert.ok(statement);
       assert.match(statement[0], /ON CONFLICT DO NOTHING;$/);
     }
   });
@@ -102,12 +103,13 @@ describe('reading the seed', () => {
   /** The helper returning [] would make every assertion built on it pass vacuously. */
   it('reads a row per table, including a three-column one', () => {
     assert.equal(insertedRows('Subject').length, 4);
-    assert.equal(insertedRows('Subject')[0]!.length, 3);
+    assert.equal(insertedRows('Subject')[0]?.length, 3);
   });
 
   /** An ARRAY[...] literal contains commas that do not separate columns. */
   it('does not split an array literal into extra columns', () => {
-    const config = insertedRows('BaseConfig')[0]!;
+    const config = insertedRows('BaseConfig')[0];
+    assert.ok(config);
     assert.equal(config[0], 'config_ssc_cgl_t1');
     assert.ok(config.some((cell) => cell.startsWith('ARRAY[')));
   });
@@ -116,7 +118,7 @@ describe('reading the seed', () => {
 describe('the first super admin', () => {
   /** The failure this prevents: nothing in the application creates one, so there is no way in. */
   it('is a super admin, active, and scoped to every branch', () => {
-    const admin = new RegExp('INSERT INTO "Admin"[\\s\\S]*?;').exec(SEED)![0];
+    const admin = new RegExp('INSERT INTO "Admin"[\\s\\S]*?;').exec(SEED)?.[0] ?? '';
     assert.match(admin, /'developer@iace\.co\.in'/);
     assert.match(admin, /true,\s*true,\s*true\s*\)/);
   });
@@ -156,7 +158,7 @@ describe('the SSC CGL catalog', () => {
 });
 
 describe('the SSC CGL Tier 1 default config', () => {
-  const config = new RegExp('INSERT INTO "BaseConfig"[\\s\\S]*?;').exec(SEED)![0];
+  const config = new RegExp('INSERT INTO "BaseConfig"[\\s\\S]*?;').exec(SEED)?.[0] ?? '';
 
   it('is the stage default, so a new test starts from it', () => {
     assert.match(config, /'stage_ssc_cgl_t1', '[^']*', true,/);
@@ -201,7 +203,7 @@ describe('the SSC CGL Tier 1 default config', () => {
   /** A null subject rolls every question up as unclassified, and the analytics say nothing. */
   it('names a subject for every section', () => {
     for (const cells of insertedRows('BaseConfigSection')) {
-      assert.match(cells[4]!, /^subject_\w+$/);
+      assert.match(cells[4] ?? '', /^subject_\w+$/);
     }
   });
 });

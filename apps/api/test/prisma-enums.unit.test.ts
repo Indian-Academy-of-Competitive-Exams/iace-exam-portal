@@ -84,7 +84,7 @@ const MIRRORED = {
 function prismaEnum(name: string): string[] {
   const block = new RegExp(String.raw`enum ${name} \{([^}]*)\}`).exec(SCHEMA);
   assert.ok(block, `schema.prisma has no enum ${name}`);
-  return block[1]!
+  return (block[1] ?? '')
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, '').trim())
     .filter((line) => line.length > 0);

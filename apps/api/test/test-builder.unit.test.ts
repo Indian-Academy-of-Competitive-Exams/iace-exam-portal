@@ -16,14 +16,15 @@ import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
 import {
-  type FakeQuestionRow,
   FakeEventBus,
-  FakeTestsPrisma,
   fakeScoringOutbox,
+  FakeTestsPrisma,
   makeBaseConfig,
   makeQuestion,
   makeSection,
   makeSeries,
+  rowAt,
+  type FakeQuestionRow,
 } from './support/fakes';
 
 /** The Phase-2 milestone end to end — the only place the four services meet. */
@@ -114,11 +115,11 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
 
     // A publishable mock: frozen, carried by a series, and offered.
     assert.equal(status, TEST_STATUS.ACTIVE);
-    const test = prisma.tests[0]!;
+    const test = rowAt(prisma.tests);
     assert.equal(test.isLocked, true);
     assert.equal(prisma.paperQuestions.length, 5);
     // Finalizing freezes the PAPER. Its blueprint stops moving when somebody sits one, not here.
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 
   it('will not offer a test until every step before it is done', async () => {
@@ -179,7 +180,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.equal(second.finalizedByThisCall, false);
 
     const before = prisma.paperQuestions.map((row) => row.questionId).sort();
-    const row = prisma.paperQuestions[0]!;
+    const row = rowAt(prisma.paperQuestions);
     prisma.attempts.push({ testId: draft.id });
 
     const edit = await paper
@@ -212,7 +213,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     );
 
     // Taking one off thaws the paper, and the question goes straight back where it was.
-    const row = prisma.paperQuestions[0]!;
+    const row = rowAt(prisma.paperQuestions);
     await paper.removeQuestion(draft.id, row.id);
     assert.deepEqual(
       counted(),
@@ -235,7 +236,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     await pickWholePaper(paper, draft.id);
-    await paper.removeQuestion(draft.id, prisma.paperQuestions[0]!.id);
+    await paper.removeQuestion(draft.id, rowAt(prisma.paperQuestions).id);
 
     assert.deepEqual(
       prisma.questions.map((row) => row.fixedUseCount),
@@ -249,11 +250,11 @@ describe('the invariants Phase 2 must not have broken', () => {
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
     await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
-    assert.equal(prisma.tests[0]!.isLocked, true);
+    assert.equal(prisma.tests[0]?.isLocked, true);
 
-    await paper.replaceQuestion(draft.id, prisma.paperQuestions[0]!.id, { questionId: 'r8' });
+    await paper.replaceQuestion(draft.id, rowAt(prisma.paperQuestions).id, { questionId: 'r8' });
 
-    const test = prisma.tests[0]!;
+    const test = rowAt(prisma.tests);
     assert.equal(test.isLocked, false);
     assert.equal(test.finalizedAt, null);
     assert.equal(test.status, TEST_STATUS.DRAFT);
@@ -279,7 +280,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
     assert.equal(prisma.paperQuestions.length, 0);
-    assert.equal(prisma.tests[0]!.isLocked, false);
-    assert.equal(prisma.configs[0]!.locked, false);
+    assert.equal(prisma.tests[0]?.isLocked, false);
+    assert.equal(prisma.configs[0]?.locked, false);
   });
 });

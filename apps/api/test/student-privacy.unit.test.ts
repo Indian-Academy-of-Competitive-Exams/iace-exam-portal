@@ -9,6 +9,7 @@ import {
   FakePrivacyPrisma,
   makeBranch,
   makeStudent,
+  rowAt,
   type FakePrivacyWorld,
 } from './support/fakes';
 
@@ -140,7 +141,7 @@ describe('erasure is anonymisation', () => {
 
     const receipt = await service.anonymize('stu_1', EVERY_BRANCH);
 
-    const student = prisma.students[0]!;
+    const student = rowAt(prisma.students);
     assert.equal(student.mobile, TOMBSTONE_MOBILE);
     assert.equal(student.fullName, null);
     assert.equal(student.pinHash, null);

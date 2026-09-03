@@ -17,13 +17,14 @@ import { QUEUE_NAMES, scoringJobId } from '../src/queue/queues';
 import {
   FakeMetrics,
   FakeQueue,
-  fakeRollupOutbox,
   FakeRedis,
+  fakeRollupOutbox,
   FakeTestsPrisma,
   makeAttempt,
   makeBaseConfig,
   makeSection,
   makeTest,
+  rowAt,
 } from './support/fakes';
 
 const NOW = new Date('2026-09-01T05:00:00.000Z');
@@ -324,8 +325,8 @@ describe('a save that races the submit', () => {
   it('writes the live state it finds behind an attempt that has already ended', async () => {
     const { submit, state, prisma } = build();
     await answered(state);
-    prisma.attemptRows[0]!.status = ATTEMPT_STATUS.SUBMITTED;
-    prisma.attemptRows[0]!.submittedAt = NOW;
+    rowAt(prisma.attemptRows).status = ATTEMPT_STATUS.SUBMITTED;
+    rowAt(prisma.attemptRows).submittedAt = NOW;
 
     const result = await submit.submit('stu_1', 'att_1');
 
@@ -405,7 +406,7 @@ describe('a sitting the scorer never scored', () => {
   /** The failure this prevents: a job that exhausted its retries leaving a result nobody owns. */
   it('asks for a score again once the request it made has been handed on and lost', async () => {
     const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
-    const attempt = prisma.attemptRows[0]!;
+    const attempt = rowAt(prisma.attemptRows);
     attempt.submittedAt = LONG_AGO;
     await prisma.outboxEvent.create({
       data: {
@@ -425,7 +426,7 @@ describe('a sitting the scorer never scored', () => {
 
   it('does not stack a second ask on top of one still waiting to be handed on', async () => {
     const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
-    const attempt = prisma.attemptRows[0]!;
+    const attempt = rowAt(prisma.attemptRows);
     attempt.submittedAt = LONG_AGO;
     await prisma.outboxEvent.create({
       data: {
@@ -443,7 +444,7 @@ describe('a sitting the scorer never scored', () => {
 
   it('leaves a scored sitting alone, and one that has only just ended', async () => {
     const { prisma, sweeper } = build({ status: ATTEMPT_STATUS.SUBMITTED });
-    const attempt = prisma.attemptRows[0]!;
+    const attempt = rowAt(prisma.attemptRows);
     attempt.submittedAt = new Date();
 
     await sweeper.process();

@@ -8,6 +8,7 @@ import {
   type PaperQuestionStatus,
 } from '@iace/contracts';
 import { scorePaper, type ScorableQuestion } from '../src/attempts/score-paper';
+import { rowAt } from './support/fakes';
 
 const MARKS = 2;
 const NEGATIVE = 0.5;
@@ -29,7 +30,7 @@ function mcq(overrides: Partial<ScorableQuestion> = {}): ScorableQuestion {
   };
 }
 
-const only = (row: ScorableQuestion) => scorePaper([row]).questions[0]!;
+const only = (row: ScorableQuestion) => rowAt(scorePaper([row]).questions);
 
 // --------------------------------------------------------------------------- the truth table
 // ---------------------------------------------------------------------------

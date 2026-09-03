@@ -16,6 +16,7 @@ import {
   FakeRedis,
   FakeScoringPrisma,
   makeAttempt,
+  rowAt,
   type FakeAttemptRow,
 } from './support/fakes';
 
@@ -248,7 +249,7 @@ describe('LeaderboardService', () => {
     for (const row of rows) await leaderboard.record(row);
     await redis.del(redisKeys.testLeaderboard(TEST_ID));
 
-    assert.equal(await leaderboard.rank(rows[1]!), null);
+    assert.equal(await leaderboard.rank(rowAt(rows, 1)), null);
     assert.equal(rebuilds.jobs.length, 1);
   });
 
@@ -266,7 +267,7 @@ describe('LeaderboardService', () => {
     const rows = [sat('att_a', 90, 20), sat('att_b', 60, 15)];
     const { redis, leaderboard } = board(rows);
     for (const row of rows) await leaderboard.record(row);
-    rows[1]!.isGraded = false;
+    rowAt(rows, 1).isGraded = false;
 
     await redis.del(redisKeys.testLeaderboardRebuild(TEST_ID));
     await leaderboard.rebuild(TEST_ID);
@@ -279,7 +280,7 @@ describe('LeaderboardService', () => {
     const { prisma, leaderboard } = board(rows);
     for (const row of rows) await leaderboard.record(row);
 
-    await leaderboard.rank(rows[1]!);
+    await leaderboard.rank(rowAt(rows, 1));
 
     assert.equal(prisma.attempts[1]?.lastRank, 2);
     assert.equal(prisma.attempts[1]?.lastPercentile, 50);
@@ -291,6 +292,6 @@ describe('LeaderboardService', () => {
     const { redis, leaderboard } = board(rows);
     redis.client.zcard = () => Promise.reject(new Error('redis unreachable'));
 
-    assert.equal(await leaderboard.rank(rows[0]!), null);
+    assert.equal(await leaderboard.rank(rowAt(rows)), null);
   });
 });

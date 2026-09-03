@@ -108,14 +108,14 @@ function sitting(attemptId: string): FakeAttemptRow {
     studentId: studentOf(attemptId),
     status: ATTEMPT_STATUS.SUBMITTED,
     startedAt: STARTED,
-    submittedAt: new Date(STARTED.getTime() + MINUTES[attemptId]! * 60_000),
+    submittedAt: new Date(STARTED.getTime() + (MINUTES[attemptId] ?? 0) * 60_000),
     score: null,
   });
 }
 
 /** The fake hands the key and the options over on every row; leaving them out is the code's job. */
 function served(attemptId: string): FakeServedAnswerRow[] {
-  return COHORT[attemptId]!.map((selectedOptionId, seat) =>
+  return (COHORT[attemptId] ?? []).map((selectedOptionId, seat) =>
     makeServedAnswer({
       attemptId,
       questionId: `q${seat + 1}`,
@@ -166,7 +166,7 @@ function platform() {
         id,
         studentId: studentOf(id),
         title: SHAPE.title,
-        submittedAt: new Date(STARTED.getTime() + MINUTES[id]! * 60_000),
+        submittedAt: new Date(STARTED.getTime() + (MINUTES[id] ?? 0) * 60_000),
         fullName: id === OURS ? OUR_NAME : RIVAL_NAME,
         branch: id === OURS ? OUR_BRANCH : 'DILSUKHNAGAR',
       }),

@@ -1224,7 +1224,7 @@ export class FakeConfigPrisma {
       } catch (error) {
         tables.forEach((rows, index) => {
           rows.length = 0;
-          rows.push(...snapshot[index]!);
+          rows.push(...(snapshot[index] ?? []));
         });
         throw error;
       }
@@ -3059,7 +3059,7 @@ export class FakeQuestionBankPrisma {
       const index = this.questions.findIndex((question) => question.id === where.id);
       if (index === -1) throw new Error(`no question ${where.id}`);
       const [row] = this.questions.splice(index, 1);
-      return Promise.resolve(row!);
+      return Promise.resolve(rowAt([row]));
     },
 
     groupBy: ({ by, where }: { by: ['status']; where?: FakeQuestionWhere }) => {
@@ -5635,6 +5635,13 @@ function matchesRow(row: Record<string, unknown>, where: Record<string, unknown>
   );
 }
 
+/** The row a fixture was built with. Throws rather than asserts, so a bad setup names itself. */
+export function rowAt<T>(rows: readonly T[], index = 0): T {
+  const row = rows[index];
+  if (row === undefined) throw new Error(`This fixture has no row ${index}`);
+  return row;
+}
+
 /** A typed row read as the loose bag every write below indexes into. */
 const fields = (row: object): Record<string, unknown> => row as Record<string, unknown>;
 
@@ -6034,7 +6041,7 @@ export class FakeRollupPrisma {
     } catch (error) {
       tables.forEach((rows, index) => {
         rows.length = 0;
-        rows.push(...snapshot[index]!);
+        rows.push(...(snapshot[index] ?? []));
       });
       throw error;
     }

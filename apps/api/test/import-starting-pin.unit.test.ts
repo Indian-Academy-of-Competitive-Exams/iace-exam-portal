@@ -58,7 +58,7 @@ describe('the PIN a roster import issues', () => {
     for (const [index, pin] of pins.entries()) {
       assert.equal(pinSchema.safeParse(pin).success, true, pin);
       assert.ok(
-        !prisma.students[index]!.mobile.startsWith(pin),
+        !prisma.students[index]?.mobile.startsWith(pin),
         `${pin} is the first digits of the number it was issued to`,
       );
     }

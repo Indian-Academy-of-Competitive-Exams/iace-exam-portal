@@ -26,6 +26,7 @@ import {
   makeQuestion,
   makeSubject,
   makeTopic,
+  rowAt,
 } from './support/fakes';
 
 /** What `getAllAndOverride` takes: a handler or the class it hangs off. */
@@ -167,7 +168,7 @@ describe('AuthoringService.history', () => {
     const { authoring, prisma } = build();
     await authoring.create(draft(), MINE);
     await authoring.create(draft({ stem: { en: 'Who wrote the Constitution?' } }), THEIRS);
-    prisma.questions[1]!.createdById = THEIRS;
+    rowAt(prisma.questions, 1).createdById = THEIRS;
 
     const mine = await authoring.history(query({ q: 'Constitution' }), MINE);
     const theirs = await authoring.history(query({ q: 'Constitution' }), THEIRS);
