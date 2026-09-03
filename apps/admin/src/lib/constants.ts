@@ -43,6 +43,7 @@ import {
   type StudentSeriesSource,
   type StudentType,
   type TestBuilderStep,
+  TEST_SERIES_KIND,
   type TestSeriesKind,
   type UnlockRequestStatus,
   type TestStatus,
@@ -179,9 +180,16 @@ export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> =
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
   STANDARD: 'Reached by an exam enrolment or a program',
   FREE: 'Also reached by everyone enrolled in its exam course',
-  PROGRAM: 'Reached only by an enrolled program',
+  PROGRAM: 'Not yet choosable — its reach rules are not built',
   EVENT: 'Reached only by candidates imported into it',
 };
+
+/** What an admin may pick by hand today; PROGRAM's own reach rules land in a later change. */
+export const SELECTABLE_TEST_SERIES_KINDS = [
+  TEST_SERIES_KIND.STANDARD,
+  TEST_SERIES_KIND.FREE,
+  TEST_SERIES_KIND.EVENT,
+] as const;
 
 /** What opens a series for a student, in the words an admin would use for it. */
 export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>> = {

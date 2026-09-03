@@ -10,7 +10,6 @@ import {
   PERMISSION_LEVELS,
   type SeriesTestRow,
   TEST_SERIES_KIND,
-  TEST_SERIES_KINDS,
   type TestSeriesKind,
   type TestSeriesSummary,
   UNLOCK_MODE,
@@ -51,6 +50,7 @@ import {
   NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
+  SELECTABLE_TEST_SERIES_KINDS,
   TEST_SERIES_KIND_HINTS,
   TEST_SERIES_KIND_LABELS,
   UNLOCK_MODE_LABELS,
@@ -393,7 +393,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
                 onChange={(next) =>
                   form.setValue('kind', next as TestSeriesKind, { shouldDirty: true })
                 }
-                items={TEST_SERIES_KINDS.map((value) => ({
+                items={SELECTABLE_TEST_SERIES_KINDS.map((value) => ({
                   value,
                   label: TEST_SERIES_KIND_LABELS[value],
                   hint: TEST_SERIES_KIND_HINTS[value],

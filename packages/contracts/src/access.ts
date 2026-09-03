@@ -159,7 +159,7 @@ export function seriesNameKind(input: {
   const program = input.programCode?.trim();
   if (program) return program;
   if (input.kind === TEST_SERIES_KIND.FREE) return 'Free Mocks';
-  if (input.kind === TEST_SERIES_KIND.EVENT) return 'Scholarship Test';
+  if (input.kind === TEST_SERIES_KIND.EVENT) return 'Event Test';
   return 'Mock Test Series';
 }
 

@@ -158,7 +158,7 @@ describe('seriesNameKind', () => {
 
   it('separates the free tier from the ordinary one', () => {
     assert.equal(seriesNameKind({ kind: TEST_SERIES_KIND.FREE }), 'Free Mocks');
-    assert.equal(seriesNameKind({ kind: TEST_SERIES_KIND.EVENT }), 'Scholarship Test');
+    assert.equal(seriesNameKind({ kind: TEST_SERIES_KIND.EVENT }), 'Event Test');
     assert.equal(seriesNameKind({}), 'Mock Test Series');
   });
 
