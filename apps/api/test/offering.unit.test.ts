@@ -160,6 +160,79 @@ describe('OfferingService — attaching a test to a series', () => {
   });
 });
 
+/** `Test.testSeriesId` is a RESTRICT key nothing else writes, so the link has to carry it. */
+describe('OfferingService — the series column follows the link that set it', () => {
+  it('writes the series onto the test itself', async () => {
+    const { service, prisma } = serviceWith();
+
+    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_1', order: 3 }] });
+
+    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], ['srs_1', 3]);
+  });
+
+  it('takes the earliest of a set the screen holds', async () => {
+    const { service, prisma } = serviceWith();
+
+    await service.setSeries('tst_1', {
+      series: [
+        { testSeriesId: 'srs_1', order: 2 },
+        { testSeriesId: 'srs_2', order: 1 },
+      ],
+    });
+
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_2');
+  });
+
+  /** The failure this prevents: a series nothing says holds the test, refusing to be deleted. */
+  it('clears the column when the last link goes', async () => {
+    const { service, prisma } = serviceWith(
+      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+    );
+
+    await service.setSeries('tst_1', { series: [] });
+
+    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], [null, null]);
+  });
+
+  it('clears the column when the series drops the test from its own side', async () => {
+    const { service, prisma } = serviceWith(
+      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+    );
+
+    await service.removeFromSeries('srs_1', 'tst_1');
+
+    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], [null, null]);
+  });
+
+  it('repoints the column at what is left rather than clearing it', async () => {
+    const { service, prisma } = serviceWith(
+      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
+      [
+        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+        { testSeriesId: 'srs_2', testId: 'tst_1', order: 2 },
+      ],
+    );
+
+    await service.removeFromSeries('srs_1', 'tst_1');
+
+    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], ['srs_2', 2]);
+  });
+
+  it('leaves the column alone when the removal is refused', async () => {
+    const { service, prisma } = serviceWith(
+      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      [{ testId: 'tst_1' }],
+    );
+
+    await service.removeFromSeries('srs_1', 'tst_1').catch(() => undefined);
+
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
+  });
+});
+
 describe('OfferingService — offering a test', () => {
   it('offers a finalized test that a series carries', async () => {
     const { service, prisma } = serviceWith(finalized(), [

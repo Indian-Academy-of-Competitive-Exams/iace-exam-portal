@@ -43,7 +43,7 @@ const KIND_PAIRING_MESSAGES = {
 } as const;
 
 const branchesAreStandardOnly = (count: number) =>
-  `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'}, and changing its kind would take it away from them.`;
+  `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'} and carries a branch list no other kind can hold, so its kind cannot change.`;
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
@@ -168,6 +168,7 @@ export class TestSeriesService {
       programCode: input.programCode ?? null,
       eventId: null,
       branchIds: [],
+      enabledBranches: 0,
     });
 
     const id = await this.prisma.$transaction(async (tx) => {
@@ -212,12 +213,14 @@ export class TestSeriesService {
         : (input.prerequisiteSeriesId ?? null),
     );
     // Against what the row WILL hold: eventId and branchIds are not writable, so they are its own.
+    const counts = await this.branchCountsFor([id]);
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
       examStageId: settledValue(input.examStageId, series.examStageId),
       programCode: settledValue(input.programCode, series.programCode),
       eventId: series.eventId,
       branchIds: series.branchIds,
+      enabledBranches: counts.get(id)?.enabled ?? 0,
     });
 
     const changes = columnsOf(input);
@@ -230,15 +233,18 @@ export class TestSeriesService {
     this.auditContext.setChanged(fieldDiff(series, updated, AUDITED_SERIES_FIELDS));
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
 
-    const counts = await this.branchCountsFor([id]);
     return toSummary(updated, counts.get(id));
   }
 
   async remove(id: string): Promise<void> {
-    const series = await this.requireSeries(id);
+    await this.requireSeries(id);
 
-    if (series._count.tests > 0) {
-      const tests = `${series._count.tests} test${series._count.tests === 1 ? '' : 's'}`;
+    // Both routes, because `Test.testSeriesId` is a RESTRICT key the join-table count cannot see.
+    const held = await this.prisma.test.count({
+      where: { OR: [{ testSeriesId: id }, { series: { some: { testSeriesId: id } } }] },
+    });
+    if (held > 0) {
+      const tests = `${held} test${held === 1 ? '' : 's'}`;
       throw new AppException(
         ErrorCodes.CONFLICT,
         `${tests} are offered through this series, and deleting it would take away the only route to them. Remove them from the series first.`,
@@ -525,13 +531,14 @@ export class TestSeriesService {
   }
 }
 
-/** The four columns a series' kind implies something about, as the row will hold them. */
+/** The columns a series' kind implies something about, plus what its branch switch says today. */
 interface SeriesPairing {
   kind: TestSeriesKind;
   examStageId: string | null;
   programCode: string | null;
   eventId: string | null;
   branchIds: readonly string[];
+  enabledBranches: number;
 }
 
 /** An absent key keeps what the column holds; an explicit null clears it. */
@@ -558,8 +565,9 @@ function kindPairingErrors(shape: SeriesPairing): Record<string, string[]> {
   if (!isEvent && shape.eventId !== null)
     found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_IS_ITS_OWN_KIND]);
 
+  // The CHECK is on the list, so that is what refuses; the count is what the sentence says.
   if (shape.kind !== TEST_SERIES_KIND.STANDARD && shape.branchIds.length > 0)
-    found.push(['kind', branchesAreStandardOnly(shape.branchIds.length)]);
+    found.push(['kind', branchesAreStandardOnly(shape.enabledBranches)]);
 
   const errors: Record<string, string[]> = {};
   for (const [field, message] of found) errors[field] = [...(errors[field] ?? []), message];

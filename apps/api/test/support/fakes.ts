@@ -1421,6 +1421,8 @@ export interface FakeTestModelRow {
   finalizedAt: Date | null;
   createdById: string | null;
   createdAt: Date;
+  testSeriesId: string | null;
+  seriesOrder: number | null;
 }
 
 export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestModelRow {
@@ -1444,6 +1446,8 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     finalizedAt: null,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    testSeriesId: null,
+    seriesOrder: null,
     ...overrides,
   };
 }
@@ -3353,6 +3357,24 @@ export interface FakeGrantRowAccess {
   createdAt: Date;
 }
 
+/** What the series-delete guard reads: the RESTRICT column, and the join rows beside it. */
+export interface FakeAccessTestRow {
+  id: string;
+  testSeriesId: string | null;
+  seriesIds: string[];
+}
+
+interface FakeAccessTestArm {
+  testSeriesId?: string;
+  series?: { some: { testSeriesId: string } };
+}
+
+/** Either route a test is offered by, exactly as the delete guard's two `OR` arms ask. */
+function reaches(row: FakeAccessTestRow, arm: FakeAccessTestArm): boolean {
+  if (arm.series) return row.seriesIds.includes(arm.series.some.testSeriesId);
+  return arm.testSeriesId !== undefined && row.testSeriesId === arm.testSeriesId;
+}
+
 export function makeProgram(overrides: Partial<FakeProgramRow> = {}): FakeProgramRow {
   return {
     id: 'prog_1',
@@ -3395,7 +3417,13 @@ export class FakeAccessPrisma {
     readonly students: FakeStudent[] = [],
     readonly grants: FakeGrantRowAccess[] = [],
     readonly examStages: FakeExamStage[] = [makeExamStage()],
+    readonly tests: FakeAccessTestRow[] = [],
   ) {}
+
+  readonly test = {
+    count: ({ where }: { where: { OR: FakeAccessTestArm[] } }) =>
+      Promise.resolve(this.tests.filter((row) => where.OR.some((arm) => reaches(row, arm))).length),
+  };
 
   private id(prefix: string): string {
     this.seq += 1;
@@ -3522,6 +3550,10 @@ export class FakeAccessPrisma {
     },
 
     delete: ({ where }: { where: { id: string } }) => {
+      // `Test.testSeriesId` is ON DELETE RESTRICT, and Prisma's P2003 for it can only leave as a 500.
+      if (this.tests.some((row) => row.testSeriesId === where.id)) {
+        throw new Error(`Test_testSeriesId_fkey restricts deleting ${where.id}`);
+      }
       const index = this.series.findIndex((row) => row.id === where.id);
       const [removed] = this.series.splice(index, 1);
       return Promise.resolve(removed);

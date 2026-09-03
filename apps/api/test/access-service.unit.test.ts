@@ -18,6 +18,7 @@ import { BranchSeriesController } from '../src/access/access.controller';
 import { ActorTypes, branchSeriesListQuerySchema } from '@iace/contracts';
 import {
   FakeEventBus,
+  type FakeAccessTestRow,
   type FakeBranch,
   type FakeProgramRow,
   type FakeBranchConfigRow,
@@ -41,6 +42,7 @@ function build(
     branches?: FakeBranch[];
     branchConfigs?: FakeBranchConfigRow[];
     students?: FakeStudent[];
+    tests?: FakeAccessTestRow[];
   } = {},
 ) {
   const prisma = new FakeAccessPrisma(
@@ -51,6 +53,7 @@ function build(
     options.students ?? [],
     [],
     [makeExamStage({ id: 'stage_1' })],
+    options.tests ?? [],
   );
   const auditContext = new AuditContext();
   const events = new FakeEventBus();
@@ -300,6 +303,44 @@ describe('TestSeriesService — what a series may point at', () => {
 
     await assert.rejects(() => series.remove('srs_1'), AppException.is);
   });
+
+  it('refuses to delete one still carrying a test, whichever route holds it', async () => {
+    const { series, prisma } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      tests: [{ id: 'tst_1', testSeriesId: 'srs_1', seriesIds: ['srs_1'] }],
+    });
+
+    const error = await series.remove('srs_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(prisma.series.length, 1);
+  });
+
+  /** The failure this prevents: a test taken out of a series, and the series then undeletable. */
+  it('deletes one a test was taken out of, rather than tripping its restrict key', async () => {
+    const { series, prisma } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      tests: [{ id: 'tst_1', testSeriesId: null, seriesIds: [] }],
+    });
+
+    await series.remove('srs_1');
+
+    assert.equal(prisma.series.length, 0);
+  });
+
+  /** The join row is gone but the column still points here, so counting links alone lets it through. */
+  it('refuses one a stranded test still points at, with no link left to count', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1' })],
+      tests: [{ id: 'tst_1', testSeriesId: 'srs_1', seriesIds: [] }],
+    });
+
+    const error = await series.remove('srs_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+  });
 });
 /** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */
 describe('TestSeriesService — a kind and its columns say the same thing', () => {
@@ -384,6 +425,10 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
   it('refuses making a series that runs at branches free', async () => {
     const { series } = build({
       series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
+      branchConfigs: [
+        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: true }),
+        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: true }),
+      ],
     });
 
     const error = await series
@@ -392,6 +437,24 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
 
     assert.ok(AppException.is(error));
     assert.match(error.fieldErrors?.kind?.[0] ?? '', /2 branches/);
+  });
+
+  /** Switching every branch off is how a series stops being offered, and it never touches branchIds. */
+  it('counts the branches switched on today, not the ones the list still names', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
+      branchConfigs: [
+        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: false }),
+        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: false }),
+      ],
+    });
+
+    const error = await series
+      .update('srs_1', { kind: TEST_SERIES_KIND.FREE })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.match(error.fieldErrors?.kind?.[0] ?? '', /0 branches/);
   });
 
   it('leaves a standard series that runs at branches alone', async () => {

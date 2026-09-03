@@ -34,7 +34,7 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v7';
+const CATALOG_SHAPE = 'v8';
 
 const catalogInclude = (branchId: string | null) =>
   ({

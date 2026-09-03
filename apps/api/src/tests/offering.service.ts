@@ -47,6 +47,16 @@ function partitionBySet(
 
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
+interface SeriesPosition {
+  testSeriesId: string;
+  order: number | null;
+}
+
+/** `linksOf`'s order, sorted here so the column lands on the same link Postgres would return. */
+const byPosition = (left: SeriesPosition, right: SeriesPosition): number =>
+  (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) ||
+  left.testSeriesId.localeCompare(right.testSeriesId);
+
 function toBranchTestRow(row: {
   testSeriesId: string;
   testId: string;
@@ -115,6 +125,7 @@ export class OfferingService {
           })),
         });
       }
+      await this.mirrorSeriesOntoTest(tx, testId);
       return new Set([
         ...before.map((row) => row.testSeriesId),
         ...wanted.map((row) => row.testSeriesId),
@@ -251,12 +262,28 @@ export class OfferingService {
     const test = await this.requireTest(testId);
     this.assertNotSat(test);
 
-    await this.prisma.testSeriesTest.delete({
-      where: { testSeriesId_testId: { testSeriesId, testId } },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.testSeriesTest.delete({
+        where: { testSeriesId_testId: { testSeriesId, testId } },
+      });
+      await this.mirrorSeriesOntoTest(tx, testId);
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
+  }
+
+  /** The join table still writes; the RESTRICT column reads. It follows, or it strands a series. */
+  private async mirrorSeriesOntoTest(tx: Prisma.TransactionClient, testId: string): Promise<void> {
+    const held = await tx.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true, order: true },
+    });
+    const first = [...held].sort(byPosition)[0];
+    await tx.test.update({
+      where: { id: testId },
+      data: { testSeriesId: first?.testSeriesId ?? null, seriesOrder: first?.order ?? null },
+    });
   }
 
   /** Every branch this test reaches, with whatever that branch does differently for it. */
