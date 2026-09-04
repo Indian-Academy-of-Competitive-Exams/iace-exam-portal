@@ -42,8 +42,6 @@ const CANDIDATE_SELECT = {
   topicId: true,
   difficulty: true,
   tags: true,
-  createdAt: true,
-  fixedUseCount: true,
 } as const satisfies Prisma.QuestionSelect;
 
 type CandidateRow = Prisma.QuestionGetPayload<{ select: typeof CANDIDATE_SELECT }>;
@@ -101,10 +99,9 @@ export class PaperService {
         const result = drawPaper({
           sections,
           pool,
-          strategy: test.drawStrategy,
           spec,
-          // A seed per variant, so the same test drawn twice gives the same set of papers.
-          seed: freshSeed() + variant,
+          // A fresh seed per paper is the whole of what makes one variant differ from the next.
+          seed: freshSeed(),
         });
         if (!result.ok) {
           throw new AppException(
@@ -408,7 +405,6 @@ export class PaperService {
         baseConfigId: true,
         isLocked: true,
         paperBinding: true,
-        drawStrategy: true,
         questionPoolFilter: true,
         _count: { select: { attempts: true } },
       },
@@ -499,8 +495,6 @@ function toCandidate(row: CandidateRow & { currentVersionId: string }): DrawCand
     topicId: row.topicId,
     difficulty: row.difficulty,
     tags: row.tags,
-    createdAt: row.createdAt,
-    fixedUseCount: row.fixedUseCount,
   };
 }
 

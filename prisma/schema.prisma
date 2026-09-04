@@ -140,13 +140,6 @@ enum PaperBinding {
   GENERATED
 }
 
-enum DrawStrategy {
-  RANDOM
-  NEWEST_FIRST
-  LEAST_SERVED
-  UNSEEN_FIRST
-}
-
 enum PaperQuestionStatus {
   ACTIVE
   DROPPED
@@ -501,7 +494,6 @@ model Test {
   paperBinding       PaperBinding   @default(FIXED)
   maxRetakes         Int?
   questionPoolFilter Json?
-  drawStrategy       DrawStrategy   @default(RANDOM)
   // Copied from the config at creation: a sat paper must not re-skin because the config moved.
   examTemplate       ExamTemplate   @default(COMFORTABLE)
   // How many papers were drawn. One for FIXED; a GENERATED test hands out one per attempt by seed.

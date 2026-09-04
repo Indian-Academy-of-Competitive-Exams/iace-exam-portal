@@ -1,9 +1,7 @@
 import {
   DIFFICULTY_LEVELS,
-  DRAW_STRATEGY,
   type DifficultyLevel,
   type DrawSpec,
-  type DrawStrategy,
   type SectionDrawSpec,
 } from '@iace/contracts';
 import { seededRandom, shuffle } from '../common/seeded-shuffle';
@@ -18,8 +16,6 @@ export interface DrawCandidate {
   topicId: string | null;
   difficulty: DifficultyLevel;
   tags: readonly string[];
-  createdAt: Date;
-  fixedUseCount: number;
 }
 
 /** A config section in the form the draw judges it: how many, of what, worth what. */
@@ -57,13 +53,10 @@ export type DrawResult =
 export interface DrawRequest {
   sections: readonly DrawSection[];
   pool: readonly DrawCandidate[];
-  strategy: DrawStrategy;
   /** What each section draws from: its topics, and how many of each difficulty. */
   spec?: DrawSpec | null;
   /** Same seed, same pool, same paper — which is what makes a re-draw a decision, not a dice roll. */
   seed: number;
-  /** What this student has already been served. Empty at finalize, real per attempt in Phase 3. */
-  seen?: ReadonlySet<string>;
   /** Chosen by hand, per section, already resolved against the bank. The draw fills what is left. */
   pinned?: ReadonlyMap<string, readonly DrawCandidate[]>;
 }
@@ -71,7 +64,8 @@ export interface DrawRequest {
 /** Fills every section to its exact count, or says which ones it could not. */
 export function drawPaper(request: DrawRequest): DrawResult {
   const random = seededRandom(request.seed);
-  const ordered = orderPool(request.pool, request.strategy, random, request.seen ?? EMPTY_SEEN);
+  // Sorted by id first, so the SEED decides the paper and not the order the rows arrived in.
+  const ordered = shuffle([...request.pool].sort(byId), random);
 
   const questions: DrawnQuestion[] = [];
   const shortfalls: SectionShortfall[] = [];
@@ -111,8 +105,6 @@ export function drawPaper(request: DrawRequest): DrawResult {
 
   return shortfalls.length > 0 ? { ok: false, shortfalls } : { ok: true, questions };
 }
-
-const EMPTY_SEEN: ReadonlySet<string> = new Set<string>();
 
 function pinnedIds(pinned: DrawRequest['pinned']): string[] {
   return [...(pinned?.values() ?? [])].flatMap((picks) => picks.map((pick) => pick.id));
@@ -161,32 +153,4 @@ function narrows<T>(values: readonly T[] | undefined): values is readonly T[] {
   return values !== undefined && values.length > 0;
 }
 
-/** By id first, so the SEED decides and not whatever order the rows arrived in. */
-function orderPool(
-  pool: readonly DrawCandidate[],
-  strategy: DrawStrategy,
-  random: () => number,
-  seen: ReadonlySet<string>,
-): DrawCandidate[] {
-  const shuffled = shuffle([...pool].sort(byId), random);
-  const rank = rankOf(strategy, seen);
-  return rank ? shuffled.sort((a, b) => rank(a) - rank(b)) : shuffled;
-}
-
 const byId = (a: DrawCandidate, b: DrawCandidate) => a.id.localeCompare(b.id);
-
-function rankOf(
-  strategy: DrawStrategy,
-  seen: ReadonlySet<string>,
-): ((candidate: DrawCandidate) => number) | null {
-  switch (strategy) {
-    case DRAW_STRATEGY.NEWEST_FIRST:
-      return (candidate) => -candidate.createdAt.getTime();
-    case DRAW_STRATEGY.LEAST_SERVED:
-      return (candidate) => candidate.fixedUseCount;
-    case DRAW_STRATEGY.UNSEEN_FIRST:
-      return (candidate) => (seen.has(candidate.id) ? 1 : 0);
-    default:
-      return null;
-  }
-}

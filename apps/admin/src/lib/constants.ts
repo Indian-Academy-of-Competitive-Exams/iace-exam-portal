@@ -24,7 +24,6 @@ import {
   BRANCH_TYPE,
   type BranchType,
   type DifficultyLevel,
-  type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
   FEATURE_KEYS,
@@ -316,21 +315,7 @@ export const PAPER_BINDING_LABELS: Readonly<Record<PaperBinding, string>> = {
 
 export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
   FIXED: 'Picked by hand and frozen when it is offered; every student sits it',
-  GENERATED: 'Drawn again for each student when their attempt starts',
-};
-
-export const DRAW_STRATEGY_LABELS: Readonly<Record<DrawStrategy, string>> = {
-  RANDOM: 'Random',
-  NEWEST_FIRST: 'Newest first',
-  LEAST_SERVED: 'Least served',
-  UNSEEN_FIRST: 'Unseen first',
-};
-
-export const DRAW_STRATEGY_HINTS: Readonly<Record<DrawStrategy, string>> = {
-  RANDOM: 'Any question in the pool, with equal chance',
-  NEWEST_FIRST: 'The most recently added questions',
-  LEAST_SERVED: 'The questions used in the fewest papers so far',
-  UNSEEN_FIRST: 'Questions the student has not met before',
+  GENERATED: 'Several papers drawn when it is offered; each student is dealt one',
 };
 
 /** The phases of building a test. The order is the contract's; these are only the words. */

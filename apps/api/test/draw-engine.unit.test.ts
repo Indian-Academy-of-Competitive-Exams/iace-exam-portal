@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DIFFICULTY_LEVEL, DRAW_STRATEGY, type DrawStrategy } from '@iace/contracts';
+import { DIFFICULTY_LEVEL } from '@iace/contracts';
 import { rowAt } from './support/fakes';
 import {
   drawPaper,
@@ -19,8 +19,6 @@ function candidate(id: string, over: Partial<DrawCandidate> = {}): DrawCandidate
     topicId: null,
     difficulty: DIFFICULTY_LEVEL.MEDIUM,
     tags: [],
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    fixedUseCount: 0,
     ...over,
   };
 }
@@ -49,7 +47,6 @@ function draw(over: Partial<DrawRequest> = {}) {
   return drawPaper({
     sections: [section()],
     pool: pool(20),
-    strategy: DRAW_STRATEGY.RANDOM,
     seed: SEED,
     ...over,
   });
@@ -65,27 +62,18 @@ function questionsOf(result: ReturnType<typeof drawPaper>) {
 // ---------------------------------------------------------------------------
 
 describe('drawPaper — filling every section', () => {
-  const STRATEGIES: DrawStrategy[] = [
-    DRAW_STRATEGY.RANDOM,
-    DRAW_STRATEGY.NEWEST_FIRST,
-    DRAW_STRATEGY.LEAST_SERVED,
-    DRAW_STRATEGY.UNSEEN_FIRST,
-  ];
+  it('fills each section to its exact count', () => {
+    const sections = [
+      section({ id: 'sec_1', order: 1, questionCount: 5 }),
+      section({ id: 'sec_2', order: 2, questionCount: 8 }),
+    ];
 
-  for (const strategy of STRATEGIES) {
-    it(`${strategy} fills each section to its exact count`, () => {
-      const sections = [
-        section({ id: 'sec_1', order: 1, questionCount: 5 }),
-        section({ id: 'sec_2', order: 2, questionCount: 8 }),
-      ];
+    const questions = questionsOf(draw({ sections, pool: pool(40) }));
 
-      const questions = questionsOf(draw({ sections, pool: pool(40), strategy }));
-
-      assert.equal(questions.length, 13);
-      assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_1').length, 5);
-      assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_2').length, 8);
-    });
-  }
+    assert.equal(questions.length, 13);
+    assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_1').length, 5);
+    assert.equal(questions.filter((row) => row.baseConfigSectionId === 'sec_2').length, 8);
+  });
 
   it('never serves one question twice, even where two sections could both take it', () => {
     // Both sections draw from the same undifferentiated pool of exactly the size they add up to.
@@ -311,80 +299,6 @@ describe('drawPaper — what narrows a section’s pool', () => {
   });
 });
 
-// --------------------------------------------------------------------------- strategies
-// ---------------------------------------------------------------------------
-
-describe('drawPaper — what each strategy actually ranks on', () => {
-  it('NEWEST_FIRST takes the most recently added', () => {
-    const bank = Array.from({ length: 10 }, (_, index) =>
-      candidate(`q${index}`, { createdAt: new Date(2026, 0, index + 1) }),
-    );
-
-    const questions = questionsOf(
-      draw({
-        sections: [section({ questionCount: 3 })],
-        pool: bank,
-        strategy: DRAW_STRATEGY.NEWEST_FIRST,
-      }),
-    );
-
-    assert.deepEqual(
-      questions.map((row) => row.questionId),
-      ['q9', 'q8', 'q7'],
-    );
-  });
-
-  it('LEAST_SERVED takes the ones fewest papers have used', () => {
-    const bank = Array.from({ length: 10 }, (_, index) =>
-      candidate(`q${index}`, { fixedUseCount: index }),
-    );
-
-    const questions = questionsOf(
-      draw({
-        sections: [section({ questionCount: 3 })],
-        pool: bank,
-        strategy: DRAW_STRATEGY.LEAST_SERVED,
-      }),
-    );
-
-    assert.deepEqual(
-      questions.map((row) => row.questionId),
-      ['q0', 'q1', 'q2'],
-    );
-  });
-
-  it('UNSEEN_FIRST exhausts what the student has not met before falling back', () => {
-    const bank = pool(6);
-
-    const questions = questionsOf(
-      draw({
-        sections: [section({ questionCount: 4 })],
-        pool: bank,
-        strategy: DRAW_STRATEGY.UNSEEN_FIRST,
-        seen: new Set(['q1', 'q2', 'q3']),
-      }),
-    );
-
-    const picked = questions.map((row) => row.questionId);
-    // All three unseen ones are in; only then does a seen one make up the number.
-    assert.equal(new Set(picked.filter((id) => ['q4', 'q5', 'q6'].includes(id))).size, 3);
-    assert.equal(picked.filter((id) => ['q1', 'q2', 'q3'].includes(id)).length, 1);
-  });
-
-  it('UNSEEN_FIRST with nothing seen is just the seeded draw', () => {
-    const bank = pool(20);
-    const options = { sections: [section({ questionCount: 5 })], pool: bank };
-
-    const unseen = questionsOf(draw({ ...options, strategy: DRAW_STRATEGY.UNSEEN_FIRST }));
-    const random = questionsOf(draw({ ...options, strategy: DRAW_STRATEGY.RANDOM }));
-
-    assert.deepEqual(
-      unseen.map((row) => row.questionId),
-      random.map((row) => row.questionId),
-    );
-  });
-});
-
 // --------------------------------------------------------------------------- determinism
 // ---------------------------------------------------------------------------
 
@@ -406,6 +320,20 @@ describe('drawPaper — the seed', () => {
     const other = questionsOf(draw({ ...options, seed: 8 })).map((row) => row.questionId);
 
     assert.notDeepEqual(first, other);
+  });
+
+  it('gives every variant of a test a different SET of questions, not one paper reordered', () => {
+    const options = { sections: [section({ questionCount: 20 })], pool: pool(200) };
+
+    const papers = Array.from({ length: 10 }, (_, variant) =>
+      questionsOf(draw({ ...options, seed: 1000 + variant }))
+        .map((row) => row.questionId)
+        .sort()
+        .join(','),
+    );
+
+    // The failure this prevents: a rank applied after the shuffle gave every variant one paper.
+    assert.equal(new Set(papers).size, 10);
   });
 
   it('gives the same paper however the rows arrived', () => {

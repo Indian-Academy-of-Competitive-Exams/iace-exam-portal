@@ -10,9 +10,7 @@ import {
   type BranchType,
   DIFFICULTY_LEVEL,
   type DifficultyLevel,
-  DRAW_STRATEGY,
   type DrawSpec,
-  type DrawStrategy,
   EVALUATION_MODE,
   EXAM_COURSE,
   EXAM_MODE,
@@ -1437,7 +1435,6 @@ export interface FakeTestModelRow {
   evaluationMode: EvaluationMode;
   paperBinding: PaperBinding;
   maxRetakes: number | null;
-  drawStrategy: DrawStrategy;
   questionPoolFilter: DrawSpec | null;
   variantCount: number;
   status: TestStatus;
@@ -1465,7 +1462,6 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     evaluationMode: EVALUATION_MODE.RANKED,
     paperBinding: PAPER_BINDING.FIXED,
     maxRetakes: null,
-    drawStrategy: DRAW_STRATEGY.RANDOM,
     variantCount: 1,
     questionPoolFilter: null,
     status: TEST_STATUS.DRAFT,

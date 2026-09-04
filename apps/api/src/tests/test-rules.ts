@@ -1,6 +1,5 @@
 import {
   DEFAULT_PAPER_VARIANTS,
-  DRAW_STRATEGY,
   EVALUATION_MODE,
   isPaperBindingAllowed,
   PAPER_BINDING,
@@ -20,7 +19,6 @@ export const TEST_DEFAULTS = {
   scope: TEST_SCOPE.FULL,
   evaluationMode: EVALUATION_MODE.RANKED,
   paperBinding: PAPER_BINDING.FIXED,
-  drawStrategy: DRAW_STRATEGY.RANDOM,
 } as const;
 
 export const RANKED_NEEDS_FIXED_MESSAGE =

@@ -3,11 +3,9 @@ import {
   AppException,
   DEFAULT_PAPER_VARIANTS,
   type DrawSpec,
-  DRAW_STRATEGY,
   EVALUATION_MODE,
   PAPER_BINDING,
   TEST_SCOPE,
-  type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
   type PaperBinding,
@@ -35,7 +33,6 @@ export interface TestFormValues {
   maxRetakes: string;
   variantCount: string;
   drawSpec: DrawSpec;
-  drawStrategy: DrawStrategy;
 }
 
 export type TestForm = UseFormReturn<TestFormValues>;
@@ -57,7 +54,6 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
     variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
     drawSpec: detail?.questionPoolFilter ?? { sections: {} },
-    drawStrategy: detail?.drawStrategy ?? DRAW_STRATEGY.RANDOM,
   };
 }
 

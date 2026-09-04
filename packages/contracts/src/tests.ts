@@ -57,7 +57,7 @@ export const EVALUATION_MODE_LABELS: Readonly<Record<EvaluationMode, string>> = 
   PRACTICE: 'Practice',
 };
 
-/** FIXED is drawn once at finalize and shared; GENERATED is drawn per attempt. */
+/** FIXED is one paper every student sits; GENERATED is several, drawn at finalize and dealt by seed. */
 export const PAPER_BINDING = {
   FIXED: 'FIXED',
   GENERATED: 'GENERATED',
@@ -89,16 +89,6 @@ export function isPaperBindingAllowed(
 export function allowedPaperBindings(evaluationMode: EvaluationMode): PaperBinding[] {
   return PAPER_BINDINGS.filter((binding) => isPaperBindingAllowed(evaluationMode, binding));
 }
-
-export const DRAW_STRATEGY = {
-  RANDOM: 'RANDOM',
-  NEWEST_FIRST: 'NEWEST_FIRST',
-  LEAST_SERVED: 'LEAST_SERVED',
-  UNSEEN_FIRST: 'UNSEEN_FIRST',
-} as const;
-export const drawStrategySchema = z.enum(DRAW_STRATEGY);
-export type DrawStrategy = z.infer<typeof drawStrategySchema>;
-export const DRAW_STRATEGIES = drawStrategySchema.options;
 
 /** The only change a frozen paper permits, and both recompute every score. */
 export const PAPER_QUESTION_STATUS = {
@@ -326,7 +316,6 @@ export const testSchema = z.object({
   examTemplate: examTemplateSchema,
   /** Null means unlimited. A ranked graded attempt is always one. */
   maxRetakes: z.number().int().nullable(),
-  drawStrategy: drawStrategySchema,
   /** What each section is drawn from. Named for the column it has always lived in. */
   questionPoolFilter: drawSpecSchema.nullable(),
   status: testStatusSchema,
@@ -505,7 +494,6 @@ const testOwnFieldsSchema = z.object({
   maxRetakes: z.coerce.number().int().min(1).max(MAX_RETAKES_CEILING).nullish(),
   /** How many papers to draw. A fixed test is one, and the server holds it there. */
   variantCount: z.coerce.number().int().min(1).max(MAX_PAPER_VARIANTS).optional(),
-  drawStrategy: drawStrategySchema.optional(),
   questionPoolFilter: drawSpecSchema.nullish(),
 });
 

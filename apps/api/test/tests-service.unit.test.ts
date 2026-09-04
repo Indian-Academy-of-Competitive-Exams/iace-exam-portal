@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   AppException,
-  DRAW_STRATEGY,
   EXAM_TEMPLATE,
   ErrorCodes,
   EVALUATION_MODE,
@@ -128,7 +127,7 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(prisma.tests[0]?.examStageId, 'stage_2');
   });
 
-  it('defaults to a full, ranked, fixed, randomly drawn paper', async () => {
+  it('defaults to a full, ranked, fixed paper', async () => {
     const { service } = serviceWith();
 
     const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
@@ -136,7 +135,6 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(created.scope, TEST_SCOPE.FULL);
     assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
     assert.equal(created.paperBinding, PAPER_BINDING.FIXED);
-    assert.equal(created.drawStrategy, DRAW_STRATEGY.RANDOM);
     assert.equal(created.maxRetakes, null);
   });
 
@@ -272,7 +270,7 @@ describe('TestsService — editing and removing', () => {
     );
 
     const error = await service
-      .update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST })
+      .update('tst_1', { questionPoolFilter: { sections: {} } })
       .catch((e: unknown) => e);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
@@ -323,7 +321,7 @@ describe('TestsService — editing and removing', () => {
       }),
     ]);
 
-    await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
+    await service.update('tst_1', { questionPoolFilter: { sections: {} } });
 
     assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
   });
@@ -370,7 +368,7 @@ describe('TestsService — editing and removing', () => {
       makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE }),
     ]);
 
-    await service.update('tst_1', { drawStrategy: DRAW_STRATEGY.NEWEST_FIRST });
+    await service.update('tst_1', { questionPoolFilter: { sections: {} } });
 
     const test = rowAt(prisma.tests);
     assert.equal(test.isLocked, false);

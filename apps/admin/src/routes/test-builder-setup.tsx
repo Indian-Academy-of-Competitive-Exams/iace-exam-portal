@@ -1,6 +1,5 @@
 import { useWatch } from 'react-hook-form';
 import {
-  DRAW_STRATEGIES,
   EVALUATION_MODE,
   EVALUATION_MODES,
   EVALUATION_MODE_LABELS,
@@ -14,7 +13,6 @@ import {
   TEST_SCOPE_LABELS,
   allowedPaperBindings,
   type BaseConfigDetail,
-  type DrawStrategy,
   type EvaluationMode,
   type ExamTemplate,
   type PaperBinding,
@@ -31,8 +29,6 @@ import {
   plural,
 } from '@iace/ui';
 import {
-  DRAW_STRATEGY_HINTS,
-  DRAW_STRATEGY_LABELS,
   EVALUATION_MODE_HINTS,
   EXAM_TEMPLATE_LABELS,
   PAPER_BINDING_HINTS,
@@ -232,7 +228,6 @@ function Rules({
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
   const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
-  const drawStrategy = useWatch({ control: form.control, name: 'drawStrategy' });
 
   /** Ranked leaves only the frozen paper, so choosing it moves the binding rather than failing. */
   const pickEvaluationMode = (value: string) => {
@@ -329,23 +324,6 @@ function Rules({
           {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
         </FormField>
       ) : null}
-
-      <FormField form={form} name="drawStrategy" label="Draw">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={drawStrategy}
-            clearable={false}
-            disabled={sat}
-            onChange={(value) => form.setValue('drawStrategy', value as DrawStrategy)}
-            items={DRAW_STRATEGIES.map((value) => ({
-              value,
-              label: DRAW_STRATEGY_LABELS[value],
-              hint: DRAW_STRATEGY_HINTS[value],
-            }))}
-          />
-        )}
-      </FormField>
     </div>
   );
 }

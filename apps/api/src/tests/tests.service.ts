@@ -59,7 +59,6 @@ export const AUDITED_TEST_FIELDS = [
   'paperBinding',
   'examTemplate',
   'maxRetakes',
-  'drawStrategy',
   'status',
 ] as const;
 
@@ -131,7 +130,6 @@ export class TestsService {
         paperBinding,
         maxRetakes: input.maxRetakes ?? null,
         variantCount,
-        drawStrategy: input.drawStrategy ?? TEST_DEFAULTS.drawStrategy,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
       },
@@ -183,7 +181,6 @@ export class TestsService {
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
           ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
-          ...(input.drawStrategy === undefined ? {} : { drawStrategy: input.drawStrategy }),
           ...(variantCount === test.variantCount ? {} : { variantCount }),
           ...(input.questionPoolFilter === undefined
             ? {}
@@ -296,7 +293,6 @@ function toTest(row: TestRow): Test {
     paperBinding: row.paperBinding,
     examTemplate: row.examTemplate,
     maxRetakes: row.maxRetakes,
-    drawStrategy: row.drawStrategy,
     variantCount: row.variantCount,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,

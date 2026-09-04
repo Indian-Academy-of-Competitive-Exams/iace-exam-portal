@@ -142,7 +142,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         examTemplate: values.examTemplate ?? undefined,
         maxRetakes: optionalNumber(values.maxRetakes),
         variantCount: optionalNumber(values.variantCount),
-        drawStrategy: values.drawStrategy,
         questionPoolFilter: values.drawSpec,
       };
       return detail
