@@ -1162,7 +1162,9 @@ export function createApiClient(options: ApiClientOptions) {
 
         /** The draft paper, as it stands: drawn at finalize, then edited a question at a time. */
         readPaper: (id: string, variant?: number): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.read(id, variant), { schema: testPaperSchema }),
+          request(`${ADMIN_TEST_PAPER_ROUTES.read(id)}${queryString({ variant })}`, {
+            schema: testPaperSchema,
+          }),
 
         /** Several at once, in the next free places its section has. */
         addPaperQuestions: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>

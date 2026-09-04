@@ -568,7 +568,10 @@ describe('PaperService — reading one variant of a drawn paper', () => {
     paper.sections.flatMap((section) => section.questions.map((row) => row.questionId)).sort();
 
   it('returns variant 0 when none is asked for, exactly as every existing caller expects', async () => {
-    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+    const kit = serviceWith(
+      undefined,
+      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
+    );
     twoVariants(kit.prisma);
 
     const paper = await kit.service.read('tst_1');
@@ -578,7 +581,10 @@ describe('PaperService — reading one variant of a drawn paper', () => {
 
   /** The failure this prevents: an admin reviewing "Paper 4" and being shown Paper 1. */
   it('returns the asked-for variant’s own rows, not variant 0’s', async () => {
-    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+    const kit = serviceWith(
+      undefined,
+      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
+    );
     twoVariants(kit.prisma);
 
     const paper = await kit.service.read('tst_1', 3);
@@ -586,12 +592,17 @@ describe('PaperService — reading one variant of a drawn paper', () => {
     assert.deepEqual(idsOf(paper), ['q4', 'r4']);
   });
 
-  it('refuses a variant at or beyond the test’s variantCount', async () => {
-    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+  it('accepts the last valid variant and refuses the one just past it', async () => {
+    const kit = serviceWith(
+      undefined,
+      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED, variantCount: 5 }),
+    );
     twoVariants(kit.prisma);
 
+    const paper = await kit.service.read('tst_1', 4);
     const error = await kit.service.read('tst_1', 5).catch((e: unknown) => e);
 
+    assert.deepEqual(idsOf(paper), []);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });

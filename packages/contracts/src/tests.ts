@@ -654,10 +654,7 @@ export const offerResultSchema = finalizeResultSchema.extend({ status: testStatu
 export type OfferResult = z.infer<typeof offerResultSchema>;
 
 export const ADMIN_TEST_PAPER_ROUTES = {
-  read: (id: string, variant?: number) => {
-    const query = variant === undefined ? '' : `?variant=${variant}`;
-    return `/admin/tests/${id}/paper${query}`;
-  },
+  read: (id: string) => `/admin/tests/${id}/paper`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
