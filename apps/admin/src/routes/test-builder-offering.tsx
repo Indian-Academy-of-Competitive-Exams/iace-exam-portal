@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Power } from 'lucide-react';
+import { Power, X } from 'lucide-react';
 import {
+  AppException,
   TEST_STATUS,
+  fromInstituteWallTime,
+  instituteWallTime,
   offerRequirements,
-  type BranchTestScheduleRow,
   type TestDetail,
 } from '@iace/contracts';
 import {
@@ -12,14 +14,19 @@ import {
   Button,
   Checkbox,
   ConfirmDialog,
+  DateTimePicker,
   Field,
+  FormSection,
   NumericInput,
-  SkeletonParagraph,
+  SectionHeading,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   digitsOnly,
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { TestSeriesMultiPicker } from '../components/access-picker';
+import { ProgramPicker, TestSeriesMultiPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
 import { toMinutes, toSeconds } from '../lib/schedule-format';
 
@@ -74,139 +81,308 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   );
 }
 
-const TIMING_KEY = (testId: string) => [...QUERY_KEYS.BRANCH_TIMING, testId] as const;
+/** When the test opens, how late a student may still begin, and which programs open it sooner. */
 
-type TimingDraft = Readonly<Record<string, { lateEntry: string; extraTime: string }>>;
+interface ProgramOpening {
+  programCode: string;
+  /** Institute wall time, which is the only form a picker speaks. */
+  opensAt: string;
+}
 
-/** A branch with no row yet still has two boxes on screen, and both start empty. */
-const NO_TIMING = { lateEntry: '', extraTime: '' } as const;
+interface ScheduleDraft {
+  opensAt: string;
+  lateEntry: string;
+  extraTime: string;
+  programs: readonly ProgramOpening[];
+}
 
-const draftOf = (rows: readonly BranchTestScheduleRow[]): TimingDraft =>
-  Object.fromEntries(
-    rows.map((row) => [
-      row.branchId,
-      { lateEntry: toMinutes(row.lateEntrySec), extraTime: toMinutes(row.extraTimeSec) },
-    ]),
+interface ScheduleChanges {
+  opening: boolean;
+  timing: boolean;
+  written: readonly ProgramOpening[];
+  cleared: readonly string[];
+  count: number;
+}
+
+interface ProgramRefusal {
+  programCode: string;
+  message: string;
+}
+
+const wallOf = (at: string | null): string => (at ? instituteWallTime(new Date(at)) : '');
+
+const instantOf = (wall: string): string => fromInstituteWallTime(wall).toISOString();
+
+const savedSchedule = (detail: TestDetail): ScheduleDraft => ({
+  opensAt: wallOf(detail.opensAt),
+  lateEntry: toMinutes(detail.lateEntrySec),
+  extraTime: toMinutes(detail.extraTimeSec),
+  programs: detail.programUnlocks.map((row) => ({
+    programCode: row.programCode,
+    opensAt: wallOf(row.opensAt),
+  })),
+});
+
+function changesOf(saved: ScheduleDraft, held: ScheduleDraft): ScheduleChanges {
+  const before = new Map(saved.programs.map((row) => [row.programCode, row.opensAt]));
+  const kept = new Set(held.programs.map((row) => row.programCode));
+  const written = held.programs.filter(
+    (row) => row.opensAt !== '' && before.get(row.programCode) !== row.opensAt,
   );
+  const cleared = saved.programs
+    .filter((row) => !kept.has(row.programCode))
+    .map((row) => row.programCode);
+  const opening = held.opensAt !== saved.opensAt;
+  const timing = held.lateEntry !== saved.lateEntry || held.extraTime !== saved.extraTime;
 
-const changedCount = (rows: readonly BranchTestScheduleRow[], draft: TimingDraft): number => {
-  const saved = draftOf(rows);
-  return rows.filter(
-    (row) =>
-      saved[row.branchId]?.lateEntry !== draft[row.branchId]?.lateEntry ||
-      saved[row.branchId]?.extraTime !== draft[row.branchId]?.extraTime,
-  ).length;
+  return {
+    opening,
+    timing,
+    written,
+    cleared,
+    count: written.length + cleared.length + Number(opening) + Number(timing),
+  };
+}
+
+/** The server owns the rule; this only puts its refusal under the row that caused it. */
+const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
+  const message = AppException.is(error) ? error.fieldErrors?.opensAt?.[0] : undefined;
+  return message ? { programCode, message } : null;
 };
 
-/** What one branch does differently: how late its students may join, and how much longer they get. */
-export function BranchTimingStep({ detail }: Readonly<{ detail: TestDetail }>) {
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<TimingDraft | null>(null);
-  const [asking, setAsking] = useState(false);
-
-  const timing = useQuery({
-    queryKey: TIMING_KEY(detail.id),
-    queryFn: () => api.admin.tests.branchTiming(detail.id),
+/** The clock is still kept per branch underneath, so one pair goes to every branch this reaches. */
+async function writeTiming(testId: string, held: ScheduleDraft): Promise<void> {
+  const rows = await api.admin.tests.branchTiming(testId);
+  await api.admin.tests.setBranchTiming(testId, {
+    branches: rows.map((row) => ({
+      branchId: row.branchId,
+      lateEntrySec: toSeconds(held.lateEntry),
+      extraTimeSec: toSeconds(held.extraTime),
+    })),
   });
+}
 
-  const rows = timing.data ?? [];
-  const held = draft ?? draftOf(rows);
-  const changed = changedCount(rows, held);
+/** The test's own clock, and the programs that reach it ahead of everybody else. */
+export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
+  const queryClient = useQueryClient();
+  const refresh = useOfferingRefresh(detail.id);
+  const [draft, setDraft] = useState<ScheduleDraft | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [refused, setRefused] = useState<ProgramRefusal | null>(null);
+
+  const seriesId = detail.testSeriesId;
+  const saved = savedSchedule(detail);
+  const held = draft ?? saved;
+  const changes = changesOf(saved, held);
 
   const save = useMutation({
-    meta: { success: 'Branch timing saved.' },
-    mutationFn: () =>
-      api.admin.tests.setBranchTiming(detail.id, {
-        branches: rows.map((row) => ({
-          branchId: row.branchId,
-          lateEntrySec: toSeconds(held[row.branchId]?.lateEntry ?? ''),
-          extraTimeSec: toSeconds(held[row.branchId]?.extraTime ?? ''),
-        })),
-      }),
-    onSuccess: (next) => {
+    meta: { success: 'Schedule saved.', fields: ['opensAt'] },
+    mutationFn: async () => {
+      if (changes.opening && seriesId) {
+        await api.admin.testSeries.setTestUnlock(seriesId, detail.id, {
+          unlockAt: held.opensAt ? instantOf(held.opensAt) : null,
+        });
+      }
+      if (changes.timing) await writeTiming(detail.id, held);
+
+      for (const row of changes.written) {
+        try {
+          await api.admin.tests.setProgramUnlock(detail.id, row.programCode, {
+            opensAt: instantOf(row.opensAt),
+          });
+        } catch (error) {
+          setRefused(refusalOf(row.programCode, error));
+          throw error;
+        }
+      }
+
+      for (const programCode of changes.cleared) {
+        await api.admin.tests.clearProgramUnlock(detail.id, programCode);
+      }
+    },
+    onMutate: () => setRefused(null),
+    onSuccess: () => setDraft(null),
+    // An opening deletes every program row it overtakes, so what stuck is read back, never assumed.
+    onSettled: async () => {
       setAsking(false);
-      setDraft(null);
-      queryClient.setQueryData(TIMING_KEY(detail.id), next);
-      // The branch screen reads the same rows from the other side, and would go stale behind this.
+      await refresh();
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_CONFIG });
     },
-    onError: () => setAsking(false),
   });
 
-  const set = (branchId: string, field: 'lateEntry' | 'extraTime', value: string) =>
+  const setField = (field: 'opensAt' | 'lateEntry' | 'extraTime', value: string) =>
+    setDraft({ ...held, [field]: value });
+
+  const setProgram = (programCode: string, opensAt: string) =>
     setDraft({
       ...held,
-      [branchId]: { ...(held[branchId] ?? NO_TIMING), [field]: digitsOnly(value) },
+      programs: held.programs.map((row) =>
+        row.programCode === programCode ? { ...row, opensAt } : row,
+      ),
     });
 
-  if (timing.isLoading) return <SkeletonParagraph lines={3} />;
+  const addProgram = (programCode: string) => {
+    if (held.programs.some((row) => row.programCode === programCode)) return;
+    setDraft({ ...held, programs: [...held.programs, { programCode, opensAt: held.opensAt }] });
+  };
 
-  if (rows.length === 0) {
+  const dropProgram = (programCode: string) =>
+    setDraft({
+      ...held,
+      programs: held.programs.filter((row) => row.programCode !== programCode),
+    });
+
+  if (!seriesId) {
     return (
       <Alert variant="info">
-        No branch runs a series holding this test yet, so there is nobody to give extra time to.
+        A test opens through the series carrying it. Add this one to a series above, and its clock
+        can be set here.
       </Alert>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <div
-            key={row.branchId}
-            className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3"
-          >
-            <p className="min-w-40 flex-1 pb-2 text-sm font-medium text-foreground">
-              {row.branch.name}
-            </p>
+    <FormSection title="Schedule">
+      <div className="flex flex-wrap items-start gap-4">
+        <Field
+          htmlFor="test-opens"
+          label="Opens (IST)"
+          className="min-w-72 flex-1"
+          /* ui-copy-ok: rule */ hint="Blank opens it the moment a student reaches it."
+        >
+          {(control) => (
+            <DateTimePicker
+              id={control.id}
+              aria-label="Opens"
+              aria-describedby={control['aria-describedby']}
+              value={held.opensAt}
+              onChange={(next) => setField('opensAt', next)}
+            />
+          )}
+        </Field>
 
-            <Field htmlFor={`late-${row.branchId}`} label="Late entry (minutes)" className="w-44">
-              {(control) => (
-                <NumericInput
-                  {...control}
-                  aria-label={`Late entry at ${row.branch.name}, in minutes`}
-                  placeholder="None"
-                  value={held[row.branchId]?.lateEntry ?? ''}
-                  onChange={(event) => set(row.branchId, 'lateEntry', event.target.value)}
-                />
-              )}
-            </Field>
+        <Field htmlFor="test-late-entry" label="Late entry (minutes)" className="w-44">
+          {(control) => (
+            <NumericInput
+              {...control}
+              placeholder="None"
+              value={held.lateEntry}
+              onChange={(event) => setField('lateEntry', digitsOnly(event.target.value))}
+            />
+          )}
+        </Field>
 
-            <Field htmlFor={`extra-${row.branchId}`} label="Extra time (minutes)" className="w-44">
-              {(control) => (
-                <NumericInput
-                  {...control}
-                  aria-label={`Extra time at ${row.branch.name}, in minutes`}
-                  placeholder="None"
-                  value={held[row.branchId]?.extraTime ?? ''}
-                  onChange={(event) => set(row.branchId, 'extraTime', event.target.value)}
-                />
-              )}
-            </Field>
-          </div>
-        ))}
+        <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
+          {(control) => (
+            <NumericInput
+              {...control}
+              placeholder="None"
+              value={held.extraTime}
+              onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
+            />
+          )}
+        </Field>
+      </div>
+
+      <SectionHeading level={3} title="Program openings" />
+
+      <Alert variant="info">
+        A program opening lets that cohort start earlier. Entry still closes at the same instant for
+        everyone, so their window is longer rather than moved.
+      </Alert>
+
+      {held.programs.map((row, index) => (
+        <ProgramOpeningRow
+          key={row.programCode}
+          row={row}
+          index={index}
+          error={refused?.programCode === row.programCode ? refused.message : undefined}
+          onChange={(next) => setProgram(row.programCode, next)}
+          onRemove={() => dropProgram(row.programCode)}
+        />
+      ))}
+
+      <div className="w-72">
+        <ProgramPicker
+          value=""
+          clearable={false}
+          placeholder="Add a program"
+          aria-label="Add a program"
+          onChange={addProgram}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" disabled={changed === 0} onClick={() => setAsking(true)}>
-          Save branch timing
+        <Button type="button" disabled={changes.count === 0} onClick={() => setAsking(true)}>
+          Save schedule
         </Button>
-        {changed > 0 ? (
-          <p className="text-sm text-muted-foreground">{`${plural(changed, 'branch', 'branches')} changed`}</p>
+        {changes.count > 0 ? (
+          <p className="text-sm text-muted-foreground">{`${plural(changes.count, 'change')} pending`}</p>
         ) : null}
       </div>
 
       <ConfirmDialog
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
-        title="Save branch timing?"
-        description={`${plural(changed, 'branch', 'branches')} change. Late entry is counted from the moment the test opens, and extra time is added to the clock every student at that branch gets. A blank leaves the branch on the plain rules.`}
-        confirmLabel="Save branch timing"
+        title="Save the schedule?"
+        description={`${plural(changes.count, 'change')} to when this test can be started. Late entry is counted from the opening, extra time is added to every student's clock, and a program opening left later than the test's own is dropped.`}
+        confirmLabel="Save schedule"
         loading={save.isPending}
         onConfirm={() => save.mutate()}
       />
-    </div>
+    </FormSection>
+  );
+}
+
+/** One program and when it opens. Its own component so the index only ever names the control. */
+function ProgramOpeningRow({
+  row,
+  index,
+  error,
+  onChange,
+  onRemove,
+}: Readonly<{
+  row: ProgramOpening;
+  index: number;
+  error?: string;
+  onChange: (opensAt: string) => void;
+  onRemove: () => void;
+}>) {
+  return (
+    <Field
+      htmlFor={`program-opens-${index}`}
+      label={`${row.programCode} opens (IST)`}
+      className="max-w-lg"
+      error={error}
+    >
+      {(control) => (
+        <div className="flex items-center gap-2">
+          <DateTimePicker
+            id={control.id}
+            aria-label={`${row.programCode} opens`}
+            aria-describedby={control['aria-describedby']}
+            className="flex-1"
+            value={row.opensAt}
+            onChange={onChange}
+          />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${row.programCode}`}
+                onClick={onRemove}
+              >
+                <X aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Remove {row.programCode}</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+    </Field>
   );
 }
 

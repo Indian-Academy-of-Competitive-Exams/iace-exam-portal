@@ -46,7 +46,7 @@ import {
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
 import { PaperStep } from './test-builder-paper';
-import { BranchTimingStep, PublishStep, SeriesStep } from './test-builder-offering';
+import { PublishStep, ScheduleStep, SeriesStep } from './test-builder-offering';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
@@ -328,7 +328,7 @@ function StepBody({
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <>
           <SeriesStep detail={detail} />
-          <BranchTimingStep detail={detail} />
+          <ScheduleStep detail={detail} />
           <PublishStep detail={detail} />
         </>
       ) : null}
