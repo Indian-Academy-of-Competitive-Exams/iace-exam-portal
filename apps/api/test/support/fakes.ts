@@ -3811,6 +3811,175 @@ export function makeBranchConfig(
   };
 }
 
+export interface FakeEventRow {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+export function makeEvent(overrides: Partial<FakeEventRow> = {}): FakeEventRow {
+  return {
+    id: 'evt_1',
+    name: 'SSC CGL Scholarship Camp',
+    description: null,
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+export interface FakeEventCandidateRow {
+  eventId: string;
+  studentId: string;
+  createdAt: Date;
+}
+
+interface FakeEventWhere {
+  AND?: { OR: ({ name: { contains: string } } | { description: { contains: string } })[] }[];
+  isActive?: boolean;
+}
+
+function matchesEvent(row: FakeEventRow, where: FakeEventWhere): boolean {
+  if (where.isActive !== undefined && row.isActive !== where.isActive) return false;
+  if (!where.AND) return true;
+  return where.AND.every((clause) =>
+    clause.OR.some((part) =>
+      'name' in part
+        ? row.name.toLowerCase().includes(part.name.contains.toLowerCase())
+        : (row.description ?? '').toLowerCase().includes(part.description.contains.toLowerCase()),
+    ),
+  );
+}
+
+/** Enough Prisma for `EventsService`: the event table, its candidates, and the series count the delete guard reads. */
+export class FakeEventsPrisma {
+  private seq = 0;
+
+  constructor(
+    readonly events: FakeEventRow[] = [],
+    readonly candidateRows: FakeEventCandidateRow[] = [],
+    readonly students: FakeStudent[] = [],
+    readonly seriesEventIds: string[] = [],
+  ) {}
+
+  private id(prefix: string): string {
+    this.seq += 1;
+    return `${prefix}_new_${this.seq}`;
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  private hydrate(row: FakeEventRow) {
+    return {
+      ...row,
+      _count: { candidates: this.candidateRows.filter((c) => c.eventId === row.id).length },
+    };
+  }
+
+  private studentRef(studentId: string): { fullName: string | null; mobile: string } {
+    const student = this.students.find((candidate) => candidate.id === studentId);
+    return { fullName: student?.fullName ?? null, mobile: student?.mobile ?? '' };
+  }
+
+  readonly event = {
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.events.find((event) => event.id === where.id);
+      return Promise.resolve(row ? this.hydrate(row) : null);
+    },
+
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: { where?: FakeEventWhere; skip?: number; take?: number } = {}) => {
+      const matched = this.events
+        .filter((event) => matchesEvent(event, where))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return Promise.resolve(
+        matched
+          .slice(skip, take === undefined ? undefined : skip + take)
+          .map((event) => this.hydrate(event)),
+      );
+    },
+
+    count: ({ where = {} }: { where?: FakeEventWhere } = {}) =>
+      Promise.resolve(this.events.filter((event) => matchesEvent(event, where)).length),
+
+    create: ({ data }: { data: Partial<FakeEventRow> & { name: string } }) => {
+      const created = makeEvent({ ...data, id: this.id('evt') });
+      this.events.push(created);
+      return Promise.resolve(this.hydrate(created));
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+      const event = this.events.find((candidate) => candidate.id === where.id);
+      if (!event) throw new Error(`no event ${where.id}`);
+      Object.assign(event, data);
+      return Promise.resolve(this.hydrate(event));
+    },
+
+    delete: ({ where }: { where: { id: string } }) => {
+      const index = this.events.findIndex((event) => event.id === where.id);
+      const [removed] = this.events.splice(index, 1);
+      return Promise.resolve(removed);
+    },
+  };
+
+  readonly eventCandidate = {
+    findMany: ({ where }: { where: { eventId: string } }) =>
+      Promise.resolve(
+        this.candidateRows
+          .filter((row) => row.eventId === where.eventId)
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map((row) => ({ ...row, student: this.studentRef(row.studentId) })),
+      ),
+
+    createMany: ({
+      data,
+      skipDuplicates,
+    }: {
+      data: { eventId: string; studentId: string }[];
+      skipDuplicates?: boolean;
+    }) => {
+      const fresh = skipDuplicates
+        ? data.filter(
+            (row) =>
+              !this.candidateRows.some(
+                (held) => held.eventId === row.eventId && held.studentId === row.studentId,
+              ),
+          )
+        : data;
+      for (const row of fresh) {
+        this.candidateRows.push({ ...row, createdAt: new Date('2026-01-01T00:00:00.000Z') });
+      }
+      return Promise.resolve({ count: fresh.length });
+    },
+
+    deleteMany: ({ where }: { where: { eventId: string; studentId: string } }) => {
+      const kept = this.candidateRows.filter(
+        (row) => row.eventId !== where.eventId || row.studentId !== where.studentId,
+      );
+      const removed = this.candidateRows.length - kept.length;
+      this.candidateRows.length = 0;
+      this.candidateRows.push(...kept);
+      return Promise.resolve({ count: removed });
+    },
+  };
+
+  readonly testSeries = {
+    count: ({ where }: { where: { eventId: string } }) =>
+      Promise.resolve(this.seriesEventIds.filter((id) => id === where.eventId).length),
+  };
+}
+
 /** The `Test` columns the catalog reads, plus the base config facts it joins in. */
 export interface FakeTestRow {
   id: string;
