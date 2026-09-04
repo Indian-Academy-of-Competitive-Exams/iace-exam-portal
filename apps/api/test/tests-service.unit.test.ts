@@ -6,6 +6,7 @@ import {
   EXAM_TEMPLATE,
   ErrorCodes,
   EVALUATION_MODE,
+  MIN_PAPER_VARIANTS,
   PAPER_BINDING,
   TEST_SCOPE,
   TEST_STATUS,
@@ -281,21 +282,51 @@ describe('TestsService — editing and removing', () => {
     assert.equal(prisma.tests[0]?.isLocked, true);
   });
 
-  /** A generated test with one paper IS a fixed test, and every student would sit the same one. */
-  it('refuses a paper per student with only one paper to draw from', async () => {
+  /** Too few papers and a cohort is back to sitting one, which is what fixed already does better. */
+  it('refuses a paper per student with fewer papers than the floor to draw from', async () => {
     const { service } = serviceWith([makeTest({ id: 'tst_1' })]);
 
     const error = await service
       .update('tst_1', {
         evaluationMode: EVALUATION_MODE.PRACTICE,
         paperBinding: PAPER_BINDING.GENERATED,
-        variantCount: 1,
+        variantCount: MIN_PAPER_VARIANTS - 1,
       })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.ok(error.fieldErrors?.variantCount?.[0]);
+  });
+
+  it('takes a paper per student at exactly the floor', async () => {
+    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+
+    await service.update('tst_1', {
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+      paperBinding: PAPER_BINDING.GENERATED,
+      variantCount: MIN_PAPER_VARIANTS,
+    });
+
+    assert.equal(prisma.tests[0]?.variantCount, MIN_PAPER_VARIANTS);
+  });
+
+  /** THE failure this prevents: raising the count of a frozen test past the papers it actually holds. */
+  it('leaves a frozen test drawn below the floor on the count its papers were drawn against', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({
+        id: 'tst_1',
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+        paperBinding: PAPER_BINDING.GENERATED,
+        variantCount: MIN_PAPER_VARIANTS - 3,
+        isLocked: true,
+      }),
+    ]);
+
+    const renamed = await service.update('tst_1', { title: 'Speed drill 3 (revised)' });
+
+    assert.equal(renamed.title, 'Speed drill 3 (revised)');
+    assert.equal(prisma.tests[0]?.variantCount, MIN_PAPER_VARIANTS - 3);
   });
 
   /** Switching over carries a count of 1 it never chose, so it starts from the default instead. */

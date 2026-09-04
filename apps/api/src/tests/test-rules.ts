@@ -1,6 +1,7 @@
 import {
   DEFAULT_PAPER_VARIANTS,
   EVALUATION_MODE,
+  MIN_PAPER_VARIANTS,
   isPaperBindingAllowed,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -32,13 +33,12 @@ export function paperBindingIssue(
   return isPaperBindingAllowed(evaluationMode, paperBinding) ? null : RANKED_NEEDS_FIXED_MESSAGE;
 }
 
-export const ONE_VARIANT_IS_FIXED_MESSAGE =
-  'A test that draws a paper per student needs more than one to draw from. Give it at least two, or make it a fixed paper.';
+export const TOO_FEW_VARIANTS_MESSAGE = `A test that draws a paper per student needs at least ${MIN_PAPER_VARIANTS} to draw from. Give it that many, or make it a fixed paper.`;
 
-/** A generated test with one paper IS a fixed test, and every student would sit the same one. */
+/** Too few papers and a cohort is back to sitting one, which is what fixed already does better. */
 export function variantCountIssue(paperBinding: PaperBinding, variantCount: number): string | null {
   const fixed = paperBinding === PAPER_BINDING.FIXED;
-  return !fixed && variantCount < 2 ? ONE_VARIANT_IS_FIXED_MESSAGE : null;
+  return !fixed && variantCount < MIN_PAPER_VARIANTS ? TOO_FEW_VARIANTS_MESSAGE : null;
 }
 
 /** A fixed paper is one paper. Held rather than refused: no screen can ask for anything else. */

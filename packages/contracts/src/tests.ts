@@ -480,6 +480,8 @@ export const MAX_RETAKES_CEILING = 20;
 
 /** Each variant is a whole paper on file, so the ceiling is rows in the table, not a preference. */
 export const MAX_PAPER_VARIANTS = 50;
+/** Under this a cohort shares papers too often for drawing them apart to have been worth it. */
+export const MIN_PAPER_VARIANTS = 5;
 /** Enough that two students rarely share a paper, few enough that every one can be looked at. */
 export const DEFAULT_PAPER_VARIANTS = 10;
 

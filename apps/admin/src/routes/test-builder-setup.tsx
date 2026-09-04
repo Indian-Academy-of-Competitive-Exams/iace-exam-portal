@@ -6,6 +6,7 @@ import {
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
   MAX_PAPER_VARIANTS,
+  MIN_PAPER_VARIANTS,
   MAX_RETAKES_CEILING,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -319,7 +320,7 @@ function Rules({
           form={form}
           name="variantCount"
           label="Papers"
-          /* ui-copy-ok: limit */ hint={`Up to ${MAX_PAPER_VARIANTS}`}
+          /* ui-copy-ok: limit */ hint={`${MIN_PAPER_VARIANTS} to ${MAX_PAPER_VARIANTS}`}
         >
           {(control) => <Input {...control} disabled={sat} inputMode="numeric" />}
         </FormField>

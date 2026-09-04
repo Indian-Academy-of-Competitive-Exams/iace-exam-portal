@@ -4,6 +4,7 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  MIN_PAPER_VARIANTS,
   PAPER_BINDING,
   fieldDiff,
   type BaseConfigDetail,
@@ -156,10 +157,14 @@ export class TestsService {
     this.assertJudgeable(input.evaluationMode ?? test.evaluationMode, paperBinding);
     this.assertCovers(config, scope, scopeRef);
 
-    // A stored 1 was never chosen, so it defaults: the rule judges the ask, not what history left.
-    const held = test.variantCount > 1 ? test.variantCount : undefined;
+    // Papers are already drawn against a frozen count, so only an unfrozen one is raised to the floor.
+    const held =
+      test.isLocked || test.variantCount >= MIN_PAPER_VARIANTS ? test.variantCount : undefined;
     const variantCount = variantCountFor(paperBinding, input.variantCount ?? held);
-    this.assertDrawable(paperBinding, variantCount);
+    // The floor judges the ask: a count nobody moved must not refuse the edit that left it alone.
+    if (input.variantCount !== undefined || variantCount !== test.variantCount) {
+      this.assertDrawable(paperBinding, variantCount);
+    }
 
     const droppingThePaper =
       input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
