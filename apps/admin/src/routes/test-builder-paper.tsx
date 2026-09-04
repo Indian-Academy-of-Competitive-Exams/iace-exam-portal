@@ -231,9 +231,9 @@ function SectionPaper({
   const add = useMutation({
     meta: { success: 'Question added.' },
     mutationFn: (questionId: string) =>
-      api.admin.tests.addPaperQuestion(testId, {
+      api.admin.tests.addPaperQuestions(testId, {
         baseConfigSectionId: section.id,
-        questionId,
+        questionIds: [questionId],
       }),
     onSuccess: onChanged,
   });

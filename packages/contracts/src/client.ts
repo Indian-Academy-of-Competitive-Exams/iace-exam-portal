@@ -1164,8 +1164,8 @@ export function createApiClient(options: ApiClientOptions) {
         readPaper: (id: string): Promise<TestPaper> =>
           request(ADMIN_TEST_PAPER_ROUTES.read(id), { schema: testPaperSchema }),
 
-        /** One more, in the next free place its section has. */
-        addPaperQuestion: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>
+        /** Several at once, in the next free places its section has. */
+        addPaperQuestions: (id: string, input: AddPaperQuestionInput): Promise<TestPaper> =>
           request(ADMIN_TEST_PAPER_ROUTES.addQuestion(id), {
             method: 'POST',
             body: input,

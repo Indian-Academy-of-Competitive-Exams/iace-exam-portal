@@ -635,10 +635,10 @@ export const replacePaperQuestionSchema = z.object({
 export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchema>;
 export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
 
-/** Putting one on the paper, in the next free place its section has. */
+/** Putting several on the paper in one request, in the next free places its section has. */
 export const addPaperQuestionSchema = z.object({
   baseConfigSectionId: z.string().min(1),
-  questionId: z.string().min(1, 'Choose a question'),
+  questionIds: z.array(z.string().min(1)).min(1, 'Choose at least one question'),
 });
 export type AddPaperQuestionInput = z.input<typeof addPaperQuestionSchema>;
 export type AddPaperQuestionBody = z.infer<typeof addPaperQuestionSchema>;

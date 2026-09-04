@@ -132,8 +132,8 @@ export class PaperService {
     await tx.paperQuestion.createMany({ data: [...rows] });
   }
 
-  /** One more question, in the next free place its section has. Refused once the section is full. */
-  async addQuestion(testId: string, input: AddPaperQuestionBody): Promise<TestPaper> {
+  /** Several at once, numbered from the section's current highest order; every one resolved and checked before any write. */
+  async addQuestions(testId: string, input: AddPaperQuestionBody): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
@@ -141,33 +141,39 @@ export class PaperService {
     const section = config.sections.find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section on this paper');
 
-    const question = await this.requireDrawable(input.questionId, section.id);
-    await this.assertNotAlreadyOnThePaper(testId, '', question.id);
+    this.assertNoRepeats(input.questionIds);
+
+    const questions: Awaited<ReturnType<PaperService['requireDrawable']>>[] = [];
+    for (const questionId of input.questionIds) {
+      const question = await this.requireDrawable(questionId, section.id);
+      await this.assertNotAlreadyOnThePaper(testId, '', question.id);
+      questions.push(question);
+    }
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId, variant: FIXED_VARIANT },
       select: { order: true, baseConfigSectionId: true },
     });
     const inSection = rows.filter((row) => row.baseConfigSectionId === section.id).length;
-    if (inSection >= section.questionCount) {
+    if (inSection + questions.length > section.questionCount) {
       const full = `${section.name} already holds the ${section.questionCount} it needs. Take one off first.`;
-      throw new AppException(ErrorCodes.CONFLICT, full, { fieldErrors: { questionId: [full] } });
+      throw new AppException(ErrorCodes.CONFLICT, full, { fieldErrors: { questionIds: [full] } });
     }
 
-    const order = rows.reduce((highest, row) => Math.max(highest, row.order), 0) + 1;
+    const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
       await thaw(tx, test);
-      await tx.paperQuestion.create({
-        data: {
+      await tx.paperQuestion.createMany({
+        data: questions.map((question, index) => ({
           testId,
           baseConfigId: test.baseConfigId,
           baseConfigSectionId: section.id,
           questionId: question.id,
           questionVersionId: question.currentVersionId,
-          order,
+          order: highest + index + 1,
           marks: section.marksPerQuestion,
           negativeMarks: section.negativeMarks,
-        },
+        })),
       });
     });
 
@@ -305,6 +311,14 @@ export class PaperService {
         fieldErrors: { questionId: [ALREADY_ON_THE_PAPER_MESSAGE] },
       });
     }
+  }
+
+  /** The same unique constraint the paper itself carries, checked before a batch ever reaches it. */
+  private assertNoRepeats(questionIds: readonly string[]): void {
+    if (new Set(questionIds).size === questionIds.length) return;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, ALREADY_ON_THE_PAPER_MESSAGE, {
+      fieldErrors: { questionIds: [ALREADY_ON_THE_PAPER_MESSAGE] },
+    });
   }
 
   /** Only ACTIVE questions carrying a current version: a paper pins a version, so there must be one. */

@@ -66,9 +66,7 @@ async function pickWholePaper(service: PaperService): Promise<void> {
     ['sec_2', ['q1', 'q2']],
   ];
   for (const [baseConfigSectionId, questionIds] of picks) {
-    for (const questionId of questionIds) {
-      await service.addQuestion('tst_1', { baseConfigSectionId, questionId });
-    }
+    await service.addQuestions('tst_1', { baseConfigSectionId, questionIds });
   }
 }
 
@@ -108,9 +106,9 @@ describe('PaperService — picking a draft paper by hand', () => {
     const spare = kit.prisma.questions.find((row) => row.subjectId === 'sub_q');
     assert.ok(spare);
 
-    await kit.service.addQuestion('tst_1', {
+    await kit.service.addQuestions('tst_1', {
       baseConfigSectionId: 'sec_2',
-      questionId: spare.id,
+      questionIds: [spare.id],
     });
 
     const added = kit.prisma.paperQuestions.find((row) => row.questionId === spare.id);
@@ -125,7 +123,7 @@ describe('PaperService — picking a draft paper by hand', () => {
     await pickWholePaper(kit.service);
 
     const error = await kit.service
-      .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId: 'q3' })
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q3'] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -137,7 +135,7 @@ describe('PaperService — picking a draft paper by hand', () => {
     const { service } = serviceWith();
 
     const error = await service
-      .addQuestion('tst_1', { baseConfigSectionId: 'sec_1', questionId: 'q1' })
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['q1'] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -154,13 +152,87 @@ describe('PaperService — picking a draft paper by hand', () => {
 
     for (const questionId of ['gone', 'unversioned']) {
       const error = await service
-        .addQuestion('tst_1', { baseConfigSectionId: 'sec_2', questionId })
+        .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: [questionId] })
         .catch((e: unknown) => e);
 
       assert.ok(AppException.is(error));
       assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
       assert.ok(error.fieldErrors?.questionId?.[0]);
     }
+  });
+});
+
+describe('PaperService — putting several questions on a section in one request', () => {
+  it('lands every question, numbered from the current highest order, in the order sent', async () => {
+    const { service, prisma } = serviceWith();
+
+    await service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_1',
+      questionIds: ['r2', 'r1', 'r3'],
+    });
+
+    const rows = prisma.paperQuestions
+      .filter((row) => row.baseConfigSectionId === 'sec_1')
+      .sort((a, b) => a.order - b.order);
+    assert.deepEqual(
+      rows.map((row) => row.questionId),
+      ['r2', 'r1', 'r3'],
+    );
+    assert.deepEqual(
+      rows.map((row) => row.order),
+      [1, 2, 3],
+    );
+  });
+
+  /** The failure this task exists to prevent: an admin cannot tell which of their ticks landed. */
+  it('refuses a batch that would take a section past its count, and writes none of it', async () => {
+    const { service, prisma } = serviceWith();
+
+    const error = await service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q2', 'q3'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /Quant already holds the 2 it needs/);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  it('refuses a batch naming a question already on the paper, and writes none of it', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q1'] });
+
+    const error = await kit.service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q2', 'q1'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(kit.prisma.paperQuestions.length, 1);
+  });
+
+  it('refuses a batch naming the same question twice, and writes none of it', async () => {
+    const { service, prisma } = serviceWith();
+
+    const error = await service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q1', 'q1'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  it('refuses a batch with one question from another subject, and writes none of it', async () => {
+    const { service, prisma } = serviceWith();
+
+    const error = await service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r1', 'q1'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.equal(prisma.paperQuestions.length, 0);
   });
 });
 
@@ -236,7 +308,7 @@ describe('PaperService — drawing the papers a GENERATED test hands out', () =>
 describe('PaperService — what it refuses to edit', () => {
   const addOne = (service: PaperService, testId = 'tst_1') =>
     service
-      .addQuestion(testId, { baseConfigSectionId: 'sec_2', questionId: 'q1' })
+      .addQuestions(testId, { baseConfigSectionId: 'sec_2', questionIds: ['q1'] })
       .catch((e: unknown) => e);
 
   it('refuses a test a student has already sat', async () => {

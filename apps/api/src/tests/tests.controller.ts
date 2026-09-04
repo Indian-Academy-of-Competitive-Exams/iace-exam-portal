@@ -112,11 +112,11 @@ export class TestsController {
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/paper/questions')
   @HttpCode(HttpStatus.OK)
-  addPaperQuestion(
+  addPaperQuestions(
     @Param('id') id: string,
     @Body(new ZodBody(addPaperQuestionSchema)) body: AddPaperQuestionBody,
   ): Promise<TestPaper> {
-    return this.paper.addQuestion(id, body);
+    return this.paper.addQuestions(id, body);
   }
 
   /** One row of the paper, so a paper right but for a single question is not redrawn whole. */

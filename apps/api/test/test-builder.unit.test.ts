@@ -88,9 +88,7 @@ async function pickWholePaper(paper: PaperService, testId: string): Promise<void
     ['sec_2', ['q1', 'q2']],
   ];
   for (const [baseConfigSectionId, questionIds] of picks) {
-    for (const questionId of questionIds) {
-      await paper.addQuestion(testId, { baseConfigSectionId, questionId });
-    }
+    await paper.addQuestions(testId, { baseConfigSectionId, questionIds });
   }
 }
 
@@ -219,9 +217,9 @@ describe('the invariants Phase 2 must not have broken', () => {
       drawn.map(() => 0),
     );
 
-    await paper.addQuestion(draft.id, {
+    await paper.addQuestions(draft.id, {
       baseConfigSectionId: row.baseConfigSectionId,
-      questionId: row.questionId,
+      questionIds: [row.questionId],
     });
     await finalizer.finalize(draft.id);
     assert.deepEqual(
