@@ -191,7 +191,6 @@ export class TestsController {
     return this.offering.setBranchTiming(id, body);
   }
 
-  /** The last step of the builder: freeze the paper and open it, or neither. */
   /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -215,6 +214,7 @@ export class TestsController {
     return this.offering.clearProgramUnlock(id, programCode);
   }
 
+  /** The last step of the builder: freeze the paper and open it, or neither. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/offer')

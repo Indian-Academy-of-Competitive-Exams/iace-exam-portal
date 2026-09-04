@@ -191,6 +191,8 @@ export class TestSeriesService {
     // No `:id` in the path and a summary coming back, so the row is named explicitly. Who did
     // it is the audit row's actor — `TestSeries` has no `createdById` column of its own.
     this.auditContext.setEntityId(id);
+    // A kind that reaches past every branch is switched on the moment it saves, cached catalogs and all.
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
 
     return this.detail(id);
   }

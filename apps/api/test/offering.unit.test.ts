@@ -571,7 +571,8 @@ describe('OfferingService — the test carries the clock the branches still set'
     assert.equal(prisma.tests[0]?.lateEntrySec, null);
   });
 
-  it('leaves the test uncapped while a grant reaches past the branches entirely', async () => {
+  /** One column, not one per student: a grant that uncapped it would uncap it for every branch. */
+  it('keeps the cap an admin set when the series is granted to somebody', async () => {
     const { service, prisma } = timingService();
     prisma.seriesGrants.push({ studentId: 'stu_1', testSeriesId: 'srs_1' });
 
@@ -579,7 +580,7 @@ describe('OfferingService — the test carries the clock the branches still set'
       branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
     });
 
-    assert.equal(prisma.tests[0]?.lateEntrySec, null);
+    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
   });
 });
 
@@ -592,7 +593,7 @@ describe('OfferingService — a program opens a test earlier, never later', () =
       [makeBaseConfig({ id: 'cfg_1' })],
       [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
       [],
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt: opensAt }],
     );
     prisma.series.push(makeSeries({ id: 'srs_1' }));
     prisma.programCatalog.push({ code: 'FOUNDATION' });
@@ -652,6 +653,49 @@ describe('OfferingService — a program opens a test earlier, never later', () =
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  /** The rule inverts if nothing revalidates: 03:30 was an hour EARLY, and is an hour LATE at 02:30. */
+  it('drops an unlock the series opening overtakes when the test is moved earlier', async () => {
+    const { service, prisma } = unlockService();
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+
+    await service.setUnlock('srs_1', 'tst_1', {
+      unlockAt: new Date(EARLIER.getTime() - 3_600_000).toISOString(),
+    });
+
+    assert.deepEqual(prisma.programUnlocks, []);
+  });
+
+  it('leaves it alone when the test is moved LATER and it still opens the cohort early', async () => {
+    const { service, prisma } = unlockService();
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+
+    await service.setUnlock('srs_1', 'tst_1', {
+      unlockAt: new Date(OPENS_AT.getTime() + 3_600_000).toISOString(),
+    });
+
+    assert.equal(prisma.programUnlocks.length, 1);
+  });
+
+  /** `setProgramUnlock` refuses to CREATE a row against a cleared opening, so none may survive one. */
+  it('leaves no orphan behind when the opening is cleared entirely', async () => {
+    const { service, prisma } = unlockService();
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+
+    await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
+
+    assert.equal(prisma.tests[0]?.opensAt, null);
+    assert.deepEqual(prisma.programUnlocks, []);
+  });
+
+  it('drops one when the test is taken out of the series that opened it', async () => {
+    const { service, prisma } = unlockService();
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+
+    await service.removeFromSeries('srs_1', 'tst_1');
+
+    assert.deepEqual(prisma.programUnlocks, []);
   });
 
   it('takes the unlock back, leaving the cohort with the test’s own opening', async () => {

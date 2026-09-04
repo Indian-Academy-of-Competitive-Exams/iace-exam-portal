@@ -437,6 +437,11 @@ export class FakeEventBus {
     this.events.push({ name, payload: payload as unknown as Record<string, unknown> });
   }
 
+  /** Drops what a test's SETUP published, so the assertion is about the write under test. */
+  forget(): void {
+    this.events.length = 0;
+  }
+
   /** Every payload published under one name, in order. */
   of<K extends DomainEventName>(name: K): DomainEventPayloads[K][] {
     return this.events
@@ -1696,9 +1701,18 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve(held ?? create);
     },
 
-    deleteMany: ({ where }: { where: { testId: string; programCode: string } }) => {
+    deleteMany: ({
+      where,
+    }: {
+      where: { testId: string; programCode?: string; opensAt?: { gt: Date } };
+    }) => {
       const kept = this.programUnlocks.filter(
-        (row) => !(row.testId === where.testId && row.programCode === where.programCode),
+        (row) =>
+          !(
+            row.testId === where.testId &&
+            (where.programCode === undefined || row.programCode === where.programCode) &&
+            (where.opensAt === undefined || row.opensAt > where.opensAt.gt)
+          ),
       );
       const count = this.programUnlocks.length - kept.length;
       this.programUnlocks.length = 0;

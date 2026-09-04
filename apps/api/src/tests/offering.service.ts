@@ -56,6 +56,17 @@ const OPENS_BEFORE_THE_TEST_DOES =
 const TEST_HAS_NO_OPENING =
   'This test has no opening time of its own, so it is already open. Give the test an opening time before letting a program in ahead of it.';
 
+/** The write guard's exact complement: a row the opening overtook now DELAYS its cohort, so it goes. */
+async function dropUnlocksTheOpeningOvertook(
+  tx: Prisma.TransactionClient,
+  testId: string,
+  testOpensAt: Date | null,
+): Promise<void> {
+  await tx.testProgramUnlock.deleteMany({
+    where: { testId, ...(testOpensAt === null ? {} : { opensAt: { gt: testOpensAt } }) },
+  });
+}
+
 /** No constraint can carry this: it compares a row on one table with a column on another. */
 function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date): void {
   if (testOpensAt !== null && opensAt <= testOpensAt) return;
@@ -304,14 +315,16 @@ export class OfferingService {
       select: { testSeriesId: true, order: true, unlockAt: true },
     });
     const first = [...held].sort(byPosition)[0];
+    const opensAt = first?.unlockAt ?? null;
     await tx.test.update({
       where: { id: testId },
       data: {
         testSeriesId: first?.testSeriesId ?? null,
         seriesOrder: first?.order ?? null,
-        opensAt: first?.unlockAt ?? null,
+        opensAt,
       },
     });
+    await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
   }
 
   /** Every branch this test reaches, with whatever that branch does differently for it. */
@@ -529,11 +542,7 @@ export class OfferingService {
       rows.filter((row) => row.lateEntrySec !== null).map((row) => row.branchId),
     );
     const reaching = await this.branchesReaching(tx, testId);
-    // A grant reaches past the branch gate, so a granted student's branch may cap nothing at all.
-    const granted = await tx.studentGrant.count({
-      where: { testSeries: { tests: { some: { testId } } } },
-    });
-    const uncapped = granted > 0 || reaching.some(({ branch }) => !capped.has(branch.id));
+    const uncapped = reaching.some(({ branch }) => !capped.has(branch.id));
 
     await tx.test.update({
       where: { id: testId },

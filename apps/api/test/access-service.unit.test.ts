@@ -99,6 +99,7 @@ describe('TestSeriesService — the branch fan-out', () => {
       [false, false, false],
       'the fan-out leaves a new series off everywhere',
     );
+    events.forget();
 
     const rows = await series.updateEveryBranchConfig(created.id, { enabled: true }, EVERY_BRANCH);
 
@@ -606,6 +607,18 @@ describe('StudentGrantsService — the escape hatch', () => {
  * silent leaves the student on the old answer until the entry expires.
  */
 describe('the access writes that bust the catalog cache', () => {
+  /** A free series is switched on the instant it saves, so a cached catalog already omits it. */
+  it('announces a series the moment it is created', async () => {
+    const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
+
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
+
+    assert.equal(created.isEnabled, true);
+    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
+      { testSeriesId: created.id },
+    ]);
+  });
+
   it('announces the student on a grant and again on a revoke', async () => {
     const { grants, events } = build({
       series: [makeSeries({ id: 'srs_1' })],
@@ -639,6 +652,8 @@ describe('the access writes that bust the catalog cache', () => {
   it('announces the series when a branch’s row for it moves', async () => {
     const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
+
+    events.forget();
 
     await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
 
