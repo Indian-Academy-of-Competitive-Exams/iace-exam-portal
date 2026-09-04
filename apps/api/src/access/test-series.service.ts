@@ -97,7 +97,7 @@ export class TestSeriesService {
       select: {
         currentBranchId: true,
         programs: true,
-        enrolledExams: true,
+        enrolledCourses: true,
       },
     });
     if (!student) return [];

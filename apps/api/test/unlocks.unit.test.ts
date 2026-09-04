@@ -25,7 +25,6 @@ import {
   FakeRedis,
   type FakeUnlockRequestRow,
   type FakeUnlockRow,
-  makeBranchConfig,
   makeExam,
   makeExamStage,
   makeSeries,
@@ -33,13 +32,10 @@ import {
   makeTestRow,
 } from './support/fakes';
 
-/**
- * Unlocks. An unlock is not a way to REACH a series — the branch gate and the three reach paths
- * decide that — so everything here can only open something the student already reaches.
- */
+/** Unlocks. An unlock is not a way to REACH a series — the kind decides that — so it can only open one already reached. */
 
 const BRANCH = 'br_1';
-const EXAM = 'SSC CGL';
+const COURSE = EXAM_COURSE.SSC;
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const ADMIN = 'adm_1';
 
@@ -84,14 +80,12 @@ function build(data: FakeCatalogData = {}) {
   };
 }
 
-/** One student at a branch, one series enabled there, one ACTIVE test in it. */
+/** One student at a branch, one series that branch runs, one ACTIVE test in it. */
 function reachable(over: FakeCatalogData = {}): FakeCatalogData {
   return {
-    students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] })],
-    series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.REQUEST })],
-    branchConfigs: [makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH })],
-    seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-    tests: [makeTestRow({ id: 'tst_1' })],
+    students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledCourses: [COURSE] })],
+    series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode: UNLOCK_MODE.REQUEST })],
+    tests: [makeTestRow({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 })],
     ...over,
   };
 }
@@ -100,15 +94,15 @@ function reachable(over: FakeCatalogData = {}): FakeCatalogData {
 function waitingOnPrerequisite(over: FakeCatalogData = {}): FakeCatalogData {
   return reachable({
     series: [
-      makeSeries({ id: 'srs_0', name: 'Foundation mocks' }),
-      makeSeries({ id: 'srs_1', name: 'Advanced mocks', prerequisiteSeriesId: 'srs_0' }),
+      makeSeries({ id: 'srs_0', name: 'Foundation mocks', branchIds: [BRANCH] }),
+      makeSeries({
+        id: 'srs_1',
+        name: 'Advanced mocks',
+        branchIds: [BRANCH],
+        prerequisiteSeriesId: 'srs_0',
+      }),
     ],
-    branchConfigs: chainConfigs(['srs_0', 'srs_1']),
-    seriesTests: [
-      { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ],
-    tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
+    tests: [testIn('tst_0', 'srs_0'), testIn('tst_1', 'srs_1')],
     ...over,
   });
 }
@@ -129,11 +123,9 @@ async function statesOf(resolver: AccessResolverService): Promise<Map<string, st
   return new Map(catalog.series.map((series) => [series.id, series.unlockState]));
 }
 
-function chainConfigs(ids: readonly string[]) {
-  return ids.map((id, index) =>
-    makeBranchConfig({ id: `btc_${index}`, testSeriesId: id, branchId: BRANCH }),
-  );
-}
+/** One ACTIVE test, in the one series it belongs to. */
+const testIn = (id: string, testSeriesId: string) =>
+  makeTestRow({ id, testSeriesId, seriesOrder: 1 });
 
 describe('auto-unlock — a series that opens itself on the read that reaches it', () => {
   /** Foundation is open to the student AND sat; Advanced sits behind it. */
@@ -141,20 +133,21 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     build(
       reachable({
         series: [
-          makeSeries({ id: 'srs_0', name: 'Foundation mocks', unlockMode: UNLOCK_MODE.REQUEST }),
+          makeSeries({
+            id: 'srs_0',
+            name: 'Foundation mocks',
+            branchIds: [BRANCH],
+            unlockMode: UNLOCK_MODE.REQUEST,
+          }),
           makeSeries({
             id: 'srs_1',
             name: 'Advanced mocks',
+            branchIds: [BRANCH],
             prerequisiteSeriesId: 'srs_0',
             unlockMode: UNLOCK_MODE.AUTO,
           }),
         ],
-        branchConfigs: chainConfigs(['srs_0', 'srs_1']),
-        seriesTests: [
-          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-        ],
-        tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
+        tests: [testIn('tst_0', 'srs_0'), testIn('tst_1', 'srs_1')],
         unlocks: [
           { studentId: 'stu_1', testSeriesId: 'srs_0', unlockedAt: new Date('2026-05-01') },
         ],
@@ -212,15 +205,10 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
 
   it('stays shut while only some of what comes first is sat', async () => {
     const { resolver } = chained({
-      seriesTests: [
-        { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
-        { testSeriesId: 'srs_0', testId: 'tst_0b', order: 2 },
-        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-      ],
       tests: [
-        makeTestRow({ id: 'tst_0' }),
-        makeTestRow({ id: 'tst_0b' }),
-        makeTestRow({ id: 'tst_1' }),
+        testIn('tst_0', 'srs_0'),
+        makeTestRow({ id: 'tst_0b', testSeriesId: 'srs_0', seriesOrder: 2 }),
+        testIn('tst_1', 'srs_1'),
       ],
     });
 
@@ -229,11 +217,7 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
 
   /** A prerequisite holding no tests has nothing anyone can finish, so it never counts as done. */
   it('stays shut behind a prerequisite that has no tests in it at all', async () => {
-    const { resolver } = chained({
-      seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-      tests: [makeTestRow({ id: 'tst_1' })],
-      attempts: [],
-    });
+    const { resolver } = chained({ tests: [testIn('tst_1', 'srs_1')], attempts: [] });
 
     assert.equal(await stateOf(resolver), UNLOCK_STATE.LOCKED);
   });
@@ -242,10 +226,16 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
   it('never auto-opens a REQUEST series, prerequisite finished or not', async () => {
     const { resolver, world, events } = chained({
       series: [
-        makeSeries({ id: 'srs_0', name: 'Foundation mocks', unlockMode: UNLOCK_MODE.REQUEST }),
+        makeSeries({
+          id: 'srs_0',
+          name: 'Foundation mocks',
+          branchIds: [BRANCH],
+          unlockMode: UNLOCK_MODE.REQUEST,
+        }),
         makeSeries({
           id: 'srs_1',
           name: 'Advanced mocks',
+          branchIds: [BRANCH],
           prerequisiteSeriesId: 'srs_0',
           unlockMode: UNLOCK_MODE.REQUEST,
         }),
@@ -262,15 +252,15 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     const { resolver, world } = build(
       reachable({
         series: [
-          makeSeries({ id: 'srs_0', name: 'Foundation mocks' }),
-          makeSeries({ id: 'srs_1', name: 'Advanced mocks', prerequisiteSeriesId: 'srs_0' }),
+          makeSeries({ id: 'srs_0', name: 'Foundation mocks', branchIds: [BRANCH] }),
+          makeSeries({
+            id: 'srs_1',
+            name: 'Advanced mocks',
+            branchIds: [BRANCH],
+            prerequisiteSeriesId: 'srs_0',
+          }),
         ],
-        branchConfigs: chainConfigs(['srs_0', 'srs_1']),
-        seriesTests: [
-          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-        ],
-        tests: [makeTestRow({ id: 'tst_0' }), makeTestRow({ id: 'tst_1' })],
+        tests: [testIn('tst_0', 'srs_0'), testIn('tst_1', 'srs_1')],
         attempts: [{ studentId: 'stu_1', testId: 'tst_0', status: ATTEMPT_STATUS.EVALUATED }],
       }),
     );
@@ -291,21 +281,21 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
     const { resolver } = build(
       reachable({
         series: [
-          makeSeries({ id: 'srs_0', name: 'A foundation' }),
-          makeSeries({ id: 'srs_1', name: 'B intermediate', prerequisiteSeriesId: 'srs_0' }),
-          makeSeries({ id: 'srs_2', name: 'C advanced', prerequisiteSeriesId: 'srs_1' }),
+          makeSeries({ id: 'srs_0', name: 'A foundation', branchIds: [BRANCH] }),
+          makeSeries({
+            id: 'srs_1',
+            name: 'B intermediate',
+            branchIds: [BRANCH],
+            prerequisiteSeriesId: 'srs_0',
+          }),
+          makeSeries({
+            id: 'srs_2',
+            name: 'C advanced',
+            branchIds: [BRANCH],
+            prerequisiteSeriesId: 'srs_1',
+          }),
         ],
-        branchConfigs: chainConfigs(['srs_0', 'srs_1', 'srs_2']),
-        seriesTests: [
-          { testSeriesId: 'srs_0', testId: 'tst_0', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-          { testSeriesId: 'srs_2', testId: 'tst_2', order: 1 },
-        ],
-        tests: [
-          makeTestRow({ id: 'tst_0' }),
-          makeTestRow({ id: 'tst_1' }),
-          makeTestRow({ id: 'tst_2' }),
-        ],
+        tests: [testIn('tst_0', 'srs_0'), testIn('tst_1', 'srs_1'), testIn('tst_2', 'srs_2')],
         attempts: [{ studentId: 'stu_1', testId: 'tst_0', status: ATTEMPT_STATUS.SUBMITTED }],
       }),
     );
@@ -320,7 +310,9 @@ describe('auto-unlock — a series that opens itself on the read that reaches it
   /** An AUTO series with nothing in front of it is open already and needs no row written. */
   it('writes nothing for an AUTO series that was never gated', async () => {
     const { resolver, world, prisma } = build(
-      reachable({ series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.AUTO })] }),
+      reachable({
+        series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode: UNLOCK_MODE.AUTO })],
+      }),
     );
 
     assert.equal(await stateOf(resolver), UNLOCK_STATE.UNLOCKED);
@@ -341,16 +333,11 @@ describe('UnlocksService.request', () => {
     assert.equal(world.requests.length, 1);
   });
 
-  /**
-   * THE failure this prevents: asking becomes a back door around the branch gate. A series the
-   * student's own centre has switched off is not theirs to ask about.
-   */
+  /** THE failure this prevents: asking as a back door — a series their own centre does not run is not theirs to ask about. */
   it('refuses a series the student cannot reach, and files nothing', async () => {
     const { service, world } = build(
       reachable({
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, enabled: false }),
-        ],
+        series: [makeSeries({ id: 'srs_1', branchIds: [], unlockMode: UNLOCK_MODE.REQUEST })],
       }),
     );
 
@@ -364,7 +351,7 @@ describe('UnlocksService.request', () => {
   it('refuses a series the student reaches through some other branch’s window', async () => {
     const { service } = build(
       reachable({
-        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledExams: [EXAM] })],
+        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledCourses: [COURSE] })],
       }),
     );
 
@@ -393,7 +380,9 @@ describe('UnlocksService.request', () => {
   /** An AUTO series with nothing in front of it is open already, so there is nothing to ask for. */
   it('refuses a series that is already open to the student', async () => {
     const { service } = build(
-      reachable({ series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.AUTO })] }),
+      reachable({
+        series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode: UNLOCK_MODE.AUTO })],
+      }),
     );
 
     const error = await service.request('stu_1', 'srs_1').catch((e: unknown) => e);
@@ -447,7 +436,7 @@ describe('UnlocksService.request', () => {
           makeStudent({
             id: 'stu_1',
             currentBranchId: BRANCH,
-            enrolledExams: [EXAM],
+            enrolledCourses: [COURSE],
             isTestBlocked: true,
           }),
         ],
@@ -586,10 +575,14 @@ describe('UnlocksService.decide', () => {
     const { service, resolver, listener, events } = build(
       reachable({
         series: [
-          makeSeries({ id: 'srs_0', name: 'Foundation mocks' }),
-          makeSeries({ id: 'srs_1', name: 'Advanced mocks', prerequisiteSeriesId: 'srs_0' }),
+          makeSeries({ id: 'srs_0', name: 'Foundation mocks', branchIds: [BRANCH] }),
+          makeSeries({
+            id: 'srs_1',
+            name: 'Advanced mocks',
+            branchIds: [BRANCH],
+            prerequisiteSeriesId: 'srs_0',
+          }),
         ],
-        branchConfigs: chainConfigs(['srs_0', 'srs_1']),
         unlockRequests: [
           {
             id: 'sur_1',
@@ -624,13 +617,15 @@ describe('UnlocksService.decide', () => {
    * branch already lets through, so the day the branch switches off, the row grants nothing.
    */
   it('opens nothing once the branch switches the series off', async () => {
-    const branchConfig = makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH });
-    const { service, resolver, listener, events, world } = pending({
-      branchConfigs: [branchConfig],
+    const series = makeSeries({
+      id: 'srs_1',
+      branchIds: [BRANCH],
+      unlockMode: UNLOCK_MODE.REQUEST,
     });
+    const { service, resolver, listener, events, world } = pending({ series: [series] });
 
     await service.decide('sur_1', ADMIN, UNLOCK_REQUEST_STATUS.APPROVED, EVERY_BRANCH);
-    branchConfig.enabled = false;
+    series.branchIds = [];
     await deliverBusts(events, listener);
 
     assert.deepEqual((await resolver.catalog('stu_1', NOW)).series, []);
@@ -758,7 +753,7 @@ describe('UnlocksService.listRequests', () => {
   });
 });
 
-/** Asking for a FREE series nobody reaches: the one way in for a student outside the institute. */
+/** Asking for a FREE series nobody reaches — which, now FREE reaches everyone, means one switched off. */
 
 const FAMILIES = [EXAM_COURSE.SSC, EXAM_COURSE.RRB, EXAM_COURSE.BANKING] as const;
 
@@ -785,6 +780,7 @@ function outsider(over: FakeCatalogData = {}): FakeCatalogData {
         id: `srs_${course}`,
         examStageId: `stage_${course}`,
         kind: TEST_SERIES_KIND.FREE,
+        isEnabled: false,
       }),
     ),
     ...over,
@@ -817,6 +813,7 @@ describe('asking for a FREE series nobody reaches', () => {
             id: 'srs_scholar',
             examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.EVENT,
+            isEnabled: false,
           }),
         ],
       }),
@@ -836,6 +833,7 @@ describe('asking for a FREE series nobody reaches', () => {
             id: 'srs_std',
             examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.STANDARD,
+            isEnabled: false,
           }),
         ],
       }),
@@ -847,7 +845,8 @@ describe('asking for a FREE series nobody reaches', () => {
     );
   });
 
-  it('approving writes a GRANT, and the series is theirs on the next read', async () => {
+  /** A grant, not an unlock — and the switch still outranks it, so the series stays dark. */
+  it('approving writes a GRANT rather than an unlock', async () => {
     const { service, resolver, listener, events, world } = build(outsider());
     const request = await service.request('stu_1', `srs_${EXAM_COURSE.SSC}`);
 
@@ -858,10 +857,8 @@ describe('asking for a FREE series nobody reaches', () => {
       world.grants.map((grant) => grant.testSeriesId),
       [`srs_${EXAM_COURSE.SSC}`],
     );
-    assert.deepEqual(
-      (await resolver.catalog('stu_1', NOW)).series.map((series) => series.id),
-      [`srs_${EXAM_COURSE.SSC}`],
-    );
+    assert.deepEqual(world.unlocks, []);
+    assert.deepEqual((await resolver.catalog('stu_1', NOW)).series, []);
   });
 
   it('refuses a third exam', async () => {
@@ -906,6 +903,7 @@ describe('asking for a FREE series nobody reaches', () => {
           id: `srs_${exam}`,
           examStageId: `stage_${exam}`,
           kind: TEST_SERIES_KIND.FREE,
+          isEnabled: false,
         }),
       ),
       grants: [grantOf('srs_cgl'), grantOf('srs_chsl')],
@@ -934,6 +932,7 @@ describe('asking for a FREE series nobody reaches', () => {
             id: 'srs_ssc_two',
             examStageId: `stage_${EXAM_COURSE.SSC}`,
             kind: TEST_SERIES_KIND.FREE,
+            isEnabled: false,
           }),
         ],
       }),

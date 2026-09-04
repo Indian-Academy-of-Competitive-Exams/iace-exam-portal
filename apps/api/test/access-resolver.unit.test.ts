@@ -5,6 +5,8 @@ import {
   EXAM_COURSE,
   ErrorCodes,
   type StudentCatalog,
+  TEST_SERIES_KIND,
+  TEST_SERIES_KINDS,
   TEST_STATUS,
   UNLOCK_MODE,
   UNLOCK_STATE,
@@ -15,22 +17,23 @@ import {
   FakeCatalogPrisma,
   FakeEventBus,
   FakeRedis,
-  makeBranchConfig,
+  type FakeCatalogData,
+  type FakeGrantRowAccess,
+  type FakeProgramUnlockRow,
+  type FakeTestRow,
   makeSeries,
   makeStudent,
   makeTestRow,
-  type FakeCatalogData,
 } from './support/fakes';
 
-/**
- * The access resolver's truth table. A student reaches a series by a grant, a program match or an
- * exam match, gated by their branch's row, and the window is applied on every read.
- */
+/** The access resolver's truth table: a series is reached by its KIND, or by a grant, and only while it is switched on. */
 
 const BRANCH = 'br_1';
-const EXAM = 'SSC CGL';
+const COURSE = EXAM_COURSE.SSC;
 const PROGRAM = 'SSC CGL FOUNDATION';
+const EVENT = 'evt_1';
 const NOW = new Date('2026-06-01T00:00:00.000Z');
+const HOUR_SEC = 60 * 60;
 
 function build(data: FakeCatalogData) {
   const prisma = new FakeCatalogPrisma(data);
@@ -44,180 +47,141 @@ function build(data: FakeCatalogData) {
   };
 }
 
-/** One student at a branch, one series enabled there, one ACTIVE test in it. */
+/** One test inside the one series every fixture below builds on. */
+const testIn = (id: string, seriesOrder: number, over: Partial<FakeTestRow> = {}) =>
+  makeTestRow({ id, testSeriesId: 'srs_1', seriesOrder, ...over });
+
+const grantOf = (testSeriesId: string): FakeGrantRowAccess => ({
+  studentId: 'stu_1',
+  testSeriesId,
+  createdById: 'adm_1',
+  createdAt: NOW,
+});
+
+/** A student at a branch on a course, one STANDARD series that branch runs, one ACTIVE test in it. */
 function reachable(over: FakeCatalogData = {}): FakeCatalogData {
   return {
-    students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] })],
-    series: [makeSeries({ id: 'srs_1' })],
-    branchConfigs: [makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH })],
-    seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-    tests: [makeTestRow({ id: 'tst_1' })],
+    students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledCourses: [COURSE] })],
+    series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH] })],
+    tests: [testIn('tst_1', 1)],
     ...over,
   };
 }
 
 const seriesIds = (catalog: StudentCatalog) => catalog.series.map((series) => series.id);
 
+const reached = async (data: FakeCatalogData) =>
+  seriesIds(await build(data).resolver.catalog('stu_1', NOW));
+
 describe('AccessResolverService — how a series is reached', () => {
-  it('opens a series on the stage of an exam the student is enrolled in', async () => {
-    const { resolver } = build(reachable());
-
-    const catalog = await resolver.catalog('stu_1', NOW);
-
-    assert.deepEqual(seriesIds(catalog), ['srs_1']);
-    assert.equal(catalog.series[0]?.tests[0]?.canStart, true);
+  it('reaches a STANDARD series only at a branch that runs it', async () => {
+    assert.deepEqual(await reached(reachable()), ['srs_1']);
+    assert.deepEqual(
+      await reached(reachable({ series: [makeSeries({ id: 'srs_1', branchIds: ['br_9'] })] })),
+      [],
+    );
   });
 
-  it('opens a program series to a student carrying the program, with no exam enrolment at all', async () => {
-    const { resolver } = build(
+  /** The mirror of the branch arm: the centre runs it, but this student is not on that course. */
+  it('gives a STANDARD series to nobody outside its course', async () => {
+    const elsewhere = reachable({
+      students: [
+        makeStudent({
+          id: 'stu_1',
+          currentBranchId: BRANCH,
+          enrolledCourses: [EXAM_COURSE.BANKING],
+        }),
+      ],
+    });
+
+    assert.deepEqual(await reached(elsewhere), []);
+  });
+
+  it('gives a student with no branch nothing on a course match', async () => {
+    const nowhere = reachable({
+      students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledCourses: [COURSE] })],
+    });
+
+    assert.deepEqual(await reached(nowhere), []);
+  });
+
+  /** FREE is the platform's shop window: no branch, no course, no program, and still reached. */
+  it('reaches a FREE series with no enrolment at all', async () => {
+    const outsider = reachable({
+      students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledCourses: [] })],
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.FREE })],
+    });
+
+    assert.deepEqual(await reached(outsider), ['srs_1']);
+  });
+
+  /** THE failure this prevents: a PROGRAM series opened on a course match hands a paid cohort's papers to everyone on that exam. */
+  it('reaches a PROGRAM series only while the student carries the program', async () => {
+    const forProgram = (programs: string[]) =>
       reachable({
         students: [
           makeStudent({
             id: 'stu_1',
             currentBranchId: BRANCH,
-            enrolledExams: [],
-            programs: [PROGRAM],
+            enrolledCourses: [COURSE],
+            programs,
           }),
         ],
-        series: [makeSeries({ id: 'srs_1', programCode: PROGRAM })],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
-  });
-
-  /**
-   * THE failure this prevents: a program-tagged series is program-ONLY. Opening it on the exam
-   * match alone hands a paid cohort's papers to everyone sitting the same exam.
-   */
-  it('does NOT open a program series to a student who only matches its exam', async () => {
-    const { resolver } = build(
-      reachable({ series: [makeSeries({ id: 'srs_1', programCode: PROGRAM })] }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
-  /**
-   * The mirror of the tests above, and what stops the exam clause being widened to "every series
-   * with no programme on it": a student sitting a DIFFERENT exam must reach nothing.
-   */
-  it('gives nothing to a student enrolled in some other exam', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: ['SSC CHSL'] }),
-        ],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
-  it('gives nothing to a student carrying some other program', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            programs: ['SSC CHSL FOUNDATION'],
+        series: [
+          makeSeries({
+            id: 'srs_1',
+            kind: TEST_SERIES_KIND.PROGRAM,
+            programCode: PROGRAM,
+            branchIds: [BRANCH],
           }),
         ],
-        series: [makeSeries({ id: 'srs_1', programCode: PROGRAM })],
-      }),
-    );
+      });
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
+    assert.deepEqual(await reached(forProgram([PROGRAM])), ['srs_1']);
+    assert.deepEqual(await reached(forProgram(['SSC CHSL FOUNDATION'])), []);
+    assert.deepEqual(await reached(forProgram([])), []);
   });
 
-  /** A course is what the institute coaches across, never an entitlement to a paper. */
-  it('gives nothing on an exam course alone', async () => {
-    const { resolver } = build(
+  /** An event intake names its sitters; being at the branch it runs at is not being named. */
+  it('reaches an EVENT series only as a candidate on its event', async () => {
+    const forCandidate = (studentId: string) =>
       reachable({
-        students: [
-          makeStudent({
-            id: 'stu_1',
-            currentBranchId: BRANCH,
-            enrolledExams: [],
-            enrolledCourses: [EXAM_COURSE.SSC],
+        series: [
+          makeSeries({
+            id: 'srs_1',
+            kind: TEST_SERIES_KIND.EVENT,
+            eventId: EVENT,
+            branchIds: [BRANCH],
           }),
         ],
-      }),
-    );
+        eventCandidates: [{ eventId: EVENT, studentId }],
+      });
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
+    assert.deepEqual(await reached(forCandidate('stu_1')), ['srs_1']);
+    assert.deepEqual(await reached(forCandidate('stu_2')), []);
   });
 
-  it('opens a series neither the exam nor the program would, on an explicit grant', async () => {
-    const { resolver } = build(
+  it('lets a grant override every kind', async () => {
+    const granted = (kind: (typeof TEST_SERIES_KINDS)[number]) =>
       reachable({
-        students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [] })],
-        grants: [
-          {
-            studentId: 'stu_1',
-            testSeriesId: 'srs_1',
-            createdById: 'adm_1',
-            createdAt: NOW,
-          },
-        ],
-      }),
-    );
+        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledCourses: [] })],
+        series: [makeSeries({ id: 'srs_1', kind, programCode: PROGRAM, eventId: EVENT })],
+        grants: [grantOf('srs_1')],
+      });
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
+    for (const kind of TEST_SERIES_KINDS) {
+      assert.deepEqual(await reached(granted(kind)), ['srs_1'], kind);
+    }
   });
 
-  it('hides a series the student’s branch has switched off', async () => {
-    const { resolver } = build(
-      reachable({
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, enabled: false }),
-        ],
-      }),
-    );
+  /** THE failure this prevents: a series pulled out of service still reaching its grantees. */
+  it('reaches nothing in a series nobody switched on', async () => {
+    const off = reachable({
+      series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], isEnabled: false })],
+      grants: [grantOf('srs_1')],
+    });
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
-  });
-
-  /** A branch's switch speaks for its cohort; a grant is one person, named, by an admin. */
-  it('opens a granted series even where the branch has switched it off', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [] })],
-        grants: [
-          { studentId: 'stu_1', testSeriesId: 'srs_1', createdById: 'adm_1', createdAt: NOW },
-        ],
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH, enabled: false }),
-        ],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
-  });
-
-  /** A scholarship candidate enrols outside the institute and sits at no centre of ours. */
-  it('opens a granted series to a student with no branch at all', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledExams: [] })],
-        grants: [{ studentId: 'stu_1', testSeriesId: 'srs_1', createdById: null, createdAt: NOW }],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
-  });
-
-  /** The gate moved for grants alone: an enrolment with no branch behind it still reaches nothing. */
-  it('gives a student with no branch nothing on an exam match', async () => {
-    const { resolver } = build(
-      reachable({
-        students: [makeStudent({ id: 'stu_1', currentBranchId: null, enrolledExams: [EXAM] })],
-      }),
-    );
-
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
+    assert.deepEqual(await reached(off), []);
   });
 
   it('treats a soft-deleted student as one that is not there', async () => {
@@ -242,7 +206,7 @@ describe('AccessResolverService — how a series is reached', () => {
           makeStudent({
             id: 'stu_1',
             currentBranchId: BRANCH,
-            enrolledExams: [EXAM],
+            enrolledCourses: [COURSE],
             isActive: false,
           }),
         ],
@@ -257,15 +221,10 @@ describe('AccessResolverService — how a series is reached', () => {
   it('never shows a test that is not ACTIVE', async () => {
     const { resolver } = build(
       reachable({
-        seriesTests: [
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_2', order: 2 },
-          { testSeriesId: 'srs_1', testId: 'tst_3', order: 3 },
-        ],
         tests: [
-          makeTestRow({ id: 'tst_1' }),
-          makeTestRow({ id: 'tst_2', status: TEST_STATUS.DRAFT }),
-          makeTestRow({ id: 'tst_3', status: TEST_STATUS.INACTIVE }),
+          testIn('tst_1', 1),
+          testIn('tst_2', 2, { status: TEST_STATUS.DRAFT }),
+          testIn('tst_3', 3, { status: TEST_STATUS.INACTIVE }),
         ],
       }),
     );
@@ -287,7 +246,7 @@ describe('AccessResolverService — a blocked student', () => {
           makeStudent({
             id: 'stu_1',
             currentBranchId: BRANCH,
-            enrolledExams: [EXAM],
+            enrolledCourses: [COURSE],
             isTestBlocked: true,
           }),
         ],
@@ -314,19 +273,12 @@ describe('AccessResolverService — a blocked student', () => {
 });
 
 describe('AccessResolverService — when a test opens', () => {
-  const withTiming = (unlockAt: Date | null, lateEntrySec: number | null) =>
-    build(
-      reachable({
-        seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt }],
-        branchSchedules:
-          lateEntrySec === null
-            ? []
-            : [{ branchId: BRANCH, testId: 'tst_1', lateEntrySec, extraTimeSec: null }],
-      }),
-    ).resolver;
-
-  const testAt = async (unlockAt: Date | null, lateEntrySec: number | null = null) =>
-    (await withTiming(unlockAt, lateEntrySec).catalog('stu_1', NOW)).series[0]?.tests[0];
+  const testAt = async (opensAt: Date | null, lateEntrySec: number | null = null) =>
+    (
+      await build(
+        reachable({ tests: [testIn('tst_1', 1, { opensAt, lateEntrySec })] }),
+      ).resolver.catalog('stu_1', NOW)
+    ).series[0]?.tests[0];
 
   it('is listed but not startable before it opens', async () => {
     const test = await testAt(new Date('2026-07-01T00:00:00.000Z'));
@@ -351,14 +303,14 @@ describe('AccessResolverService — when a test opens', () => {
     assert.deepEqual([test?.opensAt, test?.closesAt], [null, null]);
   });
 
-  it('shuts again once the branch cutoff has passed', async () => {
+  it('shuts again once the late-entry cutoff has passed', async () => {
     const test = await testAt(new Date('2026-06-01T09:00:00.000Z'), 30 * 60);
 
     assert.equal(test?.closesAt, '2026-06-01T09:30:00.000Z');
     assert.equal(test?.canStart, false);
   });
 
-  it('is still startable inside the branch cutoff', async () => {
+  it('is still startable inside the cutoff', async () => {
     const opened = new Date(NOW.getTime() - 60 * 1000);
 
     assert.equal((await testAt(opened, 30 * 60))?.canStart, true);
@@ -373,24 +325,115 @@ describe('AccessResolverService — when a test opens', () => {
   });
 });
 
+describe('AccessResolverService — when a test opens for one program', () => {
+  const OPENS = new Date('2026-07-01T00:00:00.000Z');
+  const EARLY = new Date('2026-05-01T00:00:00.000Z');
+  const EARLIER = new Date('2026-04-01T00:00:00.000Z');
+  const OTHER_PROGRAM = 'SSC CHSL FOUNDATION';
+
+  const seenBy = async (programs: string[], programUnlocks: FakeProgramUnlockRow[]) =>
+    (
+      await build(
+        reachable({
+          students: [
+            makeStudent({
+              id: 'stu_1',
+              currentBranchId: BRANCH,
+              enrolledCourses: [COURSE],
+              programs,
+            }),
+          ],
+          tests: [testIn('tst_1', 1, { opensAt: OPENS, lateEntrySec: HOUR_SEC })],
+          programUnlocks,
+        }),
+      ).resolver.catalog('stu_1', NOW)
+    ).series[0]?.tests[0];
+
+  const early: FakeProgramUnlockRow = { testId: 'tst_1', programCode: PROGRAM, opensAt: EARLY };
+  const earlier: FakeProgramUnlockRow = {
+    testId: 'tst_1',
+    programCode: OTHER_PROGRAM,
+    opensAt: EARLIER,
+  };
+
+  /** THE failure this prevents: one cohort's early sitting opening the paper for everybody. */
+  it('opens a test early for a program holder and for nobody else', async () => {
+    const holder = await seenBy([PROGRAM], [early]);
+    const outsider = await seenBy([], [early]);
+
+    assert.deepEqual([holder?.opensAt, holder?.canStart], [EARLY.toISOString(), true]);
+    assert.deepEqual([outsider?.opensAt, outsider?.canStart], [OPENS.toISOString(), false]);
+  });
+
+  it('takes the earliest opening when the student holds two programs', async () => {
+    const both = await seenBy([PROGRAM, OTHER_PROGRAM], [early, earlier]);
+
+    assert.equal(both?.opensAt, EARLIER.toISOString());
+  });
+
+  /** A program cohort gets a LONGER window, never a shifted one: entry shuts once, for everyone. */
+  it('shares one closing time across every cohort', async () => {
+    const holder = await seenBy([PROGRAM], [early]);
+    const outsider = await seenBy([], [early]);
+
+    assert.equal(holder?.closesAt, '2026-07-01T01:00:00.000Z');
+    assert.equal(outsider?.closesAt, holder?.closesAt);
+  });
+});
+
+describe('AccessResolverService.testSchedule', () => {
+  const scheduleOf = (over: Partial<FakeTestRow>) =>
+    build(reachable({ tests: [makeTestRow({ id: 'tst_1', ...over })] })).resolver.testSchedule(
+      'tst_1',
+    );
+
+  /** Standalone: it belongs to no series, so nothing schedules it and nothing shuts it. */
+  it('does not schedule a test that belongs to no series', async () => {
+    assert.deepEqual(await scheduleOf({ testSeriesId: null }), {
+      scheduled: false,
+      closesAt: null,
+      extraTimeSec: 0,
+    });
+  });
+
+  it('shuts entry at the test’s own late-entry cutoff', async () => {
+    const schedule = await scheduleOf({
+      testSeriesId: 'srs_1',
+      opensAt: new Date('2026-06-01T09:00:00.000Z'),
+      lateEntrySec: 30 * 60,
+      extraTimeSec: 300,
+    });
+
+    assert.deepEqual(schedule, {
+      scheduled: true,
+      closesAt: '2026-06-01T09:30:00.000Z',
+      extraTimeSec: 300,
+    });
+  });
+
+  /** The failure this prevents: an unscheduled test reading as one whose entry has closed. */
+  it('leaves a scheduled test with no cutoff open to enter', async () => {
+    assert.deepEqual(await scheduleOf({ testSeriesId: 'srs_1' }), {
+      scheduled: true,
+      closesAt: null,
+      extraTimeSec: 0,
+    });
+  });
+});
+
 describe('AccessResolverService — what the paper is', () => {
   /** THE failure this prevents: a shut window must not blank out what the paper itself is. */
   it('reports duration, questions and marks though the window has shut', async () => {
     const { resolver } = build(
       reachable({
-        seriesTests: [
-          {
-            testSeriesId: 'srs_1',
-            testId: 'tst_1',
-            order: 1,
-            unlockAt: new Date('2026-05-01T00:00:00.000Z'),
-          },
-        ],
-        branchSchedules: [
-          { branchId: BRANCH, testId: 'tst_1', lateEntrySec: 3600, extraTimeSec: null },
-        ],
         tests: [
-          makeTestRow({ id: 'tst_1', durationSec: 5400, totalQuestions: 90, totalMarks: 180 }),
+          testIn('tst_1', 1, {
+            opensAt: new Date('2026-05-01T00:00:00.000Z'),
+            lateEntrySec: HOUR_SEC,
+            durationSec: 5400,
+            totalQuestions: 90,
+            totalMarks: 180,
+          }),
         ],
       }),
     );
@@ -405,20 +448,14 @@ describe('AccessResolverService — what the paper is', () => {
 describe('AccessResolverService — the order the catalog comes back in', () => {
   /** Two series can share a name; without the id tiebreak they swap places between reads. */
   it('breaks a tie on id, so the same catalog reads the same way twice', async () => {
-    const { resolver } = build(
-      reachable({
-        series: [
-          makeSeries({ id: 'srs_b', name: 'Mock series' }),
-          makeSeries({ id: 'srs_a', name: 'Mock series' }),
-        ],
-        branchConfigs: [
-          makeBranchConfig({ testSeriesId: 'srs_a', branchId: BRANCH }),
-          makeBranchConfig({ testSeriesId: 'srs_b', branchId: BRANCH }),
-        ],
-      }),
-    );
+    const both = reachable({
+      series: [
+        makeSeries({ id: 'srs_b', name: 'Mock series', branchIds: [BRANCH] }),
+        makeSeries({ id: 'srs_a', name: 'Mock series', branchIds: [BRANCH] }),
+      ],
+    });
 
-    assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_a', 'srs_b']);
+    assert.deepEqual(await reached(both), ['srs_a', 'srs_b']);
   });
 });
 
@@ -427,15 +464,15 @@ describe('AccessResolverService — a series behind a prerequisite', () => {
     build(
       reachable({
         series: [
-          makeSeries({ id: 'srs_0', name: 'Foundation mocks' }),
+          makeSeries({ id: 'srs_0', name: 'Foundation mocks', branchIds: [BRANCH] }),
           makeSeries({
             id: 'srs_1',
             name: 'Advanced mocks',
+            branchIds: [BRANCH],
             prerequisiteSeriesId: 'srs_0',
             unlockMode: UNLOCK_MODE.REQUEST,
           }),
         ],
-        branchConfigs: [makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH })],
         ...over,
       }),
     );
@@ -473,7 +510,7 @@ describe('AccessResolverService — a series behind a prerequisite', () => {
 
 describe('AccessResolverService — a series that never opens on its own', () => {
   const byMode = (unlockMode: (typeof UNLOCK_MODE)[keyof typeof UNLOCK_MODE]) =>
-    build(reachable({ series: [makeSeries({ id: 'srs_1', unlockMode })] }));
+    build(reachable({ series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode })] }));
 
   /** The failure this prevents: REQUEST reduced to decoration on an already-open series. */
   it('holds a REQUEST series LOCKED with nothing to come first, and offers the request', async () => {
@@ -489,7 +526,7 @@ describe('AccessResolverService — a series that never opens on its own', () =>
   it('opens it once an unlock row carries a time', async () => {
     const catalog = await build(
       reachable({
-        series: [makeSeries({ id: 'srs_1', unlockMode: UNLOCK_MODE.REQUEST })],
+        series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode: UNLOCK_MODE.REQUEST })],
         unlocks: [
           { studentId: 'stu_1', testSeriesId: 'srs_1', unlockedAt: new Date('2026-05-20') },
         ],
@@ -518,7 +555,7 @@ describe('AccessResolverService.assertCanStart', () => {
   /** The guard and the catalog share one resolution, so they can never disagree. */
   it('refuses a test that is in no series the student reaches', async () => {
     const { resolver } = build(
-      reachable({ series: [makeSeries({ id: 'srs_1', programCode: PROGRAM })] }),
+      reachable({ series: [makeSeries({ id: 'srs_1', branchIds: ['br_9'] })] }),
     );
 
     const error = await resolver.assertCanStart('stu_1', 'tst_1', NOW).catch((e: unknown) => e);
@@ -531,7 +568,11 @@ describe('AccessResolverService.assertCanStart', () => {
    * just-blocked student starting tests for the rest of the entry's 15 minutes.
    */
   it('refuses the moment a block lands, on a cache entry nothing busted', async () => {
-    const student = makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] });
+    const student = makeStudent({
+      id: 'stu_1',
+      currentBranchId: BRANCH,
+      enrolledCourses: [COURSE],
+    });
     const { resolver } = build(reachable({ students: [student] }));
     await resolver.assertCanStart('stu_1', 'tst_1', NOW);
 
@@ -543,7 +584,11 @@ describe('AccessResolverService.assertCanStart', () => {
   });
 
   it('refuses the moment the student is deactivated, on a cache entry nothing busted', async () => {
-    const student = makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] });
+    const student = makeStudent({
+      id: 'stu_1',
+      currentBranchId: BRANCH,
+      enrolledCourses: [COURSE],
+    });
     const { resolver } = build(reachable({ students: [student] }));
     await resolver.assertCanStart('stu_1', 'tst_1', NOW);
 
@@ -556,6 +601,15 @@ describe('AccessResolverService.assertCanStart', () => {
 });
 
 describe('AccessResolverService — the cache', () => {
+  const twoStudents = (over: FakeCatalogData = {}) =>
+    reachable({
+      students: [
+        makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledCourses: [COURSE] }),
+        makeStudent({ id: 'stu_2', currentBranchId: BRANCH, enrolledCourses: [COURSE] }),
+      ],
+      ...over,
+    });
+
   it('answers a second read without touching Postgres', async () => {
     const { resolver, prisma } = build(reachable());
 
@@ -584,8 +638,8 @@ describe('AccessResolverService — the cache', () => {
    * block, live for 15 more minutes.
    */
   it('honours a bust that lands mid-resolve, instead of re-pinning the old answer', async () => {
-    const branchConfig = makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH });
-    const { resolver, prisma } = build(reachable({ branchConfigs: [branchConfig] }));
+    const series = makeSeries({ id: 'srs_1', branchIds: [BRANCH] });
+    const { resolver, prisma } = build(reachable({ series: [series] }));
     prisma.onQuery = async (name) => {
       if (name !== 'testSeries.findMany') return;
       prisma.onQuery = null;
@@ -593,19 +647,13 @@ describe('AccessResolverService — the cache', () => {
     };
 
     assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), ['srs_1']);
-    branchConfig.enabled = false;
+    series.isEnabled = false;
 
     assert.deepEqual(seriesIds(await resolver.catalog('stu_1', NOW)), []);
   });
 
   it('leaves every other student’s entry alone when one student is busted', async () => {
-    const two = reachable({
-      students: [
-        makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
-        makeStudent({ id: 'stu_2', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
-      ],
-    });
-    const { resolver, prisma } = build(two);
+    const { resolver, prisma } = build(twoStudents());
     await resolver.catalog('stu_1', NOW);
     await resolver.catalog('stu_2', NOW);
     const afterBoth = prisma.queries.length;
@@ -618,14 +666,7 @@ describe('AccessResolverService — the cache', () => {
 
   /** A series-wide change is one INCR, not a scan: every student falls out of cache at once. */
   it('recomputes for everyone when the catalog itself changes', async () => {
-    const { resolver, prisma } = build(
-      reachable({
-        students: [
-          makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
-          makeStudent({ id: 'stu_2', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
-        ],
-      }),
-    );
+    const { resolver, prisma } = build(twoStudents());
     await resolver.catalog('stu_1', NOW);
     await resolver.catalog('stu_2', NOW);
     const afterBoth = prisma.queries.length;
@@ -639,16 +680,10 @@ describe('AccessResolverService — the cache', () => {
     assert.ok(prisma.queries.length > afterFirstRecompute);
   });
 
-  /**
-   * WHY the window is not cached: the same cached entry has to answer UPCOMING before the
-   * branch's start time and ACTIVE after it, with nothing invalidating it in between. Caching
-   * availability would leave a series shut until something happened to bust the key.
-   */
+  /** WHY the window is not cached: one entry must answer UPCOMING before the opening time and ACTIVE after it, with no bust in between. */
   it('crosses an opening time on a cache entry that never changed', async () => {
-    const unlockAt = new Date('2026-06-15T00:00:00.000Z');
-    const { resolver, prisma } = build(
-      reachable({ seriesTests: [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt }] }),
-    );
+    const opensAt = new Date('2026-06-15T00:00:00.000Z');
+    const { resolver, prisma } = build(reachable({ tests: [testIn('tst_1', 1, { opensAt })] }));
 
     const before = await resolver.catalog('stu_1', new Date('2026-06-14T23:59:00.000Z'));
     const afterFirst = prisma.queries.length;
@@ -665,8 +700,8 @@ describe('AccessCacheListener', () => {
     const { resolver, prisma } = build(
       reachable({
         students: [
-          makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
-          makeStudent({ id: 'stu_2', currentBranchId: BRANCH, enrolledExams: [EXAM] }),
+          makeStudent({ id: 'stu_1', currentBranchId: BRANCH, enrolledCourses: [COURSE] }),
+          makeStudent({ id: 'stu_2', currentBranchId: BRANCH, enrolledCourses: [COURSE] }),
         ],
       }),
     );
@@ -713,17 +748,8 @@ describe('AccessResolverService — a series that unlocks in order', () => {
   const inOrder = (attempts: { studentId: string; testId: string; status: string }[] = []) =>
     build(
       reachable({
-        series: [makeSeries({ id: 'srs_1', sequentialTests: true })],
-        seriesTests: [
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_2', order: 2 },
-          { testSeriesId: 'srs_1', testId: 'tst_3', order: 3 },
-        ],
-        tests: [
-          makeTestRow({ id: 'tst_1' }),
-          makeTestRow({ id: 'tst_2' }),
-          makeTestRow({ id: 'tst_3' }),
-        ],
+        series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], sequentialTests: true })],
+        tests: [testIn('tst_1', 1), testIn('tst_2', 2), testIn('tst_3', 3)],
         attempts,
       }),
     ).resolver;
@@ -759,15 +785,7 @@ describe('AccessResolverService — a series that unlocks in order', () => {
   });
 
   it('holds nothing back when the series does not unlock in order', async () => {
-    const open = build(
-      reachable({
-        seriesTests: [
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-          { testSeriesId: 'srs_1', testId: 'tst_2', order: 2 },
-        ],
-        tests: [makeTestRow({ id: 'tst_1' }), makeTestRow({ id: 'tst_2' })],
-      }),
-    ).resolver;
+    const open = build(reachable({ tests: [testIn('tst_1', 1), testIn('tst_2', 2)] })).resolver;
 
     const series = (await open.catalog('stu_1', NOW)).series[0];
 

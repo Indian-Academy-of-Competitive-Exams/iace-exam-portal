@@ -3337,6 +3337,7 @@ export interface FakeSeriesRow {
   kind: TestSeriesKind;
   eventId: string | null;
   branchIds: string[];
+  isEnabled: boolean;
   createdAt: Date;
   _count: { tests: number };
 }
@@ -3406,6 +3407,7 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     kind: TEST_SERIES_KIND.STANDARD,
     eventId: null,
     branchIds: [],
+    isEnabled: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
     _count: { tests: overrides._count?.tests ?? 0 },
@@ -3980,7 +3982,7 @@ export class FakeEventsPrisma {
   };
 }
 
-/** The `Test` columns the catalog reads, plus the base config facts it joins in. */
+/** The `Test` columns the catalog reads — its series, its own window — plus the config it joins in. */
 export interface FakeTestRow {
   id: string;
   title: string | null;
@@ -3988,6 +3990,11 @@ export interface FakeTestRow {
   durationSec: number;
   totalQuestions: number;
   totalMarks: number;
+  testSeriesId: string | null;
+  seriesOrder: number | null;
+  opensAt: Date | null;
+  lateEntrySec: number | null;
+  extraTimeSec: number | null;
 }
 
 export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
@@ -3998,6 +4005,11 @@ export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
     durationSec: 3600,
     totalQuestions: 100,
     totalMarks: 200,
+    testSeriesId: null,
+    seriesOrder: null,
+    opensAt: null,
+    lateEntrySec: null,
+    extraTimeSec: null,
     ...overrides,
   };
 }
@@ -4030,15 +4042,22 @@ export interface FakeUnlockRequestRow {
   decidedById: string | null;
 }
 
+/** When one test opens for one program's cohort, ahead of the test's own opening. */
+export interface FakeProgramUnlockRow {
+  testId: string;
+  programCode: string;
+  opensAt: Date;
+}
+
 export interface FakeCatalogData {
   students?: FakeStudent[];
   series?: FakeSeriesRow[];
-  branchConfigs?: FakeBranchConfigRow[];
   grants?: FakeGrantRowAccess[];
   unlocks?: FakeUnlockRow[];
   unlockRequests?: FakeUnlockRequestRow[];
-  seriesTests?: FakeSeriesTestRow[];
-  branchSchedules?: FakeBranchScheduleRow[];
+  /** Who an EVENT series reaches: the people named on its event. */
+  eventCandidates?: { eventId: string; studentId: string }[];
+  programUnlocks?: FakeProgramUnlockRow[];
   /** What the student has already sat — what a series unlocking in order reads. */
   attempts?: { studentId: string; testId: string; status: string }[];
   tests?: FakeTestRow[];
@@ -4055,27 +4074,22 @@ interface CatalogReachWhere {
   unlockRequests?: { some: { studentId: string; status: string } };
   programCode?: null | { in: string[] };
   kind?: TestSeriesKind;
-  examStage?: { exam: { code?: { in: string[] }; course?: { in: ExamCourse[] } } };
+  branchIds?: { has: string };
+  event?: { candidates: { some: { studentId: string } } };
+  examStage?: { exam: { course?: { in: ExamCourse[] } } };
 }
 
 interface CatalogSeriesWhere extends CatalogReachWhere {
-  branchConfigs?: { some: { branchId: string; enabled: boolean } };
+  isEnabled?: boolean;
   id?: { in: string[] };
   OR?: CatalogSeriesWhere[];
   NOT?: CatalogSeriesWhere;
 }
 
 interface CatalogInclude {
-  tests: {
-    where: { test: { status: TestStatus } };
-    select: {
-      test: {
-        select: {
-          branchSchedules: { where: { branchId: { in: string[] } } };
-          baseConfig: { select: { durationSec: true; totalQuestions: true; totalMarks: true } };
-        };
-      };
-    };
+  directTests: {
+    where: { status: TestStatus };
+    select: { programUnlocks: { where: { programCode: { in: string[] } } } };
   };
 }
 
@@ -4100,12 +4114,11 @@ export class FakeCatalogPrisma {
     this.data = {
       students: data.students ?? [],
       series: data.series ?? [],
-      branchConfigs: data.branchConfigs ?? [],
       grants: data.grants ?? [],
       unlockRequests: data.unlockRequests ?? [],
       unlocks: data.unlocks ?? [],
-      seriesTests: data.seriesTests ?? [],
-      branchSchedules: data.branchSchedules ?? [],
+      eventCandidates: data.eventCandidates ?? [],
+      programUnlocks: data.programUnlocks ?? [],
       attempts: data.attempts ?? [],
       tests: data.tests ?? [],
       stages: data.stages ?? [makeExamStage()],
@@ -4180,6 +4193,14 @@ export class FakeCatalogPrisma {
       await this.record('testSeries.findUnique');
       const row = this.data.series.find((candidate) => candidate.id === where.id);
       return row ? { ...row, examStage: this.stageOf(row.examStageId) } : null;
+    },
+  };
+
+  readonly test = {
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      await this.record('test.findUnique');
+      const row = this.data.tests.find((test) => test.id === where.id);
+      return row ? { ...row } : null;
     },
   };
 
@@ -4387,26 +4408,27 @@ export class FakeCatalogPrisma {
   }
 
   private matchesSeries(row: FakeSeriesRow, where: CatalogSeriesWhere): boolean {
-    const gate = where.branchConfigs?.some;
-    const enabledHere =
-      gate === undefined ||
-      this.data.branchConfigs.some(
-        (config) =>
-          config.testSeriesId === row.id &&
-          config.branchId === gate.branchId &&
-          config.enabled === gate.enabled,
-      );
-
     return (
-      enabledHere &&
+      (where.isEnabled === undefined || row.isEnabled === where.isEnabled) &&
       (where.id === undefined || where.id.in.includes(row.id)) &&
       (where.kind === undefined || row.kind === where.kind) &&
+      (where.branchIds === undefined || row.branchIds.includes(where.branchIds.has)) &&
       this.matchesGrant(row, where.grants) &&
+      this.matchesCandidacy(row, where.event) &&
       this.matchesPendingRequest(row, where.unlockRequests) &&
       matchesProgramCode(row.programCode, where.programCode) &&
       this.matchesExam(row, where.examStage) &&
       (where.OR === undefined || where.OR.some((clause) => this.matchesSeries(row, clause))) &&
       (where.NOT === undefined || !this.matchesSeries(row, where.NOT))
+    );
+  }
+
+  private matchesCandidacy(row: FakeSeriesRow, filter: CatalogReachWhere['event']): boolean {
+    if (filter === undefined) return true;
+    return this.data.eventCandidates.some(
+      (candidate) =>
+        candidate.eventId === row.eventId &&
+        candidate.studentId === filter.candidates.some.studentId,
     );
   }
 
@@ -4431,16 +4453,9 @@ export class FakeCatalogPrisma {
   }
 
   private matchesExam(row: FakeSeriesRow, filter: CatalogReachWhere['examStage']): boolean {
-    if (filter === undefined) return true;
-    if (filter.exam.code) {
-      const code = this.examCodeOf(row.examStageId);
-      return code !== null && filter.exam.code.in.includes(code);
-    }
-    if (filter.exam.course) {
-      const course = this.examCourseOf(row.examStageId);
-      return course !== null && filter.exam.course.in.includes(course);
-    }
-    return true;
+    if (filter?.exam.course === undefined) return true;
+    const course = this.examCourseOf(row.examStageId);
+    return course !== null && filter.exam.course.in.includes(course);
   }
 
   /** The shape a `select: { examStage: { exam: ... } }` expects back. */
@@ -4468,38 +4483,33 @@ export class FakeCatalogPrisma {
     const prerequisite = this.data.series.find(
       (candidate) => candidate.id === row.prerequisiteSeriesId,
     );
+    const programs = include.directTests.select.programUnlocks.where.programCode.in;
 
     return {
       ...row,
       examStage: stage && code !== null ? { id: stage.id, name: stage.name, exam: { code } } : null,
       prerequisiteSeries: prerequisite ? { name: prerequisite.name } : null,
-      tests: this.data.seriesTests
-        .filter((link) => link.testSeriesId === row.id)
-        .flatMap((link) => {
-          const test = this.data.tests.find((candidate) => candidate.id === link.testId);
-          if (test?.status !== include.tests.where.test.status) return [];
-
-          const branchIds = include.tests.select.test.select.branchSchedules.where.branchId.in;
-          return [
-            {
-              order: link.order,
-              unlockAt: link.unlockAt ?? null,
-              test: {
-                id: test.id,
-                title: test.title,
-                baseConfig: {
-                  durationSec: test.durationSec,
-                  totalQuestions: test.totalQuestions,
-                  totalMarks: new Prisma.Decimal(test.totalMarks),
-                },
-                branchSchedules: this.data.branchSchedules.filter(
-                  (schedule) =>
-                    schedule.testId === test.id && branchIds.includes(schedule.branchId),
-                ),
-              },
-            },
-          ];
-        }),
+      directTests: this.data.tests
+        .filter(
+          (test) =>
+            test.testSeriesId === row.id && test.status === include.directTests.where.status,
+        )
+        .map((test) => ({
+          id: test.id,
+          title: test.title,
+          seriesOrder: test.seriesOrder,
+          opensAt: test.opensAt,
+          lateEntrySec: test.lateEntrySec,
+          extraTimeSec: test.extraTimeSec,
+          baseConfig: {
+            durationSec: test.durationSec,
+            totalQuestions: test.totalQuestions,
+            totalMarks: new Prisma.Decimal(test.totalMarks),
+          },
+          programUnlocks: this.data.programUnlocks
+            .filter((unlock) => unlock.testId === test.id && programs.includes(unlock.programCode))
+            .map((unlock) => ({ opensAt: unlock.opensAt })),
+        })),
     };
   }
 }

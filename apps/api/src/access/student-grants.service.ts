@@ -86,6 +86,7 @@ export class StudentGrantsService {
         currentBranchId: true,
         programs: true,
         enrolledExams: true,
+        enrolledCourses: true,
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');

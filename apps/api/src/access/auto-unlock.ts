@@ -12,7 +12,7 @@ export interface UnlockRule {
 /** Plus what the prerequisite is measured in: a series is done when its tests are. */
 export interface UnlockCandidate extends UnlockRule {
   id: string;
-  tests: readonly { test: { id: string } }[];
+  directTests: readonly { id: string }[];
 }
 
 /** AUTO with nothing in front opens on its own; REQUEST and a pending prerequisite both hold shut. */
@@ -32,7 +32,7 @@ function completedSeries(
 ): Set<string> {
   const done = new Set<string>();
   for (const row of series) {
-    const sat = row.tests.length > 0 && row.tests.every((link) => finished.has(link.test.id));
+    const sat = row.directTests.length > 0 && row.directTests.every((t) => finished.has(t.id));
     if (sat) done.add(row.id);
   }
   return done;

@@ -9,6 +9,7 @@ import {
   type StudentCatalog,
   type StudentCatalogSeries,
   type StudentCatalogTest,
+  TEST_SERIES_KIND,
   TEST_STATUS,
   type TestSeriesKind,
   UNLOCK_REQUEST_STATUS,
@@ -34,33 +35,24 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v8';
+const CATALOG_SHAPE = 'v9';
 
-const catalogInclude = (branchId: string | null) =>
+const catalogInclude = (programs: string[]) =>
   ({
     examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
     prerequisiteSeries: { select: { name: true } },
-    // The `access` → `Test` seam docs/03 §4 records: the tests module does not exist yet, so
-    // there is no facade to ask and the read is made here.
-    tests: {
-      where: { test: { status: TEST_STATUS.ACTIVE } },
+    directTests: {
+      where: { status: TEST_STATUS.ACTIVE },
       select: {
-        order: true,
-        unlockAt: true,
-        test: {
-          select: {
-            id: true,
-            title: true,
-            baseConfig: {
-              select: { durationSec: true, totalQuestions: true, totalMarks: true },
-            },
-            branchSchedules: {
-              // No branch, no row, which is already what "no row" means: the plain timing rules.
-              where: { branchId: { in: branchId === null ? [] : [branchId] } },
-              select: { lateEntrySec: true, extraTimeSec: true },
-            },
-          },
-        },
+        id: true,
+        title: true,
+        seriesOrder: true,
+        opensAt: true,
+        lateEntrySec: true,
+        extraTimeSec: true,
+        baseConfig: { select: { durationSec: true, totalQuestions: true, totalMarks: true } },
+        // No program, no row, which is already what "no row" means: the test's own opening.
+        programUnlocks: { where: { programCode: { in: programs } }, select: { opensAt: true } },
       },
     },
   }) as const satisfies Prisma.TestSeriesInclude;
@@ -80,7 +72,7 @@ interface ResolvedTest {
   closesAt: string | null;
   /** Where this student got to. Cached, and busted when a sitting starts or ends. */
   attemptStatus: AttemptStatus | null;
-  /** This branch's, in seconds, so the deadline is computed from one duration and not two. */
+  /** This test's, in seconds, so the deadline is computed from one duration and not two. */
   extraTimeSec: number | null;
 }
 
@@ -108,7 +100,7 @@ export interface TestSchedule {
   extraTimeSec: number;
 }
 
-/** When one test opens and shuts FOR THIS STUDENT, and what their branch adds to the clock. */
+/** When one test opens and shuts FOR THIS STUDENT, and what the test adds to the clock. */
 export interface StudentTestWindow {
   opensAt: string | null;
   closesAt: string | null;
@@ -125,11 +117,7 @@ interface FreshCatalog {
   opened: boolean;
 }
 
-/**
- * The one place "can this student reach this?" is answered. A student reaches a series by an
- * explicit grant, a program match or an exam match, and every one of those is then gated by the
- * `BranchTestConfig` row for their branch.
- */
+/** The one place "can this student reach this?" is answered: by the series' kind, or by a grant. */
 @Injectable()
 export class AccessResolverService {
   constructor(
@@ -193,47 +181,18 @@ export class AccessResolverService {
 
   /** How this test is offered to the whole institute — not to one branch, and not to one student. */
   async testSchedule(testId: string): Promise<TestSchedule> {
-    const links = await this.prisma.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true, unlockAt: true },
+    const test = await this.prisma.test.findUnique({
+      where: { id: testId },
+      select: { testSeriesId: true, opensAt: true, lateEntrySec: true, extraTimeSec: true },
     });
     // Standalone: it belongs to no series, so nothing schedules it and nothing shuts it.
-    if (links.length === 0) return { scheduled: false, closesAt: null, extraTimeSec: 0 };
+    if (!test?.testSeriesId) return { scheduled: false, closesAt: null, extraTimeSec: 0 };
 
-    const open = { scheduled: true, closesAt: null, extraTimeSec: 0 } as const;
-    if (links.some((link) => link.unlockAt === null)) return open;
-
-    const [schedules, offers] = await Promise.all([
-      this.prisma.branchTestSchedule.findMany({
-        where: { testId },
-        select: { branchId: true, lateEntrySec: true, extraTimeSec: true },
-      }),
-      this.prisma.branchTestConfig.findMany({
-        where: { testSeriesId: { in: links.map((link) => link.testSeriesId) }, enabled: true },
-        select: { branchId: true },
-        distinct: ['branchId'],
-      }),
-    ]);
-    // Compared BRANCH by branch: a test in two series has two offers to one branch, not two branches.
-    const capped = new Set(
-      schedules.filter((row) => row.lateEntrySec !== null).map((row) => row.branchId),
-    );
-    // A branch with no row runs the plain rules, and the plain rule for late entry is no cap.
-    if (capped.size === 0 || offers.some((offer) => !capped.has(offer.branchId))) return open;
-
-    // A grant reaches PAST the branch gate, so a granted student's branch may cap nothing at all.
-    const granted = await this.prisma.studentGrant.count({
-      where: { testSeriesId: { in: links.map((link) => link.testSeriesId) } },
+    const { closesAt } = testWindow({
+      unlockAt: test.opensAt?.toISOString() ?? null,
+      lateEntrySec: test.lateEntrySec,
     });
-    if (granted > 0) return open;
-
-    const opensAt = Math.max(...links.map((link) => link.unlockAt?.getTime() ?? 0));
-    const lateEntrySec = Math.max(0, ...schedules.map((row) => row.lateEntrySec ?? 0));
-    return {
-      scheduled: true,
-      closesAt: new Date(opensAt + lateEntrySec * MILLISECONDS_PER_SECOND).toISOString(),
-      extraTimeSec: Math.max(0, ...schedules.map((row) => row.extraTimeSec ?? 0)),
-    };
+    return { scheduled: true, closesAt, extraTimeSec: test.extraTimeSec ?? 0 };
   }
 
   /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */
@@ -297,14 +256,14 @@ export class AccessResolverService {
         isTestBlocked: true,
         currentBranchId: true,
         programs: true,
-        enrolledExams: true,
+        enrolledCourses: true,
       },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     const rows = await this.prisma.testSeries.findMany({
       where: reachableBy(studentId, student),
-      include: catalogInclude(student.currentBranchId),
+      include: catalogInclude(student.programs),
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
 
@@ -358,31 +317,33 @@ function counterOf(raw: string | null | undefined): number {
   return Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
-/** One where-input for reach, asked by all three readers; a grant sits OUTSIDE the branch gate. */
+/** One where-input for reach, asked by all three readers; a grant overrides every kind but the switch. */
 export function reachableBy(
   studentId: string,
   student: Readonly<{
     currentBranchId: string | null;
     programs: string[];
-    enrolledExams: string[];
+    enrolledCourses: ExamCourse[];
   }>,
 ): Prisma.TestSeriesWhereInput {
   const automatic: Prisma.TestSeriesWhereInput[] = [
-    ...(student.programs.length > 0 ? [{ programCode: { in: student.programs } }] : []),
-    // `programCode: null` is what makes a program-tagged series program-ONLY: an exam
-    // enrolment alone must never open one.
-    ...(student.enrolledExams.length > 0
-      ? [{ programCode: null, examStage: { exam: { code: { in: student.enrolledExams } } } }]
+    { kind: TEST_SERIES_KIND.FREE },
+    ...(student.currentBranchId !== null && student.enrolledCourses.length > 0
+      ? [
+          {
+            kind: TEST_SERIES_KIND.STANDARD,
+            branchIds: { has: student.currentBranchId },
+            examStage: { exam: { course: { in: student.enrolledCourses } } },
+          },
+        ]
       : []),
+    ...(student.programs.length > 0
+      ? [{ kind: TEST_SERIES_KIND.PROGRAM, programCode: { in: student.programs } }]
+      : []),
+    { kind: TEST_SERIES_KIND.EVENT, event: { candidates: { some: { studentId } } } },
   ];
 
-  const branchId = student.currentBranchId;
-  const gated: Prisma.TestSeriesWhereInput[] =
-    branchId === null || automatic.length === 0
-      ? []
-      : [{ branchConfigs: { some: { branchId, enabled: true } }, OR: automatic }];
-
-  return { OR: [{ grants: { some: { studentId } } }, ...gated] };
+  return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
 }
 
 function toResolved(
@@ -413,34 +374,45 @@ function toResolved(
     prerequisiteSeriesId: row.prerequisiteSeriesId,
     prerequisiteSeriesName: row.prerequisiteSeries?.name ?? null,
     unlockRequested: asked.has(row.id),
-    tests: row.tests.map((link) => toResolvedTest(link, sittings)).sort(byOrderThenId),
+    tests: row.directTests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
   };
+}
+
+/** Earliest, because a student in two programs is not held back by the slower one. */
+function opensFor(test: {
+  opensAt: Date | null;
+  programUnlocks: readonly { opensAt: Date }[];
+}): Date | null {
+  const earliest = test.programUnlocks.reduce<Date | null>(
+    (best, row) => (best === null || row.opensAt < best ? row.opensAt : best),
+    null,
+  );
+  return earliest ?? test.opensAt;
 }
 
 function toResolvedTest(
-  link: CatalogRow['tests'][number],
+  test: CatalogRow['directTests'][number],
   sittings: ReadonlyMap<string, AttemptStatus>,
 ): ResolvedTest {
-  const branch = link.test.branchSchedules[0];
-  const window = testWindow({
-    unlockAt: link.unlockAt?.toISOString() ?? null,
-    lateEntrySec: branch?.lateEntrySec ?? null,
+  // From the test's OWN opening, so a program cohort gets a longer window and not a shifted one.
+  const { closesAt } = testWindow({
+    unlockAt: test.opensAt?.toISOString() ?? null,
+    lateEntrySec: test.lateEntrySec,
   });
 
   return {
-    id: link.test.id,
-    title: link.test.title,
-    durationSec: link.test.baseConfig.durationSec,
-    totalQuestions: link.test.baseConfig.totalQuestions,
-    totalMarks: Number(link.test.baseConfig.totalMarks),
-    order: link.order,
-    ...window,
-    attemptStatus: sittings.get(link.test.id) ?? null,
-    extraTimeSec: branch?.extraTimeSec ?? null,
+    id: test.id,
+    title: test.title,
+    durationSec: test.baseConfig.durationSec,
+    totalQuestions: test.baseConfig.totalQuestions,
+    totalMarks: Number(test.baseConfig.totalMarks),
+    order: test.seriesOrder,
+    opensAt: opensFor(test)?.toISOString() ?? null,
+    closesAt,
+    attemptStatus: sittings.get(test.id) ?? null,
+    extraTimeSec: test.extraTimeSec,
   };
 }
-
-const MILLISECONDS_PER_SECOND = 1000;
 
 const isFinished = (status: AttemptStatus | null): boolean =>
   status !== null && FINISHED.has(status);

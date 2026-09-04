@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   ANSWER_STATE,
   ATTEMPT_STATUS,
+  EXAM_COURSE,
   EXAM_TEMPLATE,
   LANGUAGE_CODE,
   TEST_STATUS,
@@ -25,7 +26,6 @@ import {
   FakeRedis,
   FakeTestsPrisma,
   makeBaseConfig,
-  makeBranchConfig,
   makeQuestion,
   makeSection,
   makeSeries,
@@ -41,7 +41,7 @@ import {
 const STUDENT = 'stu_1';
 const TEST = 'tst_1';
 const BRANCH = 'br_1';
-const EXAM = 'SSC CGL';
+const COURSE = EXAM_COURSE.SSC;
 
 const SECTIONS = [
   makeSection({ id: 'sec_1', name: 'Reasoning', order: 1, questionCount: 2, durationSec: null }),
@@ -77,11 +77,11 @@ const version = (id: string, correct: string): FakeServedVersion => ({
 /** A student at a branch the series is enabled for, and one ACTIVE test inside it. */
 function catalogue() {
   const prisma = new FakeCatalogPrisma({
-    students: [makeStudent({ id: STUDENT, currentBranchId: BRANCH, enrolledExams: [EXAM] })],
-    series: [makeSeries({ id: 'srs_1' })],
-    branchConfigs: [makeBranchConfig({ testSeriesId: 'srs_1', branchId: BRANCH })],
-    seriesTests: [{ testSeriesId: 'srs_1', testId: TEST, order: 1 }],
-    tests: [makeTestRow({ id: TEST, status: TEST_STATUS.ACTIVE })],
+    students: [makeStudent({ id: STUDENT, currentBranchId: BRANCH, enrolledCourses: [COURSE] })],
+    series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH] })],
+    tests: [
+      makeTestRow({ id: TEST, status: TEST_STATUS.ACTIVE, testSeriesId: 'srs_1', seriesOrder: 1 }),
+    ],
   });
   return new AccessResolverService(
     prisma.asService(),
