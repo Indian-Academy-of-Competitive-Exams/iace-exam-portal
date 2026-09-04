@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  CalendarDays,
   PenLine,
   CheckCheck,
   ClipboardList,
@@ -98,6 +99,8 @@ export const ROUTES = {
   TEST_SERIES_PATTERN: '/tests/series/:id',
   SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
   SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
+  /** The ad-hoc cohorts an EVENT series draws on — candidates, IACE students or not. */
+  EVENTS: '/tests/events',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
@@ -398,6 +401,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
+      { to: ROUTES.EVENTS, label: 'Events', icon: CalendarDays, featureKey: FEATURE_KEYS.EVENT },
     ],
   },
   /** Its own section, not a row under Tests: a branch admin lives here and reaches nothing above it. */

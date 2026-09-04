@@ -26,6 +26,7 @@ import { TestsPage } from './routes/tests';
 import { TestBuilderPage } from './routes/test-builder';
 import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
+import { EventsPage } from './routes/events';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
@@ -81,6 +82,7 @@ export function App() {
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.SERIES_CANDIDATES_PATTERN} element={<ImportScholarshipPage />} />
+          <Route path={ROUTES.EVENTS} element={<EventsPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           {/* Last of the /tests routes: "configs", "series" and "new" all outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />

@@ -224,3 +224,47 @@ export function ProgramMultiPicker({
     />
   );
 }
+
+/** A candidate on an event is a student row, so a roster is picked out of the directory itself. */
+export function StudentMultiPicker({
+  value,
+  onChange,
+  placeholder = 'No students chosen',
+  ...control
+}: Readonly<{
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+  'aria-describedby'?: string;
+}>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: [...QUERY_KEYS.STUDENTS, QUERY_SCOPES.PICKER, search],
+    fetchPage: (page) => api.admin.students.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  });
+
+  return (
+    <MultiCombobox
+      {...control}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      items={pages.items.map((student) => ({
+        value: student.id,
+        label: student.fullName ?? student.mobile,
+        hint: student.mobile,
+      }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search by name or mobile number"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No student matches that"
+    />
+  );
+}
