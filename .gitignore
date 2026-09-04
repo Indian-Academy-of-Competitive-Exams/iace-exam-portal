@@ -84,6 +84,7 @@ Thumbs.db
 # only saved by one developer's GLOBAL gitignore — invisible protection that
 # does not exist on a fresh clone or in CI.
 .claude/settings.local.json
+.claude/worktrees/
 
 # Docker / local data
 docker-data/
