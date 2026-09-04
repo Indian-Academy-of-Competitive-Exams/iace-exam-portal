@@ -26,8 +26,6 @@ export const DOMAIN_EVENTS = {
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
-  /** ORPHANED — both emitters went with the ask queue; the listener and the enum value await a migration. */
-  SERIES_UNLOCKED: 'series.unlocked',
   /** Exam codes were ADDED to a student, never removed. WIRED — see students. */
   STUDENT_ENROLMENT_ADDED: 'student.enrolment_added',
   /** An admin filed a grant against a student. WIRED — see access. */
@@ -104,11 +102,6 @@ export interface AccessCatalogChangedEvent {
   testSeriesId: string | null;
 }
 
-export interface SeriesUnlockedEvent {
-  studentId: string;
-  testSeriesId: string;
-}
-
 export interface StudentEnrolmentAddedEvent {
   studentId: string;
   /** Only the codes this save ADDED — `Exam.code`, the string `Student.enrolledExams` holds. */
@@ -138,7 +131,6 @@ export interface DomainEventPayloads {
   [DOMAIN_EVENTS.AUDIT_ROW_ACTION]: AuditRowActionEvent;
   [DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED]: StudentAccessChangedEvent;
   [DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED]: AccessCatalogChangedEvent;
-  [DOMAIN_EVENTS.SERIES_UNLOCKED]: SeriesUnlockedEvent;
   [DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED]: StudentEnrolmentAddedEvent;
   [DOMAIN_EVENTS.SERIES_GRANTED]: SeriesGrantedEvent;
   [DOMAIN_EVENTS.STUDENT_SIGNED_UP]: StudentSignedUpEvent;

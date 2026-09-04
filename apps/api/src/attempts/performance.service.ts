@@ -265,13 +265,13 @@ export class PerformanceAnalyticsService {
     const series = await this.prisma.testSeries.findFirst({
       where: {
         id: query.seriesId,
-        directTests: { some: { attempts: { some: { studentId } } } },
+        tests: { some: { attempts: { some: { studentId } } } },
       },
       select: {
         id: true,
         name: true,
         progressive: true,
-        directTests: { select: { id: true, seriesOrder: true }, orderBy: { seriesOrder: 'asc' } },
+        tests: { select: { id: true, seriesOrder: true }, orderBy: { seriesOrder: 'asc' } },
       },
     });
     if (!series) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
@@ -280,7 +280,7 @@ export class PerformanceAnalyticsService {
       name: series.name,
       progressive: series.progressive,
       // A null order is a rung nobody numbered, so it keeps the place the ordered read gave it.
-      order: new Map(series.directTests.map((row, index) => [row.id, row.seriesOrder ?? index])),
+      order: new Map(series.tests.map((row, index) => [row.id, row.seriesOrder ?? index])),
     };
   }
 
@@ -288,7 +288,7 @@ export class PerformanceAnalyticsService {
   async satSeries(studentId: string): Promise<SatSeries[]> {
     const rows = await this.prisma.testSeries.findMany({
       where: {
-        directTests: {
+        tests: {
           some: { attempts: { some: { studentId, status: ATTEMPT_STATUS.EVALUATED } } },
         },
       },

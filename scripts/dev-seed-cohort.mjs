@@ -184,11 +184,9 @@ async function purge(prisma) {
   await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: attemptIds } } });
   await prisma.attempt.deleteMany({ where: { id: { in: attemptIds } } });
   await prisma.paperQuestion.deleteMany({ where: { testId: IDS.test } });
-  await prisma.branchTestSchedule.deleteMany({ where: { testId: IDS.test } });
-  await prisma.testSeriesTest.deleteMany({ where: { testId: IDS.test } });
-  await prisma.branchTestConfig.deleteMany({ where: { testSeriesId: IDS.series } });
-  await prisma.testSeries.deleteMany({ where: { id: IDS.series } });
+  // Test.testSeriesId is RESTRICT, so the test goes before the series it points at.
   await prisma.test.deleteMany({ where: { id: IDS.test } });
+  await prisma.testSeries.deleteMany({ where: { id: IDS.series } });
   await prisma.baseConfigSection.deleteMany({ where: { baseConfigId: IDS.config } });
   await prisma.baseConfig.deleteMany({ where: { id: IDS.config } });
   await prisma.studentProfile.deleteMany({ where: { studentId: { startsWith: `stu${MARK}` } } });
@@ -280,47 +278,40 @@ async function writeOffering(prisma, stageId) {
     });
   }
 
+  // branchIds IS the switch now — only the cohort's branch goes in, nobody else's off-row needed.
   await prisma.testSeries.create({
-    data: { id: IDS.series, name: '[COHORT] Scoring rehearsal', examStageId: stageId },
-  });
-  await prisma.testSeriesTest.create({
     data: {
-      testSeriesId: IDS.series,
-      testId: IDS.test,
-      order: 1,
-      unlockAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
+      id: IDS.series,
+      name: '[COHORT] Scoring rehearsal',
+      examStageId: stageId,
+      branchIds: [branchId],
+      isEnabled: true,
     },
   });
-  // A row per LIVE branch, as the service's fan-out writes one; only the cohort's is switched on.
-  const branches = await prisma.branch.findMany({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  await prisma.branchTestConfig.createMany({
-    data: branches.map((row) => ({
-      branchId: row.id,
-      testSeriesId: IDS.series,
-      enabled: row.id === branchId,
-    })),
-    skipDuplicates: true,
-  });
   // A late-entry cap is what lets entry CLOSE, which is what opens the solution gate.
-  await prisma.branchTestSchedule.create({
-    data: { branchId, testId: IDS.test, lateEntrySec: LATE_ENTRY_SEC, extraTimeSec: null },
+  await prisma.test.update({
+    where: { id: IDS.test },
+    data: {
+      testSeriesId: IDS.series,
+      seriesOrder: 1,
+      opensAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
+      lateEntrySec: LATE_ENTRY_SEC,
+    },
   });
   return branchId;
 }
 
 // --- the cohort -------------------------------------------------------------
 
-async function writeStudents(prisma, branchId, examCode) {
+async function writeStudents(prisma, branchId, examCode, course) {
   const rows = Array.from({ length: STUDENTS }, (_, index) => ({
     id: IDS.student(index),
     mobile: String(FIRST_MOBILE + index),
     studentType: 'OFFLINE',
     currentBranchId: branchId,
-    // The exam match is how they REACH the series; without it the portal shows them nothing.
     enrolledExams: [examCode],
+    // The course match is how they REACH a STANDARD series; without it the portal shows them nothing.
+    enrolledCourses: [course],
     fullName: `Cohort Candidate ${String(index + 1).padStart(3, '0')}`,
     pinIsDefault: true,
   }));
@@ -431,7 +422,7 @@ async function main() {
     const stage = await prisma.examStage.findFirst({
       where: { isActive: true, disposition: 'CONDUCTED' },
       orderBy: [{ examId: 'asc' }, { order: 'asc' }],
-      select: { id: true, stageKey: true, exam: { select: { code: true } } },
+      select: { id: true, stageKey: true, exam: { select: { code: true, course: true } } },
     });
     if (!stage) {
       console.error('Seed the catalog first — no conducted exam stage to hang a test off.');
@@ -448,7 +439,7 @@ async function main() {
 
     const paper = await writePaper(prisma, stage.id, assigned);
     const branchId = await writeOffering(prisma, stage.id);
-    const students = await writeStudents(prisma, branchId, stage.exam.code);
+    const students = await writeStudents(prisma, branchId, stage.exam.code, stage.exam.course);
     const { attempts, items } = await writeSittings(prisma, paper);
 
     console.log(`\nDone, on stage ${stage.stageKey}.`);

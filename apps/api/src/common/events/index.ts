@@ -11,7 +11,6 @@ export {
   type PinResetReason,
   type ScoringCompletedEvent,
   type SeriesGrantedEvent,
-  type SeriesUnlockedEvent,
   type StudentAccessChangedEvent,
   type StudentEnrolmentAddedEvent,
   type StudentPinResetEvent,

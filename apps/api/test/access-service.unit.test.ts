@@ -322,17 +322,6 @@ describe('TestSeriesService — what a series may point at', () => {
     );
   });
 
-  it('refuses to delete one that another series waits on', async () => {
-    const { series } = build({
-      series: [
-        makeSeries({ id: 'srs_1' }),
-        makeSeries({ id: 'srs_2', name: 'Tier 2', prerequisiteSeriesId: 'srs_1' }),
-      ],
-    });
-
-    await assert.rejects(() => series.remove('srs_1'), AppException.is);
-  });
-
   it('refuses to delete one still carrying a test', async () => {
     const { series, prisma } = build({
       series: [makeSeries({ id: 'srs_1' })],

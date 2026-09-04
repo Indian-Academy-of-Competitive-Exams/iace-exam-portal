@@ -166,7 +166,6 @@ enum NotificationType {
   RESULT_READY
   ENROLLMENT_ADDED
   GRANT_ADDED
-  SERIES_UNLOCKED
   GENERIC
 }
 
@@ -196,22 +195,10 @@ enum TestSeriesKind {
   EVENT
 }
 
-enum UnlockMode {
-  AUTO
-  REQUEST
-}
-
-// Derived from StudentSeriesUnlock presence; mirrored in @iace/contracts for the
-// student-facing catalog.
+// Unused by any column.
 enum UnlockState {
   LOCKED
   UNLOCKED
-}
-
-enum UnlockRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 // WRITE covers create + update + delete, and implies READ.
@@ -512,18 +499,16 @@ model Test {
   lateEntrySec       Int?
   extraTimeSec       Int?
 
-  baseConfig      BaseConfig           @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
-  examStage       ExamStage            @relation(fields: [examStageId], references: [id])
-  paperQuestions  PaperQuestion[]
-  attempts        Attempt[]
-  series          TestSeriesTest[]
-  branchSchedules BranchTestSchedule[]
-  notifications   Notification[]
-  stat            TestStat?
-  sectionStats    TestSectionStat[]
-  questionStats   TestQuestionStat[]
-  programUnlocks  TestProgramUnlock[]
-  testSeries      TestSeries?          @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  baseConfig     BaseConfig          @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
+  examStage      ExamStage           @relation(fields: [examStageId], references: [id])
+  paperQuestions PaperQuestion[]
+  attempts       Attempt[]
+  notifications  Notification[]
+  stat           TestStat?
+  sectionStats   TestSectionStat[]
+  questionStats  TestQuestionStat[]
+  programUnlocks TestProgramUnlock[]
+  testSeries     TestSeries?         @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -699,11 +684,9 @@ model Student {
 
   profile          StudentProfile?
   consents         StudentConsent[]
-  currentBranch    Branch?               @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
+  currentBranch    Branch?              @relation(fields: [currentBranchId], references: [id], onDelete: Restrict)
   attempts         Attempt[]
   grants           StudentGrant[]
-  unlocks          StudentSeriesUnlock[]
-  unlockRequests   SeriesUnlockRequest[]
   notifications    Notification[]
   stat             StudentStat?
   subjectStats     StudentSubjectStat[]
@@ -811,7 +794,7 @@ model AdminFeaturePermission {
 
 // ============================================================================
 // Access — branches, programs, series. A student reaches a series by exam
-// match, program match or an explicit grant, gated by BranchTestConfig.
+// match, program match or an explicit grant, gated by a STANDARD series' own branchIds/isEnabled.
 // ============================================================================
 
 // name carries a partial unique index (WHERE deletedAt IS NULL) from the migration.
@@ -824,10 +807,8 @@ model Branch {
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
 
-  students      Student[]
-  admins        AdminBranch[]
-  testConfigs   BranchTestConfig[]
-  testSchedules BranchTestSchedule[]
+  students Student[]
+  admins   AdminBranch[]
 
   @@index([name])
 }
@@ -848,58 +829,33 @@ model Program {
 // The unit of offering — a test reaches students only through a series.
 // programCode null = exam/course access; set = program-only.
 model TestSeries {
-  id                   String         @id @default(cuid())
-  name                 String
-  description          String?
-  examStageId          String?
-  programCode          String?
-  sequentialTests      Boolean        @default(false)
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  examStageId     String?
+  programCode     String?
+  sequentialTests Boolean        @default(false)
   // sequentialTests is ORDER; this is DIFFICULTY -- a graded ramp, and the two move independently.
-  progressive          Boolean        @default(false)
-  prerequisiteSeriesId String?
-  unlockMode           UnlockMode     @default(AUTO)
-  // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event; a FREE series waits on nothing -- CHECK (kind <> 'FREE' OR prerequisiteSeriesId IS NULL), in the migration.
-  kind                 TestSeriesKind @default(STANDARD)
-  eventId              String?
-  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
-  branchIds            String[]       @default([])
-  isEnabled            Boolean        @default(false)
+  progressive     Boolean        @default(false)
+  // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
+  kind            TestSeriesKind @default(STANDARD)
+  eventId         String?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  branchIds       String[]       @default([])
+  isEnabled       Boolean        @default(false)
 
-  examStage          ExamStage?            @relation(fields: [examStageId], references: [id], onDelete: Restrict)
-  program            Program?              @relation(fields: [programCode], references: [code], onDelete: Restrict)
-  prerequisiteSeries TestSeries?           @relation("SeriesPrerequisite", fields: [prerequisiteSeriesId], references: [id], onDelete: Restrict)
-  dependentSeries    TestSeries[]          @relation("SeriesPrerequisite")
-  event              Event?                @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  tests              TestSeriesTest[]
-  directTests        Test[]
-  grants             StudentGrant[]
-  unlocks            StudentSeriesUnlock[]
-  unlockRequests     SeriesUnlockRequest[]
-  branchConfigs      BranchTestConfig[]
-  notifications      Notification[]
+  examStage     ExamStage?     @relation(fields: [examStageId], references: [id], onDelete: Restrict)
+  program       Program?       @relation(fields: [programCode], references: [code], onDelete: Restrict)
+  event         Event?         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  tests         Test[]
+  grants        StudentGrant[]
+  notifications Notification[]
 
   @@index([examStageId])
   @@index([programCode])
-  @@index([prerequisiteSeriesId])
   @@index([eventId])
   @@index([branchIds], type: Gin)
-}
-
-model TestSeriesTest {
-  testSeriesId String
-  testId       String
-  order        Int?
-  // When this test opens inside this series. One time for every branch; null opens with the series.
-  unlockAt     DateTime? @db.Timestamptz(3)
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-  createdById  String?
-
-  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
-  test       Test       @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  @@id([testSeriesId, testId])
-  @@index([testId])
 }
 
 // The escape hatch for access that is not exam-, program- or branch-derivable.
@@ -914,73 +870,6 @@ model StudentGrant {
 
   @@id([studentId, testSeriesId])
   @@index([testSeriesId])
-}
-
-model StudentSeriesUnlock {
-  id           String    @id @default(cuid())
-  studentId    String
-  testSeriesId String
-  unlockedAt   DateTime? @db.Timestamptz(3)
-  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
-
-  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, testSeriesId])
-  @@index([testSeriesId])
-}
-
-// One open request per (student, series) — partial unique WHERE status='PENDING'
-// lives in the migration.
-model SeriesUnlockRequest {
-  id           String              @id @default(cuid())
-  studentId    String
-  testSeriesId String
-  status       UnlockRequestStatus @default(PENDING)
-  requestedAt  DateTime            @default(now()) @db.Timestamptz(3)
-  decidedAt    DateTime?           @db.Timestamptz(3)
-  decidedById  String?
-
-  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
-
-  @@index([studentId, testSeriesId, status])
-  @@index([testSeriesId, status])
-}
-
-// Access enable plus the default availability window, per (branch, series).
-// A branch runs a series indefinitely or not at all: WHEN an exam happens is the
-// test's own property, on TestSeriesTest.unlockAt and BranchTestSchedule.
-model BranchTestConfig {
-  id           String   @id @default(cuid())
-  branchId     String
-  testSeriesId String
-  enabled      Boolean  @default(true)
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
-
-  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  testSeries TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
-
-  @@unique([branchId, testSeriesId])
-  @@index([testSeriesId])
-}
-
-// What one branch does differently for one test. No row is the plain rules — a row
-// per branch per test would be thousands of nulls. Seconds, like every duration here.
-model BranchTestSchedule {
-  branchId     String
-  testId       String
-  lateEntrySec Int?
-  extraTimeSec Int?
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
-
-  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  test   Test   @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  @@id([branchId, testId])
-  @@index([testId])
 }
 
 // Who an EVENT series reaches: sitters, some of whom are not students yet — unlike a program, which is a fact about being one.
@@ -1009,7 +898,7 @@ model EventCandidate {
   @@index([studentId])
 }
 
-// Per-program stagger on when one test opens, on top of TestSeriesTest.unlockAt.
+// Per-program stagger on when one test opens, on top of Test.opensAt.
 model TestProgramUnlock {
   testId      String
   programCode String

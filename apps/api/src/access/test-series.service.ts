@@ -45,7 +45,7 @@ const NO_SUCH_BRANCH_MESSAGE = 'One of those branches does not exist.';
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
-  _count: { select: { directTests: true } },
+  _count: { select: { tests: true } },
 } as const satisfies Prisma.TestSeriesInclude;
 
 type SeriesRow = Prisma.TestSeriesGetPayload<{ include: typeof SERIES_INCLUDE }>;
@@ -213,14 +213,6 @@ export class TestSeriesService {
       );
     }
 
-    const dependents = await this.prisma.testSeries.count({ where: { prerequisiteSeriesId: id } });
-    if (dependents > 0) {
-      throw new AppException(
-        ErrorCodes.CONFLICT,
-        `${dependents} other series wait on this one before they open. Point them elsewhere first.`,
-      );
-    }
-
     await this.prisma.testSeries.delete({ where: { id } });
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
   }
@@ -380,7 +372,7 @@ function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
     branchIds: row.branchIds,
     isEnabled: row.isEnabled,
     eventId: row.eventId,
-    testCount: row._count.directTests,
+    testCount: row._count.tests,
     enabledBranchCount: row.branchIds.length,
     branchCount,
     createdAt: row.createdAt.toISOString(),

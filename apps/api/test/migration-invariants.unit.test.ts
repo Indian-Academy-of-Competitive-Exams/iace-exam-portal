@@ -32,6 +32,14 @@ const ACCESS_CONSTRAINTS = readFileSync(
   'utf8',
 );
 
+const THE_DROP = readFileSync(
+  join(
+    __dirname,
+    '../../../prisma/migrations/20260904130000_the_old_access_shape_is_gone/migration.sql',
+  ),
+  'utf8',
+);
+
 const REQUIRED_ARRAYS = [
   ['BaseConfig', 'languages', '"SupportedLanguage"'],
   ['Attempt', 'languages', '"SupportedLanguage"'],
@@ -354,5 +362,75 @@ describe('a series cannot contradict its kind', () => {
   /** No btree answers array containment, so the STANDARD arm scans every series without this. */
   it('seeks the branch list rather than scanning every series to find it', () => {
     assert.match(ACCESS_CONSTRAINTS, /CREATE INDEX "TestSeries_branchIds_idx"[\s\S]*?USING GIN/);
+  });
+});
+
+// --------------------------------------------------------------------- the old access shape is gone
+// ---------------------------------------------------------------------------
+
+/** The four CHECKs asserted above still stand: the migration that adds them is untouched. */
+describe('the five old-shape tables are dropped', () => {
+  for (const table of [
+    'TestSeriesTest',
+    'BranchTestConfig',
+    'BranchTestSchedule',
+    'StudentSeriesUnlock',
+    'SeriesUnlockRequest',
+  ]) {
+    it(`drops ${table}`, () => {
+      assert.match(THE_DROP, new RegExp(`DROP TABLE "${table}"`));
+    });
+  }
+});
+
+describe('the columns only those tables gave meaning to are dropped with them', () => {
+  it('drops TestSeries.prerequisiteSeriesId and TestSeries.unlockMode', () => {
+    assert.match(THE_DROP, /DROP COLUMN "prerequisiteSeriesId"/);
+    assert.match(THE_DROP, /DROP COLUMN "unlockMode"/);
+  });
+
+  it('drops the UnlockMode and UnlockRequestStatus enums', () => {
+    assert.match(THE_DROP, /DROP TYPE "UnlockMode"/);
+    assert.match(THE_DROP, /DROP TYPE "UnlockRequestStatus"/);
+  });
+});
+
+/** Postgres has no DROP VALUE, so narrowing NotificationType means a whole new type. */
+describe('SERIES_UNLOCKED leaves NotificationType by way of a replacement type', () => {
+  it('remaps any row carrying it to GENERIC before the column is retyped', () => {
+    assert.match(
+      THE_DROP,
+      /UPDATE "Notification" SET "type" = 'GENERIC'\s+WHERE "type" = 'SERIES_UNLOCKED'/,
+    );
+  });
+
+  it('rebuilds the enum without SERIES_UNLOCKED, rather than leaving it unreachable', () => {
+    assert.match(
+      THE_DROP,
+      /CREATE TYPE "NotificationType_new" AS ENUM \('TEST_ASSIGNED', 'RESULT_READY', 'ENROLLMENT_ADDED', 'GRANT_ADDED', 'GENERIC'\)/,
+    );
+  });
+});
+
+/** The final recompute this migration opens with, so nothing is lost when the source tables go. */
+describe('the final backfill runs before anything is dropped', () => {
+  it('refuses to run if a test still belongs to more than one series', () => {
+    assert.match(THE_DROP, /HAVING count\(\*\) > 1/);
+  });
+
+  for (const column of ['testSeriesId', 'seriesOrder', 'opensAt', 'lateEntrySec', 'extraTimeSec']) {
+    it(`recomputes Test.${column} before TestSeriesTest or BranchTestSchedule can drop`, () => {
+      const recompute = THE_DROP.search(new RegExp(`"${column}"\\s*=`));
+      const drop = THE_DROP.indexOf('DROP TABLE "TestSeriesTest"');
+      assert.ok(recompute >= 0, `no recompute for ${column}`);
+      assert.ok(recompute < drop, `${column} recomputed after the tables it reads are dropped`);
+    });
+  }
+
+  it('recomputes TestSeries.branchIds for STANDARD series only, before BranchTestConfig drops', () => {
+    assert.match(
+      THE_DROP,
+      /SET "branchIds" = b\."ids", "isEnabled" = true[\s\S]*?"kind" = 'STANDARD'/,
+    );
   });
 });

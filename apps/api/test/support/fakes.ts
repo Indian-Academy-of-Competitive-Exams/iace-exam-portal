@@ -1641,8 +1641,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     readonly attemptRows: FakeAttemptRow[] = [],
     readonly attemptQuestions: FakeAttemptQuestionRow[] = [],
     readonly questionVersions: FakeServedVersion[] = [],
-    readonly branchConfigRows: FakeBranchConfigRow[] = [],
-    readonly branchSchedules: FakeBranchScheduleRow[] = [],
     readonly branchNames: FakeBranch[] = [],
   ) {
     super(configs, sections);
@@ -1651,24 +1649,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   readonly branch = {
     findFirst: ({ where }: { where: { id: string } }) =>
       Promise.resolve(this.branchNames.find((row) => row.id === where.id) ?? null),
-  };
-
-  readonly branchTestConfig = {
-    findMany: ({ where }: { where: { enabled: boolean; testSeriesId: { in: string[] } } }) =>
-      Promise.resolve(
-        this.branchConfigRows
-          .filter(
-            (row) =>
-              row.enabled === where.enabled && where.testSeriesId.in.includes(row.testSeriesId),
-          )
-          .map((row) => ({
-            branch: {
-              id: row.branchId,
-              name: this.branchNames.find((it) => it.id === row.branchId)?.name ?? row.branchId,
-            },
-          }))
-          .sort((a, b) => a.branch.name.localeCompare(b.branch.name)),
-      ),
   };
 
   readonly programCatalog: { code: string }[] = [];
@@ -1723,43 +1703,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       this.programUnlocks.length = 0;
       this.programUnlocks.push(...kept);
       return Promise.resolve({ count });
-    },
-  };
-
-  readonly branchTestSchedule = {
-    findMany: ({ where }: { where: { testId: string } }) =>
-      Promise.resolve(this.branchSchedules.filter((row) => row.testId === where.testId)),
-
-    deleteMany: ({ where }: { where: { testId: string; branchId: string | { in: string[] } } }) => {
-      const named = (branchId: string) =>
-        typeof where.branchId === 'string'
-          ? where.branchId === branchId
-          : where.branchId.in.includes(branchId);
-      const kept = this.branchSchedules.filter(
-        (row) => !(row.testId === where.testId && named(row.branchId)),
-      );
-      const count = this.branchSchedules.length - kept.length;
-      this.branchSchedules.length = 0;
-      this.branchSchedules.push(...kept);
-      return Promise.resolve({ count });
-    },
-
-    upsert: ({
-      where,
-      update,
-      create,
-    }: {
-      where: { branchId_testId: { branchId: string; testId: string } };
-      update: { lateEntrySec: number | null; extraTimeSec: number | null };
-      create: FakeBranchScheduleRow;
-    }) => {
-      const { branchId, testId } = where.branchId_testId;
-      const row = this.branchSchedules.find(
-        (it) => it.branchId === branchId && it.testId === testId,
-      );
-      if (row) Object.assign(row, update);
-      else this.branchSchedules.push(create);
-      return Promise.resolve(row ?? create);
     },
   };
 
@@ -3287,29 +3230,12 @@ export interface FakeSeriesRow {
   examStageId: string | null;
   programCode: string | null;
   sequentialTests: boolean;
-  prerequisiteSeriesId: string | null;
   kind: TestSeriesKind;
   eventId: string | null;
   branchIds: string[];
   isEnabled: boolean;
   createdAt: Date;
   _count: { tests: number };
-}
-
-export interface FakeBranchConfigRow {
-  id: string;
-  branchId: string;
-  testSeriesId: string;
-  enabled: boolean;
-  createdAt: Date;
-}
-
-/** What one branch does differently for one test. No row is the plain rules. */
-export interface FakeBranchScheduleRow {
-  branchId: string;
-  testId: string;
-  lateEntrySec: number | null;
-  extraTimeSec: number | null;
 }
 
 export interface FakeGrantRowAccess {
@@ -3344,7 +3270,6 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     examStageId: 'stage_1',
     programCode: null,
     sequentialTests: false,
-    prerequisiteSeriesId: null,
     kind: TEST_SERIES_KIND.STANDARD,
     eventId: null,
     branchIds: [],
@@ -3616,7 +3541,6 @@ interface FakeSeriesWhere {
   NOT?: FakeSeriesWhere;
   id?: { in: string[] };
   programCode?: string;
-  prerequisiteSeriesId?: string;
   kind?: TestSeriesKind;
   name?: { contains: string; mode?: string };
   examStageId?: { in: string[] };
@@ -3632,30 +3556,11 @@ function matchesSeries(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
 function matchesSeriesColumns(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
   if (where.id && !where.id.in.includes(row.id)) return false;
   if (where.programCode !== undefined && row.programCode !== where.programCode) return false;
-  if (
-    where.prerequisiteSeriesId !== undefined &&
-    row.prerequisiteSeriesId !== where.prerequisiteSeriesId
-  ) {
-    return false;
-  }
   if (where.kind !== undefined && row.kind !== where.kind) return false;
   if (where.name && !row.name.toLowerCase().includes(where.name.contains.toLowerCase())) {
     return false;
   }
   return !where.examStageId || where.examStageId.in.includes(row.examStageId ?? '');
-}
-
-export function makeBranchConfig(
-  overrides: Partial<FakeBranchConfigRow> = {},
-): FakeBranchConfigRow {
-  return {
-    id: 'btc_1',
-    branchId: 'br_1',
-    testSeriesId: 'srs_1',
-    enabled: true,
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    ...overrides,
-  };
 }
 
 export interface FakeEventRow {
@@ -3945,7 +3850,7 @@ interface CatalogSeriesWhere extends CatalogReachWhere {
 }
 
 interface CatalogInclude {
-  directTests: {
+  tests: {
     where: { status: TestStatus };
     select: { programUnlocks: { where: { programCode: { in: string[] } } } };
   };
@@ -4135,15 +4040,14 @@ export class FakeCatalogPrisma {
   private hydrate(row: FakeSeriesRow, include: CatalogInclude) {
     const stage = this.data.stages.find((candidate) => candidate.id === row.examStageId);
     const code = this.examCodeOf(row.examStageId);
-    const programs = include.directTests.select.programUnlocks.where.programCode.in;
+    const programs = include.tests.select.programUnlocks.where.programCode.in;
 
     return {
       ...row,
       examStage: stage && code !== null ? { id: stage.id, name: stage.name, exam: { code } } : null,
-      directTests: this.data.tests
+      tests: this.data.tests
         .filter(
-          (test) =>
-            test.testSeriesId === row.id && test.status === include.directTests.where.status,
+          (test) => test.testSeriesId === row.id && test.status === include.tests.where.status,
         )
         .map((test) => ({
           id: test.id,
@@ -4834,7 +4738,7 @@ export class FakePerformancePrisma {
       id: row.id,
       name: row.name,
       progressive: row.progressive ?? false,
-      directTests: this.data.tests
+      tests: this.data.tests
         .filter((test) => test.testSeriesId === row.id)
         .map((test) => ({ id: test.id, seriesOrder: test.seriesOrder ?? null }))
         .toSorted((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0)),
@@ -4847,10 +4751,10 @@ export class FakePerformancePrisma {
     }: {
       where: {
         id?: string;
-        directTests: { some: { attempts: { some: { studentId: string } } } };
+        tests: { some: { attempts: { some: { studentId: string } } } };
       };
     }) => {
-      const studentId = where.directTests.some.attempts.some.studentId;
+      const studentId = where.tests.some.attempts.some.studentId;
       const held = this.data.series.find(
         (row) => row.id === where.id && this.satBy(row.id, studentId),
       );
@@ -4861,10 +4765,10 @@ export class FakePerformancePrisma {
       where,
     }: {
       where: {
-        directTests: { some: { attempts: { some: { studentId: string } } } };
+        tests: { some: { attempts: { some: { studentId: string } } } };
       };
     }) => {
-      const studentId = where.directTests.some.attempts.some.studentId;
+      const studentId = where.tests.some.attempts.some.studentId;
       return Promise.resolve(
         this.data.series
           .filter((row) => this.satBy(row.id, studentId))
@@ -5055,7 +4959,7 @@ export class FakeBoardPrisma {
       if (!row) return Promise.resolve(null);
       return Promise.resolve({
         name: row.name,
-        directTests: row.testIds.map((id) => ({ id })),
+        tests: row.testIds.map((id) => ({ id })),
       });
     },
   };

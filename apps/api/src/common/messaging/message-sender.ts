@@ -23,7 +23,7 @@ export const MESSAGE_KINDS = {
   RESULT_READY: 'result_ready',
   /** Not wired (docs/03 §10): nothing emits `test.assigned` yet. */
   TEST_ASSIGNED: 'test_assigned',
-  /** Not wired (docs/03 §10): needs a scheduled job reading BranchTestSchedule. */
+  /** Not wired (docs/03 §10): needs a scheduled job reading Test.opensAt/lateEntrySec. */
   TEST_REMINDER: 'test_reminder',
 } as const;
 

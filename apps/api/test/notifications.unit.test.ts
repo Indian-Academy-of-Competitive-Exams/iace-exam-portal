@@ -55,18 +55,6 @@ describe('NotificationsListener — one row per thing that happened', () => {
     assert.equal(sender.sent.length, 0);
   });
 
-  it('writes an unlock the student can tap through to the series', async () => {
-    const { listener, prisma } = build();
-
-    await listener.onSeriesUnlocked({ studentId: 'stu_1', testSeriesId: 'srs_1' });
-
-    const row = prisma.rows[0];
-    assert.equal(row?.type, NOTIFICATION_TYPE.SERIES_UNLOCKED);
-    assert.equal(row?.studentId, 'stu_1');
-    assert.equal(row?.testSeriesId, 'srs_1');
-    assert.equal(row?.isRead, false);
-  });
-
   it('writes a grant the student can tap through to the series', async () => {
     const { listener, prisma } = build();
 
@@ -99,9 +87,6 @@ describe('NotificationsListener — one row per thing that happened', () => {
     } as unknown as NotificationsService;
     const listener = new NotificationsListener(failing, new FakeMessageSender());
 
-    await assert.doesNotReject(() =>
-      listener.onSeriesUnlocked({ studentId: 'stu_1', testSeriesId: 'srs_1' }),
-    );
     await assert.doesNotReject(() =>
       listener.onEnrolmentAdded({ studentId: 'stu_1', examCodes: ['SSC CGL'] }),
     );
@@ -176,8 +161,8 @@ describe('NotificationsService — one student’s own bell', () => {
 
     const created = await service.create({
       studentId: 'stu_1',
-      type: NOTIFICATION_TYPE.SERIES_UNLOCKED,
-      title: 'A test series is now open',
+      type: NOTIFICATION_TYPE.GRANT_ADDED,
+      title: 'A test series was added to your account',
       testSeriesId: 'srs_1',
     });
 

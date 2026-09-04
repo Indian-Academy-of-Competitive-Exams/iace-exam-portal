@@ -5,7 +5,6 @@ import {
   DOMAIN_EVENTS,
   type ScoringCompletedEvent,
   type SeriesGrantedEvent,
-  type SeriesUnlockedEvent,
   type StudentEnrolmentAddedEvent,
 } from '../common/events/event-catalog';
 import {
@@ -63,21 +62,6 @@ export class NotificationsListener {
       });
     } catch (error) {
       this.logger.error(`Result SMS failed for student ${event.studentId}`, error);
-    }
-  }
-
-  @OnEvent(DOMAIN_EVENTS.SERIES_UNLOCKED)
-  async onSeriesUnlocked(event: SeriesUnlockedEvent): Promise<void> {
-    try {
-      await this.notifications.create({
-        studentId: event.studentId,
-        type: NOTIFICATION_TYPE.SERIES_UNLOCKED,
-        title: 'A test series is now open',
-        body: 'You can start its tests whenever you are ready.',
-        testSeriesId: event.testSeriesId,
-      });
-    } catch (error) {
-      this.logger.error(`Unlock notification failed for student ${event.studentId}`, error);
     }
   }
 

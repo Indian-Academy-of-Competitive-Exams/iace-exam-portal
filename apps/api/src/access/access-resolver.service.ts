@@ -34,7 +34,7 @@ const CATALOG_SHAPE = 'v10';
 const catalogInclude = (programs: string[]) =>
   ({
     examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
-    directTests: {
+    tests: {
       where: { status: TEST_STATUS.ACTIVE },
       select: {
         id: true,
@@ -307,7 +307,7 @@ function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus
     programCode: row.programCode,
     kind: row.kind,
     sequentialTests: row.sequentialTests,
-    tests: row.directTests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
+    tests: row.tests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
   };
 }
 
@@ -324,7 +324,7 @@ function opensFor(test: {
 }
 
 function toResolvedTest(
-  test: CatalogRow['directTests'][number],
+  test: CatalogRow['tests'][number],
   sittings: ReadonlyMap<string, AttemptStatus>,
 ): ResolvedTest {
   // From the test's OWN opening, so a program cohort gets a longer window and not a shifted one.
