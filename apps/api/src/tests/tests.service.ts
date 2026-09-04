@@ -44,6 +44,7 @@ const TEST_INCLUDE = {
       exam: { select: { id: true, code: true, name: true, course: true } },
     },
   },
+  programUnlocks: { select: { programCode: true, opensAt: true } },
   _count: { select: { attempts: true, series: true, paperQuestions: true } },
 } as const satisfies Prisma.TestInclude;
 
@@ -97,7 +98,11 @@ export class TestsService {
 
   async detail(id: string): Promise<TestDetail> {
     const row = await this.requireTest(id);
-    return { ...toTest(row), baseConfig: await this.configs.detail(row.baseConfigId) };
+    return {
+      ...toTest(row),
+      ...toTestSchedule(row),
+      baseConfig: await this.configs.detail(row.baseConfigId),
+    };
   }
 
   /** The stage comes off the CONFIG, never the body — the composite FK needs them agreeing. */
@@ -192,7 +197,7 @@ export class TestsService {
 
     this.auditContext.setChanged(fieldDiff(test, updated, AUDITED_TEST_FIELDS));
 
-    return { ...toTest(updated), baseConfig: config };
+    return { ...toTest(updated), ...toTestSchedule(updated), baseConfig: config };
   }
 
   async remove(id: string): Promise<void> {
@@ -308,5 +313,20 @@ function toTest(row: TestRow): Test {
     seriesCount: row._count.series,
     paperQuestionCount: row._count.paperQuestions,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** The columns `TestDetail` adds over `Test`: the test's own schedule, read as stored. */
+function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig'> {
+  return {
+    testSeriesId: row.testSeriesId,
+    seriesOrder: row.seriesOrder,
+    opensAt: row.opensAt?.toISOString() ?? null,
+    lateEntrySec: row.lateEntrySec,
+    extraTimeSec: row.extraTimeSec,
+    programUnlocks: row.programUnlocks.map((unlock) => ({
+      programCode: unlock.programCode,
+      opensAt: unlock.opensAt.toISOString(),
+    })),
   };
 }

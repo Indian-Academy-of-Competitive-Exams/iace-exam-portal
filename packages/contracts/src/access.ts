@@ -115,6 +115,48 @@ export const updateProgramSchema = z.object({
 export type UpdateProgramInput = z.input<typeof updateProgramSchema>;
 export type UpdateProgramBody = z.infer<typeof updateProgramSchema>;
 
+/** Who an EVENT series reaches: sitters, some of whom are not students yet. */
+export const eventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  isActive: z.boolean(),
+  candidateCount: z.number().int(),
+  createdAt: z.string(),
+});
+export type Event = z.infer<typeof eventSchema>;
+
+export const EVENT_NAME_MAX = 120;
+
+export const createEventSchema = z.object({
+  name: z.string().trim().min(2, 'Give the event a name').max(EVENT_NAME_MAX),
+  description: z.string().trim().max(500).optional(),
+});
+export type CreateEventInput = z.input<typeof createEventSchema>;
+export type CreateEventBody = z.infer<typeof createEventSchema>;
+
+export const updateEventSchema = createEventSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+export type UpdateEventInput = z.input<typeof updateEventSchema>;
+export type UpdateEventBody = z.infer<typeof updateEventSchema>;
+
+export const eventListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+  activeOnly: optionalBooleanQuery(),
+});
+export type EventListQuery = z.infer<typeof eventListQuerySchema>;
+export type EventListQueryInput = z.input<typeof eventListQuerySchema>;
+
+/** One student on an Event's roster, as the candidate list reads it. */
+export const eventCandidateSchema = z.object({
+  studentId: z.string(),
+  fullName: z.string().nullable(),
+  mobile: z.string(),
+  addedAt: z.string(),
+});
+export type EventCandidate = z.infer<typeof eventCandidateSchema>;
+
 /** The unit of offering. A test reaches a student only through one of these. */
 export const testSeriesSchema = z.object({
   id: z.string(),
@@ -130,6 +172,12 @@ export const testSeriesSchema = z.object({
   prerequisiteSeriesId: z.string().nullable(),
   unlockMode: unlockModeSchema,
   kind: testSeriesKindSchema,
+  /** Which branches run it. STANDARD only — a CHECK refuses a value on any other kind. */
+  branchIds: z.array(z.string()),
+  /** Off until somebody switches it on; a series nobody enabled reaches nobody. */
+  isEnabled: z.boolean(),
+  /** The event whose candidates are its roster. Required exactly when kind is EVENT. */
+  eventId: z.string().nullable(),
   createdAt: z.string(),
 });
 export type TestSeries = z.infer<typeof testSeriesSchema>;
@@ -189,6 +237,9 @@ export const createTestSeriesSchema = z.object({
   prerequisiteSeriesId: z.string().nullish(),
   unlockMode: unlockModeSchema.optional(),
   kind: testSeriesKindSchema.optional(),
+  branchIds: z.array(z.string()).optional(),
+  isEnabled: z.boolean().optional(),
+  eventId: z.string().nullish(),
 });
 export type CreateTestSeriesInput = z.input<typeof createTestSeriesSchema>;
 export type CreateTestSeriesBody = z.infer<typeof createTestSeriesSchema>;
@@ -532,6 +583,16 @@ export const ADMIN_PROGRAM_ROUTES = {
   create: '/admin/programs',
   update: (id: string) => `/admin/programs/${id}`,
   remove: (id: string) => `/admin/programs/${id}`,
+} as const;
+
+export const EVENT_ROUTES = {
+  list: '/admin/events',
+  create: '/admin/events',
+  detail: (id: string) => `/admin/events/${id}`,
+  update: (id: string) => `/admin/events/${id}`,
+  remove: (id: string) => `/admin/events/${id}`,
+  candidates: (id: string) => `/admin/events/${id}/candidates`,
+  removeCandidate: (id: string, studentId: string) => `/admin/events/${id}/candidates/${studentId}`,
 } as const;
 
 export const ADMIN_SERIES_ROUTES = {

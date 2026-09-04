@@ -4,7 +4,9 @@ import {
   TEST_BUCKET,
   TEST_SERIES_KIND,
   UNLOCK_REQUEST_STATUS,
+  createEventSchema,
   decideUnlockRequestSchema,
+  eventListQuerySchema,
   studentCatalogSeriesSchema,
   testAction,
   testBucket,
@@ -208,5 +210,24 @@ describe('testBucket', () => {
 
   it('offers nothing on a test that cannot be started', () => {
     assert.equal(testAction(test({ canStart: false })), null);
+  });
+});
+
+describe('createEventSchema', () => {
+  /** The failure this prevents: a one-letter name nobody can pick out of a list. */
+  it('refuses a one-character name', () => {
+    assert.equal(createEventSchema.safeParse({ name: 'A' }).success, false);
+  });
+
+  it('accepts a name at the minimum length', () => {
+    assert.equal(createEventSchema.parse({ name: 'AB' }).name, 'AB');
+  });
+});
+
+describe('eventListQuerySchema', () => {
+  it('coerces activeOnly from the query string', () => {
+    assert.equal(eventListQuerySchema.parse({ activeOnly: 'true' }).activeOnly, true);
+    assert.equal(eventListQuerySchema.parse({ activeOnly: 'false' }).activeOnly, false);
+    assert.equal(eventListQuerySchema.parse({}).activeOnly, undefined);
   });
 });

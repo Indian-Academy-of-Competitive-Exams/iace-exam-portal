@@ -94,10 +94,13 @@ import {
   ADMIN_STUDENT_SERIES_ROUTES,
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
+  EVENT_ROUTES,
   branchSeriesRowSchema,
   branchSeriesSavedSchema,
   branchTestConfigRowSchema,
   branchTestScheduleRowSchema,
+  eventSchema,
+  eventCandidateSchema,
   programCatalogSchema,
   openSeriesListSchema,
   seriesUnlockRequestRowSchema,
@@ -112,8 +115,12 @@ import {
   type BranchTestScheduleRow,
   type SetBranchSeriesInput,
   type SetBranchTestSchedulesInput,
+  type CreateEventInput,
   type CreateProgramInput,
   type CreateTestSeriesInput,
+  type Event,
+  type EventCandidate,
+  type EventListQueryInput,
   type GrantSeriesInput,
   type Program,
   type ProgramListQueryInput,
@@ -129,6 +136,7 @@ import {
   type TestSeriesListQueryInput,
   type TestSeriesSummary,
   type UpdateBranchTestConfigInput,
+  type UpdateEventInput,
   type UpdateProgramInput,
   type UpdateTestSeriesInput,
 } from './access';
@@ -1013,6 +1021,43 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_PROGRAM_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+      },
+
+      /** Who an EVENT series reaches — sitters, not necessarily students yet. */
+      events: {
+        list: (query: EventListQueryInput = {}): Promise<Paginated<Event>> =>
+          requestPaginated(`${EVENT_ROUTES.list}${queryString({ ...query })}`, {
+            schema: eventSchema.array(),
+          }),
+
+        detail: (id: string): Promise<Event> =>
+          request(EVENT_ROUTES.detail(id), { schema: eventSchema }),
+
+        create: (input: CreateEventInput): Promise<Event> =>
+          request(EVENT_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: eventSchema,
+          }),
+
+        update: (id: string, input: UpdateEventInput): Promise<Event> =>
+          request(EVENT_ROUTES.update(id), {
+            method: 'PATCH',
+            body: input,
+            schema: eventSchema,
+          }),
+
+        remove: (id: string): Promise<NoContent> =>
+          request(EVENT_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        candidates: (id: string): Promise<EventCandidate[]> =>
+          request(EVENT_ROUTES.candidates(id), { schema: eventCandidateSchema.array() }),
+
+        removeCandidate: (id: string, studentId: string): Promise<NoContent> =>
+          request(EVENT_ROUTES.removeCandidate(id, studentId), {
+            method: 'DELETE',
+            schema: noContentSchema,
+          }),
       },
 
       /** The unit of offering. A test reaches a student only through one of these. */

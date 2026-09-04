@@ -1423,6 +1423,9 @@ export interface FakeTestModelRow {
   createdAt: Date;
   testSeriesId: string | null;
   seriesOrder: number | null;
+  opensAt: Date | null;
+  lateEntrySec: number | null;
+  extraTimeSec: number | null;
 }
 
 export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestModelRow {
@@ -1448,6 +1451,9 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     testSeriesId: null,
     seriesOrder: null,
+    opensAt: null,
+    lateEntrySec: null,
+    extraTimeSec: null,
     ...overrides,
   };
 }
@@ -2368,6 +2374,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       paperQuestions: this.paperQuestions
         .filter((paper) => paper.testId === row.id)
         .sort((a, b) => a.order - b.order),
+      programUnlocks: [],
       examStage: {
         id: stage?.id ?? row.examStageId,
         stageKey: stage?.stageKey ?? '',

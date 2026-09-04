@@ -346,9 +346,28 @@ export const testSchema = z.object({
 });
 export type Test = z.infer<typeof testSchema>;
 
+/** A stagger on top of the series' own unlock, for one program sitting inside it. */
+export const testProgramUnlockSchema = z.object({
+  programCode: z.string(),
+  opensAt: z.string(),
+});
+export type TestProgramUnlock = z.infer<typeof testProgramUnlockSchema>;
+
 /** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
 export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
+  /** The series this test belongs to directly, distinct from the many-to-many `series` link. */
+  testSeriesId: z.string().nullable(),
+  /** Position inside that series, mirroring `TestSeriesTest.order`. */
+  seriesOrder: z.number().int().nullable(),
+  /** When this test opens. Null opens with the series it sits in. */
+  opensAt: z.string().nullable(),
+  /** Seconds after `opensAt` a student may still begin. Null is any time it is open. */
+  lateEntrySec: z.number().int().nullable(),
+  /** Seconds added to every sitting's clock. Null is the duration its section gives everyone. */
+  extraTimeSec: z.number().int().nullable(),
+  /** Per-program staggers on top of `opensAt`. Empty is no program-specific delay. */
+  programUnlocks: z.array(testProgramUnlockSchema),
 });
 export type TestDetail = z.infer<typeof testDetailSchema>;
 
