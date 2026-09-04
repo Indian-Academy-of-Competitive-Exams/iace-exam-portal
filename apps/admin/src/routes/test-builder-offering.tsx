@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Power, X } from 'lucide-react';
-import {
-  AppException,
-  TEST_STATUS,
-  fromInstituteWallTime,
-  instituteWallTime,
-  offerRequirements,
-  type TestDetail,
-} from '@iace/contracts';
+import { AppException, TEST_STATUS, offerRequirements, type TestDetail } from '@iace/contracts';
 import {
   Alert,
   Button,
@@ -19,6 +12,7 @@ import {
   FormSection,
   NumericInput,
   SectionHeading,
+  SkeletonParagraph,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -28,7 +22,14 @@ import {
 import { api } from '../lib/api';
 import { ProgramPicker, TestSeriesMultiPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
-import { toMinutes, toSeconds } from '../lib/schedule-format';
+import { toSeconds } from '../lib/schedule-format';
+import {
+  changesOf,
+  instantOf,
+  savedSchedule,
+  type ProgramOpening,
+  type ScheduleDraft,
+} from './test-schedule-draft';
 
 /** Who is offered the test: the series that carry it, and the freeze that lets students sit it. */
 
@@ -39,6 +40,8 @@ function useOfferingRefresh(testId: string) {
   return async () => {
     await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.TEST, testId] });
     await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+    // Series membership decides which branches reach the test, and the schedule step reads that.
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BRANCH_TIMING });
   };
 }
 
@@ -83,66 +86,18 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
 /** When the test opens, how late a student may still begin, and which programs open it sooner. */
 
-interface ProgramOpening {
-  programCode: string;
-  /** Institute wall time, which is the only form a picker speaks. */
-  opensAt: string;
-}
-
-interface ScheduleDraft {
-  opensAt: string;
-  lateEntry: string;
-  extraTime: string;
-  programs: readonly ProgramOpening[];
-}
-
-interface ScheduleChanges {
-  opening: boolean;
-  timing: boolean;
-  written: readonly ProgramOpening[];
-  cleared: readonly string[];
-  count: number;
-}
+const TIMING_KEY = (testId: string) => [...QUERY_KEYS.BRANCH_TIMING, testId] as const;
 
 interface ProgramRefusal {
   programCode: string;
   message: string;
 }
 
-const wallOf = (at: string | null): string => (at ? instituteWallTime(new Date(at)) : '');
+const PROGRAM_RULE =
+  'A program opening lets that cohort start earlier. Entry still closes at the same instant for everyone, so their window is longer rather than moved.';
 
-const instantOf = (wall: string): string => fromInstituteWallTime(wall).toISOString();
-
-const savedSchedule = (detail: TestDetail): ScheduleDraft => ({
-  opensAt: wallOf(detail.opensAt),
-  lateEntry: toMinutes(detail.lateEntrySec),
-  extraTime: toMinutes(detail.extraTimeSec),
-  programs: detail.programUnlocks.map((row) => ({
-    programCode: row.programCode,
-    opensAt: wallOf(row.opensAt),
-  })),
-});
-
-function changesOf(saved: ScheduleDraft, held: ScheduleDraft): ScheduleChanges {
-  const before = new Map(saved.programs.map((row) => [row.programCode, row.opensAt]));
-  const kept = new Set(held.programs.map((row) => row.programCode));
-  const written = held.programs.filter(
-    (row) => row.opensAt !== '' && before.get(row.programCode) !== row.opensAt,
-  );
-  const cleared = saved.programs
-    .filter((row) => !kept.has(row.programCode))
-    .map((row) => row.programCode);
-  const opening = held.opensAt !== saved.opensAt;
-  const timing = held.lateEntry !== saved.lateEntry || held.extraTime !== saved.extraTime;
-
-  return {
-    opening,
-    timing,
-    written,
-    cleared,
-    count: written.length + cleared.length + Number(opening) + Number(timing),
-  };
-}
+const NO_BRANCH_RUNS_IT =
+  'No branch runs a series holding this test yet, so late entry and extra time cannot be set. Switch one of its series on at a branch first.';
 
 /** The server owns the rule; this only puts its refusal under the row that caused it. */
 const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
@@ -151,16 +106,14 @@ const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null =
 };
 
 /** The clock is still kept per branch underneath, so one pair goes to every branch this reaches. */
-async function writeTiming(testId: string, held: ScheduleDraft): Promise<void> {
-  const rows = await api.admin.tests.branchTiming(testId);
-  await api.admin.tests.setBranchTiming(testId, {
-    branches: rows.map((row) => ({
-      branchId: row.branchId,
+const writeTiming = (testId: string, branchIds: readonly string[], held: ScheduleDraft) =>
+  api.admin.tests.setBranchTiming(testId, {
+    branches: branchIds.map((branchId) => ({
+      branchId,
       lateEntrySec: toSeconds(held.lateEntry),
       extraTimeSec: toSeconds(held.extraTime),
     })),
   });
-}
 
 /** The test's own clock, and the programs that reach it ahead of everybody else. */
 export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
@@ -169,8 +122,15 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const [draft, setDraft] = useState<ScheduleDraft | null>(null);
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<ProgramRefusal | null>(null);
-
   const seriesId = detail.testSeriesId;
+
+  const timing = useQuery({
+    queryKey: TIMING_KEY(detail.id),
+    queryFn: () => api.admin.tests.branchTiming(detail.id),
+    enabled: seriesId !== null,
+  });
+
+  const branchIds = (timing.data ?? []).map((row) => row.branchId);
   const saved = savedSchedule(detail);
   const held = draft ?? saved;
   const changes = changesOf(saved, held);
@@ -183,7 +143,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
           unlockAt: held.opensAt ? instantOf(held.opensAt) : null,
         });
       }
-      if (changes.timing) await writeTiming(detail.id, held);
+      if (changes.timing) await writeTiming(detail.id, branchIds, held);
 
       for (const row of changes.written) {
         try {
@@ -241,6 +201,10 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
     );
   }
 
+  if (timing.isLoading) return <SkeletonParagraph lines={3} />;
+
+  const reachesABranch = branchIds.length > 0;
+
   return (
     <FormSection title="Schedule">
       <div className="flex flex-wrap items-start gap-4">
@@ -266,6 +230,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
             <NumericInput
               {...control}
               placeholder="None"
+              disabled={!reachesABranch}
               value={held.lateEntry}
               onChange={(event) => setField('lateEntry', digitsOnly(event.target.value))}
             />
@@ -277,6 +242,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
             <NumericInput
               {...control}
               placeholder="None"
+              disabled={!reachesABranch}
               value={held.extraTime}
               onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
             />
@@ -284,12 +250,11 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
         </Field>
       </div>
 
-      <SectionHeading level={3} title="Program openings" />
-
-      <Alert variant="info">
-        A program opening lets that cohort start earlier. Entry still closes at the same instant for
-        everyone, so their window is longer rather than moved.
+      <Alert variant={reachesABranch ? 'info' : 'warning'}>
+        {reachesABranch ? PROGRAM_RULE : NO_BRANCH_RUNS_IT}
       </Alert>
+
+      <SectionHeading level={3} title="Program openings" />
 
       {held.programs.map((row, index) => (
         <ProgramOpeningRow
@@ -325,7 +290,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
         title="Save the schedule?"
-        description={`${plural(changes.count, 'change')} to when this test can be started. Late entry is counted from the opening, extra time is added to every student's clock, and a program opening left later than the test's own is dropped.`}
+        description={`${plural(changes.count, 'change')} to when this test can be started. Late entry is counted from the opening, and both it and extra time replace whatever each branch running this test set for itself. A program opening left later than the test's own is dropped.`}
         confirmLabel="Save schedule"
         loading={save.isPending}
         onConfirm={() => save.mutate()}
