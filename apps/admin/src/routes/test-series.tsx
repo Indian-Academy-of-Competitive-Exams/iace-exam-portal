@@ -6,6 +6,8 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   TEST_SERIES_KIND,
+  TEST_SERIES_KINDS,
+  type TestSeriesKind,
   type TestSeriesSummary,
 } from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
@@ -26,11 +28,27 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, TEST_SERIES_KIND_LABELS } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  QUERY_KEYS,
+  ROUTES,
+  TEST_SERIES_KIND_LABELS,
+  TEST_SERIES_KIND_HINTS,
+} from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../components/exam-picker';
 
-type FilterKey = 'q' | 'examId' | 'examStageId';
+type FilterKey = 'q' | 'examId' | 'examStageId' | 'kind' | 'isEnabled';
+
+/** Every kind, plus the row that means the reader has not chosen one. */
+const KIND_FILTER_ITEMS = [
+  { value: '', label: 'Any kind' },
+  ...TEST_SERIES_KINDS.map((value) => ({
+    value,
+    label: TEST_SERIES_KIND_LABELS[value],
+    hint: TEST_SERIES_KIND_HINTS[value],
+  })),
+];
 
 /** Built outside the component: `cell` is a render prop, not a component declaration. */
 function seriesColumns(
@@ -63,10 +81,20 @@ function seriesColumns(
       key: 'kind',
       header: 'Kind',
       cell: (series) => (
-        <Badge variant={series.kind === TEST_SERIES_KIND.STANDARD ? 'neutral' : 'success'}>
+        <Badge variant={series.kind === TEST_SERIES_KIND.STANDARD ? 'neutral' : 'info'}>
           {TEST_SERIES_KIND_LABELS[series.kind]}
         </Badge>
       ),
+    },
+    {
+      key: 'isEnabled',
+      header: 'Enabled',
+      cell: (series) =>
+        series.isEnabled ? (
+          <Badge variant="success">On</Badge>
+        ) : (
+          <Badge variant="warning">Off</Badge>
+        ),
     },
     { key: 'tests', header: 'Tests', numeric: true, cell: (series) => series.testCount },
     { key: 'branches', header: 'Branches', cell: (series) => <BranchReach series={series} /> },
@@ -128,6 +156,17 @@ export function TestSeriesPage() {
         <ExamStageMultiPicker {...control} examIds={examIds} />
       ),
     },
+    { key: 'kind', kind: 'choice', label: 'Filter by kind', items: KIND_FILTER_ITEMS },
+    {
+      key: 'isEnabled',
+      kind: 'choice',
+      label: 'Filter by the series switch',
+      items: [
+        { value: '', label: 'On or off' },
+        { value: 'true', label: 'Switched on' },
+        { value: 'false', label: 'Switched off' },
+      ],
+    },
   ] as const;
 
   const series = useListScreen({
@@ -136,6 +175,8 @@ export function TestSeriesPage() {
     toQuery: (values) => ({
       q: values.q || undefined,
       examStageId: values.examStageId,
+      kind: (values.kind || undefined) as TestSeriesKind | undefined,
+      isEnabled: (values.isEnabled || undefined) as 'true' | 'false' | undefined,
     }),
     fetchPage: (params) => api.admin.testSeries.list(params),
   });
@@ -171,12 +212,12 @@ export function TestSeriesPage() {
   );
 }
 
-/** A series with no stage spans a course rather than one paper, which is a fact, not a gap. */
-/**
- * How far the series actually reaches. Every branch has a row from the moment the series was
- * created, so the denominator is every centre and "0 of 12" means nobody can sit it yet.
- */
+/** How far a STANDARD series reaches. Every other kind reaches past branches, so it has none. */
 function BranchReach({ series }: Readonly<{ series: TestSeriesSummary }>) {
+  if (series.kind !== TEST_SERIES_KIND.STANDARD) {
+    return <span className="text-muted-foreground">Every branch</span>;
+  }
+
   if (series.enabledBranchCount === 0) {
     return <span className="text-muted-foreground">None of {series.branchCount}</span>;
   }

@@ -10,6 +10,7 @@ import {
   PERMISSION_LEVELS,
   type SeriesTestRow,
   TEST_SERIES_KIND,
+  TEST_SERIES_KINDS,
   type TestSeriesKind,
   type TestSeriesSummary,
   fromInstituteWallTime,
@@ -47,7 +48,6 @@ import {
   NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
-  SELECTABLE_TEST_SERIES_KINDS,
   TEST_SERIES_KIND_HINTS,
   TEST_SERIES_KIND_LABELS,
 } from '../lib/constants';
@@ -55,7 +55,7 @@ import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
-import { ProgramPicker } from '../components/access-picker';
+import { EventPicker, ProgramPicker } from '../components/access-picker';
 
 /**
  * One series: who it is for, and — once it exists — which branches run it. The two are separate
@@ -67,6 +67,7 @@ interface SeriesFormValues {
   description: string;
   examStageId: string;
   programCode: string;
+  eventId: string;
   sequentialTests: boolean;
   progressive: boolean;
   kind: TestSeriesKind;
@@ -76,31 +77,79 @@ const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
 const branchesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'branches'] as const;
 
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
-const SERVER_FIELDS = ['name', 'description', 'examStageId', 'programCode', 'kind'] as const;
+const SERVER_FIELDS = [
+  'name',
+  'description',
+  'examStageId',
+  'programCode',
+  'eventId',
+  'kind',
+] as const;
 
-/** A kind nobody may choose still has to READ back, or an existing series opens blank. */
-function kindItems(held: TestSeriesKind) {
-  const offered: readonly TestSeriesKind[] = SELECTABLE_TEST_SERIES_KINDS.includes(
-    held as (typeof SELECTABLE_TEST_SERIES_KINDS)[number],
-  )
-    ? SELECTABLE_TEST_SERIES_KINDS
-    : [...SELECTABLE_TEST_SERIES_KINDS, held];
+const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
+  value,
+  label: TEST_SERIES_KIND_LABELS[value],
+  hint: TEST_SERIES_KIND_HINTS[value],
+}));
 
-  return offered.map((value) => ({
-    value,
-    label: TEST_SERIES_KIND_LABELS[value],
-    hint: TEST_SERIES_KIND_HINTS[value],
-  }));
-}
-
-/** A program belongs to the Program kind alone, so it leaves with the kind that carried it. */
+/** A program and an event each belong to one kind, so both leave with the kind that carried them. */
 function chooseKind(form: UseFormReturn<SeriesFormValues>, next: TestSeriesKind): void {
   form.setValue('kind', next, { shouldDirty: true });
   if (next !== TEST_SERIES_KIND.PROGRAM) form.setValue('programCode', '', { shouldDirty: true });
+  if (next !== TEST_SERIES_KIND.EVENT) form.setValue('eventId', '', { shouldDirty: true });
 }
 
-/** Who the series is for. Both follow the kind, so no admin can assemble one the server refuses. */
-function SeriesTargets({
+/** The one target its kind requires, which is why exactly one of these is ever on screen. */
+function KindTarget({
+  form,
+  detail,
+  kind,
+}: Readonly<{
+  form: UseFormReturn<SeriesFormValues>;
+  detail: TestSeriesSummary | null;
+  kind: TestSeriesKind;
+}>) {
+  const programCode = useWatch({ control: form.control, name: 'programCode' });
+  const eventId = useWatch({ control: form.control, name: 'eventId' });
+
+  if (kind === TEST_SERIES_KIND.PROGRAM) {
+    return (
+      <FormField form={form} name="programCode" label="Program">
+        {(control) => (
+          <ProgramPicker
+            id={control.id}
+            value={programCode}
+            clearable={false}
+            placeholder="Choose a program"
+            selectedLabel={detail?.programCode ?? undefined}
+            onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
+          />
+        )}
+      </FormField>
+    );
+  }
+
+  if (kind === TEST_SERIES_KIND.EVENT) {
+    return (
+      <FormField form={form} name="eventId" label="Event">
+        {(control) => (
+          <EventPicker
+            id={control.id}
+            value={eventId}
+            clearable={false}
+            placeholder="Choose an event"
+            onChange={(value) => form.setValue('eventId', value, { shouldDirty: true })}
+          />
+        )}
+      </FormField>
+    );
+  }
+
+  return null;
+}
+
+/** Who the series is for. Every field follows the kind, so no admin can assemble a refused save. */
+function SeriesAccess({
   form,
   detail,
   onPickStage,
@@ -111,11 +160,24 @@ function SeriesTargets({
 }>) {
   const kind = useWatch({ control: form.control, name: 'kind' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
-  const programCode = useWatch({ control: form.control, name: 'programCode' });
   const spansACourse = kind === TEST_SERIES_KIND.FREE;
 
   return (
-    <>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <FormField form={form} name="kind" label="Kind">
+        {(control) => (
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            value={kind}
+            onChange={(next) => chooseKind(form, next as TestSeriesKind)}
+            items={KIND_ITEMS}
+          />
+        )}
+      </FormField>
+
       <FormField
         form={form}
         name="examStageId"
@@ -141,20 +203,80 @@ function SeriesTargets({
         )}
       </FormField>
 
-      {kind === TEST_SERIES_KIND.PROGRAM ? (
-        <FormField form={form} name="programCode" label="Program">
-          {(control) => (
-            <ProgramPicker
-              id={control.id}
-              value={programCode}
-              clearable={false}
-              placeholder="Choose a program"
-              selectedLabel={detail?.programCode ?? undefined}
-              onChange={(value) => form.setValue('programCode', value, { shouldDirty: true })}
-            />
-          )}
-        </FormField>
+      <KindTarget form={form} detail={detail} kind={kind} />
+
+      {detail ? (
+        <div className="sm:col-span-2">
+          <SeriesSwitch series={detail} />
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Turning it on and turning it off are not the same question, so they are not the same words. */
+function switchQuestion(
+  series: TestSeriesSummary,
+  next: boolean,
+): { title: string; description: string; confirmLabel: string; destructive: boolean } {
+  const tests = plural(series.testCount, 'test');
+
+  if (next) {
+    return {
+      title: `Switch ${series.name} on?`,
+      description: `Everyone its kind reaches can start its ${tests} from now on. Which students that is comes from the kind; this switch decides whether any of them may sit anything at all.`,
+      confirmLabel: 'Switch it on',
+      destructive: false,
+    };
+  }
+
+  return {
+    title: `Switch ${series.name} off?`,
+    description: `It reaches nobody while it is off, and its ${tests} leave every student's list at once. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped.`,
+    confirmLabel: 'Switch it off',
+    destructive: true,
+  };
+}
+
+/** The master switch. It changes who can sit a test, so it asks in both directions. */
+function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState<boolean | null>(null);
+
+  const save = useMutation({
+    meta: { success: `${series.name} saved.` },
+    mutationFn: (isEnabled: boolean) => api.admin.testSeries.update(series.id, { isEnabled }),
+    onSuccess: (saved) => {
+      setAsking(null);
+      queryClient.setQueryData(seriesKey(saved.id), saved);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
+    },
+    // Drop out of the confirm on failure, or the row is left asking a question already answered.
+    onError: () => setAsking(null),
+  });
+
+  const question = switchQuestion(series, asking ?? !series.isEnabled);
+
+  return (
+    <>
+      <Checkbox
+        checked={series.isEnabled}
+        disabled={save.isPending}
+        onChange={(event) => setAsking(event.target.checked)}
+        label="Enabled"
+        /* ui-copy-ok: consequence */ hint="Off reaches nobody, whatever the kind"
+      />
+
+      <ConfirmDialog
+        open={asking !== null}
+        onOpenChange={(open) => !open && setAsking(null)}
+        destructive={question.destructive}
+        loading={save.isPending}
+        title={question.title}
+        description={question.description}
+        confirmLabel={question.confirmLabel}
+        onConfirm={() => asking !== null && save.mutate(asking)}
+      />
     </>
   );
 }
@@ -165,6 +287,7 @@ function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     description: detail?.description ?? '',
     examStageId: detail?.examStageId ?? '',
     programCode: detail?.programCode ?? '',
+    eventId: detail?.eventId ?? '',
     sequentialTests: detail?.sequentialTests ?? false,
     progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
@@ -177,8 +300,9 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     name: values.name,
     description: values.description.trim(),
     examStageId: values.examStageId || null,
-    // Only a program series carries one, so the field it came from cannot outlive the kind.
+    // Each target belongs to one kind, so the field it came from cannot outlive that kind.
     programCode: values.kind === TEST_SERIES_KIND.PROGRAM ? values.programCode || null : null,
+    eventId: values.kind === TEST_SERIES_KIND.EVENT ? values.eventId || null : null,
     sequentialTests: values.sequentialTests,
     progressive: values.progressive,
     kind: values.kind,
@@ -214,6 +338,51 @@ export function TestSeriesFormPage() {
 
   // Mounted only once the saved series is here, so a refetch cannot throw away a half-typed edit.
   return <SeriesEditor detail={series.data ?? null} />;
+}
+
+/** What a series you are only READING offers: its candidate import, and the way into editing it. */
+function SeriesReadActions({
+  series,
+  onEdit,
+}: Readonly<{ series: TestSeriesSummary | null; onEdit: () => void }>) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {series ? (
+        <Button variant="outline" size="sm" asChild>
+          <Link to={ROUTES.SERIES_CANDIDATES(series.id)}>
+            <Upload aria-hidden />
+            Import candidates
+          </Link>
+        </Button>
+      ) : null}
+      <Button variant="outline" size="sm" onClick={onEdit}>
+        <Pencil aria-hidden />
+        Edit series
+      </Button>
+    </div>
+  );
+}
+
+function SeriesEditActions({
+  existing,
+  saving,
+  onCancel,
+}: Readonly<{ existing: boolean; saving: boolean; onCancel: () => void }>) {
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button type="submit" loading={saving}>
+        {existing ? 'Save series' : 'Create series'}
+      </Button>
+    </>
+  );
+}
+
+function seriesTitle(detail: TestSeriesSummary | null, isEditing: boolean): string {
+  if (!detail) return 'New test series';
+  return isEditing ? `Edit ${detail.name}` : detail.name;
 }
 
 function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>) {
@@ -268,8 +437,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
     setIsEditing(false);
   };
 
-  let title = 'New test series';
-  if (detail) title = isEditing ? `Edit ${detail.name}` : detail.name;
+  const title = seriesTitle(detail, isEditing);
 
   return (
     <FormPanel
@@ -277,14 +445,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
       onSubmit={form.handleSubmit((values) => save.mutate(values))}
       footer={
         isEditing ? (
-          <>
-            <Button type="button" variant="outline" onClick={cancel}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={save.isPending}>
-              {existing ? 'Save series' : 'Create series'}
-            </Button>
-          </>
+          <SeriesEditActions existing={existing} saving={save.isPending} onCancel={cancel} />
         ) : undefined
       }
       header={
@@ -294,20 +455,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             title={title}
             action={
               isEditing ? undefined : (
-                <div className="flex flex-wrap items-center gap-2">
-                  {existing ? (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={ROUTES.SERIES_CANDIDATES(detail.id)}>
-                        <Upload aria-hidden />
-                        Import candidates
-                      </Link>
-                    </Button>
-                  ) : null}
-                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                    <Pencil aria-hidden />
-                    Edit series
-                  </Button>
-                </div>
+                <SeriesReadActions series={detail} onEdit={() => setIsEditing(true)} />
               )
             }
           />
@@ -335,8 +483,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             )}
           </FormField>
 
-          <SeriesTargets form={form} detail={detail} onPickStage={setStage} />
-
           <FormField
             form={form}
             name="description"
@@ -345,16 +491,12 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           >
             {(control) => <Textarea {...control} />}
           </FormField>
-        </div>
-      </FormSection>
 
-      <FormSection title="Unlocking">
-        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-3 sm:col-span-2">
             <SeriesToggle
               form={form}
               name="sequentialTests"
-              label="Unlock the tests in order"
+              label="Open the tests in order"
               /* ui-copy-ok: rule */ hint="Off opens every test in the series together."
             />
             <SeriesToggle
@@ -364,25 +506,18 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
               /* ui-copy-ok: rule */ hint="Each paper harder than the last; students see the climb against the ramp."
             />
           </div>
-
-          <FormField form={form} name="kind" label="Kind">
-            {(control) => (
-              <Combobox
-                id={control.id}
-                aria-describedby={control['aria-describedby']}
-                aria-invalid={control['aria-invalid']}
-                clearable={false}
-                value={kind}
-                onChange={(next) => chooseKind(form, next as TestSeriesKind)}
-                items={kindItems(detail?.kind ?? TEST_SERIES_KIND.STANDARD)}
-              />
-            )}
-          </FormField>
         </div>
       </FormSection>
 
+      <FormSection title="Access">
+        <SeriesAccess form={form} detail={detail} onPickStage={setStage} />
+      </FormSection>
+
       {existing ? <SeriesTests series={detail} /> : null}
-      {existing ? <BranchSchedule series={detail} /> : null}
+      {/* The saved kind, not the chosen one: a series still carrying branches has to switch them off. */}
+      {existing && detail.kind === TEST_SERIES_KIND.STANDARD ? (
+        <BranchSchedule series={detail} />
+      ) : null}
     </FormPanel>
   );
 }

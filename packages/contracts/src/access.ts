@@ -195,6 +195,8 @@ export const testSeriesListQuerySchema = paginationQuerySchema.extend({
   forExamStageId: z.string().optional(),
   programCode: z.string().optional(),
   kind: testSeriesKindSchema.optional(),
+  /** The series' own switch. Absent is every series, on or off. */
+  isEnabled: optionalBooleanQuery(),
   match: matchModeQuery(),
   /** A student id: drops what they already reach, so a picker cannot offer a grant that does nothing. */
   notReachedBy: z.string().optional(),

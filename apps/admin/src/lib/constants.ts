@@ -43,7 +43,6 @@ import {
   type StudentSeriesSource,
   type StudentType,
   type TestBuilderStep,
-  TEST_SERIES_KIND,
   type TestSeriesKind,
   type TestStatus,
   type TestUi,
@@ -165,20 +164,13 @@ export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> =
   EVENT: 'Event',
 };
 
-/** What choosing each kind does, which the name alone does not say. */
+/** Who each kind reaches, which the name alone does not say. */
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
-  STANDARD: 'Reached by an enrolment in the exam its stage belongs to',
-  FREE: 'Also reached by everyone enrolled in its exam course',
-  PROGRAM: 'Reached only by students carrying the program it names',
-  EVENT: 'Not choosable yet — a series is joined to an event by importing candidates',
+  STANDARD: 'Reached by an enrolment in the exam course its stage belongs to',
+  FREE: 'Reached by every student',
+  PROGRAM: 'Reached only by students carrying its program',
+  EVENT: 'Reached only by the candidates on its event',
 };
-
-/** What an admin may pick by hand; EVENT waits on a screen that can create an event. */
-export const SELECTABLE_TEST_SERIES_KINDS = [
-  TEST_SERIES_KIND.STANDARD,
-  TEST_SERIES_KIND.FREE,
-  TEST_SERIES_KIND.PROGRAM,
-] as const;
 
 /** What opens a series for a student, in the words an admin would use for it. */
 export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>> = {
@@ -473,6 +465,7 @@ export const QUERY_KEYS = {
   BRANCH_CONFIG: [ADMIN, 'branch-config'],
   BRANCH_TIMING: [ADMIN, 'branch-timing'],
   BRANCHES: [ADMIN, 'branches'],
+  EVENTS: [ADMIN, 'events'],
   EXAM_STAGES: [ADMIN, 'exam-stages'],
   EXAMS: [ADMIN, 'exams'],
   FEATURES: [ADMIN, 'features'],

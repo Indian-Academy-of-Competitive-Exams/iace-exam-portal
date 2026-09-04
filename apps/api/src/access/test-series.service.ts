@@ -35,9 +35,10 @@ const KIND_PAIRING_MESSAGES = {
     'A program series is reached only by students carrying a program, so it has to name one.',
   PROGRAM_IS_ITS_OWN_KIND:
     'A series naming a program is reached only by students carrying it, which is what the Program kind is. Choose Program, or clear the program.',
-  EVENT_CANNOT_BE_CHOSEN:
-    'An event series is reached only by the candidates on its event, and a series is joined to an event by importing them rather than here. Choose another kind.',
-  EVENT_IS_ITS_OWN_KIND: 'This series is joined to an event, so its kind stays Event.',
+  EVENT_NEEDS_ITS_EVENT:
+    'An event series is reached only by the candidates on its event, so it has to name one.',
+  EVENT_IS_ITS_OWN_KIND:
+    'A series naming an event is reached only by its candidates, which is what the Event kind is. Choose Event, or clear the event.',
 } as const;
 
 const branchesAreStandardOnly = (count: number) =>
@@ -59,6 +60,8 @@ export const AUDITED_SERIES_FIELDS = [
   'sequentialTests',
   'progressive',
   'kind',
+  'eventId',
+  'isEnabled',
 ] as const;
 
 /**
@@ -112,6 +115,7 @@ export class TestSeriesService {
         : []),
       ...(query.programCode ? [{ programCode: query.programCode }] : []),
       ...(query.kind === undefined ? [] : [{ kind: query.kind }]),
+      ...(query.isEnabled === undefined ? [] : [{ isEnabled: query.isEnabled }]),
     ];
     const always: Prisma.TestSeriesWhereInput[] = query.q
       ? [{ name: { contains: query.q, mode: 'insensitive' } }]
@@ -156,12 +160,12 @@ export class TestSeriesService {
    */
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
-    // A new series carries neither yet: there is no way to write an event or a branch here.
+    // Every branch row starts off, so a new series carries no branch whatever its kind.
     this.assertKindHoldsTogether({
       kind: input.kind ?? TEST_SERIES_KIND.STANDARD,
       examStageId: input.examStageId ?? null,
       programCode: input.programCode ?? null,
-      eventId: null,
+      eventId: input.eventId ?? null,
       branchIds: [],
     });
 
@@ -184,7 +188,7 @@ export class TestSeriesService {
         })),
       });
 
-      await mirrorSwitchOntoSeries(tx, [series.id]);
+      await mirrorSwitchOntoSeries(tx, [series.id], input.isEnabled);
       return series.id;
     });
 
@@ -200,19 +204,19 @@ export class TestSeriesService {
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
-    // Against what the row WILL hold: eventId and branchIds are not writable, so they are its own.
+    // Against what the row WILL hold: branchIds moves through BranchTestConfig, so it is its own.
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
       examStageId: settledValue(input.examStageId, series.examStageId),
       programCode: settledValue(input.programCode, series.programCode),
-      eventId: series.eventId,
+      eventId: settledValue(input.eventId, series.eventId),
       branchIds: series.branchIds,
     });
 
     // The switch follows the kind: only STANDARD is gated by a branch, so a kind change moves it.
     await this.prisma.$transaction(async (tx) => {
       await tx.testSeries.update({ where: { id }, data: columnsOf(input) });
-      await mirrorSwitchOntoSeries(tx, [id]);
+      await mirrorSwitchOntoSeries(tx, [id], input.isEnabled);
     });
 
     const updated = await this.requireSeries(id);
@@ -518,7 +522,7 @@ function kindPairingErrors(shape: SeriesPairing): Record<string, string[]> {
 
   const isEvent = shape.kind === TEST_SERIES_KIND.EVENT;
   if (isEvent && shape.eventId === null)
-    found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_CANNOT_BE_CHOSEN]);
+    found.push(['eventId', KIND_PAIRING_MESSAGES.EVENT_NEEDS_ITS_EVENT]);
   if (!isEvent && shape.eventId !== null)
     found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_IS_ITS_OWN_KIND]);
 
@@ -539,6 +543,7 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
     ...(input.progressive === undefined ? {} : { progressive: input.progressive }),
     ...(input.kind === undefined ? {} : { kind: input.kind }),
+    ...(input.eventId === undefined ? {} : { eventId: input.eventId ?? null }),
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 

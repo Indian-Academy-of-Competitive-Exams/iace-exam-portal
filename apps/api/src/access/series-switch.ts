@@ -5,6 +5,8 @@ import { TEST_SERIES_KIND } from '@iace/contracts';
 export async function mirrorSwitchOntoSeries(
   tx: Prisma.TransactionClient,
   testSeriesIds: readonly string[],
+  /** The series form owns the switch outright; the branch writers derive it and pass nothing. */
+  chosen?: boolean,
 ): Promise<void> {
   const ids = [...new Set(testSeriesIds)];
   if (ids.length === 0) return;
@@ -26,9 +28,10 @@ export async function mirrorSwitchOntoSeries(
     // Only STANDARD reaches through a branch; every other kind reaches past one, so its list is empty.
     const standard = row.kind === TEST_SERIES_KIND.STANDARD;
     const branchIds = standard ? (branches.get(row.id) ?? []) : [];
+    const derived = !standard || branchIds.length > 0 || granted.has(row.id);
     await tx.testSeries.update({
       where: { id: row.id },
-      data: { branchIds, isEnabled: !standard || branchIds.length > 0 || granted.has(row.id) },
+      data: { branchIds, isEnabled: chosen ?? derived },
     });
   }
 }

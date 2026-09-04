@@ -182,17 +182,17 @@ read** rather than cached — so a test opens on time with nothing having to bus
 branch's `extraTimeSec` is added to the configured duration once, where the server computes
 `endsAt`.
 
-**Which of the three paths applies depends on the series' `kind`.** `STANDARD` reaches by exam or
-program as above. `FREE` also reaches anyone enrolled in its exam FAMILY, capped at
-`FREE_SERIES_EXAM_CAP` (2) exams' worth so a course is not a skeleton key. `SCHOLARSHIP` reaches
-nobody by exam or program — only an explicit grant, which is what the scholarship import writes. A
-`FREE` series may not sit behind a prerequisite: it is advertised to people who do not have one, so
-a database CHECK refuses the combination.
+**Which path applies depends on the series' `kind`, and only one does.** `STANDARD` reaches a
+student enrolled in the course its stage belongs to, whose current branch is on the series'
+`branchIds`. `FREE` reaches every student. `PROGRAM` reaches only students carrying its
+`programCode`. `EVENT` reaches only the candidates on its `Event`. A `StudentGrant` is an override
+that reaches past all four, and the whole answer is gated by the series' own `isEnabled` — a series
+nobody switched on reaches nobody. Four database CHECKs hold the shape: a non-FREE series names a
+stage, `PROGRAM` names a program and nothing else does, `EVENT` names an event and nothing else
+does, and only `STANDARD` may carry branches.
 
-Reaching a series is not the same as being able to start it. `unlockMode` decides that — `AUTO`
-opens on its own, at once or once every test in the prerequisite series is finished, and `REQUEST`
-goes through a queue an admin decides. There are two modes, not three. A locked series is still listed, so the student can see what
-is coming and ask for it. `isTestBlocked` leaves the whole catalog readable and starts nothing.
+There is no ask queue and nothing to request: a series is reached or it is not.
+`isTestBlocked` leaves the whole catalog readable and starts nothing.
 `sequentialTests` gates the tests INSIDE a series: the first one not yet sat is open and everything
 after it waits, counted from submitted and evaluated attempts and read fresh on every catalog read,
 so submitting one opens the next with nothing having to bust a cache.
@@ -247,10 +247,11 @@ never per test, and the only per-student row in the model is the grant.
 - **AttemptQuestion** — only questions the student **interacted with** (composite PK): option
   chosen, state, time; (post-scoring) isCorrect, marksAwarded. The analytics data points, captured
   day one.
-- **Access** — `Program`, `TestSeries`, `TestSeriesTest` (carrying `unlockAt`), `StudentGrant`,
-  `BranchTestConfig` (a switch, no window), `BranchTestSchedule(branchId, testId)` for late entry
-  and extra time, plus `StudentSeriesUnlock` and `SeriesUnlockRequest` for unlocking. See §7 —
-  there is no group table and no student↔test link.
+- **Access** — `Program`, `TestSeries` (carrying `kind`, `branchIds`, `isEnabled`, `eventId`),
+  `TestSeriesTest` (carrying `unlockAt`), `StudentGrant`, `BranchTestConfig` (a switch, no window),
+  `BranchTestSchedule(branchId, testId)` for late entry and extra time, and `Event` /
+  `EventCandidate` for an EVENT series' roster. See §7 — there is no group table, no ask queue and
+  no student↔test link.
 - **TestSeries** — many-to-many with Test, optional, **flat** (no nesting). Standalone attempts
   allowed. Marks use `Decimal(6,2)`.
 

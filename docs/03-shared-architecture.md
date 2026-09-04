@@ -112,7 +112,7 @@ may quietly start writing, which is how the boundary erodes.
 | students               | `Student`, `StudentProfile`                                                                               | existing    |
 | branches               | `Branch`                                                                                                  | existing    |
 | access                 | `Program`, `TestSeries`, `StudentGrant`, `BranchTestConfig`                                               | existing    |
-| unlocks                | `StudentSeriesUnlock`, `SeriesUnlockRequest`                                                              | existing    |
+| events                 | `Event`, `EventCandidate`                                                                                 | existing    |
 | question-bank          | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                         | existing    |
 | configs                | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                | existing    |
 | audit                  | `RowActionLog`, `ImportLog`                                                                               | existing    |
@@ -148,15 +148,14 @@ other five are referenced nowhere at all. They are schema provisioned ahead of t
 will fill them — see §6's unwired events. Give them an owning module in the same change that first
 writes one, and delete this row when that happens.
 
-`unlocks` is a service inside `access` rather than a folder of its own: an unlock is not a way to
-REACH a series, so every one of its writes has to be checked against the reach predicate that lives
-there. It keeps its own row in this table because the tables are still separately owned, and moving
-it out later is a folder move rather than a rewrite.
+`events` owns `Event` and `EventCandidate` because a candidate is a SITTER, not a route into a
+series: `access` reads the roster to resolve an EVENT series and writes none of it.
 
-**There is no group table, and access is not a link row.** A student reaches a `TestSeries` by an
-exam match, a program match, or an explicit `StudentGrant`, and every one of those is then gated by
-the `BranchTestConfig` row for their branch — which `access` owns. Auth sessions, OTP, and device
-binding live in **Redis**, never Postgres.
+**There is no group table, and access is not a link row.** A student reaches a `TestSeries` by its
+`kind` — FREE reaches everyone, STANDARD an enrolled course at a branch on its `branchIds`, PROGRAM
+a program the student carries, EVENT a candidate on its event — with a `StudentGrant` as an override
+on every kind, and the whole answer gated by the series' own `isEnabled`. There is no ask queue.
+Auth sessions, OTP, and device binding live in **Redis**, never Postgres.
 
 ---
 
@@ -167,7 +166,8 @@ binding live in **Redis**, never Postgres.
 table is its prose, and the two must be edited together.
 
 Twelve events are declared. **Wired** means something emits it and something reacts;
-**declared** means the name exists and the producer is still to come.
+**declared** means the name exists and the producer is still to come; **orphaned** means the
+producer has been deleted and the listener is waiting on a migration to go with it.
 
 | Event                                           | Producer                                                                              | Consumers                                   | State    |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------- | -------- |
@@ -175,7 +175,7 @@ Twelve events are declared. **Wired** means something emits it and something rea
 | `student.pin_reset`                             | auth                                                                                  | (sessions revoked)                          | wired    |
 | `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke) | access (bust that student's cached catalog) | wired    |
 | `access.catalog_changed`                        | access (series edit, delete, branch-config change), tests (every offering write)      | access (bust every cached catalog)          | wired    |
-| `series.unlocked`                               | access (auto-unlock on resolve, approved request)                                     | notifications                               | wired    |
+| `series.unlocked`                               | nothing — the ask queue that emitted it is gone                                       | notifications                               | orphaned |
 | `series.granted`                                | access (a grant that did not already exist)                                           | notifications                               | wired    |
 | `student.enrolment_added`                       | students (the exam codes one save ADDED)                                              | notifications                               | wired    |
 | `attempt.submitted`                             | attempts                                                                              | scoring-worker (enqueue), notifications     | declared |

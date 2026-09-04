@@ -149,6 +149,27 @@ describe('TestSeriesService — the branch fan-out', () => {
     assert.equal(prisma.series[0]?.isEnabled, false);
   });
 
+  /** The series form owns this outright: what an admin chose must survive what the rows imply. */
+  it('keeps a series off when the admin switched it off, whatever its kind implies', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
+    assert.equal(created.isEnabled, true, 'a free series reaches past every branch');
+
+    await series.update(created.id, { isEnabled: false });
+
+    assert.equal(prisma.series[0]?.isEnabled, false);
+  });
+
+  it('switches a standard series on before any branch runs it', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+
+    await series.update(created.id, { isEnabled: true });
+
+    assert.equal(prisma.series[0]?.isEnabled, true);
+    assert.deepEqual(prisma.series[0]?.branchIds, [], 'the switch is not a branch list');
+  });
+
   /** A grant reaches PAST the branch gate, so it must not be shut out by an empty branch list. */
   it('keeps a series switched on for a grant made where no branch runs it', async () => {
     const { series, grants, prisma } = build({
@@ -367,9 +388,10 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
       'kind',
     ],
     ['a series that is not free and has no stage', { examStageId: null }, 'examStageId'],
+    ['an event series naming no event', { kind: TEST_SERIES_KIND.EVENT }, 'eventId'],
     [
-      'an event series, which nothing here can give an event to',
-      { kind: TEST_SERIES_KIND.EVENT },
+      'an event on a series of some other kind',
+      { kind: TEST_SERIES_KIND.STANDARD, eventId: 'ev_1' },
       'kind',
     ],
   ] as const) {
@@ -384,6 +406,37 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     });
   }
 
+  /** The only screen that creates a series creates all four kinds, so EVENT has to be settable. */
+  it('creates an event series on the event it names', async () => {
+    const { series } = build();
+
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' }));
+
+    assert.equal(created.kind, TEST_SERIES_KIND.EVENT);
+    assert.equal(created.eventId, 'ev_1');
+  });
+
+  it('moves an event series onto another event', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],
+    });
+
+    const updated = await series.update('srs_1', { eventId: 'ev_2' });
+
+    assert.equal(updated.eventId, 'ev_2');
+  });
+
+  it('refuses clearing the event a series is still an event series by', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],
+    });
+
+    const error = await series.update('srs_1', { eventId: null }).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.ok(error.fieldErrors?.eventId);
+  });
+
   it('leaves an event series that already holds its event editable', async () => {
     const { series } = build({
       series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],
@@ -394,7 +447,6 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     assert.equal(updated.name, 'Scholarship round two');
   });
 
-  /** eventId is not writable, so a kind change is the only way the pair could come apart. */
   it('refuses taking an event series off its event by changing the kind', async () => {
     const { series } = build({
       series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.EVENT, eventId: 'ev_1' })],

@@ -26,7 +26,7 @@ export const DOMAIN_EVENTS = {
   STUDENT_ACCESS_CHANGED: 'student.access_changed',
   /** A series-wide change: every student's cached catalog is stale. WIRED — access and tests. */
   ACCESS_CATALOG_CHANGED: 'access.catalog_changed',
-  /** A series opened for one student — an auto-unlock or an approved request. WIRED — see access. */
+  /** ORPHANED — both emitters went with the ask queue; the listener and the enum value await a migration. */
   SERIES_UNLOCKED: 'series.unlocked',
   /** Exam codes were ADDED to a student, never removed. WIRED — see students. */
   STUDENT_ENROLMENT_ADDED: 'student.enrolment_added',

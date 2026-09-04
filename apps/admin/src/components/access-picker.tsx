@@ -1,15 +1,11 @@
 import { useState } from 'react';
 import { PAGE_SIZE_MAX } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
-import { Combobox, MultiCombobox } from '@iace/ui';
+import { Combobox, MultiCombobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, QUERY_SCOPES } from '../lib/constants';
 
-/**
- * The two catalogs access is built out of, each searched on the server a page at a time.
- * A program is picked by its CODE, not its id: a student row and a series both store that
- * string with no foreign key, so the code is the value everything else already holds.
- */
+/** A program is picked by its CODE: a student row and a series both store that string with no FK. */
 
 interface PickerProps {
   value: string;
@@ -49,6 +45,37 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
       isLoading={pages.isLoading}
       isLoadingMore={pages.isLoadingMore}
       emptyLabel="No program matches that"
+    />
+  );
+}
+
+/** Only active events: an event nobody is running is not a roster to build a series on. */
+export function EventPicker(props: Readonly<PickerProps>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER, search],
+    fetchPage: (page) =>
+      api.admin.events.list({ page, pageSize: PAGE_SIZE_MAX, q: search, activeOnly: 'true' }),
+  });
+
+  return (
+    <Combobox
+      {...props}
+      placeholder={props.placeholder ?? 'Any event'}
+      items={pages.items.map((event) => ({
+        value: event.id,
+        label: event.name,
+        hint: plural(event.candidateCount, 'candidate'),
+      }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search events"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No event matches that"
     />
   );
 }
