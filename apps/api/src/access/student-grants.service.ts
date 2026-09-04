@@ -2,47 +2,66 @@ import { Injectable } from '@nestjs/common';
 import {
   AppException,
   ErrorCodes,
+  type ExamCourse,
   type GrantSeriesBody,
   STUDENT_SERIES_SOURCE,
   type StudentGrantRow,
   type StudentSeriesAccess,
   type StudentSeriesSource,
+  TEST_SERIES_KIND,
+  type TestSeriesKind,
 } from '@iace/contracts';
 import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { reachableBy } from './access-resolver.service';
+import { mirrorSwitchOntoSeries } from './series-switch';
 
-/** Mirrors `reachableBy`: program-tagged is program-ONLY, and only a grant outranks the branch. */
-export function seriesSources(
-  row: Readonly<{
+/** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
+interface ReachPairing {
+  series: Readonly<{
+    kind: TestSeriesKind;
     programCode: string | null;
-    examCode: string | null;
+    course: ExamCourse | null;
+    branchIds: readonly string[];
     granted: boolean;
-    enabledAtBranch: boolean;
-  }>,
-  student: Readonly<{ programs: readonly string[]; enrolledExams: readonly string[] }>,
-): StudentSeriesSource[] {
-  const sources: StudentSeriesSource[] = [];
-  if (
-    row.enabledAtBranch &&
-    row.programCode !== null &&
-    student.programs.includes(row.programCode)
-  ) {
-    sources.push(STUDENT_SERIES_SOURCE.PROGRAM);
-  }
-  if (
-    row.enabledAtBranch &&
-    row.programCode === null &&
-    row.examCode !== null &&
-    student.enrolledExams.includes(row.examCode)
-  ) {
-    sources.push(STUDENT_SERIES_SOURCE.EXAM);
-  }
-  if (row.granted) sources.push(STUDENT_SERIES_SOURCE.GRANT);
-  return sources;
+    isCandidate: boolean;
+  }>;
+  student: Readonly<{
+    currentBranchId: string | null;
+    programs: readonly string[];
+    enrolledCourses: readonly ExamCourse[];
+  }>;
 }
+
+/** Mirrors `reachableBy` arm for arm: a kind decides the automatic route, and a grant adds one. */
+export function seriesSources({ series, student }: ReachPairing): StudentSeriesSource[] {
+  const automatic: Partial<Record<TestSeriesKind, boolean>> = {
+    [TEST_SERIES_KIND.FREE]: true,
+    [TEST_SERIES_KIND.STANDARD]:
+      student.currentBranchId !== null &&
+      series.branchIds.includes(student.currentBranchId) &&
+      series.course !== null &&
+      student.enrolledCourses.includes(series.course),
+    [TEST_SERIES_KIND.PROGRAM]:
+      series.programCode !== null && student.programs.includes(series.programCode),
+    [TEST_SERIES_KIND.EVENT]: series.isCandidate,
+  };
+
+  return [
+    ...(automatic[series.kind] ? [SOURCE_OF_KIND[series.kind]] : []),
+    ...(series.granted ? [STUDENT_SERIES_SOURCE.GRANT] : []),
+  ];
+}
+
+/** The source a kind is reached by when its own arm matches. A grant is not a kind, so it is not here. */
+const SOURCE_OF_KIND: Readonly<Record<TestSeriesKind, StudentSeriesSource>> = {
+  [TEST_SERIES_KIND.STANDARD]: STUDENT_SERIES_SOURCE.COURSE,
+  [TEST_SERIES_KIND.FREE]: STUDENT_SERIES_SOURCE.FREE,
+  [TEST_SERIES_KIND.PROGRAM]: STUDENT_SERIES_SOURCE.PROGRAM,
+  [TEST_SERIES_KIND.EVENT]: STUDENT_SERIES_SOURCE.EVENT,
+};
 
 export const BLOCKED_GRANT_MESSAGE =
   'That student is blocked from tests. Lift the block before granting them a series.';
@@ -85,7 +104,6 @@ export class StudentGrantsService {
       select: {
         currentBranchId: true,
         programs: true,
-        enrolledExams: true,
         enrolledCourses: true,
       },
     });
@@ -96,13 +114,12 @@ export class StudentGrantsService {
       select: {
         id: true,
         name: true,
+        kind: true,
         programCode: true,
-        examStage: { select: { exam: { select: { code: true } } } },
+        branchIds: true,
+        examStage: { select: { exam: { select: { course: true } } } },
         grants: { where: { studentId }, select: { createdAt: true } },
-        branchConfigs: {
-          where: { branchId: student.currentBranchId ?? '', enabled: true },
-          select: { branchId: true },
-        },
+        event: { select: { candidates: { where: { studentId }, select: { studentId: true } } } },
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
@@ -110,15 +127,17 @@ export class StudentGrantsService {
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
-      sources: seriesSources(
-        {
+      sources: seriesSources({
+        series: {
+          kind: row.kind,
           programCode: row.programCode,
-          examCode: row.examStage?.exam.code ?? null,
+          course: row.examStage?.exam.course ?? null,
+          branchIds: row.branchIds,
           granted: row.grants.length > 0,
-          enabledAtBranch: row.branchConfigs.length > 0,
+          isCandidate: (row.event?.candidates.length ?? 0) > 0,
         },
         student,
-      ),
+      }),
       grantedAt: row.grants[0]?.createdAt.toISOString() ?? null,
     }));
   }
@@ -154,10 +173,13 @@ export class StudentGrantsService {
     });
 
     // Granting twice is not an error: the roster it came from is often re-read.
-    await this.prisma.studentGrant.upsert({
-      where: { studentId_testSeriesId: key },
-      create: { ...key, createdById },
-      update: {},
+    await this.prisma.$transaction(async (tx) => {
+      await tx.studentGrant.upsert({
+        where: { studentId_testSeriesId: key },
+        create: { ...key, createdById },
+        update: {},
+      });
+      await mirrorSwitchOntoSeries(tx, [key.testSeriesId]);
     });
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
@@ -177,9 +199,13 @@ export class StudentGrantsService {
   ): Promise<number> {
     if (studentIds.length === 0) return 0;
 
-    const { count } = await this.prisma.studentGrant.createMany({
-      data: studentIds.map((studentId) => ({ studentId, testSeriesId, createdById })),
-      skipDuplicates: true,
+    const count = await this.prisma.$transaction(async (tx) => {
+      const written = await tx.studentGrant.createMany({
+        data: studentIds.map((studentId) => ({ studentId, testSeriesId, createdById })),
+        skipDuplicates: true,
+      });
+      await mirrorSwitchOntoSeries(tx, [testSeriesId]);
+      return written.count;
     });
 
     // Per student, not one global bust: an intake must not throw away every other student's catalog.
@@ -192,7 +218,11 @@ export class StudentGrantsService {
   async revoke(studentId: string, testSeriesId: string, scope: BranchScope): Promise<void> {
     await this.requireStudent(studentId, scope);
 
-    await this.prisma.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.studentGrant.deleteMany({ where: { studentId, testSeriesId } });
+      await mirrorSwitchOntoSeries(tx, [testSeriesId]);
+    });
+
     this.auditContext.setEntityId(studentId);
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }

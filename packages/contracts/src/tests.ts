@@ -598,6 +598,11 @@ export const setSeriesTestUnlockSchema = z.object({ unlockAt: z.iso.datetime().n
 export type SetSeriesTestUnlockInput = z.input<typeof setSeriesTestUnlockSchema>;
 export type SetSeriesTestUnlockBody = z.infer<typeof setSeriesTestUnlockSchema>;
 
+/** When one program's cohort may begin, ahead of everybody else. Entry still closes together. */
+export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
+export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
+export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
+
 /** One test as ONE branch sees it. A test carried by two of its series is two rows, as a student reads it. */
 export const branchTestRowSchema = z.object({
   testId: z.string(),
@@ -696,4 +701,6 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,
   branchTiming: (id: string) => `/admin/tests/${id}/branch-timing`,
+  programUnlock: (id: string, programCode: string) =>
+    `/admin/tests/${id}/program-unlocks/${encodeURIComponent(programCode)}`,
 } as const;

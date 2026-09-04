@@ -24,6 +24,7 @@ import {
   branchTestListQuerySchema,
   setBranchTestScheduleSchema,
   setBranchTestSchedulesSchema,
+  setProgramUnlockSchema,
   setSeriesTestUnlockSchema,
   setTestStatusSchema,
   testListQuerySchema,
@@ -48,7 +49,9 @@ import {
   type SeriesTestRow,
   type SetBranchTestScheduleBody,
   type SetBranchTestSchedulesBody,
+  type SetProgramUnlockBody,
   type SetSeriesTestUnlockBody,
+  type TestProgramUnlock,
   type TestStatus,
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
@@ -189,6 +192,29 @@ export class TestsController {
   }
 
   /** The last step of the builder: freeze the paper and open it, or neither. */
+  /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Put(':id/program-unlocks/:programCode')
+  setProgramUnlock(
+    @Param('id') id: string,
+    @Param('programCode') programCode: string,
+    @Body(new ZodBody(setProgramUnlockSchema)) body: SetProgramUnlockBody,
+  ): Promise<TestProgramUnlock[]> {
+    return this.offering.setProgramUnlock(id, programCode, body);
+  }
+
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Delete(':id/program-unlocks/:programCode')
+  @HttpCode(HttpStatus.OK)
+  clearProgramUnlock(
+    @Param('id') id: string,
+    @Param('programCode') programCode: string,
+  ): Promise<TestProgramUnlock[]> {
+    return this.offering.clearProgramUnlock(id, programCode);
+  }
+
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/offer')

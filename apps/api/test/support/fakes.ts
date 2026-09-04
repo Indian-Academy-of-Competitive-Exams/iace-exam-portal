@@ -1662,6 +1662,66 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       ),
   };
 
+  /** A grant reaches PAST the branch gate, so the timing mirror asks whether any exists. */
+  readonly seriesGrants: { studentId: string; testSeriesId: string }[] = [];
+
+  readonly programCatalog: { code: string }[] = [];
+
+  readonly programUnlocks: { testId: string; programCode: string; opensAt: Date }[] = [];
+
+  readonly program = {
+    findUnique: ({ where }: { where: { code: string } }) =>
+      Promise.resolve(this.programCatalog.find((row) => row.code === where.code) ?? null),
+  };
+
+  readonly testProgramUnlock = {
+    findMany: ({ where }: { where: { testId: string } }) =>
+      Promise.resolve(
+        this.programUnlocks
+          .filter((row) => row.testId === where.testId)
+          .sort((a, b) => a.programCode.localeCompare(b.programCode)),
+      ),
+
+    upsert: ({
+      where,
+      update,
+      create,
+    }: {
+      where: { testId_programCode: { testId: string; programCode: string } };
+      update: { opensAt: Date };
+      create: { testId: string; programCode: string; opensAt: Date };
+    }) => {
+      const { testId, programCode } = where.testId_programCode;
+      const held = this.programUnlocks.find(
+        (row) => row.testId === testId && row.programCode === programCode,
+      );
+      if (held) held.opensAt = update.opensAt;
+      else this.programUnlocks.push(create);
+      return Promise.resolve(held ?? create);
+    },
+
+    deleteMany: ({ where }: { where: { testId: string; programCode: string } }) => {
+      const kept = this.programUnlocks.filter(
+        (row) => !(row.testId === where.testId && row.programCode === where.programCode),
+      );
+      const count = this.programUnlocks.length - kept.length;
+      this.programUnlocks.length = 0;
+      this.programUnlocks.push(...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
+  readonly studentGrant = {
+    count: ({ where }: { where: { testSeries: { tests: { some: { testId: string } } } } }) => {
+      const held = new Set(
+        this.seriesTests
+          .filter((row) => row.testId === where.testSeries.tests.some.testId)
+          .map((row) => row.testSeriesId),
+      );
+      return Promise.resolve(this.seriesGrants.filter((row) => held.has(row.testSeriesId)).length);
+    },
+  };
+
   readonly branchTestSchedule = {
     findMany: ({ where }: { where: { testId: string } }) =>
       Promise.resolve(this.branchSchedules.filter((row) => row.testId === where.testId)),
@@ -3585,7 +3645,11 @@ export class FakeAccessPrisma {
     findMany: ({
       where = {},
     }: {
-      where?: { branchId?: string | { in: string[] }; testSeriesId?: string | { in: string[] } };
+      where?: {
+        branchId?: string | { in: string[] };
+        testSeriesId?: string | { in: string[] };
+        enabled?: boolean;
+      };
     } = {}) =>
       Promise.resolve(
         this.branchConfigs
@@ -3593,7 +3657,8 @@ export class FakeAccessPrisma {
           .filter(
             (config) =>
               matchesKey(config.branchId, where.branchId) &&
-              matchesKey(config.testSeriesId, where.testSeriesId),
+              matchesKey(config.testSeriesId, where.testSeriesId) &&
+              (where.enabled === undefined || config.enabled === where.enabled),
           )
           .map((config) => ({
             ...config,
@@ -3695,10 +3760,18 @@ export class FakeAccessPrisma {
       return Promise.resolve(row ? { testSeriesId: row.testSeriesId } : null);
     },
 
-    findMany: ({ where }: { where: { studentId: string } }) =>
+    findMany: ({
+      where,
+    }: {
+      where: { studentId?: string; testSeriesId?: string | { in: string[] } };
+    }) =>
       Promise.resolve(
         this.grants
-          .filter((grant) => grant.studentId === where.studentId)
+          .filter(
+            (grant) =>
+              (where.studentId === undefined || grant.studentId === where.studentId) &&
+              matchesKey(grant.testSeriesId, where.testSeriesId),
+          )
           .map((grant) => ({
             ...grant,
             testSeries: this.seriesRef(grant.testSeriesId),

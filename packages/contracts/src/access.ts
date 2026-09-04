@@ -157,6 +157,13 @@ export const eventCandidateSchema = z.object({
 });
 export type EventCandidate = z.infer<typeof eventCandidateSchema>;
 
+/** A whole roster in one write. Re-importing the same sheet adds nobody twice. */
+export const addEventCandidatesSchema = z.object({
+  studentIds: z.array(z.string().min(1)).min(1, 'Choose at least one student'),
+});
+export type AddEventCandidatesInput = z.input<typeof addEventCandidatesSchema>;
+export type AddEventCandidatesBody = z.infer<typeof addEventCandidatesSchema>;
+
 /** The unit of offering. A test reaches a student only through one of these. */
 export const testSeriesSchema = z.object({
   id: z.string(),
@@ -273,8 +280,10 @@ export type StudentGrantRow = z.infer<typeof studentGrantRowSchema>;
 
 /** Why a student reaches a series. A grant can sit beside an automatic one, so a row carries a set. */
 export const STUDENT_SERIES_SOURCE = {
-  EXAM: 'EXAM',
+  COURSE: 'COURSE',
   PROGRAM: 'PROGRAM',
+  FREE: 'FREE',
+  EVENT: 'EVENT',
   GRANT: 'GRANT',
 } as const;
 export const studentSeriesSourceSchema = z.enum(STUDENT_SERIES_SOURCE);
@@ -592,6 +601,7 @@ export const EVENT_ROUTES = {
   update: (id: string) => `/admin/events/${id}`,
   remove: (id: string) => `/admin/events/${id}`,
   candidates: (id: string) => `/admin/events/${id}/candidates`,
+  addCandidates: (id: string) => `/admin/events/${id}/candidates`,
   removeCandidate: (id: string, studentId: string) => `/admin/events/${id}/candidates/${studentId}`,
 } as const;
 

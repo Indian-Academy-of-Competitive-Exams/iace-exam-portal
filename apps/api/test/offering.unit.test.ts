@@ -347,6 +347,18 @@ describe('OfferingService — a series and the tests it holds', () => {
     assert.equal(rows[0]?.unlockAt, null);
   });
 
+  /** The resolver reads `Test.opensAt`, so a time only the join row holds opens nothing. */
+  it('writes the test its own opensAt when a series unlock time is set', async () => {
+    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [link('srs_1')]);
+
+    await service.setUnlock('srs_1', 'tst_1', { unlockAt: OPENS_AT.toISOString() });
+    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
+
+    await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
+
+    assert.equal(prisma.tests[0]?.opensAt, null);
+  });
+
   it('takes a test nobody has sat back out of a series', async () => {
     const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [
       link('srs_1'),
@@ -419,56 +431,57 @@ describe('OfferingService — a series and the tests it holds', () => {
   });
 });
 
-describe('OfferingService — what a branch does differently for one test', () => {
-  const timingService = (
-    branchSchedules: {
-      branchId: string;
-      testId: string;
-      lateEntrySec: number | null;
-      extraTimeSec: number | null;
-    }[] = [],
-  ) => {
-    const prisma = new FakeTestsPrisma(
-      [makeTest({ id: 'tst_1' })],
-      [makeBaseConfig({ id: 'cfg_1' })],
-      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
-      [],
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-      [],
-      [],
-      [makeSeries({ id: 'srs_1' })],
-      [],
-      [],
-      [],
-      [
-        {
-          id: 'btc_1',
-          branchId: 'br_1',
-          testSeriesId: 'srs_1',
-          enabled: true,
-          createdAt: new Date(),
-        },
-        {
-          id: 'btc_2',
-          branchId: 'br_2',
-          testSeriesId: 'srs_1',
-          enabled: false,
-          createdAt: new Date(),
-        },
-      ],
-      branchSchedules,
-      [makeBranch({ id: 'br_1', name: 'AMEERPET' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
-    );
-    return {
-      prisma,
-      service: new OfferingService(
-        prisma.asService(),
-        new FakeEventBus().asService(),
-        new AuditContext(),
-      ),
-    };
+/** One test in one series, run at br_1 and switched off at br_2. */
+const timingService = (
+  branchSchedules: {
+    branchId: string;
+    testId: string;
+    lateEntrySec: number | null;
+    extraTimeSec: number | null;
+  }[] = [],
+) => {
+  const prisma = new FakeTestsPrisma(
+    [makeTest({ id: 'tst_1' })],
+    [makeBaseConfig({ id: 'cfg_1' })],
+    [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
+    [],
+    [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+    [],
+    [],
+    [makeSeries({ id: 'srs_1' })],
+    [],
+    [],
+    [],
+    [
+      {
+        id: 'btc_1',
+        branchId: 'br_1',
+        testSeriesId: 'srs_1',
+        enabled: true,
+        createdAt: new Date(),
+      },
+      {
+        id: 'btc_2',
+        branchId: 'br_2',
+        testSeriesId: 'srs_1',
+        enabled: false,
+        createdAt: new Date(),
+      },
+    ],
+    branchSchedules,
+    [makeBranch({ id: 'br_1', name: 'AMEERPET' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
+  );
+  return {
+    prisma,
+    service: new OfferingService(
+      prisma.asService(),
+      new FakeEventBus().asService(),
+      new AuditContext(),
+    ),
   };
+};
 
+describe('OfferingService — what a branch does differently for one test', () => {
   it('lists only the branches that actually reach the test', async () => {
     const { service } = timingService();
 
@@ -516,6 +529,139 @@ describe('OfferingService — what a branch does differently for one test', () =
 
     assert.equal(prisma.branchSchedules.length, 1);
     assert.equal(prisma.branchSchedules[0]?.lateEntrySec, 600);
+  });
+});
+
+describe('OfferingService — the test carries the clock the branches still set', () => {
+  it('takes the largest extra time any branch gives, because a null gives none', async () => {
+    const { service, prisma } = timingService();
+
+    await service.setBranchTiming('tst_1', {
+      branches: [
+        { branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: 600 },
+        { branchId: 'br_2', lateEntrySec: 1200, extraTimeSec: null },
+      ],
+    });
+
+    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
+  });
+
+  /** br_2 is switched off, so only br_1 reaches the test and only br_1's cap has to be honoured. */
+  it('caps late entry at the largest cap when every branch that reaches it has one', async () => {
+    const { service, prisma } = timingService();
+
+    await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
+    });
+
+    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
+  });
+
+  /** Null is NO CAP, so the branch with no row is exactly who max() would shut out. */
+  it('leaves the test uncapped when a branch that reaches it caps nothing', async () => {
+    const { service, prisma } = timingService();
+    prisma.branchConfigRows.push(
+      makeBranchConfig({ id: 'btc_3', branchId: 'br_2', testSeriesId: 'srs_1', enabled: true }),
+    );
+
+    await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
+    });
+
+    assert.equal(prisma.tests[0]?.lateEntrySec, null);
+  });
+
+  it('leaves the test uncapped while a grant reaches past the branches entirely', async () => {
+    const { service, prisma } = timingService();
+    prisma.seriesGrants.push({ studentId: 'stu_1', testSeriesId: 'srs_1' });
+
+    await service.setBranchTiming('tst_1', {
+      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
+    });
+
+    assert.equal(prisma.tests[0]?.lateEntrySec, null);
+  });
+});
+
+describe('OfferingService — a program opens a test earlier, never later', () => {
+  const EARLIER = new Date(OPENS_AT.getTime() - 3_600_000);
+
+  const unlockService = (opensAt: Date | null = OPENS_AT) => {
+    const prisma = new FakeTestsPrisma(
+      [makeTest({ id: 'tst_1', opensAt })],
+      [makeBaseConfig({ id: 'cfg_1' })],
+      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
+      [],
+      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+    );
+    prisma.series.push(makeSeries({ id: 'srs_1' }));
+    prisma.programCatalog.push({ code: 'FOUNDATION' });
+    return {
+      prisma,
+      service: new OfferingService(
+        prisma.asService(),
+        new FakeEventBus().asService(),
+        new AuditContext(),
+      ),
+    };
+  };
+
+  it('stores an unlock that opens the test earlier for one program', async () => {
+    const { service, prisma } = unlockService();
+
+    const rows = await service.setProgramUnlock('tst_1', 'FOUNDATION', {
+      opensAt: EARLIER.toISOString(),
+    });
+
+    assert.deepEqual(rows, [{ programCode: 'FOUNDATION', opensAt: EARLIER.toISOString() }]);
+    assert.equal(prisma.programUnlocks.length, 1);
+  });
+
+  /** Entry closes at one instant for everyone, so a later opening only shortens this cohort's window. */
+  it('refuses a program unlock later than the test opens', async () => {
+    const { service, prisma } = unlockService();
+    const later = new Date(OPENS_AT.getTime() + 1000).toISOString();
+
+    const error = await service
+      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: later })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.opensAt);
+    assert.equal(prisma.programUnlocks.length, 0);
+  });
+
+  it('refuses one on a test that has no opening time of its own to be earlier than', async () => {
+    const { service } = unlockService(null);
+
+    const error = await service
+      .setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+
+  it('refuses a program the catalog does not hold', async () => {
+    const { service } = unlockService();
+
+    const error = await service
+      .setProgramUnlock('tst_1', 'NO SUCH PROGRAM', { opensAt: EARLIER.toISOString() })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  it('takes the unlock back, leaving the cohort with the test’s own opening', async () => {
+    const { service, prisma } = unlockService();
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
+
+    const rows = await service.clearProgramUnlock('tst_1', 'FOUNDATION');
+
+    assert.deepEqual(rows, []);
+    assert.equal(prisma.programUnlocks.length, 0);
   });
 });
 

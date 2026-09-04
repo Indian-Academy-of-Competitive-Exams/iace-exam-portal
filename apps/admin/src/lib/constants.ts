@@ -193,8 +193,10 @@ export const SELECTABLE_TEST_SERIES_KINDS = [
 
 /** What opens a series for a student, in the words an admin would use for it. */
 export const SERIES_SOURCE_LABELS: Readonly<Record<StudentSeriesSource, string>> = {
-  EXAM: 'Exam enrolment',
+  COURSE: 'Course, at this branch',
   PROGRAM: 'Program',
+  FREE: 'Free to everyone',
+  EVENT: 'Event candidate',
   GRANT: 'Granted directly',
 };
 

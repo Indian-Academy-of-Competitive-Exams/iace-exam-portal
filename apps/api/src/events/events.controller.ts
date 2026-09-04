@@ -12,11 +12,13 @@ import {
 } from '@nestjs/common';
 import {
   ActorTypes,
+  addEventCandidatesSchema,
   createEventSchema,
   eventListQuerySchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   updateEventSchema,
+  type AddEventCandidatesBody,
   type CreateEventBody,
   type Event,
   type EventCandidate,
@@ -74,6 +76,17 @@ export class EventsController {
   @Get(':id/candidates')
   candidates(@Param('id') id: string): Promise<EventCandidate[]> {
     return this.events.candidates(id);
+  }
+
+  /** A whole roster in one write — the import screen's commit, not a row at a time. */
+  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/candidates')
+  @HttpCode(HttpStatus.OK)
+  addCandidates(
+    @Param('id') id: string,
+    @Body(new ZodBody(addEventCandidatesSchema)) body: AddEventCandidatesBody,
+  ): Promise<EventCandidate[]> {
+    return this.events.addCandidates(id, body.studentIds);
   }
 
   @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)

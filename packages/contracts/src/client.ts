@@ -115,6 +115,7 @@ import {
   type BranchTestScheduleRow,
   type SetBranchSeriesInput,
   type SetBranchTestSchedulesInput,
+  type AddEventCandidatesInput,
   type CreateEventInput,
   type CreateProgramInput,
   type CreateTestSeriesInput,
@@ -214,6 +215,7 @@ import {
   branchTestRowSchema,
   branchTestScheduleSchema,
   seriesTestRowSchema,
+  testProgramUnlockSchema,
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
@@ -221,6 +223,7 @@ import {
   type CreateTestInput,
   type FinalizeResult,
   type SetPaperQuestionStatusInput,
+  type SetProgramUnlockInput,
   type SetTestSeriesInput,
   type SetTestStatusInput,
   type Test,
@@ -234,6 +237,7 @@ import {
   type SeriesTestRow,
   type SetBranchTestScheduleInput,
   type SetSeriesTestUnlockInput,
+  type TestProgramUnlock,
   type TestSeriesLink,
   type TestStatus,
   type UpdateTestInput,
@@ -1053,6 +1057,13 @@ export function createApiClient(options: ApiClientOptions) {
         candidates: (id: string): Promise<EventCandidate[]> =>
           request(EVENT_ROUTES.candidates(id), { schema: eventCandidateSchema.array() }),
 
+        addCandidates: (id: string, input: AddEventCandidatesInput): Promise<EventCandidate[]> =>
+          request(EVENT_ROUTES.addCandidates(id), {
+            method: 'POST',
+            body: input,
+            schema: eventCandidateSchema.array(),
+          }),
+
         removeCandidate: (id: string, studentId: string): Promise<NoContent> =>
           request(EVENT_ROUTES.removeCandidate(id, studentId), {
             method: 'DELETE',
@@ -1324,6 +1335,24 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'PATCH',
             body: input,
             schema: testStatusSchema,
+          }),
+
+        /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
+        setProgramUnlock: (
+          id: string,
+          programCode: string,
+          input: SetProgramUnlockInput,
+        ): Promise<TestProgramUnlock[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode), {
+            method: 'PUT',
+            body: input,
+            schema: testProgramUnlockSchema.array(),
+          }),
+
+        clearProgramUnlock: (id: string, programCode: string): Promise<TestProgramUnlock[]> =>
+          request(ADMIN_TEST_PAPER_ROUTES.programUnlock(id, programCode), {
+            method: 'DELETE',
+            schema: testProgramUnlockSchema.array(),
           }),
       },
 

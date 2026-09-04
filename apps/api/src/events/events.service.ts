@@ -131,6 +131,8 @@ export class EventsService {
   }
 
   async removeCandidate(id: string, studentId: string): Promise<void> {
+    await this.requireEvent(id);
+
     await this.prisma.eventCandidate.deleteMany({ where: { eventId: id, studentId } });
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
   }

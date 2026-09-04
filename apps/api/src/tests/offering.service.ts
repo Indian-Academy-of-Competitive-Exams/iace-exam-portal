@@ -14,20 +14,23 @@ import {
   type SetBranchTestSchedulesBody,
   type SeriesTestRow,
   type SetSeriesTestUnlockBody,
+  type SetProgramUnlockBody,
   type SetTestSeriesBody,
+  type TestProgramUnlock,
   type TestSeriesLink,
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
-import { activationBlocker } from './test-rules';
+import { activationBlocker, collapsedLateEntry, highestOrNull } from './test-rules';
 
 const OFFERING_SELECT = {
   id: true,
   status: true,
   isLocked: true,
   examStageId: true,
+  opensAt: true,
   _count: { select: { series: true, attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
@@ -46,6 +49,22 @@ function partitionBySet(
 }
 
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
+
+const OPENS_BEFORE_THE_TEST_DOES =
+  'A program opens a test earlier, never later — entry closes at the same instant for everyone, so a later opening would only shorten this cohort’s window.';
+
+const TEST_HAS_NO_OPENING =
+  'This test has no opening time of its own, so it is already open. Give the test an opening time before letting a program in ahead of it.';
+
+/** No constraint can carry this: it compares a row on one table with a column on another. */
+function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date): void {
+  if (testOpensAt !== null && opensAt <= testOpensAt) return;
+
+  const message = testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+    fieldErrors: { opensAt: [message] },
+  });
+}
 
 interface SeriesPosition {
   testSeriesId: string;
@@ -126,6 +145,7 @@ export class OfferingService {
         });
       }
       await this.mirrorSeriesOntoTest(tx, testId);
+      await this.mirrorTimingOntoTest(tx, testId);
       return new Set([
         ...before.map((row) => row.testSeriesId),
         ...wanted.map((row) => row.testSeriesId),
@@ -247,9 +267,12 @@ export class OfferingService {
   ): Promise<SeriesTestRow[]> {
     await this.requireLink(testSeriesId, testId);
 
-    await this.prisma.testSeriesTest.update({
-      where: { testSeriesId_testId: { testSeriesId, testId } },
-      data: { unlockAt: dateOrNull(input.unlockAt) },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.testSeriesTest.update({
+        where: { testSeriesId_testId: { testSeriesId, testId } },
+        data: { unlockAt: dateOrNull(input.unlockAt) },
+      });
+      await this.mirrorSeriesOntoTest(tx, testId);
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
@@ -267,22 +290,27 @@ export class OfferingService {
         where: { testSeriesId_testId: { testSeriesId, testId } },
       });
       await this.mirrorSeriesOntoTest(tx, testId);
+      await this.mirrorTimingOntoTest(tx, testId);
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
   }
 
-  /** The join table still writes; the RESTRICT column reads. It follows, or it strands a series. */
+  /** The join table still writes; the columns the resolver reads follow, or the two disagree. */
   private async mirrorSeriesOntoTest(tx: Prisma.TransactionClient, testId: string): Promise<void> {
     const held = await tx.testSeriesTest.findMany({
       where: { testId },
-      select: { testSeriesId: true, order: true },
+      select: { testSeriesId: true, order: true, unlockAt: true },
     });
     const first = [...held].sort(byPosition)[0];
     await tx.test.update({
       where: { id: testId },
-      data: { testSeriesId: first?.testSeriesId ?? null, seriesOrder: first?.order ?? null },
+      data: {
+        testSeriesId: first?.testSeriesId ?? null,
+        seriesOrder: first?.order ?? null,
+        opensAt: first?.unlockAt ?? null,
+      },
     });
   }
 
@@ -290,15 +318,7 @@ export class OfferingService {
   async branchTiming(testId: string): Promise<BranchTestScheduleRow[]> {
     await this.requireTest(testId);
 
-    const links = await this.prisma.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true },
-    });
-    const configs = await this.prisma.branchTestConfig.findMany({
-      where: { enabled: true, testSeriesId: { in: links.map((row) => row.testSeriesId) } },
-      select: { branch: { select: { id: true, name: true } } },
-      orderBy: { branch: { name: 'asc' } },
-    });
+    const configs = await this.branchesReaching(this.prisma, testId);
     const held = await this.prisma.branchTestSchedule.findMany({ where: { testId } });
     const byBranch = new Map(held.map((row) => [row.branchId, row]));
 
@@ -362,6 +382,55 @@ export class OfferingService {
     return { items: rows.map(toBranchTestRow), page: query.page, pageSize: query.pageSize, total };
   }
 
+  /** Which programs open this test ahead of everyone else, and when. */
+  private async programUnlocks(testId: string): Promise<TestProgramUnlock[]> {
+    const rows = await this.prisma.testProgramUnlock.findMany({
+      where: { testId },
+      orderBy: [{ programCode: 'asc' }],
+    });
+    return rows.map((row) => ({
+      programCode: row.programCode,
+      opensAt: row.opensAt.toISOString(),
+    }));
+  }
+
+  /** A program opens a test EARLIER. Later would narrow its cohort — the closing time is shared. */
+  async setProgramUnlock(
+    testId: string,
+    programCode: string,
+    input: SetProgramUnlockBody,
+  ): Promise<TestProgramUnlock[]> {
+    const test = await this.requireTest(testId);
+    await this.requireProgram(programCode);
+    const opensAt = new Date(input.opensAt);
+    assertOpensNoLaterThanTheTest(test.opensAt, opensAt);
+
+    await this.prisma.testProgramUnlock.upsert({
+      where: { testId_programCode: { testId, programCode } },
+      update: { opensAt },
+      create: { testId, programCode, opensAt },
+    });
+
+    await this.announceTest(testId);
+    return this.programUnlocks(testId);
+  }
+
+  async clearProgramUnlock(testId: string, programCode: string): Promise<TestProgramUnlock[]> {
+    await this.requireTest(testId);
+
+    await this.prisma.testProgramUnlock.deleteMany({ where: { testId, programCode } });
+    await this.announceTest(testId);
+    return this.programUnlocks(testId);
+  }
+
+  private async requireProgram(programCode: string): Promise<void> {
+    const program = await this.prisma.program.findUnique({
+      where: { code: programCode },
+      select: { code: true },
+    });
+    if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');
+  }
+
   /** One branch's timing on one test. Both fields null deletes the row rather than storing them. */
   async setBranchSchedule(
     branchId: string,
@@ -372,20 +441,20 @@ export class OfferingService {
     await this.requireTestAtBranch(branchId, testId);
 
     const cleared = input.lateEntrySec === null && input.extraTimeSec === null;
-    if (cleared) {
-      await this.prisma.branchTestSchedule.deleteMany({ where: { branchId, testId } });
-    } else {
-      await this.prisma.branchTestSchedule.upsert({
-        where: { branchId_testId: { branchId, testId } },
-        update: input,
-        create: { ...input, branchId, testId },
-      });
-    }
+    await this.prisma.$transaction(async (tx) => {
+      if (cleared) {
+        await tx.branchTestSchedule.deleteMany({ where: { branchId, testId } });
+      } else {
+        await tx.branchTestSchedule.upsert({
+          where: { branchId_testId: { branchId, testId } },
+          update: input,
+          create: { ...input, branchId, testId },
+        });
+      }
+      await this.mirrorTimingOntoTest(tx, testId);
+    });
 
-    this.auditContext.setEntityId(testId);
-    for (const testSeriesId of await this.seriesIdsOf(testId)) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-    }
+    await this.announceTest(testId);
     return { testId, ...input };
   }
 
@@ -427,20 +496,67 @@ export class OfferingService {
           create: { ...values, testId, branchId: row.branchId },
         });
       }
+      await this.mirrorTimingOntoTest(tx, testId);
     });
 
-    for (const testSeriesId of await this.seriesIdsOf(testId)) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-    }
+    await this.announceTest(testId);
     return this.branchTiming(testId);
   }
 
-  private async seriesIdsOf(testId: string): Promise<string[]> {
+  /** The branches that reach this test, in name order — every enabled config on a series it is in. */
+  private async branchesReaching(
+    tx: Prisma.TransactionClient,
+    testId: string,
+  ): Promise<{ branch: { id: string; name: string } }[]> {
+    const links = await tx.testSeriesTest.findMany({
+      where: { testId },
+      select: { testSeriesId: true },
+    });
+    return tx.branchTestConfig.findMany({
+      where: { enabled: true, testSeriesId: { in: links.map((row) => row.testSeriesId) } },
+      select: { branch: { select: { id: true, name: true } } },
+      orderBy: { branch: { name: 'asc' } },
+    });
+  }
+
+  /** The per-branch rows still hold the timings; the test's own columns are collapsed from them. */
+  private async mirrorTimingOntoTest(tx: Prisma.TransactionClient, testId: string): Promise<void> {
+    const rows = await tx.branchTestSchedule.findMany({
+      where: { testId },
+      select: { branchId: true, lateEntrySec: true, extraTimeSec: true },
+    });
+    const capped = new Set(
+      rows.filter((row) => row.lateEntrySec !== null).map((row) => row.branchId),
+    );
+    const reaching = await this.branchesReaching(tx, testId);
+    // A grant reaches past the branch gate, so a granted student's branch may cap nothing at all.
+    const granted = await tx.studentGrant.count({
+      where: { testSeries: { tests: { some: { testId } } } },
+    });
+    const uncapped = granted > 0 || reaching.some(({ branch }) => !capped.has(branch.id));
+
+    await tx.test.update({
+      where: { id: testId },
+      data: {
+        lateEntrySec: collapsedLateEntry(
+          rows.map((row) => row.lateEntrySec),
+          uncapped,
+        ),
+        extraTimeSec: highestOrNull(rows.map((row) => row.extraTimeSec)),
+      },
+    });
+  }
+
+  /** Filed against the test, and every series carrying it loses its cached catalog. */
+  private async announceTest(testId: string): Promise<void> {
+    this.auditContext.setEntityId(testId);
     const links = await this.prisma.testSeriesTest.findMany({
       where: { testId },
       select: { testSeriesId: true },
     });
-    return links.map((row) => row.testSeriesId);
+    for (const link of links) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    }
   }
 
   private async requireLink(testSeriesId: string, testId: string): Promise<void> {

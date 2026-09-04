@@ -25,6 +25,7 @@ import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
+import { mirrorSwitchOntoSeries } from './series-switch';
 
 const FREE_WAITS_ON_NOTHING_MESSAGE =
   'A free series is offered to every enrolled student, so it cannot wait on another series. Clear the prerequisite, or make this a standard series.';
@@ -137,7 +138,7 @@ export class TestSeriesService {
       this.prisma.testSeries.count({ where }),
     ]);
 
-    const branchCounts = await this.branchCountsFor(rows.map((row) => row.id));
+    const branchCounts = await this.branchRowsFor(rows.map((row) => row.id));
 
     return {
       items: rows.map((row) => toSummary(row, branchCounts.get(row.id))),
@@ -149,7 +150,7 @@ export class TestSeriesService {
 
   async detail(id: string): Promise<TestSeriesSummary> {
     const row = await this.requireSeries(id);
-    const counts = await this.branchCountsFor([id]);
+    const counts = await this.branchRowsFor([id]);
     return toSummary(row, counts.get(id));
   }
 
@@ -168,7 +169,6 @@ export class TestSeriesService {
       programCode: input.programCode ?? null,
       eventId: null,
       branchIds: [],
-      enabledBranches: 0,
     });
 
     const id = await this.prisma.$transaction(async (tx) => {
@@ -190,6 +190,7 @@ export class TestSeriesService {
         })),
       });
 
+      await mirrorSwitchOntoSeries(tx, [series.id]);
       return series.id;
     });
 
@@ -213,27 +214,25 @@ export class TestSeriesService {
         : (input.prerequisiteSeriesId ?? null),
     );
     // Against what the row WILL hold: eventId and branchIds are not writable, so they are its own.
-    const counts = await this.branchCountsFor([id]);
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
       examStageId: settledValue(input.examStageId, series.examStageId),
       programCode: settledValue(input.programCode, series.programCode),
       eventId: series.eventId,
       branchIds: series.branchIds,
-      enabledBranches: counts.get(id)?.enabled ?? 0,
     });
 
-    const changes = columnsOf(input);
-    const updated = await this.prisma.testSeries.update({
-      where: { id },
-      data: changes,
-      include: SERIES_INCLUDE,
+    // The switch follows the kind: only STANDARD is gated by a branch, so a kind change moves it.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.testSeries.update({ where: { id }, data: columnsOf(input) });
+      await mirrorSwitchOntoSeries(tx, [id]);
     });
 
+    const updated = await this.requireSeries(id);
     this.auditContext.setChanged(fieldDiff(series, updated, AUDITED_SERIES_FIELDS));
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
 
-    return toSummary(updated, counts.get(id));
+    return toSummary(updated, (await this.branchRowsFor([id])).get(id));
   }
 
   async remove(id: string): Promise<void> {
@@ -340,24 +339,17 @@ export class TestSeriesService {
 
     // By VALUE, not by diff: two statements, and a row flipped since the read still lands right.
     const [on, off] = partitionWanted(wanted);
-    await this.prisma.$transaction([
-      ...(on.length > 0
-        ? [
-            this.prisma.branchTestConfig.updateMany({
-              where: { branchId, testSeriesId: { in: on } },
-              data: { enabled: true },
-            }),
-          ]
-        : []),
-      ...(off.length > 0
-        ? [
-            this.prisma.branchTestConfig.updateMany({
-              where: { branchId, testSeriesId: { in: off } },
-              data: { enabled: false },
-            }),
-          ]
-        : []),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.branchTestConfig.updateMany({
+        where: { branchId, testSeriesId: { in: on } },
+        data: { enabled: true },
+      });
+      await tx.branchTestConfig.updateMany({
+        where: { branchId, testSeriesId: { in: off } },
+        data: { enabled: false },
+      });
+      await mirrorSwitchOntoSeries(tx, named);
+    });
 
     // A row that was missing read as OFF on the screen, so that is what it moved FROM.
     const moved = named.filter((id) => wanted.get(id) !== (held.get(id) ?? false));
@@ -430,9 +422,12 @@ export class TestSeriesService {
     await this.requireSeries(id);
     if (input.enabled === undefined) return this.branchConfigs(id, scope);
 
-    await this.prisma.branchTestConfig.updateMany({
-      where: { testSeriesId: id },
-      data: { enabled: input.enabled },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.branchTestConfig.updateMany({
+        where: { testSeriesId: id },
+        data: { enabled: input.enabled },
+      });
+      await mirrorSwitchOntoSeries(tx, [id]);
     });
 
     this.auditContext.setEntityId(id);
@@ -455,10 +450,14 @@ export class TestSeriesService {
       throw new AppException(ErrorCodes.NOT_FOUND, 'That branch has no row for this series');
     }
 
-    const row = await this.prisma.branchTestConfig.update({
-      where: { id: existing.id },
-      data: { ...(input.enabled === undefined ? {} : { enabled: input.enabled }) },
-      include: { branch: { select: { id: true, name: true } } },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const config = await tx.branchTestConfig.update({
+        where: { id: existing.id },
+        data: { ...(input.enabled === undefined ? {} : { enabled: input.enabled }) },
+        include: { branch: { select: { id: true, name: true } } },
+      });
+      await mirrorSwitchOntoSeries(tx, [id]);
+      return config;
     });
 
     this.auditContext.setEntityId(id);
@@ -508,25 +507,17 @@ export class TestSeriesService {
     return series;
   }
 
-  /** How many branches run each series, out of how many have a row — one query for the page. */
-  private async branchCountsFor(
-    seriesIds: string[],
-  ): Promise<Map<string, { enabled: number; total: number }>> {
-    const counts = new Map<string, { enabled: number; total: number }>();
+  /** How many branches each series has a row for — how many RUN it is `branchIds`, on the row itself. */
+  private async branchRowsFor(seriesIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
     if (seriesIds.length === 0) return counts;
 
     const rows = await this.prisma.branchTestConfig.findMany({
       where: { testSeriesId: { in: seriesIds } },
-      select: { testSeriesId: true, enabled: true },
+      select: { testSeriesId: true },
     });
 
-    for (const row of rows) {
-      const current = counts.get(row.testSeriesId) ?? { enabled: 0, total: 0 };
-      counts.set(row.testSeriesId, {
-        enabled: current.enabled + (row.enabled ? 1 : 0),
-        total: current.total + 1,
-      });
-    }
+    for (const row of rows) counts.set(row.testSeriesId, (counts.get(row.testSeriesId) ?? 0) + 1);
     return counts;
   }
 }
@@ -538,7 +529,6 @@ interface SeriesPairing {
   programCode: string | null;
   eventId: string | null;
   branchIds: readonly string[];
-  enabledBranches: number;
 }
 
 /** An absent key keeps what the column holds; an explicit null clears it. */
@@ -565,9 +555,8 @@ function kindPairingErrors(shape: SeriesPairing): Record<string, string[]> {
   if (!isEvent && shape.eventId !== null)
     found.push(['kind', KIND_PAIRING_MESSAGES.EVENT_IS_ITS_OWN_KIND]);
 
-  // The CHECK is on the list, so that is what refuses; the count is what the sentence says.
   if (shape.kind !== TEST_SERIES_KIND.STANDARD && shape.branchIds.length > 0)
-    found.push(['kind', branchesAreStandardOnly(shape.enabledBranches)]);
+    found.push(['kind', branchesAreStandardOnly(shape.branchIds.length)]);
 
   const errors: Record<string, string[]> = {};
   for (const [field, message] of found) errors[field] = [...(errors[field] ?? []), message];
@@ -590,10 +579,7 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 
-function toSummary(
-  row: SeriesRow,
-  branches: { enabled: number; total: number } | undefined,
-): TestSeriesSummary {
+function toSummary(row: SeriesRow, branchCount: number | undefined): TestSeriesSummary {
   return {
     id: row.id,
     name: row.name,
@@ -612,8 +598,8 @@ function toSummary(
     isEnabled: row.isEnabled,
     eventId: row.eventId,
     testCount: row._count.tests,
-    enabledBranchCount: branches?.enabled ?? 0,
-    branchCount: branches?.total ?? 0,
+    enabledBranchCount: row.branchIds.length,
+    branchCount: branchCount ?? 0,
     createdAt: row.createdAt.toISOString(),
   };
 }

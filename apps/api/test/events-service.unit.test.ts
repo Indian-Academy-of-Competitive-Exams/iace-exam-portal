@@ -111,4 +111,15 @@ describe('EventsService — candidates', () => {
     assert.equal(prisma.candidateRows.length, 0);
     assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 1);
   });
+
+  /** A no-op on a missing PAIRING is right; a 200 and a bust for an event that never existed is not. */
+  it('reads a removal from an event that is not there as missing, and rings no bell', async () => {
+    const { service, eventBus } = serviceWith([makeEvent({ id: 'evt_1' })]);
+
+    const error = await service.removeCandidate('evt_gone', 'stu_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+    assert.equal(eventBus.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED).length, 0);
+  });
 });

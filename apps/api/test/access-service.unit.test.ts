@@ -113,6 +113,57 @@ describe('TestSeriesService — the branch fan-out', () => {
     );
   });
 
+  /** The switch the resolver reads is the switch this write moves, or an admin turns nothing on. */
+  it('keeps branchIds and the switch in step when a branch is switched on', async () => {
+    const { series, prisma } = build({
+      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
+    });
+    const created = await series.create(draft());
+    assert.deepEqual(prisma.series[0]?.branchIds, []);
+    assert.equal(prisma.series[0]?.isEnabled, false);
+
+    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
+
+    assert.deepEqual(prisma.series[0]?.branchIds, ['br_1']);
+    assert.equal(prisma.series[0]?.isEnabled, true);
+  });
+
+  it('switches a series off when its last branch is switched off', async () => {
+    const { series, prisma } = build({
+      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
+    });
+    const created = await series.create(draft());
+    await series.updateEveryBranchConfig(created.id, { enabled: true }, EVERY_BRANCH);
+
+    await series.setSeriesForBranch('br_1', {
+      changes: [{ testSeriesId: created.id, enabled: false }],
+    });
+    assert.deepEqual(prisma.series[0]?.branchIds, ['br_2'], 'one branch off is not the last one');
+
+    await series.setSeriesForBranch('br_2', {
+      changes: [{ testSeriesId: created.id, enabled: false }],
+    });
+
+    assert.deepEqual(prisma.series[0]?.branchIds, []);
+    assert.equal(prisma.series[0]?.isEnabled, false);
+  });
+
+  /** A grant reaches PAST the branch gate, so it must not be shut out by an empty branch list. */
+  it('keeps a series switched on for a grant made where no branch runs it', async () => {
+    const { series, grants, prisma } = build({
+      branches: [makeBranch({ id: 'br_1' })],
+      students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
+    });
+    const created = await series.create(draft());
+
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+    assert.equal(prisma.series[0]?.isEnabled, true);
+
+    await grants.revoke('stu_1', created.id, EVERY_BRANCH);
+
+    assert.equal(prisma.series[0]?.isEnabled, false);
+  });
+
   /** Only this series: the switch is per series, and every other one keeps the state it had. */
   it('leaves another series alone', async () => {
     const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1', name: 'AMEERPET' })] });
@@ -439,22 +490,26 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     assert.match(error.fieldErrors?.kind?.[0] ?? '', /2 branches/);
   });
 
-  /** Switching every branch off is how a series stops being offered, and it never touches branchIds. */
-  it('counts the branches switched on today, not the ones the list still names', async () => {
-    const { series } = build({
-      series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
+  /** The count and the list are the same fact now, so switching the branches off clears the refusal. */
+  it('lets the kind change once the branches it named are switched off', async () => {
+    const { series, prisma } = build({
+      series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'], isEnabled: true })],
+      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
       branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: false }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: false }),
+        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: true }),
+        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: true }),
       ],
     });
 
-    const error = await series
-      .update('srs_1', { kind: TEST_SERIES_KIND.FREE })
-      .catch((e: unknown) => e);
+    await series.updateEveryBranchConfig('srs_1', { enabled: false }, EVERY_BRANCH);
+    assert.deepEqual(prisma.series[0]?.branchIds, []);
+    assert.equal(prisma.series[0]?.isEnabled, false);
 
-    assert.ok(AppException.is(error));
-    assert.match(error.fieldErrors?.kind?.[0] ?? '', /0 branches/);
+    const updated = await series.update('srs_1', { kind: TEST_SERIES_KIND.FREE });
+
+    assert.equal(updated.kind, TEST_SERIES_KIND.FREE);
+    // A free series reaches past every branch, so nothing branch-shaped is left to switch it off.
+    assert.equal(prisma.series[0]?.isEnabled, true);
   });
 
   it('leaves a standard series that runs at branches alone', async () => {
