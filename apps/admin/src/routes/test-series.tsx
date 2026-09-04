@@ -26,13 +26,7 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import {
-  NAV_ITEMS,
-  QUERY_KEYS,
-  ROUTES,
-  TEST_SERIES_KIND_LABELS,
-  UNLOCK_MODE_LABELS,
-} from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES, TEST_SERIES_KIND_LABELS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker, ExamStageMultiPicker } from '../components/exam-picker';
 
@@ -72,13 +66,6 @@ function seriesColumns(
         <Badge variant={series.kind === TEST_SERIES_KIND.STANDARD ? 'neutral' : 'success'}>
           {TEST_SERIES_KIND_LABELS[series.kind]}
         </Badge>
-      ),
-    },
-    {
-      key: 'unlock',
-      header: 'Unlocks',
-      cell: (series) => (
-        <span className="text-muted-foreground">{UNLOCK_MODE_LABELS[series.unlockMode]}</span>
       ),
     },
     { key: 'tests', header: 'Tests', numeric: true, cell: (series) => series.testCount },

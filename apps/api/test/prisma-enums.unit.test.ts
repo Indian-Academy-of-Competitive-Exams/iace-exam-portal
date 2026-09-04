@@ -33,9 +33,6 @@ import {
   TEST_STATUS,
   TEST_UI,
   TIMER_TEMPLATE,
-  UNLOCK_MODE,
-  UNLOCK_REQUEST_STATUS,
-  UNLOCK_STATE,
   actorTypeSchema,
 } from '@iace/contracts';
 
@@ -75,9 +72,6 @@ const MIRRORED = {
   AttemptStatus: ATTEMPT_STATUS,
   AnswerMode: ANSWER_MODE,
   AnswerState: ANSWER_STATE,
-  UnlockMode: UNLOCK_MODE,
-  UnlockState: UNLOCK_STATE,
-  UnlockRequestStatus: UNLOCK_REQUEST_STATUS,
   NotificationType: NOTIFICATION_TYPE,
 } as const;
 

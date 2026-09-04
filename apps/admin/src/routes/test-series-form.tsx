@@ -12,9 +12,6 @@ import {
   TEST_SERIES_KIND,
   type TestSeriesKind,
   type TestSeriesSummary,
-  UNLOCK_MODE,
-  UNLOCK_MODES,
-  type UnlockMode,
   fromInstituteWallTime,
   instituteWallTime,
 } from '@iace/contracts';
@@ -53,13 +50,12 @@ import {
   SELECTABLE_TEST_SERIES_KINDS,
   TEST_SERIES_KIND_HINTS,
   TEST_SERIES_KIND_LABELS,
-  UNLOCK_MODE_LABELS,
 } from '../lib/constants';
 import { useSuggestedSeriesName } from '../lib/use-suggested-name';
 import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
-import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
+import { ProgramPicker } from '../components/access-picker';
 
 /**
  * One series: who it is for, and — once it exists — which branches run it. The two are separate
@@ -71,8 +67,6 @@ interface SeriesFormValues {
   description: string;
   examStageId: string;
   programCode: string;
-  prerequisiteSeriesId: string;
-  unlockMode: UnlockMode;
   sequentialTests: boolean;
   progressive: boolean;
   kind: TestSeriesKind;
@@ -82,15 +76,7 @@ const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
 const branchesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id, 'branches'] as const;
 
 /** Every path the server can name that this form registers, so a failure lands on its own input. */
-const SERVER_FIELDS = [
-  'name',
-  'description',
-  'examStageId',
-  'programCode',
-  'prerequisiteSeriesId',
-  'unlockMode',
-  'kind',
-] as const;
+const SERVER_FIELDS = ['name', 'description', 'examStageId', 'programCode', 'kind'] as const;
 
 /** A kind nobody may choose still has to READ back, or an existing series opens blank. */
 function kindItems(held: TestSeriesKind) {
@@ -179,8 +165,6 @@ function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     description: detail?.description ?? '',
     examStageId: detail?.examStageId ?? '',
     programCode: detail?.programCode ?? '',
-    prerequisiteSeriesId: detail?.prerequisiteSeriesId ?? '',
-    unlockMode: detail?.unlockMode ?? UNLOCK_MODE.AUTO,
     sequentialTests: detail?.sequentialTests ?? false,
     progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
@@ -195,8 +179,6 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     examStageId: values.examStageId || null,
     // Only a program series carries one, so the field it came from cannot outlive the kind.
     programCode: values.kind === TEST_SERIES_KIND.PROGRAM ? values.programCode || null : null,
-    prerequisiteSeriesId: values.prerequisiteSeriesId || null,
-    unlockMode: values.unlockMode,
     sequentialTests: values.sequentialTests,
     progressive: values.progressive,
     kind: values.kind,
@@ -260,9 +242,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   });
 
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
-  const unlockMode = useWatch({ control: form.control, name: 'unlockMode' }) ?? UNLOCK_MODE.AUTO;
   const programCode = useWatch({ control: form.control, name: 'programCode' });
-  const prerequisiteSeriesId = useWatch({ control: form.control, name: 'prerequisiteSeriesId' });
   const name = useWatch({ control: form.control, name: 'name' });
   const kind = useWatch({ control: form.control, name: 'kind' });
 
@@ -290,13 +270,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
   let title = 'New test series';
   if (detail) title = isEditing ? `Edit ${detail.name}` : detail.name;
-
-  // The series it waits on can sit outside the picker's first page, and an id is not a name.
-  const prerequisite = useQuery({
-    queryKey: seriesKey(prerequisiteSeriesId),
-    queryFn: () => api.admin.testSeries.detail(prerequisiteSeriesId),
-    enabled: prerequisiteSeriesId !== '',
-  });
 
   return (
     <FormPanel
@@ -377,46 +350,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
       <FormSection title="Unlocking">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField form={form} name="unlockMode" label="Unlocks">
-            {(control) => (
-              <Combobox
-                id={control.id}
-                aria-describedby={control['aria-describedby']}
-                aria-invalid={control['aria-invalid']}
-                clearable={false}
-                value={unlockMode}
-                onChange={(next) =>
-                  form.setValue('unlockMode', next as UnlockMode, { shouldDirty: true })
-                }
-                items={UNLOCK_MODES.map((mode) => ({
-                  value: mode,
-                  label: UNLOCK_MODE_LABELS[mode],
-                }))}
-              />
-            )}
-          </FormField>
-
-          <FormField
-            form={form}
-            name="prerequisiteSeriesId"
-            label="Waits on"
-            /* ui-copy-ok: rule */ hint="Optional"
-          >
-            {(control) => (
-              <TestSeriesPicker
-                id={control.id}
-                value={prerequisiteSeriesId}
-                clearable
-                excludeId={detail?.id}
-                selectedLabel={prerequisite.data?.name}
-                placeholder="Nothing"
-                onChange={(value) =>
-                  form.setValue('prerequisiteSeriesId', value, { shouldDirty: true })
-                }
-              />
-            )}
-          </FormField>
-
           <div className="flex flex-col gap-3 sm:col-span-2">
             <SeriesToggle
               form={form}

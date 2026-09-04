@@ -53,18 +53,13 @@ export function ProgramPicker(props: Readonly<PickerProps>) {
   );
 }
 
-/**
- * The series catalog. `excludeId` drops the one being edited — nothing waits on itself.
- * The name comes back with the id because what asks for a series next is a dialog naming it.
- */
+/** The name comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({
-  excludeId,
   notReachedBy,
   onChange,
   ...props
 }: Readonly<
   Omit<PickerProps, 'onChange'> & {
-    excludeId?: string;
     /** A student id: the server drops what they already reach, so a grant that does nothing is unofferable. */
     notReachedBy?: string;
     onChange: (value: string, label: string) => void;
@@ -78,15 +73,11 @@ export function TestSeriesPicker({
       api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search, notReachedBy }),
   });
 
-  const items = pages.items
-    .filter((series) => series.id !== excludeId)
-    .map((series) => ({
-      value: series.id,
-      label: series.name,
-      hint: series.examStage
-        ? `${series.examStage.examCode} / ${series.examStage.name}`
-        : undefined,
-    }));
+  const items = pages.items.map((series) => ({
+    value: series.id,
+    label: series.name,
+    hint: series.examStage ? `${series.examStage.examCode} / ${series.examStage.name}` : undefined,
+  }));
 
   return (
     <Combobox

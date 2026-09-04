@@ -11,13 +11,6 @@ import { examCourseSchema } from './exams';
 // groups, and nothing is open to everyone.
 // ============================================================================
 
-/** How a series becomes available. */
-export const UNLOCK_MODE = {
-  /** Opens on its own: at once, or once every test in the prerequisite series is finished. */
-  AUTO: 'AUTO',
-  /** Never opens on its own — the student asks and an admin answers. */
-  REQUEST: 'REQUEST',
-} as const;
 /** STANDARD reaches by exam or program; FREE also by an enrolled course; PROGRAM only by program; EVENT only the candidates on its Event. */
 export const TEST_SERIES_KIND = {
   STANDARD: 'STANDARD',
@@ -27,29 +20,8 @@ export const TEST_SERIES_KIND = {
 } as const;
 export const testSeriesKindSchema = z.enum(TEST_SERIES_KIND);
 
-/** How many EXAMS a student may hold FREE-series access across by asking: a course is many exams. */
-export const FREE_SERIES_EXAM_CAP = 2;
 export type TestSeriesKind = z.infer<typeof testSeriesKindSchema>;
 export const TEST_SERIES_KINDS = testSeriesKindSchema.options;
-
-export const unlockModeSchema = z.enum(UNLOCK_MODE);
-export type UnlockMode = z.infer<typeof unlockModeSchema>;
-export const UNLOCK_MODES = unlockModeSchema.options;
-
-export const UNLOCK_STATE = {
-  LOCKED: 'LOCKED',
-  UNLOCKED: 'UNLOCKED',
-} as const;
-export const unlockStateSchema = z.enum(UNLOCK_STATE);
-export type UnlockState = z.infer<typeof unlockStateSchema>;
-
-export const UNLOCK_REQUEST_STATUS = {
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-} as const;
-export const unlockRequestStatusSchema = z.enum(UNLOCK_REQUEST_STATUS);
-export type UnlockRequestStatus = z.infer<typeof unlockRequestStatusSchema>;
 
 export const NOTIFICATION_TYPE = {
   TEST_ASSIGNED: 'TEST_ASSIGNED',
@@ -176,8 +148,6 @@ export const testSeriesSchema = z.object({
   sequentialTests: z.boolean(),
   /** A graded ramp: each paper harder than the last. Order is `sequentialTests`, not this. */
   progressive: z.boolean(),
-  prerequisiteSeriesId: z.string().nullable(),
-  unlockMode: unlockModeSchema,
   kind: testSeriesKindSchema,
   /** Which branches run it. STANDARD only — a CHECK refuses a value on any other kind. */
   branchIds: z.array(z.string()),
@@ -241,8 +211,6 @@ export const createTestSeriesSchema = z.object({
   programCode: z.string().nullish(),
   sequentialTests: z.boolean().optional(),
   progressive: z.boolean().optional(),
-  prerequisiteSeriesId: z.string().nullish(),
-  unlockMode: unlockModeSchema.optional(),
   kind: testSeriesKindSchema.optional(),
   branchIds: z.array(z.string()).optional(),
   isEnabled: z.boolean().optional(),
@@ -384,69 +352,6 @@ export const setBranchTestSchedulesSchema = z.object({
 export type SetBranchTestSchedulesInput = z.input<typeof setBranchTestSchedulesSchema>;
 export type SetBranchTestSchedulesBody = z.infer<typeof setBranchTestSchedulesSchema>;
 
-export const studentSeriesUnlockSchema = z.object({
-  id: z.string(),
-  studentId: z.string(),
-  testSeriesId: z.string(),
-  unlockedAt: z.string().nullable(),
-  createdAt: z.string(),
-});
-export type StudentSeriesUnlock = z.infer<typeof studentSeriesUnlockSchema>;
-
-export const seriesUnlockRequestSchema = z.object({
-  id: z.string(),
-  studentId: z.string(),
-  testSeriesId: z.string(),
-  status: unlockRequestStatusSchema,
-  requestedAt: z.string(),
-  decidedAt: z.string().nullable(),
-  decidedById: z.string().nullable(),
-});
-export type SeriesUnlockRequest = z.infer<typeof seriesUnlockRequestSchema>;
-
-/** A request as the admin queue reads it — a triage screen cannot act on two bare ids. */
-export const seriesUnlockRequestRowSchema = seriesUnlockRequestSchema.extend({
-  testSeries: z.object({ id: z.string(), name: z.string() }),
-  student: z.object({ id: z.string(), fullName: z.string().nullable(), mobile: z.string() }),
-});
-export type SeriesUnlockRequestRow = z.infer<typeof seriesUnlockRequestRowSchema>;
-
-/** A FREE series a student does not reach yet, as the browse screen lists it. */
-export const openSeriesSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  examStage: z.object({ name: z.string(), examCode: z.string() }).nullable(),
-  /** They have already asked and nobody has answered yet. */
-  pending: z.boolean(),
-});
-export type OpenSeries = z.infer<typeof openSeriesSchema>;
-
-/** The list, with the exams they already hold a free series on — what the cap is counted against. */
-export const openSeriesListSchema = z.object({
-  series: z.array(openSeriesSchema),
-  examsHeld: z.array(z.string()),
-});
-export type OpenSeriesList = z.infer<typeof openSeriesListSchema>;
-
-export const unlockRequestListQuerySchema = paginationQuerySchema.extend({
-  status: unlockRequestStatusSchema.optional(),
-  testSeriesId: z.string().optional(),
-  /** NARROWS the caller's scope. A branch outside it answers nothing, never everything. */
-  branchId: z.string().optional(),
-});
-export type UnlockRequestListQuery = z.infer<typeof unlockRequestListQuerySchema>;
-export type UnlockRequestListQueryInput = z.input<typeof unlockRequestListQuerySchema>;
-
-/** PENDING is where a request starts, so it is not something an admin can decide it back to. */
-export const unlockDecisionSchema = unlockRequestStatusSchema.exclude([
-  UNLOCK_REQUEST_STATUS.PENDING,
-]);
-export type UnlockDecision = z.infer<typeof unlockDecisionSchema>;
-
-export const decideUnlockRequestSchema = z.object({ status: unlockDecisionSchema });
-export type DecideUnlockRequestInput = z.input<typeof decideUnlockRequestSchema>;
-export type DecideUnlockRequestBody = z.infer<typeof decideUnlockRequestSchema>;
-
 export const notificationSchema = z.object({
   id: z.string(),
   studentId: z.string(),
@@ -542,13 +447,6 @@ export const studentCatalogSeriesSchema = z.object({
   programCode: z.string().nullable(),
   kind: testSeriesKindSchema,
   sequentialTests: z.boolean(),
-  unlockMode: unlockModeSchema,
-  unlockState: unlockStateSchema,
-  prerequisiteSeriesId: z.string().nullable(),
-  prerequisiteSeriesName: z.string().nullable(),
-  canRequestUnlock: z.boolean(),
-  /** An ask already in the queue, so the screen offers waiting rather than asking twice. */
-  unlockRequested: z.boolean(),
   tests: z.array(studentCatalogTestSchema),
 });
 export type StudentCatalogSeries = z.infer<typeof studentCatalogSeriesSchema>;
@@ -617,15 +515,6 @@ export const ADMIN_SERIES_ROUTES = {
   /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
   tests: (id: string) => `/admin/test-series/${id}/tests`,
   test: (id: string, testId: string) => `/admin/test-series/${id}/tests/${testId}`,
-} as const;
-
-/**
- * The queue is addressed on its own, not under a student: an admin triages what came in, and
- * which student each row is about is the ANSWER rather than the way in.
- */
-export const ADMIN_UNLOCK_REQUEST_ROUTES = {
-  list: '/admin/unlock-requests',
-  decide: (id: string) => `/admin/unlock-requests/${id}`,
 } as const;
 
 /** A grant is filed against the STUDENT, which is who you are looking at when you make one. */

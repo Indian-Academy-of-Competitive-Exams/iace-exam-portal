@@ -7,11 +7,10 @@ import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
 import { StudentPerformancePage } from './routes/student-performance';
-import { AccessRequestsPage } from './routes/access-requests';
 import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
-import { BranchAccessRequestsPage, BranchSeriesPage, BranchTestsPage } from './routes/branch-tests';
+import { BranchSeriesPage, BranchTestsPage } from './routes/branch-tests';
 import { ExamsPage } from './routes/exams';
 import { ProgramsPage } from './routes/programs';
 import { QuestionsPage } from './routes/questions';
@@ -59,7 +58,6 @@ export function App() {
           {/* One branch at a time, chosen by `?branchId=` — a nav row cannot carry one in its path. */}
           <Route path={ROUTES.BRANCH_TEST_SERIES} element={<BranchSeriesPage />} />
           <Route path={ROUTES.BRANCH_TESTS} element={<BranchTestsPage />} />
-          <Route path={ROUTES.BRANCH_ACCESS_REQUESTS} element={<BranchAccessRequestsPage />} />
           <Route path={ROUTES.EXAMS} element={<ExamsPage />} />
           <Route path={ROUTES.PROGRAMS} element={<ProgramsPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />
@@ -81,7 +79,6 @@ export function App() {
           <Route path={ROUTES.TEST_SERIES} element={<TestSeriesPage />} />
           {/* Before the :id route, or "new" would be read as a series id. */}
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
-          <Route path={ROUTES.ACCESS_REQUESTS} element={<AccessRequestsPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.SERIES_CANDIDATES_PATTERN} element={<ImportScholarshipPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />

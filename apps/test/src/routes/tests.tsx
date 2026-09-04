@@ -2,13 +2,11 @@
  * The student's tests. A DELIBERATE deviation from the list-screen convention: this is discovery
  * rather than an admin data table, so it is a status strip over series shelves, not a ListView.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useFilterSpec } from '@iace/app-kit/browser';
-import { ClipboardList, LockKeyhole, SearchX } from 'lucide-react';
+import { ClipboardList, SearchX } from 'lucide-react';
 import {
   Alert,
-  Badge,
-  Button,
   EmptyState,
   PageHeader,
   PanelFrame,
@@ -16,12 +14,7 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import {
-  EXAM_COURSES,
-  TEST_SERIES_KIND,
-  type ExamCourse,
-  type StudentCatalogSeries,
-} from '@iace/contracts';
+import { EXAM_COURSES, type ExamCourse, type StudentCatalogSeries } from '@iace/contracts';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY } from '../lib/constants';
 import { matching, sittablesOf, type Sittable } from '../lib/catalog';
@@ -38,7 +31,6 @@ const SKELETON_KEYS = ['a', 'b', 'c'];
 type Emptiness = 'NONE' | 'FILTERED' | null;
 
 export function TestsPage() {
-  const queryClient = useQueryClient();
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
 
   const FILTERS = [
@@ -61,18 +53,10 @@ export function TestsPage() {
   const filters = useFilterSpec(FILTERS);
   const course = filters.values.course || ANY_FAMILY;
 
-  const ask = useMutation({
-    meta: { success: 'Asked. You will hear when it is answered.' },
-    mutationFn: (testSeriesId: string) => api.me.askForSeries(testSeriesId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: CATALOG_QUERY_KEY }),
-  });
-
   const now = new Date();
-  // Free series have their own tab, so this screen is the paid journey and only that.
-  const reaches = (catalog.data?.series ?? []).filter((row) => row.kind !== TEST_SERIES_KIND.FREE);
+  const reaches = catalog.data?.series ?? [];
   const series = reaches.filter((row) => course === ANY_FAMILY || row.examStage?.course === course);
   const rows = matching(sittablesOf(series, now), filters.values.q);
-  const shut = series.filter((row) => row.canRequestUnlock);
   const emptiness = emptyReason(reaches.length, rows.length);
 
   return (
@@ -80,23 +64,12 @@ export function TestsPage() {
       header={<PageHeader title="Tests" meta={plural(rows.length, 'test')} />}
       filters={{ spec: FILTERS, state: filters }}
     >
-      <div className="mb-5 flex flex-col gap-4">
-        {catalog.data?.testBlocked ? (
-          /* ui-copy-ok: consequence */
-          <Alert variant="danger">
-            Your test access is on hold. Nothing here can be started until your branch lifts it.
-          </Alert>
-        ) : null}
-
-        {shut.map((row) => (
-          <ShutSeries
-            key={row.id}
-            series={row}
-            onAsk={() => ask.mutate(row.id)}
-            asking={ask.isPending}
-          />
-        ))}
-      </div>
+      {catalog.data?.testBlocked ? (
+        /* ui-copy-ok: consequence */
+        <Alert variant="danger" className="mb-5">
+          Your test access is on hold. Nothing here can be started until your branch lifts it.
+        </Alert>
+      ) : null}
 
       <CatalogRegion
         catalog={catalog}
@@ -202,35 +175,4 @@ function courseItems(series: readonly StudentCatalogSeries[]) {
       label: courseLabel(one),
     })),
   ];
-}
-
-/** A shut series names what opens it, and carries the only thing the student can do about it. */
-function ShutSeries({
-  series,
-  onAsk,
-  asking,
-}: Readonly<{ series: StudentCatalogSeries; onAsk: () => void; asking: boolean }>) {
-  return (
-    /* ui-copy-ok: consequence */
-    <Alert variant="info">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="flex items-start gap-2">
-          <LockKeyhole aria-hidden />
-          <span>
-            <strong className="font-medium">{series.name}</strong>{' '}
-            {series.prerequisiteSeriesName === null
-              ? 'is not open to you yet.'
-              : `opens once you have finished every test in ${series.prerequisiteSeriesName}.`}
-          </span>
-        </span>
-        {series.unlockRequested ? (
-          <Badge variant="neutral">Asked — waiting to be answered</Badge>
-        ) : (
-          <Button size="sm" disabled={asking} onClick={onAsk}>
-            Ask to open it now
-          </Button>
-        )}
-      </div>
-    </Alert>
-  );
 }

@@ -27,9 +27,6 @@ import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
 import { mirrorSwitchOntoSeries } from './series-switch';
 
-const FREE_WAITS_ON_NOTHING_MESSAGE =
-  'A free series is offered to every enrolled student, so it cannot wait on another series. Clear the prerequisite, or make this a standard series.';
-
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
   NEEDS_A_STAGE:
@@ -61,8 +58,6 @@ export const AUDITED_SERIES_FIELDS = [
   'programCode',
   'sequentialTests',
   'progressive',
-  'prerequisiteSeriesId',
-  'unlockMode',
   'kind',
 ] as const;
 
@@ -161,7 +156,6 @@ export class TestSeriesService {
    */
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
-    this.assertFreeWaitsOnNothing(input.kind, input.prerequisiteSeriesId ?? null);
     // A new series carries neither yet: there is no way to write an event or a branch here.
     this.assertKindHoldsTogether({
       kind: input.kind ?? TEST_SERIES_KIND.STANDARD,
@@ -204,15 +198,6 @@ export class TestSeriesService {
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
-    if (input.prerequisiteSeriesId)
-      this.assertNotItsOwnPrerequisite(id, input.prerequisiteSeriesId);
-    // Judged against what the series WILL hold: either half of the pair may be the one moving.
-    this.assertFreeWaitsOnNothing(
-      input.kind ?? series.kind,
-      input.prerequisiteSeriesId === undefined
-        ? series.prerequisiteSeriesId
-        : (input.prerequisiteSeriesId ?? null),
-    );
     // Against what the row WILL hold: eventId and branchIds are not writable, so they are its own.
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
@@ -473,26 +458,6 @@ export class TestSeriesService {
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, { fieldErrors });
   }
 
-  /** FREE is offered to everyone enrolled, so one behind a prerequisite is offered and then refused. */
-  private assertFreeWaitsOnNothing(
-    kind: TestSeriesKind | undefined,
-    prerequisiteSeriesId: string | null,
-  ): void {
-    if (kind !== TEST_SERIES_KIND.FREE || prerequisiteSeriesId === null) return;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, FREE_WAITS_ON_NOTHING_MESSAGE, {
-      fieldErrors: { prerequisiteSeriesId: [FREE_WAITS_ON_NOTHING_MESSAGE] },
-    });
-  }
-
-  private assertNotItsOwnPrerequisite(id: string, prerequisiteSeriesId: string): void {
-    if (prerequisiteSeriesId !== id) return;
-
-    const message = 'A series cannot wait on itself';
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { prerequisiteSeriesId: [message] },
-    });
-  }
-
   private async assertTargetsUsable(input: Partial<CreateTestSeriesBody>): Promise<void> {
     if (input.examStageId) await this.stages.assertUsable(input.examStageId);
     if (input.programCode) await this.programs.assertUsable([input.programCode], 'programCode');
@@ -571,10 +536,6 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
     ...(input.programCode === undefined ? {} : { programCode: input.programCode ?? null }),
     ...(input.sequentialTests === undefined ? {} : { sequentialTests: input.sequentialTests }),
     ...(input.progressive === undefined ? {} : { progressive: input.progressive }),
-    ...(input.prerequisiteSeriesId === undefined
-      ? {}
-      : { prerequisiteSeriesId: input.prerequisiteSeriesId ?? null }),
-    ...(input.unlockMode === undefined ? {} : { unlockMode: input.unlockMode }),
     ...(input.kind === undefined ? {} : { kind: input.kind }),
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
@@ -591,8 +552,6 @@ function toSummary(row: SeriesRow, branchCount: number | undefined): TestSeriesS
     programCode: row.programCode,
     sequentialTests: row.sequentialTests,
     progressive: row.progressive,
-    prerequisiteSeriesId: row.prerequisiteSeriesId,
-    unlockMode: row.unlockMode,
     kind: row.kind,
     branchIds: row.branchIds,
     isEnabled: row.isEnabled,

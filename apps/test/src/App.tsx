@@ -8,7 +8,6 @@ import { LoginPage } from './routes/login';
 import { AppShell } from './components/app-shell';
 import { AccountPage } from './routes/account';
 import { ProfilePage } from './routes/profile';
-import { BrowsePage } from './routes/browse';
 import { TestsPage } from './routes/tests';
 import { SeriesPage } from './routes/series';
 import { TestAboutPage } from './routes/test-about';
@@ -68,7 +67,6 @@ export function App() {
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           <Route path={ROUTES.PERFORMANCE} element={whileLoading(<OverviewPage />)} />
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
-          <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />

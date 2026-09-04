@@ -54,10 +54,6 @@ import {
   type TestStatus,
   type TestUi,
   type TimerTemplate,
-  UNLOCK_MODE,
-  UNLOCK_REQUEST_STATUS,
-  type UnlockMode,
-  type UnlockRequestStatus,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
 import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
@@ -3393,7 +3389,6 @@ export interface FakeSeriesRow {
   programCode: string | null;
   sequentialTests: boolean;
   prerequisiteSeriesId: string | null;
-  unlockMode: UnlockMode;
   kind: TestSeriesKind;
   eventId: string | null;
   branchIds: string[];
@@ -3463,7 +3458,6 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     programCode: null,
     sequentialTests: false,
     prerequisiteSeriesId: null,
-    unlockMode: UNLOCK_MODE.AUTO,
     kind: TEST_SERIES_KIND.STANDARD,
     eventId: null,
     branchIds: [],
@@ -4099,22 +4093,6 @@ export interface FakeSeriesTestKey {
   testId: string;
 }
 
-export interface FakeUnlockRow {
-  studentId: string;
-  testSeriesId: string;
-  unlockedAt: Date | null;
-}
-
-export interface FakeUnlockRequestRow {
-  id: string;
-  studentId: string;
-  testSeriesId: string;
-  status: UnlockRequestStatus;
-  requestedAt: Date;
-  decidedAt: Date | null;
-  decidedById: string | null;
-}
-
 /** When one test opens for one program's cohort, ahead of the test's own opening. */
 export interface FakeProgramUnlockRow {
   testId: string;
@@ -4126,8 +4104,6 @@ export interface FakeCatalogData {
   students?: FakeStudent[];
   series?: FakeSeriesRow[];
   grants?: FakeGrantRowAccess[];
-  unlocks?: FakeUnlockRow[];
-  unlockRequests?: FakeUnlockRequestRow[];
   /** Who an EVENT series reaches: the people named on its event. */
   eventCandidates?: { eventId: string; studentId: string }[];
   programUnlocks?: FakeProgramUnlockRow[];
@@ -4144,7 +4120,6 @@ export interface FakeCatalogData {
  */
 interface CatalogReachWhere {
   grants?: { some: { studentId: string } };
-  unlockRequests?: { some: { studentId: string; status: string } };
   programCode?: null | { in: string[] };
   kind?: TestSeriesKind;
   branchIds?: { has: string };
@@ -4169,6 +4144,9 @@ interface CatalogInclude {
 type CatalogSortField = 'name' | 'id';
 type CatalogOrderBy = Partial<Record<CatalogSortField, 'asc' | 'desc'>>;
 
+/** Every Prisma method that changes a row, by the verb its name carries. */
+const WRITE_OPERATIONS = ['create', 'update', 'upsert', 'delete'] as const;
+
 /**
  * Enough Prisma for the access resolver, and no more. It evaluates the `where` it is HANDED
  * rather than knowing anything about reach, so a truth-table test really exercises the
@@ -4177,6 +4155,9 @@ type CatalogOrderBy = Partial<Record<CatalogSortField, 'asc' | 'desc'>>;
 export class FakeCatalogPrisma {
   /** Every read that reached "Postgres" — what the cache tests count. */
   readonly queries: string[] = [];
+
+  /** The subset of `queries` that would have changed a row — a catalog read must leave this empty. */
+  readonly writes: string[] = [];
 
   /** Runs as each read reaches "Postgres", so a test can interleave a bust with a resolve. */
   onQuery: ((name: string) => Promise<void>) | null = null;
@@ -4188,8 +4169,6 @@ export class FakeCatalogPrisma {
       students: data.students ?? [],
       series: data.series ?? [],
       grants: data.grants ?? [],
-      unlockRequests: data.unlockRequests ?? [],
-      unlocks: data.unlocks ?? [],
       eventCandidates: data.eventCandidates ?? [],
       programUnlocks: data.programUnlocks ?? [],
       attempts: data.attempts ?? [],
@@ -4277,206 +4256,13 @@ export class FakeCatalogPrisma {
     },
   };
 
-  readonly studentGrant = {
-    createMany: async ({
-      data,
-    }: {
-      data: { studentId: string; testSeriesId: string; createdById: string | null }[];
-    }) => {
-      await this.record('studentGrant.createMany');
-      const added = data.filter(
-        (row) =>
-          !this.data.grants.some(
-            (held) => held.studentId === row.studentId && held.testSeriesId === row.testSeriesId,
-          ),
-      );
-      for (const row of added) this.data.grants.push({ ...row, createdAt: new Date() });
-      return { count: added.length };
-    },
-  };
-
-  readonly studentSeriesUnlock = {
-    findMany: async ({
-      where,
-    }: {
-      where: {
-        studentId: string;
-        testSeriesId: { in: string[] };
-        unlockedAt?: { not: null };
-      };
-    }) => {
-      await this.record('studentSeriesUnlock.findMany');
-      const rows = this.data.unlocks.filter(
-        (unlock) =>
-          unlock.studentId === where.studentId &&
-          where.testSeriesId.in.includes(unlock.testSeriesId) &&
-          (where.unlockedAt === undefined || unlock.unlockedAt !== null),
-      );
-      return rows.map((unlock) => ({ testSeriesId: unlock.testSeriesId }));
-    },
-
-    findUnique: async ({
-      where,
-    }: {
-      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
-    }) => {
-      await this.record('studentSeriesUnlock.findUnique');
-      return this.heldUnlock(where.studentId_testSeriesId) ?? null;
-    },
-
-    /** `update: {}` is the point: a row that is already open keeps the time it was opened at. */
-    upsert: async ({
-      where,
-      create,
-    }: {
-      where: { studentId_testSeriesId: { studentId: string; testSeriesId: string } };
-      create: { studentId: string; testSeriesId: string; unlockedAt: Date };
-    }) => {
-      await this.record('studentSeriesUnlock.upsert');
-      const held = this.heldUnlock(where.studentId_testSeriesId);
-      if (held) return held;
-
-      const row: FakeUnlockRow = { ...create };
-      this.data.unlocks.push(row);
-      return row;
-    },
-
-    /** The half the empty `update` cannot do: a row carrying no time is still a locked row. */
-    updateMany: async ({
-      where,
-      data,
-    }: {
-      where: { studentId: string; testSeriesId: string; unlockedAt: null };
-      data: { unlockedAt: Date };
-    }) => {
-      await this.record('studentSeriesUnlock.updateMany');
-      const rows = this.data.unlocks.filter(
-        (unlock) =>
-          unlock.studentId === where.studentId &&
-          unlock.testSeriesId === where.testSeriesId &&
-          unlock.unlockedAt === null,
-      );
-      for (const row of rows) Object.assign(row, data);
-      return { count: rows.length };
-    },
-  };
-
-  /** The branch a request's student sits at, which is what a scoped read narrows on. */
-  private requestInScope(row: FakeUnlockRequestRow, where: UnlockRequestWhere): boolean {
-    const wanted = where.student?.currentBranchId;
-    if (!wanted) return true;
-    const student = this.data.students.find((candidate) => candidate.id === row.studentId);
-    return student?.currentBranchId != null && wanted.in.includes(student.currentBranchId);
-  }
-
-  readonly seriesUnlockRequest = {
-    findFirst: async ({ where }: { where: UnlockRequestWhere }) => {
-      await this.record('seriesUnlockRequest.findFirst');
-      const row = this.data.unlockRequests.find(
-        (candidate) => matchesRequest(candidate, where) && this.requestInScope(candidate, where),
-      );
-      return row ? this.hydrateRequest(row) : null;
-    },
-
-    findUnique: async ({ where }: { where: { id: string } }) => {
-      await this.record('seriesUnlockRequest.findUnique');
-      const row = this.data.unlockRequests.find((candidate) => candidate.id === where.id);
-      return row ? this.hydrateRequest(row) : null;
-    },
-
-    findMany: async ({
-      where = {},
-      skip = 0,
-      take,
-    }: {
-      where?: UnlockRequestWhere;
-      skip?: number;
-      take?: number;
-    } = {}) => {
-      await this.record('seriesUnlockRequest.findMany');
-      return this.data.unlockRequests
-        .filter((row) => matchesRequest(row, where) && this.requestInScope(row, where))
-        .sort((left, right) => right.requestedAt.getTime() - left.requestedAt.getTime())
-        .slice(skip, take === undefined ? undefined : skip + take)
-        .map((row) => this.hydrateRequest(row));
-    },
-
-    count: async ({ where = {} }: { where?: UnlockRequestWhere } = {}) => {
-      await this.record('seriesUnlockRequest.count');
-      return this.data.unlockRequests.filter(
-        (row) => matchesRequest(row, where) && this.requestInScope(row, where),
-      ).length;
-    },
-
-    /** Enforces the partial unique the migration declares — Prisma cannot see it, so it throws. */
-    create: async ({ data }: { data: { studentId: string; testSeriesId: string } }) => {
-      await this.record('seriesUnlockRequest.create');
-      const open = this.data.unlockRequests.some(
-        (row) =>
-          row.studentId === data.studentId &&
-          row.testSeriesId === data.testSeriesId &&
-          row.status === UNLOCK_REQUEST_STATUS.PENDING,
-      );
-      if (open) throw uniqueViolation('SeriesUnlockRequest_open_key');
-
-      this.requestSeq += 1;
-      const row: FakeUnlockRequestRow = {
-        id: `sur_${this.requestSeq}`,
-        studentId: data.studentId,
-        testSeriesId: data.testSeriesId,
-        status: UNLOCK_REQUEST_STATUS.PENDING,
-        requestedAt: new Date('2026-06-01T00:00:00.000Z'),
-        decidedAt: null,
-        decidedById: null,
-      };
-      this.data.unlockRequests.push(row);
-      return row;
-    },
-
-    updateMany: async ({
-      where,
-      data,
-    }: {
-      where: UnlockRequestWhere & { id?: string };
-      data: Partial<FakeUnlockRequestRow>;
-    }) => {
-      await this.record('seriesUnlockRequest.updateMany');
-      const rows = this.data.unlockRequests.filter(
-        (row) => (where.id === undefined || row.id === where.id) && matchesRequest(row, where),
-      );
-      for (const row of rows) Object.assign(row, data);
-      return { count: rows.length };
-    },
-  };
-
   $transaction<T>(work: Promise<T>[]): Promise<T[]> {
     return Promise.all(work);
   }
 
-  private requestSeq = 0;
-
-  private heldUnlock(key: { studentId: string; testSeriesId: string }): FakeUnlockRow | undefined {
-    return this.data.unlocks.find(
-      (unlock) => unlock.studentId === key.studentId && unlock.testSeriesId === key.testSeriesId,
-    );
-  }
-
-  private hydrateRequest(row: FakeUnlockRequestRow) {
-    const series = this.data.series.find((candidate) => candidate.id === row.testSeriesId);
-    const student = this.data.students.find((candidate) => candidate.id === row.studentId);
-    return {
-      ...row,
-      testSeries: { id: row.testSeriesId, name: series?.name ?? '' },
-      student: {
-        id: row.studentId,
-        fullName: student?.fullName ?? null,
-        mobile: student?.mobile ?? '',
-      },
-    };
-  }
-
   private async record(name: string): Promise<void> {
     this.queries.push(name);
+    if (WRITE_OPERATIONS.some((verb) => name.includes(verb))) this.writes.push(name);
     await this.onQuery?.(name);
   }
 
@@ -4488,7 +4274,6 @@ export class FakeCatalogPrisma {
       (where.branchIds === undefined || row.branchIds.includes(where.branchIds.has)) &&
       this.matchesGrant(row, where.grants) &&
       this.matchesCandidacy(row, where.event) &&
-      this.matchesPendingRequest(row, where.unlockRequests) &&
       matchesProgramCode(row.programCode, where.programCode) &&
       this.matchesExam(row, where.examStage) &&
       (where.OR === undefined || where.OR.some((clause) => this.matchesSeries(row, clause))) &&
@@ -4509,19 +4294,6 @@ export class FakeCatalogPrisma {
     if (filter === undefined) return true;
     return this.data.grants.some(
       (grant) => grant.testSeriesId === row.id && grant.studentId === filter.some.studentId,
-    );
-  }
-
-  private matchesPendingRequest(
-    row: FakeSeriesRow,
-    filter: CatalogReachWhere['unlockRequests'],
-  ): boolean {
-    if (filter === undefined) return true;
-    return this.data.unlockRequests.some(
-      (request) =>
-        request.testSeriesId === row.id &&
-        request.studentId === filter.some.studentId &&
-        request.status === filter.some.status,
     );
   }
 
@@ -4553,15 +4325,11 @@ export class FakeCatalogPrisma {
   private hydrate(row: FakeSeriesRow, include: CatalogInclude) {
     const stage = this.data.stages.find((candidate) => candidate.id === row.examStageId);
     const code = this.examCodeOf(row.examStageId);
-    const prerequisite = this.data.series.find(
-      (candidate) => candidate.id === row.prerequisiteSeriesId,
-    );
     const programs = include.directTests.select.programUnlocks.where.programCode.in;
 
     return {
       ...row,
       examStage: stage && code !== null ? { id: stage.id, name: stage.name, exam: { code } } : null,
-      prerequisiteSeries: prerequisite ? { name: prerequisite.name } : null,
       directTests: this.data.tests
         .filter(
           (test) =>
@@ -4585,24 +4353,6 @@ export class FakeCatalogPrisma {
         })),
     };
   }
-}
-
-interface UnlockRequestWhere {
-  id?: string;
-  studentId?: string;
-  testSeriesId?: string;
-  status?: UnlockRequestStatus;
-  /** The scope's own: whose request it is decides who may see it. */
-  student?: { currentBranchId?: { in: string[] } };
-}
-
-function matchesRequest(row: FakeUnlockRequestRow, where: UnlockRequestWhere): boolean {
-  return (
-    (where.id === undefined || row.id === where.id) &&
-    (where.studentId === undefined || row.studentId === where.studentId) &&
-    (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId) &&
-    (where.status === undefined || row.status === where.status)
-  );
 }
 
 /** The real error class, so a service that tests for P2002 is tested against what Prisma throws. */

@@ -97,11 +97,10 @@ Do not break these — they are why the live test holds at 4–5K:
 - **Access has no groups.** A student reaches a `TestSeries` by an exam match, a program match, or
   an explicit `StudentGrant`, gated by the `BranchTestConfig` row for their branch — a switch with
   no window, so a branch runs a series indefinitely.
-- **A series' `kind` widens the first two paths.** `STANDARD` is the above; `FREE` also reaches
-  anyone enrolled in its exam FAMILY, capped at `FREE_SERIES_EXAM_CAP` exams, and may not sit behind
-  a prerequisite (a CHECK refuses it); `SCHOLARSHIP` reaches only a grant. Reaching is not starting:
-  `unlockMode` is `AUTO` (at once, or once the prerequisite series is finished) or `REQUEST` (a queue
-  an admin decides). A locked series is still LISTED.
+- **A series' `kind` decides who reaches it.** `STANDARD` is the above; `FREE` reaches everyone;
+  `PROGRAM` only a student carrying its program; `EVENT` only the candidates on its event. A
+  `StudentGrant` overrides every one of them, and `isEnabled` gates them all. **A series is reached
+  or it is not** — there is no unlock, no prerequisite and no queue to ask in.
 - **Scheduling belongs to the TEST.** `TestSeriesTest.unlockAt` is when it opens inside a series,
   one instant for every branch; `BranchTestSchedule(branchId, testId)` — the tests module owns it —
   carries `lateEntrySec` (counted FROM the unlock) and `extraTimeSec`, both null, no row meaning the

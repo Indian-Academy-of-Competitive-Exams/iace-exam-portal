@@ -8,4 +8,3 @@ export {
   type StudentTestWindow,
   type TestSchedule,
 } from './access-resolver.service';
-export { UnlocksService } from './unlocks.service';

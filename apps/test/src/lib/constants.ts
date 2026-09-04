@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardList, Gift, KeyRound, Trophy, User } from 'lucide-react';
+import { BarChart3, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { type BadgeProps } from '@iace/ui';
 import {
@@ -22,7 +22,6 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
   TESTS: '/tests',
-  BROWSE: '/free-tests',
   SERIES: (seriesId: string) => `/series/${seriesId}`,
   SERIES_PATTERN: '/series/:seriesId',
   TEST_ABOUT: (testId: string) => `/tests/${testId}/about`,
@@ -60,7 +59,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
-  { to: ROUTES.BROWSE, label: 'Free tests', icon: Gift },
 ];
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
@@ -146,9 +144,6 @@ export const MASTERY_TREND_BADGE: Readonly<Record<MasteryTrend, BadgeProps['vari
 
 /** What a test covers, read before the clock starts. */
 export const briefQueryKey = (testId: string) => ['me', 'tests', testId, 'brief'];
-
-/** The free series they could ask for, which an ask changes. */
-export const BROWSE_QUERY_KEY = ['me', 'open-series'] as const;
 
 /** The languages a paper can be sat in, in the words the exam world uses for them. */
 export const LANGUAGE_LABELS: Readonly<Record<LanguageCode, string>> = {

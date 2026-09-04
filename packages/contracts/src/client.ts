@@ -90,7 +90,6 @@ import {
 } from './branches';
 import {
   ADMIN_GRANT_ROUTES,
-  ADMIN_UNLOCK_REQUEST_ROUTES,
   ADMIN_STUDENT_SERIES_ROUTES,
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
@@ -102,9 +101,6 @@ import {
   eventSchema,
   eventCandidateSchema,
   programCatalogSchema,
-  openSeriesListSchema,
-  seriesUnlockRequestRowSchema,
-  seriesUnlockRequestSchema,
   studentGrantRowSchema,
   studentSeriesAccessSchema,
   testSeriesSummarySchema,
@@ -127,12 +123,7 @@ import {
   type ProgramListQueryInput,
   studentCatalogSchema,
   type StudentCatalog,
-  type DecideUnlockRequestInput,
-  type OpenSeriesList,
-  type SeriesUnlockRequest,
-  type SeriesUnlockRequestRow,
   type StudentGrantRow,
-  type UnlockRequestListQueryInput,
   type StudentSeriesAccess,
   type TestSeriesListQueryInput,
   type TestSeriesSummary,
@@ -660,16 +651,6 @@ export function createApiClient(options: ApiClientOptions) {
         }),
 
       /** Every series this student reaches, with what is open right now. */
-      /** The FREE series they could ask for, with what the course cap has already spent. */
-      openSeries: (): Promise<OpenSeriesList> =>
-        request(ME_ROUTES.openSeries, { schema: openSeriesListSchema }),
-
-      askForSeries: (testSeriesId: string): Promise<SeriesUnlockRequest> =>
-        request(ME_ROUTES.requestUnlock(testSeriesId), {
-          method: 'POST',
-          schema: seriesUnlockRequestSchema,
-        }),
-
       catalog: (): Promise<StudentCatalog> =>
         request(ME_ROUTES.catalog, { schema: studentCatalogSchema }),
 
@@ -1149,23 +1130,6 @@ export function createApiClient(options: ApiClientOptions) {
         list: (studentId: string): Promise<StudentSeriesAccess[]> =>
           request(ADMIN_STUDENT_SERIES_ROUTES.list(studentId), {
             schema: studentSeriesAccessSchema.array(),
-          }),
-      },
-
-      /** Who is asking to be let into a series, and answering them. */
-      unlockRequests: {
-        list: (
-          query: UnlockRequestListQueryInput = {},
-        ): Promise<Paginated<SeriesUnlockRequestRow>> =>
-          requestPaginated(`${ADMIN_UNLOCK_REQUEST_ROUTES.list}${queryString({ ...query })}`, {
-            schema: seriesUnlockRequestRowSchema.array(),
-          }),
-
-        decide: (id: string, input: DecideUnlockRequestInput): Promise<SeriesUnlockRequestRow> =>
-          request(ADMIN_UNLOCK_REQUEST_ROUTES.decide(id), {
-            method: 'PATCH',
-            body: input,
-            schema: seriesUnlockRequestRowSchema,
           }),
       },
 

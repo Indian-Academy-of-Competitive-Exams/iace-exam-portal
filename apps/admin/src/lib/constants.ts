@@ -45,11 +45,9 @@ import {
   type TestBuilderStep,
   TEST_SERIES_KIND,
   type TestSeriesKind,
-  type UnlockRequestStatus,
   type TestStatus,
   type TestUi,
   type TimerTemplate,
-  type UnlockMode,
 } from '@iace/contracts';
 
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
@@ -67,7 +65,6 @@ export const ROUTES = {
   /** What ONE branch runs. Three screens standing in one branch, which rides the URL as `branchId`. */
   BRANCH_TEST_SERIES: '/branch/test-series',
   BRANCH_TESTS: '/branch/tests',
-  BRANCH_ACCESS_REQUESTS: '/branch/access-requests',
   EXAMS: '/exams',
   /** The coaching variants. A student and a series both carry the code as free text. */
   PROGRAMS: '/programs',
@@ -100,7 +97,6 @@ export const ROUTES = {
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
-  ACCESS_REQUESTS: '/tests/access-requests',
   SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
   SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
   /** Super-admin only: who the admins are and who holds what. */
@@ -125,13 +121,6 @@ export const GENDER_LABELS: Readonly<Record<Gender, string>> = {
   MALE: 'Male',
   FEMALE: 'Female',
   OTHER: 'Other',
-};
-
-/** What a request's state is called on screen. */
-export const UNLOCK_REQUEST_STATUS_LABELS: Readonly<Record<UnlockRequestStatus, string>> = {
-  PENDING: 'Waiting',
-  APPROVED: 'Approved',
-  REJECTED: 'Declined',
 };
 
 /** What each kind of question is called on screen. */
@@ -365,12 +354,6 @@ export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
   INACTIVE: 'Retired',
 };
 
-/** How a series opens for a student who can reach it. */
-export const UNLOCK_MODE_LABELS: Readonly<Record<UnlockMode, string>> = {
-  AUTO: 'Automatic',
-  REQUEST: 'On request',
-};
-
 /**
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
  * the screens it gates are the ones that decide who decides.
@@ -423,7 +406,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
-      { to: ROUTES.ACCESS_REQUESTS, label: 'Access requests', icon: KeyRound },
     ],
   },
   /** Its own section, not a row under Tests: a branch admin lives here and reaches nothing above it. */
@@ -434,7 +416,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     children: [
       { to: ROUTES.BRANCH_TEST_SERIES, label: 'Test series', icon: Layers },
       { to: ROUTES.BRANCH_TESTS, label: 'Tests', icon: ClipboardList },
-      { to: ROUTES.BRANCH_ACCESS_REQUESTS, label: 'Access requests', icon: KeyRound },
     ],
   },
   {
@@ -464,7 +445,6 @@ const BRANCH_ADMIN_ROUTES = new Set<string>([
   ROUTES.BRANCHES,
   ROUTES.BRANCH_TEST_SERIES,
   ROUTES.BRANCH_TESTS,
-  ROUTES.BRANCH_ACCESS_REQUESTS,
   ROUTES.AUDIT,
   ROUTES.AUDIT_IMPORTS,
 ]);
@@ -506,7 +486,6 @@ export const QUERY_KEYS = {
   TEST: [ADMIN, 'test'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
-  UNLOCK_REQUESTS: [ADMIN, 'unlock-requests'],
   TEST_SERIES_LINKS: [ADMIN, 'test-series-links'],
   TESTS: [ADMIN, 'tests'],
   TOPICS: [ADMIN, 'topics'],

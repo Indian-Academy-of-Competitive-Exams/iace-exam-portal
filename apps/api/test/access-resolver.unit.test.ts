@@ -8,14 +8,11 @@ import {
   TEST_SERIES_KIND,
   TEST_SERIES_KINDS,
   TEST_STATUS,
-  UNLOCK_MODE,
-  UNLOCK_STATE,
 } from '@iace/contracts';
 import { AccessResolverService } from '../src/access/access-resolver.service';
 import { AccessCacheListener } from '../src/access/access-cache.listener';
 import {
   FakeCatalogPrisma,
-  FakeEventBus,
   FakeRedis,
   type FakeCatalogData,
   type FakeGrantRowAccess,
@@ -38,12 +35,10 @@ const HOUR_SEC = 60 * 60;
 function build(data: FakeCatalogData) {
   const prisma = new FakeCatalogPrisma(data);
   const redis = new FakeRedis();
-  const events = new FakeEventBus();
   return {
     prisma,
     redis,
-    events,
-    resolver: new AccessResolverService(prisma.asService(), redis.asService(), events.asService()),
+    resolver: new AccessResolverService(prisma.asService(), redis.asService()),
   };
 }
 
@@ -459,92 +454,6 @@ describe('AccessResolverService — the order the catalog comes back in', () => 
   });
 });
 
-describe('AccessResolverService — a series behind a prerequisite', () => {
-  const gated = (over: FakeCatalogData = {}) =>
-    build(
-      reachable({
-        series: [
-          makeSeries({ id: 'srs_0', name: 'Foundation mocks', branchIds: [BRANCH] }),
-          makeSeries({
-            id: 'srs_1',
-            name: 'Advanced mocks',
-            branchIds: [BRANCH],
-            prerequisiteSeriesId: 'srs_0',
-            unlockMode: UNLOCK_MODE.REQUEST,
-          }),
-        ],
-        ...over,
-      }),
-    );
-
-  it('is LOCKED and still listed, naming what has to come first', async () => {
-    const catalog = await gated().resolver.catalog('stu_1', NOW);
-
-    const series = catalog.series[0];
-    assert.equal(series?.unlockState, UNLOCK_STATE.LOCKED);
-    assert.equal(series?.prerequisiteSeriesName, 'Foundation mocks');
-    assert.equal(series?.canRequestUnlock, true);
-    assert.ok(series?.tests.every((test) => !test.canStart));
-  });
-
-  it('opens once an unlock row carries a time', async () => {
-    const catalog = await gated({
-      unlocks: [{ studentId: 'stu_1', testSeriesId: 'srs_1', unlockedAt: new Date('2026-05-20') }],
-    }).resolver.catalog('stu_1', NOW);
-
-    const series = catalog.series[0];
-    assert.equal(series?.unlockState, UNLOCK_STATE.UNLOCKED);
-    assert.equal(series?.canRequestUnlock, false);
-    assert.equal(series?.tests[0]?.canStart, true);
-  });
-
-  /** An unlock row that was never granted a time is not an unlock. */
-  it('stays LOCKED while the unlock row has no time on it', async () => {
-    const catalog = await gated({
-      unlocks: [{ studentId: 'stu_1', testSeriesId: 'srs_1', unlockedAt: null }],
-    }).resolver.catalog('stu_1', NOW);
-
-    assert.equal(catalog.series[0]?.unlockState, UNLOCK_STATE.LOCKED);
-  });
-});
-
-describe('AccessResolverService — a series that never opens on its own', () => {
-  const byMode = (unlockMode: (typeof UNLOCK_MODE)[keyof typeof UNLOCK_MODE]) =>
-    build(reachable({ series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode })] }));
-
-  /** The failure this prevents: REQUEST reduced to decoration on an already-open series. */
-  it('holds a REQUEST series LOCKED with nothing to come first, and offers the request', async () => {
-    const catalog = await byMode(UNLOCK_MODE.REQUEST).resolver.catalog('stu_1', NOW);
-
-    const series = catalog.series[0];
-    assert.equal(series?.prerequisiteSeriesId, null);
-    assert.equal(series?.unlockState, UNLOCK_STATE.LOCKED);
-    assert.equal(series?.canRequestUnlock, true);
-    assert.ok(series?.tests.every((test) => !test.canStart));
-  });
-
-  it('opens it once an unlock row carries a time', async () => {
-    const catalog = await build(
-      reachable({
-        series: [makeSeries({ id: 'srs_1', branchIds: [BRANCH], unlockMode: UNLOCK_MODE.REQUEST })],
-        unlocks: [
-          { studentId: 'stu_1', testSeriesId: 'srs_1', unlockedAt: new Date('2026-05-20') },
-        ],
-      }),
-    ).resolver.catalog('stu_1', NOW);
-
-    assert.equal(catalog.series[0]?.unlockState, UNLOCK_STATE.UNLOCKED);
-    assert.equal(catalog.series[0]?.tests[0]?.canStart, true);
-  });
-
-  it('leaves an AUTO series with no prerequisite open, needing no row at all', async () => {
-    const catalog = await byMode(UNLOCK_MODE.AUTO).resolver.catalog('stu_1', NOW);
-
-    assert.equal(catalog.series[0]?.unlockState, UNLOCK_STATE.UNLOCKED);
-    assert.equal(catalog.series[0]?.tests[0]?.canStart, true);
-  });
-});
-
 describe('AccessResolverService.assertCanStart', () => {
   it('passes for an active, unlocked test the student reaches', async () => {
     const { resolver } = build(reachable());
@@ -597,6 +506,17 @@ describe('AccessResolverService.assertCanStart', () => {
     const error = await resolver.assertCanStart('stu_1', 'tst_1', NOW).catch((e: unknown) => e);
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.FORBIDDEN);
+  });
+});
+
+describe('AccessResolverService — the read path', () => {
+  /** THE failure this prevents: a catalog GET that opens a series is a write on the hot read path. */
+  it('reads a catalog without writing anything', async () => {
+    const { resolver, prisma } = build(reachable());
+
+    await resolver.catalog('stu_1', NOW);
+
+    assert.deepEqual(prisma.writes, []);
   });
 });
 

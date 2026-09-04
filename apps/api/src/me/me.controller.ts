@@ -29,10 +29,8 @@ import {
   type Me,
   type Notification,
   type NotificationListQuery,
-  type OpenSeriesList,
   type Paginated,
   type RecordConsentBody,
-  type SeriesUnlockRequest,
   type StudentCatalog,
   type StudentDataExport,
   type UpdateMeBody,
@@ -46,7 +44,7 @@ import { Actors, CurrentUser, EVERY_BRANCH, type AuthenticatedUser } from '../co
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
-import { AccessResolverService, UnlocksService } from '../access';
+import { AccessResolverService } from '../access';
 import { NotificationsService } from '../notifications';
 import { MeService } from './me.service';
 import { StudentPrivacyService } from '../students';
@@ -69,7 +67,6 @@ export class MeController {
     private readonly me: MeService,
     private readonly auth: AuthService,
     private readonly access: AccessResolverService,
-    private readonly unlocks: UnlocksService,
     private readonly notifications: NotificationsService,
     private readonly privacy: StudentPrivacyService,
   ) {}
@@ -114,21 +111,6 @@ export class MeController {
   @Get('catalog')
   catalog(@CurrentUser() user: AuthenticatedUser): Promise<StudentCatalog> {
     return this.access.catalog(user.id);
-  }
-
-  /** The FREE series they do not reach yet. Writes nothing — this is the browse list. */
-  @Get('series/open')
-  openSeries(@CurrentUser() user: AuthenticatedUser): Promise<OpenSeriesList> {
-    return this.unlocks.openToAsk(user.id);
-  }
-
-  /** Asking for a locked series they reach, or a FREE one they do not — see the service. */
-  @Post('series/:testSeriesId/unlock-request')
-  requestUnlock(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('testSeriesId') testSeriesId: string,
-  ): Promise<SeriesUnlockRequest> {
-    return this.unlocks.request(user.id, testSeriesId);
   }
 
   @Get('notifications')

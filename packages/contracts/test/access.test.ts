@@ -3,9 +3,7 @@ import { describe, it } from 'node:test';
 import {
   TEST_BUCKET,
   TEST_SERIES_KIND,
-  UNLOCK_REQUEST_STATUS,
   createEventSchema,
-  decideUnlockRequestSchema,
   eventListQuerySchema,
   studentCatalogSeriesSchema,
   testAction,
@@ -24,12 +22,6 @@ const SERIES = {
   programCode: null,
   kind: TEST_SERIES_KIND.STANDARD,
   sequentialTests: false,
-  unlockMode: 'AUTO',
-  unlockState: 'UNLOCKED',
-  prerequisiteSeriesId: null,
-  prerequisiteSeriesName: null,
-  canRequestUnlock: false,
-  unlockRequested: false,
   tests: [
     {
       id: 'tst_1',
@@ -125,29 +117,7 @@ describe('ME_ROUTES.catalog', () => {
   /** No id in the path: the subject is always the token's student — see the controller. */
   it('carries no student id', () => {
     assert.equal(ME_ROUTES.catalog, '/me/catalog');
-    assert.equal(ME_ROUTES.requestUnlock('srs_1'), '/me/series/srs_1/unlock-request');
     assert.equal(ME_ROUTES.readNotification('ntf_1'), '/me/notifications/ntf_1/read');
-  });
-});
-
-describe('decideUnlockRequestSchema', () => {
-  it('takes the two answers an admin can give', () => {
-    assert.equal(
-      decideUnlockRequestSchema.parse({ status: UNLOCK_REQUEST_STATUS.APPROVED }).status,
-      UNLOCK_REQUEST_STATUS.APPROVED,
-    );
-    assert.equal(
-      decideUnlockRequestSchema.parse({ status: UNLOCK_REQUEST_STATUS.REJECTED }).status,
-      UNLOCK_REQUEST_STATUS.REJECTED,
-    );
-  });
-
-  /** PENDING is where a request starts. Deciding it back to "undecided" is not an answer. */
-  it('refuses PENDING as a decision', () => {
-    assert.equal(
-      decideUnlockRequestSchema.safeParse({ status: UNLOCK_REQUEST_STATUS.PENDING }).success,
-      false,
-    );
   });
 });
 

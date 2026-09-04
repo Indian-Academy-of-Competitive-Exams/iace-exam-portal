@@ -12,18 +12,12 @@ import {
   TEST_SERIES_KIND,
   TEST_STATUS,
   type TestSeriesKind,
-  UNLOCK_REQUEST_STATUS,
-  UNLOCK_STATE,
-  type UnlockMode,
-  type UnlockState,
   testIsOpen,
   testWindow,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
-import { DomainEventBus } from '../common/events';
-import { applyAutoUnlocks, needsUnlock } from './auto-unlock';
 
 /** A sitting that counts as done — for the series that unlocks in order, and for the test list. */
 const FINISHED = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
@@ -35,12 +29,11 @@ const CATALOG_TTL_SEC = 15 * 60;
  * Bump on every change to `ResolvedCatalog`: the epochs survive a deploy, so without this a
  * payload the previous build wrote is read back as the new shape until its TTL runs out.
  */
-const CATALOG_SHAPE = 'v9';
+const CATALOG_SHAPE = 'v10';
 
 const catalogInclude = (programs: string[]) =>
   ({
     examStage: { select: { id: true, name: true, exam: { select: { code: true, course: true } } } },
-    prerequisiteSeries: { select: { name: true } },
     directTests: {
       where: { status: TEST_STATUS.ACTIVE },
       select: {
@@ -85,11 +78,6 @@ interface ResolvedSeries {
   programCode: string | null;
   kind: TestSeriesKind;
   sequentialTests: boolean;
-  unlockMode: UnlockMode;
-  unlockState: UnlockState;
-  prerequisiteSeriesId: string | null;
-  prerequisiteSeriesName: string | null;
-  unlockRequested: boolean;
   tests: ResolvedTest[];
 }
 
@@ -112,18 +100,12 @@ interface ResolvedCatalog {
   series: ResolvedSeries[];
 }
 
-interface FreshCatalog {
-  catalog: ResolvedCatalog;
-  opened: boolean;
-}
-
 /** The one place "can this student reach this?" is answered: by the series' kind, or by a grant. */
 @Injectable()
 export class AccessResolverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly events: DomainEventBus,
   ) {}
 
   /** The catalog as of `now` — availability and `canStart` are derived here on every read. */
@@ -229,10 +211,8 @@ export class AccessResolverService {
     const cached = await this.redis.getJson<ResolvedCatalog>(key);
     if (cached) return cached;
 
-    const { catalog, opened } = await this.resolve(studentId);
-    // An unlock this read performed busts the epoch `key` was built from, so the entry would be
-    // dead the moment it was written — and the read that follows recomputes anyway.
-    if (!opened) await this.redis.setJson(key, catalog, CATALOG_TTL_SEC);
+    const catalog = await this.resolve(studentId);
+    await this.redis.setJson(key, catalog, CATALOG_TTL_SEC);
     return catalog;
   }
 
@@ -249,7 +229,7 @@ export class AccessResolverService {
     );
   }
 
-  private async resolve(studentId: string): Promise<FreshCatalog> {
+  private async resolve(studentId: string): Promise<ResolvedCatalog> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, deletedAt: null, isActive: true },
       select: {
@@ -268,46 +248,11 @@ export class AccessResolverService {
     });
 
     const sittings = await this.sittings(studentId);
-    // Before the unlock state is read, so a series this call opens is UNLOCKED in this call.
-    const opened = await applyAutoUnlocks(
-      this.prisma,
-      this.events,
-      studentId,
-      rows,
-      finishedTests(sittings),
-      new Date(),
-    );
-    const unlocked = await this.unlockedIds(studentId, rows);
-    for (const id of opened) unlocked.add(id);
-    const asked = await this.askedIds(studentId);
 
     return {
-      catalog: {
-        testBlocked: student.isTestBlocked,
-        series: rows.map((row) => toResolved(row, unlocked, asked, sittings)),
-      },
-      opened: opened.length > 0,
+      testBlocked: student.isTestBlocked,
+      series: rows.map((row) => toResolved(row, sittings)),
     };
-  }
-
-  /** The asks still in the queue, so a locked series can offer waiting instead of asking again. */
-  private async askedIds(studentId: string): Promise<Set<string>> {
-    const rows = await this.prisma.seriesUnlockRequest.findMany({
-      where: { studentId, status: UNLOCK_REQUEST_STATUS.PENDING },
-      select: { testSeriesId: true },
-    });
-    return new Set(rows.map((row) => row.testSeriesId));
-  }
-
-  private async unlockedIds(studentId: string, rows: CatalogRow[]): Promise<Set<string>> {
-    const gated = rows.filter(needsUnlock).map((row) => row.id);
-    if (gated.length === 0) return new Set();
-
-    const unlocks = await this.prisma.studentSeriesUnlock.findMany({
-      where: { studentId, testSeriesId: { in: gated }, unlockedAt: { not: null } },
-      select: { testSeriesId: true },
-    });
-    return new Set(unlocks.map((row) => row.testSeriesId));
   }
 }
 
@@ -346,14 +291,7 @@ export function reachableBy(
   return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
 }
 
-function toResolved(
-  row: CatalogRow,
-  unlocked: Set<string>,
-  asked: ReadonlySet<string>,
-  sittings: ReadonlyMap<string, AttemptStatus>,
-): ResolvedSeries {
-  const locked = needsUnlock(row) && !unlocked.has(row.id);
-
+function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus>): ResolvedSeries {
   return {
     id: row.id,
     name: row.name,
@@ -369,11 +307,6 @@ function toResolved(
     programCode: row.programCode,
     kind: row.kind,
     sequentialTests: row.sequentialTests,
-    unlockMode: row.unlockMode,
-    unlockState: locked ? UNLOCK_STATE.LOCKED : UNLOCK_STATE.UNLOCKED,
-    prerequisiteSeriesId: row.prerequisiteSeriesId,
-    prerequisiteSeriesName: row.prerequisiteSeries?.name ?? null,
-    unlockRequested: asked.has(row.id),
     tests: row.directTests.map((test) => toResolvedTest(test, sittings)).sort(byOrderThenId),
   };
 }
@@ -417,15 +350,7 @@ function toResolvedTest(
 const isFinished = (status: AttemptStatus | null): boolean =>
   status !== null && FINISHED.has(status);
 
-/** What a prerequisite series is measured in: the tests this student has actually sat. */
-function finishedTests(sittings: ReadonlyMap<string, AttemptStatus>): Set<string> {
-  const done = new Set<string>();
-  for (const [testId, status] of sittings) if (isFinished(status)) done.add(testId);
-  return done;
-}
-
 function project(series: ResolvedSeries, testBlocked: boolean, now: Date): StudentCatalogSeries {
-  const reachable = series.unlockState === UNLOCK_STATE.UNLOCKED && !testBlocked;
   // In order means: the first one not yet sat is open, and everything past it waits its turn.
   const waiting = series.sequentialTests
     ? series.tests.findIndex((test) => !isFinished(test.attemptStatus))
@@ -433,9 +358,8 @@ function project(series: ResolvedSeries, testBlocked: boolean, now: Date): Stude
 
   return {
     ...series,
-    canRequestUnlock: series.unlockState === UNLOCK_STATE.LOCKED,
     tests: series.tests.map((test, index) =>
-      projectTest(test, reachable && (waiting === NONE_WAITING || index <= waiting), now),
+      projectTest(test, !testBlocked && (waiting === NONE_WAITING || index <= waiting), now),
     ),
   };
 }

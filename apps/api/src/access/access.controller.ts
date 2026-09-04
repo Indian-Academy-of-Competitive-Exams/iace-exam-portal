@@ -16,7 +16,6 @@ import {
   AUDIT_FEATURE,
   createProgramSchema,
   createTestSeriesSchema,
-  decideUnlockRequestSchema,
   FEATURE_KEYS,
   grantSeriesSchema,
   PERMISSION_LEVELS,
@@ -24,19 +23,16 @@ import {
   branchSeriesListQuerySchema,
   setBranchSeriesSchema,
   testSeriesListQuerySchema,
-  unlockRequestListQuerySchema,
   updateBranchTestConfigSchema,
   updateProgramSchema,
   updateTestSeriesSchema,
   type BranchTestConfigRow,
   type CreateProgramBody,
   type CreateTestSeriesBody,
-  type DecideUnlockRequestBody,
   type GrantSeriesBody,
   type Paginated,
   type Program,
   type ProgramListQuery,
-  type SeriesUnlockRequestRow,
   type StudentGrantRow,
   type StudentSeriesAccess,
   type BranchSeriesListQuery,
@@ -44,7 +40,6 @@ import {
   type SetBranchSeriesBody,
   type TestSeriesListQuery,
   type TestSeriesSummary,
-  type UnlockRequestListQuery,
   type UpdateBranchTestConfigBody,
   type UpdateProgramBody,
   type UpdateTestSeriesBody,
@@ -63,7 +58,6 @@ import { Audit } from '../audit';
 import { ProgramsService } from './programs.service';
 import { TestSeriesService } from './test-series.service';
 import { StudentGrantsService } from './student-grants.service';
-import { UnlocksService } from './unlocks.service';
 
 /** The coaching variants a student can be a candidate for. Super admin writes, everyone reads. */
 @Controller('admin/programs')
@@ -216,34 +210,6 @@ export class BranchSeriesController {
   ): Promise<{ changed: number }> {
     assertBranchInScope(branchScopeOf(user), branchId);
     return this.series.setSeriesForBranch(branchId, body).then((changed) => ({ changed }));
-  }
-}
-
-/** The unlock queue is about series, so it is gated on TEST_MANAGEMENT — there is no key of its own. */
-@Controller('admin/unlock-requests')
-@Actors(ActorTypes.ADMIN)
-export class UnlockRequestsController {
-  constructor(private readonly unlocks: UnlocksService) {}
-
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get()
-  list(
-    @Query(new ZodQuery(unlockRequestListQuerySchema)) query: UnlockRequestListQuery,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Paginated<SeriesUnlockRequestRow>> {
-    return this.unlocks.listRequests(query, branchScopeOf(user));
-  }
-
-  /** Approving opens a locked series, or grants a FREE one they do not reach — see the service. */
-  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id')
-  decide(
-    @Param('id') id: string,
-    @Body(new ZodBody(decideUnlockRequestSchema)) body: DecideUnlockRequestBody,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<SeriesUnlockRequestRow> {
-    return this.unlocks.decide(id, user.id, body.status, branchScopeOf(user));
   }
 }
 

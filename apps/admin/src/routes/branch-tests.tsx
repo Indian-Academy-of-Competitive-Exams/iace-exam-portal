@@ -40,7 +40,6 @@ import { BranchPicker } from '../components/branch-picker';
 import { ExamStageMultiPicker } from '../components/exam-picker';
 import { TestSeriesMultiPicker } from '../components/access-picker';
 import { StageCell } from '../components/stage-cell';
-import { AccessRequestList } from './access-requests';
 import { NAV_ITEMS, QUERY_KEYS, TEST_SERIES_KIND_LABELS } from '../lib/constants';
 import { opensLabel, toMinutes, toSeconds } from '../lib/schedule-format';
 import { useStandingBranch } from '../lib/use-standing-branch';
@@ -562,17 +561,5 @@ function MinutesField({
         />
       )}
     </FormField>
-  );
-}
-
-// ============================================================================
-// Access requests — the existing queue, narrowed to this branch's students.
-// ============================================================================
-
-export function BranchAccessRequestsPage() {
-  return (
-    <BranchScreen title="Access requests">
-      {(branch, picker) => <AccessRequestList branchId={branch.id} leading={picker} />}
-    </BranchScreen>
   );
 }

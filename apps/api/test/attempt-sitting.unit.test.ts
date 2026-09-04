@@ -20,7 +20,6 @@ import { SubmitService } from '../src/attempts/submit.service';
 import { QUEUE_NAMES } from '../src/queue/queues';
 import {
   FakeCatalogPrisma,
-  FakeEventBus,
   FakeMetrics,
   FakeQueue,
   FakeRedis,
@@ -83,11 +82,7 @@ function catalogue() {
       makeTestRow({ id: TEST, status: TEST_STATUS.ACTIVE, testSeriesId: 'srs_1', seriesOrder: 1 }),
     ],
   });
-  return new AccessResolverService(
-    prisma.asService(),
-    new FakeRedis().asService(),
-    new FakeEventBus().asService(),
-  );
+  return new AccessResolverService(prisma.asService(), new FakeRedis().asService());
 }
 
 function hall() {
