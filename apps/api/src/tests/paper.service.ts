@@ -93,7 +93,7 @@ export class PaperService {
   async read(testId: string, variant?: number): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     const requested = variant ?? FIXED_VARIANT;
-    // A FIXED test has only variant 0 because variantCount defaults to 1 — nothing enforces it.
+    // No CHECK holds a FIXED test to its one variant — variantCountFor does, on create and update.
     if (requested >= test.variantCount) {
       throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_VARIANT_MESSAGE);
     }
