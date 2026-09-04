@@ -76,7 +76,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
   }, [paper]);
 
   const save = useMutation({
-    meta: { success: 'Pool saved.' },
+    meta: { success: 'Drawn from saved.' },
     // Alone on purpose: Setup owns every other field, and a stale copy would undo its last save.
     mutationFn: (next: DrawSpec) => api.admin.tests.update(detail.id, { questionPoolFilter: next }),
     onSuccess: async (saved) => {

@@ -62,8 +62,9 @@ export function PaperSectionRail({
   return (
     <div
       className={cn(
-        'flex min-h-0 shrink-0 flex-col gap-2 border-r border-border pr-3',
-        collapsed ? 'w-[--nav-item-h]' : 'w-56',
+        'flex min-h-0 shrink-0 flex-col gap-2 border-r border-border',
+        // The rail token is sized for a disc plus air; a row's own width would clip it.
+        collapsed ? 'w-[--sidebar-w-rail] px-1' : 'w-56 pr-3',
       )}
     >
       <Tooltip>
@@ -82,7 +83,10 @@ export function PaperSectionRail({
       </Tooltip>
 
       {/* `relative`, because an sr-only label under a static scroller escapes it and grows the page. */}
-      <ul aria-label="Sections" className="relative min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+      <ul
+        aria-label="Paper sections"
+        className="relative min-h-0 flex-1 space-y-0.5 overflow-y-auto"
+      >
         {sections.map((section, index) => {
           const count = held.get(section.id) ?? 0;
           const short = count < section.questionCount;
