@@ -63,6 +63,7 @@ export {
 export { ProtectedRoute } from './protected-route';
 export { useFilters } from './use-filters';
 export { useFullscreen, type FullscreenHandle } from './use-fullscreen';
+export { useMediaQuery, DESKTOP_QUERY } from './app-shell/use-media-query';
 export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { useListScreen } from './use-list-screen';
 export { useScrollList } from './use-scroll-list';

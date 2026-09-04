@@ -1,20 +1,40 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DrawSpec, TestDetail, TestPaper } from '@iace/contracts';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  AppException,
+  FORM_LEVEL_FIELD,
+  PAPER_BINDING,
+  sectionQuota,
+  type BaseConfigSection,
+  type DrawSpec,
+  type PaperRow,
+  type SectionDrawSpec,
+  type TestDetail,
+  type TestPaper,
+} from '@iace/contracts';
+import { bannerMessage } from '@iace/app-kit';
+import { DESKTOP_QUERY, PageCrumbs, useMediaQuery } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
   PageHeader,
   PaneFrame,
+  SectionHeading,
   Skeleton,
   SkeletonParagraph,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
   type BreadcrumbItem,
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { DrawSpecEditor } from '../components/draw-spec';
+import { PaperQuestions } from '../components/paper-questions';
 import { PaperSectionRail } from '../components/paper-section-rail';
+import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
@@ -24,6 +44,10 @@ const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as cons
 
 /** Referentially stable, so a test that has never had a pool does not remount the editor. */
 const NO_SPEC: DrawSpec = { sections: {} };
+const NO_PICKS: QuestionPicks = new Map();
+
+/** A batch is refused whole, and the server keys the refusal by one of these two. */
+const ADD_ERROR_FIELDS = ['questionId', 'questionIds'] as const;
 
 export function TestPaperPage() {
   const { id } = useParams();
@@ -62,9 +86,11 @@ export function TestPaperPage() {
 function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper: TestPaper }>) {
   const queryClient = useQueryClient();
   const sections = detail.baseConfig.sections;
+  const desktop = useMediaQuery(DESKTOP_QUERY);
+  const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
 
   const [openSectionId, setOpenSectionId] = useState(sections[0]?.id ?? '');
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(!desktop);
   const [draft, setDraft] = useState<DrawSpec | null>(null);
 
   const held = useMemo(() => {
@@ -74,6 +100,12 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     }
     return counts;
   }, [paper]);
+
+  // The whole paper, not one section: a question sits on it once, wherever it was put.
+  const onThePaper = useMemo(
+    () => new Set(paper.sections.flatMap((row) => row.questions.map((q) => q.questionId))),
+    [paper],
+  );
 
   const save = useMutation({
     meta: { success: 'Drawn from saved.' },
@@ -86,22 +118,24 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     },
   });
 
+  const refresh = async (next: TestPaper) => {
+    queryClient.setQueryData(PAPER_KEY(detail.id), next);
+    await queryClient.invalidateQueries({ queryKey: TEST_KEY(detail.id) });
+  };
+
   const spec = draft ?? detail.questionPoolFilter ?? NO_SPEC;
   // Saving the pool moves the paper, so on a frozen test it would thaw the finalize away.
   const editable = !detail.isLocked && detail.attemptCount === 0;
-
   const openSection = sections.find((section) => section.id === openSectionId) ?? sections[0];
+  const title = detail.title ?? 'Untitled test';
   const chosen = [...held.values()].reduce((sum, count) => sum + count, 0);
 
-  const tail: BreadcrumbItem[] = [
-    { label: detail.title ?? 'Untitled test', to: ROUTES.TEST(detail.id) },
-    { label: 'Paper' },
-  ];
+  const tail: BreadcrumbItem[] = [{ label: title, to: ROUTES.TEST(detail.id) }, { label: 'Paper' }];
 
   const header = (
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={tail} />}
-      title={detail.title ?? 'Untitled test'}
+      title={title}
       meta={`${chosen} of ${detail.totalQuestions} chosen`}
     />
   );
@@ -116,6 +150,10 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     );
   }
 
+  const sectionSpec = spec.sections[openSection.id] ?? {};
+  const rows =
+    paper.sections.find((row) => row.baseConfigSectionId === openSection.id)?.questions ?? [];
+
   return (
     <PaneFrame header={header} className="flex gap-4">
       <PaperSectionRail
@@ -127,37 +165,219 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
         onCollapsedChange={setCollapsed}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6">
-        <section className="flex min-h-0 flex-col gap-3">
-          <div className="flex shrink-0 items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">Drawn from</h2>
-            {editable ? (
-              <Button
-                size="sm"
-                disabled={draft === null}
-                loading={save.isPending}
-                onClick={() => save.mutate(spec)}
-              >
-                Save
-              </Button>
-            ) : null}
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <DrawnFrom
+          section={openSection}
+          spec={sectionSpec}
+          editable={editable}
+          fills={!byHand}
+          dirty={draft !== null}
+          saving={save.isPending}
+          onSave={() => save.mutate(spec)}
+          onChange={(next) => setDraft({ sections: { ...spec.sections, [openSection.id]: next } })}
+        />
 
-          <div className="relative min-h-0 overflow-y-auto pr-2">
-            {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
-            <fieldset disabled={!editable} className="contents">
-              <DrawSpecEditor
-                section={openSection}
-                spec={spec.sections[openSection.id] ?? {}}
-                disabled={!editable}
-                onChange={(next) =>
-                  setDraft({ sections: { ...spec.sections, [openSection.id]: next } })
-                }
-              />
-            </fieldset>
-          </div>
-        </section>
+        {byHand ? (
+          // Keyed by the section: switching one drops its ticks and its last refusal with it.
+          <SectionWorkspace
+            key={openSection.id}
+            testId={detail.id}
+            section={openSection}
+            spec={sectionSpec}
+            rows={rows}
+            held={onThePaper}
+            editable={editable}
+            onChanged={refresh}
+          />
+        ) : null}
       </div>
     </PaneFrame>
+  );
+}
+
+/** What the open section draws from, folded away where the lists below need the pane. */
+function DrawnFrom({
+  section,
+  spec,
+  editable,
+  fills,
+  dirty,
+  saving,
+  onSave,
+  onChange,
+}: Readonly<{
+  section: BaseConfigSection;
+  spec: SectionDrawSpec;
+  editable: boolean;
+  /** True where it is the whole pane, which is the only time it opens on arrival. */
+  fills: boolean;
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+  onChange: (next: SectionDrawSpec) => void;
+}>) {
+  const [open, setOpen] = useState(fills);
+  const label = open ? 'Hide drawn from' : 'Show drawn from';
+  const Glyph = open ? ChevronUp : ChevronDown;
+
+  const save = editable ? (
+    <Button size="sm" disabled={!dirty} loading={saving} onClick={onSave}>
+      Save
+    </Button>
+  ) : null;
+
+  return (
+    <section className={cn('flex flex-col gap-3', fills ? 'min-h-0 flex-1' : 'shrink-0')}>
+      <SectionHeading
+        className="shrink-0"
+        title="Drawn from"
+        action={
+          <span className="flex items-center gap-2">
+            {save}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  aria-expanded={open}
+                  onClick={() => setOpen(!open)}
+                >
+                  <Glyph aria-hidden />
+                  <span className="sr-only">{label}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+          </span>
+        }
+      />
+
+      {open ? (
+        // Capped so the lists below keep their share, and `relative` so an sr-only label stays in.
+        <div className={cn('relative overflow-y-auto pr-2', fills ? 'min-h-0 flex-1' : 'max-h-64')}>
+          {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
+          <fieldset disabled={!editable} className="contents">
+            <DrawSpecEditor
+              section={section}
+              spec={spec}
+              disabled={!editable}
+              onChange={onChange}
+            />
+          </fieldset>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/** A fill is keyed by its section, an over-quota one by the form; either belongs beside the list. */
+function sectionMessage(error: unknown, sectionId: string): string | null {
+  if (!AppException.is(error)) return bannerMessage(error);
+  const fields = error.fieldErrors ?? {};
+  return fields[sectionId]?.[0] ?? fields[FORM_LEVEL_FIELD]?.[0] ?? error.message;
+}
+
+/** The bank and the paper side by side, and the two ways a section is filled from one. */
+function SectionWorkspace({
+  testId,
+  section,
+  spec,
+  rows,
+  held,
+  editable,
+  onChanged,
+}: Readonly<{
+  testId: string;
+  section: BaseConfigSection;
+  spec: SectionDrawSpec;
+  rows: readonly PaperRow[];
+  /** Every question the whole paper holds, since one sits on it once wherever it was put. */
+  held: ReadonlySet<string>;
+  editable: boolean;
+  onChanged: (next: TestPaper) => Promise<void>;
+}>) {
+  const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
+
+  const add = useMutation({
+    meta: { success: 'Added to the paper.', fields: ADD_ERROR_FIELDS },
+    mutationFn: (questionIds: readonly string[]) =>
+      api.admin.tests.addPaperQuestions(testId, {
+        baseConfigSectionId: section.id,
+        questionIds: [...questionIds],
+      }),
+    onSuccess: async (next) => {
+      setPicked(NO_PICKS);
+      await onChanged(next);
+    },
+  });
+
+  const fill = useMutation({
+    meta: { success: 'Section filled.', fields: [section.id, FORM_LEVEL_FIELD] },
+    mutationFn: () => api.admin.tests.fillPaperSection(testId, section.id),
+    onSuccess: onChanged,
+  });
+
+  const quota = sectionQuota(
+    spec.mix,
+    rows.map((row) => row.question.difficulty),
+  );
+  const refused = bannerMessage(add.error);
+  const shortfall = sectionMessage(fill.error, section.id);
+
+  const addAction = (
+    <Button
+      size="sm"
+      disabled={picked.size === 0}
+      loading={add.isPending}
+      onClick={() => add.mutate([...picked.keys()])}
+    >
+      {picked.size === 0 ? 'Add' : `Add ${picked.size}`}
+    </Button>
+  );
+
+  const fillAction =
+    editable && rows.length < section.questionCount ? (
+      <Button size="sm" variant="outline" loading={fill.isPending} onClick={() => fill.mutate()}>
+        Fill remaining
+      </Button>
+    ) : null;
+
+  const shortfallBanner = shortfall ? (
+    <Alert variant="danger" className="shrink-0">
+      {shortfall}
+    </Alert>
+  ) : null;
+
+  return (
+    <>
+      {refused ? (
+        <Alert variant="danger" className="shrink-0">
+          {refused}
+        </Alert>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+        {editable ? (
+          <QuestionChooser
+            section={section}
+            spec={spec}
+            quota={quota}
+            held={held}
+            picking={{ picked, onPicked: setPicked, action: addAction }}
+          />
+        ) : null}
+
+        <PaperQuestions
+          testId={testId}
+          section={section}
+          rows={rows}
+          spec={spec}
+          editable={editable}
+          action={fillAction}
+          banner={shortfallBanner}
+          onChanged={onChanged}
+        />
+      </div>
+    </>
   );
 }

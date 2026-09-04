@@ -18,12 +18,11 @@ const CAPPED_VIEWPORT = 'max-h-[26rem] overflow-auto';
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
   ({ className, scroll, ...props }, ref) => {
     const fills = useInTableFrame();
-    const viewport = fills ? 'min-h-0 flex-1 overflow-auto' : 'overflow-x-auto';
+    // Inside a frame the frame owns the height, so even a paging table fills instead of capping.
+    const unframed = scroll ? CAPPED_VIEWPORT : 'overflow-x-auto';
+    const viewport = fills ? 'min-h-0 flex-1 overflow-auto' : unframed;
     return (
-      <div
-        onScroll={scroll?.onScroll}
-        className={cn('relative w-full', scroll ? CAPPED_VIEWPORT : viewport)}
-      >
+      <div onScroll={scroll?.onScroll} className={cn('relative w-full', viewport)}>
         <table
           ref={ref}
           className={cn('w-full border-separate border-spacing-0 text-sm', className)}

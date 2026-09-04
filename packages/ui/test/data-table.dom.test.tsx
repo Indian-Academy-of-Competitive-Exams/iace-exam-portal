@@ -99,6 +99,7 @@ describe('DataTable selection', () => {
   const table = (
     selected: ReadonlySet<string>,
     onChange: (next: ReadonlySet<string>) => void = () => {},
+    selectable?: (key: string) => boolean,
   ) =>
     render(
       <DataTable
@@ -107,7 +108,7 @@ describe('DataTable selection', () => {
         rowKey={(row) => row.id}
         isLoading={false}
         empty="none"
-        selection={{ selected, onChange }}
+        selection={{ selected, onChange, selectable }}
       />,
     );
 
@@ -152,6 +153,56 @@ describe('DataTable selection', () => {
 
   it('the header reads as ticked only when every row shown is', () => {
     table(new Set(['a', 'b']));
+
+    assert.ok((screen.getByLabelText('Select every row shown') as HTMLInputElement).checked);
+  });
+
+  /** The failure this prevents: 300 rows ticked against a section that can take five. */
+  it('takes only the rows a tick can reach', () => {
+    let got: ReadonlySet<string> = new Set();
+    table(
+      new Set(),
+      (next) => (got = next),
+      (key) => key === 'a',
+    );
+
+    fireEvent.click(screen.getByLabelText('Select every row shown'));
+
+    assert.deepEqual([...got], ['a']);
+  });
+
+  it('disables the box on a row a tick cannot reach', () => {
+    table(
+      new Set(),
+      () => {},
+      (key) => key === 'a',
+    );
+
+    assert.equal((screen.getByLabelText('Select row b') as HTMLInputElement).disabled, true);
+    assert.equal((screen.getByLabelText('Select row a') as HTMLInputElement).disabled, false);
+  });
+
+  /** Out of reach means it cannot be ADDED; a tick already made is always the reader's to take back. */
+  it('leaves a ticked row tickable even once it is out of reach', () => {
+    let got: ReadonlySet<string> = new Set(['b']);
+    table(
+      new Set(['b']),
+      (next) => (got = next),
+      () => false,
+    );
+
+    assert.equal((screen.getByLabelText('Select row b') as HTMLInputElement).disabled, false);
+    fireEvent.click(screen.getByLabelText('Select row b'));
+
+    assert.deepEqual([...got], []);
+  });
+
+  it('the header reads as ticked once everything within reach is', () => {
+    table(
+      new Set(['a']),
+      () => {},
+      (key) => key === 'a',
+    );
 
     assert.ok((screen.getByLabelText('Select every row shown') as HTMLInputElement).checked);
   });

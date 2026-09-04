@@ -50,10 +50,13 @@ export interface PaneFrameProps {
 /** The one frame that does not scroll its own body — children own their scrolling instead. */
 export function PaneFrame({ header, children, className }: Readonly<PaneFrameProps>) {
   return (
-    <div data-page-frame className={FILLS}>
-      {header ? <div className="shrink-0">{header}</div> : null}
-      <div className={cn('min-h-0 flex-1', className)}>{children}</div>
-    </div>
+    // Its children own the scrolling, so a table dropped in fills its pane rather than capping itself.
+    <TableFrameContext value={true}>
+      <div data-page-frame className={FILLS}>
+        {header ? <div className="shrink-0">{header}</div> : null}
+        <div className={cn('min-h-0 flex-1', className)}>{children}</div>
+      </div>
+    </TableFrameContext>
   );
 }
 

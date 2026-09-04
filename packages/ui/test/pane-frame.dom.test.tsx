@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { cleanup, render, screen } from '@testing-library/react';
+import { DataTable } from '../src/components/ui/data-table';
 import { PaneFrame } from '../src/components/ui/table-frame';
 
 afterEach(cleanup);
@@ -57,5 +58,25 @@ describe('PaneFrame', () => {
     );
 
     assert.ok(screen.getByText('body'));
+  });
+
+  /** The frame owns the height here, so a paging list must not also cap itself half way down it. */
+  it('lets a paging table fill the pane instead of capping', () => {
+    render(
+      <PaneFrame>
+        <DataTable
+          columns={[{ key: 'name', header: 'Name', cell: () => 'Alpha' }]}
+          rows={[{ id: 'a' }]}
+          rowKey={(row) => row.id}
+          isLoading={false}
+          empty="none"
+          scroll={{ hasMore: true }}
+        />
+      </PaneFrame>,
+    );
+
+    const scroller = screen.getByRole('table').parentElement;
+    assert.match(scroller?.className ?? '', /flex-1/);
+    assert.ok(!scroller?.className.includes('max-h-'));
   });
 });

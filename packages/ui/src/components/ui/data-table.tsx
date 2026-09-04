@@ -60,6 +60,8 @@ export interface DataTableSelection {
   onChange: (selected: ReadonlySet<string>) => void;
   /** The label the header checkbox announces, since a table has no heading of its own. */
   label?: string;
+  /** Which rows a tick may be ADDED to. A ticked row can always be unticked. */
+  selectable?: (key: string) => boolean;
 }
 
 /**
@@ -88,12 +90,15 @@ export function DataTable<TRow>({
     setOpen(next);
   };
   const keys = rows.map(rowKey);
-  // Only what is on screen: a header box that silently took the other nine pages would be a lie.
-  const allShown = keys.length > 0 && keys.every((key) => selection?.selected.has(key));
+  const reaches = (key: string) =>
+    Boolean(selection?.selected.has(key)) || (selection?.selectable?.(key) ?? true);
+  // Only what is on screen and within reach: a box that silently took the rest would be a lie.
+  const reachable = keys.filter(reaches);
+  const allShown = reachable.length > 0 && reachable.every((key) => selection?.selected.has(key));
 
   const toggleAll = (on: boolean) => {
     const next = new Set(selection?.selected);
-    for (const key of keys) {
+    for (const key of reachable) {
       if (on) next.add(key);
       else next.delete(key);
     }
@@ -176,6 +181,7 @@ export function DataTable<TRow>({
                       <Checkbox
                         aria-label={`Select row ${rowKey(row)}`}
                         checked={selection.selected.has(rowKey(row))}
+                        disabled={!reaches(rowKey(row))}
                         onChange={(event) => toggleOne(rowKey(row), event.target.checked)}
                       />
                     </TableCell>

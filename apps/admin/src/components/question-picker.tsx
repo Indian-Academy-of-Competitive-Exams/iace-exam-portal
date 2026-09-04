@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
@@ -19,9 +19,11 @@ import {
   Badge,
   Button,
   ListView,
+  SectionHeading,
   TruncatedText,
   plural,
   type DataTableColumn,
+  type DataTableSelection,
   type ListFilterMultiControl,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -32,6 +34,17 @@ import { QuestionLink } from './question-viewer';
 
 /** A screenful at a time: the rest arrives as the reader scrolls, so nothing pages under them. */
 const POOL_PAGE_SIZE = 25;
+
+/** What is ticked, by question, carrying the difficulty a filter change would otherwise hide. */
+export type QuestionPicks = ReadonlyMap<string, DifficultyLevel>;
+
+export interface QuestionPicking {
+  picked: QuestionPicks;
+  /** Already bound to what the section can still take — the caller only has to send it. */
+  onPicked: (next: QuestionPicks) => void;
+  /** Beside the heading — what sends the ticked questions, and what it says it will send. */
+  action?: ReactNode;
+}
 
 const DIFFICULTY_VARIANT: Readonly<
   Record<QuestionSummary['difficulty'], 'success' | 'warning' | 'danger'>
@@ -45,44 +58,56 @@ const DIFFICULTY_VARIANT: Readonly<
 function refusalText(refusal: PickRefusal, level: DifficultyLevel): string {
   return refusal === PICK_REFUSAL.QUOTA_MET
     ? `${DIFFICULTY_LABELS[level]} is full`
-    : 'Section is full';
+    : 'No room left';
+}
+
+/** The paper's quota with the ticks counted too, so a batch cannot be built past its own bound. */
+function withPicks(quota: SectionQuota, picks: readonly DifficultyLevel[]): SectionQuota {
+  return Object.fromEntries(
+    DIFFICULTY_LEVELS.map((level) => [
+      level,
+      { ...quota[level], chosen: quota[level].chosen + picks.filter((p) => p === level).length },
+    ]),
+  ) as SectionQuota;
 }
 
 function questionColumns(
   options: Readonly<{
     onAdd: ((question: QuestionSummary) => void) | undefined;
+    picking: QuestionPicking | undefined;
     held: ReadonlySet<string>;
     quota: SectionQuota;
     questionCount: number;
   }>,
 ): DataTableColumn<QuestionSummary>[] {
-  const { onAdd, held, quota, questionCount } = options;
-  const add: DataTableColumn<QuestionSummary>[] = onAdd
-    ? [
-        {
-          key: 'add',
-          className: 'text-right',
-          cell: (question) => {
-            if (held.has(question.id)) {
-              return <span className="text-xs text-muted-foreground">On the paper</span>;
-            }
-            const refusal = pickIssue(question.difficulty, quota, questionCount);
-            return refusal ? (
-              <span className="text-xs text-muted-foreground">
-                {refusalText(refusal, question.difficulty)}
-              </span>
-            ) : (
-              <Button type="button" size="sm" variant="outline" onClick={() => onAdd(question)}>
-                <Plus aria-hidden />
-                Add
-              </Button>
-            );
-          },
-        },
-      ]
-    : [];
+  const { onAdd, picking, held, quota, questionCount } = options;
+  if (!onAdd && !picking) return baseColumns();
 
-  return [...baseColumns(), ...add];
+  const pick: DataTableColumn<QuestionSummary> = {
+    key: 'pick',
+    className: 'whitespace-nowrap text-right',
+    cell: (question) => {
+      if (held.has(question.id)) {
+        return <span className="text-xs text-muted-foreground">On the paper</span>;
+      }
+      const refusal = pickIssue(question.difficulty, quota, questionCount);
+      if (refusal) {
+        return (
+          <span className="text-xs text-muted-foreground">
+            {refusalText(refusal, question.difficulty)}
+          </span>
+        );
+      }
+      return onAdd ? (
+        <Button type="button" size="sm" variant="outline" onClick={() => onAdd(question)}>
+          <Plus aria-hidden />
+          Add
+        </Button>
+      ) : null;
+    },
+  };
+
+  return [...baseColumns(), pick];
 }
 
 /** Two columns, not six: this list lives in half a screen and a row read across is unread. */
@@ -154,6 +179,7 @@ export function QuestionChooser({
   quota,
   held,
   onAdd,
+  picking,
   disabled,
 }: Readonly<{
   section: BaseConfigSection;
@@ -162,22 +188,28 @@ export function QuestionChooser({
   quota: SectionQuota;
   /** What the paper already holds, so a question on it is not offered twice. */
   held: ReadonlySet<string>;
-  onAdd: (question: QuestionSummary) => void;
+  onAdd?: (question: QuestionSummary) => void;
+  /** Given, rows are ticked and added in one batch instead of one at a time. */
+  picking?: QuestionPicking;
   disabled?: boolean;
 }>) {
   const store = useLocalFilters();
   const taken = DIFFICULTY_LEVELS.reduce((sum, level) => sum + quota[level].chosen, 0);
   const full = taken >= section.questionCount;
+  const picks = useMemo(() => [...(picking?.picked.values() ?? [])], [picking?.picked]);
+  const live = useMemo(() => withPicks(quota, picks), [quota, picks]);
 
+  const adder = disabled || full ? undefined : onAdd;
   const columns = useMemo(
     () =>
       questionColumns({
-        onAdd: disabled || full ? undefined : onAdd,
+        onAdd: adder,
+        picking,
         held,
-        quota,
+        quota: live,
         questionCount: section.questionCount,
       }),
-    [disabled, full, onAdd, held, quota, section.questionCount],
+    [adder, picking, held, live, section.questionCount],
   );
 
   const filterSpec = [
@@ -194,7 +226,7 @@ export function QuestionChooser({
       label: 'Difficulty',
       primary: true,
       width: 'w-auto',
-      render: (control: ListFilterMultiControl) => <DifficultyChips {...control} quota={quota} />,
+      render: (control: ListFilterMultiControl) => <DifficultyChips {...control} quota={live} />,
     },
   ] as const;
 
@@ -212,28 +244,63 @@ export function QuestionChooser({
     fetchPage: (params) => api.admin.questions.list({ ...params, pageSize: POOL_PAGE_SIZE }),
   });
 
+  const levelOf = (id: string): DifficultyLevel | undefined =>
+    picking?.picked.get(id) ?? questions.rows.find((row) => row.id === id)?.difficulty;
+
+  const fits = (level: DifficultyLevel, sofar: readonly DifficultyLevel[]) =>
+    pickIssue(level, withPicks(quota, sofar), section.questionCount) === null;
+
+  /** Walks the bank in its own order, keeping ticks already made, and stops where the section fills. */
+  const bound = (wanted: ReadonlySet<string>): QuestionPicks => {
+    const kept = new Map<string, DifficultyLevel>();
+    const order = [...(picking?.picked.keys() ?? []), ...questions.rows.map((row) => row.id)];
+
+    for (const id of order) {
+      const level = levelOf(id);
+      if (!wanted.has(id) || kept.has(id) || held.has(id) || level === undefined) continue;
+      if (fits(level, [...kept.values()])) kept.set(id, level);
+    }
+    return kept;
+  };
+
+  const canTake = (id: string): boolean => {
+    const level = levelOf(id);
+    return level !== undefined && !held.has(id) && fits(level, picks);
+  };
+
+  const selection: DataTableSelection | undefined =
+    picking && !disabled && !full
+      ? {
+          selected: new Set(picking.picked.keys()),
+          label: `Select what ${section.name} can still take`,
+          selectable: canTake,
+          onChange: (next) => picking.onPicked(bound(next)),
+        }
+      : undefined;
+
   return (
-    <section className="flex min-w-0 flex-col gap-3">
-      <h3 className="flex items-baseline justify-between gap-2 text-sm font-semibold tracking-tight text-foreground">
-        The bank
-        {questions.hasLoaded ? (
-          <span className="text-xs font-normal text-muted-foreground">
-            {plural(questions.total, 'question')}
-          </span>
-        ) : null}
-      </h3>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <SectionHeading
+        className="shrink-0"
+        title="The bank"
+        meta={questions.hasLoaded ? plural(questions.total, 'question') : null}
+        action={picking?.action}
+      />
 
       <ListView
         list={questions}
         filters={filterSpec}
         columns={columns}
         rowKey={(question) => question.id}
+        selection={selection}
         empty="The bank holds no live question for this section yet."
         emptyFiltered="No question matches those filters."
       />
 
       {full && !disabled ? (
-        <Alert variant="info">{`${section.name} is full. Take one off to put another on.`}</Alert>
+        <Alert variant="info" className="shrink-0">
+          {`${section.name} is full. Take one off to put another on.`}
+        </Alert>
       ) : null}
     </section>
   );
