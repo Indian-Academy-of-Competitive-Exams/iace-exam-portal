@@ -176,7 +176,7 @@ function bench(
       { id: RIVAL, deletedAt: null },
     ],
     series: [],
-    seriesTests: [],
+    tests: [],
     testStats: [],
     sectionStats: [],
     questionStats: [],

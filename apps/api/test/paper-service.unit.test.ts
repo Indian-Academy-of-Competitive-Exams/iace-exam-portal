@@ -43,7 +43,6 @@ function serviceWith(
     [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5 })],
     SECTIONS,
     [],
-    [],
     questions,
     [],
   );

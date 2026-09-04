@@ -25,7 +25,18 @@ const OFFERING_SELECT = {
   isLocked: true,
   examStageId: true,
   opensAt: true,
-  _count: { select: { series: true, attempts: true } },
+  testSeriesId: true,
+  seriesOrder: true,
+  testSeries: { select: { name: true } },
+  _count: { select: { attempts: true } },
+} as const satisfies Prisma.TestSelect;
+
+const SERIES_TEST_SELECT = {
+  id: true,
+  title: true,
+  seriesOrder: true,
+  opensAt: true,
+  _count: { select: { attempts: true } },
 } as const satisfies Prisma.TestSelect;
 
 const dateOrNull = (value: string | null | undefined): Date | null =>
@@ -72,19 +83,14 @@ function assertLateEntryHasAnOpening(opensAt: Date | null, lateEntrySec: number 
   });
 }
 
-interface SeriesPosition {
-  testSeriesId: string;
-  order: number | null;
-}
-
-/** `linksOf`'s order, sorted here so the column lands on the same link Postgres would return. */
-const byPosition = (left: SeriesPosition, right: SeriesPosition): number =>
-  (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) ||
-  left.testSeriesId.localeCompare(right.testSeriesId);
-
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
-/** How a finalized test is offered: through a series, never on its own. */
+const linkOf = (test: OfferingRow): TestSeriesLink | null =>
+  test.testSeriesId === null || test.testSeries === null
+    ? null
+    : { testSeriesId: test.testSeriesId, name: test.testSeries.name, order: test.seriesOrder };
+
+/** How a finalized test is offered: through the one series carrying it, never on its own. */
 @Injectable()
 export class OfferingService {
   constructor(
@@ -93,50 +99,34 @@ export class OfferingService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  async series(testId: string): Promise<TestSeriesLink[]> {
-    await this.requireTest(testId);
-    return this.linksOf(testId);
+  async series(testId: string): Promise<TestSeriesLink | null> {
+    return linkOf(await this.requireTest(testId));
   }
 
-  /** The whole set, not a delta: the screen holds every series this test is offered in. */
-  async setSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink[]> {
+  /** One column, so the test's own clock is untouched by a move and cannot be re-saved away. */
+  async setSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink | null> {
     const test = await this.requireTest(testId);
-    const wanted = [...new Map(input.series.map((row) => [row.testSeriesId, row])).values()];
-    this.assertStillReachable(test, wanted.length);
-    await this.assertSeriesUsable(
-      test,
-      wanted.map((row) => row.testSeriesId),
-    );
-    await this.assertNoneDropped(test, new Set(wanted.map((row) => row.testSeriesId)));
+    const next = input.testSeriesId;
+    if (next === test.testSeriesId) return linkOf(test);
 
-    const touched = await this.prisma.$transaction(async (tx) => {
-      const before = await tx.testSeriesTest.findMany({
-        where: { testId },
-        select: { testSeriesId: true },
-      });
-      await tx.testSeriesTest.deleteMany({ where: { testId } });
-      if (wanted.length > 0) {
-        await tx.testSeriesTest.createMany({
-          data: wanted.map((row) => ({
-            testId,
-            testSeriesId: row.testSeriesId,
-            order: row.order ?? null,
-          })),
-        });
-      }
-      await this.mirrorSeriesOntoTest(tx, testId);
-      return new Set([
-        ...before.map((row) => row.testSeriesId),
-        ...wanted.map((row) => row.testSeriesId),
-      ]);
+    this.assertStillReachable(test, next);
+    if (test.testSeriesId !== null) this.assertNotSat(test);
+    if (next !== null) await this.assertSeriesUsable(test, next);
+
+    const moved = await this.prisma.test.update({
+      where: { id: testId },
+      data: { testSeriesId: next, seriesOrder: null },
+      select: OFFERING_SELECT,
     });
 
-    // Every series whose contents moved: the catalog a student reads is cached against it.
-    for (const testSeriesId of touched) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+    // Both sides: the catalog a student reads is cached against the series it moved between.
+    for (const testSeriesId of [test.testSeriesId, next]) {
+      if (testSeriesId !== null) {
+        this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
+      }
     }
 
-    return this.linksOf(testId);
+    return linkOf(moved);
   }
 
   async setStatus(testId: string, status: TestStatus): Promise<TestStatus> {
@@ -144,10 +134,7 @@ export class OfferingService {
     if (test.status === status) return status;
 
     if (status === TEST_STATUS.ACTIVE) {
-      const blocker = activationBlocker({
-        isLocked: test.isLocked,
-        seriesCount: test._count.series,
-      });
+      const blocker = activationBlocker(test);
       if (blocker) {
         throw new AppException(ErrorCodes.CONFLICT, blocker, {
           fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },
@@ -156,142 +143,92 @@ export class OfferingService {
     }
 
     await this.prisma.test.update({ where: { id: testId }, data: { status } });
-
-    for (const link of await this.linksOf(testId)) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
-    }
+    this.announce(test);
 
     return status;
   }
 
   /** The mirror of the activation rule: what is offered must stay reachable while it is offered. */
-  private assertStillReachable(test: OfferingRow, wanted: number): void {
-    if (wanted > 0 || test.status !== TEST_STATUS.ACTIVE) return;
+  private assertStillReachable(test: OfferingRow, next: string | null): void {
+    if (next !== null || test.status !== TEST_STATUS.ACTIVE) return;
 
     const message =
-      'This test is being offered, and a test reaches a student only through a series. Retire it before taking it out of the last one.';
+      'This test is being offered, and a test reaches a student only through a series. Retire it before taking it out of its series.';
     throw new AppException(ErrorCodes.CONFLICT, message, {
-      fieldErrors: { series: [message] },
+      fieldErrors: { testSeriesId: [message] },
     });
-  }
-
-  private async linksOf(testId: string): Promise<TestSeriesLink[]> {
-    const rows = await this.prisma.testSeriesTest.findMany({
-      where: { testId },
-      include: { testSeries: { select: { name: true } } },
-      orderBy: [{ order: 'asc' }, { testSeriesId: 'asc' }],
-    });
-    return rows.map((row) => ({
-      testSeriesId: row.testSeriesId,
-      name: row.testSeries.name,
-      order: row.order,
-    }));
   }
 
   /** A series must exist, and must be built for this test's stage or for no stage at all. */
-  private async assertSeriesUsable(test: OfferingRow, ids: readonly string[]): Promise<void> {
-    if (ids.length === 0) return;
-    const found = await this.prisma.testSeries.findMany({
-      where: { id: { in: [...ids] } },
-      select: { id: true, name: true, examStageId: true },
+  private async assertSeriesUsable(test: OfferingRow, testSeriesId: string): Promise<void> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: { name: true, examStageId: true },
     });
 
-    if (found.length !== ids.length) {
-      const gone = 'One of the chosen series no longer exists.';
+    if (!series) {
+      const gone = 'That series no longer exists.';
       throw new AppException(ErrorCodes.VALIDATION_ERROR, gone, {
-        fieldErrors: { series: [gone] },
+        fieldErrors: { testSeriesId: [gone] },
       });
     }
 
     // A stage-agnostic series carries any test; another stage's would serve this paper to its students.
-    const foreign = found.filter(
-      (row) => row.examStageId !== null && row.examStageId !== test.examStageId,
-    );
-    if (foreign.length === 0) return;
+    if (series.examStageId === null || series.examStageId === test.examStageId) return;
 
-    const named = foreign.map((row) => row.name).join(', ');
-    const message = `${named} ${foreign.length === 1 ? 'is' : 'are'} built for a different exam stage, and a test reaches students through the series carrying it.`;
+    const message = `${series.name} is built for a different exam stage, and a test reaches students through the series carrying it.`;
     throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { series: [message] },
+      fieldErrors: { testSeriesId: [message] },
     });
   }
 
   /** The tests one series holds, in the order it holds them. */
   async testsIn(testSeriesId: string): Promise<SeriesTestRow[]> {
-    const rows = await this.prisma.testSeriesTest.findMany({
+    const rows = await this.prisma.test.findMany({
       where: { testSeriesId },
-      select: {
-        testId: true,
-        order: true,
-        unlockAt: true,
-        test: { select: { title: true, _count: { select: { attempts: true } } } },
-      },
-      orderBy: [{ order: 'asc' }, { testId: 'asc' }],
+      select: SERIES_TEST_SELECT,
+      orderBy: [{ seriesOrder: 'asc' }, { id: 'asc' }],
     });
 
     return rows.map((row) => ({
-      testId: row.testId,
-      title: row.test.title,
-      order: row.order,
-      unlockAt: row.unlockAt?.toISOString() ?? null,
-      attemptCount: row.test._count.attempts,
+      testId: row.id,
+      title: row.title,
+      order: row.seriesOrder,
+      unlockAt: row.opensAt?.toISOString() ?? null,
+      attemptCount: row._count.attempts,
     }));
   }
 
-  /** When a test opens inside one series. Every branch sits it at that instant. */
+  /** When a test opens inside its series. Every branch sits it at that instant. */
   async setUnlock(
     testSeriesId: string,
     testId: string,
     input: SetSeriesTestUnlockBody,
   ): Promise<SeriesTestRow[]> {
-    await this.requireLink(testSeriesId, testId);
+    await this.requireTestIn(testSeriesId, testId);
+    const opensAt = dateOrNull(input.unlockAt);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.testSeriesTest.update({
-        where: { testSeriesId_testId: { testSeriesId, testId } },
-        data: { unlockAt: dateOrNull(input.unlockAt) },
-      });
-      await this.mirrorSeriesOntoTest(tx, testId);
+      await tx.test.update({ where: { id: testId }, data: { opensAt } });
+      await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
   }
 
-  /** One link dropped, from the series' side. Refused once anyone has sat the test. */
+  /** The series drops the test from its own side. Refused once anyone has sat it. */
   async removeFromSeries(testSeriesId: string, testId: string): Promise<SeriesTestRow[]> {
-    await this.requireLink(testSeriesId, testId);
-    const test = await this.requireTest(testId);
+    const test = await this.requireTestIn(testSeriesId, testId);
     this.assertNotSat(test);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.testSeriesTest.delete({
-        where: { testSeriesId_testId: { testSeriesId, testId } },
-      });
-      await this.mirrorSeriesOntoTest(tx, testId);
+    await this.prisma.test.update({
+      where: { id: testId },
+      data: { testSeriesId: null, seriesOrder: null },
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     return this.testsIn(testSeriesId);
-  }
-
-  /** The join table still writes; the columns the resolver reads follow, or the two disagree. */
-  private async mirrorSeriesOntoTest(tx: Prisma.TransactionClient, testId: string): Promise<void> {
-    const held = await tx.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true, order: true, unlockAt: true },
-    });
-    const first = [...held].sort(byPosition)[0];
-    const opensAt = first?.unlockAt ?? null;
-    await tx.test.update({
-      where: { id: testId },
-      data: {
-        testSeriesId: first?.testSeriesId ?? null,
-        seriesOrder: first?.order ?? null,
-        opensAt,
-      },
-    });
-    await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
   }
 
   /** Which programs open this test ahead of everyone else, and when. */
@@ -323,15 +260,15 @@ export class OfferingService {
       create: { testId, programCode, opensAt },
     });
 
-    await this.announceTest(testId);
+    this.announce(test);
     return this.programUnlocks(testId);
   }
 
   async clearProgramUnlock(testId: string, programCode: string): Promise<TestProgramUnlock[]> {
-    await this.requireTest(testId);
+    const test = await this.requireTest(testId);
 
     await this.prisma.testProgramUnlock.deleteMany({ where: { testId, programCode } });
-    await this.announceTest(testId);
+    this.announce(test);
     return this.programUnlocks(testId);
   }
 
@@ -350,41 +287,23 @@ export class OfferingService {
 
     await this.prisma.test.update({ where: { id: testId }, data: input });
 
-    await this.announceTest(testId);
+    this.announce(test);
     return input;
   }
 
-  /** Filed against the test, and every series carrying it loses its cached catalog. */
-  private async announceTest(testId: string): Promise<void> {
-    this.auditContext.setEntityId(testId);
-    const links = await this.prisma.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true },
-    });
-    for (const link of links) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+  /** Filed against the test, and the series carrying it loses its cached catalog. */
+  private announce(test: OfferingRow): void {
+    this.auditContext.setEntityId(test.id);
+    if (test.testSeriesId === null) return;
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
+  }
+
+  private async requireTestIn(testSeriesId: string, testId: string): Promise<OfferingRow> {
+    const test = await this.requireTest(testId);
+    if (test.testSeriesId !== testSeriesId) {
+      throw new AppException(ErrorCodes.NOT_FOUND, 'That test is not in this series');
     }
-  }
-
-  private async requireLink(testSeriesId: string, testId: string): Promise<void> {
-    const link = await this.prisma.testSeriesTest.findUnique({
-      where: { testSeriesId_testId: { testSeriesId, testId } },
-      select: { testId: true },
-    });
-    if (!link) throw new AppException(ErrorCodes.NOT_FOUND, 'That test is not in this series');
-  }
-
-  /** Unticking a series is a removal like any other, so it answers to the same rule. */
-  private async assertNoneDropped(test: OfferingRow, wanted: ReadonlySet<string>): Promise<void> {
-    if (test._count.attempts === 0) return;
-
-    const held = await this.prisma.testSeriesTest.findMany({
-      where: { testId: test.id },
-      select: { testSeriesId: true },
-    });
-    if (held.every((row) => wanted.has(row.testSeriesId))) return;
-
-    this.assertNotSat(test);
+    return test;
   }
 
   private assertNotSat(test: OfferingRow): void {

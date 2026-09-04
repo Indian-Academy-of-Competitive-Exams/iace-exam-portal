@@ -136,11 +136,11 @@ export class LeaderboardViewService {
   /** A series they have never sat has no board of theirs to be in, so it reads as missing. */
   private async series(studentId: string, seriesId: string) {
     const row = await this.prisma.testSeries.findFirst({
-      where: { id: seriesId, tests: { some: { test: { attempts: { some: { studentId } } } } } },
-      select: { name: true, tests: { select: { testId: true } } },
+      where: { id: seriesId, directTests: { some: { attempts: { some: { studentId } } } } },
+      select: { name: true, directTests: { select: { id: true } } },
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
-    return { name: row.name, testIds: row.tests.map((test) => test.testId) };
+    return { name: row.name, testIds: row.directTests.map((test) => test.id) };
   }
 }
 

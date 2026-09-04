@@ -265,13 +265,13 @@ export class PerformanceAnalyticsService {
     const series = await this.prisma.testSeries.findFirst({
       where: {
         id: query.seriesId,
-        tests: { some: { test: { attempts: { some: { studentId } } } } },
+        directTests: { some: { attempts: { some: { studentId } } } },
       },
       select: {
         id: true,
         name: true,
         progressive: true,
-        tests: { select: { testId: true, order: true }, orderBy: { order: 'asc' } },
+        directTests: { select: { id: true, seriesOrder: true }, orderBy: { seriesOrder: 'asc' } },
       },
     });
     if (!series) throw new AppException(ErrorCodes.NOT_FOUND, NO_SERIES);
@@ -280,7 +280,7 @@ export class PerformanceAnalyticsService {
       name: series.name,
       progressive: series.progressive,
       // A null order is a rung nobody numbered, so it keeps the place the ordered read gave it.
-      order: new Map(series.tests.map((row, index) => [row.testId, row.order ?? index])),
+      order: new Map(series.directTests.map((row, index) => [row.id, row.seriesOrder ?? index])),
     };
   }
 
@@ -288,8 +288,8 @@ export class PerformanceAnalyticsService {
   async satSeries(studentId: string): Promise<SatSeries[]> {
     const rows = await this.prisma.testSeries.findMany({
       where: {
-        tests: {
-          some: { test: { attempts: { some: { studentId, status: ATTEMPT_STATUS.EVALUATED } } } },
+        directTests: {
+          some: { attempts: { some: { studentId, status: ATTEMPT_STATUS.EVALUATED } } },
         },
       },
       orderBy: { name: 'asc' },
@@ -344,7 +344,7 @@ function scopeWhere(studentId: string, query: PerformanceReportQuery): Prisma.At
   if (query.scope === PERFORMANCE_SCOPES.ATTEMPT) return { ...sat, id: query.attemptId };
   if (query.scope === PERFORMANCE_SCOPES.TEST) return { ...sat, testId: query.testId };
   if (query.scope === PERFORMANCE_SCOPES.SERIES) {
-    return { ...sat, test: { series: { some: { testSeriesId: query.seriesId } } } };
+    return { ...sat, test: { testSeriesId: query.seriesId } };
   }
   return sat;
 }

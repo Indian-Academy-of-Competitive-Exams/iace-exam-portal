@@ -204,7 +204,7 @@ export class TestsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/series')
-  series(@Param('id') id: string): Promise<TestSeriesLink[]> {
+  series(@Param('id') id: string): Promise<TestSeriesLink | null> {
     return this.offering.series(id);
   }
 
@@ -215,7 +215,7 @@ export class TestsController {
   setSeries(
     @Param('id') id: string,
     @Body(new ZodBody(setTestSeriesSchema)) body: SetTestSeriesBody,
-  ): Promise<TestSeriesLink[]> {
+  ): Promise<TestSeriesLink | null> {
     return this.offering.setSeries(id, body);
   }
 
@@ -238,7 +238,7 @@ export class TestsController {
   }
 }
 
-/** The link from the SERIES' side. It lives here because the tests module owns `TestSeriesTest`. */
+/** The membership from the SERIES' side. It lives here because the tests module owns `Test`. */
 @Controller('admin/test-series/:seriesId/tests')
 @Actors(ActorTypes.ADMIN)
 export class SeriesTestsController {

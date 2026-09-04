@@ -339,7 +339,8 @@ export const testSchema = z.object({
   variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
-  seriesCount: z.number().int(),
+  /** The one series carrying it. Null reaches nobody, which is what stops it being offered. */
+  testSeriesId: z.string().nullable(),
   /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
   paperQuestionCount: z.number().int(),
   createdAt: z.string(),
@@ -356,9 +357,7 @@ export type TestProgramUnlock = z.infer<typeof testProgramUnlockSchema>;
 /** The test plus the blueprint it reads its shape from, so a screen renders both in one request. */
 export const testDetailSchema = testSchema.extend({
   baseConfig: baseConfigDetailSchema,
-  /** The series this test belongs to directly, distinct from the many-to-many `series` link. */
-  testSeriesId: z.string().nullable(),
-  /** Position inside that series, mirroring `TestSeriesTest.order`. */
+  /** Position inside that series, which is what a progressive ramp is read along. */
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */
   opensAt: z.string().nullable(),
@@ -414,7 +413,7 @@ export function offerRequirements(
     | 'paperBinding'
     | 'paperQuestionCount'
     | 'totalQuestions'
-    | 'seriesCount'
+    | 'testSeriesId'
     | 'variantCount'
   >,
 ): OfferRequirement[] {
@@ -441,13 +440,11 @@ function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferR
 }
 
 function seriesRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  const met = test.seriesCount > 0;
+  const met = test.testSeriesId !== null;
   return {
     key: OFFER_REQUIREMENT.SERIES,
     met,
-    label: met
-      ? `It is in ${test.seriesCount} test series`
-      : 'It is in a test series, which is the only way a student reaches it',
+    label: 'It is in a test series, which is the only way a student reaches it',
     owed: met ? null : 'In none yet',
   };
 }
@@ -634,14 +631,9 @@ export const testSeriesLinkSchema = z.object({
 });
 export type TestSeriesLink = z.infer<typeof testSeriesLinkSchema>;
 
-/** The whole set, not a delta: the screen holds every series this test is offered in. */
+/** One series or none. A test belongs to exactly one, so this REPLACES rather than adds. */
 export const setTestSeriesSchema = z.object({
-  series: z.array(
-    z.object({
-      testSeriesId: z.string().min(1),
-      order: z.coerce.number().int().min(0).nullish(),
-    }),
-  ),
+  testSeriesId: z.string().min(1).nullable(),
 });
 export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
 export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;

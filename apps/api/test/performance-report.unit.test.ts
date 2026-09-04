@@ -424,9 +424,9 @@ function bench(overrides: Partial<FakePerformanceData> = {}) {
       { id: RIVAL, deletedAt: null, currentBranchId: 'br_1' },
     ],
     series: [{ id: 'ser_1', name: 'SSC CGL Foundation' }],
-    seriesTests: [
-      { testSeriesId: 'ser_1', testId: 'tst_1' },
-      { testSeriesId: 'ser_1', testId: 'tst_2' },
+    tests: [
+      { id: 'tst_1', testSeriesId: 'ser_1' },
+      { id: 'tst_2', testSeriesId: 'ser_1' },
     ],
     testStats: [],
     sectionStats: [],
@@ -719,7 +719,7 @@ describe('the performance report — the wider scopes', () => {
 
   it('folds only the sittings the series holds', async () => {
     const { service } = bench({
-      seriesTests: [{ testSeriesId: 'ser_1', testId: 'tst_2' }],
+      tests: [{ id: 'tst_2', testSeriesId: 'ser_1' }],
     });
 
     const report = await service.report(
@@ -972,9 +972,9 @@ describe('seriesProgressionOf', () => {
 describe('the performance report — a progressive series', () => {
   const progressive = {
     series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }],
-    seriesTests: [
-      { testSeriesId: 'ser_1', testId: 'tst_1', order: 1 },
-      { testSeriesId: 'ser_1', testId: 'tst_2', order: 2 },
+    tests: [
+      { id: 'tst_1', testSeriesId: 'ser_1', seriesOrder: 1 },
+      { id: 'tst_2', testSeriesId: 'ser_1', seriesOrder: 2 },
     ],
   };
 
@@ -1004,7 +1004,7 @@ describe('the performance report — a progressive series', () => {
   it('carries none of it for a flat series', async () => {
     const { service } = bench({
       series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: false }],
-      seriesTests: progressive.seriesTests,
+      tests: progressive.tests,
     });
 
     const report = await service.report(
@@ -1036,7 +1036,7 @@ describe('the performance report — a progressive series', () => {
         { id: 'ser_1', name: 'SSC CGL Foundation', progressive: true },
         { id: 'ser_2', name: 'Untouched', progressive: false },
       ],
-      seriesTests: progressive.seriesTests,
+      tests: progressive.tests,
     });
 
     const offered = await service.satSeries(STUDENT);
@@ -1143,9 +1143,9 @@ describe('the performance report — the payload whitelist', () => {
   it('carries exactly the fields the contract names and nothing else', async () => {
     const { service } = bench({
       series: [{ id: 'ser_1', name: 'SSC CGL Foundation', progressive: true }],
-      seriesTests: [
-        { testSeriesId: 'ser_1', testId: 'tst_1', order: 1 },
-        { testSeriesId: 'ser_1', testId: 'tst_2', order: 2 },
+      tests: [
+        { id: 'tst_1', testSeriesId: 'ser_1', seriesOrder: 1 },
+        { id: 'tst_2', testSeriesId: 'ser_1', seriesOrder: 2 },
       ],
     });
 

@@ -193,7 +193,6 @@ describe('AttemptStateService', () => {
       [],
       [],
       [],
-      [],
       [makeAttempt({ id: 'att_1', studentId: 'stu_1', endsAt: new Date(ENDS_AT) })],
       [],
     );

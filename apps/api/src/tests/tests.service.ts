@@ -45,7 +45,7 @@ const TEST_INCLUDE = {
     },
   },
   programUnlocks: { select: { programCode: true, opensAt: true } },
-  _count: { select: { attempts: true, series: true, paperQuestions: true } },
+  _count: { select: { attempts: true, paperQuestions: true } },
 } as const satisfies Prisma.TestInclude;
 
 type TestRow = Prisma.TestGetPayload<{ include: typeof TEST_INCLUDE }>;
@@ -206,16 +206,10 @@ export class TestsService {
     const blocker = testDeletionBlocker({ attemptCount: test._count.attempts });
     if (blocker) throw new AppException(ErrorCodes.CONFLICT, blocker);
 
-    // Read before the delete cascades them, or nothing is left to tell the catalog about.
-    const links = await this.prisma.testSeriesTest.findMany({
-      where: { testId: id },
-      select: { testSeriesId: true },
-    });
-
     await this.prisma.test.delete({ where: { id } });
 
-    for (const link of links) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    if (test.testSeriesId !== null) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
     }
   }
 
@@ -310,7 +304,7 @@ function toTest(row: TestRow): Test {
     version: row.version,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     attemptCount: row._count.attempts,
-    seriesCount: row._count.series,
+    testSeriesId: row.testSeriesId,
     paperQuestionCount: row._count.paperQuestions,
     createdAt: row.createdAt.toISOString(),
   };
@@ -319,7 +313,6 @@ function toTest(row: TestRow): Test {
 /** The columns `TestDetail` adds over `Test`: the test's own schedule, read as stored. */
 function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig'> {
   return {
-    testSeriesId: row.testSeriesId,
     seriesOrder: row.seriesOrder,
     opensAt: row.opensAt?.toISOString() ?? null,
     lateEntrySec: row.lateEntrySec,

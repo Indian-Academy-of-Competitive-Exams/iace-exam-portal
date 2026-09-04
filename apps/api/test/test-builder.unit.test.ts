@@ -54,7 +54,6 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
     [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5, locked: false })],
     SECTIONS,
     [],
-    [],
     questions,
     [],
     [makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 mocks' })],
@@ -110,7 +109,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(frozen.finalizedByThisCall, true);
     assert.equal(frozen.frozenQuestions, 5);
 
-    await offering.setSeries(draft.id, { series: [{ testSeriesId: 'srs_1', order: 1 }] });
+    await offering.setSeries(draft.id, { testSeriesId: 'srs_1' });
     const status = await offering.setStatus(draft.id, TEST_STATUS.ACTIVE);
 
     // A publishable mock: frozen, carried by a series, and offered.
@@ -140,7 +139,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
       .catch((e: unknown) => e);
     assert.ok(AppException.is(beforeSeries));
 
-    await offering.setSeries(draft.id, { series: [{ testSeriesId: 'srs_1', order: 1 }] });
+    await offering.setSeries(draft.id, { testSeriesId: 'srs_1' });
     assert.equal(await offering.setStatus(draft.id, TEST_STATUS.ACTIVE), TEST_STATUS.ACTIVE);
   });
 });

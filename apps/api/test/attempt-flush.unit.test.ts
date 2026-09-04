@@ -40,7 +40,6 @@ function build(status: AttemptStatus = ATTEMPT_STATUS.IN_PROGRESS) {
     [],
     [],
     [],
-    [],
     [makeAttempt({ id: 'att_1', studentId: 'stu_1', endsAt: ENDS_AT, status })],
     [
       {

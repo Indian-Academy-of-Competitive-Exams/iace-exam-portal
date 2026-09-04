@@ -153,7 +153,7 @@ function platform() {
       currentBranchId: 'br_1',
     })),
     series: [],
-    seriesTests: [],
+    tests: [],
     testStats: [],
     sectionStats: [],
     questionStats: [],

@@ -88,7 +88,6 @@ function bench(isLocked = true) {
     [makeBaseConfig({ id: 'cfg_1', totalQuestions: 2 })],
     [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1', questionCount: 2 })],
     [],
-    [],
     ['q1', 'q2'].map((id) => makeQuestion({ id, currentVersionId: `${id}_v1` })),
     [...paper.map((row) => ({ ...row }))],
     [],

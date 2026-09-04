@@ -1630,17 +1630,6 @@ export interface FakePaperRow {
   status: PaperQuestionStatus;
 }
 
-/** Every narrowing `TestSeriesTest` is read through, from either side of the link. */
-interface FakeSeriesTestWhere {
-  testId?: string;
-  testSeriesId?: string;
-  testSeries?: {
-    id?: { in: string[] };
-    branchConfigs?: { some: { branchId: string; enabled: boolean } };
-  };
-  test?: { title?: { contains?: string } };
-}
-
 /** The configs fake plus the `Test` table, because a test is only ever read through its config. */
 export class FakeTestsPrisma extends FakeConfigPrisma {
   private testSeq = 0;
@@ -1650,7 +1639,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     configs: FakeBaseConfigRow[] = [makeBaseConfig()],
     sections: FakeSectionRow[] = [makeSection()],
     readonly attempts: { testId: string }[] = [],
-    readonly seriesTests: FakeSeriesTestRow[] = [],
     readonly questions: FakeQuestionRow[] = [],
     readonly paperQuestions: FakePaperRow[] = [],
     readonly series: FakeSeriesRow[] = [],
@@ -1686,9 +1674,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
           .sort((a, b) => a.branch.name.localeCompare(b.branch.name)),
       ),
   };
-
-  /** A grant reaches PAST the branch gate, so the timing mirror asks whether any exists. */
-  readonly seriesGrants: { studentId: string; testSeriesId: string }[] = [];
 
   readonly programCatalog: { code: string }[] = [];
 
@@ -1742,17 +1727,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       this.programUnlocks.length = 0;
       this.programUnlocks.push(...kept);
       return Promise.resolve({ count });
-    },
-  };
-
-  readonly studentGrant = {
-    count: ({ where }: { where: { testSeries: { tests: { some: { testId: string } } } } }) => {
-      const held = new Set(
-        this.seriesTests
-          .filter((row) => row.testId === where.testSeries.tests.some.testId)
-          .map((row) => row.testSeriesId),
-      );
-      return Promise.resolve(this.seriesGrants.filter((row) => held.has(row.testSeriesId)).length);
     },
   };
 
@@ -1887,7 +1861,6 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       this.tests,
       this.questions,
       this.paperQuestions,
-      this.seriesTests,
       this.series,
       this.attemptRows,
       this.attemptQuestions,
@@ -2061,128 +2034,14 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
   readonly testSeries = {
     findMany: ({ where }: { where: { id: { in: string[] } } }) =>
       Promise.resolve(this.series.filter((row) => where.id.in.includes(row.id))),
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.series.find((row) => row.id === where.id) ?? null),
   };
-
-  /** Both sides of the link: `{ testId }` from the test's, a branch's enabled series from the branch's. */
-  private linksMatching(where: FakeSeriesTestWhere): FakeSeriesTestRow[] {
-    const branchId = where.testSeries?.branchConfigs?.some.branchId;
-    const wanted = where.testSeries?.id?.in;
-    const term = where.test?.title?.contains?.toLowerCase();
-
-    const enabledHere = (testSeriesId: string) =>
-      branchId === undefined ||
-      this.branchConfigRows.some(
-        (row) => row.branchId === branchId && row.testSeriesId === testSeriesId && row.enabled,
-      );
-    const titled = (testId: string) =>
-      term === undefined ||
-      (this.tests.find((it) => it.id === testId)?.title ?? '').toLowerCase().includes(term);
-
-    return this.seriesTests
-      .filter(
-        (row) =>
-          (where.testId === undefined || row.testId === where.testId) &&
-          (where.testSeriesId === undefined || row.testSeriesId === where.testSeriesId) &&
-          (wanted === undefined || wanted.includes(row.testSeriesId)) &&
-          enabledHere(row.testSeriesId) &&
-          titled(row.testId),
-      )
-      .sort(
-        (a, b) =>
-          this.seriesNameOf(a.testSeriesId).localeCompare(this.seriesNameOf(b.testSeriesId)) ||
-          (a.order ?? 0) - (b.order ?? 0) ||
-          a.testId.localeCompare(b.testId),
-      );
-  }
 
   private seriesNameOf(testSeriesId: string): string {
     return this.series.find((row) => row.id === testSeriesId)?.name ?? '';
   }
-
-  readonly testSeriesTest = {
-    findMany: ({
-      where,
-      skip,
-      take,
-    }: {
-      where: FakeSeriesTestWhere;
-      skip?: number;
-      take?: number;
-    }) => {
-      const branchId = where.testSeries?.branchConfigs?.some.branchId;
-      const matched = this.linksMatching(where);
-      const page = take === undefined ? matched : matched.slice(skip ?? 0, (skip ?? 0) + take);
-
-      return Promise.resolve(
-        page.map((row) => ({
-          ...row,
-          unlockAt: row.unlockAt ?? null,
-          testSeries: { name: this.seriesNameOf(row.testSeriesId) },
-          test: {
-            title: this.tests.find((it) => it.id === row.testId)?.title ?? null,
-            _count: { attempts: this.attempts.filter((it) => it.testId === row.testId).length },
-            branchSchedules: this.branchSchedules.filter(
-              (it) => it.testId === row.testId && it.branchId === branchId,
-            ),
-          },
-        })),
-      );
-    },
-
-    count: ({ where }: { where: FakeSeriesTestWhere }) =>
-      Promise.resolve(this.linksMatching(where).length),
-
-    findFirst: ({ where }: { where: FakeSeriesTestWhere }) =>
-      Promise.resolve(this.linksMatching(where)[0] ?? null),
-
-    findUnique: ({ where }: { where: { testSeriesId_testId: FakeSeriesTestKey } }) => {
-      const { testSeriesId, testId } = where.testSeriesId_testId;
-      const row = this.seriesTests.find(
-        (it) => it.testSeriesId === testSeriesId && it.testId === testId,
-      );
-      return Promise.resolve(row ?? null);
-    },
-
-    update: ({
-      where,
-      data,
-    }: {
-      where: { testSeriesId_testId: FakeSeriesTestKey };
-      data: { unlockAt: Date | null };
-    }) => {
-      const { testSeriesId, testId } = where.testSeriesId_testId;
-      const row = this.seriesTests.find(
-        (it) => it.testSeriesId === testSeriesId && it.testId === testId,
-      );
-      if (!row) throw new Error(`no link ${testSeriesId}/${testId}`);
-      row.unlockAt = data.unlockAt;
-      return Promise.resolve(row);
-    },
-
-    delete: ({ where }: { where: { testSeriesId_testId: FakeSeriesTestKey } }) => {
-      const { testSeriesId, testId } = where.testSeriesId_testId;
-      const kept = this.seriesTests.filter(
-        (it) => !(it.testSeriesId === testSeriesId && it.testId === testId),
-      );
-      if (kept.length === this.seriesTests.length) throw new Error('no such link');
-      this.seriesTests.length = 0;
-      this.seriesTests.push(...kept);
-      return Promise.resolve({ testSeriesId, testId });
-    },
-
-    deleteMany: ({ where }: { where: { testId: string } }) => {
-      const kept = this.seriesTests.filter((row) => row.testId !== where.testId);
-      const removed = this.seriesTests.length - kept.length;
-      this.seriesTests.length = 0;
-      this.seriesTests.push(...kept);
-      return Promise.resolve({ count: removed });
-    },
-
-    createMany: ({ data }: { data: FakeSeriesTestRow[] }) => {
-      this.seriesTests.push(...data);
-      return Promise.resolve({ count: data.length });
-    },
-  };
 
   readonly question = {
     findMany: ({ where = {} }: { where?: DrawPoolWhere; select?: unknown } = {}) =>
@@ -2374,7 +2233,12 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       skip = 0,
       take,
     }: {
-      where?: { baseConfigId?: string; examStageId?: string; status?: { in: TestStatus[] } };
+      where?: {
+        baseConfigId?: string;
+        examStageId?: string;
+        testSeriesId?: string;
+        status?: { in: TestStatus[] };
+      };
       skip?: number;
       take?: number;
     } = {}) => {
@@ -2382,6 +2246,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         (test) =>
           (where.baseConfigId === undefined || test.baseConfigId === where.baseConfigId) &&
           (where.examStageId === undefined || test.examStageId === where.examStageId) &&
+          (where.testSeriesId === undefined || test.testSeriesId === where.testSeriesId) &&
           (where.status === undefined || where.status.in.includes(test.status)),
       );
       return Promise.resolve(
@@ -2454,9 +2319,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       ...row,
       _count: {
         attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
-        series: this.seriesTests.filter((link) => link.testId === row.id).length,
         paperQuestions: this.paperQuestions.filter((paper) => paper.testId === row.id).length,
       },
+      testSeries: row.testSeriesId === null ? null : { name: this.seriesNameOf(row.testSeriesId) },
       baseConfig: {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,
@@ -3462,18 +3327,6 @@ export interface FakeGrantRowAccess {
 export interface FakeAccessTestRow {
   id: string;
   testSeriesId: string | null;
-  seriesIds: string[];
-}
-
-interface FakeAccessTestArm {
-  testSeriesId?: string;
-  series?: { some: { testSeriesId: string } };
-}
-
-/** Either route a test is offered by, exactly as the delete guard's two `OR` arms ask. */
-function reaches(row: FakeAccessTestRow, arm: FakeAccessTestArm): boolean {
-  if (arm.series) return row.seriesIds.includes(arm.series.some.testSeriesId);
-  return arm.testSeriesId !== undefined && row.testSeriesId === arm.testSeriesId;
 }
 
 export function makeProgram(overrides: Partial<FakeProgramRow> = {}): FakeProgramRow {
@@ -3522,8 +3375,8 @@ export class FakeAccessPrisma {
   ) {}
 
   readonly test = {
-    count: ({ where }: { where: { OR: FakeAccessTestArm[] } }) =>
-      Promise.resolve(this.tests.filter((row) => where.OR.some((arm) => reaches(row, arm))).length),
+    count: ({ where }: { where: { testSeriesId: string } }) =>
+      Promise.resolve(this.tests.filter((row) => row.testSeriesId === where.testSeriesId).length),
   };
 
   private id(prefix: string): string {
@@ -4161,18 +4014,6 @@ export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
     extraTimeSec: null,
     ...overrides,
   };
-}
-
-export interface FakeSeriesTestRow {
-  testSeriesId: string;
-  testId: string;
-  order: number | null;
-  unlockAt?: Date | null;
-}
-
-export interface FakeSeriesTestKey {
-  testSeriesId: string;
-  testId: string;
 }
 
 /** When one test opens for one program's cohort, ahead of the test's own opening. */
@@ -4948,7 +4789,8 @@ export interface FakePerformanceData {
   shape: FakeScoredTest;
   students: { id: string; deletedAt: Date | null; currentBranchId?: string | null }[];
   series: { id: string; name: string; progressive?: boolean }[];
-  seriesTests: { testSeriesId: string; testId: string; order?: number | null }[];
+  /** Membership is the test's own column, so a rung is a test carrying the series' id. */
+  tests: { id: string; testSeriesId: string; seriesOrder?: number | null }[];
   testStats: {
     testId: string;
     evaluatedCount: number;
@@ -5045,12 +4887,12 @@ export class FakePerformancePrisma {
         status: AttemptStatus;
         id?: string;
         testId?: string;
-        test?: { series: { some: { testSeriesId: string } } };
+        test?: { testSeriesId: string };
       };
       orderBy?: { submittedAt?: { sort: 'desc'; nulls?: 'first' | 'last' } };
       take?: number;
     }) => {
-      const inSeries = where.test?.series.some.testSeriesId;
+      const inSeries = where.test?.testSeriesId;
       const matched = this.data.attempts.filter(
         (row) =>
           row.studentId === where.studentId &&
@@ -5058,8 +4900,8 @@ export class FakePerformancePrisma {
           (where.id === undefined || row.id === where.id) &&
           (where.testId === undefined || row.testId === where.testId) &&
           (inSeries === undefined ||
-            this.data.seriesTests.some(
-              (link) => link.testSeriesId === inSeries && link.testId === row.testId,
+            this.data.tests.some(
+              (test) => test.testSeriesId === inSeries && test.id === row.testId,
             )),
       );
       const ordered = matched.toSorted(newestFirst(orderBy?.submittedAt?.nulls === 'last'));
@@ -5107,10 +4949,10 @@ export class FakePerformancePrisma {
   };
 
   private satBy(testSeriesId: string, studentId: string): boolean {
-    return this.data.seriesTests.some(
-      (link) =>
-        link.testSeriesId === testSeriesId &&
-        this.data.attempts.some((row) => row.testId === link.testId && row.studentId === studentId),
+    return this.data.tests.some(
+      (test) =>
+        test.testSeriesId === testSeriesId &&
+        this.data.attempts.some((row) => row.testId === test.id && row.studentId === studentId),
     );
   }
 
@@ -5119,10 +4961,10 @@ export class FakePerformancePrisma {
       id: row.id,
       name: row.name,
       progressive: row.progressive ?? false,
-      tests: this.data.seriesTests
-        .filter((link) => link.testSeriesId === row.id)
-        .map((link) => ({ testId: link.testId, order: link.order ?? null }))
-        .toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      directTests: this.data.tests
+        .filter((test) => test.testSeriesId === row.id)
+        .map((test) => ({ id: test.id, seriesOrder: test.seriesOrder ?? null }))
+        .toSorted((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0)),
     };
   }
 
@@ -5132,10 +4974,10 @@ export class FakePerformancePrisma {
     }: {
       where: {
         id?: string;
-        tests: { some: { test: { attempts: { some: { studentId: string } } } } };
+        directTests: { some: { attempts: { some: { studentId: string } } } };
       };
     }) => {
-      const studentId = where.tests.some.test.attempts.some.studentId;
+      const studentId = where.directTests.some.attempts.some.studentId;
       const held = this.data.series.find(
         (row) => row.id === where.id && this.satBy(row.id, studentId),
       );
@@ -5146,10 +4988,10 @@ export class FakePerformancePrisma {
       where,
     }: {
       where: {
-        tests: { some: { test: { attempts: { some: { studentId: string } } } } };
+        directTests: { some: { attempts: { some: { studentId: string } } } };
       };
     }) => {
-      const studentId = where.tests.some.test.attempts.some.studentId;
+      const studentId = where.directTests.some.attempts.some.studentId;
       return Promise.resolve(
         this.data.series
           .filter((row) => this.satBy(row.id, studentId))
@@ -5340,7 +5182,7 @@ export class FakeBoardPrisma {
       if (!row) return Promise.resolve(null);
       return Promise.resolve({
         name: row.name,
-        tests: row.testIds.map((testId) => ({ testId })),
+        directTests: row.testIds.map((id) => ({ id })),
       });
     },
   };

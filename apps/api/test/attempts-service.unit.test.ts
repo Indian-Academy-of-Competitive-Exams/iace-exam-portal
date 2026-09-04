@@ -80,18 +80,7 @@ function serviceWith(
   }),
   permitted = true,
 ) {
-  const prisma = new FakeTestsPrisma(
-    [test],
-    [config],
-    SECTIONS,
-    [],
-    [],
-    [],
-    paper(),
-    [],
-    attempts,
-    [],
-  );
+  const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], [], paper(), [], attempts, []);
   const redis = new FakeRedis();
   const state = new AttemptStateService(prisma.asService(), redis.asService());
   return {
@@ -154,7 +143,6 @@ describe('AttemptsService — starting a sitting', () => {
       [sittable()],
       [makeBaseConfig({ id: 'cfg_1', durationSec: 3600, shuffleQuestions: true })],
       twoSections,
-      [],
       [],
       [],
       spread,
@@ -421,7 +409,6 @@ describe('AttemptsService — a test with a paper per student', () => {
       [sittable({ paperBinding: PAPER_BINDING.GENERATED, variantCount: 2 })],
       [makeBaseConfig({ id: 'cfg_1', durationSec: 3600, totalQuestions: 3 })],
       SECTIONS,
-      [],
       [],
       [],
       variants(),

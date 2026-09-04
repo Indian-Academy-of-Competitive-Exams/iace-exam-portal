@@ -43,7 +43,7 @@ const branchesAreStandardOnly = (count: number) =>
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
-  _count: { select: { tests: true } },
+  _count: { select: { directTests: true } },
 } as const satisfies Prisma.TestSeriesInclude;
 
 type SeriesRow = Prisma.TestSeriesGetPayload<{ include: typeof SERIES_INCLUDE }>;
@@ -230,10 +230,7 @@ export class TestSeriesService {
   async remove(id: string): Promise<void> {
     await this.requireSeries(id);
 
-    // Both routes, because `Test.testSeriesId` is a RESTRICT key the join-table count cannot see.
-    const held = await this.prisma.test.count({
-      where: { OR: [{ testSeriesId: id }, { series: { some: { testSeriesId: id } } }] },
-    });
+    const held = await this.prisma.test.count({ where: { testSeriesId: id } });
     if (held > 0) {
       const tests = `${held} test${held === 1 ? '' : 's'}`;
       throw new AppException(
@@ -445,7 +442,7 @@ function toSummary(row: SeriesRow, branchCount: number | undefined): TestSeriesS
     branchIds: row.branchIds,
     isEnabled: row.isEnabled,
     eventId: row.eventId,
-    testCount: row._count.tests,
+    testCount: row._count.directTests,
     enabledBranchCount: row.branchIds.length,
     branchCount: branchCount ?? 0,
     createdAt: row.createdAt.toISOString(),

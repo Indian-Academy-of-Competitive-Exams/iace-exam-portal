@@ -377,10 +377,10 @@ describe('TestSeriesService — what a series may point at', () => {
     await assert.rejects(() => series.remove('srs_1'), AppException.is);
   });
 
-  it('refuses to delete one still carrying a test, whichever route holds it', async () => {
+  it('refuses to delete one still carrying a test', async () => {
     const { series, prisma } = build({
       series: [makeSeries({ id: 'srs_1' })],
-      tests: [{ id: 'tst_1', testSeriesId: 'srs_1', seriesIds: ['srs_1'] }],
+      tests: [{ id: 'tst_1', testSeriesId: 'srs_1' }],
     });
 
     const error = await series.remove('srs_1').catch((e: unknown) => e);
@@ -394,25 +394,12 @@ describe('TestSeriesService — what a series may point at', () => {
   it('deletes one a test was taken out of, rather than tripping its restrict key', async () => {
     const { series, prisma } = build({
       series: [makeSeries({ id: 'srs_1' })],
-      tests: [{ id: 'tst_1', testSeriesId: null, seriesIds: [] }],
+      tests: [{ id: 'tst_1', testSeriesId: null }],
     });
 
     await series.remove('srs_1');
 
     assert.equal(prisma.series.length, 0);
-  });
-
-  /** The join row is gone but the column still points here, so counting links alone lets it through. */
-  it('refuses one a stranded test still points at, with no link left to count', async () => {
-    const { series } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      tests: [{ id: 'tst_1', testSeriesId: 'srs_1', seriesIds: [] }],
-    });
-
-    const error = await series.remove('srs_1').catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
   });
 });
 /** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */

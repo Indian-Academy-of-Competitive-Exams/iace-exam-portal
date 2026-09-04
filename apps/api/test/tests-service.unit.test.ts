@@ -25,7 +25,6 @@ import {
   rowAt,
   type FakeBaseConfigRow,
   type FakeSectionRow,
-  type FakeSeriesTestRow,
   type FakeTestModelRow,
 } from './support/fakes';
 
@@ -40,15 +39,9 @@ const SECTIONS: FakeSectionRow[] = [
 function serviceWith(
   tests: FakeTestModelRow[] = [],
   configs: FakeBaseConfigRow[] = [makeBaseConfig({ totalQuestions: 50, durationSec: 3600 })],
-  usage: { attempts?: { testId: string }[]; seriesTests?: FakeSeriesTestRow[] } = {},
+  usage: { attempts?: { testId: string }[] } = {},
 ) {
-  const prisma = new FakeTestsPrisma(
-    tests,
-    configs,
-    SECTIONS,
-    usage.attempts ?? [],
-    usage.seriesTests ?? [],
-  );
+  const prisma = new FakeTestsPrisma(tests, configs, SECTIONS, usage.attempts ?? []);
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configsService = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
   const events = new FakeEventBus();
@@ -431,17 +424,15 @@ describe('TestsService — editing and removing', () => {
   });
 
   /** Being frozen and being offered are states a test can be talked out of; being sat is not. */
-  it('deletes a finalized test that two series still offer, because nobody sat it', async () => {
-    const { service, prisma } = serviceWith(
-      [makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE })],
-      undefined,
-      {
-        seriesTests: [
-          { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-          { testSeriesId: 'srs_2', testId: 'tst_1', order: 1 },
-        ],
-      },
-    );
+  it('deletes a finalized test a series still offers, because nobody sat it', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({
+        id: 'tst_1',
+        isLocked: true,
+        status: TEST_STATUS.ACTIVE,
+        testSeriesId: 'srs_1',
+      }),
+    ]);
 
     await service.remove('tst_1');
 
@@ -449,19 +440,14 @@ describe('TestsService — editing and removing', () => {
   });
 
   /** The failure this prevents: a deleted test still reachable in a student's cached catalog. */
-  it('tells every series that carried it that the catalog has moved', async () => {
-    const { service, events } = serviceWith([makeTest({ id: 'tst_1' })], undefined, {
-      seriesTests: [
-        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-        { testSeriesId: 'srs_2', testId: 'tst_1', order: 2 },
-      ],
-    });
+  it('tells the series that carried it that the catalog has moved', async () => {
+    const { service, events } = serviceWith([makeTest({ id: 'tst_1', testSeriesId: 'srs_1' })]);
 
     await service.remove('tst_1');
 
     assert.deepEqual(
       events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).map((payload) => payload.testSeriesId),
-      ['srs_1', 'srs_2'],
+      ['srs_1'],
     );
   });
 });

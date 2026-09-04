@@ -384,7 +384,7 @@ export type DifficultyStanding = z.infer<typeof difficultyStandingSchema>;
 // Series progression, drawn only for a series an admin has marked `progressive`.
 // A ramp is read two ways: percentile against how hard each paper was graded, and
 // each subject's accuracy over the same ordered papers. Both are ordered by
-// `TestSeriesTest.order` — the ramp is the sequence, not the calendar.
+// `Test.seriesOrder` — the ramp is the sequence, not the calendar.
 // ============================================================================
 
 /** A paper's difficulty on one 0..100 scale, averaged over the grades its questions carry. */

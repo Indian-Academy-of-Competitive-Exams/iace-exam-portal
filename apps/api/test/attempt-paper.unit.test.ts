@@ -83,7 +83,6 @@ function serviceWith(
     [config],
     SECTIONS,
     [],
-    [],
     [makeQuestion({ id: 'q1' }), makeQuestion({ id: 'q2' })],
     paper,
     [],

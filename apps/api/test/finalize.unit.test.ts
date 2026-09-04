@@ -63,7 +63,7 @@ function serviceWith(
   const questions = ['r1', 'r2', 'r3', 'q1', 'q2'].map((id) =>
     makeQuestion({ id, currentVersionId: `${id}_v1` }),
   );
-  const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], [], questions, paper);
+  const prisma = new FakeTestsPrisma([test], [config], SECTIONS, [], questions, paper);
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
   const paperService = new PaperService(
@@ -266,7 +266,6 @@ describe('FinalizeService — a test drawn per student', () => {
       [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5 })],
       SECTIONS,
       [],
-      [],
       bank,
       [],
     );
@@ -341,13 +340,8 @@ describe('FinalizeService — a test drawn per student', () => {
 });
 
 describe('FinalizeService — offering', () => {
-  const build = (over: Partial<FakeTestModelRow> = {}, series = 1) => {
-    const held = serviceWith(wholePaper(), makeTest({ id: 'tst_1', ...over }));
-    for (let index = 0; index < series; index += 1) {
-      held.prisma.seriesTests.push({ testSeriesId: `srs_${index}`, testId: 'tst_1', order: null });
-    }
-    return held;
-  };
+  const build = (over: Partial<FakeTestModelRow> = {}, testSeriesId: string | null = 'srs_1') =>
+    serviceWith(wholePaper(), makeTest({ id: 'tst_1', testSeriesId, ...over }));
 
   it('freezes and opens in one write, so neither can land without the other', async () => {
     const { service, prisma } = build();
@@ -362,7 +356,7 @@ describe('FinalizeService — offering', () => {
 
   /** The failure this prevents: a paper frozen for a test no series carries, offered to nobody. */
   it('refuses before it writes anything when no series carries it', async () => {
-    const { service, prisma } = build({}, 0);
+    const { service, prisma } = build({}, null);
 
     const error = await service.offer('tst_1').catch((e: unknown) => e);
 

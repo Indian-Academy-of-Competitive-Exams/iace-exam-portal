@@ -19,7 +19,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ProgramPicker, TestSeriesMultiPicker } from '../components/access-picker';
+import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
 import { QUERY_KEYS } from '../lib/constants';
 import { toSeconds } from '../lib/schedule-format';
 import {
@@ -30,9 +30,9 @@ import {
   type ScheduleDraft,
 } from './test-schedule-draft';
 
-/** Who is offered the test: the series that carry it, and the freeze that lets students sit it. */
+/** Who is offered the test: the series carrying it, and the freeze that lets students sit it. */
 
-const SERIES_LINKS_KEY = (testId: string) => [...QUERY_KEYS.TEST_SERIES_LINKS, testId] as const;
+const SERIES_LINK_KEY = (testId: string) => [...QUERY_KEYS.TEST_SERIES_LINKS, testId] as const;
 
 function useOfferingRefresh(testId: string) {
   const queryClient = useQueryClient();
@@ -46,38 +46,35 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const queryClient = useQueryClient();
   const refresh = useOfferingRefresh(detail.id);
 
-  const links = useQuery({
-    queryKey: SERIES_LINKS_KEY(detail.id),
+  const link = useQuery({
+    queryKey: SERIES_LINK_KEY(detail.id),
     queryFn: () => api.admin.tests.series(detail.id),
   });
-  const chosen = (links.data ?? []).map((link) => link.testSeriesId);
 
   const setSeries = useMutation({
     meta: { success: 'Series updated.' },
-    mutationFn: (testSeriesIds: string[]) =>
-      api.admin.tests.setSeries(detail.id, {
-        series: testSeriesIds.map((testSeriesId, index) => ({ testSeriesId, order: index + 1 })),
-      }),
+    mutationFn: (testSeriesId: string | null) =>
+      api.admin.tests.setSeries(detail.id, { testSeriesId }),
     onSuccess: async (next) => {
-      queryClient.setQueryData(SERIES_LINKS_KEY(detail.id), next);
+      queryClient.setQueryData(SERIES_LINK_KEY(detail.id), next);
       await refresh();
     },
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <Field htmlFor="test-series" label="Series">
-        {(control) => (
-          <TestSeriesMultiPicker
-            {...control}
-            value={chosen}
-            disabled={setSeries.isPending}
-            forExamStageId={detail.examStageId}
-            onChange={(next) => setSeries.mutate(next)}
-          />
-        )}
-      </Field>
-    </div>
+    <Field htmlFor="test-series" label="Series">
+      {(control) => (
+        <TestSeriesPicker
+          {...control}
+          clearable
+          value={link.data?.testSeriesId ?? ''}
+          selectedLabel={link.data?.name}
+          disabled={setSeries.isPending}
+          forExamStageId={detail.examStageId}
+          onChange={(chosen) => setSeries.mutate(chosen.id === '' ? null : chosen.id)}
+        />
+      )}
+    </Field>
   );
 }
 
@@ -177,7 +174,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
   if (!seriesId) {
     return (
       <Alert variant="info">
-        A test opens through the series carrying it. Add this one to a series above, and its clock
+        A test opens through the series carrying it. Put this one in a series above, and its clock
         can be set here.
       </Alert>
     );
@@ -363,7 +360,8 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
     return (
       <div className="flex flex-col gap-4">
         <Alert variant="success">
-          {`Students reached through ${plural(detail.seriesCount, 'series', 'series')} are being offered this test. Its paper is frozen — editing it takes the test back out until it is offered again.`}
+          Students reached through its series are being offered this test. Its paper is frozen —
+          editing it takes the test back out until it is offered again.
         </Alert>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -383,7 +381,7 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
           onOpenChange={(open) => !open && setRetiring(false)}
           destructive
           title={`Retire ${detail.title ?? 'this test'}?`}
-          description={`Every student reached through ${plural(detail.seriesCount, 'series', 'series')} stops being offered this test. Attempts already sat keep their results, and you can offer it again later.`}
+          description="Every student reached through its series stops being offered this test. Attempts already sat keep their results, and you can offer it again later."
           confirmLabel="Retire test"
           loading={retire.isPending}
           onConfirm={() => retire.mutate()}
@@ -434,5 +432,5 @@ function offerEffect(detail: TestDetail): string {
   const freeze = detail.isLocked
     ? ''
     : `Its ${plural(detail.totalQuestions, 'question')} freeze, and every student sits exactly them. `;
-  return `${freeze}Every student reached through ${plural(detail.seriesCount, 'series', 'series')} is offered it from now on. Editing the paper afterwards takes the test back out until it is offered again.`;
+  return `${freeze}Every student reached through its series is offered it from now on. Editing the paper afterwards takes the test back out until it is offered again.`;
 }

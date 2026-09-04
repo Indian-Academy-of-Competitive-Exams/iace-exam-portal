@@ -6,7 +6,6 @@ import { OfferingService } from '../src/tests/offering.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { AuditContext } from '../src/audit';
 import {
-  type FakeSeriesTestRow,
   FakeEventBus,
   FakeTestsPrisma,
   makeBaseConfig,
@@ -15,17 +14,12 @@ import {
   makeTest,
 } from './support/fakes';
 
-function serviceWith(
-  test = makeTest({ id: 'tst_1' }),
-  seriesTests: FakeSeriesTestRow[] = [],
-  attempts: { testId: string }[] = [],
-) {
+function serviceWith(test = makeTest({ id: 'tst_1' }), attempts: { testId: string }[] = []) {
   const prisma = new FakeTestsPrisma(
     [test],
     [makeBaseConfig({ id: 'cfg_1' })],
     [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
     attempts,
-    seriesTests,
   );
   prisma.series.push(
     makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 — Full length' }),
@@ -41,48 +35,63 @@ function serviceWith(
 
 const finalized = () => makeTest({ id: 'tst_1', isLocked: true });
 
+const inSeries = (over: Parameters<typeof makeTest>[0] = {}) =>
+  makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1, ...over });
+
 const OPENS_AT = new Date('2026-09-01T04:30:00.000Z');
 
-describe('OfferingService — attaching a test to a series', () => {
-  it('stores the whole set the screen holds, in order', async () => {
+describe('OfferingService — a test belongs to one series', () => {
+  it('writes the series onto the test itself and names it back', async () => {
     const { service, prisma } = serviceWith();
 
-    const links = await service.setSeries('tst_1', {
-      series: [
-        { testSeriesId: 'srs_1', order: 1 },
-        { testSeriesId: 'srs_2', order: 2 },
-      ],
-    });
+    const link = await service.setSeries('tst_1', { testSeriesId: 'srs_1' });
 
-    assert.deepEqual(
-      links.map((link) => [link.testSeriesId, link.order]),
-      [
-        ['srs_1', 1],
-        ['srs_2', 2],
-      ],
-    );
-    assert.equal(prisma.seriesTests.length, 2);
+    assert.deepEqual(link, {
+      testSeriesId: 'srs_1',
+      name: 'SSC CGL 2026 — Full length',
+      order: null,
+    });
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
-  it('replaces what was there rather than adding to it', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+  it('replaces the series rather than adding to it', async () => {
+    const { service, prisma } = serviceWith(inSeries());
 
-    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_2', order: 1 }] });
+    await service.setSeries('tst_1', { testSeriesId: 'srs_2' });
 
-    assert.deepEqual(
-      prisma.seriesTests.map((row) => row.testSeriesId),
-      ['srs_2'],
-    );
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_2');
+  });
+
+  /** The failure this prevents: a series nothing says holds the test, refusing to be deleted. */
+  it('clears the column, and the position that only meant something inside it', async () => {
+    const { service, prisma } = serviceWith(inSeries());
+
+    const link = await service.setSeries('tst_1', { testSeriesId: null });
+
+    assert.equal(link, null);
+    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], [null, null]);
+  });
+
+  it('reads back the series a test is already in', async () => {
+    const { service } = serviceWith(inSeries());
+
+    assert.deepEqual(await service.series('tst_1'), {
+      testSeriesId: 'srs_1',
+      name: 'SSC CGL 2026 — Full length',
+      order: 1,
+    });
+  });
+
+  it('says a test is in no series rather than answering with an empty set', async () => {
+    const { service } = serviceWith();
+
+    assert.equal(await service.series('tst_1'), null);
   });
 
   it('tells the catalog cache about the series it left AND the one it joined', async () => {
-    const { service, events } = serviceWith(makeTest({ id: 'tst_1' }), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+    const { service, events } = serviceWith(inSeries());
 
-    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_2', order: 1 }] });
+    await service.setSeries('tst_1', { testSeriesId: 'srs_2' });
 
     // A student who could reach it through srs_1 has a cached catalog that no longer holds.
     const touched = events
@@ -91,151 +100,131 @@ describe('OfferingService — attaching a test to a series', () => {
     assert.deepEqual(new Set(touched), new Set(['srs_1', 'srs_2']));
   });
 
+  it('says nothing to the cache when the series it was given is the one it holds', async () => {
+    const { service, events } = serviceWith(inSeries());
+
+    await service.setSeries('tst_1', { testSeriesId: 'srs_1' });
+
+    assert.equal(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED).length, 0);
+  });
+
   it('refuses a series that no longer exists', async () => {
     const { service, prisma } = serviceWith();
 
     const error = await service
-      .setSeries('tst_1', { series: [{ testSeriesId: 'srs_gone', order: 1 }] })
+      .setSeries('tst_1', { testSeriesId: 'srs_gone' })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.seriesTests.length, 0);
+    assert.equal(prisma.tests[0]?.testSeriesId, null);
   });
 
-  it('refuses a series built for another exam stage', async () => {
+  /** The failure this prevents: another stage's series serving this paper to its students. */
+  it('refuses a series whose stage the test does not sit on', async () => {
     const { service, prisma } = serviceWith();
     prisma.series.push(makeSeries({ id: 'srs_rrb', name: 'RRB JE mocks', examStageId: 'stage_9' }));
 
     const error = await service
-      .setSeries('tst_1', { series: [{ testSeriesId: 'srs_rrb', order: 1 }] })
+      .setSeries('tst_1', { testSeriesId: 'srs_rrb' })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.seriesTests.length, 0);
+    assert.match(error.message, /different exam stage/);
+    assert.equal(prisma.tests[0]?.testSeriesId, null);
   });
 
   it('carries a stage-agnostic series, which belongs to no stage and so fits any test', async () => {
     const { service, prisma } = serviceWith();
     prisma.series.push(makeSeries({ id: 'srs_free', name: 'Free mocks', examStageId: null }));
 
-    const links = await service.setSeries('tst_1', {
-      series: [
-        { testSeriesId: 'srs_1', order: 1 },
-        { testSeriesId: 'srs_free', order: 2 },
-      ],
-    });
+    await service.setSeries('tst_1', { testSeriesId: 'srs_free' });
 
-    assert.deepEqual(
-      new Set(links.map((link) => link.testSeriesId)),
-      new Set(['srs_1', 'srs_free']),
-    );
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_free');
   });
 
-  it('refuses to take an OFFERED test out of its last series', async () => {
+  it('refuses to take an OFFERED test out of its series', async () => {
     const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      inSeries({ status: TEST_STATUS.ACTIVE, isLocked: true }),
     );
 
     // The mirror of the activation rule: otherwise an ACTIVE test ends up with no route to it.
-    const error = await service.setSeries('tst_1', { series: [] }).catch((e: unknown) => e);
+    const error = await service.setSeries('tst_1', { testSeriesId: null }).catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.equal(prisma.seriesTests.length, 1);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
-  it('takes an empty set as taking the test out of every series', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+  /** Moving a sat test is the same removal, so it answers to the same rule. */
+  it('refuses to move a test that has been sat', async () => {
+    const { service, prisma } = serviceWith(inSeries(), [{ testId: 'tst_1' }]);
 
-    await service.setSeries('tst_1', { series: [] });
+    const error = await service
+      .setSeries('tst_1', { testSeriesId: 'srs_2' })
+      .catch((e: unknown) => e);
 
-    assert.equal(prisma.seriesTests.length, 0);
-  });
-});
-
-/** `Test.testSeriesId` is a RESTRICT key nothing else writes, so the link has to carry it. */
-describe('OfferingService — the series column follows the link that set it', () => {
-  it('writes the series onto the test itself', async () => {
-    const { service, prisma } = serviceWith();
-
-    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_1', order: 3 }] });
-
-    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], ['srs_1', 3]);
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
-  it('takes the earliest of a set the screen holds', async () => {
-    const { service, prisma } = serviceWith();
+  it('still lets a sat test that is in no series be given one', async () => {
+    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [{ testId: 'tst_1' }]);
 
-    await service.setSeries('tst_1', {
-      series: [
-        { testSeriesId: 'srs_1', order: 2 },
-        { testSeriesId: 'srs_2', order: 1 },
-      ],
-    });
-
-    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_2');
-  });
-
-  /** The failure this prevents: a series nothing says holds the test, refusing to be deleted. */
-  it('clears the column when the last link goes', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-    );
-
-    await service.setSeries('tst_1', { series: [] });
-
-    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], [null, null]);
-  });
-
-  it('clears the column when the series drops the test from its own side', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-    );
-
-    await service.removeFromSeries('srs_1', 'tst_1');
-
-    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], [null, null]);
-  });
-
-  it('repoints the column at what is left rather than clearing it', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
-      [
-        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-        { testSeriesId: 'srs_2', testId: 'tst_1', order: 2 },
-      ],
-    );
-
-    await service.removeFromSeries('srs_1', 'tst_1');
-
-    assert.deepEqual([prisma.tests[0]?.testSeriesId, prisma.tests[0]?.seriesOrder], ['srs_2', 2]);
-  });
-
-  it('leaves the column alone when the removal is refused', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1 }),
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-      [{ testId: 'tst_1' }],
-    );
-
-    await service.removeFromSeries('srs_1', 'tst_1').catch(() => undefined);
+    await service.setSeries('tst_1', { testSeriesId: 'srs_1' });
 
     assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 });
 
+/** The defect this closes: the old whole-set save rebuilt the link and dropped `unlockAt` with it. */
+describe('OfferingService — a re-save cannot wipe the clock', () => {
+  it('moves a test from one series to another without losing its opening', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT, lateEntrySec: 1800 }));
+
+    await service.setSeries('tst_1', { testSeriesId: 'srs_2' });
+
+    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
+    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
+  });
+
+  it('clears the series without clearing the clock', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT, extraTimeSec: 600 }));
+
+    await service.setSeries('tst_1', { testSeriesId: null });
+
+    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
+    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
+  });
+
+  /** The opening survived, so the rows it overtook have to survive with it. */
+  it('leaves the program openings the test had alone', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
+    prisma.programCatalog.push({ code: 'FOUNDATION' });
+    await service.setProgramUnlock('tst_1', 'FOUNDATION', {
+      opensAt: new Date(OPENS_AT.getTime() - 3_600_000).toISOString(),
+    });
+
+    await service.setSeries('tst_1', { testSeriesId: 'srs_2' });
+
+    assert.equal(prisma.programUnlocks.length, 1);
+  });
+
+  it('leaves the clock alone when the series drops the test from its own side', async () => {
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT, lateEntrySec: 1800 }));
+
+    await service.removeFromSeries('srs_1', 'tst_1');
+
+    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
+    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
+  });
+});
+
 describe('OfferingService — offering a test', () => {
   it('offers a finalized test that a series carries', async () => {
-    const { service, prisma } = serviceWith(finalized(), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+    const { service, prisma } = serviceWith(inSeries({ isLocked: true }));
 
     const status = await service.setStatus('tst_1', TEST_STATUS.ACTIVE);
 
@@ -256,9 +245,7 @@ describe('OfferingService — offering a test', () => {
   });
 
   it('refuses to offer a test whose paper is not frozen', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+    const { service, prisma } = serviceWith(inSeries());
 
     const error = await service.setStatus('tst_1', TEST_STATUS.ACTIVE).catch((e: unknown) => e);
 
@@ -280,8 +267,7 @@ describe('OfferingService — offering a test', () => {
 
   it('tells the catalog cache when a test stops being offered', async () => {
     const { service, events } = serviceWith(
-      makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
+      inSeries({ status: TEST_STATUS.ACTIVE, isLocked: true }),
     );
 
     await service.setStatus('tst_1', TEST_STATUS.INACTIVE);
@@ -293,9 +279,7 @@ describe('OfferingService — offering a test', () => {
   });
 
   it('says nothing to the cache when the status did not move', async () => {
-    const { service, events } = serviceWith(finalized(), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
+    const { service, events } = serviceWith(inSeries({ isLocked: true }));
 
     await service.setStatus('tst_1', TEST_STATUS.DRAFT);
 
@@ -304,128 +288,79 @@ describe('OfferingService — offering a test', () => {
 });
 
 describe('OfferingService — a series and the tests it holds', () => {
-  const link = (testSeriesId: string, order: number | null = 1): FakeSeriesTestRow => ({
-    testSeriesId,
-    testId: 'tst_1',
-    order,
-  });
-
   it('lists what a series holds, with the times and whether it has been sat', async () => {
-    const { service } = serviceWith(
-      makeTest({ id: 'tst_1', title: 'Mock 1' }),
-      [link('srs_1')],
-      [{ testId: 'tst_1' }],
-    );
+    const { service } = serviceWith(inSeries({ title: 'Mock 1', opensAt: OPENS_AT }), [
+      { testId: 'tst_1' },
+    ]);
 
     const rows = await service.testsIn('srs_1');
 
     assert.deepEqual(rows, [
-      { testId: 'tst_1', title: 'Mock 1', order: 1, unlockAt: null, attemptCount: 1 },
+      {
+        testId: 'tst_1',
+        title: 'Mock 1',
+        order: 1,
+        unlockAt: OPENS_AT.toISOString(),
+        attemptCount: 1,
+      },
     ]);
   });
 
   it('sets when a test opens inside a series, and busts that catalog', async () => {
-    const { service, events } = serviceWith(makeTest({ id: 'tst_1' }), [link('srs_1')]);
+    const { service, events } = serviceWith(inSeries());
 
     const rows = await service.setUnlock('srs_1', 'tst_1', {
-      unlockAt: '2026-09-01T04:30:00.000Z',
+      unlockAt: OPENS_AT.toISOString(),
     });
 
-    assert.equal(rows[0]?.unlockAt, '2026-09-01T04:30:00.000Z');
+    assert.equal(rows[0]?.unlockAt, OPENS_AT.toISOString());
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [{ testSeriesId: 'srs_1' }]);
   });
 
+  /** The resolver reads `Test.opensAt`, so the series' opening IS the test's own column. */
   it('clears the opening time back to null', async () => {
-    const { service } = serviceWith(makeTest({ id: 'tst_1' }), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt: new Date() },
-    ]);
+    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT }));
 
     const rows = await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
 
     assert.equal(rows[0]?.unlockAt, null);
-  });
-
-  /** The resolver reads `Test.opensAt`, so a time only the join row holds opens nothing. */
-  it('writes the test its own opensAt when a series unlock time is set', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [link('srs_1')]);
-
-    await service.setUnlock('srs_1', 'tst_1', { unlockAt: OPENS_AT.toISOString() });
-    assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
-
-    await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
-
     assert.equal(prisma.tests[0]?.opensAt, null);
   });
 
   it('takes a test nobody has sat back out of a series', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [
-      link('srs_1'),
-      link('srs_2', 2),
-    ]);
+    const { service, prisma } = serviceWith(inSeries());
 
     const rows = await service.removeFromSeries('srs_1', 'tst_1');
 
     assert.deepEqual(rows, []);
-    assert.deepEqual(
-      prisma.seriesTests.map((row) => row.testSeriesId),
-      ['srs_2'],
-    );
+    assert.equal(prisma.tests[0]?.testSeriesId, null);
   });
 
   /** The failure this prevents: a sat test detached, and a student's result with nowhere to sit. */
-  it('refuses to take out one that has been sat, and leaves the link alone', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1' }),
-      [link('srs_1')],
-      [{ testId: 'tst_1' }, { testId: 'tst_1' }],
-    );
+  it('refuses to take out one that has been sat, and leaves the column alone', async () => {
+    const { service, prisma } = serviceWith(inSeries(), [{ testId: 'tst_1' }, { testId: 'tst_1' }]);
 
     const error = await service.removeFromSeries('srs_1', 'tst_1').catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /2 attempts/);
-    assert.equal(prisma.seriesTests.length, 1);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
-  /** Unticking a series on the test screen is the same removal, so it answers to the same rule. */
-  it('refuses to drop a link through the whole-set save once it has been sat', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
-      [link('srs_1'), link('srs_2', 2)],
-      [{ testId: 'tst_1' }],
-    );
-
-    const error = await service
-      .setSeries('tst_1', { series: [{ testSeriesId: 'srs_1', order: 1 }] })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.equal(prisma.seriesTests.length, 2);
-  });
-
-  it('still lets a sat test be ADDED to another series', async () => {
-    const { service, prisma } = serviceWith(
-      makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
-      [link('srs_1')],
-      [{ testId: 'tst_1' }],
-    );
-
-    await service.setSeries('tst_1', {
-      series: [
-        { testSeriesId: 'srs_1', order: 1 },
-        { testSeriesId: 'srs_2', order: 2 },
-      ],
-    });
-
-    assert.equal(prisma.seriesTests.length, 2);
-  });
-
-  it('refuses a link the series does not hold', async () => {
+  it('refuses a test the series does not hold', async () => {
     const { service } = serviceWith();
 
     await assert.rejects(() => service.removeFromSeries('srs_1', 'tst_1'), AppException.is);
+  });
+
+  it('refuses to set an opening through a series the test is not in', async () => {
+    const { service } = serviceWith(inSeries());
+
+    await assert.rejects(
+      () => service.setUnlock('srs_2', 'tst_1', { unlockAt: null }),
+      AppException.is,
+    );
   });
 });
 
@@ -468,50 +403,15 @@ describe('OfferingService — the test carries its own clock', () => {
 
     assert.equal(prisma.tests[0]?.extraTimeSec, 300);
   });
-
-  /** The failure this prevents: `mirrorTimingOntoTest` used to collapse these back from branch rows. */
-  it('leaves the clock alone when the test is moved between series', async () => {
-    const { service, prisma } = serviceWith(opened());
-    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
-
-    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_1', order: 1 }] });
-
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
-  });
-
-  it('leaves the clock alone when the last series drops the test', async () => {
-    const { service, prisma } = serviceWith(opened(), [
-      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
-    ]);
-    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
-
-    await service.removeFromSeries('srs_1', 'tst_1');
-
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
-  });
 });
 
 describe('OfferingService — a program opens a test earlier, never later', () => {
   const EARLIER = new Date(OPENS_AT.getTime() - 3_600_000);
 
   const unlockService = (opensAt: Date | null = OPENS_AT) => {
-    const prisma = new FakeTestsPrisma(
-      [makeTest({ id: 'tst_1', opensAt })],
-      [makeBaseConfig({ id: 'cfg_1' })],
-      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
-      [],
-      [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt: opensAt }],
-    );
-    prisma.series.push(makeSeries({ id: 'srs_1' }));
-    prisma.programCatalog.push({ code: 'FOUNDATION' });
-    return {
-      prisma,
-      service: new OfferingService(
-        prisma.asService(),
-        new FakeEventBus().asService(),
-        new AuditContext(),
-      ),
-    };
+    const held = serviceWith(inSeries({ opensAt }));
+    held.prisma.programCatalog.push({ code: 'FOUNDATION' });
+    return held;
   };
 
   it('stores an unlock that opens the test earlier for one program', async () => {
@@ -593,15 +493,6 @@ describe('OfferingService — a program opens a test earlier, never later', () =
     await service.setUnlock('srs_1', 'tst_1', { unlockAt: null });
 
     assert.equal(prisma.tests[0]?.opensAt, null);
-    assert.deepEqual(prisma.programUnlocks, []);
-  });
-
-  it('drops one when the test is taken out of the series that opened it', async () => {
-    const { service, prisma } = unlockService();
-    await service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: EARLIER.toISOString() });
-
-    await service.removeFromSeries('srs_1', 'tst_1');
-
     assert.deepEqual(prisma.programUnlocks, []);
   });
 

@@ -137,7 +137,7 @@ function bench(overrides: Partial<FakePerformanceData> = {}, access = schedule(n
       { id: TOPPER, deletedAt: null, currentBranchId: 'br_1' },
     ],
     series: [],
-    seriesTests: [],
+    tests: [],
     testStats: [
       {
         testId: 'tst_1',

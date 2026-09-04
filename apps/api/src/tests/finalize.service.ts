@@ -27,7 +27,7 @@ const FINALIZE_SELECT = {
   isLocked: true,
   status: true,
   version: true,
-  _count: { select: { series: true } },
+  testSeriesId: true,
 } as const satisfies Prisma.TestSelect;
 
 type FinalizeRow = Prisma.TestGetPayload<{ select: typeof FINALIZE_SELECT }>;
@@ -66,12 +66,9 @@ export class FinalizeService {
       ? await this.openAlreadyFrozen(test)
       : { ...(await this.finalize(testId, TEST_STATUS.ACTIVE)), status: TEST_STATUS.ACTIVE };
 
-    // Every series carrying it: the catalog a student reads is cached against them.
-    for (const link of await this.prisma.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true },
-    })) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: link.testSeriesId });
+    // The series carrying it: the catalog a student reads is cached against it.
+    if (test.testSeriesId !== null) {
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
     }
     return frozen;
   }
@@ -88,7 +85,7 @@ export class FinalizeService {
   }
 
   private assertOfferable(test: FinalizeRow): void {
-    const blocker = activationBlocker({ isLocked: true, seriesCount: test._count.series });
+    const blocker = activationBlocker({ isLocked: true, testSeriesId: test.testSeriesId });
     if (!blocker) return;
     throw new AppException(ErrorCodes.CONFLICT, blocker, {
       fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },

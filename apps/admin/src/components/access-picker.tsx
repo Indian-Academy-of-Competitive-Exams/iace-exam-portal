@@ -14,8 +14,11 @@ interface PickerProps {
   selectedLabel?: string;
   placeholder?: string;
   clearable?: boolean;
+  disabled?: boolean;
   id?: string;
   'aria-label'?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 /** Only active programs: the server refuses a retired one, so it is never offered. */
@@ -93,21 +96,36 @@ const NO_SERIES: ChosenSeries = { id: '', name: '', isEnabled: false };
 /** The row comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({
   notReachedBy,
+  forExamStageId,
   onChange,
   ...props
 }: Readonly<
   Omit<PickerProps, 'onChange'> & {
     /** A student id: the server drops what they already reach, so a grant that does nothing is unofferable. */
     notReachedBy?: string;
+    /** The stage of the test being offered: hides series built for a different one. */
+    forExamStageId?: string;
     onChange: (chosen: ChosenSeries) => void;
   }
 >) {
   const [search, setSearch] = useState('');
 
   const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search, notReachedBy ?? ''],
+    queryKey: [
+      ...QUERY_KEYS.TEST_SERIES,
+      QUERY_SCOPES.PICKER,
+      search,
+      notReachedBy ?? '',
+      forExamStageId ?? '',
+    ],
     fetchPage: (page) =>
-      api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search, notReachedBy }),
+      api.admin.testSeries.list({
+        page,
+        pageSize: PAGE_SIZE_MAX,
+        q: search,
+        notReachedBy,
+        forExamStageId,
+      }),
   });
 
   const items = pages.items.map((series) => ({
@@ -127,62 +145,6 @@ export function TestSeriesPicker({
       placeholder={props.placeholder ?? 'No series'}
       items={items}
       onChange={(value) => onChange(chosenOf(value))}
-      search={search}
-      onSearchChange={setSearch}
-      searchPlaceholder="Search series"
-      hasMore={pages.hasMore}
-      onLoadMore={pages.loadMore}
-      isLoading={pages.isLoading}
-      isLoadingMore={pages.isLoadingMore}
-      emptyLabel="No series matches that"
-    />
-  );
-}
-
-/** The same catalog, choosing several — a test is offered through every series that carries it. */
-export function TestSeriesMultiPicker({
-  value,
-  onChange,
-  disabled,
-  forExamStageId,
-  placeholder = 'No series yet',
-  ...control
-}: Readonly<{
-  value: readonly string[];
-  onChange: (next: string[]) => void;
-  disabled?: boolean;
-  /** The stage of the test being offered: hides series built for a different one. */
-  forExamStageId?: string;
-  /** A form says what is chosen; a filter says what choosing nothing means. */
-  placeholder?: string;
-  id?: string;
-  'aria-label'?: string;
-  'aria-describedby'?: string;
-  'aria-invalid'?: boolean;
-}>) {
-  const [search, setSearch] = useState('');
-
-  const pages = useInfinitePages({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, QUERY_SCOPES.PICKER, search, forExamStageId ?? ''],
-    fetchPage: (page) =>
-      api.admin.testSeries.list({ page, pageSize: PAGE_SIZE_MAX, q: search, forExamStageId }),
-  });
-
-  return (
-    <MultiCombobox
-      {...control}
-      chips={false}
-      disabled={disabled}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      items={pages.items.map((series) => ({
-        value: series.id,
-        label: series.name,
-        hint: series.examStage
-          ? `${series.examStage.examCode} / ${series.examStage.name}`
-          : undefined,
-      }))}
       search={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search series"

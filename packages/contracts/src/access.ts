@@ -234,15 +234,6 @@ export const updateTestSeriesSchema = createTestSeriesSchema.partial();
 export type UpdateTestSeriesInput = z.input<typeof updateTestSeriesSchema>;
 export type UpdateTestSeriesBody = z.infer<typeof updateTestSeriesSchema>;
 
-export const testSeriesTestSchema = z.object({
-  testSeriesId: z.string(),
-  testId: z.string(),
-  /** Position in the series, which is what sequential unlocking follows. */
-  order: z.number().int().nullable(),
-  createdAt: z.string(),
-});
-export type TestSeriesTest = z.infer<typeof testSeriesTestSchema>;
-
 /** The escape hatch for access that is not exam-, program- or branch-derivable. */
 export const studentGrantSchema = z.object({
   studentId: z.string(),

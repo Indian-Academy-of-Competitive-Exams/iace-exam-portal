@@ -136,12 +136,15 @@ export function paperCompletenessIssues(
 }
 
 /** A test reaches a student only through a series, and only once its paper has stopped moving. */
-export function activationBlocker(test: { isLocked: boolean; seriesCount: number }): string | null {
+export function activationBlocker(test: {
+  isLocked: boolean;
+  testSeriesId: string | null;
+}): string | null {
   if (!test.isLocked) {
     return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
   }
-  if (test.seriesCount === 0) {
-    return 'A test reaches a student only through a series. Add this one to at least one before offering it.';
+  if (test.testSeriesId === null) {
+    return 'A test reaches a student only through a series. Put this one in a series before offering it.';
   }
   return null;
 }

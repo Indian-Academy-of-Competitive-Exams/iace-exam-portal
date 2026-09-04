@@ -48,7 +48,6 @@ function build(over: { endsAt?: Date; status?: AttemptStatus } = {}) {
     [],
     [],
     [],
-    [],
     [
       makeAttempt({
         id: 'att_1',

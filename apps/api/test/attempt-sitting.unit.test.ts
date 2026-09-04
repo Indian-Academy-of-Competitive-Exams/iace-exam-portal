@@ -98,7 +98,6 @@ function hall() {
     ],
     SECTIONS,
     [],
-    [],
     [makeQuestion({ id: 'q1' }), makeQuestion({ id: 'q2' })],
     paperRows(),
     [],

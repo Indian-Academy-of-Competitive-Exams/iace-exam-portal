@@ -128,7 +128,7 @@ describe('offerRequirements', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    seriesCount: 1,
+    testSeriesId: 'srs_1',
     variantCount: 1,
   };
   const met = (test: Parameters<typeof offerRequirements>[0]) =>
@@ -147,7 +147,7 @@ describe('offerRequirements', () => {
   });
 
   it('is not ready while no series carries it', () => {
-    assert.deepEqual(met({ ...fixed, seriesCount: 0 }), [true, false]);
+    assert.deepEqual(met({ ...fixed, testSeriesId: null }), [true, false]);
   });
 
   /** A frozen paper is whole by definition — a retired test must be offerable again. */
@@ -160,6 +160,6 @@ describe('offerRequirements', () => {
     const generated = { ...fixed, paperBinding: PAPER_BINDING.GENERATED, paperQuestionCount: 0 };
 
     assert.deepEqual(met(generated), [true, true]);
-    assert.deepEqual(met({ ...generated, seriesCount: 0 }), [true, false]);
+    assert.deepEqual(met({ ...generated, testSeriesId: null }), [true, false]);
   });
 });
