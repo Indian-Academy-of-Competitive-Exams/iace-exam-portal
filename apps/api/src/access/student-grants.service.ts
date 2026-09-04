@@ -187,26 +187,6 @@ export class StudentGrantsService {
     return this.list(studentId, scope);
   }
 
-  /** A whole intake at once. `skipDuplicates`, so re-importing the same sheet grants nobody twice. */
-  async grantMany(
-    studentIds: readonly string[],
-    testSeriesId: string,
-    createdById: string,
-  ): Promise<number> {
-    if (studentIds.length === 0) return 0;
-
-    const written = await this.prisma.studentGrant.createMany({
-      data: studentIds.map((studentId) => ({ studentId, testSeriesId, createdById })),
-      skipDuplicates: true,
-    });
-
-    // Per student, not one global bust: an intake must not throw away every other student's catalog.
-    for (const studentId of studentIds) {
-      this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
-    }
-    return written.count;
-  }
-
   async revoke(studentId: string, testSeriesId: string, scope: BranchScope): Promise<void> {
     await this.requireStudent(studentId, scope);
 

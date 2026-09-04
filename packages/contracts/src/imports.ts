@@ -92,43 +92,43 @@ export const studentImportResultSchema = studentImportSummarySchema.extend({
 });
 export type StudentImportResult = z.infer<typeof studentImportResultSchema>;
 
-/** A scholarship intake: an enrolment list, never a roster, so a known mobile ONLY earns a grant. */
-export const scholarshipImportActionSchema = z.enum(['create', 'grant', 'skip']);
-export type ScholarshipImportAction = z.infer<typeof scholarshipImportActionSchema>;
+/** An event intake: a candidate list, never a roster, so a number we know is only ADDED to the event. */
+export const candidateImportActionSchema = z.enum(['create', 'add', 'skip']);
+export type CandidateImportAction = z.infer<typeof candidateImportActionSchema>;
 
-export const scholarshipImportRowSchema = z.object({
+export const candidateImportRowSchema = z.object({
   line: z.number().int(),
   mobile: z.string().nullable(),
   fullName: z.string().nullable(),
-  /** Set when the number already belongs to a LIVE student — this row grants and writes nothing else. */
+  /** Set when the number already belongs to a LIVE student — this row adds them and edits nothing. */
   existingStudentId: z.string().nullable(),
   willReceiveDefaultPin: z.boolean(),
-  action: scholarshipImportActionSchema,
+  action: candidateImportActionSchema,
   errors: z.array(z.string()),
 });
-export type ScholarshipImportRow = z.infer<typeof scholarshipImportRowSchema>;
+export type CandidateImportRow = z.infer<typeof candidateImportRowSchema>;
 
-export const scholarshipImportSummarySchema = z.object({
+export const candidateImportSummarySchema = z.object({
   total: z.number().int(),
   willCreate: z.number().int(),
-  willGrant: z.number().int(),
+  willAdd: z.number().int(),
   invalid: z.number().int(),
 });
-export type ScholarshipImportSummary = z.infer<typeof scholarshipImportSummarySchema>;
+export type CandidateImportSummary = z.infer<typeof candidateImportSummarySchema>;
 
-export const scholarshipImportPlanSchema = z.object({
-  rows: z.array(scholarshipImportRowSchema),
-  summary: scholarshipImportSummarySchema,
+export const candidateImportPlanSchema = z.object({
+  rows: z.array(candidateImportRowSchema),
+  summary: candidateImportSummarySchema,
   fileErrors: z.array(z.string()),
 });
-export type ScholarshipImportPlan = z.infer<typeof scholarshipImportPlanSchema>;
+export type CandidateImportPlan = z.infer<typeof candidateImportPlanSchema>;
 
-export const scholarshipImportResultSchema = scholarshipImportSummarySchema.extend({
+export const candidateImportResultSchema = candidateImportSummarySchema.extend({
   created: z.number().int(),
-  granted: z.number().int(),
+  added: z.number().int(),
   skipped: z.number().int(),
 });
-export type ScholarshipImportResult = z.infer<typeof scholarshipImportResultSchema>;
+export type CandidateImportResult = z.infer<typeof candidateImportResultSchema>;
 
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
@@ -138,18 +138,18 @@ export const IMPORT_ROUTES = {
   studentsPortalCommit: '/imports/students/portal/commit',
   /** The sample workbook, generated from STUDENT_IMPORT_COLUMNS below. */
   studentsTemplate: '/imports/students/template',
-  /** A scholarship intake is filed against the series it enrols into. */
-  scholarshipPreview: (seriesId: string) => `/imports/scholarship/${seriesId}/preview`,
-  scholarshipCommit: (seriesId: string) => `/imports/scholarship/${seriesId}/commit`,
-  /** The sample workbook, generated from SCHOLARSHIP_IMPORT_COLUMNS. */
-  scholarshipTemplate: '/imports/scholarship/template',
+  /** An intake is filed against the EVENT whose roster it fills, never against a series. */
+  eventCandidatesPreview: (eventId: string) => `/imports/events/${eventId}/candidates/preview`,
+  eventCandidatesCommit: (eventId: string) => `/imports/events/${eventId}/candidates/commit`,
+  /** The sample workbook, generated from CANDIDATE_IMPORT_COLUMNS. */
+  candidatesTemplate: '/imports/events/candidates/template',
 } as const;
 
 /** What the sample file is called when it lands in the admin's downloads. */
 export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
 
-/** What the scholarship sample is called when it lands in the admin's downloads. */
-export const SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME = 'iace-scholarship-template.xlsx';
+/** What the candidate sample is called when it lands in the admin's downloads. */
+export const CANDIDATE_IMPORT_TEMPLATE_FILENAME = 'iace-candidates-template.xlsx';
 
 /** The multipart field the upload arrives under. Server and client must agree. */
 export const IMPORT_FILE_FIELD = 'file';
@@ -286,6 +286,6 @@ export type StudentImportColumn = (typeof STUDENT_IMPORT_COLUMNS)[number];
 export type StudentImportColumnKey = StudentImportColumn['key'];
 
 /** The roster list FILTERED, never restated: the sample and the parser read one set of aliases. */
-export const SCHOLARSHIP_IMPORT_COLUMNS = STUDENT_IMPORT_COLUMNS.filter(
+export const CANDIDATE_IMPORT_COLUMNS = STUDENT_IMPORT_COLUMNS.filter(
   (column) => column.key === 'mobile' || column.key === 'fullName',
 );

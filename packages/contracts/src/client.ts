@@ -250,12 +250,12 @@ import {
 import {
   IMPORT_FILE_FIELD,
   IMPORT_ROUTES,
-  scholarshipImportPlanSchema,
-  scholarshipImportResultSchema,
+  candidateImportPlanSchema,
+  candidateImportResultSchema,
   studentImportPlanSchema,
   studentImportResultSchema,
-  type ScholarshipImportPlan,
-  type ScholarshipImportResult,
+  type CandidateImportPlan,
+  type CandidateImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from './imports';
@@ -1441,22 +1441,22 @@ export function createApiClient(options: ApiClientOptions) {
             schema: studentImportResultSchema,
           }),
 
-        /** The scholarship sample — a Blob, not an envelope. */
-        scholarshipTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.scholarshipTemplate),
+        /** The candidate sample — a Blob, not an envelope. */
+        candidateTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.candidatesTemplate),
 
-        /** A scholarship intake: an existing number is granted the series and nothing else. */
-        previewScholarship: (seriesId: string, file: File): Promise<ScholarshipImportPlan> =>
-          request(IMPORT_ROUTES.scholarshipPreview(seriesId), {
+        /** An event intake: an existing number joins the roster and nothing about them is edited. */
+        previewEventCandidates: (eventId: string, file: File): Promise<CandidateImportPlan> =>
+          request(IMPORT_ROUTES.eventCandidatesPreview(eventId), {
             method: 'POST',
             body: fileBody(file),
-            schema: scholarshipImportPlanSchema,
+            schema: candidateImportPlanSchema,
           }),
 
-        commitScholarship: (seriesId: string, file: File): Promise<ScholarshipImportResult> =>
-          request(IMPORT_ROUTES.scholarshipCommit(seriesId), {
+        commitEventCandidates: (eventId: string, file: File): Promise<CandidateImportResult> =>
+          request(IMPORT_ROUTES.eventCandidatesCommit(eventId), {
             method: 'POST',
             body: fileBody(file),
-            schema: scholarshipImportResultSchema,
+            schema: candidateImportResultSchema,
           }),
 
         /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */

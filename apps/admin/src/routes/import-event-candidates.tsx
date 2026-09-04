@@ -3,10 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Download, Upload } from 'lucide-react';
 import {
+  CANDIDATE_IMPORT_TEMPLATE_FILENAME,
   IMPORT_ACCEPTED_EXTENSIONS,
-  SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
-  type ScholarshipImportRow,
+  type CandidateImportRow,
 } from '@iace/contracts';
 import {
   Alert,
@@ -34,33 +34,33 @@ import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
-const ACTION_LABELS: Readonly<Record<ScholarshipImportRow['action'], string>> = {
+const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
   create: 'New candidate',
-  grant: 'Already registered',
+  add: 'Already registered',
   skip: 'Skipped',
 };
 
-export function ImportScholarshipPage() {
+export function ImportEventCandidatesPage() {
   const { id = '' } = useParams();
   const [file, setFile] = useState<File | null>(null);
 
-  const series = useQuery({
-    queryKey: [...QUERY_KEYS.TEST_SERIES, id],
-    queryFn: () => api.admin.testSeries.detail(id),
+  const event = useQuery({
+    queryKey: [...QUERY_KEYS.EVENTS, id],
+    queryFn: () => api.admin.events.detail(id),
   });
 
   const sample = useMutation({
-    mutationFn: () => api.admin.imports.scholarshipTemplate(),
-    onSuccess: (blob) => saveBlob(blob, SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME),
+    mutationFn: () => api.admin.imports.candidateTemplate(),
+    onSuccess: (blob) => saveBlob(blob, CANDIDATE_IMPORT_TEMPLATE_FILENAME),
   });
 
   const preview = useMutation({
-    mutationFn: (chosen: File) => api.admin.imports.previewScholarship(id, chosen),
+    mutationFn: (chosen: File) => api.admin.imports.previewEventCandidates(id, chosen),
   });
 
   const commit = useMutation({
     meta: { success: 'Candidates imported.' },
-    mutationFn: (chosen: File) => api.admin.imports.commitScholarship(id, chosen),
+    mutationFn: (chosen: File) => api.admin.imports.commitEventCandidates(id, chosen),
   });
 
   const choose = (next: File | undefined) => {
@@ -79,17 +79,9 @@ export function ImportScholarshipPage() {
       className="lg:overflow-hidden"
       header={
         <PageHeader
-          breadcrumbs={
-            <PageCrumbs
-              nav={NAV_ITEMS}
-              tail={[
-                { label: series.data?.name ?? 'Series', to: ROUTES.TEST_SERIES_DETAIL(id) },
-                { label: 'Candidates' },
-              ]}
-            />
-          }
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={[{ label: 'Import candidates' }]} />}
           title="Import candidates"
-          meta={series.data?.name}
+          meta={event.data?.name}
         />
       }
     >
@@ -104,13 +96,10 @@ export function ImportScholarshipPage() {
           {commit.data ? (
             <Alert variant="success" className="mb-4">
               <span>
-                {commit.data.created} created, {commit.data.granted} granted, {commit.data.skipped}{' '}
-                skipped.{' '}
-                <Link
-                  to={ROUTES.TEST_SERIES_DETAIL(id)}
-                  className={linkVariants({ variant: 'inline' })}
-                >
-                  Back to the series
+                {commit.data.created} created, {commit.data.added} on the event,{' '}
+                {commit.data.skipped} skipped.{' '}
+                <Link to={ROUTES.EVENTS} className={linkVariants({ variant: 'inline' })}>
+                  Back to events
                 </Link>
               </span>
             </Alert>
@@ -178,7 +167,7 @@ export function ImportScholarshipPage() {
               />
 
               {preview.isPending ? <LoadingState>Reading the file…</LoadingState> : null}
-              {series.isPending ? <Skeleton variant="text" /> : null}
+              {event.isPending ? <Skeleton variant="text" /> : null}
 
               <Button
                 icon={<Upload aria-hidden />}
@@ -196,7 +185,7 @@ export function ImportScholarshipPage() {
               <div className="flex flex-col gap-2 text-sm">
                 <StatRow label="Rows read" value={plan.summary.total} />
                 <StatRow label="New candidates" value={plan.summary.willCreate} />
-                <StatRow label="Already registered" value={plan.summary.willGrant} />
+                <StatRow label="Already registered" value={plan.summary.willAdd} />
                 <StatRow label="Skipped (have errors)" value={plan.summary.invalid} />
               </div>
             </FormSection>

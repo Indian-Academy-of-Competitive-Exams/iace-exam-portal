@@ -1,8 +1,8 @@
 import ExcelJS from 'exceljs';
 import {
+  CANDIDATE_IMPORT_COLUMNS,
   EARLIEST_BIRTH_YEAR,
   IMPORT_MAX_ROWS,
-  SCHOLARSHIP_IMPORT_COLUMNS,
   STUDENT_IMPORT_COLUMNS,
 } from '@iace/contracts';
 
@@ -16,13 +16,13 @@ export function buildStudentTemplate(): Promise<Buffer> {
   });
 }
 
-/** The sample for a scholarship intake: two columns, because the sheet may not edit anybody. */
-export function buildScholarshipTemplate(): Promise<Buffer> {
+/** The sample for an event intake: two columns, because the sheet may not edit anybody. */
+export function buildCandidateTemplate(): Promise<Buffer> {
   return buildTemplate({
     sheetName: 'Candidates',
-    columns: SCHOLARSHIP_IMPORT_COLUMNS,
-    examples: SCHOLARSHIP_IMPORT_EXAMPLES,
-    notes: SCHOLARSHIP_IMPORT_NOTES,
+    columns: CANDIDATE_IMPORT_COLUMNS,
+    examples: CANDIDATE_IMPORT_EXAMPLES,
+    notes: CANDIDATE_IMPORT_NOTES,
   });
 }
 
@@ -165,26 +165,28 @@ const STUDENT_IMPORT_NOTES = [
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],
 ];
 
-// Column order must match SCHOLARSHIP_IMPORT_COLUMNS.
-const SCHOLARSHIP_IMPORT_EXAMPLES = [
+// Column order must match CANDIDATE_IMPORT_COLUMNS.
+const CANDIDATE_IMPORT_EXAMPLES = [
   ['9876543210', 'Asha Kumari'],
   ['9876543211', 'Ravi Teja'],
   ['9876543212', ''],
 ];
 
-const SCHOLARSHIP_IMPORT_NOTES = [
+const CANDIDATE_IMPORT_NOTES = [
   ['How to fill this in'],
   [''],
-  ['This sheet enrols candidates into ONE test series — the one you opened it from.'],
-  ['It does not change anybody. A number already on the platform is given the series'],
-  ['and nothing else about that student is touched: not their branch, not their type,'],
-  ['not their enrolments. Use the Students importer when you mean to edit a record.'],
+  ['This sheet puts candidates on ONE event — the one you opened it from. Every test'],
+  ['series built on that event reaches everybody named here, and nothing else does.'],
+  [''],
+  ['It does not change anybody. A number already on the platform joins the event and'],
+  ['nothing else about that student is touched: not their branch, not their type, not'],
+  ['their enrolments. Use the Students importer when you mean to edit a record.'],
   [''],
   ['Mobile Number — required. 10 digits. This is what identifies a candidate.'],
   [''],
   ['A number we do not know creates a new account outside the institute: no branch,'],
-  ['no exams, no programs. The series you are importing into is the whole of what'],
-  ['they can reach, which is what a scholarship candidate should have.'],
+  ['no exams, no programs. The event you are importing into is the whole of what they'],
+  ['can reach, which is what a candidate from outside should have.'],
   [''],
   ['Each new account is given a starting PIN: the FIRST FOUR DIGITS of their own'],
   ['mobile number. Tell them to change it when they first sign in — anyone holding'],
@@ -194,7 +196,10 @@ const SCHOLARSHIP_IMPORT_NOTES = [
   ['enrolment form did not capture it.'],
   [''],
   ['A number that belonged to a student who was deleted is reported, not imported.'],
-  ['Restore that student, or enrol them on a different number.'],
+  ['Restore that student, or enter them on a different number.'],
+  [''],
+  ['Somebody already on the event is left exactly as they are, so the same file can'],
+  ['be imported twice without adding anybody twice.'],
   [''],
   ['Nothing is written until you press Import. The preview shows exactly what would'],
   ['happen to every row, and rows with errors are skipped rather than stopping the file.'],

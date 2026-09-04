@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2, UserMinus } from 'lucide-react';
+import { Pencil, Plus, Power, Trash2, Upload, UserMinus } from 'lucide-react';
 import {
   createEventSchema,
   FEATURE_KEYS,
@@ -38,7 +39,7 @@ import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { StudentMultiPicker } from '../components/access-picker';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const EVENT_FIELDS = ['name', 'description'] as const;
 
@@ -324,6 +325,12 @@ function EventActions({
       <DropdownMenuItem disabled={busy} onSelect={onEdit}>
         <Pencil aria-hidden />
         Edit
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to={ROUTES.EVENT_IMPORT(event.id)}>
+          <Upload aria-hidden />
+          Import candidates
+        </Link>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={busy} onSelect={() => onAsk(EVENT_CONFIRMS.RETIRE)}>
         <Power aria-hidden />

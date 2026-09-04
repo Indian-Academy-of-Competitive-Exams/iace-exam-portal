@@ -73,6 +73,7 @@ import {
   type DomainEventName,
   type DomainEventPayloads,
 } from '../../src/common/events';
+import { type EventsService } from '../../src/events';
 
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
@@ -451,6 +452,29 @@ export class FakeEventBus {
 
   asService(): DomainEventBus {
     return this as unknown as DomainEventBus;
+  }
+}
+
+/** Enough `EventsService` for the importer: it proves the event exists and takes the roster. */
+export class FakeEventsService {
+  readonly added: { eventId: string; studentIds: string[] }[] = [];
+
+  constructor(private readonly known: readonly string[] = ['evt_1']) {}
+
+  detail(id: string): Promise<{ id: string }> {
+    if (!this.known.includes(id)) {
+      return Promise.reject(new AppException(ErrorCodes.NOT_FOUND, 'No such event'));
+    }
+    return Promise.resolve({ id });
+  }
+
+  addCandidates(eventId: string, studentIds: readonly string[]): Promise<never[]> {
+    this.added.push({ eventId, studentIds: [...studentIds] });
+    return Promise.resolve([]);
+  }
+
+  asService(): EventsService {
+    return this as unknown as EventsService;
   }
 }
 

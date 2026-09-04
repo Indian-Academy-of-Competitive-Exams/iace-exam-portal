@@ -4,9 +4,9 @@ import { BRANCH_TYPE, pinSchema } from '@iace/contracts';
 import { MESSAGE_KINDS } from '../src/common/messaging';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
-import { type StudentGrantsService } from '../src/access';
 import { EVERY_BRANCH } from '../src/common/security';
 import {
+  FakeEventsService,
   FakeMessageSender,
   fakeStartingPins,
   FakePrisma,
@@ -16,9 +16,6 @@ import {
   roster,
   type FakeStudent,
 } from './support/fakes';
-
-const fakeGrants = (): StudentGrantsService =>
-  ({ grantMany: () => Promise.resolve() }) as unknown as StudentGrantsService;
 
 function build(students: FakeStudent[] = []) {
   const prisma = new FakePrisma(
@@ -33,7 +30,7 @@ function build(students: FakeStudent[] = []) {
     fakeStartingPins(sender, (pin) => Promise.resolve(`hashed:${pin}`)),
     new FakeStorage() as never,
     new AuditService(prisma.asService(), new FakeStorage() as never),
-    fakeGrants(),
+    new FakeEventsService().asService(),
   );
   return { prisma, sender, service };
 }
@@ -104,7 +101,7 @@ describe('the PIN a roster import issues', () => {
       fakeStartingPins(failing),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      new FakeEventsService().asService(),
     );
 
     const result = await withFailingSender.commitStudents(

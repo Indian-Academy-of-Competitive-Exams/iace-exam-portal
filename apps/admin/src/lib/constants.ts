@@ -94,10 +94,10 @@ export const ROUTES = {
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
-  SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
-  SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
   /** The ad-hoc cohorts an Event Test draws on — candidates, IACE students or not. */
   EVENTS: '/events',
+  EVENT_IMPORT: (id: string) => `/events/${id}/import`,
+  EVENT_IMPORT_PATTERN: '/events/:id/import',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',

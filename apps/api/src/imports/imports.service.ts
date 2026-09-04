@@ -12,8 +12,8 @@ import {
   type StudentImportResult,
   type StudentImportRow,
   type StudentType,
-  type ScholarshipImportPlan,
-  type ScholarshipImportResult,
+  type CandidateImportPlan,
+  type CandidateImportResult,
   STUDENT_TYPE,
   AppException,
   ErrorCodes,
@@ -24,8 +24,8 @@ import { AuditService } from '../audit';
 import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
 import { fetchPortalRoster, type PortalFetch } from './portal-roster';
-import { planScholarshipImport } from './scholarship-import';
-import { StudentGrantsService } from '../access';
+import { planCandidateImport } from './candidate-import';
+import { EventsService } from '../events';
 import { EVERY_BRANCH, type BranchScope } from '../common/security';
 
 import { isPreTestReady } from '../students';
@@ -55,7 +55,7 @@ export class ImportsService {
     private readonly startingPins: StartingPinService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
-    private readonly grants: StudentGrantsService,
+    private readonly events: EventsService,
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
@@ -77,27 +77,27 @@ export class ImportsService {
     return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
   }
 
-  /** Writes nothing. The series has to exist, so a stale page cannot enrol into a deleted one. */
-  async previewScholarship(
-    seriesId: string,
+  /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
+  async previewEventCandidates(
+    eventId: string,
     file: Buffer,
     scope: BranchScope,
-  ): Promise<ScholarshipImportPlan> {
+  ): Promise<CandidateImportPlan> {
     assertReachesEveryBranch(scope);
-    await this.requireSeries(seriesId);
-    return this.planScholarship(file);
+    await this.events.detail(eventId);
+    return this.planCandidates(file);
   }
 
-  /** An existing number is GRANTED and nothing on that student is touched: this may not edit anybody. */
-  async commitScholarship(
-    seriesId: string,
+  /** An existing number only JOINS the roster: nothing on that student is touched. */
+  async commitEventCandidates(
+    eventId: string,
     file: Buffer,
     actorId: string,
     scope: BranchScope,
-  ): Promise<ScholarshipImportResult> {
+  ): Promise<CandidateImportResult> {
     assertReachesEveryBranch(scope);
-    await this.requireSeries(seriesId);
-    const plan = await this.planScholarship(file);
+    await this.events.detail(eventId);
+    const plan = await this.planCandidates(file);
     const logId = await this.openRun(
       file,
       plan.summary.total,
@@ -145,7 +145,7 @@ export class ImportsService {
           data: {
             mobile: row.mobile,
             fullName: row.fullName,
-            // Outside the institute and at no centre of ours: the grant is the whole of their access.
+            // Outside the institute and at no centre of ours: the event is the whole of their access.
             studentType: STUDENT_TYPE.NON_IACE,
             pinHash: pin?.hash,
             pinIsDefault: true,
@@ -157,7 +157,8 @@ export class ImportsService {
         rowActions.push({ entityId: student.id, action: AUDIT_ACTION.CREATE });
       }
 
-      await this.grants.grantMany(studentIds, seriesId, actorId);
+      // Through the service that owns the table, so every candidate's catalog is busted with them.
+      await this.events.addCandidates(eventId, studentIds);
     } catch (error) {
       await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
         fileErrors: plan.fileErrors,
@@ -172,7 +173,7 @@ export class ImportsService {
     return {
       ...plan.summary,
       created,
-      granted: studentIds.length,
+      added: studentIds.length,
       skipped: plan.summary.invalid,
     };
   }
@@ -303,15 +304,7 @@ export class ImportsService {
     return { entityId: student.id, action: AUDIT_ACTION.CREATE };
   }
 
-  private async requireSeries(seriesId: string): Promise<void> {
-    const series = await this.prisma.testSeries.findUnique({
-      where: { id: seriesId },
-      select: { id: true },
-    });
-    if (!series) throw new AppException(ErrorCodes.NOT_FOUND, 'No such series');
-  }
-
-  private async planScholarship(file: Buffer): Promise<ScholarshipImportPlan> {
+  private async planCandidates(file: Buffer): Promise<CandidateImportPlan> {
     const table = await readUploadedTable(file);
     const mobiles = mobilesIn(table);
     const students =
@@ -322,7 +315,7 @@ export class ImportsService {
             select: { id: true, mobile: true, pinHash: true, deletedAt: true },
           });
 
-    return planScholarshipImport(table, {
+    return planCandidateImport(table, {
       existingByMobile: new Map(
         students
           .filter((student) => student.deletedAt === null)
@@ -496,13 +489,13 @@ function profileData(row: StudentImportRow) {
   return Object.keys(data).length === 0 ? null : data;
 }
 
-const SCHOLARSHIP_NEEDS_EVERY_BRANCH =
-  'A scholarship import grants access by mobile number alone, to students at any branch, so only an admin who reaches every branch can run one.';
+const INTAKE_NEEDS_EVERY_BRANCH =
+  'A candidate import reaches students at any branch by mobile number alone, and creates accounts at none, so only an admin who reaches every branch can run one.';
 
-/** It grants by MOBILE alone, through `grantMany`, which never looks a student up to scope them. */
+/** It resolves people by MOBILE alone, which never looks a student up to scope them. */
 function assertReachesEveryBranch(scope: BranchScope): void {
   if (scope.all) return;
-  throw new AppException(ErrorCodes.FORBIDDEN, SCHOLARSHIP_NEEDS_EVERY_BRANCH);
+  throw new AppException(ErrorCodes.FORBIDDEN, INTAKE_NEEDS_EVERY_BRANCH);
 }
 
 /** The importer decides row by row, so the minted PINs are indexed by the number they belong to. */

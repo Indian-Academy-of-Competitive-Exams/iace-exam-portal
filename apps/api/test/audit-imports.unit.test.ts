@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes } from '@iace/contracts';
 import { EVERY_BRANCH } from '../src/common/security';
 import {
   AUDIT_ACTION,
@@ -16,9 +15,9 @@ import {
 } from '@iace/contracts';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
-import { type StudentGrantsService } from '../src/access';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
+  FakeEventsService,
   FakeMessageSender,
   fakeStartingPins,
   FakePrisma,
@@ -115,9 +114,8 @@ describe('AuditService.recordImportRows', () => {
 const startingPins = (hash?: (pin: string) => Promise<string>) =>
   fakeStartingPins(new FakeMessageSender(), hash);
 
-/** The scholarship path is not what these tests exercise, so the grants service is a stand-in. */
-const fakeGrants = () =>
-  ({ grantMany: () => Promise.resolve(0) }) as unknown as StudentGrantsService;
+/** The event path is not what these tests exercise — see event-candidate-import.unit.test.ts. */
+const fakeEvents = () => new FakeEventsService().asService();
 
 describe('ImportsService — a preview writes nothing at all', () => {
   /**
@@ -132,7 +130,7 @@ describe('ImportsService — a preview writes nothing at all', () => {
       startingPins(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
 
     await service.previewStudents(Buffer.from(roster('mobile\n9876543210')), EVERY_BRANCH);
@@ -165,7 +163,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       startingPins(),
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
 
     const result = await service.commitStudents(
@@ -228,7 +226,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       startingPins(() => Promise.reject(new Error('argon2 unavailable'))),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
 
     await assert.rejects(
@@ -258,7 +256,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
 
     await assert.rejects(
@@ -304,7 +302,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       startingPins(),
       new FakeStorage() as never,
       throwingAudit,
-      fakeGrants(),
+      fakeEvents(),
     );
 
     const result = await service.commitStudents(
@@ -341,7 +339,7 @@ describe('ImportsService — a failed close preserves what openRun already recor
       startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
     const opened = await prisma.importLog.create({
       data: {
@@ -499,7 +497,7 @@ describe('ImportsService — the branches the admin uploading may write into', (
       startingPins(),
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
-      fakeGrants(),
+      fakeEvents(),
     );
 
   /** The failure this prevents: a scope reaching the planner on preview but not on commit. */
@@ -547,25 +545,5 @@ describe('ImportsService — the branches the admin uploading may write into', (
 
     assert.equal(plan.summary.invalid, 1);
     assert.ok(plan.rows[0]?.errors.some((e) => e.includes('not one of your branches')));
-  });
-
-  /** A scholarship intake grants by mobile alone, so a scoped admin could reach anybody's student. */
-  it('refuses a scholarship intake from an admin who does not reach every branch', async () => {
-    const prisma = importPrisma();
-
-    for (const run of [
-      () => serviceOn(prisma).previewScholarship('srs_1', Buffer.from('Mobile\n9876543210'), held),
-      () =>
-        serviceOn(prisma).commitScholarship(
-          'srs_1',
-          Buffer.from('Mobile\n9876543210'),
-          'adm_1',
-          held,
-        ),
-    ]) {
-      const error = await run().catch((e: unknown) => e);
-      assert.ok(AppException.is(error));
-      assert.equal(error.code, ErrorCodes.FORBIDDEN);
-    }
   });
 });

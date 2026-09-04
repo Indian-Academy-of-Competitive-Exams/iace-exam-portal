@@ -7,7 +7,6 @@ import { DashboardPage } from './routes/dashboard';
 import { StudentsPage } from './routes/students';
 import { StudentDetailPage } from './routes/student-detail';
 import { StudentPerformancePage } from './routes/student-performance';
-import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ExamsPage } from './routes/exams';
@@ -26,6 +25,7 @@ import { TestBuilderPage } from './routes/test-builder';
 import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
 import { EventsPage } from './routes/events';
+import { ImportEventCandidatesPage } from './routes/import-event-candidates';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
@@ -77,8 +77,8 @@ export function App() {
           {/* Before the :id route, or "new" would be read as a series id. */}
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
-          <Route path={ROUTES.SERIES_CANDIDATES_PATTERN} element={<ImportScholarshipPage />} />
           <Route path={ROUTES.EVENTS} element={<EventsPage />} />
+          <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           {/* Last of the /tests routes: "configs", "series" and "new" all outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />

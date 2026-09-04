@@ -18,12 +18,12 @@ import {
   ActorTypes,
   AppException,
   ErrorCodes,
+  CANDIDATE_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
-  SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
-  type ScholarshipImportPlan,
-  type ScholarshipImportResult,
+  type CandidateImportPlan,
+  type CandidateImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
@@ -37,7 +37,7 @@ import {
 } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildScholarshipTemplate, buildStudentTemplate } from './workbook';
+import { buildCandidateTemplate, buildStudentTemplate } from './workbook';
 
 /** The two fields we use off a multipart upload. */
 interface UploadedFileLike {
@@ -95,40 +95,40 @@ export class ImportsController {
     return this.imports.commitStudents(this.bufferOf(file), user.id, branchScopeOf(user));
   }
 
-  /** The scholarship sample, generated from the same two columns the parser matches on. */
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get('scholarship/template')
+  /** The candidate sample, generated from the same two columns the parser matches on. */
+  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @Get('events/candidates/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
-  @Header('Content-Disposition', `attachment; filename="${SCHOLARSHIP_IMPORT_TEMPLATE_FILENAME}"`)
+  @Header('Content-Disposition', `attachment; filename="${CANDIDATE_IMPORT_TEMPLATE_FILENAME}"`)
   @Header('Cache-Control', 'no-store')
-  async scholarshipTemplate(@Res() response: Response): Promise<void> {
-    response.send(await buildScholarshipTemplate());
+  async candidateTemplate(@Res() response: Response): Promise<void> {
+    response.send(await buildCandidateTemplate());
   }
 
-  /** A scholarship intake, read against the series it enrols into. Writes nothing. */
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Post('scholarship/:seriesId/preview')
+  /** On EVENT: the account it mints is NON_IACE and reaches that event and nothing else. */
+  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @Post('events/:eventId/candidates/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  previewScholarship(
+  previewEventCandidates(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('seriesId') seriesId: string,
+    @Param('eventId') eventId: string,
     @UploadedFile() file?: UploadedFileLike,
-  ): Promise<ScholarshipImportPlan> {
-    return this.imports.previewScholarship(seriesId, this.bufferOf(file), branchScopeOf(user));
+  ): Promise<CandidateImportPlan> {
+    return this.imports.previewEventCandidates(eventId, this.bufferOf(file), branchScopeOf(user));
   }
 
-  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post('scholarship/:seriesId/commit')
+  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @Post('events/:eventId/candidates/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  commitScholarship(
+  commitEventCandidates(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('seriesId') seriesId: string,
+    @Param('eventId') eventId: string,
     @UploadedFile() file?: UploadedFileLike,
-  ): Promise<ScholarshipImportResult> {
-    return this.imports.commitScholarship(
-      seriesId,
+  ): Promise<CandidateImportResult> {
+    return this.imports.commitEventCandidates(
+      eventId,
       this.bufferOf(file),
       user.id,
       branchScopeOf(user),

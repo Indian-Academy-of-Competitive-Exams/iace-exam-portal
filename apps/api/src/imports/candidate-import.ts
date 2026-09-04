@@ -1,30 +1,30 @@
 import {
+  CANDIDATE_IMPORT_COLUMNS,
   IMPORT_MAX_ROWS,
-  SCHOLARSHIP_IMPORT_COLUMNS,
   mobileSchema,
-  type ScholarshipImportPlan,
-  type ScholarshipImportRow,
+  type CandidateImportPlan,
+  type CandidateImportRow,
 } from '@iace/contracts';
 import { type CsvRow, type CsvTable } from '../common/importing';
 import { columnValue } from './student-import';
 
-/** Decides what a scholarship intake WOULD do, without doing any of it. */
+/** Decides what an event intake WOULD do, without doing any of it. */
 
-/** The sheet is an enrolment list from outside: a number and a name, and nothing to overwrite with. */
+/** The sheet is a candidate list from outside: a number and a name, and nothing to overwrite with. */
 const REQUIRED_COLUMN = 'mobile';
 
 const DELETED_MESSAGE =
-  'That number belonged to a student who was deleted. Restore them, or enrol them on a different number.';
+  'That number belonged to a student who was deleted. Restore them, or enter them on a different number.';
 
-export interface ScholarshipImportContext {
-  /** Mobile → the LIVE student it already belongs to. Such a row grants and writes nothing else. */
+export interface CandidateImportContext {
+  /** Mobile → the LIVE student it already belongs to. Such a row only joins the roster. */
   existingByMobile: Map<string, { id: string; hasPin: boolean }>;
   /** Numbers held by a soft-deleted student: unique among live rows only, so a create would succeed. */
   deletedMobiles: Set<string>;
 }
 
 function missingHeaders(headers: string[]): string[] {
-  return SCHOLARSHIP_IMPORT_COLUMNS.filter(
+  return CANDIDATE_IMPORT_COLUMNS.filter(
     (column) => column.required && !column.aliases.some((alias) => headers.includes(alias)),
   ).map((column) => `That file has no ${column.header} column`);
 }
@@ -35,12 +35,12 @@ function tooManyRows(table: CsvTable): string[] {
     : [];
 }
 
-const EMPTY = { total: 0, willCreate: 0, willGrant: 0, invalid: 0 };
+const EMPTY = { total: 0, willCreate: 0, willAdd: 0, invalid: 0 };
 
-export function planScholarshipImport(
+export function planCandidateImport(
   table: CsvTable,
-  context: ScholarshipImportContext,
-): ScholarshipImportPlan {
+  context: CandidateImportContext,
+): CandidateImportPlan {
   if (table.rows.length === 0) {
     return {
       rows: [],
@@ -62,24 +62,24 @@ export function planScholarshipImport(
     summary: {
       total: rows.length,
       willCreate: rows.filter((row) => row.action === 'create').length,
-      willGrant: rows.filter((row) => row.action === 'grant').length,
+      willAdd: rows.filter((row) => row.action === 'add').length,
       invalid: rows.filter((row) => row.action === 'skip').length,
     },
     fileErrors: [],
   };
 }
 
-/** A row we cannot enrol is skipped; past that, knowing the number is the whole of the decision. */
-function actionFor(hasErrors: boolean, isExisting: boolean): ScholarshipImportRow['action'] {
+/** A row we cannot enter is skipped; past that, knowing the number is the whole of the decision. */
+function actionFor(hasErrors: boolean, isExisting: boolean): CandidateImportRow['action'] {
   if (hasErrors) return 'skip';
-  return isExisting ? 'grant' : 'create';
+  return isExisting ? 'add' : 'create';
 }
 
 function planRow(
   row: CsvRow,
-  context: ScholarshipImportContext,
+  context: CandidateImportContext,
   seenInFile: Map<string, number>,
-): ScholarshipImportRow {
+): CandidateImportRow {
   const parsed = mobileSchema.safeParse(columnValue(row, REQUIRED_COLUMN));
   const mobile = parsed.success ? parsed.data : null;
   const fullName = columnValue(row, 'fullName').trim() || null;
@@ -89,7 +89,7 @@ function planRow(
 
   const existing = mobile === null ? undefined : context.existingByMobile.get(mobile);
   const errors = [
-    parsed.success ? undefined : 'That is not a mobile number we can enrol on',
+    parsed.success ? undefined : 'That is not a mobile number we can enter',
     duplicateOf === undefined ? undefined : `The same number is already on line ${duplicateOf}`,
     mobile !== null && context.deletedMobiles.has(mobile) ? DELETED_MESSAGE : undefined,
   ].filter((error): error is string => error !== undefined);
