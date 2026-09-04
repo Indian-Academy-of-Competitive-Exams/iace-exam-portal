@@ -652,6 +652,9 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
+  /** Draws the rest of one section from its own spec, around the rows already on it. */
+  fillSection: (id: string, sectionId: string) =>
+    `/admin/tests/${id}/paper/sections/${sectionId}/fill`,
   /** The ONE change a finalized paper still allows: withdrawing a question, or paying it to all. */
   questionStatus: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}/status`,
   finalize: (id: string) => `/admin/tests/${id}/finalize`,

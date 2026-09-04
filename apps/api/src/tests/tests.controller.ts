@@ -150,6 +150,18 @@ export class TestsController {
     return this.paper.removeQuestion(id, rowId);
   }
 
+  /** Draws what one section still lacks. It only ever adds: a hand-picked row is never displaced. */
+  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post(':id/paper/sections/:sectionId/fill')
+  @HttpCode(HttpStatus.OK)
+  fillPaperSection(
+    @Param('id') id: string,
+    @Param('sectionId') sectionId: string,
+  ): Promise<TestPaper> {
+    return this.paper.fillSection(id, sectionId);
+  }
+
   /** Idempotent: a second finalize reports the first one's outcome rather than freezing twice. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)

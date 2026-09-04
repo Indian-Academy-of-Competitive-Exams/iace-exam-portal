@@ -20,8 +20,9 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { BaseConfigsService } from '../configs';
-import { drawPaper, type DrawCandidate, type DrawSection } from './draw-engine';
+import { drawPaper, type DrawCandidate, type DrawnQuestion, type DrawSection } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
+import { thaw } from './thaw';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
@@ -33,7 +34,11 @@ const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than thi
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
 const NOT_FROZEN_MESSAGE =
   'Only a finalized paper can have a question dropped or made a bonus. Edit the draft instead.';
-import { thaw } from './thaw';
+const NO_SUCH_SECTION_MESSAGE = 'No such section on this paper';
+const BANK_TOO_THIN_MESSAGE =
+  'The bank does not hold enough questions to fill every section of this paper.';
+const SECTION_TOO_THIN_MESSAGE =
+  'The bank does not hold enough questions to fill the rest of this section.';
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -45,6 +50,15 @@ const CANDIDATE_SELECT = {
 } as const satisfies Prisma.QuestionSelect;
 
 type CandidateRow = Prisma.QuestionGetPayload<{ select: typeof CANDIDATE_SELECT }>;
+
+const HELD_SELECT = {
+  order: true,
+  baseConfigSectionId: true,
+  questionId: true,
+  questionVersionId: true,
+} as const satisfies Prisma.PaperQuestionSelect;
+
+type HeldRow = Prisma.PaperQuestionGetPayload<{ select: typeof HELD_SELECT }>;
 
 const PAPER_INCLUDE = {
   question: {
@@ -104,11 +118,9 @@ export class PaperService {
           seed: freshSeed(),
         });
         if (!result.ok) {
-          throw new AppException(
-            ErrorCodes.DRAW_SHORTFALL,
-            'The bank does not hold enough questions to fill every section of this paper.',
-            { fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)) },
-          );
+          throw new AppException(ErrorCodes.DRAW_SHORTFALL, BANK_TOO_THIN_MESSAGE, {
+            fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)),
+          });
         }
         return result.questions.map((row) => ({
           ...row,
@@ -139,7 +151,7 @@ export class PaperService {
 
     const config = await this.configs.detail(test.baseConfigId);
     const section = config.sections.find((row) => row.id === input.baseConfigSectionId);
-    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, 'No such section on this paper');
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     this.assertNoRepeats(input.questionIds);
 
@@ -178,6 +190,95 @@ export class PaperService {
     });
 
     return this.paperOf(testId, config);
+  }
+
+  /** Tops a hand-picked section up to its count from its own spec: the draw only ever ADDS. */
+  async fillSection(testId: string, baseConfigSectionId: string): Promise<TestPaper> {
+    const test = await this.requireTest(testId);
+    this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
+
+    const config = await this.configs.detail(test.baseConfigId);
+    const section = config.sections.find((row) => row.id === baseConfigSectionId);
+    if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
+
+    const rows = await this.prisma.paperQuestion.findMany({
+      where: { testId, variant: FIXED_VARIANT },
+      select: HELD_SELECT,
+    });
+    const spec = sectionSpec((test.questionPoolFilter as DrawSpec | null) ?? null, section.id);
+    const added = await this.drawRemainder(section, spec, rows);
+    if (added.length === 0) return this.paperOf(testId, config);
+
+    const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
+    await this.prisma.$transaction(async (tx) => {
+      await thaw(tx, test);
+      await tx.paperQuestion.createMany({
+        data: added.map((row, index) => ({
+          ...row,
+          testId,
+          baseConfigId: test.baseConfigId,
+          // The engine numbers what it drew from 1, knowing nothing of the rows already here.
+          order: highest + index + 1,
+        })),
+      });
+    });
+
+    return this.paperOf(testId, config);
+  }
+
+  /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
+  private async drawRemainder(
+    section: BaseConfigDetail['sections'][number],
+    spec: DrawSpec | null,
+    rows: readonly HeldRow[],
+  ): Promise<DrawnQuestion[]> {
+    const held = rows.filter((row) => row.baseConfigSectionId === section.id);
+    const drawSection = toDrawSection(section);
+    // One question sits on a paper once, so every row already on it is out of this draw's reach.
+    const onPaper = new Set(rows.map((row) => row.questionId));
+    const pool = (await this.poolFor([drawSection], spec)).filter(
+      (candidate) => !onPaper.has(candidate.id),
+    );
+
+    const result = drawPaper({
+      sections: [drawSection],
+      pool,
+      spec,
+      seed: freshSeed(),
+      pinned: new Map([[section.id, await this.pinsOf(held)]]),
+    });
+    if (!result.ok) {
+      throw new AppException(ErrorCodes.DRAW_SHORTFALL, SECTION_TOO_THIN_MESSAGE, {
+        fieldErrors: shortfallErrors(sectionShortfalls(result.shortfalls)),
+      });
+    }
+
+    const added = result.questions.filter((row) => !onPaper.has(row.questionId));
+    if (added.length > Math.max(0, section.questionCount - held.length)) {
+      const over = `${section.name} already holds more of one difficulty than its split allows. Take one off first.`;
+      throw new AppException(ErrorCodes.CONFLICT, over, {
+        fieldErrors: { [FORM_LEVEL_FIELD]: [over] },
+      });
+    }
+    return added;
+  }
+
+  /** The section's own rows as the draw reads them, pinned so the fill can only add around them. */
+  private async pinsOf(held: readonly HeldRow[]): Promise<DrawCandidate[]> {
+    if (held.length === 0) return [];
+    const rows = await this.prisma.question.findMany({
+      where: { id: { in: held.map((row) => row.questionId) } },
+      select: CANDIDATE_SELECT,
+    });
+    const bank = new Map(rows.map((row) => [row.id, row]));
+
+    return held.flatMap((row) => {
+      const question = bank.get(row.questionId);
+      // The version the ROW pins, so a question the bank has moved on from still counts as one.
+      return question
+        ? [toCandidate({ ...question, currentVersionId: row.questionVersionId })]
+        : [];
+    });
   }
 
   /** One row swapped for another question, keeping its place in the paper. */
@@ -351,11 +452,9 @@ export class PaperService {
     );
     if (gaps.length === 0) return;
 
-    throw new AppException(
-      ErrorCodes.DRAW_SHORTFALL,
-      'The bank does not hold enough questions to fill every section of this paper.',
-      { fieldErrors: shortfallErrors(gaps) },
-    );
+    throw new AppException(ErrorCodes.DRAW_SHORTFALL, BANK_TOO_THIN_MESSAGE, {
+      fieldErrors: shortfallErrors(gaps),
+    });
   }
 
   private assertAssemblable(test: { attemptCount: number; paperBinding: string }): void {
@@ -510,6 +609,12 @@ function toCandidate(row: CandidateRow & { currentVersionId: string }): DrawCand
     difficulty: row.difficulty,
     tags: row.tags,
   };
+}
+
+/** One section's own narrowing, alone: another section's topics must not shrink this one's pool. */
+function sectionSpec(spec: DrawSpec | null, sectionId: string): DrawSpec | null {
+  const held = spec?.sections?.[sectionId];
+  return held ? { sections: { [sectionId]: held } } : null;
 }
 
 function toDrawSection(section: BaseConfigDetail['sections'][number]): DrawSection {

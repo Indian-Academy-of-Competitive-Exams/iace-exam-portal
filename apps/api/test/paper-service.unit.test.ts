@@ -2,7 +2,8 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AppException, DIFFICULTY_LEVEL, ErrorCodes, PAPER_BINDING } from '@iace/contracts';
-import { PaperService } from '../src/tests/paper.service';
+import { GENERATED_HAS_NO_PAPER_MESSAGE, PaperService } from '../src/tests/paper.service';
+import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
@@ -37,11 +38,12 @@ function bank(count: number, subjectId: string, prefix: string): FakeQuestionRow
 function serviceWith(
   questions: FakeQuestionRow[] = [...bank(6, 'sub_r', 'r'), ...bank(6, 'sub_q', 'q')],
   test = makeTest({ id: 'tst_1' }),
+  sections: FakeSectionRow[] = SECTIONS,
 ) {
   const prisma = new FakeTestsPrisma(
     [test],
     [makeBaseConfig({ id: 'cfg_1', totalQuestions: 5 })],
-    SECTIONS,
+    sections,
     [],
     questions,
     [],
@@ -302,6 +304,198 @@ describe('PaperService — drawing the papers a GENERATED test hands out', () =>
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+  });
+});
+
+/** Reasoning graded two of each difficulty, so a split has something to draw for every bucket. */
+function gradedBank(): FakeQuestionRow[] {
+  return [
+    ...bank(2, 'sub_r', 'low').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.LOW })),
+    ...bank(2, 'sub_r', 'med').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.MEDIUM })),
+    ...bank(2, 'sub_r', 'high').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.HIGH })),
+    ...bank(6, 'sub_q', 'q'),
+  ];
+}
+
+const splitTest = () =>
+  makeTest({
+    id: 'tst_1',
+    questionPoolFilter: { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 1, HIGH: 1 } } } },
+  });
+
+describe('PaperService — filling a section’s remainder from its own spec', () => {
+  const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
+    paper.sections
+      .find((section) => section.baseConfigSectionId === sectionId)
+      ?.questions.map((row) => row.questionId) ?? [];
+
+  it('tops the section up to its count and leaves the hand-picked row where it was', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q1'] });
+
+    const paper = await kit.service.fillSection('tst_1', 'sec_1');
+
+    assert.equal(idsOf(paper, 'sec_1').length, 3);
+    assert.equal(idsOf(paper, 'sec_1')[0], 'r2');
+    // The other section is not this draw's business, and keeps exactly what it held.
+    assert.deepEqual(idsOf(paper, 'sec_2'), ['q1']);
+  });
+
+  /** The failure this prevents: the engine hands the pins back, so a fill writes them a second time. */
+  it('writes a row only for what it drew, never for what was already on the paper', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+
+    await kit.service.fillSection('tst_1', 'sec_1');
+
+    const held = kit.prisma.paperQuestions.map((row) => row.questionId);
+    assert.equal(held.length, 3);
+    assert.equal(new Set(held).size, 3);
+  });
+
+  /** `@@unique([testId, variant, order])`: the engine numbers what it drew from 1, this paper cannot. */
+  it('numbers what it adds from the paper’s highest order', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_2',
+      questionIds: ['q1', 'q2'],
+    });
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+
+    await kit.service.fillSection('tst_1', 'sec_1');
+
+    const orders = kit.prisma.paperQuestions.map((row) => row.order).sort((a, b) => a - b);
+    assert.deepEqual(orders, [1, 2, 3, 4, 5]);
+  });
+
+  /** `@@unique([testId, variant, questionId])`: a question sits on a paper once, whatever section. */
+  it('will not take a question another section holds, even to fill its own split', async () => {
+    const shared = [
+      makeSection({ id: 'sec_a', name: 'Part A', order: 1, subjectId: 'sub_s', questionCount: 3 }),
+      makeSection({ id: 'sec_b', name: 'Part B', order: 2, subjectId: 'sub_s', questionCount: 1 }),
+    ];
+    // The bank holds exactly one hard question, and Part B is already serving it.
+    const graded = [
+      ...bank(1, 'sub_s', 'hard').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.HIGH })),
+      ...bank(2, 'sub_s', 'easy').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.LOW })),
+    ];
+    const kit = serviceWith(
+      graded,
+      makeTest({
+        id: 'tst_1',
+        questionPoolFilter: { sections: { sec_a: { mix: { LOW: 2, MEDIUM: 0, HIGH: 1 } } } },
+      }),
+      shared,
+    );
+    await kit.service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_b',
+      questionIds: ['hard1'],
+    });
+
+    const error = await kit.service.fillSection('tst_1', 'sec_a').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.deepEqual(
+      kit.prisma.paperQuestions.map((row) => row.questionId),
+      ['hard1'],
+    );
+  });
+
+  it('draws nothing more for a bucket the hand-picking already filled', async () => {
+    const kit = serviceWith(gradedBank(), splitTest());
+    await kit.service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_1',
+      questionIds: ['high1'],
+    });
+
+    const paper = await kit.service.fillSection('tst_1', 'sec_1');
+
+    const held = idsOf(paper, 'sec_1');
+    assert.equal(held.length, 3);
+    assert.deepEqual(
+      ['low', 'med', 'high'].map((level) => held.filter((id) => id.startsWith(level)).length),
+      [1, 1, 1],
+    );
+  });
+
+  /** The failure this prevents: a fill that takes a section past the count its config asks for. */
+  it('refuses a section whose hand-picking has already broken its split', async () => {
+    const kit = serviceWith(gradedBank(), splitTest());
+    await kit.service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_1',
+      questionIds: ['high1', 'high2'],
+    });
+
+    const error = await kit.service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /more of one difficulty than its split allows/);
+    assert.equal(kit.prisma.paperQuestions.length, 2);
+  });
+
+  it('adds nothing at all to a section already holding its count', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', {
+      baseConfigSectionId: 'sec_2',
+      questionIds: ['q1', 'q2'],
+    });
+
+    await kit.service.fillSection('tst_1', 'sec_2');
+
+    assert.equal(kit.prisma.paperQuestions.length, 2);
+  });
+
+  /** The failure this prevents: a section quietly topped up with fewer than the count it needs. */
+  it('reports the gap and writes nothing when the bank cannot fill the rest', async () => {
+    const kit = serviceWith([...bank(2, 'sub_r', 'r'), ...bank(6, 'sub_q', 'q')]);
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r1'] });
+
+    const error = await kit.service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.DRAW_SHORTFALL);
+    assert.match(error.fieldErrors?.sec_1?.[0] ?? '', /Reasoning needs 3, and the bank holds 2/);
+    assert.deepEqual(
+      kit.prisma.paperQuestions.map((row) => row.questionId),
+      ['r1'],
+    );
+  });
+
+  it('refuses a test a student has already sat', async () => {
+    const kit = serviceWith();
+    await kit.service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r2'] });
+    kit.prisma.attempts.push({ testId: 'tst_1' });
+
+    const error = await kit.service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.message, SAT_TEST_MESSAGE);
+  });
+
+  it('refuses a test that draws a fresh paper per student', async () => {
+    const { service } = serviceWith(
+      undefined,
+      makeTest({ id: 'tst_1', paperBinding: PAPER_BINDING.GENERATED }),
+    );
+
+    const error = await service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.equal(error.message, GENERATED_HAS_NO_PAPER_MESSAGE);
+  });
+
+  it('refuses a section this paper does not have', async () => {
+    const { service } = serviceWith();
+
+    const error = await service.fillSection('tst_1', 'sec_gone').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
 });
 

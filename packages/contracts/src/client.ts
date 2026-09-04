@@ -1190,6 +1190,13 @@ export function createApiClient(options: ApiClientOptions) {
             schema: testPaperSchema,
           }),
 
+        /** Fills the rest of one section from its own spec; every hand-picked row keeps its place. */
+        fillPaperSection: (id: string, sectionId: string): Promise<TestPaper> =>
+          request(ADMIN_TEST_PAPER_ROUTES.fillSection(id, sectionId), {
+            method: 'POST',
+            schema: testPaperSchema,
+          }),
+
         /** Drops a question or makes it a bonus, and re-scores every sitting that served it. */
         setPaperQuestionStatus: (
           id: string,

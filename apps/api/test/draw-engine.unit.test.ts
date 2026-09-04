@@ -480,6 +480,52 @@ describe('drawPaper — a section drawn to a difficulty split', () => {
     assert.equal(result.shortfalls[0]?.available, 21);
   });
 
+  /** The top-up a hand-picked section asks for: three already on it, a split of 25 to reach. */
+  it('fills a section that already holds pins to the whole of its split', () => {
+    const pins = [
+      rowAt(mixedBank.filter((row) => row.id.startsWith('low'))),
+      ...mixedBank.filter((row) => row.id.startsWith('med')).slice(0, 2),
+    ];
+
+    const questions = questionsOf(
+      draw({
+        sections: [section({ questionCount: 25 })],
+        pool: mixedBank,
+        spec: { sections: { sec_1: { mix: { LOW: 8, MEDIUM: 12, HIGH: 5 } } } },
+        pinned: new Map([['sec_1', pins]]),
+      }),
+    );
+
+    assert.deepEqual(countsOf(questions), { low: 8, med: 12, high: 5 });
+    // A pin is never drawn a second time, so 25 rows are 25 different questions.
+    assert.equal(new Set(questions.map((row) => row.questionId)).size, 25);
+    for (const pin of pins) {
+      assert.equal(questions.filter((row) => row.questionId === pin.id).length, 1);
+    }
+  });
+
+  /** What a caller topping up a paper has to undo: the pins come BACK, numbered from 1. */
+  it('hands the pins back among the rows it drew, numbered from one', () => {
+    const pins = mixedBank.filter((row) => row.id.startsWith('high')).slice(0, 2);
+
+    const questions = questionsOf(
+      draw({
+        sections: [section({ questionCount: 5 })],
+        pool: mixedBank,
+        pinned: new Map([['sec_1', pins]]),
+      }),
+    );
+
+    assert.deepEqual(
+      questions.slice(0, 2).map((row) => row.questionId),
+      pins.map((pin) => pin.id),
+    );
+    assert.deepEqual(
+      questions.map((row) => row.order),
+      [1, 2, 3, 4, 5],
+    );
+  });
+
   it('draws as it always did when the section has no split', () => {
     const questions = questionsOf(
       draw({ sections: [section({ questionCount: 12 })], pool: mixedBank }),
