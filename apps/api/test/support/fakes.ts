@@ -3936,6 +3936,36 @@ function matchesEvent(row: FakeEventRow, where: FakeEventWhere): boolean {
   );
 }
 
+type FakeCandidateTerm =
+  { student: { fullName: { contains: string } } } | { student: { mobile: { contains: string } } };
+
+interface FakeEventCandidateWhere {
+  eventId: string;
+  studentId?: { in: string[] };
+  AND?: { OR: FakeCandidateTerm[] }[];
+}
+
+function matchesCandidate(
+  row: FakeEventCandidateRow,
+  where: FakeEventCandidateWhere,
+  studentOf: (studentId: string) => { fullName: string | null; mobile: string },
+): boolean {
+  if (row.eventId !== where.eventId) return false;
+  if (where.studentId && !where.studentId.in.includes(row.studentId)) return false;
+  if (!where.AND) return true;
+
+  const student = studentOf(row.studentId);
+  return where.AND.every((clause) =>
+    clause.OR.some((part) =>
+      'fullName' in part.student
+        ? (student.fullName ?? '')
+            .toLowerCase()
+            .includes(part.student.fullName.contains.toLowerCase())
+        : student.mobile.includes(part.student.mobile.contains),
+    ),
+  );
+}
+
 /** Enough Prisma for `EventsService`: the event table, its candidates, and the series count the delete guard reads. */
 export class FakeEventsPrisma {
   private seq = 0;
@@ -3963,7 +3993,10 @@ export class FakeEventsPrisma {
   private hydrate(row: FakeEventRow) {
     return {
       ...row,
-      _count: { candidates: this.candidateRows.filter((c) => c.eventId === row.id).length },
+      _count: {
+        candidates: this.candidateRows.filter((c) => c.eventId === row.id).length,
+        series: this.seriesEventIds.filter((id) => id === row.id).length,
+      },
     };
   }
 
@@ -4016,14 +4049,30 @@ export class FakeEventsPrisma {
     },
   };
 
+  private rosterOf(where: FakeEventCandidateWhere): FakeEventCandidateRow[] {
+    return this.candidateRows
+      .filter((row) => matchesCandidate(row, where, (id) => this.studentRef(id)))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
   readonly eventCandidate = {
-    findMany: ({ where }: { where: { eventId: string } }) =>
+    findMany: ({
+      where,
+      skip = 0,
+      take,
+    }: {
+      where: FakeEventCandidateWhere;
+      skip?: number;
+      take?: number;
+    }) =>
       Promise.resolve(
-        this.candidateRows
-          .filter((row) => row.eventId === where.eventId)
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        this.rosterOf(where)
+          .slice(skip, take === undefined ? undefined : skip + take)
           .map((row) => ({ ...row, student: this.studentRef(row.studentId) })),
       ),
+
+    count: ({ where }: { where: FakeEventCandidateWhere }) =>
+      Promise.resolve(this.rosterOf(where).length),
 
     createMany: ({
       data,
@@ -4055,11 +4104,6 @@ export class FakeEventsPrisma {
       this.candidateRows.push(...kept);
       return Promise.resolve({ count: removed });
     },
-  };
-
-  readonly testSeries = {
-    count: ({ where }: { where: { eventId: string } }) =>
-      Promise.resolve(this.seriesEventIds.filter((id) => id === where.eventId).length),
   };
 }
 

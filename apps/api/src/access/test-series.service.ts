@@ -5,13 +5,10 @@ import {
   ErrorCodes,
   fieldDiff,
   TEST_SERIES_KIND,
-  type BranchSeriesListQuery,
-  type BranchSeriesRow,
   type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type Paginated,
   type TestSeriesListQuery,
-  type SetBranchSeriesBody,
   type TestSeriesKind,
   type TestSeriesSummary,
   type UpdateBranchTestConfigBody,
@@ -217,7 +214,7 @@ export class TestSeriesService {
       branchIds: series.branchIds,
     });
 
-    // The switch follows the kind: only STANDARD is gated by a branch, so a kind change moves it.
+    // Only STANDARD carries branches, so a kind change empties the list the CHECK reads.
     await this.prisma.$transaction(async (tx) => {
       await tx.testSeries.update({ where: { id }, data: columnsOf(input) });
       await mirrorSwitchOntoSeries(tx, [id], input.isEnabled);
@@ -270,125 +267,6 @@ export class TestSeriesService {
       data: series.map((row) => ({ branchId, testSeriesId: row.id, enabled: false })),
       skipDuplicates: true,
     });
-  }
-
-  /** Every series as ONE branch sees it, read from `TestSeries` so none can go missing. */
-  async seriesForBranch(
-    branchId: string,
-    query: BranchSeriesListQuery,
-  ): Promise<Paginated<BranchSeriesRow>> {
-    await this.requireBranch(branchId);
-    const chosen: Prisma.TestSeriesWhereInput[] = [
-      ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
-      ...(query.kind === undefined ? [] : [{ kind: query.kind }]),
-      ...(query.enabled === undefined ? [] : [enabledAtBranch(branchId, query.enabled)]),
-    ];
-    const always: Prisma.TestSeriesWhereInput[] = query.q
-      ? [{ name: { contains: query.q, mode: 'insensitive' as const } }]
-      : [];
-
-    // No match toggle here: three narrowings of one branch's list, all of them ANDed.
-    const and = [...always, ...chosen];
-    const where: Prisma.TestSeriesWhereInput = and.length > 0 ? { AND: and } : {};
-
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.testSeries.findMany({
-        where,
-        include: {
-          examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
-          _count: { select: { tests: true } },
-          branchConfigs: { where: { branchId }, select: { enabled: true } },
-        },
-        orderBy: [{ name: 'asc' }, { id: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.prisma.testSeries.count({ where }),
-    ]);
-
-    return {
-      items: rows.map(toBranchSeriesRow),
-      page: query.page,
-      pageSize: query.pageSize,
-      total,
-    };
-  }
-
-  /** The screen's whole draft in one write: one confirm, one request, two statements. */
-  async setSeriesForBranch(branchId: string, input: SetBranchSeriesBody): Promise<number> {
-    await this.requireBranch(branchId);
-    const wanted = new Map<string, boolean>(
-      input.changes.map((row) => [row.testSeriesId, row.enabled]),
-    );
-    const named = [...wanted.keys()];
-    const rows = await this.prisma.branchTestConfig.findMany({
-      where: { branchId, testSeriesId: { in: named } },
-      select: { testSeriesId: true, enabled: true },
-    });
-
-    const held = new Map(rows.map((row) => [row.testSeriesId, row.enabled]));
-    await this.giveThisBranchARow(
-      branchId,
-      named.filter((id) => !held.has(id)),
-    );
-
-    // By VALUE, not by diff: two statements, and a row flipped since the read still lands right.
-    const [on, off] = partitionWanted(wanted);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.branchTestConfig.updateMany({
-        where: { branchId, testSeriesId: { in: on } },
-        data: { enabled: true },
-      });
-      await tx.branchTestConfig.updateMany({
-        where: { branchId, testSeriesId: { in: off } },
-        data: { enabled: false },
-      });
-      await mirrorSwitchOntoSeries(tx, named);
-    });
-
-    // A row that was missing read as OFF on the screen, so that is what it moved FROM.
-    const moved = named.filter((id) => wanted.get(id) !== (held.get(id) ?? false));
-    if (moved.length === 0) return 0;
-
-    this.auditContext.setEntityId(branchId);
-    this.auditContext.setChanged(
-      Object.fromEntries(
-        moved.map((id) => [id, { from: held.get(id) ?? false, to: wanted.get(id) }]),
-      ),
-    );
-    // ONE event, naming no series: the listener busts the whole catalog whatever it is handed.
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: null });
-    return moved.length;
-  }
-
-  /** The list shows a series with no row here switched OFF, so the write writes one rather than refusing. */
-  private async giveThisBranchARow(branchId: string, testSeriesIds: string[]): Promise<void> {
-    if (testSeriesIds.length === 0) return;
-
-    const real = await this.prisma.testSeries.findMany({
-      where: { id: { in: testSeriesIds } },
-      select: { id: true },
-    });
-    if (real.length !== testSeriesIds.length) {
-      // Refused BEFORE anything is written: a half-applied draft leaves the screen disagreeing.
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_SUCH_SERIES_HERE, {
-        fieldErrors: { changes: [NO_SUCH_SERIES_HERE] },
-      });
-    }
-
-    await this.prisma.branchTestConfig.createMany({
-      data: testSeriesIds.map((testSeriesId) => ({ branchId, testSeriesId, enabled: false })),
-      skipDuplicates: true,
-    });
-  }
-
-  /** A branch that is not there is not one to configure, and it reads as missing rather than empty. */
-  private async requireBranch(branchId: string): Promise<void> {
-    const branch = await this.prisma.branch.findFirst({
-      where: { id: branchId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!branch) throw new AppException(ErrorCodes.NOT_FOUND, 'No such branch');
   }
 
   /** Every branch's row for this series the CALLER may see, in branch order. */
@@ -594,40 +472,3 @@ function toBranchConfig(row: {
 
 const EVERY_BRANCH_IS_NOT_YOURS =
   'Switching a series for every branch is for an admin who reaches every branch.';
-
-const NO_SUCH_SERIES_HERE = 'One of those series no longer exists. Reload and try again.';
-
-/** The draft split by the value it asks for, so each half is one statement. */
-function partitionWanted(wanted: ReadonlyMap<string, boolean>): [string[], string[]] {
-  const on: string[] = [];
-  const off: string[] = [];
-  for (const [testSeriesId, enabled] of wanted) (enabled ? on : off).push(testSeriesId);
-  return [on, off];
-}
-
-/** The branch's own switch, expressed as a filter on the series rather than on its config rows. */
-function enabledAtBranch(branchId: string, enabled: boolean): Prisma.TestSeriesWhereInput {
-  const some = { branchConfigs: { some: { branchId, enabled: true } } };
-  return enabled ? some : { NOT: some };
-}
-
-function toBranchSeriesRow(row: {
-  id: string;
-  name: string;
-  kind: TestSeriesKind;
-  examStage: { id: string; name: string; exam: { code: string } } | null;
-  _count: { tests: number };
-  branchConfigs: { enabled: boolean }[];
-}): BranchSeriesRow {
-  return {
-    testSeriesId: row.id,
-    name: row.name,
-    kind: row.kind,
-    examStage: row.examStage
-      ? { id: row.examStage.id, name: row.examStage.name, examCode: row.examStage.exam.code }
-      : null,
-    testCount: row._count.tests,
-    // No row reads as off. It cannot happen — both fan-outs write one — and off is the safe answer.
-    enabled: row.branchConfigs[0]?.enabled ?? false,
-  };
-}

@@ -21,13 +21,11 @@ import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   setTestSeriesSchema,
-  branchTestListQuerySchema,
-  setBranchTestScheduleSchema,
-  setBranchTestSchedulesSchema,
   setProgramUnlockSchema,
   setSeriesTestUnlockSchema,
   setTestStatusSchema,
   testListQuerySchema,
+  testScheduleSchema,
   updateTestSchema,
   type AddPaperQuestionBody,
   type ReplacePaperQuestionBody,
@@ -41,30 +39,18 @@ import {
   type TestListQuery,
   type TestPaper,
   type TestSeriesLink,
-  type BranchTestListQuery,
-  type BranchTestRow,
-  type BranchTestSchedule,
-  type BranchTestScheduleRow,
   type OfferResult,
   type SeriesTestRow,
-  type SetBranchTestScheduleBody,
-  type SetBranchTestSchedulesBody,
   type SetProgramUnlockBody,
   type SetSeriesTestUnlockBody,
   type TestProgramUnlock,
+  type TestSchedule,
   type TestStatus,
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
   type SetPaperQuestionStatusBody,
 } from '@iace/contracts';
-import {
-  Actors,
-  assertBranchInScope,
-  branchScopeOf,
-  CurrentUser,
-  RequiresFeature,
-  type AuthenticatedUser,
-} from '../common/security';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { TestsService } from './tests.service';
@@ -173,22 +159,15 @@ export class TestsController {
     return this.finalizer.finalize(id);
   }
 
-  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get(':id/branch-timing')
-  branchTiming(@Param('id') id: string): Promise<BranchTestScheduleRow[]> {
-    return this.offering.branchTiming(id);
-  }
-
-  /** Late entry and extra time are a branch's, so they answer to the branch key, not the test's. */
+  /** The test's own late entry and extra time, on the key that owns every other field of it. */
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Post(':id/branch-timing')
-  @HttpCode(HttpStatus.OK)
-  setBranchTiming(
+  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Put(':id/schedule')
+  setSchedule(
     @Param('id') id: string,
-    @Body(new ZodBody(setBranchTestSchedulesSchema)) body: SetBranchTestSchedulesBody,
-  ): Promise<BranchTestScheduleRow[]> {
-    return this.offering.setBranchTiming(id, body);
+    @Body(new ZodBody(testScheduleSchema)) body: TestSchedule,
+  ): Promise<TestSchedule> {
+    return this.offering.setSchedule(id, body);
   }
 
   /** A program opens a test EARLIER; entry still closes when it closes for everyone. */
@@ -291,36 +270,5 @@ export class SeriesTestsController {
     @Param('testId') testId: string,
   ): Promise<SeriesTestRow[]> {
     return this.offering.removeFromSeries(seriesId, testId);
-  }
-}
-
-/** One branch's tests, from the branch's side. `BranchTestSchedule` is this module's, so this is too. */
-@Controller('admin/branches/:branchId/tests')
-@Actors(ActorTypes.ADMIN)
-export class BranchTestsController {
-  constructor(private readonly offering: OfferingService) {}
-
-  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
-  @Get()
-  list(
-    @Param('branchId') branchId: string,
-    @Query(new ZodQuery(branchTestListQuerySchema)) query: BranchTestListQuery,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Paginated<BranchTestRow>> {
-    assertBranchInScope(branchScopeOf(user), branchId);
-    return this.offering.testsForBranch(branchId, query);
-  }
-
-  @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Put(':testId/schedule')
-  setSchedule(
-    @Param('branchId') branchId: string,
-    @Param('testId') testId: string,
-    @Body(new ZodBody(setBranchTestScheduleSchema)) body: SetBranchTestScheduleBody,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<BranchTestSchedule> {
-    assertBranchInScope(branchScopeOf(user), branchId);
-    return this.offering.setBranchSchedule(branchId, testId, body);
   }
 }

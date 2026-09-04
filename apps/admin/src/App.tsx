@@ -10,7 +10,6 @@ import { StudentPerformancePage } from './routes/student-performance';
 import { ImportScholarshipPage } from './routes/import-scholarship';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
-import { BranchSeriesPage, BranchTestsPage } from './routes/branch-tests';
 import { ExamsPage } from './routes/exams';
 import { ProgramsPage } from './routes/programs';
 import { QuestionsPage } from './routes/questions';
@@ -56,9 +55,6 @@ export function App() {
           <Route path={ROUTES.STUDENT_PATTERN} element={<StudentDetailPage />} />
           <Route path={ROUTES.STUDENT_PERFORMANCE_PATTERN} element={<StudentPerformancePage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
-          {/* One branch at a time, chosen by `?branchId=` — a nav row cannot carry one in its path. */}
-          <Route path={ROUTES.BRANCH_TEST_SERIES} element={<BranchSeriesPage />} />
-          <Route path={ROUTES.BRANCH_TESTS} element={<BranchTestsPage />} />
           <Route path={ROUTES.EXAMS} element={<ExamsPage />} />
           <Route path={ROUTES.PROGRAMS} element={<ProgramsPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />

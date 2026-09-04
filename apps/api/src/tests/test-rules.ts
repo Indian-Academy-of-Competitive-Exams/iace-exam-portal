@@ -146,21 +146,6 @@ export function activationBlocker(test: { isLocked: boolean; seriesCount: number
   return null;
 }
 
-/** The largest a branch asked for, and null when no branch asked for anything at all. */
-export function highestOrNull(values: readonly (number | null)[]): number | null {
-  const asked = values.filter((value): value is number => value !== null);
-  return asked.length === 0 ? null : Math.max(...asked);
-}
-
-/** Null is NO CAP, so one uncapped reader uncaps the test — max() would shut exactly them out. */
-export function collapsedLateEntry(
-  caps: readonly (number | null)[],
-  anyoneUncapped: boolean,
-): number | null {
-  if (anyoneUncapped || caps.includes(null)) return null;
-  return highestOrNull(caps);
-}
-
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */
 export function testDeletionBlocker(usage: { attemptCount: number }): string | null {
   if (usage.attemptCount === 0) return null;

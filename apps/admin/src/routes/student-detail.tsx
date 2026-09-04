@@ -44,7 +44,7 @@ import {
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
-import { TestSeriesPicker } from '../components/access-picker';
+import { TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
@@ -381,10 +381,20 @@ function SeriesList({
   );
 }
 
+const NO_SERIES_CHOSEN: ChosenSeries = { id: '', name: '', isEnabled: false };
+
+/** A grant is filed against the student either way; whether it OPENS anything is the series' switch. */
+function grantConsequence(chosen: ChosenSeries): string {
+  if (!chosen.isEnabled) {
+    return `${chosen.name} is switched off, so this grant opens nothing yet — they reach its tests only once somebody switches the series on. It is one row for this one student and changes nothing for anybody else.`;
+  }
+  return `They reach every test in ${chosen.name} from now on, whatever their enrolments, programs or branch say. It is one row for this one student and changes nothing for anybody else.`;
+}
+
 /** Everything this student reaches and what opens each; a grant is one of the three, not the whole. */
 function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   const queryClient = useQueryClient();
-  const [chosen, setChosen] = useState({ id: '', name: '' });
+  const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES_CHOSEN);
   const [granting, setGranting] = useState(false);
   const [revoking, setRevoking] = useState<StudentSeriesAccess | null>(null);
   const studentId = detail.id;
@@ -406,7 +416,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
     mutationFn: () => api.admin.grants.create(studentId, { testSeriesId: chosen.id }),
     onSuccess: async () => {
       setGranting(false);
-      setChosen({ id: '', name: '' });
+      setChosen(NO_SERIES_CHOSEN);
       await refresh();
     },
     // Drop out of the confirm on failure, or it is left asking a question already answered.
@@ -447,7 +457,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
                 notReachedBy={studentId}
                 clearable
                 placeholder="Choose a series"
-                onChange={(value, label) => setChosen({ id: value, name: label })}
+                onChange={setChosen}
               />
             )}
           </Field>
@@ -479,7 +489,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
         onOpenChange={(open) => !open && setGranting(false)}
         loading={grant.isPending}
         title={`Grant ${chosen.name} to ${name}?`}
-        description={`They reach every test in ${chosen.name} from now on, whatever their enrolments, programs or branch say. It is one row for this one student and changes nothing for anybody else.`}
+        description={grantConsequence(chosen)}
         confirmLabel="Grant series"
         onConfirm={() => grant.mutate()}
       />

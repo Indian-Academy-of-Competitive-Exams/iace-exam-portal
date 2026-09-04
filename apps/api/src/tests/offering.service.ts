@@ -5,25 +5,19 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
-  type BranchTestListQuery,
-  type BranchTestRow,
-  type BranchTestSchedule,
-  type BranchTestScheduleRow,
-  type Paginated,
-  type SetBranchTestScheduleBody,
-  type SetBranchTestSchedulesBody,
   type SeriesTestRow,
   type SetSeriesTestUnlockBody,
   type SetProgramUnlockBody,
   type SetTestSeriesBody,
   type TestProgramUnlock,
+  type TestSchedule,
   type TestSeriesLink,
   type TestStatus,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
-import { activationBlocker, collapsedLateEntry, highestOrNull } from './test-rules';
+import { activationBlocker } from './test-rules';
 
 const OFFERING_SELECT = {
   id: true,
@@ -36,17 +30,6 @@ const OFFERING_SELECT = {
 
 const dateOrNull = (value: string | null | undefined): Date | null =>
   value === null || value === undefined ? null : new Date(value);
-
-/** A branch that sets neither is a branch with nothing to store — its row goes. */
-function partitionBySet(
-  rows: SetBranchTestSchedulesBody['branches'],
-): [SetBranchTestSchedulesBody['branches'], string[]] {
-  const set = rows.filter((row) => row.lateEntrySec !== null || row.extraTimeSec !== null);
-  const cleared = rows
-    .filter((row) => row.lateEntrySec === null && row.extraTimeSec === null)
-    .map((row) => row.branchId);
-  return [set, cleared];
-}
 
 const attempts = (count: number): string => `${count} ${count === 1 ? 'attempt' : 'attempts'}`;
 
@@ -77,6 +60,18 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   });
 }
 
+const LATE_ENTRY_NEEDS_AN_OPENING =
+  'Late entry is counted from the moment the test opens, and this test has no opening time. Give it one, or leave late entry blank.';
+
+/** Without an opening there is nothing to count from, so a cap would silently never close entry. */
+function assertLateEntryHasAnOpening(opensAt: Date | null, lateEntrySec: number | null): void {
+  if (lateEntrySec === null || opensAt !== null) return;
+
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, LATE_ENTRY_NEEDS_AN_OPENING, {
+    fieldErrors: { lateEntrySec: [LATE_ENTRY_NEEDS_AN_OPENING] },
+  });
+}
+
 interface SeriesPosition {
   testSeriesId: string;
   order: number | null;
@@ -86,32 +81,6 @@ interface SeriesPosition {
 const byPosition = (left: SeriesPosition, right: SeriesPosition): number =>
   (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) ||
   left.testSeriesId.localeCompare(right.testSeriesId);
-
-function toBranchTestRow(row: {
-  testSeriesId: string;
-  testId: string;
-  order: number | null;
-  unlockAt: Date | null;
-  testSeries: { name: string };
-  test: { title: string | null; branchSchedules: BranchTiming[] };
-}): BranchTestRow {
-  const schedule = row.test.branchSchedules[0];
-  return {
-    testId: row.testId,
-    title: row.test.title,
-    testSeriesId: row.testSeriesId,
-    seriesName: row.testSeries.name,
-    order: row.order,
-    unlockAt: row.unlockAt?.toISOString() ?? null,
-    lateEntrySec: schedule?.lateEntrySec ?? null,
-    extraTimeSec: schedule?.extraTimeSec ?? null,
-  };
-}
-
-interface BranchTiming {
-  lateEntrySec: number | null;
-  extraTimeSec: number | null;
-}
 
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
@@ -156,7 +125,6 @@ export class OfferingService {
         });
       }
       await this.mirrorSeriesOntoTest(tx, testId);
-      await this.mirrorTimingOntoTest(tx, testId);
       return new Set([
         ...before.map((row) => row.testSeriesId),
         ...wanted.map((row) => row.testSeriesId),
@@ -301,7 +269,6 @@ export class OfferingService {
         where: { testSeriesId_testId: { testSeriesId, testId } },
       });
       await this.mirrorSeriesOntoTest(tx, testId);
-      await this.mirrorTimingOntoTest(tx, testId);
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
@@ -325,74 +292,6 @@ export class OfferingService {
       },
     });
     await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
-  }
-
-  /** Every branch this test reaches, with whatever that branch does differently for it. */
-  async branchTiming(testId: string): Promise<BranchTestScheduleRow[]> {
-    await this.requireTest(testId);
-
-    const configs = await this.branchesReaching(this.prisma, testId);
-    const held = await this.prisma.branchTestSchedule.findMany({ where: { testId } });
-    const byBranch = new Map(held.map((row) => [row.branchId, row]));
-
-    // A branch reached through two of this test's series is still one branch, and one row.
-    const seen = new Set<string>();
-    return configs.flatMap(({ branch }) => {
-      if (seen.has(branch.id)) return [];
-      seen.add(branch.id);
-      const schedule = byBranch.get(branch.id);
-      return [
-        {
-          branchId: branch.id,
-          branch,
-          lateEntrySec: schedule?.lateEntrySec ?? null,
-          extraTimeSec: schedule?.extraTimeSec ?? null,
-        },
-      ];
-    });
-  }
-
-  /** The same rows from the BRANCH's side: what it runs, when each opens, what it changes. */
-  async testsForBranch(
-    branchId: string,
-    query: BranchTestListQuery,
-  ): Promise<Paginated<BranchTestRow>> {
-    await this.requireBranch(branchId);
-    const where: Prisma.TestSeriesTestWhereInput = {
-      testSeries: {
-        branchConfigs: { some: { branchId, enabled: true } },
-        ...(query.testSeriesId ? { id: { in: query.testSeriesId } } : {}),
-      },
-      ...(query.q ? { test: { title: { contains: query.q, mode: 'insensitive' } } } : {}),
-    };
-
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.testSeriesTest.findMany({
-        where,
-        select: {
-          testSeriesId: true,
-          testId: true,
-          order: true,
-          unlockAt: true,
-          testSeries: { select: { name: true } },
-          test: {
-            select: {
-              title: true,
-              branchSchedules: {
-                where: { branchId },
-                select: { lateEntrySec: true, extraTimeSec: true },
-              },
-            },
-          },
-        },
-        orderBy: [{ testSeries: { name: 'asc' } }, { order: 'asc' }, { testId: 'asc' }],
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
-      this.prisma.testSeriesTest.count({ where }),
-    ]);
-
-    return { items: rows.map(toBranchTestRow), page: query.page, pageSize: query.pageSize, total };
   }
 
   /** Which programs open this test ahead of everyone else, and when. */
@@ -444,116 +343,15 @@ export class OfferingService {
     if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');
   }
 
-  /** One branch's timing on one test. Both fields null deletes the row rather than storing them. */
-  async setBranchSchedule(
-    branchId: string,
-    testId: string,
-    input: SetBranchTestScheduleBody,
-  ): Promise<BranchTestSchedule> {
-    await this.requireBranch(branchId);
-    await this.requireTestAtBranch(branchId, testId);
+  /** The test's own clock, written where the resolver reads it. No branch row collapses onto it. */
+  async setSchedule(testId: string, input: TestSchedule): Promise<TestSchedule> {
+    const test = await this.requireTest(testId);
+    assertLateEntryHasAnOpening(test.opensAt, input.lateEntrySec);
 
-    const cleared = input.lateEntrySec === null && input.extraTimeSec === null;
-    await this.prisma.$transaction(async (tx) => {
-      if (cleared) {
-        await tx.branchTestSchedule.deleteMany({ where: { branchId, testId } });
-      } else {
-        await tx.branchTestSchedule.upsert({
-          where: { branchId_testId: { branchId, testId } },
-          update: input,
-          create: { ...input, branchId, testId },
-        });
-      }
-      await this.mirrorTimingOntoTest(tx, testId);
-    });
+    await this.prisma.test.update({ where: { id: testId }, data: input });
 
     await this.announceTest(testId);
-    return { testId, ...input };
-  }
-
-  private async requireBranch(branchId: string): Promise<void> {
-    const branch = await this.prisma.branch.findFirst({
-      where: { id: branchId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!branch) throw new AppException(ErrorCodes.NOT_FOUND, 'No such branch');
-  }
-
-  /** A test this branch cannot reach is not a test it has timings for, so it reads as missing. */
-  private async requireTestAtBranch(branchId: string, testId: string): Promise<void> {
-    const link = await this.prisma.testSeriesTest.findFirst({
-      where: { testId, testSeries: { branchConfigs: { some: { branchId, enabled: true } } } },
-      select: { testId: true },
-    });
-    if (!link) throw new AppException(ErrorCodes.NOT_FOUND, 'This branch does not run that test');
-  }
-
-  /** Nothing set is no row: the plain rules are the absence of one, never a row full of nulls. */
-  async setBranchTiming(
-    testId: string,
-    input: SetBranchTestSchedulesBody,
-  ): Promise<BranchTestScheduleRow[]> {
-    await this.requireTest(testId);
-    const [set, cleared] = partitionBySet(input.branches);
-
-    await this.prisma.$transaction(async (tx) => {
-      if (cleared.length > 0) {
-        await tx.branchTestSchedule.deleteMany({ where: { testId, branchId: { in: cleared } } });
-      }
-      for (const row of set) {
-        const where = { branchId_testId: { branchId: row.branchId, testId } };
-        const values = { lateEntrySec: row.lateEntrySec, extraTimeSec: row.extraTimeSec };
-        await tx.branchTestSchedule.upsert({
-          where,
-          update: values,
-          create: { ...values, testId, branchId: row.branchId },
-        });
-      }
-      await this.mirrorTimingOntoTest(tx, testId);
-    });
-
-    await this.announceTest(testId);
-    return this.branchTiming(testId);
-  }
-
-  /** The branches that reach this test, in name order — every enabled config on a series it is in. */
-  private async branchesReaching(
-    tx: Prisma.TransactionClient,
-    testId: string,
-  ): Promise<{ branch: { id: string; name: string } }[]> {
-    const links = await tx.testSeriesTest.findMany({
-      where: { testId },
-      select: { testSeriesId: true },
-    });
-    return tx.branchTestConfig.findMany({
-      where: { enabled: true, testSeriesId: { in: links.map((row) => row.testSeriesId) } },
-      select: { branch: { select: { id: true, name: true } } },
-      orderBy: { branch: { name: 'asc' } },
-    });
-  }
-
-  /** The per-branch rows still hold the timings; the test's own columns are collapsed from them. */
-  private async mirrorTimingOntoTest(tx: Prisma.TransactionClient, testId: string): Promise<void> {
-    const rows = await tx.branchTestSchedule.findMany({
-      where: { testId },
-      select: { branchId: true, lateEntrySec: true, extraTimeSec: true },
-    });
-    const capped = new Set(
-      rows.filter((row) => row.lateEntrySec !== null).map((row) => row.branchId),
-    );
-    const reaching = await this.branchesReaching(tx, testId);
-    const uncapped = reaching.some(({ branch }) => !capped.has(branch.id));
-
-    await tx.test.update({
-      where: { id: testId },
-      data: {
-        lateEntrySec: collapsedLateEntry(
-          rows.map((row) => row.lateEntrySec),
-          uncapped,
-        ),
-        extraTimeSec: highestOrNull(rows.map((row) => row.extraTimeSec)),
-      },
-    });
+    return input;
   }
 
   /** Filed against the test, and every series carrying it loses its cached catalog. */

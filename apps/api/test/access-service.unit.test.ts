@@ -14,8 +14,6 @@ import { StudentGrantsService } from '../src/access/student-grants.service';
 import { ExamStagesService } from '../src/configs';
 import { AuditContext } from '../src/audit';
 import { DOMAIN_EVENTS } from '../src/common/events';
-import { BranchSeriesController } from '../src/access/access.controller';
-import { ActorTypes, branchSeriesListQuerySchema } from '@iace/contracts';
 import {
   FakeEventBus,
   type FakeAccessTestRow,
@@ -135,14 +133,10 @@ describe('TestSeriesService — the branch fan-out', () => {
     const created = await series.create(draft());
     await series.updateEveryBranchConfig(created.id, { enabled: true }, EVERY_BRANCH);
 
-    await series.setSeriesForBranch('br_1', {
-      changes: [{ testSeriesId: created.id, enabled: false }],
-    });
+    await series.updateBranchConfig(created.id, 'br_1', { enabled: false }, EVERY_BRANCH);
     assert.deepEqual(prisma.series[0]?.branchIds, ['br_2'], 'one branch off is not the last one');
 
-    await series.setSeriesForBranch('br_2', {
-      changes: [{ testSeriesId: created.id, enabled: false }],
-    });
+    await series.updateBranchConfig(created.id, 'br_2', { enabled: false }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.series[0]?.branchIds, []);
     assert.equal(prisma.series[0]?.isEnabled, false);
@@ -206,8 +200,26 @@ describe('TestSeriesService — the branch fan-out', () => {
     assert.equal(prisma.series[0]?.isEnabled, false);
   });
 
-  /** A grant reaches PAST the branch gate, so it must not be shut out by an empty branch list. */
-  it('switches a series on for a grant made where no branch runs it', async () => {
+  /** `isEnabled` sits OUTSIDE the reach OR, so one student's grant cannot publish a parked series. */
+  it('leaves a switched-off free series off when a student is granted it', async () => {
+    const { series, grants, prisma } = build({
+      branches: [makeBranch({ id: 'br_1' })],
+      students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
+    });
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
+    await series.update(created.id, { isEnabled: false });
+
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+
+    assert.equal(prisma.series[0]?.isEnabled, false, 'switched on, a free series reaches everyone');
+    assert.equal(
+      prisma.grants.length,
+      1,
+      'the grant is still written — it opens once somebody does',
+    );
+  });
+
+  it('leaves a standard series off when a grant is made where no branch runs it', async () => {
     const { series, grants, prisma } = build({
       branches: [makeBranch({ id: 'br_1' })],
       students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
@@ -216,7 +228,7 @@ describe('TestSeriesService — the branch fan-out', () => {
 
     await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
 
-    assert.equal(prisma.series[0]?.isEnabled, true);
+    assert.equal(prisma.series[0]?.isEnabled, false);
   });
 
   /** Taking ONE student's grant back is not a decision about the series, so it moves no switch. */
@@ -226,6 +238,7 @@ describe('TestSeriesService — the branch fan-out', () => {
       students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
     });
     const created = await series.create(draft());
+    await series.update(created.id, { isEnabled: true });
     await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
 
     await grants.revoke('stu_1', created.id, EVERY_BRANCH);
@@ -233,7 +246,7 @@ describe('TestSeriesService — the branch fan-out', () => {
     assert.equal(
       prisma.series[0]?.isEnabled,
       true,
-      'the branch list is what empties, not the switch',
+      'the admin switched it on; a revoke is not that',
     );
     assert.deepEqual(prisma.series[0]?.branchIds, []);
   });
@@ -824,227 +837,6 @@ describe('StudentGrantsService — the branches the admin asking may reach', () 
   });
 });
 
-describe("TestSeriesService — one branch's series, from the branch's side", () => {
-  const listQuery = (over: Record<string, string> = {}) =>
-    branchSeriesListQuerySchema.parse({ page: '1', pageSize: '20', ...over });
-
-  const twoSeries = () =>
-    build({
-      series: [
-        makeSeries({ id: 'srs_1', name: 'SSC CGL Tier 1 mocks' }),
-        makeSeries({ id: 'srs_2', name: 'RRB JE Stage 1' }),
-      ],
-      branches: [makeBranch({ id: 'br_1' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', testSeriesId: 'srs_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_1', testSeriesId: 'srs_2', enabled: false }),
-      ],
-    });
-
-  it("lists every series with this branch's switch", async () => {
-    const { series } = twoSeries();
-
-    const page = await series.seriesForBranch('br_1', listQuery());
-
-    assert.deepEqual(
-      page.items.map((row) => [row.testSeriesId, row.enabled]),
-      [
-        ['srs_2', false],
-        ['srs_1', true],
-      ],
-    );
-    assert.equal(page.total, 2);
-  });
-
-  /** The failure this prevents: a series with no config row vanishing instead of reading as off. */
-  it('shows a series with no row for this branch as switched off', async () => {
-    const { series } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      branches: [makeBranch({ id: 'br_1' })],
-      branchConfigs: [],
-    });
-
-    const page = await series.seriesForBranch('br_1', listQuery());
-
-    assert.equal(page.total, 1);
-    assert.equal(page.items[0]?.enabled, false);
-  });
-
-  it('counts what the filter left, not the whole table', async () => {
-    const { series } = twoSeries();
-
-    const page = await series.seriesForBranch('br_1', listQuery({ q: 'RRB' }));
-
-    assert.equal(page.total, 1);
-    assert.equal(page.items.length, 1);
-  });
-
-  it('counts what the enabled filter left', async () => {
-    const { series } = twoSeries();
-
-    const page = await series.seriesForBranch('br_1', listQuery({ enabled: 'true' }));
-
-    assert.equal(page.total, 1);
-  });
-
-  it('narrows to what the branch runs, and to what it does not', async () => {
-    const { series } = twoSeries();
-
-    const on = await series.seriesForBranch('br_1', listQuery({ enabled: 'true' }));
-    const off = await series.seriesForBranch('br_1', listQuery({ enabled: 'false' }));
-
-    assert.deepEqual(
-      on.items.map((row) => row.testSeriesId),
-      ['srs_1'],
-    );
-    assert.deepEqual(
-      off.items.map((row) => row.testSeriesId),
-      ['srs_2'],
-    );
-  });
-});
-
-describe("TestSeriesService — saving a branch's draft in one write", () => {
-  const withBoth = () =>
-    build({
-      series: [makeSeries({ id: 'srs_1' }), makeSeries({ id: 'srs_2', name: 'Second' })],
-      branches: [makeBranch({ id: 'br_1' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', testSeriesId: 'srs_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_1', testSeriesId: 'srs_2', enabled: false }),
-      ],
-    });
-
-  it('applies exactly the changes it was given', async () => {
-    const { series, prisma } = withBoth();
-
-    const changed = await series.setSeriesForBranch('br_1', {
-      changes: [
-        { testSeriesId: 'srs_1', enabled: false },
-        { testSeriesId: 'srs_2', enabled: false },
-      ],
-    });
-
-    // Only srs_1 MOVED; srs_2 was already off and is not counted or announced.
-    assert.equal(changed, 1);
-    assert.deepEqual(
-      prisma.branchConfigs.map((row) => [row.testSeriesId, row.enabled]),
-      [
-        ['srs_1', false],
-        ['srs_2', false],
-      ],
-    );
-  });
-
-  /** The listener busts the whole catalog whatever it is handed, so one event says the truth. */
-  it('busts the catalog once, naming no series', async () => {
-    const { series, events } = withBoth();
-
-    await series.setSeriesForBranch('br_1', {
-      changes: [
-        { testSeriesId: 'srs_1', enabled: false },
-        { testSeriesId: 'srs_2', enabled: true },
-      ],
-    });
-
-    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [{ testSeriesId: null }]);
-  });
-
-  /** A draft that asks for what is already true is not a change, and rings no bell. */
-  it('busts nothing when the draft moves nothing', async () => {
-    const { series, events } = withBoth();
-
-    const changed = await series.setSeriesForBranch('br_1', {
-      changes: [{ testSeriesId: 'srs_1', enabled: true }],
-    });
-
-    assert.equal(changed, 0);
-    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), []);
-  });
-
-  /** The failure this prevents: one branch's save switching a series on for every branch. */
-  it('leaves every other branch alone', async () => {
-    const { series, prisma } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'KUKATPALLY' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', testSeriesId: 'srs_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', testSeriesId: 'srs_1', enabled: true }),
-      ],
-    });
-
-    await series.setSeriesForBranch('br_1', {
-      changes: [{ testSeriesId: 'srs_1', enabled: false }],
-    });
-
-    assert.deepEqual(
-      prisma.branchConfigs.map((row) => [row.branchId, row.enabled]),
-      [
-        ['br_1', false],
-        ['br_2', true],
-      ],
-    );
-  });
-
-  /** The failure this prevents: a switch the list offers and the write can only refuse. */
-  it('gives a branch the row a series older than the fan-out never got', async () => {
-    const { series, prisma } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'KUKATPALLY' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', testSeriesId: 'srs_1', enabled: false }),
-      ],
-    });
-
-    const changed = await series.setSeriesForBranch('br_1', {
-      changes: [{ testSeriesId: 'srs_1', enabled: true }],
-    });
-
-    assert.equal(changed, 1);
-    assert.deepEqual(
-      prisma.branchConfigs
-        .filter((row) => row.branchId === 'br_1')
-        .map((row) => [row.testSeriesId, row.enabled]),
-      [['srs_1', true]],
-    );
-    // The other branch's row is untouched: one branch's draft is one branch's write.
-    assert.equal(prisma.branchConfigs.find((row) => row.branchId === 'br_2')?.enabled, false);
-  });
-
-  it('reads a branch that is not there as missing', async () => {
-    const { series } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      branches: [makeBranch({ id: 'br_1' })],
-      branchConfigs: [makeBranchConfig({ branchId: 'br_1', testSeriesId: 'srs_1' })],
-    });
-
-    const error = await series
-      .setSeriesForBranch('br_nowhere', { changes: [{ testSeriesId: 'srs_1', enabled: true }] })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  /** All or nothing: a half-applied draft leaves the screen disagreeing with the server. */
-  it('writes nothing when one of the ids names no series at all', async () => {
-    const { series, prisma } = withBoth();
-
-    const error = await series
-      .setSeriesForBranch('br_1', {
-        changes: [
-          { testSeriesId: 'srs_1', enabled: false },
-          { testSeriesId: 'srs_gone', enabled: true },
-        ],
-      })
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.branchConfigs[0]?.enabled, true);
-  });
-});
-
 describe('TestSeriesService — the series side names a branch too', () => {
   const held = { all: false, branchIds: ['br_1'] } as const;
 
@@ -1096,58 +888,5 @@ describe('TestSeriesService — the series side names a branch too', () => {
       prisma.branchConfigs.map((row) => row.enabled),
       [false, false],
     );
-  });
-});
-
-describe("BranchSeriesController — the branch in the path is the caller's or it is missing", () => {
-  const outsider = {
-    id: 'adm_1',
-    actor: ActorTypes.ADMIN,
-    sessionId: 's',
-    isSuperAdmin: false,
-    isActive: true,
-    permissions: {},
-    allBranches: false,
-    branchIds: ['br_1'],
-  } as const;
-
-  /** Never reached, because the scope check is the first statement of both handlers. */
-  const unreachable = {
-    seriesForBranch: () => Promise.reject(new Error('the service must not be reached')),
-    setSeriesForBranch: () => Promise.reject(new Error('the service must not be reached')),
-  } as never;
-
-  const controller = new BranchSeriesController(unreachable);
-  const query = branchSeriesListQuerySchema.parse({ page: '1', pageSize: '20' });
-
-  it('refuses to list a branch the admin does not hold', async () => {
-    const error = await Promise.resolve()
-      .then(() => controller.list('br_9', query, outsider))
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  /** A positive control: a guard that refused everything would pass the two tests around it. */
-  it('lets a branch the admin does hold through to the service', async () => {
-    const reached = new BranchSeriesController({
-      seriesForBranch: () => Promise.resolve({ items: [], page: 1, pageSize: 20, total: 0 }),
-    } as never);
-
-    const page = await reached.list('br_1', query, outsider);
-
-    assert.equal(page.total, 0);
-  });
-
-  it('refuses to write a branch the admin does not hold', async () => {
-    const error = await Promise.resolve()
-      .then(() =>
-        controller.set('br_9', { changes: [{ testSeriesId: 'srs_1', enabled: true }] }, outsider),
-      )
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
   });
 });

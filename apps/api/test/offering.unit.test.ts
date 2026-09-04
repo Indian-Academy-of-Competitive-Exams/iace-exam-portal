@@ -10,8 +10,6 @@ import {
   FakeEventBus,
   FakeTestsPrisma,
   makeBaseConfig,
-  makeBranch,
-  makeBranchConfig,
   makeSection,
   makeSeries,
   makeTest,
@@ -431,156 +429,65 @@ describe('OfferingService — a series and the tests it holds', () => {
   });
 });
 
-/** One test in one series, run at br_1 and switched off at br_2. */
-const timingService = (
-  branchSchedules: {
-    branchId: string;
-    testId: string;
-    lateEntrySec: number | null;
-    extraTimeSec: number | null;
-  }[] = [],
-) => {
-  const prisma = new FakeTestsPrisma(
-    [makeTest({ id: 'tst_1' })],
-    [makeBaseConfig({ id: 'cfg_1' })],
-    [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
-    [],
-    [{ testSeriesId: 'srs_1', testId: 'tst_1', order: 1 }],
-    [],
-    [],
-    [makeSeries({ id: 'srs_1' })],
-    [],
-    [],
-    [],
-    [
-      {
-        id: 'btc_1',
-        branchId: 'br_1',
-        testSeriesId: 'srs_1',
-        enabled: true,
-        createdAt: new Date(),
-      },
-      {
-        id: 'btc_2',
-        branchId: 'br_2',
-        testSeriesId: 'srs_1',
-        enabled: false,
-        createdAt: new Date(),
-      },
-    ],
-    branchSchedules,
-    [makeBranch({ id: 'br_1', name: 'AMEERPET' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
-  );
-  return {
-    prisma,
-    service: new OfferingService(
-      prisma.asService(),
-      new FakeEventBus().asService(),
-      new AuditContext(),
-    ),
-  };
-};
+describe('OfferingService — the test carries its own clock', () => {
+  const opened = () => makeTest({ id: 'tst_1', opensAt: OPENS_AT });
 
-describe('OfferingService — what a branch does differently for one test', () => {
-  it('lists only the branches that actually reach the test', async () => {
-    const { service } = timingService();
+  it('stores late entry and extra time on the test itself, in seconds', async () => {
+    const { service, prisma } = serviceWith(opened());
 
-    const rows = await service.branchTiming('tst_1');
+    const saved = await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
 
-    assert.deepEqual(
-      rows.map((row) => row.branch.name),
-      ['AMEERPET'],
+    assert.deepEqual(saved, { lateEntrySec: 1800, extraTimeSec: 600 });
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+  });
+
+  /** The failure this prevents: the old writer went through the branches, so none meant no write. */
+  it('stores the clock of a test no branch reaches', async () => {
+    const { service, prisma } = serviceWith(opened());
+
+    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 900 });
+
+    assert.equal(prisma.tests[0]?.extraTimeSec, 900);
+  });
+
+  /** The failure this prevents: a cap counted from nothing would silently never close entry. */
+  it('refuses late entry on a test with no opening', async () => {
+    const { service, prisma } = serviceWith();
+
+    await assert.rejects(
+      () => service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: null }),
+      AppException.is,
     );
-    assert.deepEqual([rows[0]?.lateEntrySec, rows[0]?.extraTimeSec], [null, null]);
-  });
-
-  it('stores what a branch sets, in seconds', async () => {
-    const { service, prisma } = timingService();
-
-    const rows = await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: 600 }],
-    });
-
-    assert.deepEqual([rows[0]?.lateEntrySec, rows[0]?.extraTimeSec], [1800, 600]);
-    assert.equal(prisma.branchSchedules.length, 1);
-  });
-
-  /** The failure this prevents: a table of rows full of nulls, each of which means nothing. */
-  it('keeps no row for a branch that sets neither', async () => {
-    const { service, prisma } = timingService([
-      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: null },
-    ]);
-
-    await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: null, extraTimeSec: null }],
-    });
-
-    assert.equal(prisma.branchSchedules.length, 0);
-  });
-
-  it('overwrites what a branch had rather than adding beside it', async () => {
-    const { service, prisma } = timingService([
-      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: null },
-    ]);
-
-    await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: 600, extraTimeSec: 300 }],
-    });
-
-    assert.equal(prisma.branchSchedules.length, 1);
-    assert.equal(prisma.branchSchedules[0]?.lateEntrySec, 600);
-  });
-});
-
-describe('OfferingService — the test carries the clock the branches still set', () => {
-  it('takes the largest extra time any branch gives, because a null gives none', async () => {
-    const { service, prisma } = timingService();
-
-    await service.setBranchTiming('tst_1', {
-      branches: [
-        { branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: 600 },
-        { branchId: 'br_2', lateEntrySec: 1200, extraTimeSec: null },
-      ],
-    });
-
-    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
-  });
-
-  /** br_2 is switched off, so only br_1 reaches the test and only br_1's cap has to be honoured. */
-  it('caps late entry at the largest cap when every branch that reaches it has one', async () => {
-    const { service, prisma } = timingService();
-
-    await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
-    });
-
-    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
-  });
-
-  /** Null is NO CAP, so the branch with no row is exactly who max() would shut out. */
-  it('leaves the test uncapped when a branch that reaches it caps nothing', async () => {
-    const { service, prisma } = timingService();
-    prisma.branchConfigRows.push(
-      makeBranchConfig({ id: 'btc_3', branchId: 'br_2', testSeriesId: 'srs_1', enabled: true }),
-    );
-
-    await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
-    });
-
     assert.equal(prisma.tests[0]?.lateEntrySec, null);
   });
 
-  /** One column, not one per student: a grant that uncapped it would uncap it for every branch. */
-  it('keeps the cap an admin set when the series is granted to somebody', async () => {
-    const { service, prisma } = timingService();
-    prisma.seriesGrants.push({ studentId: 'stu_1', testSeriesId: 'srs_1' });
+  it('takes extra time on a test with no opening, which needs nothing to count from', async () => {
+    const { service, prisma } = serviceWith();
 
-    await service.setBranchTiming('tst_1', {
-      branches: [{ branchId: 'br_1', lateEntrySec: 1800, extraTimeSec: null }],
-    });
+    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 300 });
 
-    assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
+    assert.equal(prisma.tests[0]?.extraTimeSec, 300);
+  });
+
+  /** The failure this prevents: `mirrorTimingOntoTest` used to collapse these back from branch rows. */
+  it('leaves the clock alone when the test is moved between series', async () => {
+    const { service, prisma } = serviceWith(opened());
+    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
+
+    await service.setSeries('tst_1', { series: [{ testSeriesId: 'srs_1', order: 1 }] });
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+  });
+
+  it('leaves the clock alone when the last series drops the test', async () => {
+    const { service, prisma } = serviceWith(opened(), [
+      { testSeriesId: 'srs_1', testId: 'tst_1', order: 1 },
+    ]);
+    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
+
+    await service.removeFromSeries('srs_1', 'tst_1');
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
   });
 });
 
@@ -706,121 +613,5 @@ describe('OfferingService — a program opens a test earlier, never later', () =
 
     assert.deepEqual(rows, []);
     assert.equal(prisma.programUnlocks.length, 0);
-  });
-});
-
-describe('OfferingService — one branch, and everything it runs', () => {
-  const branchService = (
-    branchSchedules: {
-      branchId: string;
-      testId: string;
-      lateEntrySec: number | null;
-      extraTimeSec: number | null;
-    }[] = [],
-  ) => {
-    const prisma = new FakeTestsPrisma(
-      [
-        makeTest({ id: 'tst_1', title: 'Tier 1 mock' }),
-        makeTest({ id: 'tst_2', title: 'Tier 2 mock' }),
-      ],
-      [makeBaseConfig({ id: 'cfg_1' })],
-      [makeSection({ id: 'sec_1', baseConfigId: 'cfg_1' })],
-      [],
-      [
-        { testSeriesId: 'srs_1', testId: 'tst_1', order: 1, unlockAt: OPENS_AT },
-        { testSeriesId: 'srs_2', testId: 'tst_2', order: 1 },
-      ],
-      [],
-      [],
-      [
-        makeSeries({ id: 'srs_1', name: 'Full length' }),
-        makeSeries({ id: 'srs_2', name: 'Sectionals' }),
-      ],
-      [],
-      [],
-      [],
-      [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', testSeriesId: 'srs_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_1', testSeriesId: 'srs_2', enabled: false }),
-      ],
-      branchSchedules,
-      [makeBranch({ id: 'br_1', name: 'AMEERPET' })],
-    );
-    return {
-      prisma,
-      service: new OfferingService(
-        prisma.asService(),
-        new FakeEventBus().asService(),
-        new AuditContext(),
-      ),
-    };
-  };
-
-  const listAt = (branchId: string, service: OfferingService) =>
-    service.testsForBranch(branchId, { page: 1, pageSize: 20, q: undefined });
-
-  it('lists a test with the series that carries it here, and when it opens', async () => {
-    const { service } = branchService([
-      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 },
-    ]);
-
-    const page = await listAt('br_1', service);
-
-    assert.equal(page.total, 1);
-    assert.deepEqual(
-      page.items.map((row) => [row.testId, row.seriesName, row.unlockAt]),
-      [['tst_1', 'Full length', OPENS_AT.toISOString()]],
-    );
-    assert.deepEqual([page.items[0]?.lateEntrySec, page.items[0]?.extraTimeSec], [1800, 600]);
-  });
-
-  /** The failure this prevents: a branch configuring timings on a test its students cannot reach. */
-  it('leaves out a test whose only series is switched off here', async () => {
-    const { service } = branchService();
-
-    const page = await listAt('br_1', service);
-
-    assert.deepEqual(
-      page.items.map((row) => row.testId),
-      ['tst_1'],
-    );
-  });
-
-  it('reads a branch that is not there as missing', async () => {
-    const { service } = branchService();
-
-    await assert.rejects(() => listAt('br_nope', service), AppException.is);
-  });
-
-  it('stores what one branch sets on one test', async () => {
-    const { service, prisma } = branchService();
-
-    const saved = await service.setBranchSchedule('br_1', 'tst_1', {
-      lateEntrySec: 900,
-      extraTimeSec: null,
-    });
-
-    assert.deepEqual(saved, { testId: 'tst_1', lateEntrySec: 900, extraTimeSec: null });
-    assert.equal(prisma.branchSchedules.length, 1);
-  });
-
-  /** The failure this prevents: a row of nulls saying "the plain rules" a second time. */
-  it('deletes the row when both fields are cleared', async () => {
-    const { service, prisma } = branchService([
-      { branchId: 'br_1', testId: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 },
-    ]);
-
-    await service.setBranchSchedule('br_1', 'tst_1', { lateEntrySec: null, extraTimeSec: null });
-
-    assert.equal(prisma.branchSchedules.length, 0);
-  });
-
-  it('refuses a test this branch does not run', async () => {
-    const { service } = branchService();
-
-    await assert.rejects(
-      () => service.setBranchSchedule('br_1', 'tst_2', { lateEntrySec: 60, extraTimeSec: null }),
-      AppException.is,
-    );
   });
 });

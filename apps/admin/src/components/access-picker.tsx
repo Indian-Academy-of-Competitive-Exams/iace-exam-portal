@@ -80,7 +80,17 @@ export function EventPicker(props: Readonly<PickerProps>) {
   );
 }
 
-/** The name comes back with the id because what asks for a series next is a dialog naming it. */
+/** What the dialog that grants a series has to say about it before the row is written. */
+export interface ChosenSeries {
+  id: string;
+  name: string;
+  /** A grant onto a switched-off series opens nothing yet, which only the dialog can say. */
+  isEnabled: boolean;
+}
+
+const NO_SERIES: ChosenSeries = { id: '', name: '', isEnabled: false };
+
+/** The row comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({
   notReachedBy,
   onChange,
@@ -89,7 +99,7 @@ export function TestSeriesPicker({
   Omit<PickerProps, 'onChange'> & {
     /** A student id: the server drops what they already reach, so a grant that does nothing is unofferable. */
     notReachedBy?: string;
-    onChange: (value: string, label: string) => void;
+    onChange: (chosen: ChosenSeries) => void;
   }
 >) {
   const [search, setSearch] = useState('');
@@ -106,12 +116,17 @@ export function TestSeriesPicker({
     hint: series.examStage ? `${series.examStage.examCode} / ${series.examStage.name}` : undefined,
   }));
 
+  const chosenOf = (value: string): ChosenSeries => {
+    const row = pages.items.find((series) => series.id === value);
+    return row ? { id: row.id, name: row.name, isEnabled: row.isEnabled } : NO_SERIES;
+  };
+
   return (
     <Combobox
       {...props}
       placeholder={props.placeholder ?? 'No series'}
       items={items}
-      onChange={(value) => onChange(value, items.find((item) => item.value === value)?.label ?? '')}
+      onChange={(value) => onChange(chosenOf(value))}
       search={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search series"

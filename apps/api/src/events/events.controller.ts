@@ -14,6 +14,7 @@ import {
   ActorTypes,
   addEventCandidatesSchema,
   createEventSchema,
+  eventCandidateListQuerySchema,
   eventListQuerySchema,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -22,6 +23,7 @@ import {
   type CreateEventBody,
   type Event,
   type EventCandidate,
+  type EventCandidateListQuery,
   type EventListQuery,
   type Paginated,
   type UpdateEventBody,
@@ -74,8 +76,11 @@ export class EventsController {
 
   @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
   @Get(':id/candidates')
-  candidates(@Param('id') id: string): Promise<EventCandidate[]> {
-    return this.events.candidates(id);
+  candidates(
+    @Param('id') id: string,
+    @Query(new ZodQuery(eventCandidateListQuerySchema)) query: EventCandidateListQuery,
+  ): Promise<Paginated<EventCandidate>> {
+    return this.events.candidates(id, query);
   }
 
   /** A whole roster in one write — the import screen's commit, not a row at a time. */

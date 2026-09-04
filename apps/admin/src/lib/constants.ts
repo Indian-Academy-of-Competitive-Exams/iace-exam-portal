@@ -62,9 +62,6 @@ export const ROUTES = {
   STUDENT_PERFORMANCE: (id: string) => `/students/${id}/performance`,
   STUDENT_PERFORMANCE_PATTERN: '/students/:id/performance',
   BRANCHES: '/branches',
-  /** What ONE branch runs. Three screens standing in one branch, which rides the URL as `branchId`. */
-  BRANCH_TEST_SERIES: '/branch/test-series',
-  BRANCH_TESTS: '/branch/tests',
   EXAMS: '/exams',
   /** The coaching variants. A student and a series both carry the code as free text. */
   PROGRAMS: '/programs',
@@ -99,8 +96,8 @@ export const ROUTES = {
   TEST_SERIES_PATTERN: '/tests/series/:id',
   SERIES_CANDIDATES: (id: string) => `/tests/series/${id}/candidates`,
   SERIES_CANDIDATES_PATTERN: '/tests/series/:id/candidates',
-  /** The ad-hoc cohorts an EVENT series draws on — candidates, IACE students or not. */
-  EVENTS: '/tests/events',
+  /** The ad-hoc cohorts an Event Test draws on — candidates, IACE students or not. */
+  EVENTS: '/events',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
@@ -401,18 +398,14 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
-      { to: ROUTES.EVENTS, label: 'Events', icon: CalendarDays, featureKey: FEATURE_KEYS.EVENT },
     ],
   },
-  /** Its own section, not a row under Tests: a branch admin lives here and reaches nothing above it. */
+  /** Its own section, not a row under Tests: a section gates before its children, and EVENT is granted alone. */
   {
-    label: 'Branch tests',
-    icon: Building2,
-    featureKey: FEATURE_KEYS.BRANCH_TEST_MANAGEMENT,
-    children: [
-      { to: ROUTES.BRANCH_TEST_SERIES, label: 'Test series', icon: Layers },
-      { to: ROUTES.BRANCH_TESTS, label: 'Tests', icon: ClipboardList },
-    ],
+    label: 'Events',
+    icon: CalendarDays,
+    featureKey: FEATURE_KEYS.EVENT,
+    children: [{ to: ROUTES.EVENTS, label: 'All events', icon: CalendarDays }],
   },
   {
     label: 'Administration',
@@ -439,8 +432,6 @@ const BRANCH_ADMIN_ROUTES = new Set<string>([
   ROUTES.STUDENTS,
   ROUTES.IMPORT_STUDENTS,
   ROUTES.BRANCHES,
-  ROUTES.BRANCH_TEST_SERIES,
-  ROUTES.BRANCH_TESTS,
   ROUTES.AUDIT,
   ROUTES.AUDIT_IMPORTS,
 ]);
@@ -465,9 +456,6 @@ export const QUERY_KEYS = {
   AUDIT: [ADMIN, 'audit'],
   BASE_CONFIG: [ADMIN, 'base-config'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],
-  /** One branch's own configuration. `test-series-form` writes the same rows and busts this. */
-  BRANCH_CONFIG: [ADMIN, 'branch-config'],
-  BRANCH_TIMING: [ADMIN, 'branch-timing'],
   BRANCHES: [ADMIN, 'branches'],
   EVENTS: [ADMIN, 'events'],
   EXAM_STAGES: [ADMIN, 'exam-stages'],
@@ -523,8 +511,6 @@ export const PAGE_SIZE_FOR_PICKERS = 100;
  */
 export const STORAGE_KEYS = {
   AUTH: 'iace.admin.auth',
-  /** The branch the three Branch tests screens stand in, so moving between them keeps it. */
-  BRANCH: 'iace.admin.branch',
   /** The question in the box right now. A closed tab loses nothing; only a save writes a row. */
   AUTHORING_DRAFT: 'iace.admin.authoring',
 } as const;

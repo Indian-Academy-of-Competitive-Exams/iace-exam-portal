@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Pencil, Plus, Power, Trash2, UserMinus } from 'lucide-react';
@@ -14,12 +14,12 @@ import {
   type UpdateEventInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useListScreen, useLocalFilters } from '@iace/app-kit/browser';
 import {
+  Alert,
   Badge,
   Button,
   ConfirmDialog,
-  DataTable,
   DropdownMenuItem,
   Field,
   FormDialog,
@@ -87,6 +87,12 @@ function eventColumns(
       numeric: true,
       cell: (event) => event.candidateCount,
     },
+    {
+      key: 'series',
+      header: 'Series',
+      numeric: true,
+      cell: (event) => event.seriesCount,
+    },
     { key: 'status', header: 'Status', cell: (event) => <EventStatus event={event} /> },
     {
       key: 'actions',
@@ -98,10 +104,12 @@ function eventColumns(
   ];
 }
 
-/** The roster an EVENT series draws on. Its candidates open under the row, never on a screen of their own. */
+/** The roster an Event Test draws on. Its candidates open under the row, never on a screen of their own. */
 export function EventsPage() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE);
+  // The picker reads the student directory, which is a key of its own — see `EventCandidates`.
+  const canReadStudents = can(FEATURE_KEYS.STUDENT_MANAGEMENT);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
   const queryClient = useQueryClient();
@@ -181,11 +189,16 @@ export function EventsPage() {
         filters={EVENT_FILTERS}
         columns={columns}
         rowKey={(event) => event.id}
-        empty="No events yet. Add the first one — an EVENT series reaches only the candidates on one."
+        empty="No events yet. Add the first one — an Event Test reaches only the candidates on one."
         emptyFiltered="No events match those filters."
         expand={{
           render: (event) => (
-            <EventCandidates event={event} canWrite={canWrite} onChanged={refresh} />
+            <EventCandidates
+              event={event}
+              canWrite={canWrite}
+              canReadStudents={canReadStudents}
+              onChanged={refresh}
+            />
           ),
           label: (event) => `Show the candidates on ${event.name}`,
         }}
@@ -316,12 +329,33 @@ function EventActions({
         <Power aria-hidden />
         {event.isActive ? 'Retire' : 'Reactivate'}
       </DropdownMenuItem>
-      <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(EVENT_CONFIRMS.DELETE)}>
-        <Trash2 aria-hidden />
-        Delete
-      </DropdownMenuItem>
+      {/* Left out, not disabled: the server refuses while a series names it, and the count says so. */}
+      {event.seriesCount === 0 ? (
+        <DropdownMenuItem destructive disabled={busy} onSelect={() => onAsk(EVENT_CONFIRMS.DELETE)}>
+          <Trash2 aria-hidden />
+          Delete
+        </DropdownMenuItem>
+      ) : null}
     </RowActions>
   );
+}
+
+function retireDescription(event: Event): string {
+  if (!event.isActive) {
+    return 'The event is offered again when anyone builds a series. Nothing else changes.';
+  }
+  const kept =
+    event.candidateCount === 0
+      ? 'Nobody is on it yet, so nothing changes for any student'
+      : `Every series already built on it keeps reaching its ${plural(event.candidateCount, 'candidate')}`;
+  return `${kept}. What stops is new ones: this event will no longer be offered when anyone builds a series. Reactivating puts it back.`;
+}
+
+function deleteDescription(event: Event): string {
+  if (event.candidateCount === 0) {
+    return 'No series names this event and nobody is on it, so nothing loses access. This cannot be undone.';
+  }
+  return `No series names this event, so no offering is lost. The ${plural(event.candidateCount, 'candidate')} on it go with it, and this cannot be undone.`;
 }
 
 function EventRowActions({
@@ -377,23 +411,18 @@ function EventRowActions({
         onOpenChange={(open) => !open && close()}
         loading={setActive.isPending}
         title={event.isActive ? `Retire ${event.name}?` : `Reactivate ${event.name}?`}
-        description={
-          event.isActive
-            ? `Every series already built on it keeps reaching its ${plural(event.candidateCount, 'candidate')}, and nothing they can sit changes. What stops is new ones: this event will no longer be offered when anyone builds a series. Reactivating puts it back.`
-            : 'The event is offered again when anyone builds a series. Nothing else changes.'
-        }
+        description={retireDescription(event)}
         confirmLabel={event.isActive ? 'Retire event' : 'Reactivate event'}
         onConfirm={() => setActive.mutate(!event.isActive)}
       />
 
-      {/* No series count on the row, so this says which answer to expect before the click. */}
       <ConfirmDialog
         open={asking === EVENT_CONFIRMS.DELETE}
         onOpenChange={(open) => !open && close()}
         destructive
         loading={remove.isPending}
         title={`Delete ${event.name}?`}
-        description={`A test series that still names this event refuses the delete, and the count of them comes back with it — point those series elsewhere first, or retire this event instead, which keeps every candidate and simply stops it being offered. Deleting takes the ${plural(event.candidateCount, 'candidate')} on it with it, and cannot be undone.`}
+        description={deleteDescription(event)}
         confirmLabel="Delete event"
         onConfirm={() => remove.mutate()}
       />
@@ -416,7 +445,7 @@ function candidateColumns(
       key: 'name',
       header: 'Candidate',
       className: 'max-w-[16rem] font-medium',
-      cell: (candidate) => <TruncatedText>{candidate.fullName}</TruncatedText>,
+      cell: (candidate) => <TruncatedText>{candidate.fullName ?? candidate.mobile}</TruncatedText>,
     },
     {
       key: 'mobile',
@@ -447,17 +476,38 @@ function candidateColumns(
   ];
 }
 
+const CANDIDATE_FILTERS = [
+  {
+    key: 'q',
+    kind: 'search',
+    label: 'Search candidates',
+    placeholder: 'Search by name or mobile number',
+    primary: true,
+  },
+] as const;
+
 /** A panel, not a screen: nobody looks for a candidate without knowing whose event they are on. */
 function EventCandidates({
   event,
   canWrite,
+  canReadStudents,
   onChanged,
-}: Readonly<{ event: Event; canWrite: boolean; onChanged: () => void }>) {
+}: Readonly<{
+  event: Event;
+  canWrite: boolean;
+  canReadStudents: boolean;
+  onChanged: () => void;
+}>) {
   const eventId = event.id;
+  // Local, not the URL: two open panels and the page's own list would otherwise share one `q`.
+  const store = useLocalFilters();
 
-  const candidates = useQuery({
+  const candidates = useListScreen({
     queryKey: candidatesKey(eventId),
-    queryFn: () => api.admin.events.candidates(eventId),
+    filters: CANDIDATE_FILTERS,
+    store,
+    toQuery: (values) => ({ q: values.q || undefined }),
+    fetchPage: (params) => api.admin.events.candidates(eventId, params),
   });
 
   const columns = useMemo(
@@ -466,15 +516,25 @@ function EventCandidates({
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      {canWrite ? <AddCandidates event={event} onAdded={onChanged} /> : null}
+    <div className="flex min-h-0 flex-col gap-3">
+      {canWrite && !canReadStudents ? (
+        <Alert variant="info">
+          <span>
+            Choosing who to add reads the student directory, so it also needs the Students
+            permission. A super admin grants it.
+          </span>
+        </Alert>
+      ) : null}
 
-      <DataTable
+      {canWrite && canReadStudents ? <AddCandidates event={event} onAdded={onChanged} /> : null}
+
+      <ListView
+        list={candidates}
+        filters={CANDIDATE_FILTERS}
         columns={columns}
-        rows={candidates.data ?? []}
         rowKey={(candidate) => candidate.studentId}
-        isLoading={candidates.isLoading}
         empty="No candidates yet. A series on this event reaches nobody until one is added."
+        emptyFiltered="No candidate on this event matches that."
       />
     </div>
   );

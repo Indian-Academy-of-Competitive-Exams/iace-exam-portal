@@ -6,6 +6,7 @@ import {
   type CreateEventBody,
   type Event,
   type EventCandidate,
+  type EventCandidateListQuery,
   type EventListQuery,
   type Paginated,
   type UpdateEventBody,
@@ -15,14 +16,16 @@ import { everyTermMatches } from '../common/search-terms';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 
 const EVENT_INCLUDE = {
-  _count: { select: { candidates: true } },
+  _count: { select: { candidates: true, series: true } },
 } as const satisfies Prisma.EventInclude;
+
+const CANDIDATE_INCLUDE = {
+  student: { select: { fullName: true, mobile: true } },
+} as const satisfies Prisma.EventCandidateInclude;
 
 type EventRow = Prisma.EventGetPayload<{ include: typeof EVENT_INCLUDE }>;
 
-type CandidateRow = Prisma.EventCandidateGetPayload<{
-  include: { student: { select: { fullName: true; mobile: true } } };
-}>;
+type CandidateRow = Prisma.EventCandidateGetPayload<{ include: typeof CANDIDATE_INCLUDE }>;
 
 /** Owns `Event` and `EventCandidate` — who an EVENT series draws its roster from, candidate or not. */
 @Injectable()
@@ -85,9 +88,7 @@ export class EventsService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.requireEvent(id);
-
-    const named = await this.prisma.testSeries.count({ where: { eventId: id } });
+    const named = (await this.requireEvent(id))._count.series;
     if (named > 0) {
       const verb = named === 1 ? 'names' : 'name';
       const pronoun = named === 1 ? 'it' : 'them';
@@ -100,16 +101,30 @@ export class EventsService {
     await this.prisma.event.delete({ where: { id } });
   }
 
-  async candidates(id: string): Promise<EventCandidate[]> {
+  /** Paged: a scholarship intake is thousands of rows, and the panel showing them is one box. */
+  async candidates(id: string, query: EventCandidateListQuery): Promise<Paginated<EventCandidate>> {
     await this.requireEvent(id);
 
-    const rows = await this.prisma.eventCandidate.findMany({
-      where: { eventId: id },
-      include: { student: { select: { fullName: true, mobile: true } } },
-      orderBy: [{ createdAt: 'asc' }],
-    });
+    const where: Prisma.EventCandidateWhereInput = {
+      eventId: id,
+      ...everyTermMatches<Prisma.EventCandidateWhereInput>(query.q, (term) => [
+        { student: { fullName: { contains: term, mode: 'insensitive' } } },
+        { student: { mobile: { contains: term } } },
+      ]),
+    };
 
-    return rows.map(toCandidate);
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.eventCandidate.findMany({
+        where,
+        include: CANDIDATE_INCLUDE,
+        orderBy: [{ createdAt: 'asc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.eventCandidate.count({ where }),
+    ]);
+
+    return { items: rows.map(toCandidate), page: query.page, pageSize: query.pageSize, total };
   }
 
   /** `skipDuplicates`, so re-importing the same roster over itself adds nobody twice. */
@@ -127,7 +142,14 @@ export class EventsService {
       }
     }
 
-    return this.candidates(id);
+    // The rows just written, not the roster: past a page the roster is not a return value.
+    const rows = await this.prisma.eventCandidate.findMany({
+      where: { eventId: id, studentId: { in: [...studentIds] } },
+      include: CANDIDATE_INCLUDE,
+      orderBy: [{ createdAt: 'asc' }],
+    });
+
+    return rows.map(toCandidate);
   }
 
   async removeCandidate(id: string, studentId: string): Promise<void> {
@@ -151,6 +173,7 @@ function toEvent(row: EventRow): Event {
     description: row.description,
     isActive: row.isActive,
     candidateCount: row._count.candidates,
+    seriesCount: row._count.series,
     createdAt: row.createdAt.toISOString(),
   };
 }

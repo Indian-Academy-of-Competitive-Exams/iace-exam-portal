@@ -603,37 +603,13 @@ export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
 export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
 export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
 
-/** One test as ONE branch sees it. A test carried by two of its series is two rows, as a student reads it. */
-export const branchTestRowSchema = z.object({
-  testId: z.string(),
-  title: z.string().nullable(),
-  testSeriesId: z.string(),
-  seriesName: z.string(),
-  order: z.number().int().nullable(),
-  unlockAt: z.string().nullable(),
-  lateEntrySec: z.number().int().nullable(),
-  extraTimeSec: z.number().int().nullable(),
-});
-export type BranchTestRow = z.infer<typeof branchTestRowSchema>;
-
-export const branchTestListQuerySchema = paginationQuerySchema.extend({
-  q: searchQuery(),
-  testSeriesId: csvIdQuery(),
-});
-export type BranchTestListQuery = z.infer<typeof branchTestListQuerySchema>;
-export type BranchTestListQueryInput = z.input<typeof branchTestListQuerySchema>;
-
-/** Both null is the plain rules, which is the ABSENCE of a row — a row of nulls says it twice. */
-export const setBranchTestScheduleSchema = z.object({
+/** The test's own clock. Both null is the plain rules: start any time it is open, on its duration. */
+export const testScheduleSchema = z.object({
   lateEntrySec: z.number().int().min(0).nullable(),
   extraTimeSec: z.number().int().min(0).nullable(),
 });
-export type SetBranchTestScheduleInput = z.input<typeof setBranchTestScheduleSchema>;
-export type SetBranchTestScheduleBody = z.infer<typeof setBranchTestScheduleSchema>;
-
-/** What the branch ended up with. Both null is what it reads back as when the row went. */
-export const branchTestScheduleSchema = setBranchTestScheduleSchema.extend({ testId: z.string() });
-export type BranchTestSchedule = z.infer<typeof branchTestScheduleSchema>;
+export type TestScheduleInput = z.input<typeof testScheduleSchema>;
+export type TestSchedule = z.infer<typeof testScheduleSchema>;
 
 /** What a finalize did. `finalizedByThisCall` is false when another request got there first. */
 export const finalizeResultSchema = z.object({
@@ -700,7 +676,7 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   offer: (id: string) => `/admin/tests/${id}/offer`,
   setStatus: (id: string) => `/admin/tests/${id}/status`,
   series: (id: string) => `/admin/tests/${id}/series`,
-  branchTiming: (id: string) => `/admin/tests/${id}/branch-timing`,
+  schedule: (id: string) => `/admin/tests/${id}/schedule`,
   programUnlock: (id: string, programCode: string) =>
     `/admin/tests/${id}/program-unlocks/${encodeURIComponent(programCode)}`,
 } as const;

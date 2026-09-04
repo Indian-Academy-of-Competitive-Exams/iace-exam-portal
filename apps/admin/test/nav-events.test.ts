@@ -9,25 +9,26 @@ const holding = (...keys: FeatureKey[]) => {
   return (key: FeatureKey) => held.has(key);
 };
 
-const testRows = (...keys: FeatureKey[]) =>
-  filterNavByPermission(NAV_ITEMS, holding(...keys))
-    .find((item) => item.label === 'Tests')
-    ?.children?.map((child) => child.to);
+const sections = (...keys: FeatureKey[]) =>
+  filterNavByPermission(NAV_ITEMS, holding(...keys)).map((item) => item.label);
 
-describe('the Events row', () => {
-  it('sits under Tests, beside the test series it feeds', () => {
-    const rows = testRows(FEATURE_KEYS.TEST_MANAGEMENT, FEATURE_KEYS.EVENT);
+describe('the Events section', () => {
+  // Under Tests, the section's own key is read first and an EVENT-only admin reaches nothing.
+  it('stands on its own, so an admin holding only the event key still reaches it', () => {
+    const shown = filterNavByPermission(NAV_ITEMS, holding(FEATURE_KEYS.EVENT));
+    const events = shown.find((item) => item.label === 'Events');
 
-    assert.ok(rows);
-    assert.equal(rows.indexOf(ROUTES.EVENTS), rows.indexOf(ROUTES.TEST_SERIES) + 1);
+    assert.ok(events);
+    assert.deepEqual(
+      events.children?.map((child) => child.to),
+      [ROUTES.EVENTS],
+    );
   });
 
-  /** The failure this prevents: an events roster offered to every admin who manages tests. */
   it('is gone for an admin who manages tests without holding the event key', () => {
-    const rows = testRows(FEATURE_KEYS.TEST_MANAGEMENT);
+    const shown = sections(FEATURE_KEYS.TEST_MANAGEMENT);
 
-    assert.ok(rows);
-    assert.ok(rows.includes(ROUTES.TEST_SERIES));
-    assert.ok(!rows.includes(ROUTES.EVENTS));
+    assert.ok(shown.includes('Tests'));
+    assert.ok(!shown.includes('Events'));
   });
 });

@@ -94,6 +94,8 @@ export const eventSchema = z.object({
   description: z.string().nullable(),
   isActive: z.boolean(),
   candidateCount: z.number().int(),
+  /** Above zero the delete is refused, so the screen leaves the action out rather than offering it. */
+  seriesCount: z.number().int(),
   createdAt: z.string(),
 });
 export type Event = z.infer<typeof eventSchema>;
@@ -128,6 +130,13 @@ export const eventCandidateSchema = z.object({
   addedAt: z.string(),
 });
 export type EventCandidate = z.infer<typeof eventCandidateSchema>;
+
+/** A roster is an intake, not a handful: it pages, and the search reads the name and the number. */
+export const eventCandidateListQuerySchema = paginationQuerySchema.extend({
+  q: searchQuery(),
+});
+export type EventCandidateListQuery = z.infer<typeof eventCandidateListQuerySchema>;
+export type EventCandidateListQueryInput = z.input<typeof eventCandidateListQuerySchema>;
 
 /** A whole roster in one write. Re-importing the same sheet adds nobody twice. */
 export const addEventCandidatesSchema = z.object({
@@ -288,71 +297,10 @@ export const branchTestConfigRowSchema = branchTestConfigSchema.extend({
 });
 export type BranchTestConfigRow = z.infer<typeof branchTestConfigRowSchema>;
 
-/** One series as ONE branch sees it: what it is, and whether this branch runs it. */
-export const branchSeriesRowSchema = z.object({
-  testSeriesId: z.string(),
-  name: z.string(),
-  kind: testSeriesKindSchema,
-  examStage: z.object({ id: z.string(), name: z.string(), examCode: z.string() }).nullable(),
-  testCount: z.number().int(),
-  /** The branch's own switch. A series with no row for it reads as off, never as a third state. */
-  enabled: z.boolean(),
-});
-export type BranchSeriesRow = z.infer<typeof branchSeriesRowSchema>;
-
-export const branchSeriesListQuerySchema = paginationQuerySchema.extend({
-  q: searchQuery(),
-  examStageId: csvIdQuery(),
-  kind: testSeriesKindSchema.optional(),
-  /** Absent is every series; the two values narrow to what this branch does or does not run. */
-  enabled: optionalBooleanQuery(),
-});
-export type BranchSeriesListQuery = z.infer<typeof branchSeriesListQuerySchema>;
-export type BranchSeriesListQueryInput = z.input<typeof branchSeriesListQuerySchema>;
-
-/** The whole draft in one write, so one confirm on screen is one request and one cache bust. */
-export const BRANCH_SERIES_DRAFT_MAX = 500;
-export const setBranchSeriesSchema = z.object({
-  changes: z
-    .array(z.object({ testSeriesId: z.string(), enabled: z.boolean() }))
-    .min(1, 'Nothing to save')
-    .max(BRANCH_SERIES_DRAFT_MAX, `Save at most ${BRANCH_SERIES_DRAFT_MAX} changes at a time`),
-});
-export type SetBranchSeriesInput = z.input<typeof setBranchSeriesSchema>;
-export type SetBranchSeriesBody = z.infer<typeof setBranchSeriesSchema>;
-
-/** How many rows actually MOVED — a draft re-posted unchanged answers zero. */
-export const branchSeriesSavedSchema = z.object({ changed: z.number().int() });
-export type BranchSeriesSaved = z.infer<typeof branchSeriesSavedSchema>;
-
 /** The switch alone: a branch runs a series indefinitely, and WHEN an exam happens is the test's. */
 export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().optional() });
 export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;
 export type UpdateBranchTestConfigBody = z.infer<typeof updateBranchTestConfigSchema>;
-
-/** What one branch does differently for one test. No row is the plain rules, not a row of nulls. */
-export const branchTestScheduleRowSchema = z.object({
-  branchId: z.string(),
-  branch: z.object({ id: z.string(), name: z.string() }),
-  /** Seconds after the test opens that a student may still begin. Null is any time it is open. */
-  lateEntrySec: z.number().int().nullable(),
-  /** Seconds added to this branch's clock. Null is the duration the configuration gives everyone. */
-  extraTimeSec: z.number().int().nullable(),
-});
-export type BranchTestScheduleRow = z.infer<typeof branchTestScheduleRowSchema>;
-
-/** The whole set, not a delta: the screen holds every branch this test reaches. */
-export const setBranchTestSchedulesSchema = z.object({
-  branches: z.array(
-    z.object({
-      branchId: z.string().min(1),
-      lateEntrySec: z.number().int().min(0).nullable(),
-      extraTimeSec: z.number().int().min(0).nullable(),
-    }),
-  ),
-});
-export type SetBranchTestSchedulesInput = z.input<typeof setBranchTestSchedulesSchema>;
-export type SetBranchTestSchedulesBody = z.infer<typeof setBranchTestSchedulesSchema>;
 
 export const notificationSchema = z.object({
   id: z.string(),

@@ -10,7 +10,7 @@ import { api } from './api';
 import { QUERY_KEYS } from './constants';
 
 /** Unpaged and long-cached, and already scoped by the server: a branch outside theirs is not in it. */
-export function useBranchList(options: { activeOnly?: boolean } = {}): {
+function useBranchList(options: { activeOnly?: boolean } = {}): {
   branches: Branch[];
   isLoading: boolean;
 } {

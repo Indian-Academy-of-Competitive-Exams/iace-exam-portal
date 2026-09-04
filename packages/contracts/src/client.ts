@@ -94,29 +94,21 @@ import {
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
   EVENT_ROUTES,
-  branchSeriesRowSchema,
-  branchSeriesSavedSchema,
   branchTestConfigRowSchema,
-  branchTestScheduleRowSchema,
   eventSchema,
   eventCandidateSchema,
   programCatalogSchema,
   studentGrantRowSchema,
   studentSeriesAccessSchema,
   testSeriesSummarySchema,
-  type BranchSeriesListQueryInput,
-  type BranchSeriesRow,
-  type BranchSeriesSaved,
   type BranchTestConfigRow,
-  type BranchTestScheduleRow,
-  type SetBranchSeriesInput,
-  type SetBranchTestSchedulesInput,
   type AddEventCandidatesInput,
   type CreateEventInput,
   type CreateProgramInput,
   type CreateTestSeriesInput,
   type Event,
   type EventCandidate,
+  type EventCandidateListQueryInput,
   type EventListQueryInput,
   type GrantSeriesInput,
   type Program,
@@ -203,10 +195,9 @@ import {
   testPaperSchema,
   testSchema,
   offerResultSchema,
-  branchTestRowSchema,
-  branchTestScheduleSchema,
   seriesTestRowSchema,
   testProgramUnlockSchema,
+  testScheduleSchema,
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
@@ -222,13 +213,11 @@ import {
   type TestListQueryInput,
   type TestPaper,
   type OfferResult,
-  type BranchTestListQueryInput,
-  type BranchTestRow,
-  type BranchTestSchedule,
   type SeriesTestRow,
-  type SetBranchTestScheduleInput,
   type SetSeriesTestUnlockInput,
   type TestProgramUnlock,
+  type TestSchedule,
+  type TestScheduleInput,
   type TestSeriesLink,
   type TestStatus,
   type UpdateTestInput,
@@ -889,43 +878,6 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_BRANCH_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
-
-        /** Every series with THIS branch's switch — the inverse of `testSeries.branches`. */
-        testSeries: (
-          id: string,
-          query: BranchSeriesListQueryInput = {},
-        ): Promise<Paginated<BranchSeriesRow>> =>
-          requestPaginated(`${ADMIN_BRANCH_ROUTES.testSeries(id)}${queryString({ ...query })}`, {
-            schema: branchSeriesRowSchema.array(),
-          }),
-
-        /** The screen's whole draft: one confirm, one request, one cache bust. */
-        setTestSeries: (id: string, input: SetBranchSeriesInput): Promise<BranchSeriesSaved> =>
-          request(ADMIN_BRANCH_ROUTES.testSeries(id), {
-            method: 'PATCH',
-            body: input,
-            schema: branchSeriesSavedSchema,
-          }),
-
-        tests: (
-          id: string,
-          query: BranchTestListQueryInput = {},
-        ): Promise<Paginated<BranchTestRow>> =>
-          requestPaginated(`${ADMIN_BRANCH_ROUTES.tests(id)}${queryString({ ...query })}`, {
-            schema: branchTestRowSchema.array(),
-          }),
-
-        /** Both fields null deletes the row, because no row IS the plain rules. */
-        setTestSchedule: (
-          id: string,
-          testId: string,
-          input: SetBranchTestScheduleInput,
-        ): Promise<BranchTestSchedule> =>
-          request(ADMIN_BRANCH_ROUTES.testSchedule(id, testId), {
-            method: 'PUT',
-            body: input,
-            schema: branchTestScheduleSchema,
-          }),
       },
 
       exams: {
@@ -1035,8 +987,13 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           request(EVENT_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 
-        candidates: (id: string): Promise<EventCandidate[]> =>
-          request(EVENT_ROUTES.candidates(id), { schema: eventCandidateSchema.array() }),
+        candidates: (
+          id: string,
+          query: EventCandidateListQueryInput = {},
+        ): Promise<Paginated<EventCandidate>> =>
+          requestPaginated(`${EVENT_ROUTES.candidates(id)}${queryString({ ...query })}`, {
+            schema: eventCandidateSchema.array(),
+          }),
 
         addCandidates: (id: string, input: AddEventCandidatesInput): Promise<EventCandidate[]> =>
           request(EVENT_ROUTES.addCandidates(id), {
@@ -1272,19 +1229,12 @@ export function createApiClient(options: ApiClientOptions) {
         offer: (id: string): Promise<OfferResult> =>
           request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
 
-        branchTiming: (id: string): Promise<BranchTestScheduleRow[]> =>
-          request(ADMIN_TEST_PAPER_ROUTES.branchTiming(id), {
-            schema: branchTestScheduleRowSchema.array(),
-          }),
-
-        setBranchTiming: (
-          id: string,
-          input: SetBranchTestSchedulesInput,
-        ): Promise<BranchTestScheduleRow[]> =>
-          request(ADMIN_TEST_PAPER_ROUTES.branchTiming(id), {
-            method: 'POST',
+        /** The test's own late entry and extra time. Both null is the plain rules. */
+        setSchedule: (id: string, input: TestScheduleInput): Promise<TestSchedule> =>
+          request(ADMIN_TEST_PAPER_ROUTES.schedule(id), {
+            method: 'PUT',
             body: input,
-            schema: branchTestScheduleRowSchema.array(),
+            schema: testScheduleSchema,
           }),
 
         setSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink[]> =>
