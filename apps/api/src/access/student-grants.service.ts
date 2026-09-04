@@ -179,7 +179,8 @@ export class StudentGrantsService {
         create: { ...key, createdById },
         update: {},
       });
-      await mirrorSwitchOntoSeries(tx, [key.testSeriesId]);
+      // A grant is a deliberate act of access, so it switches the series on to make itself mean something.
+      await mirrorSwitchOntoSeries(tx, [key.testSeriesId], true);
     });
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
@@ -204,7 +205,7 @@ export class StudentGrantsService {
         data: studentIds.map((studentId) => ({ studentId, testSeriesId, createdById })),
         skipDuplicates: true,
       });
-      await mirrorSwitchOntoSeries(tx, [testSeriesId]);
+      await mirrorSwitchOntoSeries(tx, [testSeriesId], true);
       return written.count;
     });
 

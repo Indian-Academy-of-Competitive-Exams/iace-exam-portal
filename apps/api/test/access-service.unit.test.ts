@@ -114,19 +114,18 @@ describe('TestSeriesService — the branch fan-out', () => {
     );
   });
 
-  /** The switch the resolver reads is the switch this write moves, or an admin turns nothing on. */
-  it('keeps branchIds and the switch in step when a branch is switched on', async () => {
+  /** The list the resolver reads is the list this write moves, or an admin offers nothing. */
+  it('keeps branchIds in step with the rows when a branch is switched on', async () => {
     const { series, prisma } = build({
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
     });
     const created = await series.create(draft());
     assert.deepEqual(prisma.series[0]?.branchIds, []);
-    assert.equal(prisma.series[0]?.isEnabled, false);
+    assert.equal(prisma.series[0]?.isEnabled, false, 'a standard series waits to be switched on');
 
     await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.series[0]?.branchIds, ['br_1']);
-    assert.equal(prisma.series[0]?.isEnabled, true);
   });
 
   it('switches a series off when its last branch is switched off', async () => {
@@ -170,8 +169,45 @@ describe('TestSeriesService — the branch fan-out', () => {
     assert.deepEqual(prisma.series[0]?.branchIds, [], 'the switch is not a branch list');
   });
 
+  /** The confirm is the only thing allowed to move it, so an unrelated save must not undo one. */
+  it('leaves a switched-on series on when the next save is about something else', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+    await series.update(created.id, { isEnabled: true });
+
+    await series.update(created.id, { description: 'Six papers' });
+
+    assert.equal(prisma.series[0]?.isEnabled, true, 'no branch runs it, and nobody asked it off');
+  });
+
+  it('leaves a switched-off series off when the next save is about something else', async () => {
+    const { series, prisma } = build();
+    const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
+    await series.update(created.id, { isEnabled: false });
+
+    await series.update(created.id, { name: 'Free mocks, renamed' });
+
+    assert.equal(
+      prisma.series[0]?.isEnabled,
+      false,
+      'switching it off was confirmed; renaming was not',
+    );
+  });
+
+  /** Two owners for one column is the defect. The switch wins over what the branch rows imply. */
+  it('keeps a series off when a branch is switched on beneath the switch', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+    await series.update(created.id, { isEnabled: false });
+
+    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
+
+    assert.deepEqual(prisma.series[0]?.branchIds, ['br_1'], 'the list still follows the rows');
+    assert.equal(prisma.series[0]?.isEnabled, false);
+  });
+
   /** A grant reaches PAST the branch gate, so it must not be shut out by an empty branch list. */
-  it('keeps a series switched on for a grant made where no branch runs it', async () => {
+  it('switches a series on for a grant made where no branch runs it', async () => {
     const { series, grants, prisma } = build({
       branches: [makeBranch({ id: 'br_1' })],
       students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
@@ -179,11 +215,27 @@ describe('TestSeriesService — the branch fan-out', () => {
     const created = await series.create(draft());
 
     await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+
     assert.equal(prisma.series[0]?.isEnabled, true);
+  });
+
+  /** Taking ONE student's grant back is not a decision about the series, so it moves no switch. */
+  it('leaves the switch alone when a grant is revoked', async () => {
+    const { series, grants, prisma } = build({
+      branches: [makeBranch({ id: 'br_1' })],
+      students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_1' })],
+    });
+    const created = await series.create(draft());
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
 
     await grants.revoke('stu_1', created.id, EVERY_BRANCH);
 
-    assert.equal(prisma.series[0]?.isEnabled, false);
+    assert.equal(
+      prisma.series[0]?.isEnabled,
+      true,
+      'the branch list is what empties, not the switch',
+    );
+    assert.deepEqual(prisma.series[0]?.branchIds, []);
   });
 
   /** Only this series: the switch is per series, and every other one keeps the state it had. */
@@ -491,12 +543,11 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
 
     await series.updateEveryBranchConfig('srs_1', { enabled: false }, EVERY_BRANCH);
     assert.deepEqual(prisma.series[0]?.branchIds, []);
-    assert.equal(prisma.series[0]?.isEnabled, false);
 
     const updated = await series.update('srs_1', { kind: TEST_SERIES_KIND.FREE });
 
     assert.equal(updated.kind, TEST_SERIES_KIND.FREE);
-    // A free series reaches past every branch, so nothing branch-shaped is left to switch it off.
+    // Emptying the branches is what clears the refusal; the switch is nobody's business but the form's.
     assert.equal(prisma.series[0]?.isEnabled, true);
   });
 

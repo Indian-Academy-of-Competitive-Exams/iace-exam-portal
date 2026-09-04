@@ -25,7 +25,7 @@ import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
-import { mirrorSwitchOntoSeries } from './series-switch';
+import { mirrorSwitchOntoSeries, startsSwitchedOn } from './series-switch';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
@@ -188,7 +188,11 @@ export class TestSeriesService {
         })),
       });
 
-      await mirrorSwitchOntoSeries(tx, [series.id], input.isEnabled);
+      await mirrorSwitchOntoSeries(
+        tx,
+        [series.id],
+        input.isEnabled ?? startsSwitchedOn(series.kind),
+      );
       return series.id;
     });
 

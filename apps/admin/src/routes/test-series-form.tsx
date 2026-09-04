@@ -865,7 +865,7 @@ function offerQuestion(
   if (next) {
     return {
       title: `Offer ${series.name} at ${row.branch.name}?`,
-      description: `Every student whose current branch is ${row.branch.name} and who reaches this series — by enrolment, by program or by a grant — can start its ${tests} from then on, for as long as it stays switched on. When each test opens is the test's own, not this switch.`,
+      description: `Every student whose current branch is ${row.branch.name} and who reaches this series — by their enrolment or by a grant — can start its ${tests} from then on, for as long as the series itself is switched on. When each test opens is the test's own, not this switch.`,
       confirmLabel: 'Offer it here',
       destructive: false,
     };

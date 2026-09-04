@@ -1,11 +1,10 @@
 import { Prisma } from '@prisma/client';
-import { TEST_SERIES_KIND } from '@iace/contracts';
+import { TEST_SERIES_KIND, type TestSeriesKind } from '@iace/contracts';
 
-/** The resolver reads `branchIds`/`isEnabled`; admins write `BranchTestConfig` and `StudentGrant`. */
+/** branchIds follows the BranchTestConfig rows; isEnabled has ONE owner, so it moves only when told. */
 export async function mirrorSwitchOntoSeries(
   tx: Prisma.TransactionClient,
   testSeriesIds: readonly string[],
-  /** The series form owns the switch outright; the branch writers derive it and pass nothing. */
   chosen?: boolean,
 ): Promise<void> {
   const ids = [...new Set(testSeriesIds)];
@@ -16,25 +15,25 @@ export async function mirrorSwitchOntoSeries(
     where: { testSeriesId: { in: ids }, enabled: true },
     select: { testSeriesId: true, branchId: true },
   });
-  const grants = await tx.studentGrant.findMany({
-    where: { testSeriesId: { in: ids } },
-    select: { testSeriesId: true },
-  });
 
   const branches = groupBranches(enabled);
-  const granted = new Set(grants.map((row) => row.testSeriesId));
 
   for (const row of rows) {
     // Only STANDARD reaches through a branch; every other kind reaches past one, so its list is empty.
     const standard = row.kind === TEST_SERIES_KIND.STANDARD;
-    const branchIds = standard ? (branches.get(row.id) ?? []) : [];
-    const derived = !standard || branchIds.length > 0 || granted.has(row.id);
     await tx.testSeries.update({
       where: { id: row.id },
-      data: { branchIds, isEnabled: chosen ?? derived },
+      data: {
+        branchIds: standard ? (branches.get(row.id) ?? []) : [],
+        ...(chosen === undefined ? {} : { isEnabled: chosen }),
+      },
     });
   }
 }
+
+/** What a series is worth switching on AS it is created: a kind reaching past branches has nothing to wait for. */
+export const startsSwitchedOn = (kind: TestSeriesKind): boolean =>
+  kind !== TEST_SERIES_KIND.STANDARD;
 
 const KIND_ONLY = { id: true, kind: true } as const satisfies Prisma.TestSeriesSelect;
 

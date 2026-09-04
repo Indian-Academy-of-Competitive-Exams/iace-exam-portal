@@ -166,7 +166,7 @@ export const TEST_SERIES_KIND_LABELS: Readonly<Record<TestSeriesKind, string>> =
 
 /** Who each kind reaches, which the name alone does not say. */
 export const TEST_SERIES_KIND_HINTS: Readonly<Record<TestSeriesKind, string>> = {
-  STANDARD: 'Reached by an enrolment in the exam course its stage belongs to',
+  STANDARD: "Reached by an enrolment in its stage's exam course, at a branch that runs it",
   FREE: 'Reached by every student',
   PROGRAM: 'Reached only by students carrying its program',
   EVENT: 'Reached only by the candidates on its event',

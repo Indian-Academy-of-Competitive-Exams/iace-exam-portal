@@ -125,7 +125,7 @@ Do not break these — they are why the live test holds at 4–5K:
 - `packages/ui/src/index.ts` — the component inventory.
 - `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
 - `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: render modes and skins (§14),
-  access and unlocking (§7), student journey and landing page (§5), results and solutions (§6).
+  access by kind (§7), student journey and landing page (§5), results and solutions (§6).
 - `docs/03-shared-architecture.md` — module boundaries, the table-ownership map, the event catalog.
 - `docs/design/design-system.html` — living style guide.
 - `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).
