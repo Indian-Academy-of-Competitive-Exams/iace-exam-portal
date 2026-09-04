@@ -29,6 +29,7 @@ import { AuditContext } from '../audit';
 /** The one a FIXED test has, and the first a GENERATED test draws. */
 const FIXED_VARIANT = 0;
 
+const NO_SUCH_VARIANT_MESSAGE = 'This test has no paper at that variant.';
 const NOT_DRAWABLE_MESSAGE = 'That question is not live, so no paper can serve it.';
 const WRONG_SUBJECT_MESSAGE = 'That question belongs to another subject than this section draws.';
 const ALREADY_ON_THE_PAPER_MESSAGE = 'That question is already on this paper.';
@@ -81,10 +82,15 @@ export class PaperService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  async read(testId: string): Promise<TestPaper> {
+  async read(testId: string, variant?: number): Promise<TestPaper> {
     const test = await this.requireTest(testId);
+    const requested = variant ?? FIXED_VARIANT;
+    // A FIXED test's only variant is 0, so this one bound refuses it without a branch on paperBinding.
+    if (requested >= test.variantCount) {
+      throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_VARIANT_MESSAGE);
+    }
     const config = await this.configs.detail(test.baseConfigId);
-    return this.paperOf(test.id, config);
+    return this.paperOf(test.id, config, requested);
   }
 
   /** The papers a GENERATED test hands out. DRAWN only — writing them belongs behind the freeze. */
@@ -519,6 +525,7 @@ export class PaperService {
         isLocked: true,
         paperBinding: true,
         questionPoolFilter: true,
+        variantCount: true,
         _count: { select: { attempts: true } },
       },
     });

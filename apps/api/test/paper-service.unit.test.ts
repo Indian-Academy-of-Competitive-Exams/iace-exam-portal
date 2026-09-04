@@ -538,6 +538,76 @@ describe('PaperService — what it refuses to edit', () => {
   });
 });
 
+describe('PaperService — reading one variant of a drawn paper', () => {
+  /** Two variants of a drawn paper, each with its own row in each section. */
+  function twoVariants(prisma: FakeTestsPrisma): void {
+    const rows: [number, string, string][] = [
+      [0, 'sec_1', 'r1'],
+      [0, 'sec_2', 'q1'],
+      [3, 'sec_1', 'r4'],
+      [3, 'sec_2', 'q4'],
+    ];
+    for (const [variant, baseConfigSectionId, questionId] of rows) {
+      prisma.paperQuestions.push({
+        id: `pq_tst_1_${variant}_${baseConfigSectionId}`,
+        testId: 'tst_1',
+        baseConfigId: 'cfg_1',
+        baseConfigSectionId,
+        questionId,
+        questionVersionId: `${questionId}_v1`,
+        variant,
+        order: 1,
+        marks: 2,
+        negativeMarks: 0.5,
+        status: 'ACTIVE',
+      });
+    }
+  }
+
+  const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>) =>
+    paper.sections.flatMap((section) => section.questions.map((row) => row.questionId)).sort();
+
+  it('returns variant 0 when none is asked for, exactly as every existing caller expects', async () => {
+    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+    twoVariants(kit.prisma);
+
+    const paper = await kit.service.read('tst_1');
+
+    assert.deepEqual(idsOf(paper), ['q1', 'r1']);
+  });
+
+  /** The failure this prevents: an admin reviewing "Paper 4" and being shown Paper 1. */
+  it('returns the asked-for variant’s own rows, not variant 0’s', async () => {
+    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+    twoVariants(kit.prisma);
+
+    const paper = await kit.service.read('tst_1', 3);
+
+    assert.deepEqual(idsOf(paper), ['q4', 'r4']);
+  });
+
+  it('refuses a variant at or beyond the test’s variantCount', async () => {
+    const kit = serviceWith(undefined, makeTest({ id: 'tst_1', variantCount: 5 }));
+    twoVariants(kit.prisma);
+
+    const error = await kit.service.read('tst_1', 5).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+
+  /** A FIXED test's variantCount is 1, so this is the same bound as above, not a special case. */
+  it('refuses any variant but 0 on a fixed paper', async () => {
+    const kit = serviceWith();
+    await pickWholePaper(kit.service);
+
+    const error = await kit.service.read('tst_1', 1).catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+  });
+});
+
 describe('PaperService — one row at a time', () => {
   /** Picks a whole paper, then hands back the row that holds a Quant question. */
   async function drawn() {

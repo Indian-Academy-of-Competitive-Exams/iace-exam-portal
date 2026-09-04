@@ -569,6 +569,12 @@ export const testPaperSchema = z.object({
 });
 export type TestPaper = z.infer<typeof testPaperSchema>;
 
+/** Absent reads the paper every FIXED test has and a GENERATED one drew first. */
+export const readPaperQuerySchema = z.object({
+  variant: z.coerce.number().int().min(0).optional(),
+});
+export type ReadPaperQuery = z.infer<typeof readPaperQuerySchema>;
+
 /** One test as the SERIES reads it: what it is called, when it opens there, and whether it is sat. */
 export const seriesTestRowSchema = z.object({
   testId: z.string(),
@@ -648,7 +654,10 @@ export const offerResultSchema = finalizeResultSchema.extend({ status: testStatu
 export type OfferResult = z.infer<typeof offerResultSchema>;
 
 export const ADMIN_TEST_PAPER_ROUTES = {
-  read: (id: string) => `/admin/tests/${id}/paper`,
+  read: (id: string, variant?: number) => {
+    const query = variant === undefined ? '' : `?variant=${variant}`;
+    return `/admin/tests/${id}/paper${query}`;
+  },
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
   removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
