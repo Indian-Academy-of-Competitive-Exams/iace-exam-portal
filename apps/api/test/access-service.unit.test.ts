@@ -2,12 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EVERY_BRANCH } from '../src/common/security';
-import {
-  AppException,
-  ErrorCodes,
-  TEST_SERIES_KIND,
-  updateBranchTestConfigSchema,
-} from '@iace/contracts';
+import { AppException, ErrorCodes, TEST_SERIES_KIND } from '@iace/contracts';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
@@ -19,14 +14,12 @@ import {
   type FakeAccessTestRow,
   type FakeBranch,
   type FakeProgramRow,
-  type FakeBranchConfigRow,
   type FakeSeriesRow,
   type FakeStudent,
   FakeAccessPrisma,
   makeBranch,
   makeExamStage,
   makeProgram,
-  makeBranchConfig,
   makeSeries,
   makeStudent,
 } from './support/fakes';
@@ -38,7 +31,6 @@ function build(
     programs?: FakeProgramRow[];
     series?: FakeSeriesRow[];
     branches?: FakeBranch[];
-    branchConfigs?: FakeBranchConfigRow[];
     students?: FakeStudent[];
     tests?: FakeAccessTestRow[];
   } = {},
@@ -47,7 +39,6 @@ function build(
     options.programs ?? [],
     options.series ?? [],
     options.branches ?? [],
-    options.branchConfigs ?? [],
     options.students ?? [],
     [],
     [makeExamStage({ id: 'stage_1' })],
@@ -76,73 +67,117 @@ function build(
 const draft = (over: Record<string, unknown> = {}) =>
   ({ name: 'SSC CGL Tier 1 mocks', examStageId: 'stage_1', ...over }) as never;
 
-describe('TestSeriesService — the branch fan-out', () => {
-  /**
-   * THE rule this exists for: "not offered at this centre" is `enabled: false` on a row that
-   * exists. An ABSENT row would have to be read as a default, and a default is exactly what
-   * nobody can see on a screen or find in an audit trail.
-   */
-  /** The fan-out leaves every row OFF, so the thirtieth switch is the one somebody forgets. */
-  it('switches every branch on at once, and tells the catalog', async () => {
-    const { series, prisma, events } = build({
-      branches: [
-        makeBranch({ id: 'br_1', name: 'AMEERPET' }),
-        makeBranch({ id: 'br_2', name: 'DILSUKHNAGAR' }),
-        makeBranch({ id: 'br_3', name: 'ONLINE' }),
-      ],
-    });
+describe('TestSeriesService — branches are the truth about branches', () => {
+  /** `branchIds` is what the resolver reads, so this write is the only thing that opens the door. */
+  it('reaches a student at a branch the series names', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
-    assert.deepEqual(
-      prisma.branchConfigs.map((config) => config.enabled),
-      [false, false, false],
-      'the fan-out leaves a new series off everywhere',
-    );
-    events.forget();
 
-    const rows = await series.updateEveryBranchConfig(created.id, { enabled: true }, EVERY_BRANCH);
-
-    assert.deepEqual(
-      rows.map((row) => row.enabled),
-      [true, true, true],
-    );
-    assert.deepEqual(
-      events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED),
-      [{ testSeriesId: created.id }],
-      'a catalog nobody rebuilt would keep the series hidden from every student',
-    );
-  });
-
-  /** The list the resolver reads is the list this write moves, or an admin offers nothing. */
-  it('keeps branchIds in step with the rows when a branch is switched on', async () => {
-    const { series, prisma } = build({
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
-    });
-    const created = await series.create(draft());
-    assert.deepEqual(prisma.series[0]?.branchIds, []);
-    assert.equal(prisma.series[0]?.isEnabled, false, 'a standard series waits to be switched on');
-
-    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
 
     assert.deepEqual(prisma.series[0]?.branchIds, ['br_1']);
   });
 
-  it('switches a series off when its last branch is switched off', async () => {
-    const { series, prisma } = build({
+  it('stops reaching them when the branch is removed', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+
+    await series.setBranches(created.id, { branchIds: [] }, EVERY_BRANCH);
+
+    assert.deepEqual(prisma.series[0]?.branchIds, []);
+  });
+
+  /** `isEnabled` has ONE owner, and the branch writer is not it — it always passes nothing. */
+  it('leaves the switch alone when branches change', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+    await series.update(created.id, { isEnabled: true });
+
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+
+    assert.equal(prisma.series[0]?.isEnabled, true, 'the branch writer passes nothing');
+  });
+
+  /** Answered here so the form marks the field: the CHECK behind it can only leave as a 500. */
+  it('refuses branches on a series that is not STANDARD', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', kind: TEST_SERIES_KIND.FREE })],
+      branches: [makeBranch({ id: 'br_1' })],
+    });
+
+    const error = await series
+      .setBranches('srs_1', { branchIds: ['br_1'] }, EVERY_BRANCH)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.kind);
+  });
+
+  it('tells the catalog when the list changes', async () => {
+    const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+    events.forget();
+
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+
+    assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
+      { testSeriesId: created.id },
+    ]);
+  });
+
+  /** Nothing in the array may name a branch that is not really there — it carries no FK. */
+  it('refuses a branch that does not exist', async () => {
+    const { series } = build({ branches: [makeBranch({ id: 'br_1' })] });
+    const created = await series.create(draft());
+
+    const error = await series
+      .setBranches(created.id, { branchIds: ['br_gone'] }, EVERY_BRANCH)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.branchIds);
+  });
+
+  /** Only this series: a write is per series, and every other one keeps the state it had. */
+  it('leaves another series alone', async () => {
+    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1', name: 'AMEERPET' })] });
+    const mine = await series.create(draft());
+    const other = await series.create(draft({ name: 'RRB JE Tier 1 mocks' }));
+
+    await series.setBranches(mine.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+
+    assert.deepEqual(prisma.series.find((row) => row.id === other.id)?.branchIds, []);
+  });
+
+  /** A new series must not appear at every centre in the country the moment it is saved. */
+  it('starts every one of them switched off, reaching nobody', async () => {
+    const { series } = build({ branches: [makeBranch({ id: 'br_1' })] });
+
+    const created = await series.create(draft());
+
+    assert.equal(created.isEnabled, false);
+    assert.deepEqual(created.branchIds, []);
+    assert.equal(created.enabledBranchCount, 0);
+    assert.equal(created.branchCount, 1);
+  });
+
+  it('reports how many branches run it, out of how many could', async () => {
+    const { series } = build({
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
     });
     const created = await series.create(draft());
-    await series.updateEveryBranchConfig(created.id, { enabled: true }, EVERY_BRANCH);
 
-    await series.updateBranchConfig(created.id, 'br_1', { enabled: false }, EVERY_BRANCH);
-    assert.deepEqual(prisma.series[0]?.branchIds, ['br_2'], 'one branch off is not the last one');
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    const after = await series.detail(created.id);
 
-    await series.updateBranchConfig(created.id, 'br_2', { enabled: false }, EVERY_BRANCH);
-
-    assert.deepEqual(prisma.series[0]?.branchIds, []);
-    assert.equal(prisma.series[0]?.isEnabled, false);
+    assert.equal(after.enabledBranchCount, 1);
+    assert.equal(after.branchCount, 2);
   });
 
-  /** The series form owns this outright: what an admin chose must survive what the rows imply. */
+  /** The series form owns this outright: what an admin chose must survive what the branches imply. */
   it('keeps a series off when the admin switched it off, whatever its kind implies', async () => {
     const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
@@ -188,15 +223,15 @@ describe('TestSeriesService — the branch fan-out', () => {
     );
   });
 
-  /** Two owners for one column is the defect. The switch wins over what the branch rows imply. */
-  it('keeps a series off when a branch is switched on beneath the switch', async () => {
+  /** Two owners for one column is the defect. The switch stays put whichever way branches move. */
+  it('keeps a series off when a branch is named beneath the switch', async () => {
     const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
     await series.update(created.id, { isEnabled: false });
 
-    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
 
-    assert.deepEqual(prisma.series[0]?.branchIds, ['br_1'], 'the list still follows the rows');
+    assert.deepEqual(prisma.series[0]?.branchIds, ['br_1'], 'the write still lands');
     assert.equal(prisma.series[0]?.isEnabled, false);
   });
 
@@ -250,90 +285,11 @@ describe('TestSeriesService — the branch fan-out', () => {
     );
     assert.deepEqual(prisma.series[0]?.branchIds, []);
   });
-
-  /** Only this series: the switch is per series, and every other one keeps the state it had. */
-  it('leaves another series alone', async () => {
-    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1', name: 'AMEERPET' })] });
-    const mine = await series.create(draft());
-    const other = await series.create(draft({ name: 'RRB JE Tier 1 mocks' }));
-
-    await series.updateEveryBranchConfig(mine.id, { enabled: true }, EVERY_BRANCH);
-
-    assert.equal(prisma.branchConfigs.find((c) => c.testSeriesId === other.id)?.enabled, false);
-  });
-
-  it('gives every branch a row the moment the series is created', async () => {
-    const { series, prisma } = build({
-      branches: [
-        makeBranch({ id: 'br_1', name: 'AMEERPET' }),
-        makeBranch({ id: 'br_2', name: 'DILSUKHNAGAR' }),
-        makeBranch({ id: 'br_3', name: 'ONLINE' }),
-      ],
-    });
-
-    const created = await series.create(draft());
-
-    assert.equal(prisma.branchConfigs.length, 3);
-    assert.deepEqual(
-      prisma.branchConfigs.map((config) => config.testSeriesId),
-      [created.id, created.id, created.id],
-    );
-  });
-
-  /** A new series must not appear at every centre in the country the moment it is saved. */
-  it('starts every one of them switched off', async () => {
-    const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
-
-    const created = await series.create(draft());
-
-    assert.equal(prisma.branchConfigs[0]?.enabled, false);
-    assert.equal(created.enabledBranchCount, 0);
-    assert.equal(created.branchCount, 1);
-  });
-
-  it('reports how many branches run it, out of how many could', async () => {
-    const { series } = build({
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
-    });
-    const created = await series.create(draft());
-
-    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
-    const after = await series.detail(created.id);
-
-    assert.equal(after.enabledBranchCount, 1);
-    assert.equal(after.branchCount, 2);
-  });
-
-  /** A branch runs a series indefinitely: the only schedule left belongs to the test. */
-  it('takes nothing but the switch', () => {
-    const parsed = updateBranchTestConfigSchema.safeParse({
-      enabled: true,
-      startAt: '2026-09-01T00:00:00.000Z',
-    });
-
-    assert.equal(parsed.success, true);
-    assert.equal('startAt' in (parsed.data ?? {}), false);
-  });
-
-  it('refuses to schedule a branch that has no row for the series', async () => {
-    const { series } = build({ branches: [makeBranch({ id: 'br_1' })] });
-    const created = await series.create(draft());
-
-    await assert.rejects(
-      () => series.updateBranchConfig(created.id, 'br_gone', { enabled: true }, EVERY_BRANCH),
-      (error: unknown) => {
-        assert.ok(AppException.is(error));
-        assert.equal(error.code, ErrorCodes.NOT_FOUND);
-        return true;
-      },
-    );
-  });
 });
 
 describe('TestSeriesService — what a series may point at', () => {
   it('refuses a stage that is retired', async () => {
     const prisma = new FakeAccessPrisma(
-      [],
       [],
       [],
       [],
@@ -516,10 +472,6 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
   it('refuses making a series that runs at branches free', async () => {
     const { series } = build({
       series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'] })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: true }),
-      ],
     });
 
     const error = await series
@@ -530,18 +482,14 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
     assert.match(error.fieldErrors?.kind?.[0] ?? '', /2 branches/);
   });
 
-  /** The count and the list are the same fact now, so switching the branches off clears the refusal. */
-  it('lets the kind change once the branches it named are switched off', async () => {
+  /** The count and the list are the same fact now, so clearing the list clears the refusal. */
+  it('lets the kind change once the branches it named are cleared', async () => {
     const { series, prisma } = build({
       series: [makeSeries({ id: 'srs_1', branchIds: ['br_1', 'br_2'], isEnabled: true })],
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', enabled: true }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', enabled: true }),
-      ],
     });
 
-    await series.updateEveryBranchConfig('srs_1', { enabled: false }, EVERY_BRANCH);
+    await series.setBranches('srs_1', { branchIds: [] }, EVERY_BRANCH);
     assert.deepEqual(prisma.series[0]?.branchIds, []);
 
     const updated = await series.update('srs_1', { kind: TEST_SERIES_KIND.FREE });
@@ -752,13 +700,13 @@ describe('the access writes that bust the catalog cache', () => {
     ]);
   });
 
-  it('announces the series when a branch’s row for it moves', async () => {
+  it('announces the series when its branches move', async () => {
     const { series, events } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
 
     events.forget();
 
-    await series.updateBranchConfig(created.id, 'br_1', { enabled: true }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
@@ -824,56 +772,43 @@ describe('StudentGrantsService — the branches the admin asking may reach', () 
   });
 });
 
-describe('TestSeriesService — the series side names a branch too', () => {
+describe('TestSeriesService — a scoped admin only moves the branches they hold', () => {
   const held = { all: false, branchIds: ['br_1'] } as const;
 
-  const twoBranches = () =>
+  const twoBranches = (branchIds: string[] = []) =>
     build({
-      series: [makeSeries({ id: 'srs_1' })],
+      series: [makeSeries({ id: 'srs_1', branchIds })],
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'KUKATPALLY' })],
-      branchConfigs: [
-        makeBranchConfig({ id: 'btc_1', branchId: 'br_1', testSeriesId: 'srs_1', enabled: false }),
-        makeBranchConfig({ id: 'btc_2', branchId: 'br_2', testSeriesId: 'srs_1', enabled: false }),
-      ],
     });
 
-  /** The same write, reached from the series rather than the branch, and refused the same way. */
-  it('refuses to switch a series for a branch the admin does not hold', async () => {
-    const { series, prisma } = twoBranches();
+  it('refuses to switch on a branch the admin does not hold', async () => {
+    const { series } = twoBranches();
 
     const error = await series
-      .updateBranchConfig('srs_1', 'br_2', { enabled: true }, held)
+      .setBranches('srs_1', { branchIds: ['br_2'] }, held)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.NOT_FOUND);
-    assert.equal(prisma.branchConfigs[1]?.enabled, false);
   });
 
   it('shows only the branches the admin holds', async () => {
     const { series } = twoBranches();
 
-    const rows = await series.branchConfigs('srs_1', held);
+    const rows = await series.branches('srs_1', held);
 
     assert.deepEqual(
-      rows.map((row) => row.branchId),
+      rows.map((row) => row.id),
       ['br_1'],
     );
   });
 
-  /** Every branch means every branch, including the ones the caller cannot see. */
-  it('refuses the fan-out to an admin who does not reach every branch', async () => {
-    const { series, prisma } = twoBranches();
+  /** A scoped write must not silently drop what somebody else already named. */
+  it('leaves a branch outside the admin’s scope untouched', async () => {
+    const { series, prisma } = twoBranches(['br_2']);
 
-    const error = await series
-      .updateEveryBranchConfig('srs_1', { enabled: true }, held)
-      .catch((e: unknown) => e);
+    await series.setBranches('srs_1', { branchIds: ['br_1'] }, held);
 
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.FORBIDDEN);
-    assert.deepEqual(
-      prisma.branchConfigs.map((row) => row.enabled),
-      [false, false],
-    );
+    assert.deepEqual([...(prisma.series[0]?.branchIds ?? [])].sort(), ['br_1', 'br_2']);
   });
 });

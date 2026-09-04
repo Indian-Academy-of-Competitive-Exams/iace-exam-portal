@@ -100,7 +100,7 @@ export interface StudentAccessChangedEvent {
 }
 
 export interface AccessCatalogChangedEvent {
-  /** Null when the change was not about one series — a branch fan-out, an import. */
+  /** Null when the change was about a test that carries no series. */
   testSeriesId: string | null;
 }
 

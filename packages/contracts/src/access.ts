@@ -223,7 +223,6 @@ export const createTestSeriesSchema = z.object({
   sequentialTests: z.boolean().optional(),
   progressive: z.boolean().optional(),
   kind: testSeriesKindSchema.optional(),
-  branchIds: z.array(z.string()).optional(),
   isEnabled: z.boolean().optional(),
   eventId: z.string().nullish(),
 });
@@ -272,26 +271,18 @@ export const grantSeriesSchema = z.object({ testSeriesId: z.string().min(1, 'Cho
 export type GrantSeriesInput = z.input<typeof grantSeriesSchema>;
 export type GrantSeriesBody = z.infer<typeof grantSeriesSchema>;
 
-/** Whether a branch's students get a series at all. Admin-only; never shown to a student. */
-export const branchTestConfigSchema = z.object({
+/** One branch, and whether this series reaches it. Admin-only; never shown to a student. */
+export const seriesBranchSchema = z.object({
   id: z.string(),
-  branchId: z.string(),
-  testSeriesId: z.string(),
+  name: z.string(),
   enabled: z.boolean(),
-  createdAt: z.string(),
 });
-export type BranchTestConfig = z.infer<typeof branchTestConfigSchema>;
+export type SeriesBranch = z.infer<typeof seriesBranchSchema>;
 
-/** The row plus the branch it is about, which is the only way the screen reads. */
-export const branchTestConfigRowSchema = branchTestConfigSchema.extend({
-  branch: z.object({ id: z.string(), name: z.string() }),
-});
-export type BranchTestConfigRow = z.infer<typeof branchTestConfigRowSchema>;
-
-/** The switch alone: a branch runs a series indefinitely, and WHEN an exam happens is the test's. */
-export const updateBranchTestConfigSchema = z.object({ enabled: z.boolean().optional() });
-export type UpdateBranchTestConfigInput = z.input<typeof updateBranchTestConfigSchema>;
-export type UpdateBranchTestConfigBody = z.infer<typeof updateBranchTestConfigSchema>;
+/** The whole list `branchIds` should hold from now on — the array itself, not a diff against it. */
+export const updateSeriesBranchesSchema = z.object({ branchIds: z.array(z.string()) });
+export type UpdateSeriesBranchesInput = z.input<typeof updateSeriesBranchesSchema>;
+export type UpdateSeriesBranchesBody = z.infer<typeof updateSeriesBranchesSchema>;
 
 export const notificationSchema = z.object({
   id: z.string(),
@@ -450,9 +441,8 @@ export const ADMIN_SERIES_ROUTES = {
   detail: (id: string) => `/admin/test-series/${id}`,
   update: (id: string) => `/admin/test-series/${id}`,
   remove: (id: string) => `/admin/test-series/${id}`,
-  /** Every branch has a row from the moment the series exists — see the fan-out. */
+  /** Read every branch and whether this series reaches it; write the whole `branchIds` list. */
   branches: (id: string) => `/admin/test-series/${id}/branches`,
-  branch: (id: string, branchId: string) => `/admin/test-series/${id}/branches/${branchId}`,
   /** The link, from the series' side. The tests module owns it — a test is offered THROUGH a series. */
   tests: (id: string) => `/admin/test-series/${id}/tests`,
   test: (id: string, testId: string) => `/admin/test-series/${id}/tests/${testId}`,

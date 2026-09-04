@@ -5,13 +5,13 @@ import {
   ErrorCodes,
   fieldDiff,
   TEST_SERIES_KIND,
-  type BranchTestConfigRow,
   type CreateTestSeriesBody,
   type Paginated,
+  type SeriesBranch,
   type TestSeriesListQuery,
   type TestSeriesKind,
   type TestSeriesSummary,
-  type UpdateBranchTestConfigBody,
+  type UpdateSeriesBranchesBody,
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
@@ -22,7 +22,7 @@ import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { ExamStagesService } from '../configs';
 import { ProgramsService } from './programs.service';
-import { mirrorSwitchOntoSeries, startsSwitchedOn } from './series-switch';
+import { isEnabledPatch, startsSwitchedOn } from './series-switch';
 
 /** What the four CHECKs on `TestSeries` refuse, in the words the form uses for the fields. */
 const KIND_PAIRING_MESSAGES = {
@@ -40,6 +40,8 @@ const KIND_PAIRING_MESSAGES = {
 
 const branchesAreStandardOnly = (count: number) =>
   `Only a standard series reaches students branch by branch. This one is switched on at ${count} ${count === 1 ? 'branch' : 'branches'} and carries a branch list no other kind can hold, so its kind cannot change.`;
+
+const NO_SUCH_BRANCH_MESSAGE = 'One of those branches does not exist.';
 
 const SERIES_INCLUDE = {
   examStage: { select: { id: true, name: true, exam: { select: { code: true } } } },
@@ -61,10 +63,7 @@ export const AUDITED_SERIES_FIELDS = [
   'isEnabled',
 ] as const;
 
-/**
- * Owns `TestSeries` and its `BranchTestConfig` fan-out. A test reaches a student only through a
- * series, and a series reaches a branch only through a row that says so.
- */
+/** Owns `TestSeries`. A test reaches a student only through a series, a STANDARD one only through `branchIds`. */
 @Injectable()
 export class TestSeriesService {
   constructor(
@@ -134,10 +133,10 @@ export class TestSeriesService {
       this.prisma.testSeries.count({ where }),
     ]);
 
-    const branchCounts = await this.branchRowsFor(rows.map((row) => row.id));
+    const branchCount = await this.liveBranchCount();
 
     return {
-      items: rows.map((row) => toSummary(row, branchCounts.get(row.id))),
+      items: rows.map((row) => toSummary(row, branchCount)),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -146,66 +145,42 @@ export class TestSeriesService {
 
   async detail(id: string): Promise<TestSeriesSummary> {
     const row = await this.requireSeries(id);
-    const counts = await this.branchRowsFor([id]);
-    return toSummary(row, counts.get(id));
+    return toSummary(row, await this.liveBranchCount());
   }
 
-  /**
-   * Creating a series gives EVERY branch a row. "Not offered here" is `enabled: false` on a row
-   * that exists, never a missing one — an absent row would have to be read as a default, and a
-   * default is exactly what nobody can audit or see on a screen.
-   */
+  /** A new series reaches no branch until an admin names one — `branchIds` starts empty. */
   async create(input: CreateTestSeriesBody): Promise<TestSeriesSummary> {
     await this.assertTargetsUsable(input);
-    // Every branch row starts off, so a new series carries no branch whatever its kind.
+    const kind = input.kind ?? TEST_SERIES_KIND.STANDARD;
     this.assertKindHoldsTogether({
-      kind: input.kind ?? TEST_SERIES_KIND.STANDARD,
+      kind,
       examStageId: input.examStageId ?? null,
       programCode: input.programCode ?? null,
       eventId: input.eventId ?? null,
       branchIds: [],
     });
 
-    const id = await this.prisma.$transaction(async (tx) => {
-      const series = await tx.testSeries.create({
-        data: { ...columnsOf(input), name: input.name },
-      });
-
-      const branches = await tx.branch.findMany({
-        where: { deletedAt: null },
-        select: { id: true },
-      });
-      await tx.branchTestConfig.createMany({
-        data: branches.map((branch) => ({
-          branchId: branch.id,
-          testSeriesId: series.id,
-          // Off until somebody says otherwise: a new series must not appear at every
-          // centre in the country the moment it is saved.
-          enabled: false,
-        })),
-      });
-
-      await mirrorSwitchOntoSeries(
-        tx,
-        [series.id],
-        input.isEnabled ?? startsSwitchedOn(series.kind),
-      );
-      return series.id;
+    const series = await this.prisma.testSeries.create({
+      data: {
+        ...columnsOf(input),
+        name: input.name,
+        isEnabled: input.isEnabled ?? startsSwitchedOn(kind),
+      },
     });
 
     // No `:id` in the path and a summary coming back, so the row is named explicitly. Who did
     // it is the audit row's actor — `TestSeries` has no `createdById` column of its own.
-    this.auditContext.setEntityId(id);
+    this.auditContext.setEntityId(series.id);
     // A kind that reaches past every branch is switched on the moment it saves, cached catalogs and all.
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: series.id });
 
-    return this.detail(id);
+    return this.detail(series.id);
   }
 
   async update(id: string, input: UpdateTestSeriesBody): Promise<TestSeriesSummary> {
     const series = await this.requireSeries(id);
     await this.assertTargetsUsable(input);
-    // Against what the row WILL hold: branchIds moves through BranchTestConfig, so it is its own.
+    // `branchIds` is untouched here — only `setBranches` moves it, so this reads what it already holds.
     this.assertKindHoldsTogether({
       kind: input.kind ?? series.kind,
       examStageId: settledValue(input.examStageId, series.examStageId),
@@ -214,17 +189,16 @@ export class TestSeriesService {
       branchIds: series.branchIds,
     });
 
-    // Only STANDARD carries branches, so a kind change empties the list the CHECK reads.
-    await this.prisma.$transaction(async (tx) => {
-      await tx.testSeries.update({ where: { id }, data: columnsOf(input) });
-      await mirrorSwitchOntoSeries(tx, [id], input.isEnabled);
+    await this.prisma.testSeries.update({
+      where: { id },
+      data: { ...columnsOf(input), ...isEnabledPatch(input.isEnabled) },
     });
 
     const updated = await this.requireSeries(id);
     this.auditContext.setChanged(fieldDiff(series, updated, AUDITED_SERIES_FIELDS));
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
 
-    return toSummary(updated, (await this.branchRowsFor([id])).get(id));
+    return this.detail(id);
   }
 
   async remove(id: string): Promise<void> {
@@ -251,88 +225,49 @@ export class TestSeriesService {
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
   }
 
-  /**
-   * The other half of the fan-out: a branch opened after a series exists still has to appear on
-   * that series' scheduling screen, switched off. Without this, "every branch has a row" would
-   * hold only for the branches that existed on the day the series was created.
-   */
-  async fanOutToBranch(branchId: string): Promise<void> {
-    const series = await this.prisma.testSeries.findMany({ select: { id: true } });
-    if (series.length === 0) return;
-
-    await this.prisma.branchTestConfig.createMany({
-      data: series.map((row) => ({ branchId, testSeriesId: row.id, enabled: false })),
-      skipDuplicates: true,
-    });
-  }
-
-  /** Every branch's row for this series the CALLER may see, in branch order. */
-  async branchConfigs(id: string, scope: BranchScope): Promise<BranchTestConfigRow[]> {
-    await this.requireSeries(id);
-
+  /** Every branch, and whether this series reaches it — scoped to what the caller may see. */
+  async branches(id: string, scope: BranchScope): Promise<SeriesBranch[]> {
+    const series = await this.requireSeries(id);
     const reachable = branchScopeWhere(scope);
-    const rows = await this.prisma.branchTestConfig.findMany({
-      where: { testSeriesId: id, ...(reachable ? { branchId: reachable } : {}) },
-      include: { branch: { select: { id: true, name: true } } },
-      orderBy: [{ branch: { name: 'asc' } }],
+    const rows = await this.prisma.branch.findMany({
+      where: { deletedAt: null, ...(reachable ? { id: reachable } : {}) },
+      select: { id: true, name: true },
+      orderBy: [{ name: 'asc' }],
     });
 
-    return rows.map(toBranchConfig);
+    const enabled = new Set(series.branchIds);
+    return rows.map((row) => ({ id: row.id, name: row.name, enabled: enabled.has(row.id) }));
   }
 
-  /** Switching a series on for a branch. The row is never created here, and it has no window. */
-  /** Every row at once: a free series is switched on branch by branch otherwise, thirty times. */
-  async updateEveryBranchConfig(
+  /** The whole list at once; a scoped admin only moves the branches they can see, the rest survive. */
+  async setBranches(
     id: string,
-    input: UpdateBranchTestConfigBody,
+    input: UpdateSeriesBranchesBody,
     scope: BranchScope,
-  ): Promise<BranchTestConfigRow[]> {
-    // EVERY branch, including ones the caller cannot see, so only somebody who reaches all may.
-    if (!scope.all) throw new AppException(ErrorCodes.FORBIDDEN, EVERY_BRANCH_IS_NOT_YOURS);
-    await this.requireSeries(id);
-    if (input.enabled === undefined) return this.branchConfigs(id, scope);
+  ): Promise<SeriesBranch[]> {
+    const series = await this.requireSeries(id);
+    const chosen = [...new Set(input.branchIds)];
+    this.assertKindHoldsTogether({
+      kind: series.kind,
+      examStageId: series.examStageId,
+      programCode: series.programCode,
+      eventId: series.eventId,
+      branchIds: chosen,
+    });
+    for (const branchId of chosen) assertBranchInScope(scope, branchId);
+    await this.assertBranchesLive(chosen);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.branchTestConfig.updateMany({
-        where: { testSeriesId: id },
-        data: { enabled: input.enabled },
-      });
-      await mirrorSwitchOntoSeries(tx, [id]);
+    const outsideScope = scope.all
+      ? []
+      : series.branchIds.filter((branchId) => !scope.branchIds.includes(branchId));
+    await this.prisma.testSeries.update({
+      where: { id },
+      data: { branchIds: [...outsideScope, ...chosen] },
     });
 
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
-    return this.branchConfigs(id, scope);
-  }
-
-  async updateBranchConfig(
-    id: string,
-    branchId: string,
-    input: UpdateBranchTestConfigBody,
-    scope: BranchScope,
-  ): Promise<BranchTestConfigRow> {
-    assertBranchInScope(scope, branchId);
-    const existing = await this.prisma.branchTestConfig.findUnique({
-      where: { branchId_testSeriesId: { branchId, testSeriesId: id } },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw new AppException(ErrorCodes.NOT_FOUND, 'That branch has no row for this series');
-    }
-
-    const row = await this.prisma.$transaction(async (tx) => {
-      const config = await tx.branchTestConfig.update({
-        where: { id: existing.id },
-        data: { ...(input.enabled === undefined ? {} : { enabled: input.enabled }) },
-        include: { branch: { select: { id: true, name: true } } },
-      });
-      await mirrorSwitchOntoSeries(tx, [id]);
-      return config;
-    });
-
-    this.auditContext.setEntityId(id);
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
-    return toBranchConfig(row);
+    return this.branches(id, scope);
   }
 
   /** Answered here so a form marks the field: a raw CHECK violation can only leave as a 500. */
@@ -348,6 +283,18 @@ export class TestSeriesService {
     if (input.programCode) await this.programs.assertUsable([input.programCode], 'programCode');
   }
 
+  /** Nothing in `branchIds` may name a branch that is not really there — the array carries no FK. */
+  private async assertBranchesLive(branchIds: readonly string[]): Promise<void> {
+    if (branchIds.length === 0) return;
+    const found = await this.prisma.branch.count({
+      where: { id: { in: [...branchIds] }, deletedAt: null },
+    });
+    if (found === branchIds.length) return;
+    throw new AppException(ErrorCodes.VALIDATION_ERROR, NO_SUCH_BRANCH_MESSAGE, {
+      fieldErrors: { branchIds: [NO_SUCH_BRANCH_MESSAGE] },
+    });
+  }
+
   private async requireSeries(id: string): Promise<SeriesRow> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id },
@@ -357,18 +304,9 @@ export class TestSeriesService {
     return series;
   }
 
-  /** How many branches each series has a row for — how many RUN it is `branchIds`, on the row itself. */
-  private async branchRowsFor(seriesIds: string[]): Promise<Map<string, number>> {
-    const counts = new Map<string, number>();
-    if (seriesIds.length === 0) return counts;
-
-    const rows = await this.prisma.branchTestConfig.findMany({
-      where: { testSeriesId: { in: seriesIds } },
-      select: { testSeriesId: true },
-    });
-
-    for (const row of rows) counts.set(row.testSeriesId, (counts.get(row.testSeriesId) ?? 0) + 1);
-    return counts;
+  /** Out of how many branches could run one — every live branch, the same number for every series. */
+  private async liveBranchCount(): Promise<number> {
+    return this.prisma.branch.count({ where: { deletedAt: null } });
   }
 }
 
@@ -426,7 +364,7 @@ function columnsOf(input: Partial<CreateTestSeriesBody>) {
   } satisfies Prisma.TestSeriesUncheckedUpdateInput;
 }
 
-function toSummary(row: SeriesRow, branchCount: number | undefined): TestSeriesSummary {
+function toSummary(row: SeriesRow, branchCount: number): TestSeriesSummary {
   return {
     id: row.id,
     name: row.name,
@@ -444,28 +382,7 @@ function toSummary(row: SeriesRow, branchCount: number | undefined): TestSeriesS
     eventId: row.eventId,
     testCount: row._count.directTests,
     enabledBranchCount: row.branchIds.length,
-    branchCount: branchCount ?? 0,
+    branchCount,
     createdAt: row.createdAt.toISOString(),
   };
 }
-
-function toBranchConfig(row: {
-  id: string;
-  branchId: string;
-  testSeriesId: string;
-  enabled: boolean;
-  createdAt: Date;
-  branch: { id: string; name: string };
-}): BranchTestConfigRow {
-  return {
-    id: row.id,
-    branchId: row.branchId,
-    testSeriesId: row.testSeriesId,
-    enabled: row.enabled,
-    branch: row.branch,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
-const EVERY_BRANCH_IS_NOT_YOURS =
-  'Switching a series for every branch is for an admin who reaches every branch.';

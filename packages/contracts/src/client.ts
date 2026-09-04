@@ -94,14 +94,14 @@ import {
   ADMIN_PROGRAM_ROUTES,
   ADMIN_SERIES_ROUTES,
   EVENT_ROUTES,
-  branchTestConfigRowSchema,
+  seriesBranchSchema,
   eventSchema,
   eventCandidateSchema,
   programCatalogSchema,
   studentGrantRowSchema,
   studentSeriesAccessSchema,
   testSeriesSummarySchema,
-  type BranchTestConfigRow,
+  type SeriesBranch,
   type AddEventCandidatesInput,
   type CreateEventInput,
   type CreateProgramInput,
@@ -119,7 +119,7 @@ import {
   type StudentSeriesAccess,
   type TestSeriesListQueryInput,
   type TestSeriesSummary,
-  type UpdateBranchTestConfigInput,
+  type UpdateSeriesBranchesInput,
   type UpdateEventInput,
   type UpdateProgramInput,
   type UpdateTestSeriesInput,
@@ -1036,29 +1036,15 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_SERIES_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 
-        /** Every branch has a row from the moment the series exists — see the fan-out. */
-        branches: (id: string): Promise<BranchTestConfigRow[]> =>
-          request(ADMIN_SERIES_ROUTES.branches(id), { schema: branchTestConfigRowSchema.array() }),
+        /** Every branch, and whether this series reaches it, scoped to what the caller may see. */
+        branches: (id: string): Promise<SeriesBranch[]> =>
+          request(ADMIN_SERIES_ROUTES.branches(id), { schema: seriesBranchSchema.array() }),
 
-        updateEveryBranch: (
-          id: string,
-          input: UpdateBranchTestConfigInput,
-        ): Promise<BranchTestConfigRow[]> =>
+        setBranches: (id: string, input: UpdateSeriesBranchesInput): Promise<SeriesBranch[]> =>
           request(ADMIN_SERIES_ROUTES.branches(id), {
-            method: 'PATCH',
+            method: 'PUT',
             body: input,
-            schema: branchTestConfigRowSchema.array(),
-          }),
-
-        updateBranch: (
-          id: string,
-          branchId: string,
-          input: UpdateBranchTestConfigInput,
-        ): Promise<BranchTestConfigRow> =>
-          request(ADMIN_SERIES_ROUTES.branch(id, branchId), {
-            method: 'PATCH',
-            body: input,
-            schema: branchTestConfigRowSchema,
+            schema: seriesBranchSchema.array(),
           }),
 
         tests: (id: string): Promise<SeriesTestRow[]> =>

@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { fieldDiff } from '@iace/contracts';
 import { AUDITED_BRANCH_FIELDS, BranchesService } from '../src/branches/branches.service';
 import { AuditContext } from '../src/audit';
-import { FakeSeriesFanOut, FakePrisma, makeBranch } from './support/fakes';
+import { FakePrisma, makeBranch } from './support/fakes';
 
 describe('the branch audit diff', () => {
   it('covers every column a branch edit can change', () => {
@@ -33,11 +33,7 @@ describe('BranchesService.update — driven live, the diff a real edit contribut
   it('reports a retire', async () => {
     const prisma = new FakePrisma([], [], [makeBranch({ id: 'br_1', isActive: true })]);
     const auditContext = new AuditContext();
-    const service = new BranchesService(
-      prisma.asService(),
-      new FakeSeriesFanOut().asService(),
-      auditContext,
-    );
+    const service = new BranchesService(prisma.asService(), auditContext);
 
     await auditContext.run(async () => {
       await service.update('br_1', { isActive: false });

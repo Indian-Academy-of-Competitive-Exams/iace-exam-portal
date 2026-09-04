@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -21,10 +22,10 @@ import {
   PERMISSION_LEVELS,
   programListQuerySchema,
   testSeriesListQuerySchema,
-  updateBranchTestConfigSchema,
+  updateSeriesBranchesSchema,
   updateProgramSchema,
   updateTestSeriesSchema,
-  type BranchTestConfigRow,
+  type SeriesBranch,
   type CreateProgramBody,
   type CreateTestSeriesBody,
   type GrantSeriesBody,
@@ -35,7 +36,7 @@ import {
   type StudentSeriesAccess,
   type TestSeriesListQuery,
   type TestSeriesSummary,
-  type UpdateBranchTestConfigBody,
+  type UpdateSeriesBranchesBody,
   type UpdateProgramBody,
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
@@ -114,7 +115,7 @@ export class TestSeriesController {
     return this.series.detail(id);
   }
 
-  /** Creating one gives every branch a row, switched off — see the fan-out. */
+  /** A new series reaches no branch until `setBranches` names one. */
   @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.CREATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
@@ -147,33 +148,20 @@ export class TestSeriesController {
   branches(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<BranchTestConfigRow[]> {
-    return this.series.branchConfigs(id, branchScopeOf(user));
+  ): Promise<SeriesBranch[]> {
+    return this.series.branches(id, branchScopeOf(user));
   }
 
-  /** The same switch, thrown for every branch at once. */
+  /** A separate key from series editing: naming the branches is not the same permission as the rest. */
   @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/branches')
-  updateEveryBranch(
+  @Put(':id/branches')
+  setBranches(
     @Param('id') id: string,
-    @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
+    @Body(new ZodBody(updateSeriesBranchesSchema)) body: UpdateSeriesBranchesBody,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<BranchTestConfigRow[]> {
-    return this.series.updateEveryBranchConfig(id, body, branchScopeOf(user));
-  }
-
-  /** Which branches run it, and when. A separate key: scheduling is its own job. */
-  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Patch(':id/branches/:branchId')
-  updateBranch(
-    @Param('id') id: string,
-    @Param('branchId') branchId: string,
-    @Body(new ZodBody(updateBranchTestConfigSchema)) body: UpdateBranchTestConfigBody,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<BranchTestConfigRow> {
-    return this.series.updateBranchConfig(id, branchId, body, branchScopeOf(user));
+  ): Promise<SeriesBranch[]> {
+    return this.series.setBranches(id, body, branchScopeOf(user));
   }
 }
 

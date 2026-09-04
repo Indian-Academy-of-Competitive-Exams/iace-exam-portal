@@ -4,10 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
-  type BranchTestConfigRow,
   type CreateTestSeriesBody,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
+  type SeriesBranch,
   type SeriesTestRow,
   TEST_SERIES_KIND,
   TEST_SERIES_KINDS,
@@ -722,7 +722,10 @@ function BranchSchedule({ series }: Readonly<{ series: TestSeriesSummary }>) {
 
   const enableEverywhere = useMutation({
     meta: { success: 'Switched on at every branch.' },
-    mutationFn: () => api.admin.testSeries.updateEveryBranch(series.id, { enabled: true }),
+    mutationFn: () =>
+      api.admin.testSeries.setBranches(series.id, {
+        branchIds: (branches.data ?? []).map((row) => row.id),
+      }),
     onSuccess: () => {
       setAskingAll(false);
       refresh();
@@ -794,7 +797,7 @@ function BranchScheduleList({
   onSaved,
 }: Readonly<{
   series: TestSeriesSummary;
-  rows: readonly BranchTestConfigRow[];
+  rows: readonly SeriesBranch[];
   isLoading: boolean;
   canRead: boolean;
   canWrite: boolean;
@@ -833,6 +836,7 @@ function BranchScheduleList({
           key={row.id}
           series={series}
           row={row}
+          rows={rows}
           canWrite={canWrite}
           onSaved={onSaved}
         />
@@ -844,23 +848,23 @@ function BranchScheduleList({
 /** Turning it on and turning it off are not the same question, so they are not the same words. */
 function offerQuestion(
   series: TestSeriesSummary,
-  row: BranchTestConfigRow,
+  row: SeriesBranch,
   next: boolean,
 ): { title: string; description: string; confirmLabel: string; destructive: boolean } {
   const tests = plural(series.testCount, 'test');
 
   if (next) {
     return {
-      title: `Offer ${series.name} at ${row.branch.name}?`,
-      description: `Every student whose current branch is ${row.branch.name} and who reaches this series by their enrolment can start its ${tests} from then on, for as long as the series itself is switched on. When each test opens is the test's own, not this switch.`,
+      title: `Offer ${series.name} at ${row.name}?`,
+      description: `Every student whose current branch is ${row.name} and who reaches this series by their enrolment can start its ${tests} from then on, for as long as the series itself is switched on. When each test opens is the test's own, not this switch.`,
       confirmLabel: 'Offer it here',
       destructive: false,
     };
   }
 
   return {
-    title: `Stop offering ${series.name} at ${row.branch.name}?`,
-    description: `Students at ${row.branch.name} lose the route to its ${tests} straight away. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped. The row stays — this is what "not offered here" is — so switching it back on restores everything.`,
+    title: `Stop offering ${series.name} at ${row.name}?`,
+    description: `Students at ${row.name} lose the route to its ${tests} straight away. Attempts already made and their results are kept, and a test somebody is sitting right now is not stopped. Switching it back on restores everything.`,
     confirmLabel: 'Stop offering it here',
     destructive: true,
   };
@@ -869,20 +873,26 @@ function offerQuestion(
 function BranchScheduleRow({
   series,
   row,
+  rows,
   canWrite,
   onSaved,
 }: Readonly<{
   series: TestSeriesSummary;
-  row: BranchTestConfigRow;
+  row: SeriesBranch;
+  rows: readonly SeriesBranch[];
   canWrite: boolean;
   onSaved: () => void;
 }>) {
   const [asking, setAsking] = useState<boolean | null>(null);
 
   const save = useMutation({
-    meta: { success: `${row.branch.name} saved.` },
+    meta: { success: `${row.name} saved.` },
     mutationFn: (enabled: boolean) =>
-      api.admin.testSeries.updateBranch(series.id, row.branchId, { enabled }),
+      api.admin.testSeries.setBranches(series.id, {
+        branchIds: rows
+          .filter((candidate) => (candidate.id === row.id ? enabled : candidate.enabled))
+          .map((candidate) => candidate.id),
+      }),
     onSuccess: () => {
       setAsking(null);
       onSaved();
@@ -900,7 +910,7 @@ function BranchScheduleRow({
         checked={row.enabled}
         disabled={!canWrite || save.isPending}
         onChange={(event) => setAsking(event.target.checked)}
-        label={row.branch.name}
+        label={row.name}
       />
 
       <ConfirmDialog

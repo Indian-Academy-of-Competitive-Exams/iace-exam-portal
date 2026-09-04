@@ -9,18 +9,14 @@ import {
 } from '@iace/contracts';
 import { BranchesService } from '../src/branches/branches.service';
 import { AuditContext } from '../src/audit';
-import { FakeSeriesFanOut, FakePrisma, makeBranch } from './support/fakes';
+import { FakePrisma, makeBranch } from './support/fakes';
 import { EVERY_BRANCH } from '../src/common/security';
 
 /** The branch list, exercised through the service rather than its rule helpers. */
 function serviceWith(branches = [makeBranch()]) {
   const prisma = new FakePrisma([], [], branches);
   return {
-    service: new BranchesService(
-      prisma.asService(),
-      new FakeSeriesFanOut().asService(),
-      new AuditContext(),
-    ),
+    service: new BranchesService(prisma.asService(), new AuditContext()),
     prisma,
   };
 }
@@ -147,23 +143,6 @@ describe('BranchesService — the online branch is protected', () => {
     const { service } = serviceWith([ONLINE]);
 
     await assert.rejects(() => service.update('br_online', { isActive: false }), AppException.is);
-  });
-});
-
-describe('BranchesService — a new branch joins every series', () => {
-  /**
-   * The other half of the series fan-out. Without it, "every branch has a row for every series"
-   * would hold only for the branches that existed on the day each series was created — and a
-   * centre opened afterwards would never appear on a scheduling screen at all.
-   */
-  it('fans the new branch out across the series that already exist', async () => {
-    const prisma = new FakePrisma([], [], []);
-    const fanOut = new FakeSeriesFanOut();
-    const service = new BranchesService(prisma.asService(), fanOut.asService(), new AuditContext());
-
-    const created = await service.create({ name: 'KUKATPALLY', type: BRANCH_TYPE.PHYSICAL });
-
-    assert.deepEqual(fanOut.branchIds, [created.id]);
   });
 });
 

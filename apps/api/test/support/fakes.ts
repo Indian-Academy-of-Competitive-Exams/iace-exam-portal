@@ -3355,7 +3355,7 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
   };
 }
 
-/** Enough Prisma for the access services: the catalog, the series and the per-branch fan-out. */
+/** Enough Prisma for the access services: the catalog, the series and its branches. */
 export class FakeAccessPrisma {
   private seq = 0;
 
@@ -3363,7 +3363,6 @@ export class FakeAccessPrisma {
     readonly programs: FakeProgramRow[] = [],
     readonly series: FakeSeriesRow[] = [],
     readonly branches: FakeBranch[] = [],
-    readonly branchConfigs: FakeBranchConfigRow[] = [],
     readonly students: FakeStudent[] = [],
     readonly grants: FakeGrantRowAccess[] = [],
     readonly examStages: FakeExamStage[] = [makeExamStage()],
@@ -3396,16 +3395,25 @@ export class FakeAccessPrisma {
   };
 
   readonly branch = {
-    // Every LIVE branch: the fan-out asks for `deletedAt: null`, and a fake with no soft-deleted
-    // rows answers the same question either way.
-    findMany: () =>
-      Promise.resolve(this.branches.map((branch) => ({ id: branch.id, name: branch.name }))),
+    // A fake with no soft-deleted rows answers `deletedAt: null` the same either way.
+    findMany: ({ where = {} }: { where?: { deletedAt?: null; id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.branches
+          .filter((branch) => !where.id || where.id.in.includes(branch.id))
+          .map((branch) => ({ id: branch.id, name: branch.name }))
+          .sort((left, right) => left.name.localeCompare(right.name)),
+      ),
 
     /** The existence check the branch-side reads make before they answer for one. */
     findFirst: ({ where }: { where: { id: string; deletedAt?: null } }) => {
       const branch = this.branches.find((candidate) => candidate.id === where.id);
       return Promise.resolve(branch ? { id: branch.id, name: branch.name } : null);
     },
+
+    count: ({ where = {} }: { where?: { deletedAt?: null; id?: { in: string[] } } } = {}) =>
+      Promise.resolve(
+        this.branches.filter((branch) => !where.id || where.id.in.includes(branch.id)).length,
+      ),
   };
 
   readonly program = {
@@ -3451,40 +3459,27 @@ export class FakeAccessPrisma {
 
     findMany: ({
       where = {},
-      include,
       skip = 0,
       take,
     }: {
       where?: FakeSeriesWhere;
-      include?: { branchConfigs?: { where: { branchId: string } } };
       skip?: number;
       take?: number;
     } = {}) =>
       Promise.resolve(
         this.series
-          .filter((row) => matchesSeries(row, where, this.branchConfigs))
+          .filter((row) => matchesSeries(row, where))
           // By name, as every paged read of this table asks for; the fixtures rely on it.
           .sort(
             (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
           )
           .slice(skip, take === undefined ? undefined : skip + take)
-          .map((row) => ({
-            ...this.hydrate(row),
-            branchConfigs: include?.branchConfigs
-              ? this.branchConfigs.filter(
-                  (config) =>
-                    config.testSeriesId === row.id &&
-                    config.branchId === include.branchConfigs?.where.branchId,
-                )
-              : [],
-          })),
+          .map((row) => this.hydrate(row)),
       ),
 
     // The same `where` the rows came off, or a pager promises pages nobody can open.
     count: ({ where = {} }: { where?: FakeSeriesWhere } = {}) =>
-      Promise.resolve(
-        this.series.filter((row) => matchesSeries(row, where, this.branchConfigs)).length,
-      ),
+      Promise.resolve(this.series.filter((row) => matchesSeries(row, where)).length),
 
     create: ({ data }: { data: Partial<FakeSeriesRow> & { name: string } }) => {
       const created = makeSeries({ ...data, id: this.id('srs') });
@@ -3507,93 +3502,6 @@ export class FakeAccessPrisma {
       const index = this.series.findIndex((row) => row.id === where.id);
       const [removed] = this.series.splice(index, 1);
       return Promise.resolve(removed);
-    },
-  };
-
-  readonly branchTestConfig = {
-    findUnique: ({
-      where,
-    }: {
-      where: { branchId_testSeriesId: { branchId: string; testSeriesId: string } };
-    }) => {
-      const key = where.branchId_testSeriesId;
-      const row = this.branchConfigs.find(
-        (config) => config.branchId === key.branchId && config.testSeriesId === key.testSeriesId,
-      );
-      return Promise.resolve(row ? { ...row } : null);
-    },
-
-    findMany: ({
-      where = {},
-    }: {
-      where?: {
-        branchId?: string | { in: string[] };
-        testSeriesId?: string | { in: string[] };
-        enabled?: boolean;
-      };
-    } = {}) =>
-      Promise.resolve(
-        this.branchConfigs
-          // `branchId` is the whole point of this table: ignoring it makes one branch read as all.
-          .filter(
-            (config) =>
-              matchesKey(config.branchId, where.branchId) &&
-              matchesKey(config.testSeriesId, where.testSeriesId) &&
-              (where.enabled === undefined || config.enabled === where.enabled),
-          )
-          .map((config) => ({
-            ...config,
-            branch: this.branchRef(config.branchId),
-          })),
-      ),
-
-    createMany: ({
-      data,
-      skipDuplicates,
-    }: {
-      data: { branchId: string; testSeriesId: string; enabled: boolean }[];
-      skipDuplicates?: boolean;
-    }) => {
-      const fresh = skipDuplicates
-        ? data.filter(
-            (row) =>
-              !this.branchConfigs.some(
-                (held) => held.branchId === row.branchId && held.testSeriesId === row.testSeriesId,
-              ),
-          )
-        : data;
-      for (const row of fresh) {
-        this.branchConfigs.push({
-          id: this.id('btc'),
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          ...row,
-        });
-      }
-      return Promise.resolve({ count: fresh.length });
-    },
-
-    updateMany: ({
-      where,
-      data,
-    }: {
-      where: { branchId?: string; testSeriesId?: string | { in: string[] } };
-      data: Record<string, unknown>;
-    }) => {
-      // Without `branchId` a write meant for one branch lands on every branch's row.
-      const rows = this.branchConfigs.filter(
-        (config) =>
-          (where.branchId === undefined || config.branchId === where.branchId) &&
-          matchesKey(config.testSeriesId, where.testSeriesId),
-      );
-      for (const row of rows) Object.assign(row, data);
-      return Promise.resolve({ count: rows.length });
-    },
-
-    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-      const row = this.branchConfigs.find((config) => config.id === where.id);
-      if (!row) throw new Error(`no branch config ${where.id}`);
-      Object.assign(row, data);
-      return Promise.resolve({ ...row, branch: this.branchRef(row.branchId) });
     },
   };
 
@@ -3688,11 +3596,6 @@ export class FakeAccessPrisma {
     },
   };
 
-  private branchRef(branchId: string): { id: string; name: string } {
-    const branch = this.branches.find((candidate) => candidate.id === branchId);
-    return { id: branchId, name: branch?.name ?? '' };
-  }
-
   private seriesRef(testSeriesId: string): { id: string; name: string } {
     const series = this.series.find((candidate) => candidate.id === testSeriesId);
     return { id: testSeriesId, name: series?.name ?? '' };
@@ -3707,7 +3610,7 @@ export class FakeAccessPrisma {
   }
 }
 
-/** The series filters the fakes answer, including the branch switch the branch-side list narrows by. */
+/** The series filters `FakeAccessPrisma` answers. */
 interface FakeSeriesWhere {
   AND?: FakeSeriesWhere[];
   NOT?: FakeSeriesWhere;
@@ -3717,24 +3620,12 @@ interface FakeSeriesWhere {
   kind?: TestSeriesKind;
   name?: { contains: string; mode?: string };
   examStageId?: { in: string[] };
-  branchConfigs?: { some: { branchId: string; enabled: boolean } };
 }
 
-function matchesSeries(
-  row: FakeSeriesRow,
-  where: FakeSeriesWhere,
-  configs: readonly FakeBranchConfigRow[],
-): boolean {
-  if (where.AND && !where.AND.every((part) => matchesSeries(row, part, configs))) return false;
-  if (where.NOT && matchesSeries(row, where.NOT, configs)) return false;
-  if (!matchesSeriesColumns(row, where)) return false;
-  if (!where.branchConfigs) return true;
-
-  const { branchId, enabled } = where.branchConfigs.some;
-  return configs.some(
-    (config) =>
-      config.testSeriesId === row.id && config.branchId === branchId && config.enabled === enabled,
-  );
+function matchesSeries(row: FakeSeriesRow, where: FakeSeriesWhere): boolean {
+  if (where.AND && !where.AND.every((part) => matchesSeries(row, part))) return false;
+  if (where.NOT && matchesSeries(row, where.NOT)) return false;
+  return matchesSeriesColumns(row, where);
 }
 
 /** The series' own columns, apart from the recursion and the join above. */
@@ -4325,20 +4216,6 @@ export class FakeCodeCatalog {
         fieldErrors: { [fieldKey]: [message] },
       });
     }
-    return Promise.resolve();
-  }
-
-  asService<T>(): T {
-    return this as unknown as T;
-  }
-}
-
-/** The series seam a branch write goes through: a new centre appears on every series, off. */
-export class FakeSeriesFanOut {
-  readonly branchIds: string[] = [];
-
-  fanOutToBranch(branchId: string): Promise<void> {
-    this.branchIds.push(branchId);
     return Promise.resolve();
   }
 

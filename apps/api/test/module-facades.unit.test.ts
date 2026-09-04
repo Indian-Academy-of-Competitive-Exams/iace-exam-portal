@@ -12,7 +12,6 @@ import {
   FakeEventBus,
   FakePrisma,
   FakeRedis,
-  FakeSeriesFanOut,
   makeBranch,
   makeStudent,
 } from './support/fakes';
@@ -74,7 +73,6 @@ describe('BranchesService.assertUsable — the seam every branch write comes thr
   const usable = () =>
     new BranchesService(
       new FakePrisma([], [], [makeBranch({ id: 'br_1' })]).asService(),
-      new FakeSeriesFanOut().asService(),
       new AuditContext(),
     );
 
@@ -88,7 +86,6 @@ describe('BranchesService.assertUsable — the seam every branch write comes thr
   it('refuses a retired branch, keyed to the field the form shows', async () => {
     const service = new BranchesService(
       new FakePrisma([], [], [makeBranch({ id: 'br_1', isActive: false })]).asService(),
-      new FakeSeriesFanOut().asService(),
       new AuditContext(),
     );
 
@@ -100,11 +97,7 @@ describe('BranchesService.assertUsable — the seam every branch write comes thr
   });
 
   it('refuses a branch that does not exist', async () => {
-    const service = new BranchesService(
-      new FakePrisma([], [], []).asService(),
-      new FakeSeriesFanOut().asService(),
-      new AuditContext(),
-    );
+    const service = new BranchesService(new FakePrisma([], [], []).asService(), new AuditContext());
 
     const error = await service.assertUsable('br_missing').catch((e: unknown) => e);
     assert.ok(AppException.is(error));

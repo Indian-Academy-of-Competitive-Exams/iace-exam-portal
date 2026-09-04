@@ -15,7 +15,6 @@ import {
   FakeMessageSender,
   FakeEventBus,
   FakePrisma,
-  FakeSeriesFanOut,
   makeBranch,
   makeStudent,
 } from './support/fakes';
@@ -66,11 +65,7 @@ function serviceWith(
       prisma.asService(),
       undefined as unknown as StorageService,
       exams.asService(),
-      new BranchesService(
-        prisma.asService(),
-        new FakeSeriesFanOut().asService(),
-        new AuditContext(),
-      ),
+      new BranchesService(prisma.asService(), new AuditContext()),
       fakeStartingPins(sender),
       programs.asService(),
       new AuditContext(),
