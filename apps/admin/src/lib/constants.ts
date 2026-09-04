@@ -88,6 +88,8 @@ export const ROUTES = {
   TEST_NEW: '/tests/new',
   TEST: (id: string) => `/tests/${id}`,
   TEST_PATTERN: '/tests/:id',
+  /** The paper on its own screen: the extra segment outranks `/tests/:id`. */
+  TEST_PAPER_PATTERN: '/tests/:id/paper',
   /** The unit of offering: a test reaches a student only through a series. */
   TEST_SERIES: '/tests/series',
   TEST_SERIES_NEW: '/tests/series/new',

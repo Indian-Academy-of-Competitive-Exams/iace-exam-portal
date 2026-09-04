@@ -22,6 +22,7 @@ import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
 import { TestsPage } from './routes/tests';
 import { TestBuilderPage } from './routes/test-builder';
+import { TestPaperPage } from './routes/test-paper';
 import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
 import { EventsPage } from './routes/events';
@@ -83,6 +84,7 @@ export function App() {
           {/* Last of the /tests routes: "configs", "series" and "new" all outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PATTERN} element={<TestBuilderPage />} />
+          <Route path={ROUTES.TEST_PAPER_PATTERN} element={<TestPaperPage />} />
           {/* Super-admin screens. The route exists for everyone — the page
               itself refuses, so a pasted URL gets a sentence rather than a
               redirect that looks like a broken link. */}
