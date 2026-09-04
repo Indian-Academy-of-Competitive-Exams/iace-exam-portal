@@ -38,6 +38,7 @@ import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { PaperSectionRail } from '../components/paper-section-rail';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
+import { canPickPaper, hasPaper, paperOptions } from './test-paper-view';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
@@ -123,10 +124,7 @@ function TestPaperScreen({
   const sections = detail.baseConfig.sections;
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
-  // A drawn test holds no paper until finalize draws one, so there is nothing yet to be short of.
-  const hasPaper = byHand || detail.isLocked;
-  // One paper is not a choice, and a hand-picked test has only ever had the one.
-  const browsable = hasPaper && !byHand && detail.variantCount > 1;
+  const paperExists = hasPaper(detail);
 
   const [openSectionId, setOpenSectionId] = useState(sections[0]?.id ?? '');
   const [collapsed, setCollapsed] = useState(!desktop);
@@ -181,7 +179,7 @@ function TestPaperScreen({
           : `${plural(detail.variantCount, 'paper')} · ${plural(detail.totalQuestions, 'question')}`
       }
       action={
-        browsable ? (
+        canPickPaper(detail) ? (
           <PaperPicker count={detail.variantCount} variant={variant} onVariant={onVariant} />
         ) : null
       }
@@ -201,12 +199,14 @@ function TestPaperScreen({
   const sectionSpec = spec.sections[openSection.id] ?? {};
   const rows =
     paper.sections.find((row) => row.baseConfigSectionId === openSection.id)?.questions ?? [];
+  // The picked paper's counts or none: the last one's tallies under this one's name is a lie.
+  const tallies = paperExists && !loading ? held : null;
 
   return (
     <PaneFrame header={header} className="flex gap-4">
       <PaperSectionRail
         sections={sections}
-        held={hasPaper ? held : null}
+        held={tallies}
         openSectionId={openSection.id}
         collapsed={collapsed}
         onOpen={setOpenSectionId}
@@ -214,20 +214,20 @@ function TestPaperScreen({
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        {hasPaper ? null : <DrawnAtOffer detail={detail} />}
+        {paperExists ? null : <DrawnAtOffer detail={detail} />}
 
         <DrawnFrom
           section={openSection}
           spec={sectionSpec}
           editable={editable}
-          fills={!hasPaper}
+          fills={!paperExists}
           dirty={draft !== null}
           saving={save.isPending}
           onSave={() => save.mutate(spec)}
           onChange={(next) => setDraft({ sections: { ...spec.sections, [openSection.id]: next } })}
         />
 
-        {hasPaper ? (
+        {paperExists ? (
           // Keyed by the section: switching one drops its ticks and its last refusal with it.
           <SectionWorkspace
             key={openSection.id}
@@ -247,20 +247,13 @@ function TestPaperScreen({
   );
 }
 
-/** Which of the drawn papers is on screen. Numbered from one: nobody sits paper zero. */
+/** Which of the drawn papers is on screen. */
 function PaperPicker({
   count,
   variant,
   onVariant,
 }: Readonly<{ count: number; variant: number; onVariant: (variant: number) => void }>) {
-  const items = useMemo(
-    () =>
-      Array.from({ length: count }, (_, index) => ({
-        value: String(index),
-        label: `Paper ${index + 1}`,
-      })),
-    [count],
-  );
+  const items = useMemo(() => paperOptions(count), [count]);
 
   return (
     <Combobox
