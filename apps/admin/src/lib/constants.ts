@@ -89,6 +89,7 @@ export const ROUTES = {
   TEST: (id: string) => `/tests/${id}`,
   TEST_PATTERN: '/tests/:id',
   /** The paper on its own screen: the extra segment outranks `/tests/:id`. */
+  TEST_PAPER: (id: string) => `/tests/${id}/paper`,
   TEST_PAPER_PATTERN: '/tests/:id/paper',
   /** The unit of offering: a test reaches a student only through a series. */
   TEST_SERIES: '/tests/series',
@@ -323,7 +324,6 @@ export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
 /** The phases of building a test. The order is the contract's; these are only the words. */
 export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>> = {
   SETUP: 'Setup',
-  PAPER: 'Paper',
   OFFER: 'Offer',
 };
 

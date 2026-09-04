@@ -3,13 +3,9 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
-  PAPER_BINDING,
-  type PaperBinding,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
-  testBuilderStepOf,
   type BaseConfigDetail,
-  type DrawSpec,
   type TestBuilderStep,
   type TestDetail,
 } from '@iace/contracts';
@@ -45,27 +41,17 @@ import {
   type TestFormValues,
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
-import { PaperStep } from './test-builder-paper';
 import { PublishStep, ScheduleStep, SeriesStep } from './test-builder-offering';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
 
 const TEST_KEY = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
 
-/** The steps the form itself owns — the only ones whose Next has anything to save. */
-const FIELD_STEPS: ReadonlySet<TestBuilderStep> = new Set([
-  TEST_BUILDER_STEP.SETUP,
-  TEST_BUILDER_STEP.PAPER,
-]);
-
 /** Each step is done when the thing it exists to produce is there, not when it has been walked past. */
 function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   const done = new Set<TestBuilderStep>();
   if (!detail) return done;
   done.add(TEST_BUILDER_STEP.SETUP);
-  if (detail.paperBinding === PAPER_BINDING.GENERATED || detail.paperQuestionCount > 0) {
-    done.add(TEST_BUILDER_STEP.PAPER);
-  }
   if (detail.isLocked) done.add(TEST_BUILDER_STEP.OFFER);
   return done;
 }
@@ -110,12 +96,10 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
-  const drawSpec = useWatch({ control: form.control, name: 'drawSpec' });
-  const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
 
   const arrivedAt = (location.state as { step?: TestBuilderStep } | null)?.step;
   const [step, setStep] = useState<TestBuilderStep>(
-    arrivedAt ?? (detail ? testBuilderStepOf(detail) : TEST_BUILDER_STEP.SETUP),
+    arrivedAt ?? (detail ? TEST_BUILDER_STEP.OFFER : TEST_BUILDER_STEP.SETUP),
   );
 
   const chosenConfig = useQuery({
@@ -171,11 +155,11 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
       save.mutate({ values, target });
     })();
 
-  /** Leaving a step the form owns saves it first, so no move can quietly drop what was typed. */
+  /** Leaving Setup saves it first, so no move can quietly drop what was typed — Offer owns nothing to save. */
   const open = (target: TestBuilderStep) => {
     if (target === step) return;
     const pending = !existing || form.formState.isDirty;
-    if (FIELD_STEPS.has(step) && pending) {
+    if (step === TEST_BUILDER_STEP.SETUP && pending) {
       saveThenOpen(target);
       return;
     }
@@ -233,16 +217,7 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         </>
       }
     >
-      <StepBody
-        step={step}
-        form={form}
-        detail={detail}
-        config={config}
-        sat={sat}
-        spec={drawSpec}
-        onSpec={(next) => form.setValue('drawSpec', next, { shouldDirty: true })}
-        paperBinding={paperBinding}
-      />
+      <StepBody step={step} form={form} detail={detail} config={config} sat={sat} />
     </FormPanel>
   );
 }
@@ -295,19 +270,12 @@ function StepBody({
   detail,
   config,
   sat,
-  spec,
-  onSpec,
-  paperBinding,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
   detail: TestDetail | null;
   config: BaseConfigDetail | null;
   sat: boolean;
-  spec: DrawSpec;
-  onSpec: (next: DrawSpec) => void;
-  /** From the FORM, not the record: the step shows what was chosen, not what was last saved. */
-  paperBinding: PaperBinding;
 }>) {
   return (
     <>
@@ -320,9 +288,6 @@ function StepBody({
 
       {step === TEST_BUILDER_STEP.SETUP ? (
         <SetupStep form={form} detail={detail} config={config} sat={sat} />
-      ) : null}
-      {detail && step === TEST_BUILDER_STEP.PAPER ? (
-        <PaperStep detail={detail} spec={spec} onSpec={onSpec} paperBinding={paperBinding} />
       ) : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <>

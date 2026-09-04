@@ -4,12 +4,12 @@ import {
   EVALUATION_MODE,
   PAPER_BINDING,
   TEST_BUILDER_STEP,
+  TEST_BUILDER_STEPS,
   allowedPaperBindings,
   createTestSchema,
   isPaperBindingAllowed,
   offerRequirements,
   paperQuestionSchema,
-  testBuilderStepOf,
   updateTestSchema,
 } from '../src/index';
 
@@ -97,28 +97,10 @@ describe('a test is named when it is created', () => {
   });
 });
 
-describe('testBuilderStepOf', () => {
-  const draft = { isLocked: false, paperBinding: PAPER_BINDING.FIXED, paperQuestionCount: 0 };
-
-  /** The failure this prevents: reopening a half-built test on a step with nothing left to do. */
-  it('sends an undrawn fixed test to its paper', () => {
-    assert.equal(testBuilderStepOf(draft), TEST_BUILDER_STEP.PAPER);
-  });
-
-  it('sends a drawn test on to offering it', () => {
-    assert.equal(testBuilderStepOf({ ...draft, paperQuestionCount: 50 }), TEST_BUILDER_STEP.OFFER);
-  });
-
-  it('sends a finalized test on to offering it', () => {
-    assert.equal(testBuilderStepOf({ ...draft, isLocked: true }), TEST_BUILDER_STEP.OFFER);
-  });
-
-  /** A generated test draws per attempt, so it has no paper step to owe work to. */
-  it('sends a generated test past the paper', () => {
-    assert.equal(
-      testBuilderStepOf({ ...draft, paperBinding: PAPER_BINDING.GENERATED }),
-      TEST_BUILDER_STEP.OFFER,
-    );
+describe('TEST_BUILDER_STEP', () => {
+  /** The failure this prevents: two ways to reach a paper, disagreeing about what is done. */
+  it('walks Setup then Offer, with no paper step of its own', () => {
+    assert.deepEqual(TEST_BUILDER_STEPS, [TEST_BUILDER_STEP.SETUP, TEST_BUILDER_STEP.OFFER]);
   });
 });
 

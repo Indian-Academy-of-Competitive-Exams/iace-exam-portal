@@ -16,7 +16,6 @@ import {
   type SectionQuota,
 } from '@iace/contracts';
 import { useLocalFilters, useScrollList } from '@iace/app-kit/browser';
-import { Plus } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -66,15 +65,14 @@ function refusalText(refusal: PickRefusal, level: DifficultyLevel): string {
 
 function questionColumns(
   options: Readonly<{
-    onAdd: ((question: QuestionSummary) => void) | undefined;
     picking: QuestionPicking | undefined;
     held: ReadonlySet<string>;
     quota: SectionQuota;
     questionCount: number;
   }>,
 ): DataTableColumn<QuestionSummary>[] {
-  const { onAdd, picking, held, quota, questionCount } = options;
-  if (!onAdd && !picking) return baseColumns();
+  const { picking, held, quota, questionCount } = options;
+  if (!picking) return baseColumns();
 
   const pick: DataTableColumn<QuestionSummary> = {
     key: 'pick',
@@ -84,18 +82,10 @@ function questionColumns(
         return <span className="text-xs text-muted-foreground">On the paper</span>;
       }
       const refusal = pickIssue(question.difficulty, quota, questionCount);
-      if (refusal) {
-        return (
-          <span className="text-xs text-muted-foreground">
-            {refusalText(refusal, question.difficulty)}
-          </span>
-        );
-      }
-      return onAdd ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => onAdd(question)}>
-          <Plus aria-hidden />
-          Add
-        </Button>
+      return refusal ? (
+        <span className="text-xs text-muted-foreground">
+          {refusalText(refusal, question.difficulty)}
+        </span>
       ) : null;
     },
   };
@@ -171,7 +161,6 @@ export function QuestionChooser({
   spec,
   quota,
   held,
-  onAdd,
   picking,
   disabled,
 }: Readonly<{
@@ -181,8 +170,7 @@ export function QuestionChooser({
   quota: SectionQuota;
   /** What the paper already holds, so a question on it is not offered twice. */
   held: ReadonlySet<string>;
-  onAdd?: (question: QuestionSummary) => void;
-  /** Given, rows are ticked and added in one batch instead of one at a time. */
+  /** Rows are ticked and sent to the paper in one batch instead of one at a time. */
   picking?: QuestionPicking;
   disabled?: boolean;
 }>) {
@@ -192,17 +180,9 @@ export function QuestionChooser({
   const picks = useMemo(() => [...(picking?.picked.values() ?? [])], [picking?.picked]);
   const live = useMemo(() => quotaWithPicks(quota, picks), [quota, picks]);
 
-  const adder = disabled || full ? undefined : onAdd;
   const columns = useMemo(
-    () =>
-      questionColumns({
-        onAdd: adder,
-        picking,
-        held,
-        quota: live,
-        questionCount: section.questionCount,
-      }),
-    [adder, picking, held, live, section.questionCount],
+    () => questionColumns({ picking, held, quota: live, questionCount: section.questionCount }),
+    [picking, held, live, section.questionCount],
   );
 
   const filterSpec = [

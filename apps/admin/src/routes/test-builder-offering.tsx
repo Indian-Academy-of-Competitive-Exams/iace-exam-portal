@@ -1,7 +1,14 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Power, X } from 'lucide-react';
-import { AppException, TEST_STATUS, offerRequirements, type TestDetail } from '@iace/contracts';
+import {
+  AppException,
+  OFFER_REQUIREMENT,
+  TEST_STATUS,
+  offerRequirements,
+  type TestDetail,
+} from '@iace/contracts';
 import {
   Alert,
   Button,
@@ -20,7 +27,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { toSeconds } from '../lib/schedule-format';
 import {
   changesOf,
@@ -400,7 +407,7 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
       <ul className="flex flex-col gap-1">
         {requirements.map((requirement) => (
-          <li key={requirement.key}>
+          <li key={requirement.key} className="flex items-center justify-between gap-3">
             <Checkbox
               checked={requirement.met}
               readOnly
@@ -408,6 +415,11 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
               label={requirement.label}
               /* ui-copy-ok: rule */ hint={requirement.owed ?? undefined}
             />
+            {requirement.key === OFFER_REQUIREMENT.PAPER ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
+              </Button>
+            ) : null}
           </li>
         ))}
       </ul>

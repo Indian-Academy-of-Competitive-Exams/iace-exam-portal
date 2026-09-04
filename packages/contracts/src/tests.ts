@@ -400,21 +400,11 @@ export type TestDetail = z.infer<typeof testDetailSchema>;
 /** The phases of building a test, in the order an admin walks them. */
 export const TEST_BUILDER_STEP = {
   SETUP: 'SETUP',
-  PAPER: 'PAPER',
   OFFER: 'OFFER',
 } as const;
 export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
-
-/** How far a test has got, so reopening it lands on the step still owing work. */
-export function testBuilderStepOf(
-  test: Pick<Test, 'isLocked' | 'paperBinding' | 'paperQuestionCount'>,
-): TestBuilderStep {
-  const owesAPaper =
-    test.paperBinding === PAPER_BINDING.FIXED && test.paperQuestionCount === 0 && !test.isLocked;
-  return owesAPaper ? TEST_BUILDER_STEP.PAPER : TEST_BUILDER_STEP.OFFER;
-}
 
 /** The two things a test owes before students can be given it. Both are shown, ticked or not. */
 export const OFFER_REQUIREMENT = {
