@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useParams } from 'react-router-dom';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   AppException,
   FORM_LEVEL_FIELD,
   PAPER_BINDING,
+  TEST_BUILDER_STEP,
   sectionQuota,
   type BaseConfigSection,
   type DrawSpec,
@@ -19,6 +20,7 @@ import {
   Alert,
   Button,
   CAPPED_VIEWPORT,
+  Combobox,
   PageHeader,
   PaneFrame,
   SectionHeading,
@@ -28,6 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
+  plural,
   type BreadcrumbItem,
 } from '@iace/ui';
 import { api } from '../lib/api';
@@ -40,7 +43,11 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
 
 const TEST_KEY = (testId: string) => [...QUERY_KEYS.TEST, testId] as const;
-const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as const;
+const PAPER_KEY = (testId: string, variant: number) =>
+  [...QUERY_KEYS.TEST_PAPER, testId, variant] as const;
+
+/** The paper every FIXED test has, and the first one a GENERATED test drew. */
+const FIRST_PAPER = 0;
 
 /** Referentially stable, so a test that has never had a pool does not remount the editor. */
 const NO_SPEC: DrawSpec = { sections: {} };
@@ -56,6 +63,7 @@ const UNSAVED_POOL =
 export function TestPaperPage() {
   const { id } = useParams();
   const testId = id ?? '';
+  const [variant, setVariant] = useState(FIRST_PAPER);
 
   const test = useQuery({
     queryKey: TEST_KEY(testId),
@@ -64,9 +72,11 @@ export function TestPaperPage() {
   });
 
   const paper = useQuery({
-    queryKey: PAPER_KEY(testId),
-    queryFn: () => api.admin.tests.readPaper(testId),
+    queryKey: PAPER_KEY(testId, variant),
+    queryFn: () => api.admin.tests.readPaper(testId, variant),
     enabled: testId !== '',
+    // The last paper holds the screen while the next one loads, so the open section stays open.
+    placeholderData: keepPreviousData,
   });
 
   if (test.isLoading || paper.isLoading) {
@@ -84,14 +94,39 @@ export function TestPaperPage() {
   }
 
   // Mounted only once both are here, so a refetch cannot throw away a half-edited pool.
-  return <TestPaperScreen detail={test.data} paper={paper.data} />;
+  return (
+    <TestPaperScreen
+      detail={test.data}
+      paper={paper.data}
+      variant={variant}
+      onVariant={setVariant}
+      loading={paper.isPlaceholderData}
+    />
+  );
 }
 
-function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper: TestPaper }>) {
+function TestPaperScreen({
+  detail,
+  paper,
+  variant,
+  onVariant,
+  loading,
+}: Readonly<{
+  detail: TestDetail;
+  paper: TestPaper;
+  variant: number;
+  onVariant: (variant: number) => void;
+  /** True while the paper on screen is the one picked before this one. */
+  loading: boolean;
+}>) {
   const queryClient = useQueryClient();
   const sections = detail.baseConfig.sections;
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
+  // A drawn test holds no paper until finalize draws one, so there is nothing yet to be short of.
+  const hasPaper = byHand || detail.isLocked;
+  // One paper is not a choice, and a hand-picked test has only ever had the one.
+  const browsable = hasPaper && !byHand && detail.variantCount > 1;
 
   const [openSectionId, setOpenSectionId] = useState(sections[0]?.id ?? '');
   const [collapsed, setCollapsed] = useState(!desktop);
@@ -123,7 +158,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
   });
 
   const refresh = async (next: TestPaper) => {
-    queryClient.setQueryData(PAPER_KEY(detail.id), next);
+    queryClient.setQueryData(PAPER_KEY(detail.id, variant), next);
     await queryClient.invalidateQueries({ queryKey: TEST_KEY(detail.id) });
   };
 
@@ -140,7 +175,16 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={tail} />}
       title={title}
-      meta={`${chosen} of ${detail.totalQuestions} chosen`}
+      meta={
+        byHand
+          ? `${chosen} of ${detail.totalQuestions} chosen`
+          : `${plural(detail.variantCount, 'paper')} · ${plural(detail.totalQuestions, 'question')}`
+      }
+      action={
+        browsable ? (
+          <PaperPicker count={detail.variantCount} variant={variant} onVariant={onVariant} />
+        ) : null
+      }
     />
   );
 
@@ -162,7 +206,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
     <PaneFrame header={header} className="flex gap-4">
       <PaperSectionRail
         sections={sections}
-        held={held}
+        held={hasPaper ? held : null}
         openSectionId={openSection.id}
         collapsed={collapsed}
         onOpen={setOpenSectionId}
@@ -170,18 +214,20 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-4">
+        {hasPaper ? null : <DrawnAtOffer detail={detail} />}
+
         <DrawnFrom
           section={openSection}
           spec={sectionSpec}
           editable={editable}
-          fills={!byHand}
+          fills={!hasPaper}
           dirty={draft !== null}
           saving={save.isPending}
           onSave={() => save.mutate(spec)}
           onChange={(next) => setDraft({ sections: { ...spec.sections, [openSection.id]: next } })}
         />
 
-        {byHand ? (
+        {hasPaper ? (
           // Keyed by the section: switching one drops its ticks and its last refusal with it.
           <SectionWorkspace
             key={openSection.id}
@@ -191,12 +237,60 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
             rows={rows}
             held={onThePaper}
             editable={editable}
+            loading={loading}
             poolDirty={draft !== null}
             onChanged={refresh}
           />
         ) : null}
       </div>
     </PaneFrame>
+  );
+}
+
+/** Which of the drawn papers is on screen. Numbered from one: nobody sits paper zero. */
+function PaperPicker({
+  count,
+  variant,
+  onVariant,
+}: Readonly<{ count: number; variant: number; onVariant: (variant: number) => void }>) {
+  const items = useMemo(
+    () =>
+      Array.from({ length: count }, (_, index) => ({
+        value: String(index),
+        label: `Paper ${index + 1}`,
+      })),
+    [count],
+  );
+
+  return (
+    <Combobox
+      aria-label="Paper"
+      className="w-44"
+      clearable={false}
+      value={String(variant)}
+      onChange={(next) => onVariant(Number(next))}
+      items={items}
+    />
+  );
+}
+
+/** The one thing this screen cannot show a drawn test: papers the finalize has not drawn yet. */
+function DrawnAtOffer({ detail }: Readonly<{ detail: TestDetail }>) {
+  const papers = detail.variantCount === 1 ? 'paper is' : 'papers are';
+
+  return (
+    <Alert variant="info" className="shrink-0">
+      <span className="flex flex-1 flex-wrap items-center justify-between gap-3">
+        <span>
+          {`Its ${detail.variantCount} ${papers} drawn the moment this test is offered, so there is nothing on them to read yet — what they are drawn from is set below.`}
+        </span>
+        <Button size="sm" variant="outline" asChild>
+          <Link to={ROUTES.TEST(detail.id)} state={{ step: TEST_BUILDER_STEP.OFFER }}>
+            Offer this test
+          </Link>
+        </Button>
+      </span>
+    </Alert>
   );
 }
 
@@ -301,6 +395,7 @@ function SectionWorkspace({
   rows,
   held,
   editable,
+  loading,
   poolDirty,
   onChanged,
 }: Readonly<{
@@ -311,6 +406,8 @@ function SectionWorkspace({
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
+  /** True while `rows` still belongs to the paper picked before this one. */
+  loading: boolean;
   /** Both writes draw from the stored pool, so an unsaved one has to stop them. */
   poolDirty: boolean;
   onChanged: (next: TestPaper) => Promise<void>;
@@ -398,6 +495,7 @@ function SectionWorkspace({
           rows={rows}
           spec={spec}
           editable={editable}
+          isLoading={loading}
           action={fillAction}
           banner={shortfallBanner}
           onChanged={onChanged}

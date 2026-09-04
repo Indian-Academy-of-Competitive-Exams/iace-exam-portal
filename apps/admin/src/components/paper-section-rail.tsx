@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   cn,
+  plural,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -40,6 +41,22 @@ function RailTooltip({
   );
 }
 
+/** How many questions each section holds, by `BaseConfigSection.id`. Null before a paper exists. */
+type PaperHeld = ReadonlyMap<string, number> | null;
+
+/** How full a section is, or what it asks for where no paper has been drawn yet. */
+function tallyOf(section: BaseConfigSection, held: PaperHeld) {
+  if (!held) return plural(section.questionCount, 'question');
+  return `${held.get(section.id) ?? 0} of ${section.questionCount}`;
+}
+
+/** No paper, no judgement: a section cannot be short of questions nobody has drawn. */
+function fullnessOf(section: BaseConfigSection, held: PaperHeld) {
+  if (!held) return null;
+  const short = (held.get(section.id) ?? 0) < section.questionCount;
+  return <Badge variant={short ? 'warning' : 'success'}>{short ? 'Short' : 'Full'}</Badge>;
+}
+
 export function PaperSectionRail({
   sections,
   held,
@@ -49,8 +66,7 @@ export function PaperSectionRail({
   onCollapsedChange,
 }: Readonly<{
   sections: readonly BaseConfigSection[];
-  /** How many questions each section already holds, by `BaseConfigSection.id`. */
-  held: ReadonlyMap<string, number>;
+  held: PaperHeld;
   openSectionId: string;
   collapsed: boolean;
   onOpen: (sectionId: string) => void;
@@ -88,9 +104,7 @@ export function PaperSectionRail({
         className="relative min-h-0 flex-1 space-y-0.5 overflow-y-auto"
       >
         {sections.map((section, index) => {
-          const count = held.get(section.id) ?? 0;
-          const short = count < section.questionCount;
-          const tally = `${count} of ${section.questionCount}`;
+          const tally = tallyOf(section, held);
           const open = section.id === openSectionId;
 
           return (
@@ -113,9 +127,7 @@ export function PaperSectionRail({
                         <TruncatedText>{section.name}</TruncatedText>
                         <span className="text-xs font-normal">{tally}</span>
                       </span>
-                      <Badge variant={short ? 'warning' : 'success'}>
-                        {short ? 'Short' : 'Full'}
-                      </Badge>
+                      {fullnessOf(section, held)}
                     </>
                   )}
                 </button>

@@ -93,6 +93,7 @@ export function PaperQuestions({
   rows,
   spec,
   editable,
+  isLoading = false,
   action,
   banner,
   onChanged,
@@ -103,6 +104,8 @@ export function PaperQuestions({
   /** What the section draws from now, which is what strands a question chosen before it changed. */
   spec: SectionDrawSpec;
   editable: boolean;
+  /** True while `rows` are last read's, so the table draws its shape instead of another paper's. */
+  isLoading?: boolean;
   /** Beside the heading — filling the rest of this section. */
   action?: ReactNode;
   /** Above the rows — how the last fill was refused. */
@@ -151,7 +154,7 @@ export function PaperQuestions({
         columns={paperColumns(editable ? setRemoving : undefined, stranded)}
         rows={rows}
         rowKey={(row) => row.id}
-        isLoading={false}
+        isLoading={isLoading}
         empty="Nothing chosen for this section yet. Tick questions in the bank and add them."
       />
 
