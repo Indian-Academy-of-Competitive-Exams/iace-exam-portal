@@ -3,16 +3,21 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   AppException,
+  DIFFICULTY_LEVELS,
   ErrorCodes,
   FORM_LEVEL_FIELD,
   PAPER_BINDING,
   QUESTION_STATUS,
   type BaseConfigDetail,
   paperFeasibility,
+  quotaWithPicks,
+  sectionQuota,
+  type DifficultyMix,
   type DrawShortfall,
   type DrawSpec,
   type FeasibilitySection,
   type SectionAvailability,
+  type SectionQuota,
   type AddPaperQuestionBody,
   type PaperQuestionStatus,
   type ReplacePaperQuestionBody,
@@ -40,6 +45,9 @@ const BANK_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill every section of this paper.';
 const SECTION_TOO_THIN_MESSAGE =
   'The bank does not hold enough questions to fill the rest of this section.';
+
+const overSplitMessage = (sectionName: string) =>
+  `${sectionName} already holds more of one difficulty than its split allows. Take one off first.`;
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -85,7 +93,7 @@ export class PaperService {
   async read(testId: string, variant?: number): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     const requested = variant ?? FIXED_VARIANT;
-    // A FIXED test's only variant is 0, so this one bound refuses it without a branch on paperBinding.
+    // A FIXED test has only variant 0 because variantCount defaults to 1 — nothing enforces it.
     if (requested >= test.variantCount) {
       throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_VARIANT_MESSAGE);
     }
@@ -170,13 +178,30 @@ export class PaperService {
 
     const rows = await this.prisma.paperQuestion.findMany({
       where: { testId, variant: FIXED_VARIANT },
-      select: { order: true, baseConfigSectionId: true },
+      select: {
+        order: true,
+        baseConfigSectionId: true,
+        question: { select: { difficulty: true } },
+      },
     });
-    const inSection = rows.filter((row) => row.baseConfigSectionId === section.id).length;
-    if (inSection + questions.length > section.questionCount) {
+    const inSection = rows.filter((row) => row.baseConfigSectionId === section.id);
+    if (inSection.length + questions.length > section.questionCount) {
       const full = `${section.name} already holds the ${section.questionCount} it needs. Take one off first.`;
       throw new AppException(ErrorCodes.CONFLICT, full, { fieldErrors: { questionIds: [full] } });
     }
+
+    const quota = sectionQuota(
+      mixOf(test.questionPoolFilter as DrawSpec | null, section.id),
+      inSection.map((row) => row.question.difficulty),
+    );
+    assertWithinSplit(
+      section.name,
+      quotaWithPicks(
+        quota,
+        questions.map((question) => question.difficulty),
+      ),
+      'questionIds',
+    );
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
@@ -246,12 +271,23 @@ export class PaperService {
       (candidate) => !onPaper.has(candidate.id),
     );
 
+    const pins = await this.pinsOf(held);
+    // Judged on the pins alone, so what the bank happens to stock cannot change the verdict.
+    assertWithinSplit(
+      section.name,
+      sectionQuota(
+        mixOf(spec, section.id),
+        pins.map((pin) => pin.difficulty),
+      ),
+      FORM_LEVEL_FIELD,
+    );
+
     const result = drawPaper({
       sections: [drawSection],
       pool,
       spec,
       seed: freshSeed(),
-      pinned: new Map([[section.id, await this.pinsOf(held)]]),
+      pinned: new Map([[section.id, pins]]),
     });
     if (!result.ok) {
       throw new AppException(ErrorCodes.DRAW_SHORTFALL, SECTION_TOO_THIN_MESSAGE, {
@@ -259,14 +295,7 @@ export class PaperService {
       });
     }
 
-    const added = result.questions.filter((row) => !onPaper.has(row.questionId));
-    if (added.length > Math.max(0, section.questionCount - held.length)) {
-      const over = `${section.name} already holds more of one difficulty than its split allows. Take one off first.`;
-      throw new AppException(ErrorCodes.CONFLICT, over, {
-        fieldErrors: { [FORM_LEVEL_FIELD]: [over] },
-      });
-    }
-    return added;
+    return result.questions.filter((row) => !onPaper.has(row.questionId));
   }
 
   /** The section's own rows as the draw reads them, pinned so the fill can only add around them. */
@@ -387,7 +416,13 @@ export class PaperService {
     });
     const question = await this.prisma.question.findUnique({
       where: { id: questionId },
-      select: { id: true, status: true, subjectId: true, currentVersionId: true },
+      select: {
+        id: true,
+        status: true,
+        subjectId: true,
+        currentVersionId: true,
+        difficulty: true,
+      },
     });
 
     if (question?.status !== QUESTION_STATUS.ACTIVE || !question.currentVersionId) {
@@ -616,6 +651,22 @@ function toCandidate(row: CandidateRow & { currentVersionId: string }): DrawCand
     difficulty: row.difficulty,
     tags: row.tags,
   };
+}
+
+function mixOf(spec: DrawSpec | null, sectionId: string): DifficultyMix | undefined {
+  return spec?.sections?.[sectionId]?.mix;
+}
+
+/** The split bounds hand-picking as much as it does the draw, so one bucket over it is refused. */
+function assertWithinSplit(sectionName: string, quota: SectionQuota, field: string): void {
+  const over = DIFFICULTY_LEVELS.some((level) => {
+    const { chosen, allowed } = quota[level];
+    return allowed !== null && chosen > allowed;
+  });
+  if (!over) return;
+
+  const message = overSplitMessage(sectionName);
+  throw new AppException(ErrorCodes.CONFLICT, message, { fieldErrors: { [field]: [message] } });
 }
 
 /** One section's own narrowing, alone: another section's topics must not shrink this one's pool. */

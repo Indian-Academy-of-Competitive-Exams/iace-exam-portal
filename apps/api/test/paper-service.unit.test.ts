@@ -164,6 +164,46 @@ describe('PaperService — picking a draft paper by hand', () => {
   });
 });
 
+/** Reasoning graded two of each difficulty, so a split has something to draw for every bucket. */
+function gradedBank(): FakeQuestionRow[] {
+  return [
+    ...bank(2, 'sub_r', 'low').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.LOW })),
+    ...bank(2, 'sub_r', 'med').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.MEDIUM })),
+    ...bank(2, 'sub_r', 'high').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.HIGH })),
+    ...bank(6, 'sub_q', 'q'),
+  ];
+}
+
+const splitTest = () =>
+  makeTest({
+    id: 'tst_1',
+    questionPoolFilter: { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 1, HIGH: 1 } } } },
+  });
+
+/** No low question at all, so a draw against a broken split still finds one and looks filled. */
+function thinBank(): FakeQuestionRow[] {
+  return [
+    ...bank(1, 'sub_r', 'med').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.MEDIUM })),
+    ...bank(2, 'sub_r', 'high').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.HIGH })),
+    ...bank(6, 'sub_q', 'q'),
+  ];
+}
+
+/** The split moved under questions already picked, which is the one way a section gets over one. */
+async function pickThenNarrow(questions: FakeQuestionRow[]) {
+  const test = makeTest({
+    id: 'tst_1',
+    questionPoolFilter: { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 0, HIGH: 2 } } } },
+  });
+  const kit = serviceWith(questions, test);
+  await kit.service.addQuestions('tst_1', {
+    baseConfigSectionId: 'sec_1',
+    questionIds: ['high1', 'high2'],
+  });
+  test.questionPoolFilter = { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 1, HIGH: 1 } } } };
+  return kit;
+}
+
 describe('PaperService — putting several questions on a section in one request', () => {
   it('lands every question, numbered from the current highest order, in the order sent', async () => {
     const { service, prisma } = serviceWith();
@@ -198,6 +238,20 @@ describe('PaperService — putting several questions on a section in one request
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /Quant already holds the 2 it needs/);
     assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  /** The failure this prevents: a hand-picked section quietly written against its own split. */
+  it('refuses a batch that would put a difficulty past the split, and writes none of it', async () => {
+    const kit = serviceWith(gradedBank(), splitTest());
+
+    const error = await kit.service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['high1', 'high2'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /more of one difficulty than its split allows/);
+    assert.equal(kit.prisma.paperQuestions.length, 0);
   });
 
   it('refuses a batch naming a question already on the paper, and writes none of it', async () => {
@@ -307,22 +361,6 @@ describe('PaperService — drawing the papers a GENERATED test hands out', () =>
   });
 });
 
-/** Reasoning graded two of each difficulty, so a split has something to draw for every bucket. */
-function gradedBank(): FakeQuestionRow[] {
-  return [
-    ...bank(2, 'sub_r', 'low').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.LOW })),
-    ...bank(2, 'sub_r', 'med').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.MEDIUM })),
-    ...bank(2, 'sub_r', 'high').map((row) => ({ ...row, difficulty: DIFFICULTY_LEVEL.HIGH })),
-    ...bank(6, 'sub_q', 'q'),
-  ];
-}
-
-const splitTest = () =>
-  makeTest({
-    id: 'tst_1',
-    questionPoolFilter: { sections: { sec_1: { mix: { LOW: 1, MEDIUM: 1, HIGH: 1 } } } },
-  });
-
 describe('PaperService — filling a section’s remainder from its own spec', () => {
   const idsOf = (paper: Awaited<ReturnType<PaperService['read']>>, sectionId: string) =>
     paper.sections
@@ -422,11 +460,7 @@ describe('PaperService — filling a section’s remainder from its own spec', (
 
   /** The failure this prevents: a fill that takes a section past the count its config asks for. */
   it('refuses a section whose hand-picking has already broken its split', async () => {
-    const kit = serviceWith(gradedBank(), splitTest());
-    await kit.service.addQuestions('tst_1', {
-      baseConfigSectionId: 'sec_1',
-      questionIds: ['high1', 'high2'],
-    });
+    const kit = await pickThenNarrow(gradedBank());
 
     const error = await kit.service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
 
@@ -434,6 +468,21 @@ describe('PaperService — filling a section’s remainder from its own spec', (
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.match(error.message, /more of one difficulty than its split allows/);
     assert.equal(kit.prisma.paperQuestions.length, 2);
+  });
+
+  /** The same broken split against a thinner bank: what is stocked must not decide the verdict. */
+  it('refuses it whether or not the bank could fill the buckets left', async () => {
+    const kit = await pickThenNarrow(thinBank());
+
+    const error = await kit.service.fillSection('tst_1', 'sec_1').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.message, /more of one difficulty than its split allows/);
+    assert.deepEqual(
+      kit.prisma.paperQuestions.map((row) => row.questionId),
+      ['high1', 'high2'],
+    );
   });
 
   it('adds nothing at all to a section already holding its count', async () => {

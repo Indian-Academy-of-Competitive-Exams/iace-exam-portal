@@ -2,7 +2,6 @@ import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
   DEFAULT_PAPER_VARIANTS,
-  type DrawSpec,
   EVALUATION_MODE,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -32,7 +31,6 @@ export interface TestFormValues {
   examTemplate: ExamTemplate | null;
   maxRetakes: string;
   variantCount: string;
-  drawSpec: DrawSpec;
 }
 
 export type TestForm = UseFormReturn<TestFormValues>;
@@ -53,7 +51,6 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     examTemplate: detail?.examTemplate ?? null,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
     variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
-    drawSpec: detail?.questionPoolFilter ?? { sections: {} },
   };
 }
 

@@ -65,14 +65,12 @@ function refusalText(refusal: PickRefusal, level: DifficultyLevel): string {
 
 function questionColumns(
   options: Readonly<{
-    picking: QuestionPicking | undefined;
     held: ReadonlySet<string>;
     quota: SectionQuota;
     questionCount: number;
   }>,
 ): DataTableColumn<QuestionSummary>[] {
-  const { picking, held, quota, questionCount } = options;
-  if (!picking) return baseColumns();
+  const { held, quota, questionCount } = options;
 
   const pick: DataTableColumn<QuestionSummary> = {
     key: 'pick',
@@ -162,7 +160,6 @@ export function QuestionChooser({
   quota,
   held,
   picking,
-  disabled,
 }: Readonly<{
   section: BaseConfigSection;
   /** What the section draws from. The pool follows it, so narrowing the topics narrows this. */
@@ -171,18 +168,17 @@ export function QuestionChooser({
   /** What the paper already holds, so a question on it is not offered twice. */
   held: ReadonlySet<string>;
   /** Rows are ticked and sent to the paper in one batch instead of one at a time. */
-  picking?: QuestionPicking;
-  disabled?: boolean;
+  picking: QuestionPicking;
 }>) {
   const store = useLocalFilters();
   const taken = DIFFICULTY_LEVELS.reduce((sum, level) => sum + quota[level].chosen, 0);
   const full = taken >= section.questionCount;
-  const picks = useMemo(() => [...(picking?.picked.values() ?? [])], [picking?.picked]);
+  const picks = useMemo(() => [...picking.picked.values()], [picking.picked]);
   const live = useMemo(() => quotaWithPicks(quota, picks), [quota, picks]);
 
   const columns = useMemo(
-    () => questionColumns({ picking, held, quota: live, questionCount: section.questionCount }),
-    [picking, held, live, section.questionCount],
+    () => questionColumns({ held, quota: live, questionCount: section.questionCount }),
+    [held, live, section.questionCount],
   );
 
   const filterSpec = [
@@ -219,7 +215,7 @@ export function QuestionChooser({
 
   // Ticks first, so a tick-all fills what is left around them instead of pushing them out.
   const offered: OfferedQuestion[] = [
-    ...[...(picking?.picked ?? [])].map(([questionId, difficulty]) => ({ questionId, difficulty })),
+    ...[...picking.picked].map(([questionId, difficulty]) => ({ questionId, difficulty })),
     ...questions.rows.map((row) => ({ questionId: row.id, difficulty: row.difficulty })),
   ];
 
@@ -230,16 +226,15 @@ export function QuestionChooser({
     );
   };
 
-  const selection: DataTableSelection | undefined =
-    picking && !disabled && !full
-      ? {
-          selected: new Set(picking.picked.keys()),
-          label: `Select what ${section.name} can still take`,
-          selectable: canTake,
-          onChange: (next) =>
-            picking.onPicked(boundedPicks(offered, next, held, quota, section.questionCount)),
-        }
-      : undefined;
+  const selection: DataTableSelection | undefined = full
+    ? undefined
+    : {
+        selected: new Set(picking.picked.keys()),
+        label: `Select what ${section.name} can still take`,
+        selectable: canTake,
+        onChange: (next) =>
+          picking.onPicked(boundedPicks(offered, next, held, quota, section.questionCount)),
+      };
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
@@ -247,7 +242,7 @@ export function QuestionChooser({
         className="shrink-0"
         title="The bank"
         meta={questions.hasLoaded ? plural(questions.total, 'question') : null}
-        action={picking?.action}
+        action={picking.action}
       />
 
       <ListView
@@ -260,7 +255,7 @@ export function QuestionChooser({
         emptyFiltered="No question matches those filters."
       />
 
-      {full && !disabled ? (
+      {full ? (
         <Alert variant="info" className="shrink-0">
           {`${section.name} is full. Take one off to put another on.`}
         </Alert>

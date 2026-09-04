@@ -81,7 +81,7 @@ export function App() {
           <Route path={ROUTES.EVENTS} element={<EventsPage />} />
           <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
-          {/* Last of the /tests routes: "configs", "series" and "new" all outrank ":id". */}
+          {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PATTERN} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PAPER_PATTERN} element={<TestPaperPage />} />

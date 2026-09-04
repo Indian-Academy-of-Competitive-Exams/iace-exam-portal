@@ -61,6 +61,9 @@ const ADD_ERROR_FIELDS = ['questionId', 'questionIds', FORM_LEVEL_FIELD] as cons
 const UNSAVED_POOL =
   'Adding and filling read the saved pool, so neither runs until this change is saved.';
 
+/** The Offer step's own words, so both screens name one price for the same edit. */
+const THAWS_THE_TEST = 'Editing the paper takes the test back out until it is offered again.';
+
 export function TestPaperPage() {
   const { id } = useParams();
   const testId = id ?? '';
@@ -161,8 +164,11 @@ function TestPaperScreen({
   };
 
   const spec = draft ?? detail.questionPoolFilter ?? NO_SPEC;
+  const unsat = detail.attemptCount === 0;
+  // What the server assembles: a sat test and a drawn one are refused, a frozen one is thawed.
+  const canEditPaper = unsat && byHand;
   // Saving the pool moves the paper, so on a frozen test it would thaw the finalize away.
-  const editable = !detail.isLocked && detail.attemptCount === 0;
+  const canSaveSpec = unsat && !detail.isLocked;
   const openSection = sections.find((section) => section.id === openSectionId) ?? sections[0];
   const title = detail.title ?? 'Untitled test';
   const chosen = [...held.values()].reduce((sum, count) => sum + count, 0);
@@ -216,10 +222,16 @@ function TestPaperScreen({
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {paperExists ? null : <DrawnAtOffer detail={detail} />}
 
+        {canEditPaper && detail.isLocked ? (
+          <Alert variant="warning" className="shrink-0">
+            {THAWS_THE_TEST}
+          </Alert>
+        ) : null}
+
         <DrawnFrom
           section={openSection}
           spec={sectionSpec}
-          editable={editable}
+          canSave={canSaveSpec}
           fills={!paperExists}
           dirty={draft !== null}
           saving={save.isPending}
@@ -236,7 +248,7 @@ function TestPaperScreen({
             spec={sectionSpec}
             rows={rows}
             held={onThePaper}
-            editable={editable}
+            editable={canEditPaper}
             loading={loading}
             poolDirty={draft !== null}
             onChanged={refresh}
@@ -275,7 +287,7 @@ function DrawnAtOffer({ detail }: Readonly<{ detail: TestDetail }>) {
     <Alert variant="info" className="shrink-0">
       <span className="flex flex-1 flex-wrap items-center justify-between gap-3">
         <span>
-          {`Its ${detail.variantCount} ${papers} drawn the moment this test is offered, so there is nothing on them to read yet — what they are drawn from is set below.`}
+          {`Its ${detail.variantCount} ${papers} drawn the moment this test is offered, so there is nothing on them to read yet.`}
         </span>
         <Button size="sm" variant="outline" asChild>
           <Link to={ROUTES.TEST(detail.id)} state={{ step: TEST_BUILDER_STEP.OFFER }}>
@@ -291,7 +303,7 @@ function DrawnAtOffer({ detail }: Readonly<{ detail: TestDetail }>) {
 function DrawnFrom({
   section,
   spec,
-  editable,
+  canSave,
   fills,
   dirty,
   saving,
@@ -300,7 +312,7 @@ function DrawnFrom({
 }: Readonly<{
   section: BaseConfigSection;
   spec: SectionDrawSpec;
-  editable: boolean;
+  canSave: boolean;
   /** True where it is the whole pane, which is the only time it opens on arrival. */
   fills: boolean;
   dirty: boolean;
@@ -312,7 +324,7 @@ function DrawnFrom({
   const label = open ? 'Hide drawn from' : 'Show drawn from';
   const Glyph = open ? ChevronUp : ChevronDown;
 
-  const save = editable ? (
+  const save = canSave ? (
     <Button size="sm" disabled={!dirty} loading={saving} onClick={onSave}>
       Save
     </Button>
@@ -359,13 +371,8 @@ function DrawnFrom({
           )}
         >
           {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
-          <fieldset disabled={!editable} className="contents">
-            <DrawSpecEditor
-              section={section}
-              spec={spec}
-              disabled={!editable}
-              onChange={onChange}
-            />
+          <fieldset disabled={!canSave} className="contents">
+            <DrawSpecEditor section={section} spec={spec} disabled={!canSave} onChange={onChange} />
           </fieldset>
         </div>
       ) : null}
