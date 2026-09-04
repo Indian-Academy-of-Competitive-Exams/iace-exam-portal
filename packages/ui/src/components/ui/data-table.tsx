@@ -129,6 +129,7 @@ export function DataTable<TRow>({
                 <Checkbox
                   aria-label={selection.label ?? 'Select every row shown'}
                   checked={allShown}
+                  disabled={reachable.length === 0}
                   onChange={(event) => toggleAll(event.target.checked)}
                 />
               </TableHead>

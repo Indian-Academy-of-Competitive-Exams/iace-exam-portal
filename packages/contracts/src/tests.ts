@@ -216,6 +216,44 @@ export function pickIssue(
   return allowed !== null && chosen >= allowed ? PICK_REFUSAL.QUOTA_MET : null;
 }
 
+/** The section's quota with questions only shortlisted counted too, so a batch judges itself. */
+export function quotaWithPicks(
+  quota: SectionQuota,
+  picks: readonly DifficultyLevel[],
+): SectionQuota {
+  return Object.fromEntries(
+    DIFFICULTY_LEVELS.map((level) => [
+      level,
+      { ...quota[level], chosen: quota[level].chosen + picks.filter((p) => p === level).length },
+    ]),
+  ) as SectionQuota;
+}
+
+/** One question a shortlist is being built from, in the order it is offered. */
+export interface OfferedQuestion {
+  questionId: string;
+  difficulty: DifficultyLevel;
+}
+
+/** As much of `wanted` as the section can still take, in `order`, stopped where it fills. */
+export function boundedPicks(
+  order: readonly OfferedQuestion[],
+  wanted: ReadonlySet<string>,
+  held: ReadonlySet<string>,
+  quota: SectionQuota,
+  questionCount: number,
+): Map<string, DifficultyLevel> {
+  const kept = new Map<string, DifficultyLevel>();
+
+  for (const { questionId, difficulty } of order) {
+    if (!wanted.has(questionId) || kept.has(questionId) || held.has(questionId)) continue;
+    const room = quotaWithPicks(quota, [...kept.values()]);
+    if (pickIssue(difficulty, room, questionCount) === null) kept.set(questionId, difficulty);
+  }
+
+  return kept;
+}
+
 /** The ones on the paper this section would no longer offer, keyed by question. */
 export function strandedPicks(
   chosen: readonly PickedQuestion[],

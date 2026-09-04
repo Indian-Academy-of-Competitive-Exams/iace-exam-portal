@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  boundedPicks,
   defaultMixFor,
   difficultyMixSchema,
   mixIssue,
   paperFeasibility,
   pickIssue,
+  quotaWithPicks,
   sectionQuota,
   strandedPicks,
   type DifficultyLevel,
   type FeasibilitySection,
+  type OfferedQuestion,
   type PickedQuestion,
   type SectionAvailability,
 } from '../src/index';
@@ -163,6 +166,84 @@ describe('pickIssue', () => {
 
     assert.equal(pickIssue('MEDIUM', quota, QUANT.questionCount), 'SECTION_FULL');
     assert.equal(pickIssue('LOW', quota, QUANT.questionCount), 'SECTION_FULL');
+  });
+});
+
+describe('quotaWithPicks', () => {
+  it('counts what is only shortlisted alongside what the paper already holds', () => {
+    const quota = quotaWithPicks(sectionQuota({ LOW: 7, MEDIUM: 11, HIGH: 7 }, ['LOW']), [
+      'LOW',
+      'HIGH',
+    ]);
+
+    assert.deepEqual(quota.LOW, { chosen: 2, allowed: 7 });
+    assert.deepEqual(quota.HIGH, { chosen: 1, allowed: 7 });
+  });
+});
+
+describe('boundedPicks', () => {
+  const CYCLE: readonly DifficultyLevel[] = ['LOW', 'MEDIUM', 'HIGH'];
+  const ids = Array.from({ length: 40 }, (_, index) => `q${index}`);
+  const bank: OfferedQuestion[] = ids.map((questionId, index) => ({
+    questionId,
+    difficulty: CYCLE[index % CYCLE.length] ?? 'LOW',
+  }));
+  const all = new Set(ids);
+  const none = new Set<string>();
+
+  /** The failure this prevents: 40 rows ticked at once against a section that can take three. */
+  it('takes only what the section still has room for, in the order offered', () => {
+    const quota = sectionQuota(
+      undefined,
+      Array.from({ length: 22 }, () => 'LOW' as const),
+    );
+
+    const kept = boundedPicks(bank, all, none, quota, 25);
+
+    assert.equal(kept.size, 3);
+    assert.deepEqual([...kept.keys()], ['q0', 'q1', 'q2']);
+  });
+
+  it('stops at a full bucket while its neighbours still take one', () => {
+    const quota = sectionQuota({ LOW: 1, MEDIUM: 2, HIGH: 0 }, []);
+
+    const kept = boundedPicks(bank, all, none, quota, 3);
+
+    assert.deepEqual(
+      [...kept.entries()],
+      [
+        ['q0', 'LOW'],
+        ['q1', 'MEDIUM'],
+        ['q4', 'MEDIUM'],
+      ],
+    );
+  });
+
+  /** A tick already made comes first in the order, so a later tick-all cannot push it out. */
+  it('keeps a pick already made ahead of the rest of the bank', () => {
+    const quota = sectionQuota(undefined, []);
+    const order = [{ questionId: 'q30', difficulty: 'HIGH' as const }, ...bank];
+
+    const kept = boundedPicks(order, all, none, quota, 2);
+
+    assert.deepEqual([...kept.keys()], ['q30', 'q0']);
+  });
+
+  it('passes over anything the paper already holds, and anything not asked for', () => {
+    const quota = sectionQuota(undefined, []);
+
+    const kept = boundedPicks(bank, new Set(['q0', 'q1', 'q2']), new Set(['q1']), quota, 25);
+
+    assert.deepEqual([...kept.keys()], ['q0', 'q2']);
+  });
+
+  it('takes nothing at all once the section holds what it needs', () => {
+    const quota = sectionQuota(
+      undefined,
+      Array.from({ length: 25 }, () => 'LOW' as const),
+    );
+
+    assert.equal(boundedPicks(bank, all, none, quota, 25).size, 0);
   });
 });
 

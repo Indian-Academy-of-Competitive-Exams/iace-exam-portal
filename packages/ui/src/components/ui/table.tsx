@@ -9,7 +9,7 @@ export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
 }
 
 /** Tall enough to read a pool in, short enough that what sits below it stays reachable. */
-const CAPPED_VIEWPORT = 'max-h-[26rem] overflow-auto';
+export const CAPPED_VIEWPORT = 'max-h-[26rem] overflow-auto';
 
 /**
  * Uppercase headers, a rule between rows, tabular figures. Owns its scrollbar.

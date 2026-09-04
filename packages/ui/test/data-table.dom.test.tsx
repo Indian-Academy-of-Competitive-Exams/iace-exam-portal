@@ -197,6 +197,20 @@ describe('DataTable selection', () => {
     assert.deepEqual([...got], []);
   });
 
+  /** A box that fires and changes nothing reads as broken; there is nothing left for it to take. */
+  it('disables the header box when no row is within reach', () => {
+    table(
+      new Set(),
+      () => {},
+      () => false,
+    );
+
+    assert.equal(
+      (screen.getByLabelText('Select every row shown') as HTMLInputElement).disabled,
+      true,
+    );
+  });
+
   it('the header reads as ticked once everything within reach is', () => {
     table(
       new Set(['a']),

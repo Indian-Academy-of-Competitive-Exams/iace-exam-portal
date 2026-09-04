@@ -4,9 +4,12 @@ import {
   DIFFICULTY_LEVELS,
   PICK_REFUSAL,
   QUESTION_STATUS,
+  boundedPicks,
   pickIssue,
+  quotaWithPicks,
   type BaseConfigSection,
   type DifficultyLevel,
+  type OfferedQuestion,
   type PickRefusal,
   type QuestionSummary,
   type SectionDrawSpec,
@@ -59,16 +62,6 @@ function refusalText(refusal: PickRefusal, level: DifficultyLevel): string {
   return refusal === PICK_REFUSAL.QUOTA_MET
     ? `${DIFFICULTY_LABELS[level]} is full`
     : 'No room left';
-}
-
-/** The paper's quota with the ticks counted too, so a batch cannot be built past its own bound. */
-function withPicks(quota: SectionQuota, picks: readonly DifficultyLevel[]): SectionQuota {
-  return Object.fromEntries(
-    DIFFICULTY_LEVELS.map((level) => [
-      level,
-      { ...quota[level], chosen: quota[level].chosen + picks.filter((p) => p === level).length },
-    ]),
-  ) as SectionQuota;
 }
 
 function questionColumns(
@@ -197,7 +190,7 @@ export function QuestionChooser({
   const taken = DIFFICULTY_LEVELS.reduce((sum, level) => sum + quota[level].chosen, 0);
   const full = taken >= section.questionCount;
   const picks = useMemo(() => [...(picking?.picked.values() ?? [])], [picking?.picked]);
-  const live = useMemo(() => withPicks(quota, picks), [quota, picks]);
+  const live = useMemo(() => quotaWithPicks(quota, picks), [quota, picks]);
 
   const adder = disabled || full ? undefined : onAdd;
   const columns = useMemo(
@@ -244,28 +237,17 @@ export function QuestionChooser({
     fetchPage: (params) => api.admin.questions.list({ ...params, pageSize: POOL_PAGE_SIZE }),
   });
 
-  const levelOf = (id: string): DifficultyLevel | undefined =>
-    picking?.picked.get(id) ?? questions.rows.find((row) => row.id === id)?.difficulty;
-
-  const fits = (level: DifficultyLevel, sofar: readonly DifficultyLevel[]) =>
-    pickIssue(level, withPicks(quota, sofar), section.questionCount) === null;
-
-  /** Walks the bank in its own order, keeping ticks already made, and stops where the section fills. */
-  const bound = (wanted: ReadonlySet<string>): QuestionPicks => {
-    const kept = new Map<string, DifficultyLevel>();
-    const order = [...(picking?.picked.keys() ?? []), ...questions.rows.map((row) => row.id)];
-
-    for (const id of order) {
-      const level = levelOf(id);
-      if (!wanted.has(id) || kept.has(id) || held.has(id) || level === undefined) continue;
-      if (fits(level, [...kept.values()])) kept.set(id, level);
-    }
-    return kept;
-  };
+  // Ticks first, so a tick-all fills what is left around them instead of pushing them out.
+  const offered: OfferedQuestion[] = [
+    ...[...(picking?.picked ?? [])].map(([questionId, difficulty]) => ({ questionId, difficulty })),
+    ...questions.rows.map((row) => ({ questionId: row.id, difficulty: row.difficulty })),
+  ];
 
   const canTake = (id: string): boolean => {
-    const level = levelOf(id);
-    return level !== undefined && !held.has(id) && fits(level, picks);
+    const level = offered.find((row) => row.questionId === id)?.difficulty;
+    return (
+      level !== undefined && !held.has(id) && pickIssue(level, live, section.questionCount) === null
+    );
   };
 
   const selection: DataTableSelection | undefined =
@@ -274,7 +256,8 @@ export function QuestionChooser({
           selected: new Set(picking.picked.keys()),
           label: `Select what ${section.name} can still take`,
           selectable: canTake,
-          onChange: (next) => picking.onPicked(bound(next)),
+          onChange: (next) =>
+            picking.onPicked(boundedPicks(offered, next, held, quota, section.questionCount)),
         }
       : undefined;
 

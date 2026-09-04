@@ -14,11 +14,11 @@ import {
   type TestDetail,
   type TestPaper,
 } from '@iace/contracts';
-import { bannerMessage } from '@iace/app-kit';
 import { DESKTOP_QUERY, PageCrumbs, useMediaQuery } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
+  CAPPED_VIEWPORT,
   PageHeader,
   PaneFrame,
   SectionHeading,
@@ -46,8 +46,12 @@ const PAPER_KEY = (testId: string) => [...QUERY_KEYS.TEST_PAPER, testId] as cons
 const NO_SPEC: DrawSpec = { sections: {} };
 const NO_PICKS: QuestionPicks = new Map();
 
-/** A batch is refused whole, and the server keys the refusal by one of these two. */
-const ADD_ERROR_FIELDS = ['questionId', 'questionIds'] as const;
+/** A batch is refused whole, under whichever of these keys the server reached for. */
+const ADD_ERROR_FIELDS = ['questionId', 'questionIds', FORM_LEVEL_FIELD] as const;
+
+/** Both read the record, so a pool that is only on screen is a pool they will not draw from. */
+const UNSAVED_POOL =
+  'Adding and filling read the saved pool, so neither runs until this change is saved.';
 
 export function TestPaperPage() {
   const { id } = useParams();
@@ -187,6 +191,7 @@ function TestPaperScreen({ detail, paper }: Readonly<{ detail: TestDetail; paper
             rows={rows}
             held={onThePaper}
             editable={editable}
+            poolDirty={draft !== null}
             onChanged={refresh}
           />
         ) : null}
@@ -252,9 +257,20 @@ function DrawnFrom({
         }
       />
 
+      {dirty && !fills ? (
+        <Alert variant="info" className="shrink-0">
+          {UNSAVED_POOL}
+        </Alert>
+      ) : null}
+
       {open ? (
         // Capped so the lists below keep their share, and `relative` so an sr-only label stays in.
-        <div className={cn('relative overflow-y-auto pr-2', fills ? 'min-h-0 flex-1' : 'max-h-64')}>
+        <div
+          className={cn(
+            'relative pr-2',
+            fills ? 'min-h-0 flex-1 overflow-y-auto' : CAPPED_VIEWPORT,
+          )}
+        >
           {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
           <fieldset disabled={!editable} className="contents">
             <DrawSpecEditor
@@ -270,11 +286,11 @@ function DrawnFrom({
   );
 }
 
-/** A fill is keyed by its section, an over-quota one by the form; either belongs beside the list. */
-function sectionMessage(error: unknown, sectionId: string): string | null {
-  if (!AppException.is(error)) return bannerMessage(error);
+/** Only what the server said: anything else is not field-mapped, so the toast owns it. */
+function refusalMessage(error: unknown, ...keys: readonly string[]): string | null {
+  if (!AppException.is(error)) return null;
   const fields = error.fieldErrors ?? {};
-  return fields[sectionId]?.[0] ?? fields[FORM_LEVEL_FIELD]?.[0] ?? error.message;
+  return keys.map((key) => fields[key]?.[0]).find(Boolean) ?? error.message;
 }
 
 /** The bank and the paper side by side, and the two ways a section is filled from one. */
@@ -285,6 +301,7 @@ function SectionWorkspace({
   rows,
   held,
   editable,
+  poolDirty,
   onChanged,
 }: Readonly<{
   testId: string;
@@ -294,6 +311,8 @@ function SectionWorkspace({
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
+  /** Both writes draw from the stored pool, so an unsaved one has to stop them. */
+  poolDirty: boolean;
   onChanged: (next: TestPaper) => Promise<void>;
 }>) {
   const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
@@ -321,13 +340,13 @@ function SectionWorkspace({
     spec.mix,
     rows.map((row) => row.question.difficulty),
   );
-  const refused = bannerMessage(add.error);
-  const shortfall = sectionMessage(fill.error, section.id);
+  const refused = refusalMessage(add.error);
+  const shortfall = refusalMessage(fill.error, section.id, FORM_LEVEL_FIELD);
 
   const addAction = (
     <Button
       size="sm"
-      disabled={picked.size === 0}
+      disabled={picked.size === 0 || poolDirty}
       loading={add.isPending}
       onClick={() => add.mutate([...picked.keys()])}
     >
@@ -337,7 +356,13 @@ function SectionWorkspace({
 
   const fillAction =
     editable && rows.length < section.questionCount ? (
-      <Button size="sm" variant="outline" loading={fill.isPending} onClick={() => fill.mutate()}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={poolDirty}
+        loading={fill.isPending}
+        onClick={() => fill.mutate()}
+      >
         Fill remaining
       </Button>
     ) : null;

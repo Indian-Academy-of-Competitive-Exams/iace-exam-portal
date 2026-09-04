@@ -263,6 +263,7 @@ export {
 } from './components/ui/truncated-text';
 export {
   Table,
+  CAPPED_VIEWPORT,
   TableHeader,
   TableBody,
   TableRow,
