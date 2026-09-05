@@ -4,7 +4,7 @@ The rules a service enforces, an ordering guarantees, or a reason explains. Ever
 type or a foreign key already enforces lives in `prisma/schema.prisma` and is not repeated here.
 
 Stack, scaling and deployment are `docs/01-architecture.md`. Module boundaries, table ownership and
-the event catalog are `docs/03-shared-architecture.md`.
+the event catalog are `docs/03-conventions.md`.
 
 ---
 

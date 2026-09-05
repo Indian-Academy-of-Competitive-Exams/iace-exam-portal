@@ -22,7 +22,7 @@ const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
 const ALLOWED = new Set(['EventEmitter']);
 
 const SCHEMA_PATH = 'prisma/schema.prisma';
-const ARCHITECTURE_DOC = 'docs/03-shared-architecture.md';
+const ARCHITECTURE_DOC = 'docs/03-conventions.md';
 const ROOT_DOCS = ['CLAUDE.md', 'README.md'];
 
 const PRISMA_MODEL = /^(?:model|enum) (\w+) \{/gm;
