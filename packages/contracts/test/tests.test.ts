@@ -3,15 +3,20 @@ import { describe, it } from 'node:test';
 import {
   EVALUATION_MODE,
   PAPER_BINDING,
+  TEST_SCOPE,
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
   allowedPaperBindings,
   createTestSchema,
   isPaperBindingAllowed,
   offerRequirements,
+  scopedSections,
+  scopedQuestionCount,
   testBuilderStepOf,
   paperQuestionSchema,
   updateTestSchema,
+  type TestScope,
+  type TestScopeRef,
 } from '../src/index';
 
 /**
@@ -190,5 +195,70 @@ describe('testBuilderStepOf', () => {
       }),
       TEST_BUILDER_STEP.OFFER,
     );
+  });
+});
+
+describe('scopedSections', () => {
+  const sections = [
+    { id: 'sec_quant', moduleId: 'mod_a', questionCount: 25 },
+    { id: 'sec_reasoning', moduleId: 'mod_a', questionCount: 25 },
+    { id: 'sec_english', moduleId: 'mod_b', questionCount: 25 },
+    { id: 'sec_gk', moduleId: null, questionCount: 25 },
+  ];
+  const ids = (scope: TestScope, ref: TestScopeRef | null) =>
+    scopedSections(sections, scope, ref).map((section) => section.id);
+
+  it('puts every section in play for a full paper', () => {
+    assert.deepEqual(ids(TEST_SCOPE.FULL, null), [
+      'sec_quant',
+      'sec_reasoning',
+      'sec_english',
+      'sec_gk',
+    ]);
+  });
+
+  /** THE failure this prevents: a sectional test whose paper can be built across every section. */
+  it('holds a sectional test to the one section it names', () => {
+    assert.deepEqual(ids(TEST_SCOPE.SECTIONAL, { sectionId: 'sec_english' }), ['sec_english']);
+  });
+
+  it('holds a module test to that module, and a section outside it stays out', () => {
+    assert.deepEqual(ids(TEST_SCOPE.MODULE, { moduleId: 'mod_a' }), ['sec_quant', 'sec_reasoning']);
+  });
+
+  /** A scope naming nothing covers nothing, rather than quietly falling back to everything. */
+  it('covers nothing when the reference names nothing it holds', () => {
+    assert.deepEqual(ids(TEST_SCOPE.SECTIONAL, null), []);
+    assert.deepEqual(ids(TEST_SCOPE.SECTIONAL, { sectionId: 'sec_gone' }), []);
+    assert.deepEqual(ids(TEST_SCOPE.MODULE, { moduleId: 'mod_gone' }), []);
+  });
+
+  /** A null moduleId is a section belonging to no module, not one matching every module. */
+  it('does not sweep a module-less section into a module test', () => {
+    assert.deepEqual(ids(TEST_SCOPE.MODULE, {}), []);
+  });
+});
+
+describe('scopedQuestionCount', () => {
+  const sections = [
+    { id: 'sec_quant', moduleId: 'mod_a', questionCount: 25 },
+    { id: 'sec_reasoning', moduleId: 'mod_a', questionCount: 30 },
+    { id: 'sec_english', moduleId: 'mod_b', questionCount: 20 },
+  ];
+
+  it('counts the whole configuration for a full paper', () => {
+    assert.equal(scopedQuestionCount(sections, TEST_SCOPE.FULL, null), 75);
+  });
+
+  /** THE failure this prevents: a correctly built sectional paper that can never be offered. */
+  it('counts only what a sectional test covers', () => {
+    assert.equal(
+      scopedQuestionCount(sections, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_english' }),
+      20,
+    );
+  });
+
+  it('counts a module as the sum of its own sections', () => {
+    assert.equal(scopedQuestionCount(sections, TEST_SCOPE.MODULE, { moduleId: 'mod_a' }), 55);
   });
 });

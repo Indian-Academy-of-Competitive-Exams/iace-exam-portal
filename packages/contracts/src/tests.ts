@@ -145,6 +145,40 @@ export const drawSpecSchema = z.object({
 });
 export type DrawSpec = z.infer<typeof drawSpecSchema>;
 
+/** The shape a section needs for the scope rule to place it. */
+export interface ScopedSection {
+  id: string;
+  moduleId: string | null;
+  questionCount: number;
+}
+
+/** The sections a test's scope puts in play — built, drawn, counted and judged over these alone. */
+export function scopedSections<T extends ScopedSection>(
+  sections: readonly T[],
+  scope: TestScope,
+  scopeRef: TestScopeRef | null,
+): readonly T[] {
+  if (scope === TEST_SCOPE.SECTIONAL) {
+    return sections.filter((section) => section.id === scopeRef?.sectionId);
+  }
+  if (scope === TEST_SCOPE.MODULE) {
+    return sections.filter((section) => section.moduleId === scopeRef?.moduleId);
+  }
+  return sections;
+}
+
+/** What a scoped test's whole paper comes to — never the configuration's total, which is bigger. */
+export function scopedQuestionCount(
+  sections: readonly ScopedSection[],
+  scope: TestScope,
+  scopeRef: TestScopeRef | null,
+): number {
+  return scopedSections(sections, scope, scopeRef).reduce(
+    (total, section) => total + section.questionCount,
+    0,
+  );
+}
+
 export interface FeasibilitySection {
   id: string;
   name: string;

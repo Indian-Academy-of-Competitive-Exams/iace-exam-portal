@@ -8,6 +8,7 @@ import {
   PAPER_BINDING,
   TEST_BUILDER_STEP,
   sectionQuota,
+  scopedSections,
   type BaseConfigSection,
   type DrawSpec,
   type PaperRow,
@@ -130,7 +131,8 @@ function TestPaperScreen({
   loading: boolean;
 }>) {
   const queryClient = useQueryClient();
-  const sections = detail.baseConfig.sections;
+  // The scope decides which sections this test has a paper for; the rest belong to other tests.
+  const sections = scopedSections(detail.baseConfig.sections, detail.scope, detail.scopeRef);
   const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
   const paperExists = hasPaper(detail);
 

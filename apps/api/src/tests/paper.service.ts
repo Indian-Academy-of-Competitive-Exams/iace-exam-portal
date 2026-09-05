@@ -22,6 +22,9 @@ import {
   type PaperQuestionStatus,
   type ReplacePaperQuestionBody,
   type TestPaper,
+  type TestScope,
+  type TestScopeRef,
+  scopedSections,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { BaseConfigsService } from '../configs';
@@ -98,7 +101,7 @@ export class PaperService {
       throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_VARIANT_MESSAGE);
     }
     const config = await this.configs.detail(test.baseConfigId);
-    return this.paperOf(test.id, config, requested);
+    return this.paperOf(test.id, this.scopedOf(test, config), requested);
   }
 
   /** The papers a GENERATED test hands out. DRAWN only — writing them belongs behind the freeze. */
@@ -108,7 +111,8 @@ export class PaperService {
   ): Promise<Prisma.PaperQuestionCreateManyInput[]> {
     const test = await this.requireTest(testId);
     const config = await this.configs.detail(test.baseConfigId);
-    const sections = config.sections.map(toDrawSection);
+    const scoped = this.scopedOf(test, config);
+    const sections = scoped.map(toDrawSection);
     const spec = (test.questionPoolFilter as DrawSpec | null) ?? null;
 
     if (count < 1) {
@@ -119,7 +123,7 @@ export class PaperService {
     }
 
     const pool = await this.poolFor(sections, spec);
-    this.assertBankCanFill(config.sections, spec, pool);
+    this.assertBankCanFill(scoped, spec, pool);
 
     const papers = Array.from(
       { length: count },
@@ -164,7 +168,7 @@ export class PaperService {
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const config = await this.configs.detail(test.baseConfigId);
-    const section = config.sections.find((row) => row.id === input.baseConfigSectionId);
+    const section = this.scopedOf(test, config).find((row) => row.id === input.baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     this.assertNoRepeats(input.questionIds);
@@ -220,7 +224,7 @@ export class PaperService {
       });
     });
 
-    return this.paperOf(testId, config);
+    return this.paperOf(testId, this.scopedOf(test, config));
   }
 
   /** Tops a hand-picked section up to its count from its own spec: the draw only ever ADDS. */
@@ -229,7 +233,7 @@ export class PaperService {
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
 
     const config = await this.configs.detail(test.baseConfigId);
-    const section = config.sections.find((row) => row.id === baseConfigSectionId);
+    const section = this.scopedOf(test, config).find((row) => row.id === baseConfigSectionId);
     if (!section) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_SECTION_MESSAGE);
 
     const rows = await this.prisma.paperQuestion.findMany({
@@ -238,7 +242,7 @@ export class PaperService {
     });
     const spec = sectionSpec((test.questionPoolFilter as DrawSpec | null) ?? null, section.id);
     const added = await this.drawRemainder(section, spec, rows);
-    if (added.length === 0) return this.paperOf(testId, config);
+    if (added.length === 0) return this.paperOf(testId, this.scopedOf(test, config));
 
     const highest = rows.reduce((max, row) => Math.max(max, row.order), 0);
     await this.prisma.$transaction(async (tx) => {
@@ -254,7 +258,7 @@ export class PaperService {
       });
     });
 
-    return this.paperOf(testId, config);
+    return this.paperOf(testId, this.scopedOf(test, config));
   }
 
   /** What the section still lacks. The engine hands the pins back, so only the new rows survive. */
@@ -337,7 +341,7 @@ export class PaperService {
       });
     });
 
-    return this.paperOf(testId, await this.configs.detail(test.baseConfigId));
+    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
@@ -351,7 +355,7 @@ export class PaperService {
       await tx.paperQuestion.delete({ where: { id: rowId } });
     });
 
-    return this.paperOf(testId, await this.configs.detail(test.baseConfigId));
+    return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
   }
 
   /** The only change a LOCKED paper allows; a draft's question is edited, never withdrawn. */
@@ -387,7 +391,11 @@ export class PaperService {
         `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
       );
     }
-    return this.paperOf(testId, await this.configs.detail(test.baseConfigId), row.variant);
+    return this.paperOf(
+      testId,
+      this.scopedOf(test, await this.configs.detail(test.baseConfigId)),
+      row.variant,
+    );
   }
 
   private async requireRow(testId: string, rowId: string) {
@@ -514,7 +522,7 @@ export class PaperService {
   /** One paper at a time. A FIXED test has only variant 0; a GENERATED one is read a variant at a time. */
   private async paperOf(
     testId: string,
-    config: BaseConfigDetail,
+    sections: BaseConfigDetail['sections'],
     variant = FIXED_VARIANT,
   ): Promise<TestPaper> {
     const rows = await this.prisma.paperQuestion.findMany({
@@ -526,7 +534,7 @@ export class PaperService {
     return {
       testId,
       totalQuestions: rows.length,
-      sections: config.sections.map((section) => ({
+      sections: sections.map((section) => ({
         baseConfigSectionId: section.id,
         name: section.name,
         order: section.order,
@@ -551,6 +559,15 @@ export class PaperService {
     };
   }
 
+  /** The sections this test's scope covers. Building, drawing, reading and counting use these alone. */
+  private scopedOf(
+    test: { scope: TestScope; scopeRef: Prisma.JsonValue },
+    config: BaseConfigDetail,
+  ): BaseConfigDetail['sections'] {
+    const scopeRef = (test.scopeRef as TestScopeRef | null) ?? null;
+    return [...scopedSections(config.sections, test.scope, scopeRef)];
+  }
+
   private async requireTest(id: string) {
     const test = await this.prisma.test.findUnique({
       where: { id },
@@ -559,6 +576,8 @@ export class PaperService {
         baseConfigId: true,
         isLocked: true,
         paperBinding: true,
+        scope: true,
+        scopeRef: true,
         questionPoolFilter: true,
         variantCount: true,
         _count: { select: { attempts: true } },

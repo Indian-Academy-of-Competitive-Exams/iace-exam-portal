@@ -6,7 +6,9 @@ import {
   FORM_LEVEL_FIELD,
   MIN_PAPER_VARIANTS,
   PAPER_BINDING,
+  TEST_SCOPE,
   fieldDiff,
+  scopedQuestionCount,
   type BaseConfigDetail,
   type CreateTestBody,
   type Paginated,
@@ -36,7 +38,15 @@ import {
 import { thaw } from './thaw';
 
 const TEST_INCLUDE = {
-  baseConfig: { select: { name: true, totalQuestions: true, durationSec: true } },
+  baseConfig: {
+    select: {
+      name: true,
+      totalQuestions: true,
+      durationSec: true,
+      // A scoped test's paper is its own sections' worth, never the whole configuration's.
+      sections: { select: { id: true, moduleId: true, questionCount: true } },
+    },
+  },
   examStage: {
     select: {
       id: true,
@@ -288,7 +298,11 @@ function toTest(row: TestRow): Test {
     title: row.title,
     baseConfigId: row.baseConfigId,
     baseConfigName: row.baseConfig.name,
-    totalQuestions: row.baseConfig.totalQuestions,
+    // A full paper is the configuration's own maintained total; a scoped one is its sections' worth.
+    totalQuestions:
+      row.scope === TEST_SCOPE.FULL
+        ? row.baseConfig.totalQuestions
+        : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRefOf(row)),
     durationSec: row.baseConfig.durationSec,
     examStageId: row.examStageId,
     examStage: row.examStage,

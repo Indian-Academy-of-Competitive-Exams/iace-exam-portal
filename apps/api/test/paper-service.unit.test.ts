@@ -7,6 +7,7 @@ import { SAT_TEST_MESSAGE } from '../src/tests/test-rules';
 import { BaseConfigsService } from '../src/configs/base-configs.service';
 import { ExamStagesService } from '../src/configs/exam-stages.service';
 import { AuditContext } from '../src/audit';
+import { TEST_SCOPE } from '@iace/contracts';
 import {
   type FakeQuestionRow,
   type FakeSectionRow,
@@ -764,5 +765,53 @@ describe('PaperService — one row at a time', () => {
     assert.equal(replaced.code, ErrorCodes.CONFLICT);
     assert.ok(AppException.is(removed));
     assert.equal(removed.code, ErrorCodes.CONFLICT);
+  });
+});
+
+describe('PaperService — a test only has the sections its scope covers', () => {
+  const sectional = () =>
+    makeTest({ id: 'tst_1', scope: TEST_SCOPE.SECTIONAL, scopeRef: { sectionId: 'sec_1' } });
+
+  /** THE failure this prevents: a sectional test whose paper can be built across every section. */
+  it('refuses a question added to a section outside the scope', async () => {
+    const { service, prisma } = serviceWith(undefined, sectional());
+
+    const error = await service
+      .addQuestions('tst_1', { baseConfigSectionId: 'sec_2', questionIds: ['q1'] })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  it('still takes a question into the one section it does cover', async () => {
+    const { service, prisma } = serviceWith(undefined, sectional());
+
+    await service.addQuestions('tst_1', { baseConfigSectionId: 'sec_1', questionIds: ['r1'] });
+
+    assert.equal(prisma.paperQuestions.length, 1);
+  });
+
+  it('refuses to fill a section outside the scope', async () => {
+    const { service, prisma } = serviceWith(undefined, sectional());
+
+    const error = await service.fillSection('tst_1', 'sec_2').catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.NOT_FOUND);
+    assert.equal(prisma.paperQuestions.length, 0);
+  });
+
+  /** The paper a screen reads must not offer a section the server would refuse to fill. */
+  it('reads back only the covered section', async () => {
+    const { service } = serviceWith(undefined, sectional());
+
+    const paper = await service.read('tst_1');
+
+    assert.deepEqual(
+      paper.sections.map((section) => section.baseConfigSectionId),
+      ['sec_1'],
+    );
   });
 });

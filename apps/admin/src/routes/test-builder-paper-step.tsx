@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   MERIT_TYPE,
+  scopedSections,
   type BaseConfigDetail,
   type BaseConfigSection,
   type TestDetail,
@@ -48,7 +49,7 @@ export function PaperStep({
     return <Alert variant="info">Save this test to build its paper.</Alert>;
   }
 
-  const sections = config.sections;
+  const sections = scopedSections(config.sections, detail.scope, detail.scopeRef);
   if (sections.length === 0) {
     return (
       <Alert variant="warning">

@@ -2268,6 +2268,10 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
         languages: config?.languages ?? [],
         locked: config?.locked ?? false,
+        // Selected with the test now, because a scoped test counts its own sections, not the config's.
+        sections: this.sections
+          .filter((section) => section.baseConfigId === config?.id)
+          .sort((a, b) => a.order - b.order),
       },
       paperQuestions: this.paperQuestions
         .filter((paper) => paper.testId === row.id)
