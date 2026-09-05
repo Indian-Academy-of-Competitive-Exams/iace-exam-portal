@@ -25,9 +25,21 @@ const SCHEMA_PATH = 'prisma/schema.prisma';
 const ARCHITECTURE_DOC = 'docs/03-conventions.md';
 const ROOT_DOCS = ['CLAUDE.md', 'README.md'];
 
+/** Anything that can cite a section: a lint rule and a CI workflow are code the docs describe. */
+const CITING_PATHSPECS = [
+  '*.ts',
+  '*.tsx',
+  '*.mjs',
+  '*.js',
+  '*.cjs',
+  '.husky',
+  '.editorconfig',
+  '.github',
+];
+
 const PRISMA_MODEL = /^(?:model|enum) (\w+) \{/gm;
 const SOURCE_SYMBOL = /\b([A-Z][A-Za-z0-9]*)\b/g;
-const DOC_IDENTIFIER = /`([A-Z][A-Za-z0-9]*)[`.]/g;
+const DOC_IDENTIFIER = /`([A-Z][A-Za-z0-9]*)\b/g;
 const SECTION_HEADING = /^## (\d+)\./gm;
 const SUBSECTION_HEADING = /^### (\d+\.\d+)/gm;
 const NUMBERED_RULE = /^(\d+)\. /gm;
@@ -119,7 +131,7 @@ function main() {
   const docs = load(tracked('docs', ...ROOT_DOCS).filter((path) => path.endsWith(DOC_EXTENSION)));
 
   const headings = architectureHeadings(readFileSync(ARCHITECTURE_DOC, 'utf8'));
-  const citing = tracked('*.ts', '*.tsx', '.husky', '*.mjs').filter(isLiveCode);
+  const citing = tracked(...CITING_PATHSPECS).filter(isLiveCode);
   const citations = load(citing).flatMap(({ path, text }) =>
     captured(text, SECTION_CITATION).map((section) => ({ path, section })),
   );

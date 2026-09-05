@@ -65,6 +65,16 @@ describe('ghostIdentifiers — a doc may only name what the repo has', () => {
     ]);
   });
 
+  it('sees a name a doc writes with its columns, which a trailing backtick alone would hide', () => {
+    const offences = ghostIdentifiers({
+      docs: doc('One row per grant: `AdminFeaturePermission(adminId, featureKey, level)`.'),
+      models: ['AdminBranch'],
+      symbols: [],
+      allowlist: ALLOWLIST,
+    });
+    assert.deepEqual(names(offences), ['AdminFeaturePermission']);
+  });
+
   it('never reports a single-word name, or every enum value in every doc would fire', () => {
     const offences = ghostIdentifiers({
       docs: doc('`FREE` reaches everyone, and there is no `Feature` table for a `Test`.'),
