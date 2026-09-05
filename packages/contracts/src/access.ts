@@ -6,12 +6,12 @@ import { canonicalNameSchema } from './naming';
 import { examCourseSchema } from './exams';
 
 // ============================================================================
-// Access. A student reaches a series by exam match, by program match or by an
-// explicit grant, and the series must be enabled for their branch. There are no
-// groups, and nothing is open to everyone.
+// Access. A series' kind decides who reaches it, a grant overrides every kind,
+// and `isEnabled` gates all of them. There are no groups, and the branch gate
+// belongs to STANDARD alone.
 // ============================================================================
 
-/** STANDARD reaches by exam or program; FREE also by an enrolled course; PROGRAM only by program; EVENT only the candidates on its Event. */
+/** FREE reaches everyone; STANDARD only the branches on its branchIds whose students enrolled the stage's course; PROGRAM only its program; EVENT only the candidates on its Event. */
 export const TEST_SERIES_KIND = {
   STANDARD: 'STANDARD',
   FREE: 'FREE',

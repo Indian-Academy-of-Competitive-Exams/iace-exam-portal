@@ -59,7 +59,9 @@ enum QuestionStatus {
 enum TestUi {
   CBT
   OMR
+  // Selectable but has no affordance of its own: anything that is not OMR renders the CBT screen.
   GENERIC
+  // Reserved for a typing/skill paper, which V1 does not run — it renders the CBT screen too.
   TYPING
 }
 
@@ -186,7 +188,7 @@ enum ImportSource {
   SELF_SIGNUP
 }
 
-// STANDARD reaches by exam or program; FREE also by course; PROGRAM only by program; EVENT only its event's candidates.
+// FREE reaches everyone; STANDARD only the branches on branchIds whose students enrolled the stage's course; PROGRAM only its program; EVENT only its candidates.
 enum TestSeriesKind {
   STANDARD
   FREE
@@ -782,8 +784,10 @@ model AdminFeaturePermission {
 }
 
 // ============================================================================
-// Access — branches, programs, series. A student reaches a series by exam
-// match, program match or an explicit grant, gated by a STANDARD series' own branchIds/isEnabled.
+// Access — branches, programs, series. The kind decides reach: FREE everyone,
+// STANDARD its branchIds plus the stage's course enrolled, PROGRAM its
+// programCode, EVENT its candidates. A grant overrides every kind, isEnabled
+// gates them all, and there are no groups.
 // ============================================================================
 
 // name carries a partial unique index (WHERE deletedAt IS NULL) from the migration.
