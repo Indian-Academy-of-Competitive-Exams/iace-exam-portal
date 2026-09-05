@@ -171,7 +171,7 @@ describe('a sitting, end to end', () => {
 
     const served = await paper.paper(STUDENT, started.id);
 
-    assert.equal(served.examTemplate, EXAM_TEMPLATE.COMFORTABLE);
+    assert.equal(served.examTemplate, EXAM_TEMPLATE.DEFAULT);
     assert.equal(served.questions.length, 2);
     // The failure this prevents: `isCorrect` or a solution riding along to the browser.
     const serialized = JSON.stringify(served);

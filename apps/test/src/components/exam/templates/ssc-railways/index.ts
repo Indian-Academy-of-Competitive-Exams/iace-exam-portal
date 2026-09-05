@@ -13,10 +13,10 @@ import {
 } from '../shared/slots';
 
 /** The austere baseline: square section buttons, a spelt-out clock beside them, the mark behind all of it. */
-const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.STRICT];
+const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.SSC_RAILWAYS];
 
-export const strictTemplate: ExamTemplateDefinition = {
-  id: EXAM_TEMPLATE.STRICT,
+export const sscRailwaysTemplate: ExamTemplateDefinition = {
+  id: EXAM_TEMPLATE.SSC_RAILWAYS,
   config: CONFIG,
   slots: {
     Header,

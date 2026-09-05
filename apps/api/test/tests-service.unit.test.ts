@@ -74,31 +74,31 @@ describe('TestsService — creating a draft from a config', () => {
     const { service } = serviceWith();
 
     const created = await service.create(
-      { baseConfigId: 'cfg_1', title: 'Mock 1', examTemplate: EXAM_TEMPLATE.STRICT },
+      { baseConfigId: 'cfg_1', title: 'Mock 1', examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS },
       ADMIN,
     );
 
-    assert.equal(created.examTemplate, EXAM_TEMPLATE.STRICT);
+    assert.equal(created.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
   });
 
   it('falls back to the config when the admin chose no screen', async () => {
-    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.STRICT });
+    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
     const { service } = serviceWith([], [config]);
 
     const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
-    assert.equal(created.examTemplate, EXAM_TEMPLATE.STRICT);
+    assert.equal(created.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
   });
 
   /** The copy is the point: re-skinning the blueprint must not re-skin a test already built. */
   it('keeps the screen it was built with when the config is re-skinned', async () => {
-    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.COMFORTABLE });
+    const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.DEFAULT });
     const { service } = serviceWith([], [config]);
     const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
-    config.examTemplate = EXAM_TEMPLATE.STRICT;
+    config.examTemplate = EXAM_TEMPLATE.SSC_RAILWAYS;
 
-    assert.equal((await service.detail(created.id)).examTemplate, EXAM_TEMPLATE.COMFORTABLE);
+    assert.equal((await service.detail(created.id)).examTemplate, EXAM_TEMPLATE.DEFAULT);
   });
 
   it('follows the config when it changes, because it never copied it', async () => {
@@ -372,9 +372,9 @@ describe('TestsService — editing and removing', () => {
       makeTest({ id: 'tst_1', isLocked: true, status: TEST_STATUS.ACTIVE }),
     ]);
 
-    const updated = await service.update('tst_1', { examTemplate: EXAM_TEMPLATE.STRICT });
+    const updated = await service.update('tst_1', { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
 
-    assert.equal(updated.examTemplate, EXAM_TEMPLATE.STRICT);
+    assert.equal(updated.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
     assert.equal(prisma.tests[0]?.isLocked, true);
     assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
   });
@@ -386,7 +386,7 @@ describe('TestsService — editing and removing', () => {
     });
 
     const error = await service
-      .update('tst_1', { examTemplate: EXAM_TEMPLATE.STRICT })
+      .update('tst_1', { examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));

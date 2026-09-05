@@ -31,7 +31,7 @@ describe('baseConfigSchema', () => {
     navigation: 'FREE',
     optionalSectionCount: null,
     defaultTestUi: 'CBT',
-    examTemplate: 'COMFORTABLE',
+    examTemplate: 'DEFAULT',
     languageMode: 'DUAL',
     languages: ['EN', 'HI'],
     shuffleQuestions: true,

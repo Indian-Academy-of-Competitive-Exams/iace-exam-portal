@@ -575,8 +575,8 @@
    edit, and re-skinning to an exact exam means editing one block.
    ========================================================================== */
 
-/* Comfortable — the polished default: softer contrast, roomier cells. */
-[data-exam-template='comfortable'] {
+/* Default — the polished house skin: softer contrast, roomier cells. */
+[data-exam-template='default'] {
   --exam-surface: var(--surface);
   --exam-surface-2: var(--surface-2);
   --exam-ink: var(--foreground);
@@ -630,7 +630,7 @@
 }
 
 /* Strict — the austere real-CBT baseline: flat fills, square edges, dense. */
-[data-exam-template='strict'] {
+[data-exam-template='ssc_railways'] {
   --exam-surface: #ffffff;
   --exam-surface-2: #eef1f5;
   --exam-ink: #10141a;
@@ -679,7 +679,7 @@
   --watermark-size: var(--text-sm);
 }
 
-:root[data-theme='dark'] [data-exam-template='comfortable'] {
+:root[data-theme='dark'] [data-exam-template='default'] {
   --exam-answered: #22c55e;
   --exam-answered-ink: #04140a;
   --exam-notanswered: #ef4444;
@@ -700,7 +700,7 @@
   --exam-timer-urgent-border: #ef4444;
 }
 
-:root[data-theme='dark'] [data-exam-template='strict'] {
+:root[data-theme='dark'] [data-exam-template='ssc_railways'] {
   --exam-surface: #0f1216;
   --exam-surface-2: #191d23;
   --exam-ink: #f2f4f7;

@@ -270,13 +270,13 @@ export const TEST_UI_LABELS: Readonly<Record<TestUi, string>> = {
 };
 
 export const EXAM_TEMPLATE_LABELS: Readonly<Record<ExamTemplate, string>> = {
-  COMFORTABLE: 'Comfortable',
-  STRICT: 'Strict',
+  DEFAULT: 'Default',
+  SSC_RAILWAYS: 'SSC/Railways',
 };
 
 export const EXAM_TEMPLATE_HINTS: Readonly<Record<ExamTemplate, string>> = {
-  COMFORTABLE: 'Roomier spacing and larger targets',
-  STRICT: 'Dense and austere, like the government CBT',
+  DEFAULT: 'Roomier spacing and larger targets',
+  SSC_RAILWAYS: 'Dense, with the timer in the section bar and the palette on the left',
 };
 
 export const LANGUAGE_MODE_LABELS: Readonly<Record<LanguageMode, string>> = {

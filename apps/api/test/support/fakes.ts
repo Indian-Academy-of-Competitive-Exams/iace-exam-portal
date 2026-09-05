@@ -1168,7 +1168,7 @@ export function makeBaseConfig(overrides: Partial<FakeBaseConfigRow> = {}): Fake
     navigation: NAVIGATION_POLICY.FREE,
     optionalSectionCount: null,
     defaultTestUi: TEST_UI.CBT,
-    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
+    examTemplate: EXAM_TEMPLATE.DEFAULT,
     languageMode: LANGUAGE_MODE.SINGLE,
     languages: [LANGUAGE_CODE.EN],
     shuffleQuestions: true,
@@ -1455,7 +1455,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     id: 'tst_1',
     title: 'SSC CGL Tier 1 — Mock 1',
     baseConfigId: 'cfg_1',
-    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
+    examTemplate: EXAM_TEMPLATE.DEFAULT,
     examStageId: 'stage_1',
     scope: TEST_SCOPE.FULL,
     scopeRef: null,
@@ -2112,7 +2112,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
     return {
       ...row,
       test: {
-        examTemplate: test?.examTemplate ?? EXAM_TEMPLATE.COMFORTABLE,
+        examTemplate: test?.examTemplate ?? EXAM_TEMPLATE.DEFAULT,
         baseConfig: {
           languageMode: config?.languageMode ?? LANGUAGE_MODE.SINGLE,
           timerTemplate: config?.timerTemplate ?? TIMER_TEMPLATE.COMPOSITE_FREE,

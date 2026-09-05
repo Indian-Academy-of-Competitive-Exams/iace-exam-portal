@@ -13,10 +13,10 @@ import {
 } from '../shared/slots';
 
 /** Roomier cells, softer contrast, the clock where a reader looks first. */
-const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.COMFORTABLE];
+const CONFIG = EXAM_TEMPLATE_CONFIG[EXAM_TEMPLATE.DEFAULT];
 
-export const comfortableTemplate: ExamTemplateDefinition = {
-  id: EXAM_TEMPLATE.COMFORTABLE,
+export const defaultTemplate: ExamTemplateDefinition = {
+  id: EXAM_TEMPLATE.DEFAULT,
   config: CONFIG,
   slots: {
     Header,

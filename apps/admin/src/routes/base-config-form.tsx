@@ -146,7 +146,7 @@ function emptyValues(): ConfigFormValues {
     navigation: NAVIGATION_POLICY.FREE,
     optionalSectionCount: '',
     defaultTestUi: TEST_UI.CBT,
-    examTemplate: EXAM_TEMPLATE.COMFORTABLE,
+    examTemplate: EXAM_TEMPLATE.DEFAULT,
     languageMode: LANGUAGE_MODE.SINGLE,
     languages: [LANGUAGE_CODE.EN],
     shuffleQuestions: false,
@@ -615,7 +615,7 @@ function ConfigEditor({ detail }: Readonly<{ detail: BaseConfigDetail | null }>)
             )}
           </FormField>
 
-          <FormField form={form} name="examTemplate" label="Exam screen">
+          <FormField form={form} name="examTemplate" label="Exam template">
             {(control) => (
               <Combobox
                 id={control.id}

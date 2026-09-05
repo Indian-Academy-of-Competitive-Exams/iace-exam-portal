@@ -111,7 +111,7 @@ function Blueprint({
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const chosen = useWatch({ control: form.control, name: 'examTemplate' });
   // Unchosen shows what the blueprint would give, which is exactly what the server would store.
-  const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.COMFORTABLE;
+  const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.DEFAULT;
 
   /** A cascade: a stage belongs to one exam, and a configuration to one stage. */
   const pickExam = (value: string) => {
@@ -187,11 +187,11 @@ function Blueprint({
         )}
       </FormField>
 
-      <FormField form={form} name="examTemplate" label="Exam screen" className="sm:col-span-2">
+      <FormField form={form} name="examTemplate" label="Exam template" className="sm:col-span-2">
         {(control) => (
           <RadioGroup
             name={control.name}
-            legend="Exam screen"
+            legend="Exam template"
             hideLegend
             value={examTemplate}
             onValueChange={(next) =>

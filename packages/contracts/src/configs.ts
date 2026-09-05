@@ -44,8 +44,8 @@ export const LANGUAGE_MODES = languageModeSchema.options;
 
 /** Which skin the exam screen wears. Presentation only: one engine, one clock, one paper. */
 export const EXAM_TEMPLATE = {
-  COMFORTABLE: 'COMFORTABLE',
-  STRICT: 'STRICT',
+  DEFAULT: 'DEFAULT',
+  SSC_RAILWAYS: 'SSC_RAILWAYS',
 } as const;
 export const examTemplateSchema = z.enum(EXAM_TEMPLATE);
 export type ExamTemplate = z.infer<typeof examTemplateSchema>;
@@ -64,14 +64,14 @@ export interface ExamTemplateConfig {
 
 /** One home, so the admin's preview cannot describe a screen the student does not get. */
 export const EXAM_TEMPLATE_CONFIG: Readonly<Record<ExamTemplate, ExamTemplateConfig>> = {
-  [EXAM_TEMPLATE.COMFORTABLE]: {
+  [EXAM_TEMPLATE.DEFAULT]: {
     timerPosition: 'HEADER',
     timerFormat: 'CLOCK',
     palettePosition: 'RIGHT',
     sectionSwitch: 'TABS',
     watermark: 'PAPER',
   },
-  [EXAM_TEMPLATE.STRICT]: {
+  [EXAM_TEMPLATE.SSC_RAILWAYS]: {
     timerPosition: 'SECTION_BAR',
     timerFormat: 'LABELLED',
     palettePosition: 'LEFT',
