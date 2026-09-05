@@ -30,6 +30,10 @@ jobs:
   # is what keeps this job a couple of minutes rather than a couple of services.
   verify:
     name: Verify
+    # The weekly cron exists for the docs job alone; schedule is a workflow-level
+    # trigger, so without this guard every job inherits it and runs on a Monday
+    # against a tree nobody pushed.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -88,6 +92,7 @@ jobs:
   # repo still produce the schema in the repo. Nothing else here touches Postgres.
   database:
     name: Migrations
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
