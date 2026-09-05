@@ -10,6 +10,8 @@ import {
   type LanguageCode,
   type LiveAttempt,
   type StartAttemptBody,
+  scopedDurationSec,
+  type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -33,9 +35,29 @@ const SITTABLE_INCLUDE = {
       totalQuestions: true,
       shuffleQuestions: true,
       locked: true,
+      // A scoped test is sat on its own sections' clock, never the whole configuration's.
+      sections: {
+        select: {
+          id: true,
+          moduleId: true,
+          questionCount: true,
+          durationSec: true,
+          perQuestionSec: true,
+        },
+      },
     },
   },
 } as const satisfies Prisma.TestInclude;
+
+/** The clock this test is actually sat on, which a scope narrows and the branch's extra time widens. */
+function sittingSeconds(test: SittableTest): number {
+  return scopedDurationSec(
+    test.baseConfig.sections,
+    test.baseConfig,
+    test.scope,
+    (test.scopeRef as TestScopeRef | null) ?? null,
+  );
+}
 
 type SittableTest = Prisma.TestGetPayload<{ include: typeof SITTABLE_INCLUDE }>;
 
@@ -114,7 +136,7 @@ export class AttemptsService {
           // Counts toward a cohort: one attempt per student, the first, and never on a practice paper.
           isGraded: attemptNo === 1 && test.evaluationMode === EVALUATION_MODE.RANKED,
           startedAt,
-          endsAt: deadlineFrom(startedAt, test.baseConfig.durationSec + extraTimeSec),
+          endsAt: deadlineFrom(startedAt, sittingSeconds(test) + extraTimeSec),
           shuffleSeed: randomInt(SEED_CEILING),
           languages: languagesFor(test.baseConfig.languageMode, test.baseConfig.languages, picked),
         },
@@ -216,7 +238,7 @@ function toLiveAttempt(
     createdAt: attempt.createdAt.toISOString(),
     startedByThisCall,
     testTitle: test.title,
-    durationSec: test.baseConfig.durationSec,
+    durationSec: sittingSeconds(test),
     totalQuestions: test.baseConfig.totalQuestions,
   };
 }

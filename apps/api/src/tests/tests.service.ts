@@ -9,6 +9,7 @@ import {
   TEST_SCOPE,
   fieldDiff,
   scopedQuestionCount,
+  scopedDurationSec,
   type BaseConfigDetail,
   type CreateTestBody,
   type Paginated,
@@ -44,7 +45,15 @@ const TEST_INCLUDE = {
       totalQuestions: true,
       durationSec: true,
       // A scoped test's paper is its own sections' worth, never the whole configuration's.
-      sections: { select: { id: true, moduleId: true, questionCount: true } },
+      sections: {
+        select: {
+          id: true,
+          moduleId: true,
+          questionCount: true,
+          durationSec: true,
+          perQuestionSec: true,
+        },
+      },
     },
   },
   examStage: {
@@ -303,7 +312,12 @@ function toTest(row: TestRow): Test {
       row.scope === TEST_SCOPE.FULL
         ? row.baseConfig.totalQuestions
         : scopedQuestionCount(row.baseConfig.sections, row.scope, scopeRefOf(row)),
-    durationSec: row.baseConfig.durationSec,
+    durationSec: scopedDurationSec(
+      row.baseConfig.sections,
+      row.baseConfig,
+      row.scope,
+      scopeRefOf(row),
+    ),
     examStageId: row.examStageId,
     examStage: row.examStage,
     scope: row.scope,

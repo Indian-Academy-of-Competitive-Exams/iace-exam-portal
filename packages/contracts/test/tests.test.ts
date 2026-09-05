@@ -13,6 +13,7 @@ import {
   scopedSections,
   scopedQuestionCount,
   scopedMarks,
+  scopedDurationSec,
   testBuilderStepOf,
   paperQuestionSchema,
   updateTestSchema,
@@ -275,5 +276,81 @@ describe('scopedMarks', () => {
     assert.equal(scopedMarks(sections, TEST_SCOPE.FULL, null), 70);
     assert.equal(scopedMarks(sections, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_english' }), 20);
     assert.equal(scopedMarks(sections, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_quant' }), 50);
+  });
+});
+
+describe('scopedDurationSec', () => {
+  const timed = [
+    { id: 'sec_a', moduleId: 'mod_a', questionCount: 40, durationSec: 2100, perQuestionSec: null },
+    { id: 'sec_b', moduleId: 'mod_a', questionCount: 40, durationSec: 2100, perQuestionSec: null },
+    { id: 'sec_c', moduleId: 'mod_b', questionCount: 35, durationSec: 2700, perQuestionSec: null },
+  ];
+  const composite = [
+    { id: 'sec_a', moduleId: null, questionCount: 25, durationSec: null, perQuestionSec: null },
+    { id: 'sec_b', moduleId: null, questionCount: 75, durationSec: null, perQuestionSec: null },
+  ];
+  const config = { durationSec: 3600, totalQuestions: 100 };
+
+  /** A whole paper is untouched: the configuration's clock is the clock, whatever the sections say. */
+  it('leaves a full paper on the configuration clock', () => {
+    assert.equal(
+      scopedDurationSec(timed, { durationSec: 6900, totalQuestions: 115 }, TEST_SCOPE.FULL, null),
+      6900,
+    );
+  });
+
+  /** THE failure this prevents: a 35-minute section sat for the whole paper's hour. */
+  it('gives a sectional test its own section clock', () => {
+    assert.equal(
+      scopedDurationSec(timed, { durationSec: 6900, totalQuestions: 115 }, TEST_SCOPE.SECTIONAL, {
+        sectionId: 'sec_c',
+      }),
+      2700,
+    );
+  });
+
+  it('sums the sections a module covers', () => {
+    assert.equal(
+      scopedDurationSec(timed, { durationSec: 6900, totalQuestions: 115 }, TEST_SCOPE.MODULE, {
+        moduleId: 'mod_a',
+      }),
+      4200,
+    );
+  });
+
+  /** A composite paper has one clock for all of it, so a section's share is the honest answer. */
+  it('takes a share of a composite clock, rounded to the minute', () => {
+    assert.equal(
+      scopedDurationSec(composite, config, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_a' }),
+      900,
+    );
+    assert.equal(
+      scopedDurationSec(composite, config, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_b' }),
+      2700,
+    );
+  });
+
+  /** Seconds per question is the per-section clock a composite paper CAN carry, so it wins the share. */
+  it('prefers seconds per question over a share when the section names one', () => {
+    const paced = composite.map((section) => ({ ...section, perQuestionSec: 90 }));
+
+    assert.equal(
+      scopedDurationSec(paced, config, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_a' }),
+      2250,
+    );
+  });
+
+  /** Nothing to go on is the configuration's clock, never zero — a test with no time cannot be sat. */
+  it('falls back to the configuration clock rather than to nothing', () => {
+    assert.equal(
+      scopedDurationSec(composite, { durationSec: 3600, totalQuestions: 0 }, TEST_SCOPE.SECTIONAL, {
+        sectionId: 'sec_a',
+      }),
+      3600,
+    );
+    assert.equal(
+      scopedDurationSec(composite, config, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_gone' }),
+      3600,
+    );
   });
 });

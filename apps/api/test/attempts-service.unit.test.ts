@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { TEST_SCOPE, type TestScope } from '@iace/contracts';
 import {
   AppException,
   ATTEMPT_STATUS,
@@ -430,5 +431,65 @@ describe('AttemptsService — a test with a paper per student', () => {
     // Every question came from ONE of the two papers, never a blend of both.
     const from = new Set(served.map((id) => id.slice(0, 2)));
     assert.equal(from.size, 1);
+  });
+});
+
+describe('AttemptsService — a scoped test is sat on its own clock', () => {
+  const timedSections = [
+    makeSection({
+      id: 'sec_1',
+      name: 'Reasoning',
+      order: 1,
+      subjectId: 'sub_r',
+      questionCount: 3,
+      durationSec: 900,
+    }),
+    makeSection({
+      id: 'sec_2',
+      name: 'Quant',
+      order: 2,
+      subjectId: 'sub_q',
+      questionCount: 2,
+      durationSec: 2700,
+    }),
+  ];
+
+  function sittingFor(scope: TestScope, sectionId?: string) {
+    const test = sittable({ scope, scopeRef: sectionId ? { sectionId } : null });
+    const config = makeBaseConfig({
+      id: 'cfg_1',
+      durationSec: 3600,
+      totalQuestions: 5,
+      languages: [LANGUAGE_CODE.EN],
+    });
+    const prisma = new FakeTestsPrisma(
+      [test],
+      [config],
+      timedSections,
+      [],
+      [],
+      paper(),
+      [],
+      [],
+      [],
+    );
+    const redis = new FakeRedis();
+    const state = new AttemptStateService(prisma.asService(), redis.asService());
+    return new AttemptsService(prisma.asService(), resolver(true), state);
+  }
+
+  /** THE failure this prevents: a fifteen-minute section sat for the whole paper's hour. */
+  it('ends a sectional sitting on the clock that section carries', async () => {
+    const attempt = await sittingFor(TEST_SCOPE.SECTIONAL, 'sec_1').start(STUDENT, 'tst_1', {});
+
+    assert.equal(Date.parse(attempt.endsAt) - Date.parse(attempt.startedAt), 900 * 1000);
+    assert.equal(attempt.durationSec, 900);
+  });
+
+  /** A whole paper is untouched: its clock is still the configuration's, section times or not. */
+  it('leaves a full paper on the configuration clock', async () => {
+    const attempt = await sittingFor(TEST_SCOPE.FULL).start(STUDENT, 'tst_1', {});
+
+    assert.equal(Date.parse(attempt.endsAt) - Date.parse(attempt.startedAt), 3600 * 1000);
   });
 });

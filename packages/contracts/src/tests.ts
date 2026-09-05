@@ -167,6 +167,42 @@ export function scopedSections<T extends ScopedSection>(
   return sections;
 }
 
+/** What a section says about its own clock. Both are null on a paper carrying one timer for all of it. */
+export interface TimedScopedSection extends ScopedSection {
+  durationSec: number | null;
+  perQuestionSec: number | null;
+}
+
+/** A whole paper keeps the configuration's clock; only a scope narrows it, and never silently. */
+export function scopedDurationSec(
+  sections: readonly TimedScopedSection[],
+  config: { durationSec: number; totalQuestions: number },
+  scope: TestScope,
+  scopeRef: TestScopeRef | null,
+): number {
+  if (scope === TEST_SCOPE.FULL) return config.durationSec;
+
+  const covered = scopedSections(sections, scope, scopeRef);
+  if (covered.length === 0) return config.durationSec;
+
+  if (covered.every((section) => section.durationSec !== null)) {
+    return covered.reduce((total, section) => total + (section.durationSec ?? 0), 0);
+  }
+
+  if (covered.every((section) => section.perQuestionSec !== null)) {
+    return covered.reduce(
+      (total, section) => total + section.questionCount * (section.perQuestionSec ?? 0),
+      0,
+    );
+  }
+
+  const questions = covered.reduce((total, section) => total + section.questionCount, 0);
+  if (config.totalQuestions <= 0 || questions <= 0) return config.durationSec;
+  // Rounded to the minute: a share of a composite clock is an estimate, and 9m41s reads as a bug.
+  const share = (config.durationSec * questions) / config.totalQuestions;
+  return Math.max(60, Math.round(share / 60) * 60);
+}
+
 /** A scoped section still has to say what a question is worth, for the marks its paper carries. */
 export interface ScoredScopedSection extends ScopedSection {
   marksPerQuestion: number;

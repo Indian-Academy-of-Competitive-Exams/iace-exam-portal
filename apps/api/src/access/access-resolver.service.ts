@@ -15,6 +15,7 @@ import {
   testIsOpen,
   testWindow,
   scopedSections,
+  scopedDurationSec,
   type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -54,7 +55,14 @@ const catalogInclude = (programs: string[]) =>
             totalMarks: true,
             // A scoped test is its own sections' worth, and the catalog is what a student reads first.
             sections: {
-              select: { id: true, moduleId: true, questionCount: true, marksPerQuestion: true },
+              select: {
+                id: true,
+                moduleId: true,
+                questionCount: true,
+                marksPerQuestion: true,
+                durationSec: true,
+                perQuestionSec: true,
+              },
             },
           },
         },
@@ -355,7 +363,12 @@ function toResolvedTest(
   return {
     id: test.id,
     title: test.title,
-    durationSec: test.baseConfig.durationSec,
+    durationSec: scopedDurationSec(
+      test.baseConfig.sections,
+      test.baseConfig,
+      test.scope,
+      (test.scopeRef as TestScopeRef | null) ?? null,
+    ),
     totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
     totalMarks: scoped.reduce(
       (total, section) => total + section.questionCount * Number(section.marksPerQuestion),

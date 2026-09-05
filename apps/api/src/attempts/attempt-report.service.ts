@@ -24,6 +24,7 @@ import {
   type SolutionReport,
   type TestScopeRef,
   scopedQuestionCount,
+  scopedDurationSec,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -96,6 +97,8 @@ const SCORE_CARD_SELECT = {
             select: {
               id: true,
               moduleId: true,
+              durationSec: true,
+              perQuestionSec: true,
               name: true,
               order: true,
               questionCount: true,
@@ -235,7 +238,12 @@ export class AttemptReportService {
       ),
       timeTakenSec:
         attempt.submittedAt === null ? 0 : elapsedSeconds(attempt.startedAt, attempt.submittedAt),
-      durationSec: config.durationSec,
+      durationSec: scopedDurationSec(
+        config.sections,
+        config,
+        attempt.test.scope,
+        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
+      ),
       // The snapshot only where the live board could not answer, so a screen is never blank.
       rank: standing?.rank ?? attempt.lastRank,
       percentile: standing?.percentile ?? numberOrNull(attempt.lastPercentile),

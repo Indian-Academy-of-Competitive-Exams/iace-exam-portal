@@ -4077,6 +4077,9 @@ export class FakeCatalogPrisma {
                 marksPerQuestion: new Prisma.Decimal(
                   test.totalQuestions === 0 ? 0 : test.totalMarks / test.totalQuestions,
                 ),
+                // NULL, not absent: the scope rule reads a missing clock as one it must not sum.
+                durationSec: null,
+                perQuestionSec: null,
               },
             ],
           },
