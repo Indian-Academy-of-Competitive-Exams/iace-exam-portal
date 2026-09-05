@@ -7,6 +7,7 @@ import { ImportsService } from '../src/imports/imports.service';
 import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakeEventsService,
+  FakeProgramsService,
   FakeMessageSender,
   fakeStartingPins,
   FakePrisma,
@@ -31,6 +32,7 @@ function build(students: FakeStudent[] = []) {
     new FakeStorage() as never,
     new AuditService(prisma.asService(), new FakeStorage() as never),
     new FakeEventsService().asService(),
+    new FakeProgramsService().asService(),
   );
   return { prisma, sender, service };
 }
@@ -102,6 +104,7 @@ describe('the PIN a roster import issues', () => {
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       new FakeEventsService().asService(),
+      new FakeProgramsService().asService(),
     );
 
     const result = await withFailingSender.commitStudents(

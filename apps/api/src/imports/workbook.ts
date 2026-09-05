@@ -3,6 +3,7 @@ import {
   CANDIDATE_IMPORT_COLUMNS,
   EARLIEST_BIRTH_YEAR,
   IMPORT_MAX_ROWS,
+  PROGRAM_IMPORT_COLUMNS,
   STUDENT_IMPORT_COLUMNS,
 } from '@iace/contracts';
 
@@ -23,6 +24,16 @@ export function buildCandidateTemplate(): Promise<Buffer> {
     columns: CANDIDATE_IMPORT_COLUMNS,
     examples: CANDIDATE_IMPORT_EXAMPLES,
     notes: CANDIDATE_IMPORT_NOTES,
+  });
+}
+
+/** The sample for a program enrolment: the same two columns, and it creates nobody. */
+export function buildProgramTemplate(): Promise<Buffer> {
+  return buildTemplate({
+    sheetName: 'Students',
+    columns: PROGRAM_IMPORT_COLUMNS,
+    examples: CANDIDATE_IMPORT_EXAMPLES,
+    notes: PROGRAM_IMPORT_NOTES,
   });
 }
 
@@ -170,6 +181,29 @@ const CANDIDATE_IMPORT_EXAMPLES = [
   ['9876543210', 'Asha Kumari'],
   ['9876543211', 'Ravi Teja'],
   ['9876543212', ''],
+];
+
+const PROGRAM_IMPORT_NOTES = [
+  ['How to fill this in'],
+  [''],
+  ['This sheet adds ONE program — the one you opened it from — to students who are'],
+  ['already on the platform. Every test series aimed at that program then reaches'],
+  ['them, and nothing else about them changes.'],
+  [''],
+  ['It creates nobody. A program is something an enrolled student carries, so a'],
+  ['number we do not know is reported and skipped, never turned into an account.'],
+  ['Add those students with the Students importer first, then run this again.'],
+  [''],
+  ['Mobile Number — required. 10 digits. This is what identifies a student.'],
+  [''],
+  ['Full Name — optional, and only ever read back to you so you can check you have'],
+  ['the right person. Nothing in this column is written to their record.'],
+  [''],
+  ['Somebody already carrying this program is left exactly as they are, so the same'],
+  ['file can be imported twice without enrolling anybody twice.'],
+  [''],
+  ['Nothing is written until you press Import. The preview shows exactly what would'],
+  ['happen, row by row.'],
 ];
 
 const CANDIDATE_IMPORT_NOTES = [

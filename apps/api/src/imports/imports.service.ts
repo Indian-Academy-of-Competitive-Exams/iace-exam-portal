@@ -14,6 +14,8 @@ import {
   type StudentType,
   type CandidateImportPlan,
   type CandidateImportResult,
+  type ProgramImportPlan,
+  type ProgramImportResult,
   STUDENT_TYPE,
   AppException,
   ErrorCodes,
@@ -25,7 +27,9 @@ import { StorageService } from '../storage/storage.service';
 import { mobilesIn, planStudentImport, type ImportContext } from './student-import';
 import { fetchPortalRoster, type PortalFetch } from './portal-roster';
 import { planCandidateImport } from './candidate-import';
+import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
+import { ProgramsService } from '../access';
 import { EVERY_BRANCH, type BranchScope } from '../common/security';
 
 import { isPreTestReady } from '../students';
@@ -56,6 +60,7 @@ export class ImportsService {
     private readonly storage: StorageService,
     private readonly audit: AuditService,
     private readonly events: EventsService,
+    private readonly programs: ProgramsService,
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
@@ -83,7 +88,7 @@ export class ImportsService {
     file: Buffer,
     scope: BranchScope,
   ): Promise<CandidateImportPlan> {
-    assertReachesEveryBranch(scope);
+    assertReachesEveryBranch(scope, INTAKE_NEEDS_EVERY_BRANCH);
     await this.events.detail(eventId);
     return this.planCandidates(file);
   }
@@ -95,7 +100,7 @@ export class ImportsService {
     actorId: string,
     scope: BranchScope,
   ): Promise<CandidateImportResult> {
-    assertReachesEveryBranch(scope);
+    assertReachesEveryBranch(scope, INTAKE_NEEDS_EVERY_BRANCH);
     await this.events.detail(eventId);
     const plan = await this.planCandidates(file);
     const logId = await this.openRun(
@@ -176,6 +181,72 @@ export class ImportsService {
       added: studentIds.length,
       skipped: plan.summary.invalid,
     };
+  }
+
+  /** Writes nothing. The program has to exist and be offered, or there is nothing to enrol into. */
+  async previewProgramStudents(
+    code: string,
+    file: Buffer,
+    scope: BranchScope,
+  ): Promise<ProgramImportPlan> {
+    assertReachesEveryBranch(scope, ENROLMENT_NEEDS_EVERY_BRANCH);
+    await this.programs.assertUsable([code], 'programCode');
+    return this.planPrograms(code, file);
+  }
+
+  /** Adds the code to students who already exist. A number we do not know is skipped, never created. */
+  async commitProgramStudents(
+    code: string,
+    file: Buffer,
+    actorId: string,
+    scope: BranchScope,
+  ): Promise<ProgramImportResult> {
+    assertReachesEveryBranch(scope, ENROLMENT_NEEDS_EVERY_BRANCH);
+    await this.programs.assertUsable([code], 'programCode');
+
+    const plan = await this.planPrograms(code, file);
+    const logId = await this.openRun(
+      file,
+      plan.summary.total,
+      plan.fileErrors,
+      IMPORT_SOURCE.SHEET,
+      actorId,
+    );
+
+    const rowActions: { entityId: string; action: AuditAction }[] = [];
+    const written = (): RunOutcome => ({
+      feature: AUDIT_FEATURE.STUDENT,
+      rowActions,
+      counts: {
+        created: 0,
+        updated: rowActions.length,
+        skipped: plan.summary.alreadyEnrolled,
+        failed: plan.summary.invalid,
+      },
+      actorId,
+    });
+
+    try {
+      for (const row of plan.rows) {
+        if (row.action !== 'enrol' || row.studentId === null) continue;
+
+        await this.prisma.student.update({
+          where: { id: row.studentId },
+          data: { programs: { push: code } },
+        });
+        rowActions.push({ entityId: row.studentId, action: AUDIT_ACTION.UPDATE });
+      }
+    } catch (error) {
+      await this.closeRun(logId, IMPORT_LOG_STATUS.FAILED, written(), {
+        fileErrors: plan.fileErrors,
+        error,
+      });
+      throw error;
+    }
+
+    await this.closeRun(logId, IMPORT_LOG_STATUS.COMMITTED, written());
+
+    return { ...plan.summary, enrolled: rowActions.length, skipped: plan.summary.invalid };
   }
 
   /** What the portal WOULD do, judged by the same planner the sheet goes through. */
@@ -324,6 +395,28 @@ export class ImportsService {
       deletedMobiles: new Set(
         students.filter((student) => student.deletedAt !== null).map((student) => student.mobile),
       ),
+    });
+  }
+
+  private async planPrograms(code: string, file: Buffer): Promise<ProgramImportPlan> {
+    const table = await readUploadedTable(file);
+    const mobiles = mobilesIn(table);
+    const students =
+      mobiles.length === 0
+        ? []
+        : await this.prisma.student.findMany({
+            where: { mobile: { in: mobiles }, deletedAt: null },
+            select: { id: true, mobile: true, fullName: true, programs: true },
+          });
+
+    return planProgramImport(table, {
+      studentsByMobile: new Map(
+        students.map((student) => [
+          student.mobile,
+          { id: student.id, fullName: student.fullName, programs: student.programs },
+        ]),
+      ),
+      programCode: code,
     });
   }
 
@@ -492,10 +585,13 @@ function profileData(row: StudentImportRow) {
 const INTAKE_NEEDS_EVERY_BRANCH =
   'A candidate import reaches students at any branch by mobile number alone, and creates accounts at none, so only an admin who reaches every branch can run one.';
 
+const ENROLMENT_NEEDS_EVERY_BRANCH =
+  'A program enrolment reaches students at any branch by mobile number alone, so only an admin who reaches every branch can run one.';
+
 /** It resolves people by MOBILE alone, which never looks a student up to scope them. */
-function assertReachesEveryBranch(scope: BranchScope): void {
+function assertReachesEveryBranch(scope: BranchScope, message: string): void {
   if (scope.all) return;
-  throw new AppException(ErrorCodes.FORBIDDEN, INTAKE_NEEDS_EVERY_BRANCH);
+  throw new AppException(ErrorCodes.FORBIDDEN, message);
 }
 
 /** The importer decides row by row, so the minted PINs are indexed by the number they belong to. */

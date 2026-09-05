@@ -18,6 +18,7 @@ import { ImportsService } from '../src/imports/imports.service';
 import { QuestionImportService } from '../src/questions/question-import.service';
 import {
   FakeEventsService,
+  FakeProgramsService,
   FakeMessageSender,
   fakeStartingPins,
   FakePrisma,
@@ -131,6 +132,7 @@ describe('ImportsService — a preview writes nothing at all', () => {
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
     await service.previewStudents(Buffer.from(roster('mobile\n9876543210')), EVERY_BRANCH);
@@ -164,6 +166,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       storage as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
     const result = await service.commitStudents(
@@ -227,6 +230,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
     await assert.rejects(
@@ -257,6 +261,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
     await assert.rejects(
@@ -303,6 +308,7 @@ describe('ImportsService.commitStudents — what an import run actually left beh
       new FakeStorage() as never,
       throwingAudit,
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
     const result = await service.commitStudents(
@@ -340,6 +346,7 @@ describe('ImportsService — a failed close preserves what openRun already recor
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
     const opened = await prisma.importLog.create({
       data: {
@@ -498,6 +505,7 @@ describe('ImportsService — the branches the admin uploading may write into', (
       new FakeStorage() as never,
       new AuditService(prisma.asService(), new FakeStorage() as never),
       fakeEvents(),
+      new FakeProgramsService().asService(),
     );
 
   /** The failure this prevents: a scope reaching the planner on preview but not on commit. */

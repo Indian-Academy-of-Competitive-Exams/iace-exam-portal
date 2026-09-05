@@ -252,10 +252,14 @@ import {
   IMPORT_ROUTES,
   candidateImportPlanSchema,
   candidateImportResultSchema,
+  programImportPlanSchema,
+  programImportResultSchema,
   studentImportPlanSchema,
   studentImportResultSchema,
   type CandidateImportPlan,
   type CandidateImportResult,
+  type ProgramImportPlan,
+  type ProgramImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from './imports';
@@ -1452,6 +1456,24 @@ export function createApiClient(options: ApiClientOptions) {
             method: 'POST',
             body: fileBody(file),
             schema: candidateImportResultSchema,
+          }),
+
+        /** The program enrolment sample — a Blob, not an envelope. */
+        programTemplate: (): Promise<Blob> => requestBlob(IMPORT_ROUTES.programStudentsTemplate),
+
+        /** Adds a program to students who already exist; a number we do not know is skipped. */
+        previewProgramStudents: (code: string, file: File): Promise<ProgramImportPlan> =>
+          request(IMPORT_ROUTES.programStudentsPreview(code), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: programImportPlanSchema,
+          }),
+
+        commitProgramStudents: (code: string, file: File): Promise<ProgramImportResult> =>
+          request(IMPORT_ROUTES.programStudentsCommit(code), {
+            method: 'POST',
+            body: fileBody(file),
+            schema: programImportResultSchema,
           }),
 
         /** No body: the roster is fetched server-side, so there is nothing here to tamper with. */

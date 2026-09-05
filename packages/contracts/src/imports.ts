@@ -130,6 +130,45 @@ export const candidateImportResultSchema = candidateImportSummarySchema.extend({
 });
 export type CandidateImportResult = z.infer<typeof candidateImportResultSchema>;
 
+/** A program is something an existing student CARRIES, so a number we do not know is a skip. */
+export const programImportActionSchema = z.enum(['enrol', 'already', 'skip']);
+export type ProgramImportAction = z.infer<typeof programImportActionSchema>;
+
+export const programImportRowSchema = z.object({
+  line: z.number().int(),
+  mobile: z.string().nullable(),
+  /** From the sheet, for the admin to recognise the row by — never written to the student. */
+  fullName: z.string().nullable(),
+  /** The LIVE student the number resolves to. Null is exactly why a row is skipped. */
+  studentId: z.string().nullable(),
+  /** The name on record, which is what the admin should be checking against, not the sheet's. */
+  studentName: z.string().nullable(),
+  action: programImportActionSchema,
+  errors: z.array(z.string()),
+});
+export type ProgramImportRow = z.infer<typeof programImportRowSchema>;
+
+export const programImportSummarySchema = z.object({
+  total: z.number().int(),
+  willEnrol: z.number().int(),
+  alreadyEnrolled: z.number().int(),
+  invalid: z.number().int(),
+});
+export type ProgramImportSummary = z.infer<typeof programImportSummarySchema>;
+
+export const programImportPlanSchema = z.object({
+  rows: z.array(programImportRowSchema),
+  summary: programImportSummarySchema,
+  fileErrors: z.array(z.string()),
+});
+export type ProgramImportPlan = z.infer<typeof programImportPlanSchema>;
+
+export const programImportResultSchema = programImportSummarySchema.extend({
+  enrolled: z.number().int(),
+  skipped: z.number().int(),
+});
+export type ProgramImportResult = z.infer<typeof programImportResultSchema>;
+
 export const IMPORT_ROUTES = {
   studentsPreview: '/imports/students/preview',
   studentsCommit: '/imports/students/commit',
@@ -143,6 +182,13 @@ export const IMPORT_ROUTES = {
   eventCandidatesCommit: (eventId: string) => `/imports/events/${eventId}/candidates/commit`,
   /** The sample workbook, generated from CANDIDATE_IMPORT_COLUMNS. */
   candidatesTemplate: '/imports/events/candidates/template',
+  /** An enrolment is filed against the PROGRAM it adds to, addressed by the code students carry. */
+  programStudentsPreview: (code: string) =>
+    `/imports/programs/${encodeURIComponent(code)}/students/preview`,
+  programStudentsCommit: (code: string) =>
+    `/imports/programs/${encodeURIComponent(code)}/students/commit`,
+  /** The sample workbook, generated from PROGRAM_IMPORT_COLUMNS. */
+  programStudentsTemplate: '/imports/programs/students/template',
 } as const;
 
 /** What the sample file is called when it lands in the admin's downloads. */
@@ -150,6 +196,9 @@ export const STUDENT_IMPORT_TEMPLATE_FILENAME = 'iace-students-template.xlsx';
 
 /** What the candidate sample is called when it lands in the admin's downloads. */
 export const CANDIDATE_IMPORT_TEMPLATE_FILENAME = 'iace-candidates-template.xlsx';
+
+/** What the program enrolment sample is called when it lands in the admin's downloads. */
+export const PROGRAM_IMPORT_TEMPLATE_FILENAME = 'iace-program-students-template.xlsx';
 
 /** The multipart field the upload arrives under. Server and client must agree. */
 export const IMPORT_FILE_FIELD = 'file';
@@ -289,3 +338,6 @@ export type StudentImportColumnKey = StudentImportColumn['key'];
 export const CANDIDATE_IMPORT_COLUMNS = STUDENT_IMPORT_COLUMNS.filter(
   (column) => column.key === 'mobile' || column.key === 'fullName',
 );
+
+/** The same two columns: a program enrolment names a student it does not create. */
+export const PROGRAM_IMPORT_COLUMNS = CANDIDATE_IMPORT_COLUMNS;

@@ -27,6 +27,7 @@ import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
 
 import { ImportEventCandidatesPage } from './routes/import-event-candidates';
+import { ImportProgramStudentsPage } from './routes/import-program-students';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
@@ -80,6 +81,7 @@ export function App() {
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
 
           <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
+          <Route path={ROUTES.PROGRAM_IMPORT_PATTERN} element={<ImportProgramStudentsPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />

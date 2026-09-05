@@ -97,6 +97,9 @@ export const ROUTES = {
   COHORTS: '/cohorts',
   EVENT_IMPORT: (id: string) => `/cohorts/events/${id}/import`,
   EVENT_IMPORT_PATTERN: '/cohorts/events/:id/import',
+  /** Addressed by the CODE a student carries, which is what the sheet enrols them into. */
+  PROGRAM_IMPORT: (code: string) => `/cohorts/programs/${encodeURIComponent(code)}/import`,
+  PROGRAM_IMPORT_PATTERN: '/cohorts/programs/:code/import',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
