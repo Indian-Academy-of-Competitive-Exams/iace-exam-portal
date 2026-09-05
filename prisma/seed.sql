@@ -40,11 +40,13 @@ ON CONFLICT DO NOTHING;
 -- Branches.
 --
 -- ONLINE is the VIRTUAL branch, and the application cannot do without it.
--- AccessResolver reads a student's branch ALONE to decide what they can reach:
--- the enable flag and the open/close window both live on that branch's
--- BranchTestConfig row, so a student with no branch resolves to an empty
--- catalog no matter what they are enrolled on. Every ONLINE student sits here,
--- and the admin screens now lock their branch picker to this row.
+-- A STANDARD series is the one kind gated by branch: AccessResolverService
+-- reaches it only when the student's current branch is on the series' own
+-- branchIds AND their enrolled courses include the course of its stage. FREE,
+-- PROGRAM and EVENT series and an explicit StudentGrant carry no branch
+-- condition at all, so a student with no branch still reaches those and only
+-- STANDARD closes to them. Every ONLINE student sits here, and the admin
+-- screens now lock their branch picker to this row.
 --
 -- It is a singleton and the code treats it as one — branchEditBlocker refuses
 -- to rename or retire it, branchDeletionBlocker refuses to delete it, and

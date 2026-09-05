@@ -37,9 +37,8 @@ The choices; the reasons behind each are `docs/01-architecture.md`.
   are Recharts v3 on the `--series-*` tokens. Brand palette: the `ui-conventions` skill.
 - **DB:** PostgreSQL via Prisma. **Redis:** live-sitting state, leaderboards, OTP, sessions, device
   binding, rate limiting. **Jobs:** BullMQ on Redis. **Storage:** S3, MinIO locally.
-- **Auth:** self-built JWT + refresh. Students: mobile + OTP at signup, then a 4-digit PIN — not
-  unique across students, only ever checked against the one student a mobile resolves to. Admins:
-  email + OTP, holding READ/WRITE per feature key; super admins bypass every check.
+- **Auth:** self-built JWT + refresh. Students: mobile + OTP at signup, then a 4-digit PIN. Admins:
+  email + OTP. Super admins bypass every check.
 - **No WebSockets.** **Payments:** separate portal, not V1. **Mobile:** React Native + Expo, post-V1.
   **Infra:** chosen last, AWS-leaning, cloud-agnostic Docker + env.
 
@@ -55,31 +54,20 @@ Do not break these — they are why the live test holds at 4–5K:
 
 </scaling-rules>
 
-## Rules stated only here
+## Naming
 
-Everything the domain enforces is `docs/02-domain-rules.md` and everything a column enforces is the
-schema. These are the ones no other document carries.
-
-- **Question versions are append-only past the draft.** Editing a DRAFT rewrites its one
-  `QuestionVersion` in place; every later edit inserts an immutable one and repoints
-  `currentVersionId`, so a paper or a sitting that pinned a version never moves. A save that changes
-  nothing writes no version.
-- **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion`,
-  `AttemptQuestion` or `TestQuestionStat` references may be returned to DRAFT or deleted.
-- **A topic must sit under the question's own subject.** No foreign key can say it;
-  `packages/contracts/src/question-rules.ts` is what checks it, for the editor and the importer alike.
-- **Branch names and exam codes are canonical** (`canonicalName` in
-  `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. **Normalise
-  input, never reject it.**
+**Branch names and exam codes are canonical** (`canonicalName` in
+`packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. **Normalise
+input, never reject it.**
 
 ## Where things live
 
 - `prisma/schema.prisma` — the data model, and the target of record for every claim about it.
 - `docs/01-architecture.md` — what the system is: the locked stack and why each piece, the V1
   boundary, the service diagram, live-test scaling, the deployment topology.
-- `docs/02-domain-rules.md` — the rules the schema cannot state: the blueprint, building and
-  finalizing a test, lock on first attempt, access, scheduling, the sitting, results and ranking,
-  rollups, render modes and skins, question import.
+- `docs/02-domain-rules.md` — the rules the schema cannot state: the catalog and the blueprint,
+  building and finalizing a test, lock on first attempt, access, scheduling, the sitting, results
+  and ranking, rollups, render modes and skins, the question bank, question import.
 - `docs/03-conventions.md` — where code goes: packaging, module boundaries, the table-ownership map,
   the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
   interface that source comments cite, so renumbering is a breaking change.
@@ -88,7 +76,6 @@ schema. These are the ones no other document carries.
   invoke it; this is where it lives.
 - `graft/` — the wiring graph of every TypeScript and JavaScript file, queried with the `graft` CLI
   or the `graft` skill. Git-ignored, so run `graft build` once in a fresh clone.
-- `packages/ui/src/index.ts` — the component inventory. `packages/app-kit/` — SPA plumbing
-  (tokens/session, API client, form errors, page size).
-- `pnpm docs:check` — reports names a doc uses that neither the schema nor the source defines. It
-  runs on a schedule and gates nothing; a human clears the report.
+- `packages/ui/src/index.ts` — the component inventory.
+- `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).
+- `pnpm docs:check` — the doc-drift report, on a schedule and gating nothing (`docs/03` §12).

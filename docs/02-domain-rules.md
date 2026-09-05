@@ -24,11 +24,18 @@ Discarded outright, and the model blocks none of them: certificates, typing and 
 open-book whitelisting, bio-break scheduling, live proctoring, groups and batches, access codes,
 shareable test links, and a nested category tree.
 
-## 2. The blueprint
+## 2. The catalog and the blueprint
 
-A `BaseConfig` is a stage's blueprint. A test **inherits** its shape and never overrides it — there
-is no per-test duration, marks or timing. The way to change a shape is to clone it.
+The stage is the level everything hangs off: a base config, a series and a test all point at one. A
+`BaseConfig` is a stage's blueprint, and a test **inherits** its shape and never overrides it —
+there is no per-test duration, marks or timing. The way to change a shape is to clone it.
 
+- **A taxonomy key cannot change once anything carries it.** A rename of `Exam.code` is refused once
+  a student's enrolments hold it, and of `ExamStage.stageKey` once a base config hangs off it. Both
+  are free text with no foreign key behind them, so the rename would detach every holder silently
+  and report nothing changed. Create a second row instead.
+- **A `CATALOG_ONLY` stage carries no paper.** It is listed so the journey reads whole; a config
+  pointed at one is refused, because nobody sits it here.
 - Marks, negative marks, timing and merit/qualifying are **per section**; one paper may mix them.
   Language is not: a paper renders in one `LanguageMode` throughout.
 - The shape rules are checked in the service before the database's deferred triggers see them, so an
@@ -74,7 +81,8 @@ Setup, then paper, then offer. There is no certificate step.
 - Offering a test needs a frozen paper **and** a series: a test reaches a student only through one.
 - Editing a finalized test **thaws** its paper unless the edit could not change what the paper holds
   — a rename and a re-skin cannot. Once the test has been **sat**, only its title moves.
-- A sat test is never deleted. Retire it; it keeps its results.
+- A sat test is never deleted, and the series cannot drop it from its own side either — it is part
+  of the record of everyone who sat it, wherever it was offered. Retire it; it keeps its results.
 
 ## 4. Lock on first attempt
 
@@ -218,7 +226,33 @@ presentation.
   timing on or off and locked versus free switching, an optional on-screen calculator, section and
   question counts, and marking.
 
-## 11. Question import
+## 11. The question bank
+
+`Question` is the identity and `QuestionVersion` is the content. The split is what lets a paper or a
+sitting pin exactly what it served while the bank carries on moving underneath.
+
+- **A save that changes nothing writes no version.** Content, options and answer key are
+  fingerprinted together, and a save matching the fingerprint keeps the version already current.
+- **A draft is rewritten in place, and everything else is appended.** While a question is a DRAFT
+  and no paper or sitting holds its current version, an edit rewrites that one row — version 1 of a
+  question nobody has drawn stays version 1 however often it is saved. Otherwise the edit inserts a
+  new immutable version and repoints `currentVersionId`, so what a paper pinned never moves under
+  it.
+- **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion`,
+  `AttemptQuestion` or `TestQuestionStat` references may be returned to DRAFT or deleted; the rule
+  counts those three tables before it allows the move, so it refuses before a foreign key does.
+- **Subject and topic settle when the question leaves the draft.** Taxonomy is what a section draws
+  on, so moving it afterwards would change what a finalized paper was built from. Returning the
+  question to draft is the only way to move it, and the freeze above refuses that once anything uses
+  it.
+- **Option ids carry over by position.** A sitting stores the id it was shown, so a position that
+  already had an id keeps it and only a genuinely new position gets a new one — editing an option's
+  wording can never orphan an answer.
+- **A topic must sit under the question's own subject.** The question carries both ids and no
+  foreign key can relate them, so the check is a shared rule in
+  `packages/contracts/src/question-rules.ts` — the same one for the editor and the importer.
+
+## 12. Question import
 
 **One row is one question, with a column per language.** That is the deliberate inversion of
 ThinkExam's flat 51-column sheet, whose 32 mostly-empty option columns, free-text taxonomy and
@@ -246,7 +280,7 @@ letter-based answer key are why real uploads were rejected wholesale.
 Two intake paths, and they are not interchangeable: this sheet for bulk text MCQs, and the rich
 manual editor for anything carrying an image or an equation.
 
-## 12. A worked blueprint — SSC CGL Tier 1
+## 13. A worked blueprint — SSC CGL Tier 1
 
 The official patterns are seeded (`prisma/seed.sql` and `prisma/seed.catalog.sql`); IACE validates
 them as the domain expert. SSC CGL Tier 1 is the reference shape: four sections of 25 single-answer
