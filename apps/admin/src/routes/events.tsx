@@ -17,7 +17,6 @@ import {
 import { applyFieldErrors } from '@iace/app-kit';
 import { PageCrumbs, useListScreen, useLocalFilters } from '@iace/app-kit/browser';
 import {
-  Alert,
   Badge,
   Button,
   ConfirmDialog,
@@ -108,9 +107,7 @@ function eventColumns(
 /** The roster an Event Test draws on. Its candidates open under the row, never on a screen of their own. */
 export function EventsPage() {
   const { can } = useAuth();
-  const canWrite = can(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE);
-  // The picker reads the student directory, which is a key of its own — see `EventCandidates`.
-  const canReadStudents = can(FEATURE_KEYS.STUDENT_MANAGEMENT);
+  const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
   const queryClient = useQueryClient();
@@ -194,12 +191,7 @@ export function EventsPage() {
         emptyFiltered="No events match those filters."
         expand={{
           render: (event) => (
-            <EventCandidates
-              event={event}
-              canWrite={canWrite}
-              canReadStudents={canReadStudents}
-              onChanged={refresh}
-            />
+            <EventCandidates event={event} canWrite={canWrite} onChanged={refresh} />
           ),
           label: (event) => `Show the candidates on ${event.name}`,
         }}
@@ -497,12 +489,10 @@ const CANDIDATE_FILTERS = [
 function EventCandidates({
   event,
   canWrite,
-  canReadStudents,
   onChanged,
 }: Readonly<{
   event: Event;
   canWrite: boolean;
-  canReadStudents: boolean;
   onChanged: () => void;
 }>) {
   const eventId = event.id;
@@ -524,16 +514,7 @@ function EventCandidates({
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      {canWrite && !canReadStudents ? (
-        <Alert variant="info">
-          <span>
-            Choosing who to add reads the student directory, so it also needs the Students
-            permission. A super admin grants it.
-          </span>
-        </Alert>
-      ) : null}
-
-      {canWrite && canReadStudents ? <AddCandidates event={event} onAdded={onChanged} /> : null}
+      {canWrite ? <AddCandidates event={event} onAdded={onChanged} /> : null}
 
       <ListView
         list={candidates}

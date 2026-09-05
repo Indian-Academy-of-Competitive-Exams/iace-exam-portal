@@ -96,7 +96,7 @@ export class ImportsController {
   }
 
   /** The candidate sample, generated from the same two columns the parser matches on. */
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('events/candidates/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${CANDIDATE_IMPORT_TEMPLATE_FILENAME}"`)
@@ -106,7 +106,7 @@ export class ImportsController {
   }
 
   /** On EVENT: the account it mints is NON_IACE and reaches that event and nothing else. */
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Post('events/:eventId/candidates/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
@@ -118,7 +118,7 @@ export class ImportsController {
     return this.imports.previewEventCandidates(eventId, this.bufferOf(file), branchScopeOf(user));
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('events/:eventId/candidates/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))

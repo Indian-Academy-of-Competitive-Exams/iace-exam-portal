@@ -387,11 +387,10 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
     ],
   },
-  /** Its own section, not a row under Tests: a section gates before its children, and EVENT is granted alone. */
   {
     label: 'Events',
     icon: CalendarDays,
-    featureKey: FEATURE_KEYS.EVENT,
+    featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
     children: [{ to: ROUTES.EVENTS, label: 'All events', icon: CalendarDays }],
   },
   {
