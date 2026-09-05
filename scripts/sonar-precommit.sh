@@ -34,12 +34,18 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR -- apps packages prism
 
 # Read .env without sourcing it: values there contain spaces, and `. .env`
 # executes them as commands.
-env_val() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2-; }
+# A worktree is tracked files only, so it has no .env; --git-common-dir points at the checkout that does.
+env_file=.env
+[ -f "$env_file" ] || env_file="$(dirname "$(git rev-parse --git-common-dir)")/.env"
+
+# `|| true` because grep exits 2 on a missing file, which pipefail would turn into a silent exit.
+env_val() { grep -E "^$1=" "$env_file" 2>/dev/null | head -1 | cut -d= -f2- || true; }
 host=${SONAR_HOST_URL:-$(env_val SONAR_HOST_URL)}
 token=${SONAR_TOKEN:-$(env_val SONAR_TOKEN)}
 
 if [ -z "$host" ] || [ -z "$token" ]; then
   echo "sonar: SONAR_HOST_URL / SONAR_TOKEN not set — see .env.example" >&2
+  echo "       Looked in $env_file." >&2
   echo "       Set them, or commit with SKIP_SONAR=1 if this is deliberate." >&2
   exit 1
 fi
