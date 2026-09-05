@@ -17,7 +17,7 @@ const ALLOWLIST = ['EventEmitter'];
 const ARCHITECTURE = 'docs/03-shared-architecture.md';
 
 const doc = (text: string) => [{ path: ARCHITECTURE, text }];
-const names = (offences: string[]) => offences.map((offence) => offence.split('  ')[0]);
+const names = (offences: { name: string }[]) => offences.map((offence) => offence.name);
 
 describe('ghostIdentifiers — a doc may only name what the repo has', () => {
   it('accepts a name the schema defines', () => {
@@ -50,10 +50,10 @@ describe('ghostIdentifiers — a doc may only name what the repo has', () => {
     assert.deepEqual(names(offences), ['BranchTestConfig']);
   });
 
-  it('names every doc that cites it, because the output is the rewrite worklist', () => {
+  it('names every doc that cites it once, because the output is the rewrite worklist', () => {
     const offences = ghostIdentifiers({
       docs: [
-        { path: 'README.md', text: 'the `AdminBranch` join' },
+        { path: 'README.md', text: 'the `AdminBranch` join, and `AdminBranch` again' },
         { path: 'docs/01-architecture-and-plan.md', text: '`AdminBranch` is per admin' },
       ],
       models: [],
@@ -61,7 +61,7 @@ describe('ghostIdentifiers — a doc may only name what the repo has', () => {
       allowlist: ALLOWLIST,
     });
     assert.deepEqual(offences, [
-      'AdminBranch  cited in docs/01-architecture-and-plan.md, README.md',
+      { name: 'AdminBranch', paths: ['docs/01-architecture-and-plan.md', 'README.md'] },
     ]);
   });
 
@@ -92,6 +92,24 @@ describe('sourceSymbols — what is allowed to prove a name still exists', () =>
       { path: 'apps/api/src/tests/tests.service.ts', text: 'export class TestsService {}' },
     ]);
     assert.equal(symbols.has('TestsService'), true);
+  });
+
+  it('ignores a comment, where prose outlives the class it was written about', () => {
+    const symbols = sourceSymbols([
+      {
+        path: 'apps/api/src/branches/branch-rules.ts',
+        text: [
+          '/**',
+          ' * `AccessResolver` reads the branch alone, so an online student inherits its schedule.',
+          ' */',
+          '// AdminBranch used to scope this.',
+          'export class BranchRules {}',
+        ].join('\n'),
+      },
+    ]);
+    assert.equal(symbols.has('BranchRules'), true);
+    assert.equal(symbols.has('AccessResolver'), false);
+    assert.equal(symbols.has('AdminBranch'), false);
   });
 
   it('ignores a test directory, so a DROP TABLE assertion cannot keep a dead table alive', () => {
@@ -193,7 +211,25 @@ describe('brokenSectionRefs — a docs/03 citation must land on something', () =
   it('reports a citation with no matching heading, naming the file that made it', () => {
     const citations = [{ path: 'apps/api/src/auth/auth.module.ts', section: '4.9' }];
     assert.deepEqual(brokenSectionRefs({ headings, citations }), [
-      'docs/03 §4.9  cited in apps/api/src/auth/auth.module.ts',
+      { section: '4.9', paths: ['apps/api/src/auth/auth.module.ts'] },
+    ]);
+  });
+
+  it('counts a missing section once however often it is cited', () => {
+    const citations = [
+      { path: 'apps/api/src/common/events/event-catalog.ts', section: '9' },
+      { path: 'apps/api/src/common/events/event-catalog.ts', section: '9' },
+      { path: 'apps/api/src/common/events/event-catalog.ts', section: '9' },
+      { path: 'apps/api/src/common/messaging/message-sender.ts', section: '9' },
+    ];
+    assert.deepEqual(brokenSectionRefs({ headings, citations }), [
+      {
+        section: '9',
+        paths: [
+          'apps/api/src/common/events/event-catalog.ts',
+          'apps/api/src/common/messaging/message-sender.ts',
+        ],
+      },
     ]);
   });
 });

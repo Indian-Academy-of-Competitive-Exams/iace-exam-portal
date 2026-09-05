@@ -1,8 +1,8 @@
 /**
  * Docs rot silently: a table is renamed, the prose keeps the old name, and no gate notices.
  * Check A — a backticked multi-word name in a doc must be a Prisma model/enum or a TS symbol.
- * Check B — a `docs/03 §N` citation must land on a heading that exists. Build output and tests
- * are NOT source: a stale dist/ and a `DROP TABLE "X"` both make a dead name read as alive.
+ * Check B — a `docs/03 §N` citation must land on a heading that exists. Build output, tests and
+ * comments are NOT source: each makes a dead name read as alive, which is the drift being caught.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -14,6 +14,9 @@ const NOT_SOURCE = /(^|\/)(dist|node_modules|coverage|build)\//;
 const NOT_SOURCE_TEST = /(?:^(?:apps|packages)\/[^/]+\/test\/)|(?:\.test\.tsx?$)/;
 const SOURCE_FILE = /\.tsx?$/;
 const DOC_EXTENSION = '.md';
+
+/** Prose in a comment names things it does not define — `AccessResolver` outlived the class. */
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
 
 /** Node built-in, so it is real without being ours; every entry here needs a reason. */
 const ALLOWED = new Set(['EventEmitter']);
@@ -33,6 +36,21 @@ const SECTION_CITATION = /docs\/03 §(\d+(?:\.\d+)?)/g;
 const captured = (text, pattern) => [...text.matchAll(pattern)].map(([, capture]) => capture);
 const alphabetical = (a, b) => a.localeCompare(b);
 
+const codeOnly = (text) =>
+  text
+    .split('\n')
+    .filter((line) => !COMMENT_LINE.test(line))
+    .join('\n');
+
+/** One entry per thing named, carrying every file that named it — never one per occurrence. */
+function groupPaths(pairs) {
+  const groups = new Map();
+  for (const [key, path] of pairs) groups.set(key, (groups.get(key) ?? new Set()).add(path));
+  return [...groups]
+    .sort(([a], [b]) => alphabetical(a, b))
+    .map(([key, paths]) => [key, [...paths].sort(alphabetical)]);
+}
+
 /** Build output and tests describe code rather than being it — a DROP TABLE is not a table. */
 export const isLiveCode = (path) => !NOT_SOURCE.test(path) && !NOT_SOURCE_TEST.test(path);
 
@@ -42,31 +60,27 @@ export function sourceSymbols(files) {
   const symbols = new Set();
   for (const { path, text } of files) {
     if (!isSourceFile(path)) continue;
-    for (const symbol of captured(text, SOURCE_SYMBOL)) symbols.add(symbol);
+    for (const symbol of captured(codeOnly(text), SOURCE_SYMBOL)) symbols.add(symbol);
   }
   return symbols;
 }
 
 export function ghostIdentifiers({ docs, models, symbols, allowlist }) {
   const live = new Set([...models, ...symbols, ...allowlist]);
-  const ghosts = new Map();
-  for (const { path, text } of docs) {
-    for (const name of captured(text, DOC_IDENTIFIER)) {
-      if (!TABLE_LIKE.test(name) || live.has(name)) continue;
-      ghosts.set(name, (ghosts.get(name) ?? new Set()).add(path));
-    }
-  }
-  return [...ghosts]
-    .map(([name, paths]) => `${name}  cited in ${[...paths].sort(alphabetical).join(', ')}`)
-    .sort(alphabetical);
+  const cited = docs.flatMap(({ path, text }) =>
+    captured(text, DOC_IDENTIFIER)
+      .filter((name) => TABLE_LIKE.test(name) && !live.has(name))
+      .map((name) => [name, path]),
+  );
+  return groupPaths(cited).map(([name, paths]) => ({ name, paths }));
 }
 
 export function brokenSectionRefs({ headings, citations }) {
   const known = new Set(headings);
-  return citations
+  const unresolved = citations
     .filter(({ section }) => !known.has(section))
-    .map(({ path, section }) => `docs/03 §${section}  cited in ${path}`)
-    .sort(alphabetical);
+    .map(({ section, path }) => [section, path]);
+  return groupPaths(unresolved).map(([section, paths]) => ({ section, paths }));
 }
 
 /** docs/03 numbers its rules as list items, so §4.1 is rule 1 of section 4 and has no heading. */
@@ -92,14 +106,17 @@ const tracked = (...pathspecs) =>
 
 const load = (paths) => paths.map((path) => ({ path, text: readFileSync(path, 'utf8') }));
 
+function report(headline, lines, trailer) {
+  console.error(`\n✗ ${headline}\n`);
+  for (const line of lines) console.error(`  ${line}`);
+  console.error(`\n  ${trailer.join('\n  ')}\n`);
+}
+
 function main() {
   const schema = readFileSync(SCHEMA_PATH, 'utf8');
   const models = new Set(captured(schema, PRISMA_MODEL));
   const symbols = sourceSymbols(load(tracked('*.ts', '*.tsx')));
-  const docs = load([
-    ...tracked('docs').filter((path) => path.endsWith(DOC_EXTENSION)),
-    ...ROOT_DOCS,
-  ]);
+  const docs = load(tracked('docs', ...ROOT_DOCS).filter((path) => path.endsWith(DOC_EXTENSION)));
 
   const headings = architectureHeadings(readFileSync(ARCHITECTURE_DOC, 'utf8'));
   const citing = tracked('*.ts', '*.tsx', '.husky', '*.mjs').filter(isLiveCode);
@@ -107,18 +124,32 @@ function main() {
     captured(text, SECTION_CITATION).map((section) => ({ path, section })),
   );
 
-  const offences = [
-    ...ghostIdentifiers({ docs, models, symbols, allowlist: ALLOWED }),
-    ...brokenSectionRefs({ headings, citations }),
-  ];
+  const ghosts = ghostIdentifiers({ docs, models, symbols, allowlist: ALLOWED });
+  const broken = brokenSectionRefs({ headings, citations });
 
-  if (offences.length === 0) return;
+  if (ghosts.length > 0) {
+    report(
+      `${ghosts.length} name(s) the docs use that the repo does not have.`,
+      ghosts.map(({ name, paths }) => `${name}  cited in ${paths.join(', ')}`),
+      [
+        `A doc may only name what ${SCHEMA_PATH} or the TypeScript source defines.`,
+        'Rename the prose, not the code.',
+      ],
+    );
+  }
 
-  console.error(`\n✗ ${offences.length} name(s) the docs use that the repo does not have.\n`);
-  for (const offence of offences) console.error(`  ${offence}`);
-  console.error('\n  A doc may only name what prisma/schema.prisma, the TypeScript source or');
-  console.error(`  ${ARCHITECTURE_DOC} actually defines. Rename the prose, not the code.\n`);
-  process.exit(1);
+  if (broken.length > 0) {
+    report(
+      `${broken.length} section(s) cited by code that ${ARCHITECTURE_DOC} does not have.`,
+      broken.map(({ section, paths }) => `§${section}  cited by ${paths.join(', ')}`),
+      [
+        'Renumbering a section is what breaks this, and the code is what went stale.',
+        'Repoint the citation, or put the heading back.',
+      ],
+    );
+  }
+
+  if (ghosts.length + broken.length > 0) process.exit(1);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
