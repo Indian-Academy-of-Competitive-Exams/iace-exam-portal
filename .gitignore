@@ -93,8 +93,6 @@ docker-data/
 # Uploads (local S3/MinIO scratch, if any)
 tmp/
 
-sonar-project.properties
-
 # sonar-scanner working directory
 .scannerwork/
 
