@@ -15,14 +15,14 @@ import {
   type TestDetail,
   type TestPaper,
 } from '@iace/contracts';
-import { DESKTOP_QUERY, PageCrumbs, useMediaQuery } from '@iace/app-kit/browser';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   Alert,
   Button,
   CAPPED_VIEWPORT,
   Combobox,
   PageHeader,
-  PaneFrame,
+  PanelFrame,
   SectionHeading,
   Skeleton,
   SkeletonParagraph,
@@ -36,9 +36,8 @@ import {
 import { api } from '../lib/api';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
-import { PaperSectionRail } from '../components/paper-section-rail';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
-import { canPickPaper, hasPaper, paperOptions } from './test-paper-view';
+import { canPickPaper, hasPaper, paperOptions, sectionTabLabel } from './test-paper-view';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
@@ -125,12 +124,10 @@ function TestPaperScreen({
 }>) {
   const queryClient = useQueryClient();
   const sections = detail.baseConfig.sections;
-  const desktop = useMediaQuery(DESKTOP_QUERY);
   const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
   const paperExists = hasPaper(detail);
 
   const [openSectionId, setOpenSectionId] = useState(sections[0]?.id ?? '');
-  const [collapsed, setCollapsed] = useState(!desktop);
   const [draft, setDraft] = useState<DrawSpec | null>(null);
 
   const held = useMemo(() => {
@@ -194,69 +191,68 @@ function TestPaperScreen({
 
   if (!openSection) {
     return (
-      <PaneFrame header={header}>
+      <PanelFrame fills header={header}>
         <Alert variant="warning">
           This test&rsquo;s configuration has no sections, so there is no paper to build.
         </Alert>
-      </PaneFrame>
+      </PanelFrame>
     );
   }
 
-  const sectionSpec = spec.sections[openSection.id] ?? {};
-  const rows =
-    paper.sections.find((row) => row.baseConfigSectionId === openSection.id)?.questions ?? [];
   // The picked paper's counts or none: the last one's tallies under this one's name is a lie.
   const tallies = paperExists && !loading ? held : null;
 
-  return (
-    <PaneFrame header={header} className="flex gap-4">
-      <PaperSectionRail
-        sections={sections}
-        held={tallies}
-        openSectionId={openSection.id}
-        collapsed={collapsed}
-        onOpen={setOpenSectionId}
-        onCollapsedChange={setCollapsed}
-      />
-
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
+  const thaws = canEditPaper && detail.isLocked;
+  // The screen owns these, not any one section, so they ride the toolbar above the strip.
+  const banners =
+    paperExists && !thaws ? undefined : (
+      <div className="flex flex-col gap-4 pb-4">
         {paperExists ? null : <DrawnAtOffer detail={detail} />}
-
-        {canEditPaper && detail.isLocked ? (
-          <Alert variant="warning" className="shrink-0">
-            {THAWS_THE_TEST}
-          </Alert>
-        ) : null}
-
-        <DrawnFrom
-          section={openSection}
-          spec={sectionSpec}
-          canSave={canSaveSpec}
-          fills={!paperExists}
-          dirty={draft !== null}
-          saving={save.isPending}
-          onSave={() => save.mutate(spec)}
-          onChange={(next) => setDraft({ sections: { ...spec.sections, [openSection.id]: next } })}
-        />
-
-        {paperExists ? (
-          // Keyed by the section: switching one drops its ticks and its last refusal with it.
-          <SectionWorkspace
-            key={openSection.id}
-            testId={detail.id}
-            section={openSection}
-            spec={sectionSpec}
-            rows={rows}
-            held={onThePaper}
-            editable={canEditPaper}
-            loading={loading}
-            poolDirty={draft !== null}
-            onChanged={refresh}
-          />
-        ) : null}
+        {thaws ? <Alert variant="warning">{THAWS_THE_TEST}</Alert> : null}
       </div>
-    </PaneFrame>
-  );
+    );
+
+  const tabs = {
+    value: openSection.id,
+    onValueChange: setOpenSectionId,
+    items: sections.map((section) => ({
+      value: section.id,
+      label: sectionTabLabel(section, tallies),
+      content: (
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <DrawnFrom
+            section={section}
+            spec={spec.sections[section.id] ?? {}}
+            canSave={canSaveSpec}
+            fills={!paperExists}
+            dirty={draft !== null}
+            saving={save.isPending}
+            onSave={() => save.mutate(spec)}
+            onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
+          />
+
+          {paperExists ? (
+            <SectionWorkspace
+              testId={detail.id}
+              section={section}
+              spec={spec.sections[section.id] ?? {}}
+              rows={
+                paper.sections.find((row) => row.baseConfigSectionId === section.id)?.questions ??
+                []
+              }
+              held={onThePaper}
+              editable={canEditPaper}
+              loading={loading}
+              poolDirty={draft !== null}
+              onChanged={refresh}
+            />
+          ) : null}
+        </div>
+      ),
+    })),
+  };
+
+  return <PanelFrame fills header={header} toolbar={banners} tabs={tabs} />;
 }
 
 /** Which of the drawn papers is on screen. */

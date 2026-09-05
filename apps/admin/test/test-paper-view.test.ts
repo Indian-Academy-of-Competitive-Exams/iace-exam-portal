@@ -5,6 +5,7 @@ import {
   canPickPaper,
   hasPaper,
   paperOptions,
+  sectionTabLabel,
   type PaperSource,
 } from '../src/routes/test-paper-view';
 
@@ -75,5 +76,24 @@ describe('the papers offered by name', () => {
   it('reaches the last paper a test drew', () => {
     assert.deepEqual(paperOptions(10).at(-1), { value: '9', label: 'Paper 10' });
     assert.deepEqual(paperOptions(1), [{ value: '0', label: 'Paper 1' }]);
+  });
+});
+
+describe('sectionTabLabel', () => {
+  const section = { id: 'sec_1', name: 'Quantitative Aptitude', questionCount: 25 };
+
+  it('carries the tally, so which sections are short reads off the strip', () => {
+    assert.equal(sectionTabLabel(section, new Map([['sec_1', 12]])), 'Quantitative Aptitude 12/25');
+    assert.equal(sectionTabLabel(section, new Map([['sec_1', 25]])), 'Quantitative Aptitude 25/25');
+  });
+
+  /** A section the paper holds nothing for is at zero, not unmeasured. */
+  it('reads zero for a section the paper has no row for', () => {
+    assert.equal(sectionTabLabel(section, new Map()), 'Quantitative Aptitude 0/25');
+  });
+
+  /** THE failure this prevents: a drawn test reading "0/25" as though nobody had built it. */
+  it('names the section alone before any paper exists', () => {
+    assert.equal(sectionTabLabel(section, null), 'Quantitative Aptitude');
   });
 });

@@ -1,4 +1,4 @@
-import { PAPER_BINDING, type Test } from '@iace/contracts';
+import { PAPER_BINDING, type BaseConfigSection, type Test } from '@iace/contracts';
 import type { ComboboxItem } from '@iace/ui';
 
 /** What the paper screen reads off a test: whether a paper exists at all, and which one is on it. */
@@ -19,3 +19,12 @@ export const paperOptions = (variantCount: number): ComboboxItem[] =>
     value: String(index),
     label: `Paper ${index + 1}`,
   }));
+
+/** A tab has to say which section it is and how far off it is, because only one pane is open. */
+export const sectionTabLabel = (
+  section: Pick<BaseConfigSection, 'id' | 'name' | 'questionCount'>,
+  held: ReadonlyMap<string, number> | null,
+): string =>
+  held === null
+    ? section.name
+    : `${section.name} ${held.get(section.id) ?? 0}/${section.questionCount}`;

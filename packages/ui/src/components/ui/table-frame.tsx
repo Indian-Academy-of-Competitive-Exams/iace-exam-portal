@@ -40,26 +40,6 @@ export function PageFrame({ header, children, className }: Readonly<PageFramePro
   );
 }
 
-export interface PaneFrameProps {
-  /** Pinned above the body — usually a `PageHeader`. */
-  header?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}
-
-/** The one frame that does not scroll its own body — children own their scrolling instead. */
-export function PaneFrame({ header, children, className }: Readonly<PaneFrameProps>) {
-  return (
-    // Its children own the scrolling, so a table dropped in fills its pane rather than capping itself.
-    <TableFrameContext value={true}>
-      <div data-page-frame className={FILLS}>
-        {header ? <div className="shrink-0">{header}</div> : null}
-        <div className={cn('min-h-0 flex-1', className)}>{children}</div>
-      </div>
-    </TableFrameContext>
-  );
-}
-
 export interface PanelFrameProps {
   /** Pinned above the card — usually a `PageHeader`. */
   header?: React.ReactNode;
@@ -74,21 +54,24 @@ export interface PanelFrameProps {
   };
   /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
   tabs?: TableFrameTabs;
+  /** Hands the scrolling to the children — for a body that is itself two panes, each its own. */
+  fills?: boolean;
   children?: React.ReactNode;
   className?: string;
 }
 
-/** `TableFrame` for content that is no table: same card and strip, but the BODY is the scroller. */
+/** `TableFrame` for content that is no table: same card and strip, the body scrolling unless `fills`. */
 export function PanelFrame({
   header,
   toolbar,
   filters,
   tabs,
+  fills,
   children,
   className,
 }: Readonly<PanelFrameProps>) {
   // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
-  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', className);
+  const scroller = cn(fills ? FILLS : 'relative min-h-0 flex-1 overflow-y-auto', className);
 
   const bar =
     filters && (filters.spec.length > 0 || filters.leading) ? (
@@ -128,12 +111,15 @@ export function PanelFrame({
     </div>
   );
 
+  // The context is what tells a table inside to fill its pane rather than cap itself half way down.
+  const rooted = fills ? <TableFrameContext value={true}>{frame}</TableFrameContext> : frame;
+
   return tabs ? (
     <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
-      {frame}
+      {rooted}
     </Tabs>
   ) : (
-    frame
+    rooted
   );
 }
 

@@ -17,6 +17,8 @@ const TabsList = React.forwardRef<
     className={cn(
       // A rule under the row, with the active tab sitting on it.
       'flex items-center gap-1 border-b border-border',
+      // A tab past the edge is clipped away by the card it sits in, so the overflow must be reachable.
+      'overflow-x-auto',
       className,
     )}
     {...props}

@@ -232,7 +232,6 @@ export {
   TableFrame,
   PageFrame,
   PanelFrame,
-  PaneFrame,
   useInTableFrame,
   PAGE_CONTENT_CLASS,
   type TableFrameProps,
@@ -240,7 +239,6 @@ export {
   type TableFrameTabs,
   type PageFrameProps,
   type PanelFrameProps,
-  type PaneFrameProps,
 } from './components/ui/table-frame';
 export {
   ListView,
