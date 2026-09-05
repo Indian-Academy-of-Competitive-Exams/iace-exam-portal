@@ -62,11 +62,13 @@ adaptive practice, certificates.
   under load, one engine behind every `ExamTemplate` skin.
 - **Instant results:** score, correct/wrong/unattempted, full solutions per question, and cohort
   rank + percentile.
-- **Access:** student → test series → test. There are no groups and no student↔test link. A student
-  reaches a `TestSeries` by an exam match, a program match, or an explicit `StudentGrant`, gated by
-  the series' own `branchIds` (a GIN-indexed array) together with `isEnabled`. A grant overrides
-  every kind; `isEnabled` overrides the grant. A series is reached or it is not — there is no
-  unlock, no prerequisite, and no queue to ask in.
+- **Access:** student → test series → test. There are no groups and no student↔test link. A
+  `StudentGrant` overrides every kind and `isEnabled` gates every path, grant included. `FREE`
+  reaches everyone, `PROGRAM` matches a program, `EVENT` matches its own candidates; none of the
+  three looks at a branch. `STANDARD` is the only branch-gated kind: the series' own `branchIds` (a
+  GIN-indexed array) must hold the student's current branch _and_ the stage's exam course must be
+  one of their `enrolledCourses`, so a student carrying neither reaches no `STANDARD` series. A
+  series is reached or it is not — there is no unlock, no prerequisite, and no queue to ask in.
 - **Scheduling belongs to the test:** `Test.opensAt`, `Test.lateEntrySec` (counted from the
   opening), `Test.extraTimeSec`. It blocks _starting_ a test, never seeing one, and `canStart` is
   derived from the clock on every read rather than stored. Series to test is one-to-many:
