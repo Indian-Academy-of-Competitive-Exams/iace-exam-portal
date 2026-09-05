@@ -15,7 +15,7 @@ import {
   type UpdateEventInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useListScreen, useLocalFilters } from '@iace/app-kit/browser';
+import { useListScreen, useLocalFilters } from '@iace/app-kit/browser';
 import {
   Badge,
   Button,
@@ -26,10 +26,8 @@ import {
   FormField,
   Input,
   ListView,
-  PageHeader,
   plural,
   RowActions,
-  TableFrame,
   Textarea,
   TruncatedText,
   type DataTableColumn,
@@ -38,7 +36,7 @@ import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { StudentMultiPicker } from '../components/access-picker';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const EVENT_FIELDS = ['name', 'description'] as const;
 
@@ -105,10 +103,12 @@ function eventColumns(
 }
 
 /** The roster an Event Test draws on. Its candidates open under the row, never on a screen of their own. */
-export function EventsPage() {
+export function EventsList({
+  creating,
+  onCreatingChange,
+}: Readonly<{ creating: boolean; onCreatingChange: (open: boolean) => void }>) {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
-  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
   const queryClient = useQueryClient();
 
@@ -116,10 +116,13 @@ export function EventsPage() {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EVENTS });
   }, [queryClient]);
 
-  const startEdit = useCallback((event: Event) => {
-    setCreating(false);
-    setEditing(event);
-  }, []);
+  const startEdit = useCallback(
+    (event: Event) => {
+      onCreatingChange(false);
+      setEditing(event);
+    },
+    [onCreatingChange],
+  );
 
   const columns = useMemo(
     () => eventColumns(canWrite, refresh, startEdit),
@@ -136,35 +139,14 @@ export function EventsPage() {
     fetchPage: (params) => api.admin.events.list(params),
   });
 
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Events"
-      action={
-        canWrite ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditing(null);
-              setCreating(true);
-            }}
-          >
-            <Plus aria-hidden />
-            New event
-          </Button>
-        ) : undefined
-      }
-    />
-  );
-
   return (
-    <TableFrame header={header}>
+    <>
       {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
       <NewEventDialog
         open={creating}
-        onOpenChange={setCreating}
+        onOpenChange={onCreatingChange}
         onDone={() => {
-          setCreating(false);
+          onCreatingChange(false);
           refresh();
         }}
       />
@@ -196,7 +178,7 @@ export function EventsPage() {
           label: (event) => `Show the candidates on ${event.name}`,
         }}
       />
-    </TableFrame>
+    </>
   );
 }
 

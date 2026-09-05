@@ -23,7 +23,7 @@ import {
 import { PageCrumbs, useImportScreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { saveBlob } from '../lib/save-blob';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
+import { COHORT_TABS, NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const ACTION_LABELS: Readonly<Record<CandidateImportRow['action'], string>> = {
   create: 'New candidate',
@@ -84,7 +84,10 @@ export function ImportEventCandidatesPage() {
           <>
             {intake.result.created} created, {intake.result.added} on the event,{' '}
             {intake.result.skipped} skipped.{' '}
-            <Link to={ROUTES.EVENTS} className={linkVariants({ variant: 'inline' })}>
+            <Link
+              to={`${ROUTES.COHORTS}?tab=${COHORT_TABS.EVENTS}`}
+              className={linkVariants({ variant: 'inline' })}
+            >
               Back to events
             </Link>
           </>

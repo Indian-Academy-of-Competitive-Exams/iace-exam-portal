@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Pencil, Power, Trash2 } from 'lucide-react';
 import {
   createProgramSchema,
   updateProgramSchema,
@@ -11,21 +11,18 @@ import {
   type UpdateProgramInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
-import { NAV_ITEMS, QUERY_KEYS } from '../lib/constants';
+import { useListScreen } from '@iace/app-kit/browser';
+import { QUERY_KEYS } from '../lib/constants';
 import {
   Alert,
   Badge,
-  Button,
   ConfirmDialog,
   DropdownMenuItem,
   FormDialog,
   FormField,
   Input,
   ListView,
-  PageHeader,
   RowActions,
-  TableFrame,
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
@@ -89,20 +86,25 @@ function programColumns(
 }
 
 /** Anyone managing students may read the catalog, because they pick from it. Only a super admin writes. */
-export function ProgramsPage() {
+export function ProgramsList({
+  creating,
+  onCreatingChange,
+}: Readonly<{ creating: boolean; onCreatingChange: (open: boolean) => void }>) {
   const { identity: admin } = useAuth();
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
-  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Program | null>(null);
   const queryClient = useQueryClient();
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROGRAMS });
   }, [queryClient]);
 
-  const startEdit = useCallback((program: Program) => {
-    setCreating(false);
-    setEditing(program);
-  }, []);
+  const startEdit = useCallback(
+    (program: Program) => {
+      onCreatingChange(false);
+      setEditing(program);
+    },
+    [onCreatingChange],
+  );
 
   const columns = useMemo(
     () => programColumns(isSuperAdmin, refresh, startEdit),
@@ -119,43 +121,14 @@ export function ProgramsPage() {
     fetchPage: (params) => api.admin.programs.list(params),
   });
 
-  const header = (
-    <>
-      <PageHeader
-        breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-        title="Programs"
-        action={
-          isSuperAdmin ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setCreating(true);
-              }}
-            >
-              <Plus aria-hidden />
-              New program
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {!isSuperAdmin ? (
-        <Alert variant="info" className="mb-5">
-          <span>Only a super admin can add or change a program.</span>
-        </Alert>
-      ) : null}
-    </>
-  );
-
   return (
-    <TableFrame header={header}>
+    <>
       {/* Portalled, so where these sit in the tree costs the pinned header nothing. */}
       <NewProgramDialog
         open={creating}
-        onOpenChange={setCreating}
+        onOpenChange={onCreatingChange}
         onDone={() => {
-          setCreating(false);
+          onCreatingChange(false);
           refresh();
         }}
       />
@@ -177,10 +150,17 @@ export function ProgramsPage() {
         filters={PROGRAM_FILTERS}
         columns={columns}
         rowKey={(program) => program.id}
+        banner={
+          isSuperAdmin ? undefined : (
+            <Alert variant="info">
+              <span>Only a super admin can add or change a program.</span>
+            </Alert>
+          )
+        }
         empty="No programs yet. Add the first one — a series can then be aimed at it."
         emptyFiltered="No programs match those filters."
       />
-    </TableFrame>
+    </>
   );
 }
 

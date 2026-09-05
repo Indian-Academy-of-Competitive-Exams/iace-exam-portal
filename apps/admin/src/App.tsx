@@ -10,7 +10,7 @@ import { StudentPerformancePage } from './routes/student-performance';
 import { ImportStudentsPage } from './routes/import-students';
 import { BranchesPage } from './routes/branches';
 import { ExamsPage } from './routes/exams';
-import { ProgramsPage } from './routes/programs';
+import { CohortsPage } from './routes/cohorts';
 import { QuestionsPage } from './routes/questions';
 import { QuestionFormPage } from './routes/question-form';
 import { QuestionApprovalsPage } from './routes/question-approvals';
@@ -25,7 +25,7 @@ import { TestBuilderPage } from './routes/test-builder';
 import { TestPaperPage } from './routes/test-paper';
 import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
-import { EventsPage } from './routes/events';
+
 import { ImportEventCandidatesPage } from './routes/import-event-candidates';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
@@ -57,7 +57,7 @@ export function App() {
           <Route path={ROUTES.STUDENT_PERFORMANCE_PATTERN} element={<StudentPerformancePage />} />
           <Route path={ROUTES.BRANCHES} element={<BranchesPage />} />
           <Route path={ROUTES.EXAMS} element={<ExamsPage />} />
-          <Route path={ROUTES.PROGRAMS} element={<ProgramsPage />} />
+          <Route path={ROUTES.COHORTS} element={<CohortsPage />} />
           <Route path={ROUTES.QUESTIONS} element={<QuestionsPage />} />
           {/* Before the :id route, or "new", "import" and "taxonomy" would each
               be read as a question id. */}
@@ -78,7 +78,7 @@ export function App() {
           {/* Before the :id route, or "new" would be read as a series id. */}
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
-          <Route path={ROUTES.EVENTS} element={<EventsPage />} />
+
           <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
