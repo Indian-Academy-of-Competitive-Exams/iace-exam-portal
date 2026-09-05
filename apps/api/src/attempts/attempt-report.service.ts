@@ -22,6 +22,8 @@ import {
   type ScoreCardQuestion,
   type SolutionQuestion,
   type SolutionReport,
+  type TestScopeRef,
+  scopedQuestionCount,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -84,6 +86,8 @@ const SCORE_CARD_SELECT = {
   test: {
     select: {
       title: true,
+      scope: true,
+      scopeRef: true,
       baseConfig: {
         select: {
           durationSec: true,
@@ -91,6 +95,7 @@ const SCORE_CARD_SELECT = {
           sections: {
             select: {
               id: true,
+              moduleId: true,
               name: true,
               order: true,
               questionCount: true,
@@ -223,7 +228,11 @@ export class AttemptReportService {
       correctCount: attempt.correctCount ?? 0,
       wrongCount: attempt.wrongCount ?? 0,
       unattemptedCount: attempt.unattemptedCount ?? 0,
-      totalQuestions: config.totalQuestions,
+      totalQuestions: scopedQuestionCount(
+        config.sections,
+        attempt.test.scope,
+        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
+      ),
       timeTakenSec:
         attempt.submittedAt === null ? 0 : elapsedSeconds(attempt.startedAt, attempt.submittedAt),
       durationSec: config.durationSec,

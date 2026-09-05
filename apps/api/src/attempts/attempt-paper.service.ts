@@ -4,6 +4,7 @@ import {
   AppException,
   ErrorCodes,
   contentLanguageOf,
+  scopedSections,
   type ExamOption,
   type ExamBrief,
   type ExamPaper,
@@ -11,6 +12,7 @@ import {
   type LanguageCode,
   type LocalizedContent,
   type QuestionOption,
+  type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
@@ -28,6 +30,8 @@ const PAPER_SELECT = {
   test: {
     select: {
       examTemplate: true,
+      scope: true,
+      scopeRef: true,
       baseConfig: {
         select: {
           defaultTestUi: true,
@@ -39,6 +43,7 @@ const PAPER_SELECT = {
           sections: {
             select: {
               id: true,
+              moduleId: true,
               name: true,
               order: true,
               questionCount: true,
@@ -85,6 +90,8 @@ export class AttemptPaperService {
       select: {
         id: true,
         title: true,
+        scope: true,
+        scopeRef: true,
         baseConfig: {
           select: {
             durationSec: true,
@@ -94,6 +101,7 @@ export class AttemptPaperService {
             sections: {
               select: {
                 id: true,
+                moduleId: true,
                 name: true,
                 questionCount: true,
                 durationSec: true,
@@ -108,14 +116,21 @@ export class AttemptPaperService {
     });
     if (!test) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
 
+    // A scoped test sits its own sections; the rest belong to other tests on the same configuration.
+    const covered = scopedSections(
+      test.baseConfig.sections,
+      test.scope,
+      (test.scopeRef as TestScopeRef | null) ?? null,
+    );
+
     return {
       testId: test.id,
       title: test.title,
       durationSec: test.baseConfig.durationSec,
-      totalQuestions: test.baseConfig.totalQuestions,
+      totalQuestions: covered.reduce((total, section) => total + section.questionCount, 0),
       languageMode: test.baseConfig.languageMode,
       languages: test.baseConfig.languages,
-      sections: test.baseConfig.sections.map((section) => ({
+      sections: covered.map((section) => ({
         id: section.id,
         name: section.name,
         questionCount: section.questionCount,
@@ -150,7 +165,11 @@ export class AttemptPaperService {
       timerTemplate: config.timerTemplate,
       navigation: config.navigation,
       calculatorEnabled: config.calculatorEnabled,
-      sections: config.sections.map((section) => ({
+      sections: scopedSections(
+        config.sections,
+        attempt.test.scope,
+        (attempt.test.scopeRef as TestScopeRef | null) ?? null,
+      ).map((section) => ({
         id: section.id,
         name: section.name,
         order: section.order,

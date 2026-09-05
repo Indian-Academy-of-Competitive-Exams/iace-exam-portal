@@ -14,6 +14,8 @@ import {
   type TestSeriesKind,
   testIsOpen,
   testWindow,
+  scopedSections,
+  type TestScopeRef,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -43,7 +45,19 @@ const catalogInclude = (programs: string[]) =>
         opensAt: true,
         lateEntrySec: true,
         extraTimeSec: true,
-        baseConfig: { select: { durationSec: true, totalQuestions: true, totalMarks: true } },
+        scope: true,
+        scopeRef: true,
+        baseConfig: {
+          select: {
+            durationSec: true,
+            totalQuestions: true,
+            totalMarks: true,
+            // A scoped test is its own sections' worth, and the catalog is what a student reads first.
+            sections: {
+              select: { id: true, moduleId: true, questionCount: true, marksPerQuestion: true },
+            },
+          },
+        },
         // No program, no row, which is already what "no row" means: the test's own opening.
         programUnlocks: { where: { programCode: { in: programs } }, select: { opensAt: true } },
       },
@@ -332,13 +346,21 @@ function toResolvedTest(
     unlockAt: test.opensAt?.toISOString() ?? null,
     lateEntrySec: test.lateEntrySec,
   });
+  const scoped = scopedSections(
+    test.baseConfig.sections,
+    test.scope,
+    (test.scopeRef as TestScopeRef | null) ?? null,
+  );
 
   return {
     id: test.id,
     title: test.title,
     durationSec: test.baseConfig.durationSec,
-    totalQuestions: test.baseConfig.totalQuestions,
-    totalMarks: Number(test.baseConfig.totalMarks),
+    totalQuestions: scoped.reduce((total, section) => total + section.questionCount, 0),
+    totalMarks: scoped.reduce(
+      (total, section) => total + section.questionCount * Number(section.marksPerQuestion),
+      0,
+    ),
     order: test.seriesOrder,
     opensAt: opensFor(test)?.toISOString() ?? null,
     closesAt,

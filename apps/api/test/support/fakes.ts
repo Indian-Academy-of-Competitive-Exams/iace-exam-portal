@@ -3788,6 +3788,8 @@ export interface FakeTestRow {
   durationSec: number;
   totalQuestions: number;
   totalMarks: number;
+  scope?: TestScope;
+  scopeRef?: TestScopeRef | null;
   testSeriesId: string | null;
   seriesOrder: number | null;
   opensAt: Date | null;
@@ -4060,10 +4062,23 @@ export class FakeCatalogPrisma {
           opensAt: test.opensAt,
           lateEntrySec: test.lateEntrySec,
           extraTimeSec: test.extraTimeSec,
+          scope: test.scope ?? TEST_SCOPE.FULL,
+          scopeRef: test.scopeRef ?? null,
           baseConfig: {
             durationSec: test.durationSec,
             totalQuestions: test.totalQuestions,
             totalMarks: new Prisma.Decimal(test.totalMarks),
+            // One section standing for the whole paper: the catalog now sums what the scope covers.
+            sections: [
+              {
+                id: `${test.id}_sec`,
+                moduleId: null,
+                questionCount: test.totalQuestions,
+                marksPerQuestion: new Prisma.Decimal(
+                  test.totalQuestions === 0 ? 0 : test.totalMarks / test.totalQuestions,
+                ),
+              },
+            ],
           },
           programUnlocks: this.data.programUnlocks
             .filter((unlock) => unlock.testId === test.id && programs.includes(unlock.programCode))

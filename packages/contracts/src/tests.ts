@@ -167,6 +167,23 @@ export function scopedSections<T extends ScopedSection>(
   return sections;
 }
 
+/** A scoped section still has to say what a question is worth, for the marks its paper carries. */
+export interface ScoredScopedSection extends ScopedSection {
+  marksPerQuestion: number;
+}
+
+/** What a scoped test's paper is worth, for the same reason its question count is its own. */
+export function scopedMarks(
+  sections: readonly ScoredScopedSection[],
+  scope: TestScope,
+  scopeRef: TestScopeRef | null,
+): number {
+  return scopedSections(sections, scope, scopeRef).reduce(
+    (total, section) => total + section.questionCount * section.marksPerQuestion,
+    0,
+  );
+}
+
 /** What a scoped test's whole paper comes to — never the configuration's total, which is bigger. */
 export function scopedQuestionCount(
   sections: readonly ScopedSection[],
