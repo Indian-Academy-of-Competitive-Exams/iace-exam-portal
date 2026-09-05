@@ -17,6 +17,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md,yml,yaml}\"",
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
+    "docs:check": "node scripts/check-docs.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

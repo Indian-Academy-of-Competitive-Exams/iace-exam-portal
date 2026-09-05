@@ -6,7 +6,9 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": ".."
+    // scripts/check-docs.mjs lives above apps/api and is plain JS, so both widen for it.
+    "allowJs": true,
+    "rootDir": "../../.."
   },
   // src/ is listed as well as test/ on purpose. tsx applies a tsconfig only to
   // files matching its `include`, so without src/ here the services under test
