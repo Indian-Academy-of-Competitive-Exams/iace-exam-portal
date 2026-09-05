@@ -112,6 +112,15 @@ describe('sourceSymbols — what is allowed to prove a name still exists', () =>
     assert.deepEqual(names(offences), ['BranchTestConfig']);
   });
 
+  it('reads apps/test as the student SPA it is, not as a package full of tests', () => {
+    const symbols = sourceSymbols([
+      { path: 'apps/test/src/routes/tests.tsx', text: 'export function SittingScreen() {}' },
+      { path: 'apps/api/test/support/fakes.ts', text: 'export class FakePrisma {}' },
+    ]);
+    assert.equal(symbols.has('SittingScreen'), true);
+    assert.equal(symbols.has('FakePrisma'), false);
+  });
+
   it('ignores a colocated test file too, not only a test directory', () => {
     const symbols = sourceSymbols([
       { path: 'apps/admin/src/lib/access.test.ts', text: 'const row: BranchTestSchedule = x;' },
@@ -146,6 +155,11 @@ describe('isLiveCode — the same exclusions guard both checks', () => {
 
   it('discounts a test, whose fixtures quote citations rather than make them', () => {
     assert.equal(isLiveCode('apps/api/test/check-docs.unit.test.ts'), false);
+    assert.equal(isLiveCode('packages/ui/test/button.test.tsx'), false);
+  });
+
+  it('counts apps/test, a package named test rather than a package of tests', () => {
+    assert.equal(isLiveCode('apps/test/src/routes/tests.tsx'), true);
   });
 
   it('discounts build output', () => {

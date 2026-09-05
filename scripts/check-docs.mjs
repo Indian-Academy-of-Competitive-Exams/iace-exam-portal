@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const TABLE_LIKE = /^[A-Z][a-z]+[A-Z]/;
 const NOT_SOURCE = /(^|\/)(dist|node_modules|coverage|build)\//;
-const NOT_SOURCE_TEST = /(?:(?:^|\/)test\/)|(?:\.test\.tsx?$)/;
+/** A package's test/ directory, not the package NAMED test — apps/test is the student SPA. */
+const NOT_SOURCE_TEST = /(?:^(?:apps|packages)\/[^/]+\/test\/)|(?:\.test\.tsx?$)/;
 const SOURCE_FILE = /\.tsx?$/;
 const DOC_EXTENSION = '.md';
 
