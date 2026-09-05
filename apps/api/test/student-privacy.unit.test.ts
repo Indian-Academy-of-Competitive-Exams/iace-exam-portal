@@ -3,7 +3,6 @@ import { describe, it } from 'node:test';
 import { AppException, CONSENT_PURPOSE, ErrorCodes } from '@iace/contracts';
 import { StudentPrivacyService } from '../src/students/student-privacy.service';
 import { TOMBSTONE_MOBILE, anonymizedProfile } from '../src/students/anonymize';
-import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakeConfig,
   FakePrivacyPrisma,
@@ -139,7 +138,7 @@ describe('erasure is anonymisation', () => {
       attempts: [{ id: 'att_1', studentId: 'stu_1', testId: 'tst_1', score: 42 }],
     });
 
-    const receipt = await service.anonymize('stu_1', EVERY_BRANCH);
+    const receipt = await service.anonymize('stu_1');
 
     const student = rowAt(prisma.students);
     assert.equal(student.mobile, TOMBSTONE_MOBILE);
@@ -162,27 +161,11 @@ describe('erasure is anonymisation', () => {
       students: [makeStudent({ id: 'stu_1', anonymizedAt: new Date('2026-01-01') })],
     });
 
-    await assert.rejects(service.anonymize('stu_1', EVERY_BRANCH), (error: unknown) => {
+    await assert.rejects(service.anonymize('stu_1'), (error: unknown) => {
       assert.ok(AppException.is(error));
       assert.equal(error.code, ErrorCodes.CONFLICT);
       return true;
     });
-  });
-
-  /** Missing, not refused: an admin outside the branch learns nothing about who exists. */
-  it('is a not-found for a student outside the admin’s branches', async () => {
-    const { service } = build({
-      students: [makeStudent({ id: 'stu_1', currentBranchId: 'br_other' })],
-    });
-
-    await assert.rejects(
-      service.anonymize('stu_1', { all: false, branchIds: ['br_mine'] }),
-      (error: unknown) => {
-        assert.ok(AppException.is(error));
-        assert.equal(error.code, ErrorCodes.NOT_FOUND);
-        return true;
-      },
-    );
   });
 });
 

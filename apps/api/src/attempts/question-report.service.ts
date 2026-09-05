@@ -18,7 +18,6 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { optionCountsIn } from './rollup-fold';
 import { gateFacts, solutionsAreOpen, solutionsClosedReason } from './solution-gate';
 import { topperOf, type TopperTimes } from './topper';
@@ -123,15 +122,12 @@ export class QuestionReportService {
   async forStudent(
     studentId: string,
     attemptId: string,
-    scope: BranchScope,
     now: Date = new Date(),
   ): Promise<QuestionReport> {
-    const reachable = branchScopeWhere(scope);
     const student = await this.prisma.student.findFirst({
       where: {
         id: studentId,
         deletedAt: null,
-        ...(reachable ? { currentBranchId: reachable } : {}),
       },
       select: { id: true },
     });

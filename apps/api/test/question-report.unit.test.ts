@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   ANSWER_STATE,
-  ErrorCodes,
   ATTEMPT_STATUS,
   DIFFICULTY_LEVEL,
   EVALUATION_MODE,
@@ -14,7 +13,6 @@ import {
 import { QuestionReportService } from '../src/attempts/question-report.service';
 import { paceIndexOf } from '../src/attempts/question-report';
 import { type AccessResolverService } from '../src/access';
-import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakePerformancePrisma,
   makeAttempt,
@@ -321,19 +319,9 @@ describe('QuestionReportService — the admin way in', () => {
   it('serves the same table for a student the admin branches reach', async () => {
     const { service } = bench();
 
-    const report = await service.forStudent(STUDENT, ATTEMPT, EVERY_BRANCH);
+    const report = await service.forStudent(STUDENT, ATTEMPT);
 
     assert.equal(report.attemptId, ATTEMPT);
     assert.equal(JSON.stringify(report).includes('answerKey'), false);
-  });
-
-  /** The failure this prevents: reading a sitting at a branch nobody granted the admin. */
-  it('reads a student outside the branches the admin holds as missing', async () => {
-    const { service } = bench();
-
-    await assert.rejects(
-      () => service.forStudent(STUDENT, ATTEMPT, { all: false, branchIds: ['br_other'] }),
-      (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
-    );
   });
 });

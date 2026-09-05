@@ -413,23 +413,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
   },
 ];
 
-/** An ALLOW-list: a screen added later is hidden from a branch admin until somebody names it here. */
-const BRANCH_ADMIN_ROUTES = new Set<string>([
-  ROUTES.STUDENTS,
-  ROUTES.BRANCHES,
-  ROUTES.AUDIT,
-  ROUTES.AUDIT_IMPORTS,
-]);
-
-/** Strips `superAdminOnly` and what a branch admin has no use for. `featureKey` is the shell's job. */
+/** Strips `superAdminOnly`. `featureKey` is the shell's job, and every other key is a peer. */
 export function filterAdminNav(
   items: readonly AdminNavItem[],
-  viewer: { isSuperAdmin: boolean; isBranchAdmin: boolean },
+  viewer: { isSuperAdmin: boolean },
 ): AdminNavItem[] {
-  return filterNavBy(items, (item) => {
-    if (item.superAdminOnly && !viewer.isSuperAdmin) return true;
-    return viewer.isBranchAdmin && item.to !== undefined && !BRANCH_ADMIN_ROUTES.has(item.to);
-  });
+  return filterNavBy(items, (item) => Boolean(item.superAdminOnly) && !viewer.isSuperAdmin);
 }
 
 const ADMIN = 'admin';

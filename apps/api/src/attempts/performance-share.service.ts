@@ -17,7 +17,6 @@ import {
   type SharedReport,
 } from '@iace/contracts';
 import { AuditContext } from '../audit';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { redisKeys } from '../redis/redis.keys';
@@ -34,7 +33,6 @@ import {
 const NO_SUCH_REPORT = 'This report is not available';
 const NO_SUCH_SITTING = 'No such sitting';
 const NO_SUCH_SHARE = 'No such shared report';
-const NO_SUCH_STUDENT = 'No such student';
 const TOO_MANY_READS = 'This report is being opened too often — try again in a minute';
 
 /** How many sittings the share picker offers. Older than this and nobody is sharing it. */
@@ -77,13 +75,8 @@ export class PerformanceShareService {
   ) {}
 
   /** The owner's view: their live and dead links, and the sittings a new one could open. */
-  async list(
-    studentId: string,
-    scope: BranchScope,
-    withToken: boolean,
-  ): Promise<PerformanceShares> {
+  async list(studentId: string, withToken: boolean): Promise<PerformanceShares> {
     const now = new Date();
-    await this.requireStudent(studentId, scope);
     const [shares, sittings] = await Promise.all([
       this.prisma.performanceShare.findMany({
         where: { attempt: { studentId } },
@@ -109,10 +102,8 @@ export class PerformanceShareService {
     studentId: string,
     input: CreatePerformanceShareInput,
     createdByAdminId: string | null,
-    scope: BranchScope,
   ): Promise<PerformanceShare> {
     const now = new Date();
-    await this.requireStudent(studentId, scope);
     const sitting = await this.prisma.attempt.findFirst({
       where: { id: input.attemptId, studentId, status: ATTEMPT_STATUS.EVALUATED },
       select: { id: true },
@@ -134,9 +125,8 @@ export class PerformanceShareService {
   }
 
   /** Either party may pull any link to this student's data; the FIRST revocation is the truth. */
-  async revoke(studentId: string, shareId: string, scope: BranchScope): Promise<PerformanceShare> {
+  async revoke(studentId: string, shareId: string): Promise<PerformanceShare> {
     const now = new Date();
-    await this.requireStudent(studentId, scope);
     // `revokedAt: null` in the WHERE is what makes two revokes in flight settle on one date.
     await this.prisma.performanceShare.updateMany({
       where: { id: shareId, attempt: { studentId }, revokedAt: null },
@@ -152,17 +142,6 @@ export class PerformanceShareService {
     await this.redis.del(redisKeys.sharedReport(shareCacheKey(share.token)));
     this.auditContext.setEntityId(studentId);
     return toShare(share, now, true);
-  }
-
-  /** Scoped, so a student at another branch is missing rather than merely unmodifiable. */
-  private async requireStudent(studentId: string, scope: BranchScope): Promise<void> {
-    const reachable = branchScopeWhere(scope);
-    if (!reachable) return;
-    const student = await this.prisma.student.findFirst({
-      where: { id: studentId, deletedAt: null, currentBranchId: reachable },
-      select: { id: true },
-    });
-    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_SUCH_STUDENT);
   }
 
   /** The public read. Nothing is loaded until the link has proved it is still open. */

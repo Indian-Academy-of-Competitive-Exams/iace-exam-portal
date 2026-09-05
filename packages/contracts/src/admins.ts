@@ -48,8 +48,8 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
     description: 'Base configs, tests, papers and series.',
   },
   [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT]: {
-    label: 'Branch scheduling',
-    description: 'Which series a branch runs, and when.',
+    label: 'Branch access',
+    description: 'Which branches a test series runs for.',
   },
   [FEATURE_KEYS.STUDENT_PERFORMANCE]: {
     label: 'Student performance',
@@ -81,14 +81,6 @@ export const adminSchema = z.object({
   fullName: z.string().nullable(),
   isSuperAdmin: z.boolean(),
   isActive: z.boolean(),
-  /**
-   * Every branch, said out loud. NEVER inferred from an empty `branchIds`: an admin who has
-   * been given no branch yet reaches none, and reading that as "all of them" is the failure
-   * this column exists to prevent.
-   */
-  allBranches: z.boolean(),
-  /** The branches they were given, when `allBranches` is false. */
-  branchIds: z.array(z.string()),
   createdAt: z.string(),
   /** What this admin has been granted. Empty for a super admin — they bypass. */
   permissions: adminPermissionsSchema,
@@ -125,9 +117,6 @@ export const createAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   /** A super admin may create another super admin. Nothing else may. */
   isSuperAdmin: z.boolean().default(false),
-  allBranches: z.boolean().default(false),
-  /** Replaces the set. An empty list with `allBranches` false is a real answer: no branch. */
-  branchIds: z.array(z.string()).optional(),
 });
 export type CreateAdminInput = z.input<typeof createAdminSchema>;
 export type CreateAdminBody = z.infer<typeof createAdminSchema>;
@@ -140,9 +129,6 @@ export type SetAdminActiveBody = z.infer<typeof setAdminActiveSchema>;
 export const updateAdminSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   isSuperAdmin: z.boolean().optional(),
-  allBranches: z.boolean().optional(),
-  /** Replaces the set wholesale — the screen holds all of them, not a delta. */
-  branchIds: z.array(z.string()).optional(),
 });
 export type UpdateAdminInput = z.input<typeof updateAdminSchema>;
 export type UpdateAdminBody = z.infer<typeof updateAdminSchema>;

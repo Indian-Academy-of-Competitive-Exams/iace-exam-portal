@@ -19,9 +19,7 @@ import {
 } from '@iace/contracts';
 import {
   Actors,
-  branchScopeOf,
   CurrentUser,
-  EVERY_BRANCH,
   Public,
   RequiresFeature,
   type AuthenticatedUser,
@@ -58,7 +56,7 @@ export class MePerformanceShareController {
 
   @Get()
   list(@CurrentUser() user: AuthenticatedUser): Promise<PerformanceShares> {
-    return this.shares.list(user.id, EVERY_BRANCH, true);
+    return this.shares.list(user.id, true);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)
@@ -67,7 +65,7 @@ export class MePerformanceShareController {
     @Body(new ZodBody(createPerformanceShareSchema)) body: CreatePerformanceShareInput,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceShare> {
-    return this.shares.create(user.id, body, null, EVERY_BRANCH);
+    return this.shares.create(user.id, body, null);
   }
 
   /** A student can always kill a link to their own data. */
@@ -77,7 +75,7 @@ export class MePerformanceShareController {
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceShare> {
-    return this.shares.revoke(user.id, id, EVERY_BRANCH);
+    return this.shares.revoke(user.id, id);
   }
 }
 
@@ -92,7 +90,7 @@ export class AdminPerformanceShareController {
     @Param('studentId') studentId: string,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceShares> {
-    return this.shares.list(studentId, branchScopeOf(user), holdsWrite(user));
+    return this.shares.list(studentId, holdsWrite(user));
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.CREATE)
@@ -103,7 +101,7 @@ export class AdminPerformanceShareController {
     @Body(new ZodBody(createPerformanceShareSchema)) body: CreatePerformanceShareInput,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceShare> {
-    return this.shares.create(studentId, body, user.id, branchScopeOf(user));
+    return this.shares.create(studentId, body, user.id);
   }
 
   /** For when a link must come down and the student cannot be reached. */
@@ -113,8 +111,7 @@ export class AdminPerformanceShareController {
   revoke(
     @Param('studentId') studentId: string,
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceShare> {
-    return this.shares.revoke(studentId, id, branchScopeOf(user));
+    return this.shares.revoke(studentId, id);
   }
 }

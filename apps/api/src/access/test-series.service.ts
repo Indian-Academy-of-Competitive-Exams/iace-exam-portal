@@ -15,7 +15,6 @@ import {
   type UpdateTestSeriesBody,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
-import { assertBranchInScope, branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { reachableBy } from './access-resolver.service';
 import { AuditContext } from '../audit';
@@ -75,20 +74,11 @@ export class TestSeriesService {
   ) {}
 
   /** Prisma ANDs the keys inside NOT, so this is the exact complement of "already reaches it". */
-  private async outOfReachOf(
-    scope: BranchScope,
-    studentId?: string,
-  ): Promise<Prisma.TestSeriesWhereInput[]> {
+  private async outOfReachOf(studentId?: string): Promise<Prisma.TestSeriesWhereInput[]> {
     if (studentId === undefined) return [];
 
-    // Scoped, or this answers what a student every other route calls missing already reaches.
-    const reachable = branchScopeWhere(scope);
     const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        deletedAt: null,
-        ...(reachable ? { currentBranchId: reachable } : {}),
-      },
+      where: { id: studentId, deletedAt: null },
       select: {
         currentBranchId: true,
         programs: true,
@@ -100,10 +90,7 @@ export class TestSeriesService {
     return [{ NOT: reachableBy(studentId, student) }];
   }
 
-  async list(
-    query: TestSeriesListQuery,
-    scope: BranchScope,
-  ): Promise<Paginated<TestSeriesSummary>> {
+  async list(query: TestSeriesListQuery): Promise<Paginated<TestSeriesSummary>> {
     const chosen: Prisma.TestSeriesWhereInput[] = [
       ...(query.examStageId ? [{ examStageId: { in: query.examStageId } }] : []),
       ...(query.forExamStageId
@@ -118,7 +105,7 @@ export class TestSeriesService {
       : [];
 
     // Not a filter: it stands outside `match`, which is the reader's All/Any over THEIR choices.
-    const complement = await this.outOfReachOf(scope, query.notReachedBy);
+    const complement = await this.outOfReachOf(query.notReachedBy);
     const and = [...matchFilters(always, chosen, query.match), ...complement];
     const where: Prisma.TestSeriesWhereInput = and.length > 0 ? { AND: and } : {};
 
@@ -217,12 +204,11 @@ export class TestSeriesService {
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
   }
 
-  /** Every branch, and whether this series reaches it — scoped to what the caller may see. */
-  async branches(id: string, scope: BranchScope): Promise<SeriesBranch[]> {
+  /** Every branch, and whether this series reaches it. */
+  async branches(id: string): Promise<SeriesBranch[]> {
     const series = await this.requireSeries(id);
-    const reachable = branchScopeWhere(scope);
     const rows = await this.prisma.branch.findMany({
-      where: { deletedAt: null, ...(reachable ? { id: reachable } : {}) },
+      where: { deletedAt: null },
       select: { id: true, name: true },
       orderBy: [{ name: 'asc' }],
     });
@@ -231,12 +217,8 @@ export class TestSeriesService {
     return rows.map((row) => ({ id: row.id, name: row.name, enabled: enabled.has(row.id) }));
   }
 
-  /** The whole list at once; a scoped admin only moves the branches they can see, the rest survive. */
-  async setBranches(
-    id: string,
-    input: UpdateSeriesBranchesBody,
-    scope: BranchScope,
-  ): Promise<SeriesBranch[]> {
+  /** The whole list at once — the array itself, never a delta against what is stored. */
+  async setBranches(id: string, input: UpdateSeriesBranchesBody): Promise<SeriesBranch[]> {
     const series = await this.requireSeries(id);
     const chosen = [...new Set(input.branchIds)];
     this.assertKindHoldsTogether({
@@ -246,20 +228,13 @@ export class TestSeriesService {
       eventId: series.eventId,
       branchIds: chosen,
     });
-    for (const branchId of chosen) assertBranchInScope(scope, branchId);
     await this.assertBranchesLive(chosen);
 
-    const outsideScope = scope.all
-      ? []
-      : series.branchIds.filter((branchId) => !scope.branchIds.includes(branchId));
-    await this.prisma.testSeries.update({
-      where: { id },
-      data: { branchIds: [...outsideScope, ...chosen] },
-    });
+    await this.prisma.testSeries.update({ where: { id }, data: { branchIds: chosen } });
 
     this.auditContext.setEntityId(id);
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: id });
-    return this.branches(id, scope);
+    return this.branches(id);
   }
 
   /** Answered here so a form marks the field: a raw CHECK violation can only leave as a 500. */

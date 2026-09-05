@@ -9,7 +9,6 @@ import {
 } from '@iace/contracts';
 import { StorageService } from '../storage/storage.service';
 import { StudentsService } from '../students';
-import { EVERY_BRANCH } from '../common/security';
 import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
 
@@ -34,13 +33,13 @@ export class MeService {
   ) {}
 
   profile(studentId: string): Promise<Me> {
-    return this.students.detail(studentId, EVERY_BRANCH);
+    return this.students.detail(studentId);
   }
 
   /** An enrolment cannot arrive here — see updateMeSchema for why. */
   async update(studentId: string, input: UpdateMeBody): Promise<Me> {
-    const before = await this.students.detail(studentId, EVERY_BRANCH);
-    const updated = await this.students.update(studentId, input, EVERY_BRANCH);
+    const before = await this.students.detail(studentId);
+    const updated = await this.students.update(studentId, input);
 
     const columns = this.auditContext.current()?.changed;
     const profile = updated.profile

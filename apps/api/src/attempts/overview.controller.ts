@@ -4,13 +4,7 @@
  */
 import { Controller, Get, Param } from '@nestjs/common';
 import { ActorTypes, FEATURE_KEYS, PERMISSION_LEVELS, type StudentOverview } from '@iace/contracts';
-import {
-  Actors,
-  branchScopeOf,
-  CurrentUser,
-  RequiresFeature,
-  type AuthenticatedUser,
-} from '../common/security';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { StudentOverviewService } from './overview.service';
 
 @Controller('me/overview')
@@ -33,10 +27,7 @@ export class AdminOverviewController {
   /** The same payload the student reads, for any student in the admin's own branches. */
   @RequiresFeature(FEATURE_KEYS.STUDENT_PERFORMANCE, PERMISSION_LEVELS.READ)
   @Get()
-  read(
-    @Param('studentId') studentId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StudentOverview> {
-    return this.overview.forStudent(studentId, branchScopeOf(user));
+  read(@Param('studentId') studentId: string): Promise<StudentOverview> {
+    return this.overview.forStudent(studentId);
   }
 }

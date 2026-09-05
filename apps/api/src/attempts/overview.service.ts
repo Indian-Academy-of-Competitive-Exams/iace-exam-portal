@@ -14,7 +14,6 @@ import {
   type SubjectStanding,
   type SubjectTally,
 } from '@iace/contracts';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { numberOrNull } from './attempt-report';
 
@@ -52,14 +51,9 @@ export class StudentOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
-  async forStudent(studentId: string, scope: BranchScope): Promise<StudentOverview> {
-    const reachable = branchScopeWhere(scope);
+  async forStudent(studentId: string): Promise<StudentOverview> {
     const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        deletedAt: null,
-        ...(reachable ? { currentBranchId: reachable } : {}),
-      },
+      where: { id: studentId, deletedAt: null },
       select: { id: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);

@@ -1,12 +1,5 @@
 export { type AuthenticatedUser } from './authenticated-user';
 export {
-  assertBranchInScope,
-  branchScopeOf,
-  branchScopeWhere,
-  EVERY_BRANCH,
-  type BranchScope,
-} from './branch-scope';
-export {
   ACTORS_KEY,
   Actors,
   CurrentUser,

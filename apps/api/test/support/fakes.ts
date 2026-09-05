@@ -537,8 +537,6 @@ export interface FakeAdmin {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
-  /** Every branch, said out loud. False with no `AdminBranch` rows reaches none. */
-  allBranches: boolean;
 }
 
 export function makeStudent(overrides: Partial<FakeStudent> = {}): FakeStudent {
@@ -574,7 +572,6 @@ export function makeAdmin(overrides: Partial<FakeAdmin> = {}): FakeAdmin {
     fullName: 'Super Admin',
     isSuperAdmin: true,
     isActive: true,
-    allBranches: false,
     ...overrides,
   };
 }
@@ -2499,22 +2496,14 @@ export const NO_DEVICE: DeviceContext = {
   userAgent: null,
 };
 
-/** The admins facade as auth sees it: the grant map and the branches a token carries. */
+/** The admins facade as auth sees it: the grant map a token carries. */
 export class FakeAdminsService {
   readonly calls: string[] = [];
-  constructor(
-    private readonly grants: Record<string, AdminPermissions> = {},
-    private readonly branches: Record<string, string[]> = {},
-  ) {}
+  constructor(private readonly grants: Record<string, AdminPermissions> = {}) {}
 
   permissionsFor(adminId: string): Promise<AdminPermissions> {
     this.calls.push(adminId);
     return Promise.resolve(this.grants[adminId] ?? {});
-  }
-
-  branchIdsFor(adminId: string): Promise<string[]> {
-    this.calls.push(adminId);
-    return Promise.resolve(this.branches[adminId] ?? []);
   }
 }
 
@@ -2533,16 +2522,8 @@ interface FakeAdminRow {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
-  allBranches: boolean;
   createdById: string | null;
   createdAt: Date;
-  branches: { branchId: string }[];
-}
-
-/** The nested write the service uses to replace an admin's branch set wholesale. */
-interface BranchWrite {
-  deleteMany?: Record<string, never>;
-  create?: { branchId: string }[];
 }
 
 /** Enough Prisma for AdminsService to run unchanged, with no database. */
@@ -2554,12 +2535,6 @@ export class FakeAdminsPrisma {
     readonly admins: FakeAdminRow[] = [],
     readonly branches: FakeBranch[] = [],
   ) {}
-
-  /** The join the scope is read off, so the query feeding it is exercised rather than stubbed. */
-  readonly adminBranch = {
-    findMany: ({ where }: { where: { adminId: string } }) =>
-      Promise.resolve(this.admins.find((row) => row.id === where.adminId)?.branches ?? []),
-  };
 
   readonly branch = {
     count: ({ where }: { where: { id: { in: string[] } } }) =>
@@ -2595,39 +2570,24 @@ export class FakeAdminsPrisma {
 
     count: () => Promise.resolve(this.admins.length),
 
-    create: ({
-      data,
-    }: {
-      data: Partial<FakeAdminRow> & { email: string; branches?: BranchWrite };
-    }) => {
+    create: ({ data }: { data: Partial<FakeAdminRow> & { email: string } }) => {
       const row: FakeAdminRow = {
         id: this.id('adm'),
         email: data.email,
         fullName: data.fullName ?? null,
         isSuperAdmin: data.isSuperAdmin ?? false,
         isActive: true,
-        allBranches: data.allBranches ?? false,
         createdById: data.createdById ?? null,
         createdAt: new Date(),
-        branches: data.branches?.create ?? [],
       };
       this.admins.push(row);
       return Promise.resolve(row);
     },
 
-    update: ({
-      where,
-      data,
-    }: {
-      where: { id: string };
-      data: Partial<FakeAdminRow> & { branches?: BranchWrite };
-    }) => {
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeAdminRow> }) => {
       const row = this.admins.find((a) => a.id === where.id);
       if (!row) throw new Error(`no admin ${where.id}`);
-      const { branches, ...scalars } = data;
-      Object.assign(row, scalars);
-      // `deleteMany` then `create` is a replacement, which is what the service means by it.
-      if (branches) row.branches = branches.create ?? [];
+      Object.assign(row, data);
       return Promise.resolve(row);
     },
   };
@@ -2689,10 +2649,8 @@ export function makeAdminRow(overrides: Partial<FakeAdminRow> = {}): FakeAdminRo
     fullName: 'An Admin',
     isSuperAdmin: false,
     isActive: true,
-    allBranches: false,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    branches: [],
     ...overrides,
   };
 }

@@ -4,7 +4,6 @@ import { BRANCH_TYPE, pinSchema } from '@iace/contracts';
 import { MESSAGE_KINDS } from '../src/common/messaging';
 import { AuditService } from '../src/audit/audit.service';
 import { ImportsService } from '../src/imports/imports.service';
-import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakeEventsService,
   FakeProgramsService,
@@ -49,7 +48,6 @@ describe('the PIN a roster import issues', () => {
     await service.commitStudents(
       sheet('mobile,fullName\n9876543210,Asha\n9876500000,Bala'),
       'adm_1',
-      EVERY_BRANCH,
     );
 
     const pins = prisma.students.map((student) => pinOf(student.pinHash));
@@ -67,7 +65,7 @@ describe('the PIN a roster import issues', () => {
     const { prisma, service } = build();
     const rows = Array.from({ length: 12 }, (_, i) => `98765${String(i).padStart(5, '0')}`);
 
-    await service.commitStudents(sheet(`mobile\n${rows.join('\n')}`), 'adm_1', EVERY_BRANCH);
+    await service.commitStudents(sheet(`mobile\n${rows.join('\n')}`), 'adm_1');
 
     const pins = new Set(prisma.students.map((student) => pinOf(student.pinHash)));
     assert.ok(pins.size > 1, 'every imported student got the same PIN');
@@ -82,7 +80,6 @@ describe('the PIN a roster import issues', () => {
     await service.commitStudents(
       sheet('mobile,fullName\n9876543210,Asha\n9000000001,Renamed'),
       'adm_1',
-      EVERY_BRANCH,
     );
 
     assert.equal(sender.sent.length, 1);
@@ -107,11 +104,7 @@ describe('the PIN a roster import issues', () => {
       new FakeProgramsService().asService(),
     );
 
-    const result = await withFailingSender.commitStudents(
-      sheet('mobile\n9876543210'),
-      'adm_1',
-      EVERY_BRANCH,
-    );
+    const result = await withFailingSender.commitStudents(sheet('mobile\n9876543210'), 'adm_1');
 
     assert.equal(result.created, 1);
     assert.equal(prisma.students.length, 1);

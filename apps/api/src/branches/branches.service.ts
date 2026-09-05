@@ -13,7 +13,6 @@ import {
   type StudentType,
   type UpdateBranchBody,
 } from '@iace/contracts';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import {
@@ -86,12 +85,10 @@ export class BranchesService {
     }
   }
 
-  async list(query: BranchListQuery, scope: BranchScope): Promise<Paginated<Branch>> {
-    const reachable = branchScopeWhere(scope);
+  async list(query: BranchListQuery): Promise<Paginated<Branch>> {
     const where: Prisma.BranchWhereInput = {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
       ...(query.activeOnly ? { isActive: true } : {}),
-      ...(reachable ? { id: reachable } : {}),
     };
 
     const [rows, total] = await this.prisma.$transaction([

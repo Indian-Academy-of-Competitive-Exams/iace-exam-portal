@@ -7,7 +7,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ANSWER_STATE, ATTEMPT_STATUS, ErrorCodes, PERFORMANCE_SCOPES } from '@iace/contracts';
-import { EVERY_BRANCH } from '../src/common/security';
 import { AuditContext } from '../src/audit';
 import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
@@ -246,9 +245,9 @@ describe('a cohort, scored and reported and published', () => {
     const { scoring, shares } = platform();
     await scoreEveryone(scoring);
 
-    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null, EVERY_BRANCH);
+    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null);
     const opened = await shares.readPublic(link.token ?? '');
-    const pulled = await shares.revoke(OUR_STUDENT, link.id, EVERY_BRANCH);
+    const pulled = await shares.revoke(OUR_STUDENT, link.id);
 
     assert.equal(link.isLive, true);
     assert.equal(opened.studentName, OUR_NAME);
@@ -264,7 +263,7 @@ describe('a cohort, scored and reported and published', () => {
     await scoreEveryone(scoring);
     const report = await ourReport(analytics);
 
-    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null, EVERY_BRANCH);
+    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null);
     const opened = await shares.readPublic(link.token ?? '');
 
     assert.equal(opened.score, report.composition.net);
@@ -281,7 +280,7 @@ describe('a cohort, scored and reported and published', () => {
     const { scoring, analytics, shares } = platform();
     await scoreEveryone(scoring);
 
-    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null, EVERY_BRANCH);
+    const link = await shares.create(OUR_STUDENT, { attemptId: OURS }, null);
     const payloads = [
       JSON.stringify(await ourReport(analytics)),
       JSON.stringify(await shares.readPublic(link.token ?? '')),

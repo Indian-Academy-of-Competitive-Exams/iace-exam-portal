@@ -29,7 +29,6 @@ import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
 import { studentOrderBy, studentWhere } from './student-query';
-import { branchScopeWhere, EVERY_BRANCH, type BranchScope } from '../common/security';
 import { isPreTestReady, isProfileCompleted, type ProfileDocumentColumn } from './student-flags';
 import { fromDateColumn, toDateColumn } from '../common/time/institute-day';
 
@@ -92,8 +91,8 @@ export class StudentsService {
   // Reading
   // ==========================================================================
 
-  async list(query: StudentListQuery, scope: BranchScope): Promise<Paginated<StudentSummary>> {
-    const where = studentWhere(query, scope);
+  async list(query: StudentListQuery): Promise<Paginated<StudentSummary>> {
+    const where = studentWhere(query);
     const skip = (query.page - 1) * query.pageSize;
 
     // One round trip for the rows and one for the count.
@@ -115,9 +114,9 @@ export class StudentsService {
     };
   }
 
-  async detail(id: string, scope: BranchScope): Promise<StudentDetail> {
+  async detail(id: string): Promise<StudentDetail> {
     const student = await this.prisma.student.findFirst({
-      where: { id, ...inScope(scope) },
+      where: { id },
       include: { profile: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
@@ -175,18 +174,15 @@ export class StudentsService {
   // ==========================================================================
 
   /** Creates a student before their first login. */
-  async create(input: CreateStudentBody, scope: BranchScope): Promise<StudentDetail> {
-    assertWritableBranch(scope, input.currentBranchId ?? null);
-    // Unscoped: a mobile is unique platform-wide. The id it names is not, so it is withheld below.
+  async create(input: CreateStudentBody): Promise<StudentDetail> {
     const existing = await this.findLiveByMobile(input.mobile);
     if (existing) {
-      const theirs = scope.all || scope.branchIds.includes(existing.currentBranchId ?? '');
       throw new AppException(
         ErrorCodes.CONFLICT,
         'A student with that mobile number already exists',
         {
           fieldErrors: { mobile: ['Already registered'] },
-          ...(theirs ? { details: { studentId: existing.id } } : {}),
+          details: { studentId: existing.id },
         },
       );
     }
@@ -226,7 +222,7 @@ export class StudentsService {
 
     // After the row, never before it: a PIN texted for a create that threw opens nothing.
     await this.startingPins.announce([issued]);
-    return this.detail(student.id, EVERY_BRANCH);
+    return this.detail(student.id);
   }
 
   /** Every target a patch names has to still be usable before any of it is written. */
@@ -276,15 +272,14 @@ export class StudentsService {
   }
 
   /** A patch: an omitted key is left alone, an explicit null clears the field. */
-  async update(id: string, input: UpdateStudentBody, scope: BranchScope): Promise<StudentDetail> {
+  async update(id: string, input: UpdateStudentBody): Promise<StudentDetail> {
     const student = await this.prisma.student.findFirst({
-      where: { id, ...inScope(scope) },
+      where: { id },
       include: { profile: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     // Only when the patch MOVES them: the branch they are already at is one this admin reaches.
-    if (input.currentBranchId !== undefined) assertWritableBranch(scope, input.currentBranchId);
     await this.assertPatchUsable(student, input);
 
     const profilePatch = input.profile;
@@ -332,7 +327,7 @@ export class StudentsService {
       this.events.emit(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED, { studentId: id, examCodes });
     }
 
-    return this.detail(id, EVERY_BRANCH);
+    return this.detail(id);
   }
 
   /** Confirms there is a student to act on, without reading anything about them. */
@@ -380,17 +375,13 @@ export class StudentsService {
       fieldDiff(student, { ...student, isActive }, AUDITED_ACTIVE_FIELDS),
     );
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
-    return this.detail(id, EVERY_BRANCH);
+    return this.detail(id);
   }
 
   /** Sign-in is untouched: they keep their history and their session, and cannot start a test. */
-  async setTestBlocked(
-    id: string,
-    isTestBlocked: boolean,
-    scope: BranchScope,
-  ): Promise<StudentDetail> {
+  async setTestBlocked(id: string, isTestBlocked: boolean): Promise<StudentDetail> {
     const student = await this.prisma.student.findFirst({
-      where: { id, ...inScope(scope) },
+      where: { id },
       select: { id: true, isTestBlocked: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
@@ -400,7 +391,7 @@ export class StudentsService {
       fieldDiff(student, { ...student, isTestBlocked }, AUDITED_TEST_BLOCKED_FIELDS),
     );
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
-    return this.detail(id, EVERY_BRANCH);
+    return this.detail(id);
   }
 
   // ==========================================================================
@@ -510,23 +501,4 @@ function toProfileData(patch: NonNullable<UpdateStudentBody['profile']>) {
     // Prisma wants a Date for a DATE column; the wire format is a plain day.
     ...(data.dob === undefined ? {} : { dob: data.dob === null ? null : toDateColumn(data.dob) }),
   };
-}
-
-const NOT_YOUR_BRANCH_MESSAGE = 'That branch is not one of yours.';
-const NO_BRANCH_MESSAGE = 'Choose one of your branches: a student at none is not yours to see.';
-
-/** A `where` fragment narrowing to the branches in scope, spread into an existing one. */
-function inScope(scope: BranchScope) {
-  const reachable = branchScopeWhere(scope);
-  return reachable ? { currentBranchId: reachable } : {};
-}
-
-/** Writing a student out of your own branches puts them somewhere you can no longer reach. */
-function assertWritableBranch(scope: BranchScope, branchId: string | null): void {
-  if (scope.all) return;
-  const message = branchId === null ? NO_BRANCH_MESSAGE : NOT_YOUR_BRANCH_MESSAGE;
-  if (branchId !== null && scope.branchIds.includes(branchId)) return;
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-    fieldErrors: { [CURRENT_BRANCH_ID_FIELD]: [message] },
-  });
 }

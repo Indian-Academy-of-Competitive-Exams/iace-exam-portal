@@ -32,21 +32,11 @@ interface AdminRow {
   fullName: string | null;
   isSuperAdmin: boolean;
   isActive: boolean;
-  allBranches: boolean;
   createdAt: Date;
-  branches: { branchId: string }[];
 }
 
-/** Every read hands back the branch scope, because "none" and "all" are different answers. */
-const ADMIN_INCLUDE = { branches: { select: { branchId: true } } } as const;
-
 /** What an admin's audit diff covers — every column the admin screens can change. */
-export const AUDITED_ADMIN_FIELDS = [
-  'fullName',
-  'isSuperAdmin',
-  'allBranches',
-  'branchIds',
-] as const;
+export const AUDITED_ADMIN_FIELDS = ['fullName', 'isSuperAdmin'] as const;
 
 /** The single column the toggle route moves — the same `fieldDiff` definition of "changed". */
 const AUDITED_ACTIVE_FIELDS = ['isActive'] as const;
@@ -95,15 +85,6 @@ export class AdminsService {
     return permissions;
   }
 
-  /** The branches a token carries. One indexed read, beside the grant map, on every admin login. */
-  async branchIdsFor(adminId: string): Promise<string[]> {
-    const rows = await this.prisma.adminBranch.findMany({
-      where: { adminId },
-      select: { branchId: true },
-    });
-    return rows.map((row) => row.branchId);
-  }
-
   // ==========================================================================
   // Admins
   // ==========================================================================
@@ -125,7 +106,6 @@ export class AdminsService {
     const [rows, total] = await Promise.all([
       this.prisma.admin.findMany({
         where,
-        include: ADMIN_INCLUDE,
         orderBy: [{ createdAt: 'desc' }],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
@@ -154,18 +134,13 @@ export class AdminsService {
       });
     }
 
-    await this.assertBranchesExist(input.branchIds);
-
     const row = await this.prisma.admin.create({
       data: {
         email: input.email,
         fullName: input.fullName ?? null,
         isSuperAdmin: input.isSuperAdmin,
-        allBranches: input.allBranches,
         createdById,
-        branches: { create: (input.branchIds ?? []).map((branchId) => ({ branchId })) },
       },
-      include: ADMIN_INCLUDE,
     });
     // A brand-new admin holds nothing until a grant is made, and a super admin
     // never needs one.
@@ -176,25 +151,13 @@ export class AdminsService {
     // requireAdmin, not requireActive: renaming a deactivated admin, or making
     // one a super admin before switching them back on, are both reasonable.
     const before = await this.requireAdmin(id);
-    await this.assertBranchesExist(input.branchIds);
 
     const row = await this.prisma.admin.update({
       where: { id },
       data: {
         ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
         ...(input.isSuperAdmin === undefined ? {} : { isSuperAdmin: input.isSuperAdmin }),
-        ...(input.allBranches === undefined ? {} : { allBranches: input.allBranches }),
-        // Replaced wholesale: the screen holds every branch, not a delta.
-        ...(input.branchIds === undefined
-          ? {}
-          : {
-              branches: {
-                deleteMany: {},
-                create: input.branchIds.map((branchId) => ({ branchId })),
-              },
-            }),
       },
-      include: ADMIN_INCLUDE,
     });
 
     this.auditContext.setChanged(
@@ -220,7 +183,6 @@ export class AdminsService {
       const row = await this.prisma.admin.update({
         where: { id },
         data: { isActive: true },
-        include: ADMIN_INCLUDE,
       });
       this.auditContext.setChanged(
         fieldDiff(before, { ...before, isActive: true }, AUDITED_ACTIVE_FIELDS),
@@ -236,7 +198,6 @@ export class AdminsService {
       const updated = await tx.admin.update({
         where: { id },
         data: { isActive: false },
-        include: ADMIN_INCLUDE,
       });
       await tx.adminFeaturePermission.deleteMany({ where: { adminId: id } });
       return updated;
@@ -317,23 +278,9 @@ export class AdminsService {
 
   /** Exists at all — the right check when the point is to change their state. */
   private async requireAdmin(id: string): Promise<AdminRow> {
-    const admin = await this.prisma.admin.findUnique({ where: { id }, include: ADMIN_INCLUDE });
+    const admin = await this.prisma.admin.findUnique({ where: { id } });
     if (!admin) throw new AppException(ErrorCodes.NOT_FOUND, 'Admin not found');
     return admin;
-  }
-
-  /** A branch that no longer exists would leave the admin scoped to nothing, silently. */
-  private async assertBranchesExist(branchIds: string[] | undefined): Promise<void> {
-    if (!branchIds?.length) return;
-
-    const wanted = [...new Set(branchIds)];
-    const found = await this.prisma.branch.count({ where: { id: { in: wanted } } });
-    if (found === wanted.length) return;
-
-    const message = 'One of those branches no longer exists';
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { branchIds: [message] },
-    });
   }
 
   /**
@@ -384,8 +331,6 @@ export class AdminsService {
       fullName: row.fullName,
       isSuperAdmin: row.isSuperAdmin,
       isActive: row.isActive,
-      allBranches: row.allBranches,
-      branchIds: row.branches.map((branch) => branch.branchId),
       createdAt: row.createdAt.toISOString(),
       permissions,
     };
@@ -415,23 +360,6 @@ function asFeatureKey(value: string): FeatureKey | null {
   return (FEATURE_KEY_VALUES as readonly string[]).includes(value) ? (value as FeatureKey) : null;
 }
 
-/** `branches`, the join rows, flattened to ids — sorted so an unchanged set never reads as a
- *  reorder. Not `localeCompare`: two machines must never order the same id set differently. */
-function auditFieldsOf(row: AdminRow): {
-  fullName: string | null;
-  isSuperAdmin: boolean;
-  allBranches: boolean;
-  branchIds: string[];
-} {
-  return {
-    fullName: row.fullName,
-    isSuperAdmin: row.isSuperAdmin,
-    allBranches: row.allBranches,
-    branchIds: row.branches.map((branch) => branch.branchId).sort(byCodeUnit),
-  };
-}
-
-function byCodeUnit(a: string, b: string): number {
-  if (a < b) return -1;
-  return a > b ? 1 : 0;
+function auditFieldsOf(row: AdminRow): { fullName: string | null; isSuperAdmin: boolean } {
+  return { fullName: row.fullName, isSuperAdmin: row.isSuperAdmin };
 }

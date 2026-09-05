@@ -40,7 +40,7 @@ import {
   recordConsentSchema,
   updateMeSchema,
 } from '@iace/contracts';
-import { Actors, CurrentUser, EVERY_BRANCH, type AuthenticatedUser } from '../common/security';
+import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
@@ -99,7 +99,7 @@ export class MeController {
   @Post('erasure')
   @HttpCode(HttpStatus.OK)
   erase(@CurrentUser() user: AuthenticatedUser): Promise<ErasureReceipt> {
-    return this.privacy.anonymize(user.id, EVERY_BRANCH);
+    return this.privacy.anonymize(user.id);
   }
 
   @Get()

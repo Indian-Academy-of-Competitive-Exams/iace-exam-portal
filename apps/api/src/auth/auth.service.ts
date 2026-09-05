@@ -373,23 +373,15 @@ export class AuthService {
     };
   }
 
-  /** What a token carries about one admin. A super admin's grants are empty and their branches unread. */
+  /** What a token carries about one admin. A super admin bypasses, so their grants stay empty. */
   private async adminGrants(admin: {
     id: string;
     isSuperAdmin: boolean;
     isActive: boolean;
-    allBranches: boolean;
-  }): Promise<{ permissions: AdminPermissions; allBranches: boolean; branchIds: string[] }> {
-    // A deactivated admin reaches nothing, scope included, not merely no permissions.
-    if (!admin.isActive) return { permissions: {}, allBranches: false, branchIds: [] };
-    if (admin.isSuperAdmin) {
-      return { permissions: {}, allBranches: admin.allBranches, branchIds: [] };
-    }
-    const [permissions, branchIds] = await Promise.all([
-      this.admins.permissionsFor(admin.id),
-      this.admins.branchIdsFor(admin.id),
-    ]);
-    return { permissions, allBranches: admin.allBranches, branchIds };
+  }): Promise<{ permissions: AdminPermissions }> {
+    // A deactivated admin reaches nothing, not merely no permissions.
+    if (!admin.isActive || admin.isSuperAdmin) return { permissions: {} };
+    return { permissions: await this.admins.permissionsFor(admin.id) };
   }
 }
 
@@ -400,7 +392,5 @@ function adminClaims(identity: AuthIdentity) {
     isSuperAdmin: identity.isSuperAdmin,
     isActive: identity.isActive,
     permissions: identity.permissions,
-    allBranches: identity.allBranches,
-    branchIds: identity.branchIds,
   };
 }

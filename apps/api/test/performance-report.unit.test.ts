@@ -20,7 +20,7 @@ import {
   type DifficultyLevel,
 } from '@iace/contracts';
 import { Prisma } from '@prisma/client';
-import { EVERY_BRANCH, type AuthenticatedUser } from '../src/common/security';
+import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { AdminPerformanceController } from '../src/attempts/performance.controller';
 import { PerformanceAnalyticsService } from '../src/attempts/performance.service';
@@ -739,7 +739,6 @@ describe('the performance report — the admin path', () => {
     const report = await service.forStudent(
       RIVAL,
       query({ scope: PERFORMANCE_SCOPES.TEST, testId: 'tst_1' }),
-      EVERY_BRANCH,
     );
 
     assert.equal(report.studentId, RIVAL);
@@ -751,22 +750,7 @@ describe('the performance report — the admin path', () => {
     const { service } = bench();
 
     await assert.rejects(
-      () =>
-        service.forStudent('stu_nope', query({ scope: PERFORMANCE_SCOPES.ALL_TIME }), EVERY_BRANCH),
-      (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
-    );
-  });
-
-  /** The failure this prevents: reading a report for a student at a branch nobody granted. */
-  it('reads a student outside the branches the admin holds as missing', async () => {
-    const { service } = bench();
-
-    await assert.rejects(
-      () =>
-        service.forStudent(RIVAL, query({ scope: PERFORMANCE_SCOPES.ALL_TIME }), {
-          all: false,
-          branchIds: ['br_other'],
-        }),
+      () => service.forStudent('stu_nope', query({ scope: PERFORMANCE_SCOPES.ALL_TIME })),
       (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
     );
   });

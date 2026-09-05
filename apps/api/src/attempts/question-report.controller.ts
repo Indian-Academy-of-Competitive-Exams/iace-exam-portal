@@ -4,13 +4,7 @@
  */
 import { Controller, Get, Param } from '@nestjs/common';
 import { ActorTypes, FEATURE_KEYS, PERMISSION_LEVELS, type QuestionReport } from '@iace/contracts';
-import {
-  Actors,
-  branchScopeOf,
-  CurrentUser,
-  RequiresFeature,
-  type AuthenticatedUser,
-} from '../common/security';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { QuestionReportService } from './question-report.service';
 
 @Controller('me/attempts')
@@ -39,8 +33,7 @@ export class AdminQuestionReportController {
   report(
     @Param('studentId') studentId: string,
     @Param('id') attemptId: string,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<QuestionReport> {
-    return this.questions.forStudent(studentId, attemptId, branchScopeOf(user));
+    return this.questions.forStudent(studentId, attemptId);
   }
 }

@@ -23,7 +23,6 @@ import {
 } from '@iace/contracts';
 import { toIsoDate, type CsvRow, type CsvTable } from '../common/importing';
 import { studentBranchBlocker } from '../branches';
-import { type BranchScope } from '../common/security';
 
 /** Decides what a roster file WOULD do, without doing any of it. */
 
@@ -52,8 +51,6 @@ export interface ImportContext {
   >;
   /** Canonical branch name → the branch. Active only: a retired one takes no new students. */
   branchByName: Map<string, { id: string; type: BranchType }>;
-  /** The branches the admin uploading may write into. Every row is judged against it. */
-  scope: BranchScope;
   /** The exam codes an enrolment may name, canonical. */
   examCodes: Set<string>;
   /** The program codes a student may be a candidate for, canonical. */
@@ -231,14 +228,6 @@ function readBranch(
   const blocker = studentType ? studentBranchBlocker(studentType, branch.type) : null;
   if (blocker) return { branchName: name, currentBranchId: null, error: blocker };
 
-  if (!context.scope.all && !context.scope.branchIds.includes(branch.id)) {
-    return {
-      branchName: name,
-      currentBranchId: null,
-      error: `"${name}" is not one of your branches.`,
-    };
-  }
-
   return { branchName: name, currentBranchId: branch.id };
 }
 
@@ -337,7 +326,6 @@ function planRow(
     number.error,
     type.error,
     branch.error,
-    theirStudent(context.scope, existing),
     courses.error,
     unknownExams.length > 0 ? `No such exam code: ${unknownExams.join(', ')}.` : undefined,
     unknownPrograms.length > 0 ? `No such program code: ${unknownPrograms.join(', ')}.` : undefined,
@@ -375,19 +363,4 @@ function reachesNothing(
 ): string | undefined {
   const routes = [courses, enrolledExams, programs];
   return routes.some((route) => route.length > 0) ? undefined : NO_ACCESS_ROUTE_MESSAGE;
-}
-
-/** A row naming somebody else's student would MOVE them, so it is refused rather than applied. */
-function theirStudent(
-  scope: BranchScope,
-  existing: { currentBranchId: string | null } | undefined,
-): string | undefined {
-  if (scope.all || !existing) return undefined;
-  // At NO branch is not at another one, and saying so sends the uploader looking for a branch.
-  if (existing.currentBranchId === null) {
-    return 'That number belongs to a student who is at no branch.';
-  }
-  return scope.branchIds.includes(existing.currentBranchId)
-    ? undefined
-    : 'That number belongs to a student at another branch.';
 }

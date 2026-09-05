@@ -42,7 +42,6 @@ function build(
   students: FakeStudent[] = [],
   admins: FakeAdmin[] = [],
   grants: Record<string, AdminPermissions> = {},
-  branches: Record<string, string[]> = {},
 ) {
   const redis = new FakeRedis();
   const config = new FakeConfig();
@@ -56,7 +55,7 @@ function build(
 
   const events = new FakeEventBus();
 
-  const adminsFacade = new FakeAdminsService(grants, branches);
+  const adminsFacade = new FakeAdminsService(grants);
 
   const auth = new AuthService(
     prisma.asService(),
@@ -285,62 +284,6 @@ describe('AuthService — admin', () => {
     });
   });
 
-  /** The identity is what the token is minted from, so an untested one is an unscoped admin. */
-  it('carries the branches a branch admin was given', async () => {
-    const ctx = build(
-      [],
-      [makeAdmin({ id: 'adm_1', isSuperAdmin: false, allBranches: false })],
-      {},
-      { adm_1: ['br_1', 'br_2'] },
-    );
-    await ctx.auth.requestAdminOtp('admin@iace.co.in');
-
-    const { identity } = await ctx.auth.verifyAdminOtp(
-      'admin@iace.co.in',
-      ctx.sender.lastCode,
-      NO_DEVICE,
-    );
-
-    assert.equal(identity.actor, ActorTypes.ADMIN);
-    assert.equal(identity.allBranches, false);
-    assert.deepEqual(identity.branchIds, ['br_1', 'br_2']);
-  });
-
-  it('carries an admin who holds every branch as holding every branch', async () => {
-    const ctx = build([], [makeAdmin({ id: 'adm_1', isSuperAdmin: false, allBranches: true })]);
-    await ctx.auth.requestAdminOtp('admin@iace.co.in');
-
-    const { identity } = await ctx.auth.verifyAdminOtp(
-      'admin@iace.co.in',
-      ctx.sender.lastCode,
-      NO_DEVICE,
-    );
-
-    assert.equal(identity.actor, ActorTypes.ADMIN);
-    assert.equal(identity.allBranches, true);
-  });
-
-  /** A deactivated admin reaches nothing, scope included — not merely no permissions. */
-  it('hands a deactivated admin no branches either', async () => {
-    const ctx = build(
-      [],
-      [makeAdmin({ id: 'adm_1', isActive: false, allBranches: true })],
-      {},
-      { adm_1: ['br_1'] },
-    );
-    await ctx.auth.requestAdminOtp('admin@iace.co.in');
-
-    const { identity } = await ctx.auth.verifyAdminOtp(
-      'admin@iace.co.in',
-      ctx.sender.lastCode,
-      NO_DEVICE,
-    );
-
-    assert.equal(identity.actor, ActorTypes.ADMIN);
-    assert.equal(identity.allBranches, false);
-    assert.deepEqual(identity.branchIds, []);
-  });
-
   it('signs in a DEACTIVATED admin, and hands them nothing', async () => {
     // The point of the change: refusing here would answer a real account with "invalid credentials",
     // which reads as a typo. They get in, and the app tells them what actually happened.
@@ -444,8 +387,6 @@ describe('AuthService — refresh and me', () => {
       id: claims.sub,
       actor: ActorTypes.STUDENT,
       sessionId: claims.sid,
-      allBranches: false,
-      branchIds: [],
       isSuperAdmin: false,
       isActive: true,
       permissions: {},

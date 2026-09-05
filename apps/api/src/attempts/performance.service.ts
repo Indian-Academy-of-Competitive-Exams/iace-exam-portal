@@ -21,7 +21,6 @@ import {
   type ScoreCardSection,
   type SeriesProgression,
 } from '@iace/contracts';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
@@ -107,17 +106,11 @@ export class PerformanceAnalyticsService {
   ) {}
 
   /** The admin path. The student is named, so an unknown id must read as missing, not as empty. */
-  async forStudent(
-    studentId: string,
-    query: PerformanceReportQuery,
-    scope: BranchScope,
-  ): Promise<PerformanceReport> {
-    const reachable = branchScopeWhere(scope);
+  async forStudent(studentId: string, query: PerformanceReportQuery): Promise<PerformanceReport> {
     const student = await this.prisma.student.findFirst({
       where: {
         id: studentId,
         deletedAt: null,
-        ...(reachable ? { currentBranchId: reachable } : {}),
       },
       select: { id: true },
     });

@@ -17,8 +17,6 @@ import {
   type ProgramImportPlan,
   type ProgramImportResult,
   STUDENT_TYPE,
-  AppException,
-  ErrorCodes,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { StartingPinService, type StartingPin } from '../auth';
@@ -30,7 +28,6 @@ import { planCandidateImport } from './candidate-import';
 import { planProgramImport } from './program-import';
 import { EventsService } from '../events';
 import { ProgramsService } from '../access';
-import { EVERY_BRANCH, type BranchScope } from '../common/security';
 
 import { isPreTestReady } from '../students';
 import { importFileKey, readUploadedTable, type CsvTable } from '../common/importing';
@@ -64,31 +61,22 @@ export class ImportsService {
   ) {}
 
   /** What the file would do. Writes nothing — only a commit opens a run, see `openRun`. */
-  async previewStudents(file: Buffer, scope: BranchScope): Promise<StudentImportPlan> {
-    return this.planStudents(file, scope);
+  async previewStudents(file: Buffer): Promise<StudentImportPlan> {
+    return this.planStudents(file);
   }
 
   /**
    * Applies the plan. Re-plans from the same input rather than trusting a preview the client sends
    * back: the file may have changed, and a client that can hand us a plan can hand us any plan.
    */
-  async commitStudents(
-    file: Buffer,
-    actorId: string,
-    scope: BranchScope,
-  ): Promise<StudentImportResult> {
+  async commitStudents(file: Buffer, actorId: string): Promise<StudentImportResult> {
     // Re-judged against the scope on COMMIT too: a preview is not a permission check.
-    const plan = await this.planStudents(file, scope);
+    const plan = await this.planStudents(file);
     return this.applyPlan(plan, file, IMPORT_SOURCE.SHEET, actorId);
   }
 
   /** Writes nothing. The event has to exist, so a stale page cannot fill a deleted roster. */
-  async previewEventCandidates(
-    eventId: string,
-    file: Buffer,
-    scope: BranchScope,
-  ): Promise<CandidateImportPlan> {
-    assertReachesEveryBranch(scope, INTAKE_NEEDS_EVERY_BRANCH);
+  async previewEventCandidates(eventId: string, file: Buffer): Promise<CandidateImportPlan> {
     await this.events.detail(eventId);
     return this.planCandidates(file);
   }
@@ -98,9 +86,7 @@ export class ImportsService {
     eventId: string,
     file: Buffer,
     actorId: string,
-    scope: BranchScope,
   ): Promise<CandidateImportResult> {
-    assertReachesEveryBranch(scope, INTAKE_NEEDS_EVERY_BRANCH);
     await this.events.detail(eventId);
     const plan = await this.planCandidates(file);
     const logId = await this.openRun(
@@ -184,12 +170,7 @@ export class ImportsService {
   }
 
   /** Writes nothing. The program has to exist and be offered, or there is nothing to enrol into. */
-  async previewProgramStudents(
-    code: string,
-    file: Buffer,
-    scope: BranchScope,
-  ): Promise<ProgramImportPlan> {
-    assertReachesEveryBranch(scope, ENROLMENT_NEEDS_EVERY_BRANCH);
+  async previewProgramStudents(code: string, file: Buffer): Promise<ProgramImportPlan> {
     await this.programs.assertUsable([code], 'programCode');
     return this.planPrograms(code, file);
   }
@@ -199,9 +180,7 @@ export class ImportsService {
     code: string,
     file: Buffer,
     actorId: string,
-    scope: BranchScope,
   ): Promise<ProgramImportResult> {
-    assertReachesEveryBranch(scope, ENROLMENT_NEEDS_EVERY_BRANCH);
     await this.programs.assertUsable([code], 'programCode');
 
     const plan = await this.planPrograms(code, file);
@@ -420,17 +399,14 @@ export class ImportsService {
     });
   }
 
-  private async planStudents(file: Buffer, scope: BranchScope): Promise<StudentImportPlan> {
+  private async planStudents(file: Buffer): Promise<StudentImportPlan> {
     const table = await readUploadedTable(file);
-    return planStudentImport(table, await this.contextFor(table, scope));
+    return planStudentImport(table, await this.contextFor(table));
   }
 
   /** A failed fetch is a SOURCE error, never a row error — there are no rows to blame. */
   private async planPortal(fetched: PortalFetch): Promise<StudentImportPlan> {
-    const plan = planStudentImport(
-      fetched.table,
-      await this.contextFor(fetched.table, EVERY_BRANCH),
-    );
+    const plan = planStudentImport(fetched.table, await this.contextFor(fetched.table));
     return { ...plan, fileErrors: [...fetched.errors, ...plan.fileErrors] };
   }
 
@@ -438,7 +414,7 @@ export class ImportsService {
    * Loads only the mobiles this file refers to rather than the whole table, so a 5,000-row
    * roster is one bounded query and not a table scan per line.
    */
-  private async contextFor(table: CsvTable, scope: BranchScope): Promise<ImportContext> {
+  private async contextFor(table: CsvTable): Promise<ImportContext> {
     const mobiles = mobilesIn(table);
 
     // Whole small catalogs: cheaper than a lookup per row, and a roster repeats a branch.
@@ -480,7 +456,6 @@ export class ImportsService {
       ),
       examCodes: new Set(exams.map((exam) => exam.code)),
       programCodes: new Set(programs.map((program) => program.code)),
-      scope,
     };
   }
 
@@ -580,18 +555,6 @@ function profileData(row: StudentImportRow) {
     ...(p.address === null ? {} : { address: p.address }),
   };
   return Object.keys(data).length === 0 ? null : data;
-}
-
-const INTAKE_NEEDS_EVERY_BRANCH =
-  'A candidate import reaches students at any branch by mobile number alone, and creates accounts at none, so only an admin who reaches every branch can run one.';
-
-const ENROLMENT_NEEDS_EVERY_BRANCH =
-  'A program enrolment reaches students at any branch by mobile number alone, so only an admin who reaches every branch can run one.';
-
-/** It resolves people by MOBILE alone, which never looks a student up to scope them. */
-function assertReachesEveryBranch(scope: BranchScope, message: string): void {
-  if (scope.all) return;
-  throw new AppException(ErrorCodes.FORBIDDEN, message);
 }
 
 /** The importer decides row by row, so the minted PINs are indexed by the number they belong to. */

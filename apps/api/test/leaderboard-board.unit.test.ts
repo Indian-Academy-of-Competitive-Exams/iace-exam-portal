@@ -408,8 +408,6 @@ describe('reaching the leaderboard', () => {
         isSuperAdmin: false,
         isActive: true,
         permissions: {},
-        allBranches: false,
-        branchIds: [],
       } satisfies AuthenticatedUser,
     };
     const context = {

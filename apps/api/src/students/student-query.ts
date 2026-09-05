@@ -1,13 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { STUDENT_SORTS, type StudentListQuery, type StudentSort } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 
 /** Turns the roster's filters into a Prisma query. */
-export function studentWhere(
-  query: StudentListQuery,
-  scope: BranchScope,
-): Prisma.StudentWhereInput {
+export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput {
   /** What the match toggle governs. */
   const chosen: Prisma.StudentWhereInput[] = [];
   const add = (condition: Prisma.StudentWhereInput) => chosen.push(condition);
@@ -28,10 +24,6 @@ export function studentWhere(
   if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 
   if (query.hasDefaultPin !== undefined) add({ pinIsDefault: query.hasDefaultPin });
-
-  // ALWAYS, never among the conditions `match=any` ORs: a second filter would widen it back.
-  const reachable = branchScopeWhere(scope);
-  if (reachable) always.push({ currentBranchId: reachable });
 
   const search = query.q?.trim();
   if (search) {

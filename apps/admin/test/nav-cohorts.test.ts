@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { FEATURE_KEYS, type FeatureKey } from '@iace/contracts';
 import { filterNavByPermission } from '@iace/app-kit';
-import { NAV_ITEMS, ROUTES, filterAdminNav, type AdminNavItem } from '../src/lib/constants';
+import { NAV_ITEMS, ROUTES, type AdminNavItem } from '../src/lib/constants';
 
 const holding = (...keys: FeatureKey[]) => {
   const held = new Set<FeatureKey>(keys);
@@ -40,13 +40,5 @@ describe('the nav after programs and events merged', () => {
 
     assert.ok(!paths.includes(ROUTES.IMPORT_STUDENTS));
     assert.ok(!paths.includes(ROUTES.IMPORT_QUESTIONS));
-  });
-
-  it('keeps programs and events away from a branch admin, who runs one branch', () => {
-    const shown = filterAdminNav(NAV_ITEMS, { isSuperAdmin: false, isBranchAdmin: true });
-    const paths = everyPath(shown);
-
-    assert.ok(paths.includes(ROUTES.STUDENTS));
-    assert.ok(!paths.includes(ROUTES.COHORTS));
   });
 });

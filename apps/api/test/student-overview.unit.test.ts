@@ -14,7 +14,7 @@ import {
   studentOverviewSchema,
   type StudentOverview,
 } from '@iace/contracts';
-import { EVERY_BRANCH, type AuthenticatedUser } from '../src/common/security';
+import { type AuthenticatedUser } from '../src/common/security';
 import { FeaturePermissionGuard } from '../src/auth/guards/feature-permission.guard';
 import { AdminOverviewController } from '../src/attempts/overview.controller';
 import { StudentOverviewService } from '../src/attempts/overview.service';
@@ -187,24 +187,16 @@ describe('StudentOverviewService sourcing', () => {
 // ---------------------------------------------------------------------------
 
 describe('StudentOverviewService.forStudent', () => {
-  it('returns the named student under a scope that reaches their branch', async () => {
-    const overview = await serviceFor().forStudent(STUDENT, { all: false, branchIds: [BRANCH] });
+  it('returns the named student', async () => {
+    const overview = await serviceFor().forStudent(STUDENT);
 
     assert.equal(overview.studentId, STUDENT);
     assert.equal(overview.standing.testsEvaluated, 4);
   });
 
-  /** Out of scope reads as missing, so a branch admin cannot probe for who exists elsewhere. */
-  it('refuses a student outside the admin branches', async () => {
+  it('refuses an unknown student', async () => {
     await assert.rejects(
-      serviceFor().forStudent(STUDENT, { all: false, branchIds: ['brn_other'] }),
-      (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
-    );
-  });
-
-  it('refuses an unknown student even for an admin holding every branch', async () => {
-    await assert.rejects(
-      serviceFor().forStudent('stu_nope', EVERY_BRANCH),
+      serviceFor().forStudent('stu_nope'),
       (error: { code?: string }) => error.code === ErrorCodes.NOT_FOUND,
     );
   });
@@ -283,7 +275,6 @@ describe('StudentOverviewService reads', () => {
 
     const overview: StudentOverview = await new StudentOverviewService(watched as never).forStudent(
       STUDENT,
-      EVERY_BRANCH,
     );
 
     assert.equal(overview.studentId, STUDENT);

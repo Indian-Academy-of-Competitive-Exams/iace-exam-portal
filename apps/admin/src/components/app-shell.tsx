@@ -16,13 +16,11 @@ export function AppShell() {
   const isDeactivated = admin !== null && !admin.isActive;
 
   const isSuperAdmin = admin?.isSuperAdmin ?? false;
-  // Derived, never stored: not a super admin and not every branch is a branch admin.
-  const isBranchAdmin = admin ? !admin.isSuperAdmin && !admin.allBranches : false;
 
   // A deactivated admin keeps their session but loses the nav.
   const nav = useMemo(
-    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, { isSuperAdmin, isBranchAdmin })),
-    [isDeactivated, isSuperAdmin, isBranchAdmin],
+    () => (isDeactivated ? [] : filterAdminNav(NAV_ITEMS, { isSuperAdmin })),
+    [isDeactivated, isSuperAdmin],
   );
 
   return (

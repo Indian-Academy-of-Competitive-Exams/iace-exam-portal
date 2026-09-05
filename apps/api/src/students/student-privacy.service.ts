@@ -17,7 +17,6 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
-import { branchScopeWhere, type BranchScope } from '../common/security';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
 
 const NO_STUDENT = 'No such student';
@@ -159,14 +158,9 @@ export class StudentPrivacyService {
   }
 
   /** One transaction: a nameless student whose profile still holds their mother's is worse than both. */
-  async anonymize(studentId: string, scope: BranchScope): Promise<ErasureReceipt> {
-    const reachable = branchScopeWhere(scope);
+  async anonymize(studentId: string): Promise<ErasureReceipt> {
     const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        deletedAt: null,
-        ...(reachable ? { currentBranchId: reachable } : {}),
-      },
+      where: { id: studentId, deletedAt: null },
       select: { id: true, anonymizedAt: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);

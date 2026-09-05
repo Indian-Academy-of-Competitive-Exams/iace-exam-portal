@@ -42,7 +42,6 @@ import {
 } from '@iace/contracts';
 import {
   Actors,
-  branchScopeOf,
   CurrentUser,
   RequiresFeature,
   RequiresSuperAdmin,
@@ -104,9 +103,8 @@ export class TestSeriesController {
   @Get()
   list(
     @Query(new ZodQuery(testSeriesListQuerySchema)) query: TestSeriesListQuery,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Paginated<TestSeriesSummary>> {
-    return this.series.list(query, branchScopeOf(user));
+    return this.series.list(query);
   }
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
@@ -145,11 +143,8 @@ export class TestSeriesController {
 
   @RequiresFeature(FEATURE_KEYS.BRANCH_TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/branches')
-  branches(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<SeriesBranch[]> {
-    return this.series.branches(id, branchScopeOf(user));
+  branches(@Param('id') id: string): Promise<SeriesBranch[]> {
+    return this.series.branches(id);
   }
 
   /** A separate key from series editing: naming the branches is not the same permission as the rest. */
@@ -159,9 +154,8 @@ export class TestSeriesController {
   setBranches(
     @Param('id') id: string,
     @Body(new ZodBody(updateSeriesBranchesSchema)) body: UpdateSeriesBranchesBody,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<SeriesBranch[]> {
-    return this.series.setBranches(id, body, branchScopeOf(user));
+    return this.series.setBranches(id, body);
   }
 }
 
@@ -173,11 +167,8 @@ export class StudentGrantsController {
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
-  list(
-    @Param('studentId') studentId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StudentGrantRow[]> {
-    return this.grants.list(studentId, branchScopeOf(user));
+  list(@Param('studentId') studentId: string): Promise<StudentGrantRow[]> {
+    return this.grants.list(studentId);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
@@ -188,7 +179,7 @@ export class StudentGrantsController {
     @Body(new ZodBody(grantSeriesSchema)) body: GrantSeriesBody,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StudentGrantRow[]> {
-    return this.grants.grant(studentId, body, user.id, branchScopeOf(user));
+    return this.grants.grant(studentId, body, user.id);
   }
 
   @Audit(AUDIT_FEATURE.STUDENT, AUDIT_ACTION.UPDATE)
@@ -198,9 +189,8 @@ export class StudentGrantsController {
   revoke(
     @Param('studentId') studentId: string,
     @Param('testSeriesId') testSeriesId: string,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
-    return this.grants.revoke(studentId, testSeriesId, branchScopeOf(user));
+    return this.grants.revoke(studentId, testSeriesId);
   }
 }
 
@@ -212,10 +202,7 @@ export class StudentSeriesController {
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
-  list(
-    @Param('studentId') studentId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<StudentSeriesAccess[]> {
-    return this.grants.reachedSeries(studentId, branchScopeOf(user));
+  list(@Param('studentId') studentId: string): Promise<StudentSeriesAccess[]> {
+    return this.grants.reachedSeries(studentId);
   }
 }

@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { EVERY_BRANCH } from '../src/common/security';
 import { AppException, ErrorCodes, TEST_SERIES_KIND } from '@iace/contracts';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
@@ -73,7 +72,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
     assert.deepEqual(prisma.series[0]?.branchIds, ['br_1']);
   });
@@ -81,9 +80,9 @@ describe('TestSeriesService — branches are the truth about branches', () => {
   it('stops reaching them when the branch is removed', async () => {
     const { series, prisma } = build({ branches: [makeBranch({ id: 'br_1' })] });
     const created = await series.create(draft());
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
-    await series.setBranches(created.id, { branchIds: [] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: [] });
 
     assert.deepEqual(prisma.series[0]?.branchIds, []);
   });
@@ -94,7 +93,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft());
     await series.update(created.id, { isEnabled: true });
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
     assert.equal(prisma.series[0]?.isEnabled, true, 'the branch writer passes nothing');
   });
@@ -107,7 +106,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     });
 
     const error = await series
-      .setBranches('srs_1', { branchIds: ['br_1'] }, EVERY_BRANCH)
+      .setBranches('srs_1', { branchIds: ['br_1'] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -120,7 +119,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft());
     events.forget();
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
@@ -133,7 +132,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft());
 
     const error = await series
-      .setBranches(created.id, { branchIds: ['br_gone'] }, EVERY_BRANCH)
+      .setBranches(created.id, { branchIds: ['br_gone'] })
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -147,7 +146,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const mine = await series.create(draft());
     const other = await series.create(draft({ name: 'RRB JE Tier 1 mocks' }));
 
-    await series.setBranches(mine.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(mine.id, { branchIds: ['br_1'] });
 
     assert.deepEqual(prisma.series.find((row) => row.id === other.id)?.branchIds, []);
   });
@@ -170,7 +169,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     });
     const created = await series.create(draft());
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
     const after = await series.detail(created.id);
 
     assert.equal(after.enabledBranchCount, 1);
@@ -229,7 +228,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft());
     await series.update(created.id, { isEnabled: false });
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
     assert.deepEqual(prisma.series[0]?.branchIds, ['br_1'], 'the write still lands');
     assert.equal(prisma.series[0]?.isEnabled, false);
@@ -244,7 +243,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     const created = await series.create(draft({ kind: TEST_SERIES_KIND.FREE }));
     await series.update(created.id, { isEnabled: false });
 
-    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN);
 
     assert.equal(prisma.series[0]?.isEnabled, false, 'switched on, a free series reaches everyone');
     assert.equal(
@@ -261,7 +260,7 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     });
     const created = await series.create(draft());
 
-    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN);
 
     assert.equal(prisma.series[0]?.isEnabled, false);
   });
@@ -274,9 +273,9 @@ describe('TestSeriesService — branches are the truth about branches', () => {
     });
     const created = await series.create(draft());
     await series.update(created.id, { isEnabled: true });
-    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: created.id }, ADMIN);
 
-    await grants.revoke('stu_1', created.id, EVERY_BRANCH);
+    await grants.revoke('stu_1', created.id);
 
     assert.equal(
       prisma.series[0]?.isEnabled,
@@ -478,7 +477,7 @@ describe('TestSeriesService — a kind and its columns say the same thing', () =
       branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'ONLINE' })],
     });
 
-    await series.setBranches('srs_1', { branchIds: [] }, EVERY_BRANCH);
+    await series.setBranches('srs_1', { branchIds: [] });
     assert.deepEqual(prisma.series[0]?.branchIds, []);
 
     const updated = await series.update('srs_1', { kind: TEST_SERIES_KIND.FREE });
@@ -585,7 +584,7 @@ describe('StudentGrantsService — the escape hatch', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    const after = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    const after = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
 
     assert.equal(after.length, 1);
     assert.equal(after[0]?.testSeries.name, 'Scholarship mocks');
@@ -598,8 +597,8 @@ describe('StudentGrantsService — the escape hatch', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
 
     assert.equal(prisma.grants.length, 1);
   });
@@ -611,7 +610,7 @@ describe('StudentGrantsService — the escape hatch', () => {
     });
 
     await assert.rejects(
-      () => grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH),
+      () => grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN),
       (error: unknown) => {
         assert.ok(AppException.is(error));
         assert.ok(error.fieldErrors?.testSeriesId);
@@ -624,7 +623,7 @@ describe('StudentGrantsService — the escape hatch', () => {
     const { grants } = build({ students: [makeStudent({ id: 'stu_1' })] });
 
     await assert.rejects(
-      () => grants.grant('stu_1', { testSeriesId: 'nope' }, ADMIN, EVERY_BRANCH),
+      () => grants.grant('stu_1', { testSeriesId: 'nope' }, ADMIN),
       AppException.is,
     );
   });
@@ -634,9 +633,9 @@ describe('StudentGrantsService — the escape hatch', () => {
       series: [makeSeries({ id: 'srs_1' })],
       students: [makeStudent({ id: 'stu_1' })],
     });
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
 
-    await grants.revoke('stu_1', 'srs_1', EVERY_BRANCH);
+    await grants.revoke('stu_1', 'srs_1');
 
     assert.equal(prisma.grants.length, 0);
   });
@@ -665,8 +664,8 @@ describe('the access writes that bust the catalog cache', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
-    await grants.revoke('stu_1', 'srs_1', EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.revoke('stu_1', 'srs_1');
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED), [
       { studentId: 'stu_1' },
@@ -681,8 +680,8 @@ describe('the access writes that bust the catalog cache', () => {
       students: [makeStudent({ id: 'stu_1' })],
     });
 
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
-    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, EVERY_BRANCH);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
+    await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN);
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.SERIES_GRANTED), [
       { studentId: 'stu_1', testSeriesId: 'srs_1' },
@@ -695,109 +694,10 @@ describe('the access writes that bust the catalog cache', () => {
 
     events.forget();
 
-    await series.setBranches(created.id, { branchIds: ['br_1'] }, EVERY_BRANCH);
+    await series.setBranches(created.id, { branchIds: ['br_1'] });
 
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
     ]);
-  });
-});
-
-describe('StudentGrantsService — the branches the admin asking may reach', () => {
-  const held = { all: false, branchIds: ['br_1'] } as const;
-
-  const atBranch = (branchId: string | null) =>
-    build({
-      series: [makeSeries({ id: 'srs_1' })],
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_9' })],
-      students: [makeStudent({ id: 'stu_1', currentBranchId: branchId })],
-    });
-
-  /** The failure this prevents: granting series to a student at somebody else's branch. */
-  it('refuses to grant to a student at another branch', async () => {
-    const { grants } = atBranch('br_9');
-
-    const error = await grants
-      .grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, held)
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  it('refuses to list what a student at another branch reaches', async () => {
-    const { grants } = atBranch('br_9');
-
-    const error = await grants.reachedSeries('stu_1', held).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  it('refuses to read what a student at another branch was granted', async () => {
-    const { grants } = atBranch('br_9');
-
-    const error = await grants.list('stu_1', held).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  it('refuses to take a grant back from a student at another branch', async () => {
-    const { grants } = atBranch('br_9');
-
-    const error = await grants.revoke('stu_1', 'srs_1', held).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  it("grants to a student at the admin's own branch", async () => {
-    const { grants } = atBranch('br_1');
-
-    const rows = await grants.grant('stu_1', { testSeriesId: 'srs_1' }, ADMIN, held);
-
-    assert.equal(rows.length, 1);
-  });
-});
-
-describe('TestSeriesService — a scoped admin only moves the branches they hold', () => {
-  const held = { all: false, branchIds: ['br_1'] } as const;
-
-  const twoBranches = (branchIds: string[] = []) =>
-    build({
-      series: [makeSeries({ id: 'srs_1', branchIds })],
-      branches: [makeBranch({ id: 'br_1' }), makeBranch({ id: 'br_2', name: 'KUKATPALLY' })],
-    });
-
-  it('refuses to switch on a branch the admin does not hold', async () => {
-    const { series } = twoBranches();
-
-    const error = await series
-      .setBranches('srs_1', { branchIds: ['br_2'] }, held)
-      .catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.NOT_FOUND);
-  });
-
-  it('shows only the branches the admin holds', async () => {
-    const { series } = twoBranches();
-
-    const rows = await series.branches('srs_1', held);
-
-    assert.deepEqual(
-      rows.map((row) => row.id),
-      ['br_1'],
-    );
-  });
-
-  /** A scoped write must not silently drop what somebody else already named. */
-  it('leaves a branch outside the admin’s scope untouched', async () => {
-    const { series, prisma } = twoBranches(['br_2']);
-
-    await series.setBranches('srs_1', { branchIds: ['br_1'] }, held);
-
-    assert.deepEqual([...(prisma.series[0]?.branchIds ?? [])].sort(), ['br_1', 'br_2']);
   });
 });

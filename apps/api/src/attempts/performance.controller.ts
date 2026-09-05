@@ -12,13 +12,7 @@ import {
   type PerformanceReportQuery,
   type SatSeries,
 } from '@iace/contracts';
-import {
-  Actors,
-  branchScopeOf,
-  CurrentUser,
-  RequiresFeature,
-  type AuthenticatedUser,
-} from '../common/security';
+import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodQuery } from '../common/zod-validation.pipe';
 import { PerformanceAnalyticsService } from './performance.service';
 
@@ -54,8 +48,7 @@ export class AdminPerformanceController {
   report(
     @Param('studentId') studentId: string,
     @Query(new ZodQuery(performanceReportQuerySchema)) query: PerformanceReportQuery,
-    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PerformanceReport> {
-    return this.performance.forStudent(studentId, query, branchScopeOf(user));
+    return this.performance.forStudent(studentId, query);
   }
 }

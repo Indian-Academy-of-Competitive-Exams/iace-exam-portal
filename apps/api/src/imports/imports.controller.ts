@@ -32,7 +32,6 @@ import {
 } from '@iace/contracts';
 import {
   Actors,
-  branchScopeOf,
   CurrentUser,
   RequiresFeature,
   RequiresSuperAdmin,
@@ -80,11 +79,8 @@ export class ImportsController {
   @Post('students/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
-  preview(
-    @CurrentUser() user: AuthenticatedUser,
-    @UploadedFile() file?: UploadedFileLike,
-  ): Promise<StudentImportPlan> {
-    return this.imports.previewStudents(this.bufferOf(file), branchScopeOf(user));
+  preview(@UploadedFile() file?: UploadedFileLike): Promise<StudentImportPlan> {
+    return this.imports.previewStudents(this.bufferOf(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -95,7 +91,7 @@ export class ImportsController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<StudentImportResult> {
-    return this.imports.commitStudents(this.bufferOf(file), user.id, branchScopeOf(user));
+    return this.imports.commitStudents(this.bufferOf(file), user.id);
   }
 
   /** The candidate sample, generated from the same two columns the parser matches on. */
@@ -124,11 +120,10 @@ export class ImportsController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewProgramStudents(
-    @CurrentUser() user: AuthenticatedUser,
     @Param('code') code: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<ProgramImportPlan> {
-    return this.imports.previewProgramStudents(code, this.bufferOf(file), branchScopeOf(user));
+    return this.imports.previewProgramStudents(code, this.bufferOf(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -140,12 +135,7 @@ export class ImportsController {
     @Param('code') code: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<ProgramImportResult> {
-    return this.imports.commitProgramStudents(
-      code,
-      this.bufferOf(file),
-      user.id,
-      branchScopeOf(user),
-    );
+    return this.imports.commitProgramStudents(code, this.bufferOf(file), user.id);
   }
 
   /** On EVENT: the account it mints is NON_IACE and reaches that event and nothing else. */
@@ -154,11 +144,10 @@ export class ImportsController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
   previewEventCandidates(
-    @CurrentUser() user: AuthenticatedUser,
     @Param('eventId') eventId: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<CandidateImportPlan> {
-    return this.imports.previewEventCandidates(eventId, this.bufferOf(file), branchScopeOf(user));
+    return this.imports.previewEventCandidates(eventId, this.bufferOf(file));
   }
 
   @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
@@ -170,12 +159,7 @@ export class ImportsController {
     @Param('eventId') eventId: string,
     @UploadedFile() file?: UploadedFileLike,
   ): Promise<CandidateImportResult> {
-    return this.imports.commitEventCandidates(
-      eventId,
-      this.bufferOf(file),
-      user.id,
-      branchScopeOf(user),
-    );
+    return this.imports.commitEventCandidates(eventId, this.bufferOf(file), user.id);
   }
 
   /** Super admin, as the old fire-and-forget trigger was: it pulls a whole roster from elsewhere. */
