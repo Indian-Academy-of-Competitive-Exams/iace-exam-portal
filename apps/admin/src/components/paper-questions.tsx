@@ -20,6 +20,7 @@ import {
   type DataTableColumn,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { framingOf } from '../routes/test-paper-view';
 import { QuestionLink } from './question-viewer';
 
 /** One section of the paper as it stands: what is on it, and what its own settings now refuse. */
@@ -125,7 +126,7 @@ export function PaperQuestions({
       <SectionHeading
         className="shrink-0"
         title="On the paper"
-        meta={`${rows.length} of ${section.questionCount}`}
+        meta={`${rows.length} of ${section.questionCount} · ${framingOf(section)}`}
         action={
           <span className="flex items-center gap-2">
             {editable && going.length > 0 ? (

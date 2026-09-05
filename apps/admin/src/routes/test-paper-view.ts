@@ -1,5 +1,5 @@
-import { PAPER_BINDING, type BaseConfigSection, type Test } from '@iace/contracts';
-import type { ComboboxItem } from '@iace/ui';
+import { MERIT_TYPE, PAPER_BINDING, type BaseConfigSection, type Test } from '@iace/contracts';
+import { plural, type ComboboxItem } from '@iace/ui';
 
 /** What the paper screen reads off a test: whether a paper exists at all, and which one is on it. */
 
@@ -45,3 +45,16 @@ export const sectionTally = (
   held: ReadonlyMap<string, number> | null,
 ): string | null =>
   held === null ? null : `${held.get(section.id) ?? 0}/${section.questionCount}`;
+
+/** What the configuration framed this section as — the numbers a paper is judged against. */
+export function framingOf(section: BaseConfigSection): string {
+  const parts = [`${plural(section.marksPerQuestion, 'mark')} each`];
+  if (section.negativeMarks > 0) parts.push(`−${section.negativeMarks} per wrong answer`);
+  if (section.durationSec !== null) parts.push(`${Math.round(section.durationSec / 60)} minutes`);
+  if (section.meritOrQualifying === MERIT_TYPE.QUALIFYING) {
+    const cutoff = section.qualifyingCutoff;
+    parts.push(cutoff === null ? 'Qualifying' : `Qualifying at ${cutoff}`);
+  }
+  if (!section.mandatory) parts.push('Optional');
+  return parts.join(' · ');
+}

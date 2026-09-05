@@ -1,16 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {
-  MERIT_TYPE,
-  scopedSections,
-  type BaseConfigDetail,
-  type BaseConfigSection,
-  type TestDetail,
-} from '@iace/contracts';
+import { scopedSections, type BaseConfigDetail, type TestDetail } from '@iace/contracts';
 import { Alert, Badge, Button, Skeleton, TruncatedText, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
-import { hasPaper, sectionFullness, sectionTally } from './test-paper-view';
+import { framingOf, hasPaper, sectionFullness, sectionTally } from './test-paper-view';
 
 /** Amber only where work has started and stalled: an untouched section is not a warning. */
 const CHIP_VARIANT = {
@@ -18,19 +12,6 @@ const CHIP_VARIANT = {
   SHORT: 'warning',
   FULL: 'success',
 } as const;
-
-/** What the configuration framed this section as — the numbers a paper is judged against. */
-function framingOf(section: BaseConfigSection): string {
-  const parts = [`${plural(section.marksPerQuestion, 'mark')} each`];
-  if (section.negativeMarks > 0) parts.push(`−${section.negativeMarks} per wrong answer`);
-  if (section.durationSec !== null) parts.push(`${Math.round(section.durationSec / 60)} minutes`);
-  if (section.meritOrQualifying === MERIT_TYPE.QUALIFYING) {
-    const cutoff = section.qualifyingCutoff;
-    parts.push(cutoff === null ? 'Qualifying' : `Qualifying at ${cutoff}`);
-  }
-  if (!section.mandatory) parts.push('Optional');
-  return parts.join(' · ');
-}
 
 /** The step is a way in, not the workbench: the paper is built on its own screen. */
 export function PaperStep({

@@ -184,11 +184,13 @@ function TestPaperScreen({
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={tail} />}
       title={title}
-      meta={
+      meta={[
+        detail.baseConfigName,
         byHand
           ? `${chosen} of ${detail.totalQuestions} chosen`
-          : `${plural(detail.variantCount, 'paper')} · ${plural(detail.totalQuestions, 'question')}`
-      }
+          : `${plural(detail.variantCount, 'paper')} · ${plural(detail.totalQuestions, 'question')}`,
+        `${Math.round(detail.durationSec / 60)} minutes`,
+      ].join(' · ')}
       action={
         canPickPaper(detail) ? (
           <PaperPicker count={detail.variantCount} variant={variant} onVariant={onVariant} />
