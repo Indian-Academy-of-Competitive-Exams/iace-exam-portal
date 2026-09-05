@@ -156,6 +156,8 @@ function asBankQuery(query: AuthoringHistoryQuery): QuestionListQuery {
     page: query.page,
     pageSize: query.pageSize,
     q: query.q,
+    // A work record is already one author's, so the bank's author filter has nothing left to ask.
+    author: undefined,
     subjectId: query.subjectId,
     topicId: undefined,
     type: query.type,

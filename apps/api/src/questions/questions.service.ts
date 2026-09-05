@@ -48,6 +48,8 @@ import { taxonomyForIds } from './taxonomy-context';
 const QUESTION_INCLUDE = {
   subject: { select: { id: true, name: true } },
   topic: { select: { id: true, name: true } },
+  // The relation, not a second lookup: a page of drafts names its authors in one round trip.
+  createdBy: { select: { id: true, fullName: true, email: true } },
   currentVersion: true,
   // Counted in the row's own query, so a page of questions costs one round trip, not one each.
   _count: { select: { paperQuestions: true, attemptItems: true, questionStats: true } },
@@ -718,7 +720,11 @@ function toSummary(row: QuestionRow): QuestionSummary {
     stemPreview: stemPreviewOf(content),
     languages: languagesInContent(content),
     tags: row.tags,
+    author: row.createdBy
+      ? { id: row.createdBy.id, name: row.createdBy.fullName ?? row.createdBy.email }
+      : null,
     inUse: isReferenced(row),
+    createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }

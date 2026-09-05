@@ -101,3 +101,39 @@ describe('questionWhere — a filter holding several values', () => {
     assert.deepEqual(where, { AND: [{ status: { not: 'ARCHIVED' } }, { id: { in: [] } }] });
   });
 });
+
+describe('questionWhere — who wrote it and when', () => {
+  /** There is no picker of authors, so the filter matches what an admin is known by. */
+  it('matches the author by name or by the email they sign in with', () => {
+    assert.deepEqual(conditionFor({ author: 'priya' }, 'createdBy'), {
+      OR: [
+        { fullName: { contains: 'priya', mode: 'insensitive' } },
+        { email: { contains: 'priya', mode: 'insensitive' } },
+      ],
+    });
+  });
+
+  it('leaves an empty author box out rather than matching the empty string', () => {
+    assert.equal(conditionFor({ author: '   ' }, 'createdBy'), undefined);
+  });
+
+  /** A day read as an instant starts at 05:30 IST, losing a whole morning of drafts. */
+  it('covers the whole institute day at each end of the range', () => {
+    const range = conditionFor({ from: '2026-03-01', to: '2026-03-01' }, 'createdAt') as {
+      gte: Date;
+      lte: Date;
+    };
+
+    assert.equal(range.gte.toISOString(), '2026-02-28T18:30:00.000Z');
+    assert.equal(range.lte.toISOString(), '2026-03-01T18:29:59.999Z');
+  });
+
+  it('takes an open-ended range from either side', () => {
+    assert.deepEqual(Object.keys(conditionFor({ from: '2026-03-01' }, 'createdAt') ?? {}), ['gte']);
+    assert.deepEqual(Object.keys(conditionFor({ to: '2026-03-01' }, 'createdAt') ?? {}), ['lte']);
+  });
+
+  it('adds no date clause when neither end was given', () => {
+    assert.equal(conditionFor({}, 'createdAt'), undefined);
+  });
+});

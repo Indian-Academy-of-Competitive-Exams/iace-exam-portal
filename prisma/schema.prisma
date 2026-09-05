@@ -428,6 +428,7 @@ model Question {
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
   subject        Subject            @relation(fields: [subjectId], references: [id])
+  createdBy      Admin?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
   topic          Topic?             @relation(fields: [topicId], references: [id], onDelete: Restrict)
   currentVersion QuestionVersion?   @relation("QuestionCurrentVersion", fields: [id, currentVersionId], references: [questionId, id], onDelete: Restrict, onUpdate: NoAction)
   versions       QuestionVersion[]  @relation("QuestionVersions")
@@ -439,6 +440,7 @@ model Question {
   @@index([topicId])
   @@index([stemHash])
   @@index([fixedUseCount])
+  @@index([createdById])
   @@index([tags], type: Gin)
 }
 
@@ -760,8 +762,10 @@ model Admin {
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  permissions AdminFeaturePermission[]
-  sharesMade  PerformanceShare[]
+  permissions       AdminFeaturePermission[]
+  sharesMade        PerformanceShare[]
+  // The one createdById with a real relation: a draft names its author on screen and in a filter.
+  questionsAuthored Question[]
 }
 
 // One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { csvIdQuery, csvQuery, matchModeQuery, searchQuery } from './common';
+import { dateOnlySchema } from './students';
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 import { type LanguageCode } from './exams';
@@ -485,6 +486,13 @@ export const answerKeySchema = z.object({
 });
 export type AnswerKey = z.infer<typeof answerKeySchema>;
 
+/** The admin a question is filed against. Name falls back to the email they sign in with. */
+export const questionAuthorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type QuestionAuthor = z.infer<typeof questionAuthorSchema>;
+
 export const questionSummarySchema = z.object({
   id: z.string(),
   questionCode: z.string().nullable(),
@@ -498,8 +506,11 @@ export const questionSummarySchema = z.object({
   /** Which languages this question has been authored in, in `LANGUAGE_ORDER`. */
   languages: z.array(languageSchema),
   tags: z.array(z.string()),
+  /** Who wrote it, resolved from the author relation. Null once nobody owns the id any more. */
+  author: questionAuthorSchema.nullable(),
   /** Whether a paper, an attempt or a stat points at it — what decides if it can still be undone. */
   inUse: z.boolean(),
+  createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type QuestionSummary = z.infer<typeof questionSummarySchema>;
@@ -535,6 +546,11 @@ export const questionListQuerySchema = paginationQuerySchema.extend({
   status: csvQuery(questionStatusSchema),
   language: languageSchema.optional(),
   tag: tagSchema.optional(),
+  /** Matches the author's name or the email they sign in with — there is no picker to choose from. */
+  author: searchQuery(),
+  /** Civil days in Asia/Kolkata, widened to the whole day by the service. */
+  from: dateOnlySchema.optional(),
+  to: dateOnlySchema.optional(),
   sort: z.enum(QUESTION_SORT_VALUES).optional().default(QUESTION_SORTS.RECENT),
   match: matchModeQuery(),
 });

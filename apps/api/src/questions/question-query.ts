@@ -6,6 +6,15 @@ import {
   type QuestionSort,
 } from '@iace/contracts';
 import { matchFilters } from '../common/match-filters';
+import { endOfInstituteDay, startOfInstituteDay } from '../common/time/institute-day';
+
+/** A civil day in Asia/Kolkata is a whole day, not the instant its name would parse to. */
+function writtenBetween(from: string | undefined, to: string | undefined) {
+  return {
+    ...(from ? { gte: startOfInstituteDay(from) } : {}),
+    ...(to ? { lte: endOfInstituteDay(to) } : {}),
+  };
+}
 
 /** The filter half of the questions list. Pure, so it is testable without a database. */
 export function questionWhere(
@@ -26,6 +35,18 @@ export function questionWhere(
   if (query.status) chosen.push({ status: { in: query.status } });
   else always.push({ status: { not: QUESTION_STATUS.ARCHIVED } });
   if (query.tag) chosen.push({ tags: { has: query.tag } });
+  // No picker to choose an author from, so the name typed is matched against what they sign in as.
+  if (query.author) {
+    chosen.push({
+      createdBy: {
+        OR: [
+          { fullName: { contains: query.author, mode: 'insensitive' } },
+          { email: { contains: query.author, mode: 'insensitive' } },
+        ],
+      },
+    });
+  }
+  if (query.from || query.to) chosen.push({ createdAt: writtenBetween(query.from, query.to) });
 
   // A language is present when the CURRENT version has a stem in it, which is the key
   // `buildContent` writes. The content is on the version, so the filter travels through it.

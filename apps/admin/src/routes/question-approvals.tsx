@@ -9,9 +9,11 @@ import {
   PERMISSION_LEVELS,
   QUESTION_STATUS,
   QUESTION_TYPES,
+  todayISO,
   type QuestionSummary,
 } from '@iace/contracts';
 import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
   Alert,
   Badge,
@@ -35,7 +37,8 @@ import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { SubjectMultiPicker, TopicMultiPicker } from '../components/taxonomy-picker';
 
-type FilterKey = 'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty';
+type FilterKey =
+  'q' | 'subjectId' | 'topicId' | 'type' | 'difficulty' | 'tag' | 'author' | 'from' | 'to';
 
 const DIFFICULTY_VARIANT = {
   LOW: 'success',
@@ -75,6 +78,36 @@ function approvalColumns(): DataTableColumn<QuestionSummary>[] {
           label={(language) => LANGUAGE_LABELS[language]}
           empty={<span className="text-muted-foreground">—</span>}
         />
+      ),
+    },
+    {
+      key: 'tags',
+      header: 'Tags',
+      className: 'max-w-48',
+      cell: (question) => (
+        <BadgeList
+          items={question.tags}
+          label={(tag) => tag}
+          max={2}
+          empty={<span className="text-muted-foreground">—</span>}
+        />
+      ),
+    },
+    {
+      key: 'author',
+      header: 'Written by',
+      className: 'max-w-40',
+      cell: (question) => (
+        <TruncatedText className="text-muted-foreground">{question.author?.name}</TruncatedText>
+      ),
+    },
+    {
+      key: 'written',
+      header: 'Written',
+      cell: (question) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {WHEN_FORMATTER.format(new Date(question.createdAt))}
+        </span>
       ),
     },
     {
@@ -143,6 +176,11 @@ export function QuestionApprovalsPage() {
         label: type === 'SINGLE_MCQ' ? 'Multiple choice' : 'Typed answer',
       })),
     },
+    // Free text, both of them: a tag is free text already, and there is no list of authors to offer.
+    { key: 'tag', kind: 'search', label: 'Tag', placeholder: 'Exactly one tag' },
+    { key: 'author', kind: 'search', label: 'Written by', placeholder: 'A name or an email' },
+    { key: 'from', kind: 'date', label: 'Written from', max: todayISO() },
+    { key: 'to', kind: 'date', label: 'Written to', max: todayISO() },
   ] as const;
 
   // Status is not a filter here: a screen for approving drafts shows drafts.
@@ -155,6 +193,10 @@ export function QuestionApprovalsPage() {
       topicId: values.topicId,
       type: values.type as QuestionSummary['type'][],
       difficulty: values.difficulty as QuestionSummary['difficulty'][],
+      tag: values.tag || undefined,
+      author: values.author || undefined,
+      from: values.from || undefined,
+      to: values.to || undefined,
       status: [QUESTION_STATUS.DRAFT],
     }),
     fetchPage: (params) => api.admin.questions.list(params),
