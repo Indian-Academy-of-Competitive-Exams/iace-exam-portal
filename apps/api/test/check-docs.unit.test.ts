@@ -9,6 +9,7 @@ import {
   architectureHeadings,
   brokenSectionRefs,
   ghostIdentifiers,
+  isLiveCode,
   sourceSymbols,
 } from '../../../scripts/check-docs.mjs';
 
@@ -134,6 +135,21 @@ describe('sourceSymbols — what is allowed to prove a name still exists', () =>
       allowlist: ALLOWLIST,
     });
     assert.deepEqual(names(offences), ['AdminBranch']);
+  });
+});
+
+describe('isLiveCode — the same exclusions guard both checks', () => {
+  it('counts real source', () => {
+    assert.equal(isLiveCode('apps/api/src/auth/auth.module.ts'), true);
+    assert.equal(isLiveCode('.husky/pre-commit'), true);
+  });
+
+  it('discounts a test, whose fixtures quote citations rather than make them', () => {
+    assert.equal(isLiveCode('apps/api/test/check-docs.unit.test.ts'), false);
+  });
+
+  it('discounts build output', () => {
+    assert.equal(isLiveCode('packages/contracts/dist/index.d.ts'), false);
   });
 });
 

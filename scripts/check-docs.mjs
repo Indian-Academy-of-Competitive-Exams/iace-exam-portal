@@ -32,9 +32,10 @@ const SECTION_CITATION = /docs\/03 §(\d+(?:\.\d+)?)/g;
 const captured = (text, pattern) => [...text.matchAll(pattern)].map(([, capture]) => capture);
 const alphabetical = (a, b) => a.localeCompare(b);
 
-/** Build output and tests describe names rather than define them — a DROP TABLE is not a table. */
-export const isSourceFile = (path) =>
-  SOURCE_FILE.test(path) && !NOT_SOURCE.test(path) && !NOT_SOURCE_TEST.test(path);
+/** Build output and tests describe code rather than being it — a DROP TABLE is not a table. */
+export const isLiveCode = (path) => !NOT_SOURCE.test(path) && !NOT_SOURCE_TEST.test(path);
+
+const isSourceFile = (path) => SOURCE_FILE.test(path) && isLiveCode(path);
 
 export function sourceSymbols(files) {
   const symbols = new Set();
@@ -100,7 +101,8 @@ function main() {
   ]);
 
   const headings = architectureHeadings(readFileSync(ARCHITECTURE_DOC, 'utf8'));
-  const citations = load(tracked('*.ts', '*.tsx', '.husky', '*.mjs')).flatMap(({ path, text }) =>
+  const citing = tracked('*.ts', '*.tsx', '.husky', '*.mjs').filter(isLiveCode);
+  const citations = load(citing).flatMap(({ path, text }) =>
     captured(text, SECTION_CITATION).map((section) => ({ path, section })),
   );
 
