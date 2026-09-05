@@ -28,7 +28,7 @@ export function useImportScreen<TPlan, TResult>(options: {
   preview: (file: File) => Promise<TPlan>;
   commit: (file: File | null, plan: TPlan) => Promise<TResult>;
   writes: (plan: TPlan) => number;
-  success?: AppMutationMeta['success'];
+  success?: NonNullable<AppMutationMeta['success']>;
   onCommitted?: (result: TResult) => void;
 }): ImportScreenState<TPlan, TResult> {
   const [file, setFile] = useState<File | null>(null);

@@ -94,7 +94,7 @@ export function ImportQuestionsPage() {
         </Field>
       }
       action={{
-        label: `Import ${plan ? `${intake.writes} questions` : ''}`.trim(),
+        label: plan ? `Import ${intake.writes} questions` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,

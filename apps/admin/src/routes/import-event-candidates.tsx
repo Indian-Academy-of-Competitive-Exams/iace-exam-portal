@@ -73,7 +73,7 @@ export function ImportEventCandidatesPage() {
       }}
       previewing={intake.isPreviewing}
       action={{
-        label: `Import ${plan ? `${intake.writes} candidates` : ''}`.trim(),
+        label: plan ? `Import ${intake.writes} candidates` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,

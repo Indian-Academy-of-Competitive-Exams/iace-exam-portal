@@ -99,7 +99,7 @@ export function ImportStudentsPage() {
       }}
       previewing={intake.isPreviewing}
       action={{
-        label: `Import ${plan ? `${intake.writes} rows` : ''}`.trim(),
+        label: plan ? `Import ${intake.writes} rows` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,

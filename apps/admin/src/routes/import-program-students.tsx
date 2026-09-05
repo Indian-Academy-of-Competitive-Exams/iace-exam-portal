@@ -62,7 +62,7 @@ export function ImportProgramStudentsPage() {
       }}
       previewing={intake.isPreviewing}
       action={{
-        label: `Import ${plan ? `${intake.writes} students` : ''}`.trim(),
+        label: plan ? `Import ${intake.writes} students` : 'Import',
         loading: intake.isCommitting,
         disabled: !intake.canCommit,
         onClick: intake.commit,
