@@ -225,7 +225,7 @@ live exam engine, BullMQ scoring, the Redis leaderboard, the score card and solu
 student test portal (`apps/test`) all ship. Phase 5 — load test at target concurrency, error
 monitoring, backups, security pass, deploy — is what remains.
 
-Built since this plan was written, and not in the roadmap above: branch-scoped admins, the branch
+Built since this plan was written, and not in the roadmap above: the branch
 configuration screens, three kinds of test series (`STANDARD` / `FREE` / `SCHOLARSHIP`), unlock
 modes and the request queue, prerequisite series, generated paper variants, and exam skins.
 

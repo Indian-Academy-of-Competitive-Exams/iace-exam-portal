@@ -115,7 +115,10 @@ Do not break these — they are why the live test holds at 4–5K:
 - **Branch names and exam codes are canonical** (`canonicalName` in
   `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. **Normalise
   input, never reject it.**
-- **Series ↔ test:** many-to-many, optional, flat. A test can be attempted standalone.
+- **Series → test is one-to-many.** A test names at most one series (`Test.testSeriesId`, nullable,
+  ordered by `seriesOrder`). A test naming none still exists — it is simply not offered, because the
+  student catalog is built from the series a student reaches, never from tests. **There is no
+  standalone sitting.**
 - Marks use `Decimal(6,2)`. No certificates in V1.
 
 ## Where things live
