@@ -174,21 +174,23 @@ constant is the catalog; this table is its prose, and the two are edited togethe
 
 **Wired** means something emits it and something reacts. **Declared** means the name and the payload
 type exist and nothing yet does either — no producer, no `@OnEvent`. A declared name is a reserved
-shape, not a half-built path.
+shape, not a half-built path. **Announced** means something emits it and nothing subscribes, by
+design: the work the name describes has already been done inline by the producer, and the event is
+there for whatever wants to hear about it later.
 
-| Event                                           | Producer                                                                                                      | Consumers                                    | State    |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
-| `audit.row_action`                              | the audit interceptor, on every write carrying `@Audit`                                                       | audit (writes `RowActionLog`)                | wired    |
-| `student.signed_up`                             | auth, on the signup that created the row                                                                      | students (records the platform consent)      | wired    |
-| `student.pin_reset`                             | auth, both reset paths                                                                                        | sessions revoked                             | wired    |
-| `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired    |
-| `access.catalog_changed`                        | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired    |
-| `student.enrolment_added`                       | students, carrying only the exam codes one save ADDED                                                         | notifications                                | wired    |
-| `series.granted`                                | access, on a grant that did not already exist                                                                 | notifications                                | wired    |
-| `scoring.completed`                             | the scoring worker                                                                                            | notifications (result ready)                 | wired    |
-| `attempt.submitted`                             | —                                                                                                             | —                                            | declared |
-| `test.assigned`                                 | —                                                                                                             | —                                            | declared |
-| `paperQuestion.dropped` / `paperQuestion.bonus` | —                                                                                                             | —                                            | declared |
+| Event                                           | Producer                                                                                                      | Consumers                                    | State     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------- |
+| `audit.row_action`                              | the audit interceptor, on every write carrying `@Audit`                                                       | audit (writes `RowActionLog`)                | wired     |
+| `student.signed_up`                             | auth, on the signup that created the row                                                                      | students (records the platform consent)      | wired     |
+| `student.pin_reset`                             | auth, both reset paths                                                                                        | —                                            | announced |
+| `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
+| `access.catalog_changed`                        | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired     |
+| `student.enrolment_added`                       | students, carrying only the exam codes one save ADDED                                                         | notifications                                | wired     |
+| `series.granted`                                | access, on a grant that did not already exist                                                                 | notifications                                | wired     |
+| `scoring.completed`                             | the scoring worker                                                                                            | notifications (result ready)                 | wired     |
+| `attempt.submitted`                             | —                                                                                                             | —                                            | declared  |
+| `test.assigned`                                 | —                                                                                                             | —                                            | declared  |
+| `paperQuestion.dropped` / `paperQuestion.bonus` | —                                                                                                             | —                                            | declared  |
 
 Submit and scoring do not go through the bus: they go through `OutboxEvent` and the BullMQ scoring
 queue, which is the durable path and the right one for a write that must not be lost. The rollup
@@ -254,6 +256,9 @@ Rules for what you write next; what already exists is in the schema.
   `Asia/Kolkata` through the existing helpers. Never add a second date helper.
 - **What Prisma cannot express** — composite foreign keys, partial uniques, checks, triggers, GIN —
   is hand-written SQL in the migration.
+- **Canonical names.** Branch names and exam codes are canonical (`canonicalName` in
+  `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. Normalise the
+  input, never reject it — a name typed in lower case is the same branch, not a validation error.
 
 ---
 

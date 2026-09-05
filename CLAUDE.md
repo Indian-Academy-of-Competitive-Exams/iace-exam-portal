@@ -28,19 +28,13 @@ SI/Constable), replacing ThinkExam.
 
 ## Tech stack (locked)
 
-The choices; the reasons behind each are `docs/01-architecture.md`.
+**`docs/01-architecture.md` §2 is the list**, every choice with its reason beside it — NestJS API,
+Vite + React SPAs, PostgreSQL via Prisma, Redis + BullMQ, S3, self-built JWT auth, no WebSockets.
+It is the only copy; nothing here restates it.
 
-- **API:** NestJS. **Frontend:** Vite + React SPAs — no Next.js, no SSR.
-- **Server data:** TanStack Query over the typed client from `packages/contracts`. **Client state:**
-  Zustand only where React Query does not fit.
-- **Design:** Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark via CSS variables. Charts
-  are Recharts v3 on the `--series-*` tokens. Brand palette: the `ui-conventions` skill.
-- **DB:** PostgreSQL via Prisma. **Redis:** live-sitting state, leaderboards, OTP, sessions, device
-  binding, rate limiting. **Jobs:** BullMQ on Redis. **Storage:** S3, MinIO locally.
-- **Auth:** self-built JWT + refresh. Students: mobile + OTP at signup, then a 4-digit PIN. Admins:
-  email + OTP. Super admins bypass every check.
-- **No WebSockets.** **Payments:** separate portal, not V1. **Mobile:** React Native + Expo, post-V1.
-  **Infra:** chosen last, AWS-leaning, cloud-agnostic Docker + env.
+One auth rule no table can carry: a student's **4-digit PIN is not unique across students**, and is
+only ever checked against the one student a mobile resolves to. A `@unique` on it would cap the
+platform at 10,000 students.
 
 <scaling-rules>
 
@@ -53,12 +47,6 @@ Do not break these — they are why the live test holds at 4–5K:
 - Read rank/percentile live from Redis. There is no "regenerate" step.
 
 </scaling-rules>
-
-## Naming
-
-**Branch names and exam codes are canonical** (`canonicalName` in
-`packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. **Normalise
-input, never reject it.**
 
 ## Where things live
 

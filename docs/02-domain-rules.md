@@ -69,6 +69,10 @@ Setup, then paper, then offer. There is no certificate step.
   topics mean the whole subject. **There is no test-wide difficulty default.**
 - A `FIXED` paper is **picked by hand** from the pool its section's own spec describes. The draw only
   ever ADDS, topping a hand-picked section up to its count; it never withdraws a choice.
+- **A hand-pick is capped per difficulty bucket, not only per section.** Once a section already holds
+  as many of one difficulty as its mix allows, the next pick of that difficulty is refused and the
+  admin is told to take one off first — otherwise the draw could only ever top up a section the hand
+  had already made impossible to balance.
 - Only an ACTIVE question carrying a current version is drawable, because a paper pins a version.
 - Finalize freezes rows that already exist. A `FIXED` paper must hold every section at its exact
   count or the freeze rolls back naming the shortfall — a paper that is not whole leaves the test
@@ -111,6 +115,11 @@ public rollout unchanged.
 - A `StudentGrant` overrides every kind. It does not override the enable switch.
 - **The branch gate is `STANDARD`'s alone.** A student with no branch is still reached by a free
   series, a program, an event and a grant.
+- **Four CHECK constraints hold a series to its kind**, and they are CHECKs precisely because Prisma
+  has no syntax for any of them: only a STANDARD series may name branches; only a FREE series may
+  span no stage; a series is PROGRAM exactly when it carries a program code; a series is EVENT
+  exactly when it carries an event. The last two are equivalences, so neither the kind without the
+  column nor the column without the kind can be written.
 - **A retired branch takes no new students.** Deactivating one is a service check, not a schema
   constraint: nobody new may be placed in it and nobody may be transferred into it, while the
   students already there keep the branch and everything it reaches.

@@ -149,20 +149,6 @@ Both are env vars: change them without touching code.
 
 Every backend feature ships with its tests in the same commit (see the guardrail in `CLAUDE.md`): the happy path, plus the failure the feature exists to prevent.
 
-## Status
-
-**Admin side built** — foundation (monorepo, local infra, `packages/ui`, contracts, NestJS API, auth) plus the question bank and its importer, the exam taxonomy, base configurations, test series, students and branches, programs, permissions and the audit log.
-
-**Not built yet: the test itself** — attempts, the live player, autosave, scoring and the leaderboard. That is what V1 turns on.
-
-The data model runs ahead of the code in two places, deliberately: the columns exist and are migrated, but nothing enforces them until the feature that owns them lands.
-
-| In the schema                           | Enforced when                                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Student.preTestReady`                  | the test engine lands — a prompt for mother's/father's name + DOB on the way into a test, never a hard block              |
-| `TestSeries.branchIds` / `StudentGrant` | the test list and attempt-start endpoints exist — a series' kind decides who reaches it, and a grant overrides every kind |
-| `BaseConfig.locked`                     | a test built from it is first finalized — after that the shape only changes by cloning                                    |
-
 ## Notes
 
 - **Ports:** everything is configurable in `.env`. If `5432` is taken by another Postgres, set `POSTGRES_PORT` **and** the port inside `DATABASE_URL`.
