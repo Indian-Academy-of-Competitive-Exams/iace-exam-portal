@@ -20,10 +20,13 @@ import {
   ErrorCodes,
   CANDIDATE_IMPORT_TEMPLATE_FILENAME,
   IMPORT_FILE_FIELD,
+  PROGRAM_IMPORT_TEMPLATE_FILENAME,
   STUDENT_IMPORT_TEMPLATE_FILENAME,
   XLSX_CONTENT_TYPE,
   type CandidateImportPlan,
   type CandidateImportResult,
+  type ProgramImportPlan,
+  type ProgramImportResult,
   type StudentImportPlan,
   type StudentImportResult,
 } from '@iace/contracts';
@@ -37,7 +40,7 @@ import {
 } from '../common/security';
 import { AppConfigService } from '../config/app-config.service';
 import { ImportsService } from './imports.service';
-import { buildCandidateTemplate, buildStudentTemplate } from './workbook';
+import { buildCandidateTemplate, buildProgramTemplate, buildStudentTemplate } from './workbook';
 
 /** The two fields we use off a multipart upload. */
 interface UploadedFileLike {
@@ -96,7 +99,7 @@ export class ImportsController {
   }
 
   /** The candidate sample, generated from the same two columns the parser matches on. */
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get('events/candidates/template')
   @Header('Content-Type', XLSX_CONTENT_TYPE)
   @Header('Content-Disposition', `attachment; filename="${CANDIDATE_IMPORT_TEMPLATE_FILENAME}"`)
@@ -105,8 +108,48 @@ export class ImportsController {
     response.send(await buildCandidateTemplate());
   }
 
+  /** The program enrolment sample, generated from the same two columns the parser matches on. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Get('programs/students/template')
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', `attachment; filename="${PROGRAM_IMPORT_TEMPLATE_FILENAME}"`)
+  @Header('Cache-Control', 'no-store')
+  async programTemplate(@Res() response: Response): Promise<void> {
+    response.send(await buildProgramTemplate());
+  }
+
+  /** On PROGRAM: it adds a code to students who already exist, and creates none of them. */
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
+  @Post('programs/:code/students/preview')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  previewProgramStudents(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('code') code: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<ProgramImportPlan> {
+    return this.imports.previewProgramStudents(code, this.bufferOf(file), branchScopeOf(user));
+  }
+
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
+  @Post('programs/:code/students/commit')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
+  commitProgramStudents(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('code') code: string,
+    @UploadedFile() file?: UploadedFileLike,
+  ): Promise<ProgramImportResult> {
+    return this.imports.commitProgramStudents(
+      code,
+      this.bufferOf(file),
+      user.id,
+      branchScopeOf(user),
+    );
+  }
+
   /** On EVENT: the account it mints is NON_IACE and reaches that event and nothing else. */
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Post('events/:eventId/candidates/preview')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))
@@ -118,7 +161,7 @@ export class ImportsController {
     return this.imports.previewEventCandidates(eventId, this.bufferOf(file), branchScopeOf(user));
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post('events/:eventId/candidates/commit')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor(IMPORT_FILE_FIELD))

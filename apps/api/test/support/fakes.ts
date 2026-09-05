@@ -72,6 +72,7 @@ import {
   type DomainEventPayloads,
 } from '../../src/common/events';
 import { type EventsService } from '../../src/events';
+import { type ProgramsService } from '../../src/access';
 
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
@@ -473,6 +474,23 @@ export class FakeEventsService {
 
   asService(): EventsService {
     return this as unknown as EventsService;
+  }
+}
+
+/** Enough `ProgramsService` for the importer: it only ever asks whether a code can be enrolled into. */
+export class FakeProgramsService {
+  constructor(private readonly known: readonly string[] = ['SSC FOUNDATION']) {}
+
+  assertUsable(codes: string[]): Promise<void> {
+    const unknown = codes.filter((code) => !this.known.includes(code));
+    if (unknown.length > 0) {
+      return Promise.reject(new AppException(ErrorCodes.NOT_FOUND, 'No such program'));
+    }
+    return Promise.resolve();
+  }
+
+  asService(): ProgramsService {
+    return this as unknown as ProgramsService;
   }
 }
 

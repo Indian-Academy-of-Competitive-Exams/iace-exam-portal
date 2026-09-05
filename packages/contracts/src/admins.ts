@@ -24,7 +24,6 @@ export const FEATURE_KEYS = {
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
   STUDENT_PERFORMANCE: 'STUDENT_PERFORMANCE',
-  EVENT: 'EVENT',
 } as const;
 export const featureKeySchema = z.enum(FEATURE_KEYS);
 export type FeatureKey = z.infer<typeof featureKeySchema>;
@@ -34,7 +33,7 @@ export const FEATURE_KEY_VALUES = featureKeySchema.options;
 export const FEATURES: Readonly<Record<FeatureKey, { label: string; description: string }>> = {
   [FEATURE_KEYS.STUDENT_MANAGEMENT]: {
     label: 'Students',
-    description: 'The student directory, imports, branches and the exam catalog.',
+    description: 'The student directory, imports, branches, the exam catalog, programs and events.',
   },
   [FEATURE_KEYS.QUESTION_MANAGEMENT]: {
     label: 'Question bank',
@@ -55,10 +54,6 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.STUDENT_PERFORMANCE]: {
     label: 'Student performance',
     description: "Any student's analytics — percentile, cohort standing and time use.",
-  },
-  [FEATURE_KEYS.EVENT]: {
-    label: 'Events',
-    description: 'The events an EVENT series draws its candidates from.',
   },
 };
 

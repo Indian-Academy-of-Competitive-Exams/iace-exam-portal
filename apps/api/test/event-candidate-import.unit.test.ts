@@ -6,6 +6,7 @@ import { ImportsService } from '../src/imports/imports.service';
 import { EVERY_BRANCH } from '../src/common/security';
 import {
   FakeEventsService,
+  FakeProgramsService,
   FakeMessageSender,
   fakeStartingPins,
   FakePrisma,
@@ -26,6 +27,7 @@ function build(students: FakeStudent[] = [], events = new FakeEventsService()) {
     storage as never,
     new AuditService(prisma.asService(), new FakeStorage() as never),
     events.asService(),
+    new FakeProgramsService().asService(),
   );
   return { prisma, storage, events, service };
 }

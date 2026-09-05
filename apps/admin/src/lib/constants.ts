@@ -1,7 +1,6 @@
 import {
   BookOpen,
   Building2,
-  CalendarDays,
   PenLine,
   CheckCheck,
   ClipboardList,
@@ -62,8 +61,6 @@ export const ROUTES = {
   STUDENT_PERFORMANCE_PATTERN: '/students/:id/performance',
   BRANCHES: '/branches',
   EXAMS: '/exams',
-  /** The coaching variants. A student and a series both carry the code as free text. */
-  PROGRAMS: '/programs',
   IMPORT_STUDENTS: '/students/import',
   /** The question bank. Import and taxonomy sit under it, before the :id route. */
   QUESTIONS: '/questions',
@@ -96,10 +93,13 @@ export const ROUTES = {
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
-  /** The ad-hoc cohorts an Event Test draws on — candidates, IACE students or not. */
-  EVENTS: '/events',
-  EVENT_IMPORT: (id: string) => `/events/${id}/import`,
-  EVENT_IMPORT_PATTERN: '/events/:id/import',
+  /** Programs and events on one screen: both are how a series reaches a cohort. */
+  COHORTS: '/cohorts',
+  EVENT_IMPORT: (id: string) => `/cohorts/events/${id}/import`,
+  EVENT_IMPORT_PATTERN: '/cohorts/events/:id/import',
+  /** Addressed by the CODE a student carries, which is what the sheet enrols them into. */
+  PROGRAM_IMPORT: (code: string) => `/cohorts/programs/${encodeURIComponent(code)}/import`,
+  PROGRAM_IMPORT_PATTERN: '/cohorts/programs/:code/import',
   /** Super-admin only: who the admins are and who holds what. */
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
@@ -338,6 +338,13 @@ export const TEST_STATUS_LABELS: Readonly<Record<TestStatus, string>> = {
  * A NavItem plus `superAdminOnly`, which is NOT a feature key and must never become one:
  * the screens it gates are the ones that decide who decides.
  */
+/** Which list the cohorts screen is showing. Absent from the URL means Programs. */
+export const COHORT_TABS = {
+  PROGRAMS: 'programs',
+  EVENTS: 'events',
+} as const;
+export type CohortTab = (typeof COHORT_TABS)[keyof typeof COHORT_TABS];
+
 export interface AdminNavItem extends NavItem {
   superAdminOnly?: boolean;
   children?: AdminNavItem[];
@@ -351,10 +358,9 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     featureKey: FEATURE_KEYS.STUDENT_MANAGEMENT,
     children: [
       { to: ROUTES.STUDENTS, label: 'All students', icon: Users },
-      { to: ROUTES.IMPORT_STUDENTS, label: 'Import students', icon: Upload },
       { to: ROUTES.BRANCHES, label: 'Branches', icon: Building2 },
       { to: ROUTES.EXAMS, label: 'Exams', icon: GraduationCap },
-      { to: ROUTES.PROGRAMS, label: 'Programs', icon: Route },
+      { to: ROUTES.COHORTS, label: 'Programs and events', icon: Route },
     ],
   },
   {
@@ -364,7 +370,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     children: [
       { to: ROUTES.QUESTIONS, label: 'All questions', icon: BookOpen },
       { to: ROUTES.QUESTION_APPROVALS, label: 'Draft questions', icon: CheckCheck },
-      { to: ROUTES.IMPORT_QUESTIONS, label: 'Import questions', icon: Upload },
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
@@ -387,13 +392,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
       { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
     ],
-  },
-  /** Its own section, not a row under Tests: a section gates before its children, and EVENT is granted alone. */
-  {
-    label: 'Events',
-    icon: CalendarDays,
-    featureKey: FEATURE_KEYS.EVENT,
-    children: [{ to: ROUTES.EVENTS, label: 'All events', icon: CalendarDays }],
   },
   {
     label: 'Administration',
@@ -418,7 +416,6 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
 /** An ALLOW-list: a screen added later is hidden from a branch admin until somebody names it here. */
 const BRANCH_ADMIN_ROUTES = new Set<string>([
   ROUTES.STUDENTS,
-  ROUTES.IMPORT_STUDENTS,
   ROUTES.BRANCHES,
   ROUTES.AUDIT,
   ROUTES.AUDIT_IMPORTS,

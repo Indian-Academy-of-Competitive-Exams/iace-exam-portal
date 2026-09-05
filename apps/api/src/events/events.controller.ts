@@ -38,7 +38,7 @@ import { EventsService } from './events.service';
 export class EventsController {
   constructor(private readonly events: EventsService) {}
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get()
   list(
     @Query(new ZodQuery(eventListQuerySchema)) query: EventListQuery,
@@ -46,19 +46,19 @@ export class EventsController {
     return this.events.list(query);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id')
   detail(@Param('id') id: string): Promise<Event> {
     return this.events.detail(id);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post()
   create(@Body(new ZodBody(createEventSchema)) body: CreateEventBody): Promise<Event> {
     return this.events.create(body);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -67,14 +67,14 @@ export class EventsController {
     return this.events.update(id, body);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id') id: string): Promise<void> {
     return this.events.remove(id);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.READ)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/candidates')
   candidates(
     @Param('id') id: string,
@@ -84,7 +84,7 @@ export class EventsController {
   }
 
   /** A whole roster in one write — the import screen's commit, not a row at a time. */
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/candidates')
   @HttpCode(HttpStatus.OK)
   addCandidates(
@@ -94,7 +94,7 @@ export class EventsController {
     return this.events.addCandidates(id, body.studentIds);
   }
 
-  @RequiresFeature(FEATURE_KEYS.EVENT, PERMISSION_LEVELS.WRITE)
+  @RequiresFeature(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Delete(':id/candidates/:studentId')
   @HttpCode(HttpStatus.OK)
   removeCandidate(@Param('id') id: string, @Param('studentId') studentId: string): Promise<void> {
