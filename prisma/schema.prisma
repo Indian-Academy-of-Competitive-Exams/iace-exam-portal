@@ -756,26 +756,12 @@ model Admin {
   fullName     String?
   isSuperAdmin Boolean  @default(false)
   isActive     Boolean  @default(true)
-  // Explicit, never inferred from having no AdminBranch rows.
-  allBranches  Boolean  @default(false)
   createdById  String?
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  branches    AdminBranch[]
   permissions AdminFeaturePermission[]
   sharesMade  PerformanceShare[]
-}
-
-model AdminBranch {
-  adminId  String
-  branchId String
-
-  admin  Admin  @relation(fields: [adminId], references: [id], onDelete: Cascade)
-  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@id([adminId, branchId])
-  @@index([branchId])
 }
 
 // One row per grant. featureKey mirrors the code-owned FEATURE_KEYS enum and is
@@ -807,7 +793,6 @@ model Branch {
   updatedAt DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
 
   students Student[]
-  admins   AdminBranch[]
 
   @@index([name])
 }

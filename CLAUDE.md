@@ -60,7 +60,9 @@ Do not break these — they are why the live test holds at 4–5K:
 - **Student** and **Admin** are separate tables. A student needs a `mobile` and a `studentType`;
   `mobile` is unique among LIVE rows only (a partial index), so every lookup by it is a filtered
   read, never a key. Admin permissions are one row per grant:
-  `AdminFeaturePermission(adminId, featureKey, level)`. There is no `Feature` table.
+  `AdminFeaturePermission(adminId, featureKey, level)`. There is no `Feature` table. **An admin is
+  a super admin or not, and "not" means the feature keys they hold — nothing narrower.** There is no
+  branch scoping on an admin: a typist is simply one holding only `QUESTION_AUTHORING`.
 - **StudentProfile** (1:1). `preTestReady` = mother's name + father's name + DOB; prompt before a
   test. `profileCompleted` only drives a nudge — never block on it. Aadhaar and PAN are
   `aadhaarVerified`/`panVerified` booleans; the images are never stored, so the only upload is the photo.
@@ -95,16 +97,16 @@ Do not break these — they are why the live test holds at 4–5K:
 - **`Attempt`** holds live state and scored fields (no Result table). **`AttemptQuestion`** stores
   only questions the student interacted with, plus analytics points.
 - **Access has no groups.** A student reaches a `TestSeries` by an exam match, a program match, or
-  an explicit `StudentGrant`, gated by the `BranchTestConfig` row for their branch — a switch with
-  no window, so a branch runs a series indefinitely.
+  an explicit `StudentGrant`, gated by the series' own `branchIds` (a GIN-indexed array) together
+  with `isEnabled` — a switch with no window, so a branch runs a series indefinitely.
 - **A series' `kind` decides who reaches it.** `STANDARD` is the above; `FREE` reaches everyone;
   `PROGRAM` only a student carrying its program; `EVENT` only the candidates on its event. A
   `StudentGrant` overrides every one of them, and `isEnabled` gates them all. **A series is reached
   or it is not** — there is no unlock, no prerequisite and no queue to ask in.
-- **Scheduling belongs to the TEST.** `TestSeriesTest.unlockAt` is when it opens inside a series,
-  one instant for every branch; `BranchTestSchedule(branchId, testId)` — the tests module owns it —
-  carries `lateEntrySec` (counted FROM the unlock) and `extraTimeSec`, both null, no row meaning the
-  plain rules. It blocks STARTING a test, never seeing one: `assertCanStart` refuses the sitting,
+- **Scheduling belongs to the TEST.** `Test.opensAt` is when it opens, one instant for every
+  branch; `Test.lateEntrySec` (counted FROM the opening) and `Test.extraTimeSec` sit beside it, both
+  nullable, null meaning the plain rules. There is no per-branch schedule row. It blocks STARTING a
+  test, never seeing one: `assertCanStart` refuses the sitting,
   `assertReachable` still opens it to read about. A series has no availability, and `canStart` is
   derived from the clock on every read. A test that has been sat cannot be taken out of a series.
 - **`Branch` is a table.** Super admin writes, everyone managing students reads. `name` is unique
