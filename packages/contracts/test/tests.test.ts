@@ -98,9 +98,13 @@ describe('a test is named when it is created', () => {
 });
 
 describe('TEST_BUILDER_STEP', () => {
-  /** The failure this prevents: two ways to reach a paper, disagreeing about what is done. */
-  it('walks Setup then Offer, with no paper step of its own', () => {
-    assert.deepEqual(TEST_BUILDER_STEPS, [TEST_BUILDER_STEP.SETUP, TEST_BUILDER_STEP.OFFER]);
+  /** The order is the walk: the footer and the stepper both read the steps straight off it. */
+  it('walks Setup, then Paper, then Offer', () => {
+    assert.deepEqual(TEST_BUILDER_STEPS, [
+      TEST_BUILDER_STEP.SETUP,
+      TEST_BUILDER_STEP.PAPER,
+      TEST_BUILDER_STEP.OFFER,
+    ]);
   });
 });
 

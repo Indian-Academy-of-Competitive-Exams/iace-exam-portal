@@ -129,7 +129,8 @@ export function useInTableFrame(): boolean {
 
 export interface TableFrameTab {
   value: string;
-  label: string;
+  /** A node, so a tab can carry a chip; its text is still what names the tab to a reader. */
+  label: React.ReactNode;
   content: React.ReactNode;
 }
 

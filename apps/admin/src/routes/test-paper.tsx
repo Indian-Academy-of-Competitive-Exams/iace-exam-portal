@@ -15,9 +15,10 @@ import {
   type TestDetail,
   type TestPaper,
 } from '@iace/contracts';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilters } from '@iace/app-kit/browser';
 import {
   Alert,
+  Badge,
   Button,
   CAPPED_VIEWPORT,
   Combobox,
@@ -37,7 +38,13 @@ import { api } from '../lib/api';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
-import { canPickPaper, hasPaper, paperOptions, sectionTabLabel } from './test-paper-view';
+import {
+  canPickPaper,
+  hasPaper,
+  paperOptions,
+  sectionFullness,
+  sectionTally,
+} from './test-paper-view';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 
 /** One test's paper on a whole screen: the sections down the side, the work beside them. */
@@ -127,7 +134,9 @@ function TestPaperScreen({
   const byHand = detail.paperBinding === PAPER_BINDING.FIXED;
   const paperExists = hasPaper(detail);
 
-  const [openSectionId, setOpenSectionId] = useState(sections[0]?.id ?? '');
+  // The open tab rides the URL, so a link can land on a section and a reload does not lose it.
+  const filters = useFilters<'section'>();
+  const openSectionId = filters.get('section') || (sections[0]?.id ?? '');
   const [draft, setDraft] = useState<DrawSpec | null>(null);
 
   const held = useMemo(() => {
@@ -214,10 +223,10 @@ function TestPaperScreen({
 
   const tabs = {
     value: openSection.id,
-    onValueChange: setOpenSectionId,
+    onValueChange: (next: string) => filters.set({ section: next }),
     items: sections.map((section) => ({
       value: section.id,
-      label: sectionTabLabel(section, tallies),
+      label: <SectionTab section={section} held={tallies} />,
       content: (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <DrawnFrom
@@ -253,6 +262,29 @@ function TestPaperScreen({
   };
 
   return <PanelFrame fills header={header} toolbar={banners} tabs={tabs} />;
+}
+
+/** Amber only where work has started and stalled: an untouched section is not a warning. */
+const CHIP_VARIANT = {
+  EMPTY: 'neutral',
+  SHORT: 'warning',
+  FULL: 'success',
+} as const;
+
+/** A tab names its section and says how far off it is, because only one section is open. */
+function SectionTab({
+  section,
+  held,
+}: Readonly<{ section: BaseConfigSection; held: ReadonlyMap<string, number> | null }>) {
+  const fullness = sectionFullness(section, held);
+  const tally = sectionTally(section, held);
+
+  return (
+    <span className="flex items-center gap-2">
+      {section.name}
+      {fullness && tally ? <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge> : null}
+    </span>
+  );
 }
 
 /** Which of the drawn papers is on screen. */

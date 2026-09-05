@@ -324,6 +324,7 @@ export const PAPER_BINDING_HINTS: Readonly<Record<PaperBinding, string>> = {
 /** The phases of building a test. The order is the contract's; these are only the words. */
 export const TEST_BUILDER_STEP_LABELS: Readonly<Record<TestBuilderStep, string>> = {
   SETUP: 'Setup',
+  PAPER: 'Paper',
   OFFER: 'Offer',
 };
 

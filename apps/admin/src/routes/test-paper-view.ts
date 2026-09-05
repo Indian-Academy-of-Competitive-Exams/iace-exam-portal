@@ -20,11 +20,28 @@ export const paperOptions = (variantCount: number): ComboboxItem[] =>
     label: `Paper ${index + 1}`,
   }));
 
-/** A tab has to say which section it is and how far off it is, because only one pane is open. */
-export const sectionTabLabel = (
-  section: Pick<BaseConfigSection, 'id' | 'name' | 'questionCount'>,
+/** How far a section is from the paper it owes. Null where no paper exists to judge it against. */
+export const SECTION_FULLNESS = {
+  EMPTY: 'EMPTY',
+  SHORT: 'SHORT',
+  FULL: 'FULL',
+} as const;
+export type SectionFullness = (typeof SECTION_FULLNESS)[keyof typeof SECTION_FULLNESS];
+
+/** Untouched reads apart from part-built: five amber chips on a fresh test single nothing out. */
+export function sectionFullness(
+  section: Pick<BaseConfigSection, 'id' | 'questionCount'>,
   held: ReadonlyMap<string, number> | null,
-): string =>
-  held === null
-    ? section.name
-    : `${section.name} ${held.get(section.id) ?? 0}/${section.questionCount}`;
+): SectionFullness | null {
+  if (held === null) return null;
+  const count = held.get(section.id) ?? 0;
+  if (count === 0) return SECTION_FULLNESS.EMPTY;
+  return count < section.questionCount ? SECTION_FULLNESS.SHORT : SECTION_FULLNESS.FULL;
+}
+
+/** The chip's own text. A section with no paper to measure against carries no chip at all. */
+export const sectionTally = (
+  section: Pick<BaseConfigSection, 'id' | 'questionCount'>,
+  held: ReadonlyMap<string, number> | null,
+): string | null =>
+  held === null ? null : `${held.get(section.id) ?? 0}/${section.questionCount}`;

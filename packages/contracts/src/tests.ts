@@ -400,6 +400,7 @@ export type TestDetail = z.infer<typeof testDetailSchema>;
 /** The phases of building a test, in the order an admin walks them. */
 export const TEST_BUILDER_STEP = {
   SETUP: 'SETUP',
+  PAPER: 'PAPER',
   OFFER: 'OFFER',
 } as const;
 export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);

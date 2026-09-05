@@ -5,7 +5,9 @@ import {
   canPickPaper,
   hasPaper,
   paperOptions,
-  sectionTabLabel,
+  SECTION_FULLNESS,
+  sectionFullness,
+  sectionTally,
   type PaperSource,
 } from '../src/routes/test-paper-view';
 
@@ -79,21 +81,38 @@ describe('the papers offered by name', () => {
   });
 });
 
-describe('sectionTabLabel', () => {
-  const section = { id: 'sec_1', name: 'Quantitative Aptitude', questionCount: 25 };
+describe('sectionFullness', () => {
+  const section = { id: 'sec_1', questionCount: 25 };
 
-  it('carries the tally, so which sections are short reads off the strip', () => {
-    assert.equal(sectionTabLabel(section, new Map([['sec_1', 12]])), 'Quantitative Aptitude 12/25');
-    assert.equal(sectionTabLabel(section, new Map([['sec_1', 25]])), 'Quantitative Aptitude 25/25');
+  /** Untouched is not the same as part-built: a fresh test must not read as five warnings. */
+  it('separates untouched from short from full', () => {
+    assert.equal(sectionFullness(section, new Map()), SECTION_FULLNESS.EMPTY);
+    assert.equal(sectionFullness(section, new Map([['sec_1', 0]])), SECTION_FULLNESS.EMPTY);
+    assert.equal(sectionFullness(section, new Map([['sec_1', 12]])), SECTION_FULLNESS.SHORT);
+    assert.equal(sectionFullness(section, new Map([['sec_1', 25]])), SECTION_FULLNESS.FULL);
   });
 
-  /** A section the paper holds nothing for is at zero, not unmeasured. */
+  /** A paper over its count is not short of anything, whatever put it there. */
+  it('counts a section past its own count as full', () => {
+    assert.equal(sectionFullness(section, new Map([['sec_1', 26]])), SECTION_FULLNESS.FULL);
+  });
+
+  /** THE failure this prevents: a drawn test judged short before anything has been drawn for it. */
+  it('judges nothing before a paper exists', () => {
+    assert.equal(sectionFullness(section, null), null);
+    assert.equal(sectionTally(section, null), null);
+  });
+});
+
+describe('sectionTally', () => {
+  const section = { id: 'sec_1', questionCount: 25 };
+
+  it('reads what the section holds against what it owes', () => {
+    assert.equal(sectionTally(section, new Map([['sec_1', 12]])), '12/25');
+  });
+
+  /** A section the paper has no row for holds zero, not nothing measurable. */
   it('reads zero for a section the paper has no row for', () => {
-    assert.equal(sectionTabLabel(section, new Map()), 'Quantitative Aptitude 0/25');
-  });
-
-  /** THE failure this prevents: a drawn test reading "0/25" as though nobody had built it. */
-  it('names the section alone before any paper exists', () => {
-    assert.equal(sectionTabLabel(section, null), 'Quantitative Aptitude');
+    assert.equal(sectionTally(section, new Map()), '0/25');
   });
 });

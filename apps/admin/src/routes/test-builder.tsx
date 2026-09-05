@@ -41,6 +41,7 @@ import {
   type TestFormValues,
 } from './test-builder-form';
 import { SetupStep } from './test-builder-setup';
+import { PaperStep } from './test-builder-paper-step';
 import { PublishStep, ScheduleStep, SeriesStep } from './test-builder-offering';
 
 /** The builder shell: which phase you are in, and the Next that saves the one you are leaving. */
@@ -288,6 +289,8 @@ function StepBody({
       {step === TEST_BUILDER_STEP.SETUP ? (
         <SetupStep form={form} detail={detail} config={config} sat={sat} />
       ) : null}
+
+      {step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} config={config} /> : null}
       {detail && step === TEST_BUILDER_STEP.OFFER ? (
         <>
           <SeriesStep detail={detail} />
