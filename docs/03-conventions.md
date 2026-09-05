@@ -138,6 +138,9 @@ owns the sitting owns the derivation.
   `configs` has no way to learn that a paper was sat.
 - `tests` moves a `Question` in-use counter on finalize and on thaw. Being depended on is what
   freezes a question, and only the freeze knows.
+- the outbox prune worker in `apps/api/src/common/events` deletes relayed `OutboxEvent` rows. It is
+  the one crossing that is infra rather than domain: retention is a property of the buffer, not of
+  the module that fills it, and a pruner that lived in `attempts` would not travel with the queue.
 
 **`PerformanceShare` is the one unauthenticated route to student data in the platform.** A row is a
 revocable public link onto one sitting's curated report, addressed by a random token rather than by
@@ -169,8 +172,9 @@ to ask in. Sessions, OTP and device binding live in **Redis**, never Postgres.
 producer cannot publish the wrong shape and a handler cannot claim one that is never sent. That
 constant is the catalog; this table is its prose, and the two are edited together.
 
-**Wired** means something emits it and something reacts; **declared** means the name and payload
-exist and the producer is still to come.
+**Wired** means something emits it and something reacts. **Declared** means the name and the payload
+type exist and nothing yet does either — no producer, no `@OnEvent`. A declared name is a reserved
+shape, not a half-built path.
 
 | Event                                           | Producer                                                                                                      | Consumers                                    | State    |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------- |
@@ -181,14 +185,17 @@ exist and the producer is still to come.
 | `access.catalog_changed`                        | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired    |
 | `student.enrolment_added`                       | students, carrying only the exam codes one save ADDED                                                         | notifications                                | wired    |
 | `series.granted`                                | access, on a grant that did not already exist                                                                 | notifications                                | wired    |
-| `scoring.completed`                             | the scoring worker, and the rollup outbox                                                                     | notifications (result ready), rollups        | wired    |
+| `scoring.completed`                             | the scoring worker                                                                                            | notifications (result ready)                 | wired    |
 | `attempt.submitted`                             | —                                                                                                             | —                                            | declared |
-| `test.assigned`                                 | —                                                                                                             | notifications                                | declared |
-| `paperQuestion.dropped` / `paperQuestion.bonus` | —                                                                                                             | scoring recompute                            | declared |
+| `test.assigned`                                 | —                                                                                                             | —                                            | declared |
+| `paperQuestion.dropped` / `paperQuestion.bonus` | —                                                                                                             | —                                            | declared |
 
 Submit and scoring do not go through the bus: they go through `OutboxEvent` and the BullMQ scoring
-queue, which is the durable path and the right one for a write that must not be lost. The declared
-names are for the reactions layered on top of it, not for the hand-off itself.
+queue, which is the durable path and the right one for a write that must not be lost. The rollup
+fold rides one of those outbox rows, and the row's type string reuses the `scoring.completed` name —
+same words, different mechanism, and the bus never sees it. The declared names are reserved for the
+reactions that would layer on top of the durable path: a notification on submit, a notification when
+a test is assigned, a rescore when a paper question is dropped or made a bonus.
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 
@@ -307,6 +314,9 @@ push is a worse version of a check that takes five seconds before the commit exi
   earlier one failed, so one push reports every problem. A second job applies every migration to a
   scratch database from scratch and then checks the result still matches `schema.prisma`.
 - **Doc drift** — `pnpm docs:check`: a name a doc backticks must exist in the schema or the
-  TypeScript source, and a `docs/03 §N` citation must land on a section that exists.
+  TypeScript source, and a `docs/03 §N` citation must land on a section that exists. It is the one
+  item here that is **not** a gate: it runs on a weekly schedule and blocks no commit and no push,
+  deliberately, because prose lags a rename by hours and a doc nobody has caught up with yet is not
+  a reason to refuse working code. It reports; a human clears the report.
 
 A rule that isn't enforced by CI is a suggestion; prefer adding the check over adding a paragraph.
