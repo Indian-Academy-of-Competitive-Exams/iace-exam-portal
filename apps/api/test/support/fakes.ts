@@ -513,6 +513,8 @@ export interface FakeStudent {
   createdAt: Date;
   updatedAt: Date;
   profile: FakeProfile | null;
+  /** The events they are a candidate on, as `detail` includes them. Absent reads as none. */
+  eventCandidacies?: { event: { id: string; name: string } }[];
   deletedAt: Date | null;
   /** Set by an erasure request. Separate from deletedAt: closed and erased are different facts. */
   anonymizedAt?: Date | null;
@@ -649,7 +651,11 @@ function matchesKey(value: string, filter: KeyFilter | undefined): boolean {
 /** Deep enough that mutating the original after this — `update` does, in place — leaves the
  * copy alone: the nested `profile` object needs its own copy. */
 function cloneStudent(student: FakeStudent): FakeStudent {
-  return { ...student, profile: student.profile ? { ...student.profile } : null };
+  return {
+    ...student,
+    profile: student.profile ? { ...student.profile } : null,
+    eventCandidacies: student.eventCandidacies ?? [],
+  };
 }
 
 /** An omitted field takes its column default — for every nullable column here, that is null. */

@@ -111,6 +111,23 @@ describe('studentWhere — access-shaped filters', () => {
     assertHas({ course: 'SSC' }, { enrolledCourses: { hasSome: ['SSC'] } });
   });
 
+  /** An event's roster is a join row, so it reaches the students through EventCandidate. */
+  it('finds the candidates on an event', () => {
+    assertHas({ eventId: 'evt_1' }, { eventCandidacies: { some: { eventId: { in: ['evt_1'] } } } });
+  });
+
+  it('takes several events at once', () => {
+    assertHas(
+      { eventId: 'evt_1,evt_2' },
+      { eventCandidacies: { some: { eventId: { in: ['evt_1', 'evt_2'] } } } },
+    );
+  });
+
+  /** Set-valued like the rest: naming no event means every student, never none of them. */
+  it('drops the event filter when it names none', () => {
+    assert.deepEqual(conditionsFor({ eventId: '' }), []);
+  });
+
   /** Both are set-valued: naming none means every student, never none of them. */
   it('drops the program and course filters when they name none', () => {
     assert.deepEqual(conditionsFor({ programCode: '', course: '' }), []);

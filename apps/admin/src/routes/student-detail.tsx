@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
-import { BarChart3, FileText, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { BarChart3, FileText, Pencil, Plus, Save, Trash2, UserMinus } from 'lucide-react';
 import {
   EARLIEST_BIRTH_DATE,
   EXAM_COURSES,
@@ -16,6 +16,7 @@ import {
   type ExamCourse,
   type Gender,
   type StudentDetail,
+  type StudentEvent,
   type UpdateStudentBody,
   type StudentSeriesAccess,
   type StudentType,
@@ -389,6 +390,79 @@ function grantConsequence(chosen: ChosenSeries): string {
     return `${chosen.name} is switched off, so this grant opens nothing yet — they reach its tests only once somebody switches the series on. It is one row for this one student and changes nothing for anybody else.`;
   }
   return `They reach every test in ${chosen.name} from now on, whatever their enrolments, programs or branch say. It is one row for this one student and changes nothing for anybody else.`;
+}
+
+/** Built outside the component: `cell` is a render prop, not a component declaration. */
+function studentEventColumns(
+  busy: boolean,
+  onRemove: (event: StudentEvent) => void,
+): DataTableColumn<StudentEvent>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Event',
+      className: 'max-w-[20rem] font-medium',
+      cell: (event) => <TruncatedText>{event.name}</TruncatedText>,
+    },
+    {
+      key: 'actions',
+      className: 'text-right',
+      cell: (event) => (
+        <RowActions label={`Actions for ${event.name}`}>
+          <DropdownMenuItem destructive disabled={busy} onSelect={() => onRemove(event)}>
+            <UserMinus aria-hidden />
+            Remove from event
+          </DropdownMenuItem>
+        </RowActions>
+      ),
+    },
+  ];
+}
+
+/** Where a candidate comes OFF an event: the roster is managed here, on the student it belongs to. */
+function EventsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState<StudentEvent | null>(null);
+
+  const remove = useMutation({
+    meta: { success: 'Removed from the event.' },
+    mutationFn: (event: StudentEvent) => api.admin.events.removeCandidate(event.id, detail.id),
+    onSuccess: () => {
+      setAsking(null);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STUDENTS });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EVENTS });
+    },
+    // Drop out of the confirm on failure, or the row is left asking an answered question.
+    onError: () => setAsking(null),
+  });
+
+  const columns = useMemo(
+    () => studentEventColumns(remove.isPending, setAsking),
+    [remove.isPending],
+  );
+
+  return (
+    <FormSection title="Events">
+      <DataTable
+        columns={columns}
+        rows={detail.events}
+        rowKey={(event) => event.id}
+        isLoading={false}
+        scroll={{}}
+        empty={<Alert variant="info">This student is not a candidate on any event.</Alert>}
+      />
+
+      <ConfirmDialog
+        open={asking !== null}
+        onOpenChange={(open) => !open && setAsking(null)}
+        loading={remove.isPending}
+        title={asking ? `Remove ${detail.fullName ?? detail.mobile} from ${asking.name}?` : ''}
+        description="They lose every series this event reaches them by, straight away. Attempts already made and their results are kept, and adding them back restores it."
+        confirmLabel="Remove candidate"
+        onConfirm={() => asking && remove.mutate(asking)}
+      />
+    </FormSection>
+  );
 }
 
 /** Everything this student reaches and what opens each; a grant is one of the three, not the whole. */
@@ -787,7 +861,12 @@ export function StudentDetailPage() {
           />
         </>
       }
-      after={<SeriesAccessCard detail={detail} />}
+      after={
+        <>
+          <SeriesAccessCard detail={detail} />
+          <EventsCard detail={detail} />
+        </>
+      }
     >
       <FormSection title="Uploads">
         <div className="flex flex-wrap gap-2">

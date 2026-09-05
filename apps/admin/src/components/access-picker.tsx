@@ -202,6 +202,46 @@ export function ProgramMultiPicker({
   );
 }
 
+/** Which events a roster is being read through — the events themselves, not their candidates. */
+export function EventMultiPicker({
+  value,
+  onChange,
+  placeholder = 'Any event',
+  ...control
+}: Readonly<{
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  id?: string;
+  'aria-label'?: string;
+}>) {
+  const [search, setSearch] = useState('');
+
+  const pages = useInfinitePages({
+    queryKey: [...QUERY_KEYS.EVENTS, QUERY_SCOPES.PICKER, search],
+    fetchPage: (page) => api.admin.events.list({ page, pageSize: PAGE_SIZE_MAX, q: search }),
+  });
+
+  return (
+    <MultiCombobox
+      {...control}
+      chips={false}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      items={pages.items.map((event) => ({ value: event.id, label: event.name }))}
+      search={search}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search events"
+      hasMore={pages.hasMore}
+      onLoadMore={pages.loadMore}
+      isLoading={pages.isLoading}
+      isLoadingMore={pages.isLoadingMore}
+      emptyLabel="No event matches that"
+    />
+  );
+}
+
 /** A candidate on an event is a student row, so a roster is picked out of the directory itself. */
 export function StudentMultiPicker({
   value,

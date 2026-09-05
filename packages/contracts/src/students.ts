@@ -161,8 +161,17 @@ export const studentProfileSchema = z.object({
 });
 export type StudentProfileView = z.infer<typeof studentProfileSchema>;
 
+/** One event a student is a candidate on. Named here because the profile is where they come off it. */
+export const studentEventSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type StudentEvent = z.infer<typeof studentEventSchema>;
+
 export const studentDetailSchema = studentSummarySchema.extend({
   programs: z.array(z.string()),
+  /** A join row rather than an array on the student, so it is read here and never patched here. */
+  events: z.array(studentEventSchema),
   currentBranchId: z.string().nullable(),
   updatedAt: z.string(),
   profile: studentProfileSchema.nullable(),
@@ -186,6 +195,8 @@ export const studentListQuerySchema = paginationQuerySchema.extend({
   branchId: csvIdQuery(),
   /** `Program.code` values an import wrote onto the student. */
   programCode: csvIdQuery(),
+  /** Candidates on these events — a join row, not a column the student carries. */
+  eventId: csvIdQuery(),
   /** The courses they are enrolled on, which is what a STANDARD series reaches them by. */
   course: csvQuery(examCourseSchema),
   isActive: optionalBooleanQuery(),

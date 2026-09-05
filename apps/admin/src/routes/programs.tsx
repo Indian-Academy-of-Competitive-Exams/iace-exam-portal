@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { Pencil, Power, Trash2, Upload } from 'lucide-react';
+import { Pencil, Power, Trash2, Upload, Users } from 'lucide-react';
 import {
   createProgramSchema,
   FEATURE_KEYS,
@@ -301,10 +301,15 @@ function ProgramActions({
   onAsk: (confirm: ProgramConfirm) => void;
   onEdit: () => void;
 }>) {
-  if (!canEdit && !canImport) return null;
-
   return (
     <RowActions label={`Actions for ${program.name}`}>
+      {/* Everyone on this screen holds STUDENT_MANAGEMENT, so who carries a program is always reachable. */}
+      <DropdownMenuItem asChild>
+        <Link to={`${ROUTES.STUDENTS}?programCode=${encodeURIComponent(program.code)}`}>
+          <Users aria-hidden />
+          View students
+        </Link>
+      </DropdownMenuItem>
       {canEdit ? (
         <DropdownMenuItem disabled={busy} onSelect={onEdit}>
           <Pencil aria-hidden />

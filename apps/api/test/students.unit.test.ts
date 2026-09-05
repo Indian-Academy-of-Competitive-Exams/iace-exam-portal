@@ -111,6 +111,7 @@ describe('admin student contracts', () => {
     profileCompleted: false,
     createdAt: new Date().toISOString(),
     programs: [],
+    events: [],
     currentBranchId: null,
     updatedAt: new Date().toISOString(),
     profile,

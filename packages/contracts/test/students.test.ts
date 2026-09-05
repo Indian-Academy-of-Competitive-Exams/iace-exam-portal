@@ -30,6 +30,7 @@ const summary = {
 const detail = {
   ...summary,
   programs: [],
+  events: [],
   currentBranchId: null,
   updatedAt: '2026-01-05T09:30:00.000Z',
   profile: null,
@@ -137,7 +138,7 @@ describe('the roster reads both states', () => {
   });
 });
 
-describe('studentDetailSchema — programs and branch are required keys', () => {
+describe('studentDetailSchema — programs, events and branch are required keys', () => {
   it('accepts an empty list and a null branch — a known "none", not a gap', () => {
     assert.equal(studentDetailSchema.safeParse(detail).success, true);
   });
@@ -145,6 +146,9 @@ describe('studentDetailSchema — programs and branch are required keys', () => 
   it('refuses an absent key — "none" is a value on this schema, absent is not', () => {
     const { programs: _programs, ...withoutPrograms } = detail;
     assert.equal(studentDetailSchema.safeParse(withoutPrograms).success, false);
+
+    const { events: _events, ...withoutEvents } = detail;
+    assert.equal(studentDetailSchema.safeParse(withoutEvents).success, false);
 
     const { currentBranchId: _currentBranchId, ...withoutBranch } = detail;
     assert.equal(studentDetailSchema.safeParse(withoutBranch).success, false);

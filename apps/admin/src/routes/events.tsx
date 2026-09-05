@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Pencil, Plus, Power, Trash2, Upload, UserMinus } from 'lucide-react';
+import { Pencil, Plus, Power, Trash2, Upload } from 'lucide-react';
 import {
   createEventSchema,
   FEATURE_KEYS,
@@ -11,20 +11,28 @@ import {
   updateEventSchema,
   type CreateEventInput,
   type Event,
-  type EventCandidate,
   type UpdateEventInput,
 } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import { useListScreen, useLocalFilters } from '@iace/app-kit/browser';
+import { useListScreen } from '@iace/app-kit/browser';
 import {
+  Alert,
   Badge,
   Button,
   ConfirmDialog,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenuItem,
   Field,
   FormDialog,
   FormField,
   Input,
+  linkVariants,
   ListView,
   plural,
   RowActions,
@@ -35,7 +43,6 @@ import {
 import { useAuth } from '../providers/auth';
 import { api } from '../lib/api';
 import { StudentMultiPicker } from '../components/access-picker';
-import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 
 const EVENT_FIELDS = ['name', 'description'] as const;
@@ -65,6 +72,7 @@ function eventColumns(
   canWrite: boolean,
   refresh: () => void,
   onEdit: (event: Event) => void,
+  onAddCandidates: (event: Event) => void,
 ): DataTableColumn<Event>[] {
   return [
     {
@@ -83,7 +91,18 @@ function eventColumns(
       key: 'candidates',
       header: 'Candidates',
       numeric: true,
-      cell: (event) => event.candidateCount,
+      // A count is a link: the roster is the students screen filtered, not a second table here.
+      cell: (event) =>
+        event.candidateCount === 0 ? (
+          event.candidateCount
+        ) : (
+          <Link
+            to={`${ROUTES.STUDENTS}?eventId=${event.id}`}
+            className={linkVariants({ variant: 'inline' })}
+          >
+            {event.candidateCount}
+          </Link>
+        ),
     },
     {
       key: 'series',
@@ -96,13 +115,19 @@ function eventColumns(
       key: 'actions',
       className: 'text-right',
       cell: (event) => (
-        <EventRowActions event={event} canWrite={canWrite} onChanged={refresh} onEdit={onEdit} />
+        <EventRowActions
+          event={event}
+          canWrite={canWrite}
+          onChanged={refresh}
+          onEdit={onEdit}
+          onAddCandidates={() => onAddCandidates(event)}
+        />
       ),
     },
   ];
 }
 
-/** The roster an Event Test draws on. Its candidates open under the row, never on a screen of their own. */
+/** The roster an Event Test draws on. Who is on one is the students screen, filtered to it. */
 export function EventsList({
   creating,
   onCreatingChange,
@@ -110,6 +135,7 @@ export function EventsList({
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.STUDENT_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [editing, setEditing] = useState<Event | null>(null);
+  const [adding, setAdding] = useState<Event | null>(null);
   const queryClient = useQueryClient();
 
   const refresh = useCallback(() => {
@@ -125,7 +151,7 @@ export function EventsList({
   );
 
   const columns = useMemo(
-    () => eventColumns(canWrite, refresh, startEdit),
+    () => eventColumns(canWrite, refresh, startEdit, setAdding),
     [canWrite, refresh, startEdit],
   );
 
@@ -164,6 +190,18 @@ export function EventsList({
         />
       ) : null}
 
+      {adding ? (
+        <AddCandidatesDialog
+          key={adding.id}
+          event={adding}
+          onDone={() => {
+            setAdding(null);
+            refresh();
+          }}
+          onClose={() => setAdding(null)}
+        />
+      ) : null}
+
       <ListView
         list={events}
         filters={EVENT_FILTERS}
@@ -171,12 +209,6 @@ export function EventsList({
         rowKey={(event) => event.id}
         empty="No events yet. Add the first one — an Event Test reaches only the candidates on one."
         emptyFiltered="No events match those filters."
-        expand={{
-          render: (event) => (
-            <EventCandidates event={event} canWrite={canWrite} onChanged={refresh} />
-          ),
-          label: (event) => `Show the candidates on ${event.name}`,
-        }}
       />
     </>
   );
@@ -285,12 +317,14 @@ function EventActions({
   busy,
   onAsk,
   onEdit,
+  onAddCandidates,
 }: Readonly<{
   event: Event;
   canWrite: boolean;
   busy: boolean;
   onAsk: (confirm: EventConfirm) => void;
   onEdit: () => void;
+  onAddCandidates: () => void;
 }>) {
   if (!canWrite) return null;
 
@@ -299,6 +333,10 @@ function EventActions({
       <DropdownMenuItem disabled={busy} onSelect={onEdit}>
         <Pencil aria-hidden />
         Edit
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={busy} onSelect={onAddCandidates}>
+        <Plus aria-hidden />
+        Add candidates
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link to={ROUTES.EVENT_IMPORT(event.id)}>
@@ -344,11 +382,13 @@ function EventRowActions({
   canWrite,
   onChanged,
   onEdit,
+  onAddCandidates,
 }: Readonly<{
   event: Event;
   canWrite: boolean;
   onChanged: () => void;
   onEdit: (event: Event) => void;
+  onAddCandidates: () => void;
 }>) {
   const [asking, setAsking] = useState<EventConfirm | null>(null);
   const close = () => setAsking(null);
@@ -384,6 +424,7 @@ function EventRowActions({
         busy={busy}
         onAsk={setAsking}
         onEdit={() => onEdit(event)}
+        onAddCandidates={onAddCandidates}
       />
 
       {/* Retiring only drops it from the series picker: access never reads this switch. */}
@@ -413,220 +454,66 @@ function EventRowActions({
 
 // ---------------------------------------------------------------------------
 
-const candidatesKey = (eventId: string) => [...QUERY_KEYS.EVENTS, eventId, 'candidates'] as const;
-
-/** Built outside the component: `cell` is a render prop, not a component declaration. */
-function candidateColumns(
-  event: Event,
-  canWrite: boolean,
-  refresh: () => void,
-): DataTableColumn<EventCandidate>[] {
-  return [
-    {
-      key: 'name',
-      header: 'Candidate',
-      className: 'max-w-[16rem] font-medium',
-      cell: (candidate) => <TruncatedText>{candidate.fullName ?? candidate.mobile}</TruncatedText>,
-    },
-    {
-      key: 'mobile',
-      header: 'Mobile number',
-      className: 'max-w-36',
-      cell: (candidate) => <TruncatedText>{candidate.mobile}</TruncatedText>,
-    },
-    {
-      key: 'addedAt',
-      header: 'Added',
-      className: 'max-w-48',
-      cell: (candidate) => (
-        <TruncatedText>{WHEN_FORMATTER.format(new Date(candidate.addedAt))}</TruncatedText>
-      ),
-    },
-    {
-      key: 'actions',
-      className: 'text-right',
-      cell: (candidate) => (
-        <CandidateRowActions
-          event={event}
-          candidate={candidate}
-          canWrite={canWrite}
-          onChanged={refresh}
-        />
-      ),
-    },
-  ];
-}
-
-const CANDIDATE_FILTERS = [
-  {
-    key: 'q',
-    kind: 'search',
-    label: 'Search candidates',
-    placeholder: 'Search by name or mobile number',
-    primary: true,
-  },
-] as const;
-
-/** A panel, not a screen: nobody looks for a candidate without knowing whose event they are on. */
-function EventCandidates({
+/** Putting somebody on an event is a grant, so the dialog says what it costs before it writes. */
+function AddCandidatesDialog({
   event,
-  canWrite,
-  onChanged,
-}: Readonly<{
-  event: Event;
-  canWrite: boolean;
-  onChanged: () => void;
-}>) {
-  const eventId = event.id;
-  // Local, not the URL: two open panels and the page's own list would otherwise share one `q`.
-  const store = useLocalFilters();
-
-  const candidates = useListScreen({
-    queryKey: candidatesKey(eventId),
-    filters: CANDIDATE_FILTERS,
-    store,
-    toQuery: (values) => ({ q: values.q || undefined }),
-    fetchPage: (params) => api.admin.events.candidates(eventId, params),
-  });
-
-  const columns = useMemo(
-    () => candidateColumns(event, canWrite, onChanged),
-    [event, canWrite, onChanged],
-  );
-
-  return (
-    <div className="flex min-h-0 flex-col gap-3">
-      {canWrite ? <AddCandidates event={event} onAdded={onChanged} /> : null}
-
-      <ListView
-        list={candidates}
-        filters={CANDIDATE_FILTERS}
-        columns={columns}
-        rowKey={(candidate) => candidate.studentId}
-        empty="No candidates yet. A series on this event reaches nobody until one is added."
-        emptyFiltered="No candidate on this event matches that."
-      />
-    </div>
-  );
-}
-
-function AddCandidates({ event, onAdded }: Readonly<{ event: Event; onAdded: () => void }>) {
+  onDone,
+  onClose,
+}: Readonly<{ event: Event; onDone: () => void; onClose: () => void }>) {
   const [chosen, setChosen] = useState<string[]>([]);
-  const [asking, setAsking] = useState(false);
   const fieldId = `add-candidates-${event.id}`;
 
   const add = useMutation({
     meta: { success: 'Candidates added.' },
     mutationFn: () => api.admin.events.addCandidates(event.id, { studentIds: chosen }),
-    onSuccess: () => {
-      setAsking(false);
-      setChosen([]);
-      onAdded();
-    },
-    onError: () => setAsking(false),
+    onSuccess: onDone,
   });
 
   return (
-    <>
-      <div className="flex flex-wrap items-end gap-3">
-        <Field htmlFor={fieldId} label="Students to add" className="min-w-56 flex-1">
-          {({ id, 'aria-describedby': describedBy }) => (
-            <StudentMultiPicker
-              id={id}
-              aria-describedby={describedBy}
-              value={chosen}
-              onChange={setChosen}
-            />
-          )}
-        </Field>
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add candidates to {event.name}</DialogTitle>
+        </DialogHeader>
 
-        <Button
-          type="button"
-          variant="outline"
-          disabled={chosen.length === 0}
-          loading={add.isPending}
-          onClick={() => setAsking(true)}
-        >
-          <Plus aria-hidden />
-          Add
-        </Button>
-      </div>
+        <DialogBody className="flex flex-col gap-4">
+          <Alert variant="warning">
+            <span>
+              Whoever you add reaches every series built on {event.name} from now on, whatever their
+              enrolments, programs or branch say. Anyone already on the roster is left exactly as
+              they are.
+            </span>
+          </Alert>
 
-      {/* Putting somebody on an event is a grant, so it is stated before it is written. */}
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={(open) => !open && setAsking(false)}
-        loading={add.isPending}
-        title={`Add ${plural(chosen.length, 'candidate')} to ${event.name}?`}
-        description={`They reach every series built on ${event.name} from now on, whatever their enrolments, programs or branch say. Anyone already on the roster is left exactly as they are.`}
-        confirmLabel="Add candidates"
-        onConfirm={() => add.mutate()}
-      />
-    </>
-  );
-}
+          <Field htmlFor={fieldId} label="Students to add">
+            {({ id, 'aria-describedby': describedBy }) => (
+              <StudentMultiPicker
+                id={id}
+                aria-describedby={describedBy}
+                value={chosen}
+                onChange={setChosen}
+              />
+            )}
+          </Field>
+        </DialogBody>
 
-function CandidateActions({
-  name,
-  canWrite,
-  busy,
-  onAsk,
-}: Readonly<{ name: string; canWrite: boolean; busy: boolean; onAsk: () => void }>) {
-  if (!canWrite) return null;
-
-  return (
-    <RowActions label={`Actions for ${name}`}>
-      <DropdownMenuItem destructive disabled={busy} onSelect={onAsk}>
-        <UserMinus aria-hidden />
-        Remove
-      </DropdownMenuItem>
-    </RowActions>
-  );
-}
-
-function CandidateRowActions({
-  event,
-  candidate,
-  canWrite,
-  onChanged,
-}: Readonly<{
-  event: Event;
-  candidate: EventCandidate;
-  canWrite: boolean;
-  onChanged: () => void;
-}>) {
-  const [asking, setAsking] = useState(false);
-  const name = candidate.fullName ?? candidate.mobile;
-
-  const remove = useMutation({
-    meta: { success: `${name} removed.` },
-    mutationFn: () => api.admin.events.removeCandidate(event.id, candidate.studentId),
-    onSuccess: () => {
-      setAsking(false);
-      onChanged();
-    },
-    onError: () => setAsking(false),
-  });
-
-  return (
-    <>
-      <CandidateActions
-        name={name}
-        canWrite={canWrite}
-        busy={remove.isPending}
-        onAsk={() => setAsking(true)}
-      />
-
-      <ConfirmDialog
-        open={asking}
-        onOpenChange={(open) => !open && setAsking(false)}
-        destructive
-        loading={remove.isPending}
-        title={`Remove ${name} from ${event.name}?`}
-        description="They lose every series this event reaches them by, straight away. Attempts already made and their results are kept, and adding them back restores it."
-        confirmLabel="Remove candidate"
-        onConfirm={() => remove.mutate()}
-      />
-    </>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="button"
+            disabled={chosen.length === 0}
+            loading={add.isPending}
+            onClick={() => add.mutate()}
+          >
+            <Plus aria-hidden />
+            Add {plural(chosen.length, 'candidate')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

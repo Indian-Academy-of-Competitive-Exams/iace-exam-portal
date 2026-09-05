@@ -20,6 +20,8 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   // Both are arrays on the student with a GIN index, so `hasSome` is the indexed read.
   if (query.programCode) add({ programs: { hasSome: query.programCode } });
   if (query.course) add({ enrolledCourses: { hasSome: query.course } });
+  // A join, not an array: EventCandidate is indexed by studentId, so `some` reads that index.
+  if (query.eventId) add({ eventCandidacies: { some: { eventId: { in: query.eventId } } } });
   if (query.noAccess !== undefined) add(ownAccessFilter(query.noAccess));
   if (query.neverSignedIn !== undefined) add(signedInFilter(query.neverSignedIn));
 

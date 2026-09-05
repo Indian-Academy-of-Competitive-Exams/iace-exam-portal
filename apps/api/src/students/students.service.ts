@@ -117,13 +117,17 @@ export class StudentsService {
   async detail(id: string): Promise<StudentDetail> {
     const student = await this.prisma.student.findFirst({
       where: { id },
-      include: { profile: true },
+      include: {
+        profile: true,
+        eventCandidacies: { include: { event: { select: { id: true, name: true } } } },
+      },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
 
     return {
       ...this.toSummary(student),
       programs: student.programs,
+      events: student.eventCandidacies.map((candidacy) => candidacy.event),
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,

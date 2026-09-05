@@ -46,7 +46,7 @@ import {
   type ListFilterMultiControl,
   useTruncation,
 } from '@iace/ui';
-import { ProgramMultiPicker } from '../components/access-picker';
+import { EventMultiPicker, ProgramMultiPicker } from '../components/access-picker';
 import { api } from '../lib/api';
 import { courseLabel, NAV_ITEMS, QUERY_KEYS, ROUTES, STUDENT_TYPE_LABELS } from '../lib/constants';
 import { applyFieldErrors } from '@iace/app-kit';
@@ -213,6 +213,12 @@ export function StudentsPage() {
       render: (control: ListFilterMultiControl) => <ProgramMultiPicker {...control} />,
     },
     {
+      key: 'eventId',
+      kind: 'customMulti',
+      label: 'Event',
+      render: (control: ListFilterMultiControl) => <EventMultiPicker {...control} />,
+    },
+    {
       key: 'preTestReady',
       kind: 'choice',
       label: 'Pre-test details',
@@ -252,6 +258,7 @@ export function StudentsPage() {
       branchId: values.branchId,
       course: values.course,
       programCode: values.programCode,
+      eventId: values.eventId,
       preTestReady: asBooleanParam(values.preTestReady),
       profileCompleted: asBooleanParam(values.profileCompleted),
       noAccess: asBooleanParam(values.noAccess),
