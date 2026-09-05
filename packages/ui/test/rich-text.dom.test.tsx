@@ -41,6 +41,13 @@ describe('RichText', () => {
     assert.equal(screen.queryByLabelText('Equation'), null);
   });
 
+  /** The hook components.css hides the node views' chrome on — lose it and the handle comes back. */
+  it('marks the content non-editable, which is what hides the editing affordances', () => {
+    show(<RichText value="<p>x</p>" onChange={noop} disabled />);
+
+    assert.equal(document.querySelector('.ProseMirror')?.getAttribute('contenteditable'), 'false');
+  });
+
   /** The whole point of the fieldset context: a contenteditable is not a form control. */
   it('goes read-only from the FormPanel around it, with no prop passed', () => {
     show(

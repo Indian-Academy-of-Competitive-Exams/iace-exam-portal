@@ -647,6 +647,18 @@
   opacity: 1;
 }
 
+/* A read-only editor keeps its node views, so every affordance above is turned off by hand here.
+   `display: none`, not a fade: an invisible handle still takes the pointer, and a reader who
+   grabbed one would resize a question they are not editing. */
+.ProseMirror[contenteditable='false'] :is(.rich-figure-handle, .rich-remove, .rich-table-tools) {
+  display: none;
+}
+
+/* Clicking a figure still selects it when read-only, but Backspace is gone, so the ring says nothing. */
+.ProseMirror[contenteditable='false'] .ProseMirror-selectednode {
+  outline: none;
+}
+
 .rich-remove:hover {
   border-color: var(--destructive);
   color: var(--destructive);
