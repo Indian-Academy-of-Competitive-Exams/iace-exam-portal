@@ -1,7 +1,8 @@
 # CLAUDE.md — IACE Platform
 
-Operating context for anyone (human or agent) in this repo. Read `docs/` and `prisma/schema.prisma`
-before writing code. **`prisma/schema.prisma` wins over this file on any data-model conflict.**
+Operating context for anyone (human or agent) in this repo: what this project is, and what to read
+next. It is a map, not a reference — the data model is `prisma/schema.prisma`, it is not summarised
+anywhere, and it **wins over every document here.**
 
 <binding-core>
 
@@ -22,26 +23,25 @@ SI/Constable), replacing ThinkExam.
 
 - **V1 = the mock-test feature.** One developer + AI pair, ~45 days.
 - **Scale:** ~2K concurrent normal, handle 4K, 5K with minor infra additions. Not 10K.
-- **Portals:** **Student** (broad platform, later), **Test** (`apps/test`, V1), **Admin** (V1).
+- **Portals:** **Test** (`apps/test`, V1) and **Admin** (`apps/admin`, V1); a broad Student portal later.
 - **Rollout:** internal IACE students first, by branch and enrolment; public later.
 
 ## Tech stack (locked)
 
+The choices; the reasons behind each are `docs/01-architecture.md`.
+
 - **API:** NestJS. **Frontend:** Vite + React SPAs — no Next.js, no SSR.
-- **Server data:** TanStack Query over the typed client from `packages/contracts`.
-- **Design:** Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark via CSS variables. Brand
-  palette and its rules: the `ui-conventions` skill.
-- **Charts:** Recharts v3 in `packages/ui/src/components/charts`, on the `--series-*` tokens.
-- **Client state:** Zustand only where React Query does not fit.
-- **DB:** PostgreSQL via Prisma. **Redis:** live test state, leaderboards, OTP, sessions, device
-  binding, rate limiting. **Jobs:** BullMQ on Redis.
-- **Auth:** self-built JWT + refresh. Students: mobile + OTP at signup, then a 4-digit PIN (not
-  unique across students; only ever checked against the one student a mobile resolves to). Admins:
-  email + OTP. Admins hold `READ`/`WRITE` per feature key, keys are code-owned (`FEATURE_KEYS`);
-  super admins bypass every check.
-- **Storage:** S3 SDK in every environment; MinIO locally. **Mobile (post-V1):** React Native + Expo.
-- **No WebSockets.** **Payments:** separate portal, not V1. **Infra:** chosen last, AWS-leaning,
-  cloud-agnostic Docker + env.
+- **Server data:** TanStack Query over the typed client from `packages/contracts`. **Client state:**
+  Zustand only where React Query does not fit.
+- **Design:** Tailwind + shadcn/ui, tokens in `packages/ui`, light + dark via CSS variables. Charts
+  are Recharts v3 on the `--series-*` tokens. Brand palette: the `ui-conventions` skill.
+- **DB:** PostgreSQL via Prisma. **Redis:** live-sitting state, leaderboards, OTP, sessions, device
+  binding, rate limiting. **Jobs:** BullMQ on Redis. **Storage:** S3, MinIO locally.
+- **Auth:** self-built JWT + refresh. Students: mobile + OTP at signup, then a 4-digit PIN — not
+  unique across students, only ever checked against the one student a mobile resolves to. Admins:
+  email + OTP, holding READ/WRITE per feature key; super admins bypass every check.
+- **No WebSockets.** **Payments:** separate portal, not V1. **Mobile:** React Native + Expo, post-V1.
+  **Infra:** chosen last, AWS-leaning, cloud-agnostic Docker + env.
 
 <scaling-rules>
 
@@ -55,82 +55,40 @@ Do not break these — they are why the live test holds at 4–5K:
 
 </scaling-rules>
 
-## Data model (schema is authoritative)
+## Rules stated only here
 
-- **Student** and **Admin** are separate tables. A student needs a `mobile` and a `studentType`;
-  `mobile` is unique among LIVE rows only (a partial index), so every lookup by it is a filtered
-  read, never a key. Admin permissions are one row per grant:
-  `AdminFeaturePermission(adminId, featureKey, level)`. There is no `Feature` table. **An admin is
-  a super admin or not, and "not" means the feature keys they hold — nothing narrower.** There is no
-  branch scoping on an admin: a typist is simply one holding only `QUESTION_AUTHORING`.
-- **StudentProfile** (1:1). `preTestReady` = mother's name + father's name + DOB; prompt before a
-  test. `profileCompleted` only drives a nudge — never block on it. Aadhaar and PAN are
-  `aadhaarVerified`/`panVerified` booleans; the images are never stored, so the only upload is the photo.
-- **Exam taxonomy: `ExamCourse` (enum) → `Exam` → `ExamStage`.** The STAGE is the level everything
-  hangs off — a base config, a test series and a test all point at one. `Exam.code` is what
-  `Student.enrolledExams` stores, and `ExamStage.stageKey` is unique table-wide because seeds and
-  the exam-pattern workbook address a stage by it. Neither can change once something carries it. A
-  CATALOG_ONLY stage is listed so the journey reads whole; nothing is built on it.
-- **Question bank:** `Question` is IDENTITY — type, taxonomy, status, tags, `stemHash`,
-  `currentVersionId`. Editing a DRAFT rewrites its one `QuestionVersion` in place; editing anything
-  past the draft inserts an immutable one (content, options as JSON, answer key) and repoints
-  `currentVersionId`, so a paper or an attempt that pinned a version never moves. **Nothing a
-  `PaperQuestion`, `AttemptQuestion` or `TestQuestionStat` references can be returned to DRAFT or
-  deleted** — being depended on is what freezes a question, not being published. A save that
-  changes nothing writes no version. Subject and topic settle when the question leaves the draft.
-  Option ids carry over by position. Localized content is JSON keyed by language, rich (text,
-  `$LaTeX$`, S3 image URLs). English default.
-- **Question taxonomy: `Subject` → `Topic`.** Two levels only. Anything finer is a free-text tag on
-  the question. A `Question` carries `subjectId` + optional `topicId`; **the service must check the
-  topic belongs to the subject** — no FK can.
-- **Base configs** (`BaseConfig` + `BaseConfigModule` + `BaseConfigSection`) are a stage's blueprint,
-  and a `Test` INHERITS its shape rather than copying it. Marks, negative marks, timing and
-  merit/qualifying are PER SECTION — one paper may mix them. A stage holds exactly one `isDefault`
-  config. `locked` trips at the first finalize of any test built from it; after that only name,
-  `isDefault` and `isActive` still move, and the way to change the shape is to clone it
-  (`clonedFromId` is the lineage).
-- **A FIXED paper is picked by hand** from the pool its section's spec describes, and frozen at
-  finalize → one `PaperQuestion` paper every student shares. A GENERATED test is DRAWN at finalize
-  into `Test.variantCount` papers. Per-student shuffle via `Attempt.shuffleSeed` either way.
-- **Lock on first attempt.** The only permitted post-start change is marking a `PaperQuestion`
-  DROPPED/BONUS → auto-recompute.
-- **`Attempt`** holds live state and scored fields (no Result table). **`AttemptQuestion`** stores
-  only questions the student interacted with, plus analytics points.
-- **Access has no groups.** A student reaches a `TestSeries` by an exam match, a program match, or
-  an explicit `StudentGrant`, gated by the series' own `branchIds` (a GIN-indexed array) together
-  with `isEnabled` — a switch with no window, so a branch runs a series indefinitely.
-- **A series' `kind` decides who reaches it.** `STANDARD` is the above; `FREE` reaches everyone;
-  `PROGRAM` only a student carrying its program; `EVENT` only the candidates on its event. A
-  `StudentGrant` overrides every one of them, and `isEnabled` gates them all. **A series is reached
-  or it is not** — there is no unlock, no prerequisite and no queue to ask in.
-- **Scheduling belongs to the TEST.** `Test.opensAt` is when it opens, one instant for every
-  branch; `Test.lateEntrySec` (counted FROM the opening) and `Test.extraTimeSec` sit beside it, both
-  nullable, null meaning the plain rules. There is no per-branch schedule row. It blocks STARTING a
-  test, never seeing one: `assertCanStart` refuses the sitting,
-  `assertReachable` still opens it to read about. A series has no availability, and `canStart` is
-  derived from the clock on every read. A test that has been sat cannot be taken out of a series.
-- **`Branch` is a table.** Super admin writes, everyone managing students reads. `name` is unique
-  among live rows only. A branch a student still attends cannot be deleted; a retired branch takes
-  no new students.
+Everything the domain enforces is `docs/02-domain-rules.md` and everything a column enforces is the
+schema. These are the ones no other document carries.
+
+- **Question versions are append-only past the draft.** Editing a DRAFT rewrites its one
+  `QuestionVersion` in place; every later edit inserts an immutable one and repoints
+  `currentVersionId`, so a paper or a sitting that pinned a version never moves. A save that changes
+  nothing writes no version.
+- **Being depended on is what freezes a question, not being published.** Nothing a `PaperQuestion`,
+  `AttemptQuestion` or `TestQuestionStat` references may be returned to DRAFT or deleted.
+- **A topic must sit under the question's own subject.** No foreign key can say it;
+  `packages/contracts/src/question-rules.ts` is what checks it, for the editor and the importer alike.
 - **Branch names and exam codes are canonical** (`canonicalName` in
   `packages/contracts/src/naming.ts`): UPPERCASE, letters and digits, single-spaced. **Normalise
   input, never reject it.**
-- **Series → test is one-to-many.** A test names at most one series (`Test.testSeriesId`, nullable,
-  ordered by `seriesOrder`). A test naming none still exists — it is simply not offered, because the
-  student catalog is built from the series a student reaches, never from tests. **There is no
-  standalone sitting.**
-- Marks use `Decimal(6,2)`. No certificates in V1.
 
 ## Where things live
 
+- `prisma/schema.prisma` — the data model, and the target of record for every claim about it.
+- `docs/01-architecture.md` — what the system is: the locked stack and why each piece, the V1
+  boundary, the service diagram, live-test scaling, the deployment topology.
+- `docs/02-domain-rules.md` — the rules the schema cannot state: the blueprint, building and
+  finalizing a test, lock on first attempt, access, scheduling, the sitting, results and ranking,
+  rollups, render modes and skins, question import.
+- `docs/03-conventions.md` — where code goes: packaging, module boundaries, the table-ownership map,
+  the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
+  interface that source comments cite, so renumbering is a breaking change.
+- `docs/design/design-system.html` — living style guide.
 - `.claude/skills/ui-conventions/` — the binding UI rules. The constraints file above says when to
   invoke it; this is where it lives.
 - `graft/` — the wiring graph of every TypeScript and JavaScript file, queried with the `graft` CLI
   or the `graft` skill. Git-ignored, so run `graft build` once in a fresh clone.
-- `packages/ui/src/index.ts` — the component inventory.
-- `docs/01-architecture-and-plan.md` — architecture, scaling, roadmap.
-- `docs/02-mocktest-feature-spec.md` — the mock-test feature in full: render modes and skins (§14),
-  access by kind (§7), student journey and landing page (§5), results and solutions (§6).
-- `docs/03-shared-architecture.md` — module boundaries, the table-ownership map, the event catalog.
-- `docs/design/design-system.html` — living style guide.
-- `packages/app-kit/` — SPA plumbing (tokens/session, API client, form errors, page size).
+- `packages/ui/src/index.ts` — the component inventory. `packages/app-kit/` — SPA plumbing
+  (tokens/session, API client, form errors, page size).
+- `pnpm docs:check` — reports names a doc uses that neither the schema nor the source defines. It
+  runs on a schedule and gates nothing; a human clears the report.
