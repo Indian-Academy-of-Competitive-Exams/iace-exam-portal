@@ -270,3 +270,24 @@ describe('Alert', () => {
     assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
   });
 });
+
+describe('Separator — dashed', () => {
+  /** A filled div has nothing to leave gaps in, so a dash has to come from a border. */
+  it('draws a dash with a border rather than a fill', () => {
+    const { container } = render(<Separator orientation="vertical" dashed />);
+
+    const rule = container.firstElementChild;
+    assert.ok(rule?.className.includes('border-dashed'));
+    assert.ok(rule?.className.includes('border-l'));
+    assert.equal(rule?.className.includes('bg-border'), false);
+    // THE failure this prevents: h-full beats align-self, so a rule in a flex row draws nothing.
+    assert.ok(rule?.className.includes('self-stretch'));
+    assert.equal(rule?.className.includes('h-full'), false);
+  });
+
+  it('still fills when it is not dashed', () => {
+    const { container } = render(<Separator orientation="vertical" />);
+
+    assert.ok(container.firstElementChild?.className.includes('bg-border'));
+  });
+});

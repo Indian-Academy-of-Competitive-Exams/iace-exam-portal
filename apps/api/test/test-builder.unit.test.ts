@@ -211,7 +211,7 @@ describe('the invariants Phase 2 must not have broken', () => {
 
     // Taking one off thaws the paper, and the question goes straight back where it was.
     const row = rowAt(prisma.paperQuestions);
-    await paper.removeQuestion(draft.id, row.id);
+    await paper.removeQuestions(draft.id, [row.id]);
     assert.deepEqual(
       counted(),
       drawn.map(() => 0),
@@ -233,7 +233,7 @@ describe('the invariants Phase 2 must not have broken', () => {
     const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
 
     await pickWholePaper(paper, draft.id);
-    await paper.removeQuestion(draft.id, rowAt(prisma.paperQuestions).id);
+    await paper.removeQuestions(draft.id, [rowAt(prisma.paperQuestions).id]);
 
     assert.deepEqual(
       prisma.questions.map((row) => row.fixedUseCount),

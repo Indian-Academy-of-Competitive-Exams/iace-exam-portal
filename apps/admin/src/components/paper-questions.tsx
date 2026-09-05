@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
 import {
   PICK_REFUSAL,
   strandedPicks,
@@ -11,12 +10,10 @@ import {
   type TestPaper,
 } from '@iace/contracts';
 import {
-  Alert,
   Badge,
+  Button,
   ConfirmDialog,
   DataTable,
-  DropdownMenuItem,
-  RowActions,
   SectionHeading,
   TruncatedText,
   plural,
@@ -42,26 +39,8 @@ function refusalOf(stranded: Readonly<Record<string, PickRefusal>>, questionId: 
 }
 
 function paperColumns(
-  onRemove: ((row: PaperRow) => void) | undefined,
   stranded: Readonly<Record<string, PickRefusal>>,
 ): DataTableColumn<PaperRow>[] {
-  const actions: DataTableColumn<PaperRow>[] = onRemove
-    ? [
-        {
-          key: 'actions',
-          className: 'text-right',
-          cell: (row) => (
-            <RowActions label={`Actions for question ${row.order}`}>
-              <DropdownMenuItem destructive onSelect={() => onRemove(row)}>
-                <Trash2 aria-hidden />
-                Remove
-              </DropdownMenuItem>
-            </RowActions>
-          ),
-        },
-      ]
-    : [];
-
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order },
     {
@@ -72,18 +51,23 @@ function paperColumns(
       cell: (row) => (
         <span className="flex min-w-0 flex-col gap-0.5">
           <QuestionLink questionId={row.questionId}>
-            <TruncatedText className="font-mono">{row.question.questionCode}</TruncatedText>
+            <TruncatedText>{row.question.stemPreview}</TruncatedText>
           </QuestionLink>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {`${row.question.difficulty.toLowerCase()} · ${row.marks} marks`}
-            </span>
+            <TruncatedText className="text-xs text-muted-foreground">
+              {[
+                row.question.difficulty.toLowerCase(),
+                row.question.questionCode,
+                `${row.marks} marks`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </TruncatedText>
             {refusalOf(stranded, row.questionId)}
           </span>
         </span>
       ),
     },
-    ...actions,
   ];
 }
 
@@ -112,7 +96,10 @@ export function PaperQuestions({
   banner?: ReactNode;
   onChanged: (next: TestPaper) => Promise<void>;
 }>) {
-  const [removing, setRemoving] = useState<PaperRow | null>(null);
+  // Ticked here and removed together, the way the bank is ticked and added together.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const going = rows.filter((row) => picked.has(row.id));
 
   const stranded = strandedPicks(
     rows.map((row) => ({
@@ -122,13 +109,13 @@ export function PaperQuestions({
     })),
     spec,
   );
-  const strandedCount = Object.keys(stranded).length;
 
   const remove = useMutation({
-    meta: { success: 'Question removed.' },
-    mutationFn: (rowId: string) => api.admin.tests.removePaperQuestion(testId, rowId),
+    meta: { success: 'Questions removed.' },
+    mutationFn: (rowIds: readonly string[]) => api.admin.tests.removePaperQuestions(testId, rowIds),
     onSuccess: async (next) => {
-      setRemoving(null);
+      setConfirming(false);
+      setPicked(new Set());
       await onChanged(next);
     },
   });
@@ -139,34 +126,40 @@ export function PaperQuestions({
         className="shrink-0"
         title="On the paper"
         meta={`${rows.length} of ${section.questionCount}`}
-        action={action}
+        action={
+          <span className="flex items-center gap-2">
+            {editable && going.length > 0 ? (
+              <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+                {`Remove ${going.length}`}
+              </Button>
+            ) : null}
+            {action}
+          </span>
+        }
       />
 
       {banner}
 
-      {strandedCount > 0 ? (
-        <Alert variant="warning" className="shrink-0">
-          {`${plural(strandedCount, 'question')} on this paper sit outside what ${section.name} now draws from. Take them off, or widen the pool above.`}
-        </Alert>
-      ) : null}
-
       <DataTable
-        columns={paperColumns(editable ? setRemoving : undefined, stranded)}
+        columns={paperColumns(stranded)}
         rows={rows}
         rowKey={(row) => row.id}
+        selection={
+          editable ? { selected: picked, onChange: setPicked, label: 'Select question' } : undefined
+        }
         isLoading={isLoading}
         empty="Nothing chosen for this section yet. Tick questions in the bank and add them."
       />
 
       <ConfirmDialog
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
+        open={confirming}
+        onOpenChange={setConfirming}
         destructive
-        title={`Remove question ${removing?.order ?? ''} from ${section.name}?`}
-        description={`${section.name} drops to ${rows.length - 1} of the ${section.questionCount} it needs, so this test cannot be offered until one is chosen in its place.`}
-        confirmLabel="Remove question"
+        title={`Remove ${plural(going.length, 'question')} from ${section.name}?`}
+        description={`${section.name} drops to ${rows.length - going.length} of the ${section.questionCount} it needs, so this test cannot be offered until they are replaced.`}
+        confirmLabel={`Remove ${plural(going.length, 'question')}`}
         loading={remove.isPending}
-        onConfirm={() => removing && remove.mutate(removing.id)}
+        onConfirm={() => remove.mutate(going.map((row) => row.id))}
       />
     </section>
   );

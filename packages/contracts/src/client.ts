@@ -1186,11 +1186,11 @@ export function createApiClient(options: ApiClientOptions) {
             schema: testPaperSchema,
           }),
 
-        removePaperQuestion: (id: string, rowId: string): Promise<TestPaper> =>
-          request(ADMIN_TEST_PAPER_ROUTES.removeQuestion(id, rowId), {
-            method: 'DELETE',
-            schema: testPaperSchema,
-          }),
+        removePaperQuestions: (id: string, rowIds: readonly string[]): Promise<TestPaper> =>
+          request(
+            `${ADMIN_TEST_PAPER_ROUTES.removeQuestions(id)}${queryString({ rowIds: [...rowIds] })}`,
+            { method: 'DELETE', schema: testPaperSchema },
+          ),
 
         /** Fills the rest of one section from its own spec; every hand-picked row keeps its place. */
         fillPaperSection: (id: string, sectionId: string): Promise<TestPaper> =>

@@ -7,5 +7,7 @@
 export { QuestionsModule } from './questions.module';
 export { QuestionsService } from './questions.service';
 export { TaxonomyService } from './taxonomy.service';
+/** How a stem is shortened for a row is the bank's own rule, so a paper borrows it rather than its own. */
+export { stemPreviewOf } from './question-core';
 /** Content that carries images is the bank's shape, so signing one is the bank's rule to lend. */
 export { applyImageUrls, imageKeysIn } from './question-images';

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import {
   AppException,
   FORM_LEVEL_FIELD,
@@ -25,9 +25,9 @@ import {
   Combobox,
   PageHeader,
   PanelFrame,
-  SectionHeading,
   Skeleton,
   SkeletonParagraph,
+  Separator,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -63,10 +63,6 @@ const NO_PICKS: QuestionPicks = new Map();
 
 /** A batch is refused whole, under whichever of these keys the server reached for. */
 const ADD_ERROR_FIELDS = ['questionId', 'questionIds', FORM_LEVEL_FIELD] as const;
-
-/** Both read the record, so a pool that is only on screen is a pool they will not draw from. */
-const UNSAVED_POOL =
-  'Adding and filling read the saved pool, so neither runs until this change is saved.';
 
 /** The Offer step's own words, so both screens name one price for the same edit. */
 const THAWS_THE_TEST = 'Editing the paper takes the test back out until it is offered again.';
@@ -140,6 +136,7 @@ function TestPaperScreen({
   const filters = useFilters<'section'>();
   const openSectionId = filters.get('section') || (sections[0]?.id ?? '');
   const [draft, setDraft] = useState<DrawSpec | null>(null);
+  const [poolOpen, setPoolOpen] = useState(false);
 
   const held = useMemo(() => {
     const counts = new Map<string, number>();
@@ -223,8 +220,20 @@ function TestPaperScreen({
       </div>
     );
 
+  const stripAction = (
+    <StripActions
+      dirty={draft !== null}
+      canSave={canSaveSpec}
+      saving={save.isPending}
+      poolOpen={poolOpen}
+      onPoolOpen={setPoolOpen}
+      onSave={() => save.mutate(spec)}
+    />
+  );
+
   const tabs = {
     value: openSection.id,
+    action: stripAction,
     onValueChange: (next: string) => filters.set({ section: next }),
     items: sections.map((section) => ({
       value: section.id,
@@ -236,9 +245,7 @@ function TestPaperScreen({
             spec={spec.sections[section.id] ?? {}}
             canSave={canSaveSpec}
             fills={!paperExists}
-            dirty={draft !== null}
-            saving={save.isPending}
-            onSave={() => save.mutate(spec)}
+            open={poolOpen || !paperExists}
             onChange={(next) => setDraft({ sections: { ...spec.sections, [section.id]: next } })}
           />
 
@@ -289,6 +296,50 @@ function SectionTab({
   );
 }
 
+/** What the open section is acted on with, held at the tab strip's right end beside the tabs. */
+function StripActions({
+  dirty,
+  canSave,
+  saving,
+  poolOpen,
+  onPoolOpen,
+  onSave,
+}: Readonly<{
+  dirty: boolean;
+  canSave: boolean;
+  saving: boolean;
+  poolOpen: boolean;
+  onPoolOpen: (open: boolean) => void;
+  onSave: () => void;
+}>) {
+  const poolLabel = poolOpen ? 'Hide what this section draws from' : 'What this section draws from';
+
+  return (
+    <>
+      {dirty ? <Badge variant="warning">Unsaved</Badge> : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            aria-expanded={poolOpen}
+            onClick={() => onPoolOpen(!poolOpen)}
+          >
+            <SlidersHorizontal aria-hidden />
+            <span className="sr-only">{poolLabel}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{poolLabel}</TooltipContent>
+      </Tooltip>
+      {canSave ? (
+        <Button size="sm" disabled={!dirty} loading={saving} onClick={onSave}>
+          Save
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
 /** Which of the drawn papers is on screen. */
 function PaperPicker({
   count,
@@ -335,77 +386,29 @@ function DrawnFrom({
   spec,
   canSave,
   fills,
-  dirty,
-  saving,
-  onSave,
+  open,
   onChange,
 }: Readonly<{
   section: BaseConfigSection;
   spec: SectionDrawSpec;
   canSave: boolean;
-  /** True where it is the whole pane, which is the only time it opens on arrival. */
+  /** True where it is the whole pane, which is the only time it fills rather than caps. */
   fills: boolean;
-  dirty: boolean;
-  saving: boolean;
-  onSave: () => void;
+  open: boolean;
   onChange: (next: SectionDrawSpec) => void;
 }>) {
-  const [open, setOpen] = useState(fills);
-  const label = open ? 'Hide drawn from' : 'Show drawn from';
-  const Glyph = open ? ChevronUp : ChevronDown;
-
-  const save = canSave ? (
-    <Button size="sm" disabled={!dirty} loading={saving} onClick={onSave}>
-      Save
-    </Button>
-  ) : null;
+  // Nothing at all when folded: an empty section is still a flex child, and still takes the gap.
+  if (!open) return null;
 
   return (
-    <section className={cn('flex flex-col gap-3', fills ? 'min-h-0 flex-1' : 'shrink-0')}>
-      <SectionHeading
-        className="shrink-0"
-        title="Drawn from"
-        action={
-          <span className="flex items-center gap-2">
-            {save}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="iconSm"
-                  aria-expanded={open}
-                  onClick={() => setOpen(!open)}
-                >
-                  <Glyph aria-hidden />
-                  <span className="sr-only">{label}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{label}</TooltipContent>
-            </Tooltip>
-          </span>
-        }
-      />
-
-      {dirty && !fills ? (
-        <Alert variant="info" className="shrink-0">
-          {UNSAVED_POOL}
-        </Alert>
-      ) : null}
-
-      {open ? (
-        // Capped so the lists below keep their share, and `relative` so an sr-only label stays in.
-        <div
-          className={cn(
-            'relative pr-2',
-            fills ? 'min-h-0 flex-1 overflow-y-auto' : CAPPED_VIEWPORT,
-          )}
-        >
-          {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
-          <fieldset disabled={!canSave} className="contents">
-            <DrawSpecEditor section={section} spec={spec} disabled={!canSave} onChange={onChange} />
-          </fieldset>
-        </div>
-      ) : null}
+    // Capped so the lists below keep their share, and `relative` so an sr-only label stays in.
+    <section
+      className={cn('relative pr-2', fills ? 'min-h-0 flex-1 overflow-y-auto' : CAPPED_VIEWPORT)}
+    >
+      {/* A fieldset reaches the pickers `disabled` does not; `contents` keeps it out of the layout. */}
+      <fieldset disabled={!canSave} className="contents">
+        <DrawSpecEditor section={section} spec={spec} disabled={!canSave} onChange={onChange} />
+      </fieldset>
     </section>
   );
 }
@@ -517,6 +520,11 @@ function SectionWorkspace({
             held={held}
             picking={{ picked, onPicked: setPicked, action: addAction }}
           />
+        ) : null}
+
+        {editable ? (
+          // Only where they sit side by side: stacked, the gap already separates them.
+          <Separator orientation="vertical" dashed className="hidden lg:block" />
         ) : null}
 
         <PaperQuestions

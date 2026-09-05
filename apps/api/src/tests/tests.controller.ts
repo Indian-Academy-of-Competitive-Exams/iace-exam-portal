@@ -50,7 +50,9 @@ import {
   type TestStatus,
   type UpdateTestBody,
   setPaperQuestionStatusSchema,
+  removePaperQuestionsSchema,
   type SetPaperQuestionStatusBody,
+  type RemovePaperQuestionsQuery,
 } from '@iace/contracts';
 import { Actors, CurrentUser, RequiresFeature, type AuthenticatedUser } from '../common/security';
 import { ZodBody, ZodQuery } from '../common/zod-validation.pipe';
@@ -150,9 +152,12 @@ export class TestsController {
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Delete(':id/paper/:rowId')
-  removePaperQuestion(@Param('id') id: string, @Param('rowId') rowId: string): Promise<TestPaper> {
-    return this.paper.removeQuestion(id, rowId);
+  @Delete(':id/paper/questions')
+  removePaperQuestions(
+    @Param('id') id: string,
+    @Query(new ZodQuery(removePaperQuestionsSchema)) query: RemovePaperQuestionsQuery,
+  ): Promise<TestPaper> {
+    return this.paper.removeQuestions(id, query.rowIds ?? []);
   }
 
   /** Draws what one section still lacks. It only ever adds: a hand-picked row is never displaced. */

@@ -2019,8 +2019,12 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
           .map((row) => ({ ...row, question: this.questionRef(row.questionId) })),
       ),
 
-    deleteMany: ({ where }: { where: { testId: string } }) => {
-      const kept = this.paperQuestions.filter((row) => row.testId !== where.testId);
+    deleteMany: ({ where }: { where: { testId: string; id?: { in: string[] } } }) => {
+      // The id filter matters: without it a batch remove clears the whole paper and the test still passes.
+      const ids = where.id?.in;
+      const kept = this.paperQuestions.filter(
+        (row) => row.testId !== where.testId || (ids !== undefined && !ids.includes(row.id)),
+      );
       const removed = this.paperQuestions.length - kept.length;
       this.paperQuestions.length = 0;
       this.paperQuestions.push(...kept);

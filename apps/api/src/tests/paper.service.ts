@@ -22,6 +22,7 @@ import {
   type PaperQuestionStatus,
   type ReplacePaperQuestionBody,
   type TestPaper,
+  type LocalizedContent,
   type TestScope,
   type TestScopeRef,
   scopedSections,
@@ -31,6 +32,7 @@ import { BaseConfigsService } from '../configs';
 import { drawPaper, type DrawCandidate, type DrawnQuestion, type DrawSection } from './draw-engine';
 import { SAT_TEST_MESSAGE } from './test-rules';
 import { thaw } from './thaw';
+import { stemPreviewOf } from '../questions';
 import { ScoringOutbox } from '../attempts';
 import { AuditContext } from '../audit';
 
@@ -74,7 +76,15 @@ type HeldRow = Prisma.PaperQuestionGetPayload<{ select: typeof HELD_SELECT }>;
 
 const PAPER_INCLUDE = {
   question: {
-    select: { id: true, questionCode: true, difficulty: true, subjectId: true, topicId: true },
+    select: {
+      id: true,
+      questionCode: true,
+      difficulty: true,
+      subjectId: true,
+      topicId: true,
+      // The stem, so the paper reads like the bank beside it rather than like a list of codes.
+      currentVersion: { select: { content: true } },
+    },
   },
 } as const satisfies Prisma.PaperQuestionInclude;
 
@@ -345,14 +355,16 @@ export class PaperService {
   }
 
   /** Dropped, leaving its section short of the count its config asks for until one is drawn. */
-  async removeQuestion(testId: string, rowId: string): Promise<TestPaper> {
+  async removeQuestions(testId: string, rowIds: readonly string[]): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     this.assertAssemblable({ ...test, attemptCount: test._count.attempts });
-    await this.requireRow(testId, rowId);
+
+    // Every row resolved before any is deleted: a half-removed batch is one nobody can reason about.
+    for (const rowId of rowIds) await this.requireRow(testId, rowId);
 
     await this.prisma.$transaction(async (tx) => {
       await thaw(tx, test);
-      await tx.paperQuestion.delete({ where: { id: rowId } });
+      await tx.paperQuestion.deleteMany({ where: { testId, id: { in: [...rowIds] } } });
     });
 
     return this.paperOf(testId, this.scopedOf(test, await this.configs.detail(test.baseConfigId)));
@@ -553,7 +565,16 @@ export class PaperService {
             marks: Number(row.marks),
             negativeMarks: Number(row.negativeMarks),
             status: row.status,
-            question: row.question,
+            question: {
+              id: row.question.id,
+              questionCode: row.question.questionCode,
+              difficulty: row.question.difficulty,
+              subjectId: row.question.subjectId,
+              topicId: row.question.topicId,
+              stemPreview: stemPreviewOf(
+                (row.question.currentVersion?.content as LocalizedContent | undefined) ?? {},
+              ),
+            },
           })),
       })),
     };

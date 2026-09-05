@@ -89,4 +89,18 @@ describe('PanelFrame — fills', () => {
     const strip = screen.getByRole('tab', { name: 'Reasoning 0/20' }).parentElement;
     assert.ok(strip?.className.includes('overflow-x-auto'));
   });
+
+  /** The strip is where the open tab is acted on, so its action rides the same row as the tabs. */
+  it('holds an action at the strip\u0027s right end, beside the tabs', () => {
+    render(<PanelFrame fills tabs={{ ...tabs, action: <button type="button">Save</button> }} />);
+
+    const strip = screen.getByRole('tab', { name: 'Reasoning 0/20' }).parentElement;
+    const save = screen.getByRole('button', { name: 'Save' });
+    assert.ok(save);
+    assert.equal(
+      strip?.contains(save),
+      false,
+      'the action sits beside the tab list, not inside it',
+    );
+  });
 });

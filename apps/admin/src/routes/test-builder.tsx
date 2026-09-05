@@ -6,6 +6,7 @@ import {
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
   testBuilderStepOf,
+  owesAPaper,
   type BaseConfigDetail,
   type TestBuilderStep,
   type TestDetail,
@@ -54,6 +55,7 @@ function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
   const done = new Set<TestBuilderStep>();
   if (!detail) return done;
   done.add(TEST_BUILDER_STEP.SETUP);
+  if (!owesAPaper(detail)) done.add(TEST_BUILDER_STEP.PAPER);
   if (detail.isLocked) done.add(TEST_BUILDER_STEP.OFFER);
   return done;
 }

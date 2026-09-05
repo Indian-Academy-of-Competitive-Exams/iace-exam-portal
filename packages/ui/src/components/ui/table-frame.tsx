@@ -83,13 +83,18 @@ export function PanelFrame({
   const body = tabs ? (
     <>
       {/* Bled past the card's padding so the rule reaches its edges, not a floating line. */}
-      <TabsList className="-mx-4 mb-4 shrink-0 px-4">
-        {tabs.items.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <div className="-mx-4 mb-4 flex shrink-0 items-center gap-3 border-b border-border px-4">
+        <TabsList className="min-w-0 flex-1 border-b-0">
+          {tabs.items.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.action ? (
+          <span className="flex shrink-0 items-center gap-2">{tabs.action}</span>
+        ) : null}
+      </div>
       {tabs.items.map((tab) => (
         <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
           {tab.content}
@@ -138,6 +143,8 @@ export interface TableFrameTabs {
   value: string;
   onValueChange: (value: string) => void;
   items: readonly TableFrameTab[];
+  /** Held at the strip's right end — what the open tab is acted on with, beside the tabs themselves. */
+  action?: React.ReactNode;
 }
 
 export interface TableFrameProps {

@@ -522,12 +522,17 @@ export function offerRequirements(
   return [paperRequirement(test), seriesRequirement(test)];
 }
 
-/** Reopening lands on the step still owing work, so a half-built paper is never walked past. */
-export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0]): TestBuilderStep {
+/** Whether a paper is still owed. The stepper's tick, the checklist and the landing step all read it. */
+export function owesAPaper(test: Parameters<typeof offerRequirements>[0]): boolean {
   const paper = offerRequirements(test).find(
     (requirement) => requirement.key === OFFER_REQUIREMENT.PAPER,
   );
-  return paper?.met ? TEST_BUILDER_STEP.OFFER : TEST_BUILDER_STEP.PAPER;
+  return paper?.met !== true;
+}
+
+/** Reopening lands on the step still owing work, so a half-built paper is never walked past. */
+export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0]): TestBuilderStep {
+  return owesAPaper(test) ? TEST_BUILDER_STEP.PAPER : TEST_BUILDER_STEP.OFFER;
 }
 
 function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
@@ -658,10 +663,12 @@ export const ADMIN_TEST_ROUTES = {
 // finalize — `Test.isLocked` is the freeze, not the existence of these rows.
 // ============================================================================
 
-/** Enough of a question to recognise a row of the paper without loading its content. */
+/** Enough of a question to READ a row of the paper, not merely to recognise its code. */
 export const paperQuestionRefSchema = z.object({
   id: z.string(),
   questionCode: z.string().nullable(),
+  /** The same shortened stem the bank shows, so both halves of the screen read alike. */
+  stemPreview: z.string(),
   difficulty: difficultyLevelSchema,
   subjectId: z.string(),
   topicId: z.string().nullable(),
@@ -763,6 +770,12 @@ export type ReplacePaperQuestionInput = z.input<typeof replacePaperQuestionSchem
 export type ReplacePaperQuestionBody = z.infer<typeof replacePaperQuestionSchema>;
 
 /** Putting several on the paper in one request, in the next free places its section has. */
+/** Which rows go. A CSV rather than a body, because a DELETE body does not survive every proxy. */
+export const removePaperQuestionsSchema = z.object({
+  rowIds: csvIdQuery(),
+});
+export type RemovePaperQuestionsQuery = z.infer<typeof removePaperQuestionsSchema>;
+
 export const addPaperQuestionSchema = z.object({
   baseConfigSectionId: z.string().min(1),
   questionIds: z.array(z.string().min(1)).min(1, 'Choose at least one question'),
@@ -778,7 +791,7 @@ export const ADMIN_TEST_PAPER_ROUTES = {
   read: (id: string) => `/admin/tests/${id}/paper`,
   addQuestion: (id: string) => `/admin/tests/${id}/paper/questions`,
   replaceQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
-  removeQuestion: (id: string, rowId: string) => `/admin/tests/${id}/paper/${rowId}`,
+  removeQuestions: (id: string) => `/admin/tests/${id}/paper/questions`,
   /** Draws the rest of one section from its own spec, around the rows already on it. */
   fillSection: (id: string, sectionId: string) =>
     `/admin/tests/${id}/paper/sections/${sectionId}/fill`,

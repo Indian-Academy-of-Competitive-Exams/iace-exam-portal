@@ -46,6 +46,8 @@ export interface DataTableScroll {
   hasMore?: boolean;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
+  /** The scroller itself, for a caller that needs to read how far it has gone or move it back. */
+  onScroll?: (viewport: HTMLDivElement) => void;
 }
 
 export interface DataTableExpand<TRow> {
@@ -117,6 +119,7 @@ export function DataTable<TRow>({
 
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
     if (scroll?.hasMore && nearTheEnd(event.currentTarget)) scroll.onLoadMore?.();
+    scroll?.onScroll?.(event.currentTarget);
   };
 
   const body = (

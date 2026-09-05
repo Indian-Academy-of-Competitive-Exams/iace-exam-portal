@@ -743,7 +743,7 @@ describe('PaperService — one row at a time', () => {
     const { service, prisma, row } = await drawn();
     const length = prisma.paperQuestions.length;
 
-    await service.removeQuestion('tst_1', row.id);
+    await service.removeQuestions('tst_1', [row.id]);
 
     assert.equal(prisma.paperQuestions.length, length - 1);
     assert.equal(
@@ -759,7 +759,7 @@ describe('PaperService — one row at a time', () => {
     const replaced = await service
       .replaceQuestion('tst_1', row.id, { questionId: 'q6' })
       .catch((e: unknown) => e);
-    const removed = await service.removeQuestion('tst_1', row.id).catch((e: unknown) => e);
+    const removed = await service.removeQuestions('tst_1', [row.id]).catch((e: unknown) => e);
 
     assert.ok(AppException.is(replaced));
     assert.equal(replaced.code, ErrorCodes.CONFLICT);

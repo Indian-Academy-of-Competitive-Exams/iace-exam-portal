@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DIFFICULTY_LABELS,
   DIFFICULTY_LEVELS,
@@ -15,13 +15,16 @@ import {
   type SectionDrawSpec,
   type SectionQuota,
 } from '@iace/contracts';
+import { ArrowUp } from 'lucide-react';
 import { useLocalFilters, useScrollList } from '@iace/app-kit/browser';
 import {
-  Alert,
   Badge,
   Button,
   ListView,
   SectionHeading,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   TruncatedText,
   plural,
   type DataTableColumn,
@@ -48,13 +51,16 @@ export interface QuestionPicking {
   action?: ReactNode;
 }
 
-const DIFFICULTY_VARIANT: Readonly<
+export const DIFFICULTY_VARIANT: Readonly<
   Record<QuestionSummary['difficulty'], 'success' | 'warning' | 'danger'>
 > = {
   LOW: 'success',
   MEDIUM: 'warning',
   HIGH: 'danger',
 };
+
+/** Far enough that the control is a way back, not a nag at the first flick of a wheel. */
+const BACK_TO_TOP_AFTER = 400;
 
 /** Said where the Add button would have been, so a row explains itself rather than greying out. */
 function refusalText(refusal: PickRefusal, level: DifficultyLevel): string {
@@ -105,9 +111,10 @@ function baseColumns(): DataTableColumn<QuestionSummary>[] {
             <TruncatedText>{question.stemPreview}</TruncatedText>
           </QuestionLink>
           <span className="flex min-w-0 items-center gap-2">
-            <Badge variant={DIFFICULTY_VARIANT[question.difficulty]}>{question.difficulty}</Badge>
             <TruncatedText className="text-xs text-muted-foreground">
-              {[question.questionCode, question.topic?.name].filter(Boolean).join(' · ') || null}
+              {[question.difficulty.toLowerCase(), question.questionCode, question.topic?.name]
+                .filter(Boolean)
+                .join(' · ') || null}
             </TruncatedText>
           </span>
         </span>
@@ -171,6 +178,12 @@ export function QuestionChooser({
   picking: QuestionPicking;
 }>) {
   const store = useLocalFilters();
+  const viewport = useRef<HTMLDivElement | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+  const onListScroll = useCallback((element: HTMLDivElement) => {
+    viewport.current = element;
+    setScrolled(element.scrollTop > BACK_TO_TOP_AFTER);
+  }, []);
   const taken = DIFFICULTY_LEVELS.reduce((sum, level) => sum + quota[level].chosen, 0);
   const full = taken >= section.questionCount;
   const picks = useMemo(() => [...picking.picked.values()], [picking.picked]);
@@ -237,7 +250,8 @@ export function QuestionChooser({
       };
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    // `relative`, because the back-to-top control is positioned against this pane.
+    <section className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       <SectionHeading
         className="shrink-0"
         title="The bank"
@@ -246,7 +260,7 @@ export function QuestionChooser({
       />
 
       <ListView
-        list={questions}
+        list={{ ...questions, scroll: { ...questions.scroll, onScroll: onListScroll } }}
         filters={filterSpec}
         columns={columns}
         rowKey={(question) => question.id}
@@ -255,10 +269,21 @@ export function QuestionChooser({
         emptyFiltered="No question matches those filters."
       />
 
-      {full ? (
-        <Alert variant="info" className="shrink-0">
-          {`${section.name} is full. Take one off to put another on.`}
-        </Alert>
+      {scrolled ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="absolute bottom-4 right-4 shadow-sm"
+              onClick={() => viewport.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            >
+              <ArrowUp aria-hidden />
+              <span className="sr-only">Back to the top of the bank</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to the top</TooltipContent>
+        </Tooltip>
       ) : null}
     </section>
   );

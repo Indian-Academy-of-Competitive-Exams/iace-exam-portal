@@ -15,6 +15,7 @@ import {
   scopedMarks,
   scopedDurationSec,
   testBuilderStepOf,
+  owesAPaper,
   paperQuestionSchema,
   updateTestSchema,
   type TestScope,
@@ -352,5 +353,35 @@ describe('scopedDurationSec', () => {
       scopedDurationSec(composite, config, TEST_SCOPE.SECTIONAL, { sectionId: 'sec_gone' }),
       3600,
     );
+  });
+});
+
+describe('owesAPaper', () => {
+  const fixed = {
+    isLocked: false,
+    paperBinding: PAPER_BINDING.FIXED,
+    paperQuestionCount: 100,
+    totalQuestions: 100,
+    testSeriesId: 'srs_1',
+    variantCount: 1,
+  };
+
+  /** THE failure this prevents: a finished paper whose step never ticks, so it reads as outstanding. */
+  it('owes nothing once every question is on the paper', () => {
+    assert.equal(owesAPaper(fixed), false);
+  });
+
+  it('owes a paper while it is part built', () => {
+    assert.equal(owesAPaper({ ...fixed, paperQuestionCount: 40 }), true);
+  });
+
+  /** The tick and the landing step are one rule, so they cannot say different things. */
+  it('is the same answer the landing step reads', () => {
+    const half = { ...fixed, paperQuestionCount: 40 };
+
+    assert.equal(testBuilderStepOf(half), TEST_BUILDER_STEP.PAPER);
+    assert.equal(owesAPaper(half), true);
+    assert.equal(testBuilderStepOf(fixed), TEST_BUILDER_STEP.OFFER);
+    assert.equal(owesAPaper(fixed), false);
   });
 });
