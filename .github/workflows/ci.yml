@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
 
 # A new push supersedes the one before it on the same branch. main is excluded
 # so a merge is never cancelled halfway by the next merge.
@@ -134,3 +136,29 @@ jobs:
       # database" true rather than aspirational.
       - name: Check migrations still match the schema
         run: pnpm db:check
+
+  # Doc drift, and the one check here that gates nothing (docs/03 §12). It judges
+  # the whole doc set against the whole schema, so as a commit gate it would fail
+  # your push for prose somebody else left behind. Weekly and on demand only —
+  # the `if` is what keeps it off every push and pull request, since schedule and
+  # workflow_dispatch are workflow-level triggers that every job would otherwise
+  # inherit. It reads schema.prisma as text, so it needs no Prisma client.
+  docs-check:
+    name: Docs
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Check docs against the schema and the source
+        run: pnpm docs:check
