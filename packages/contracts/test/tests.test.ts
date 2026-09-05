@@ -9,6 +9,7 @@ import {
   createTestSchema,
   isPaperBindingAllowed,
   offerRequirements,
+  testBuilderStepOf,
   paperQuestionSchema,
   updateTestSchema,
 } from '../src/index';
@@ -147,5 +148,47 @@ describe('offerRequirements', () => {
 
     assert.deepEqual(met(generated), [true, true]);
     assert.deepEqual(met({ ...generated, testSeriesId: null }), [true, false]);
+  });
+});
+
+describe('testBuilderStepOf', () => {
+  const fixed = {
+    isLocked: false,
+    paperBinding: PAPER_BINDING.FIXED,
+    paperQuestionCount: 100,
+    totalQuestions: 100,
+    testSeriesId: 'srs_1',
+    variantCount: 1,
+  };
+
+  /** THE failure this prevents: reopening a half-built paper and landing past it, on Offer. */
+  it('lands on the paper while it is part built, not only while it is empty', () => {
+    assert.equal(testBuilderStepOf({ ...fixed, paperQuestionCount: 40 }), TEST_BUILDER_STEP.PAPER);
+    assert.equal(testBuilderStepOf({ ...fixed, paperQuestionCount: 0 }), TEST_BUILDER_STEP.PAPER);
+  });
+
+  it('lands on offer once the paper is whole', () => {
+    assert.equal(testBuilderStepOf(fixed), TEST_BUILDER_STEP.OFFER);
+  });
+
+  /** A frozen paper cannot be built further, so there is nothing on that step to send them to. */
+  it('lands on offer for a frozen test, however few questions it counted', () => {
+    assert.equal(
+      testBuilderStepOf({ ...fixed, isLocked: true, paperQuestionCount: 0 }),
+      TEST_BUILDER_STEP.OFFER,
+    );
+  });
+
+  /** A drawn test owes no paper before it is offered — the draw is what makes one. */
+  it('lands on offer for a test that draws its own papers', () => {
+    assert.equal(
+      testBuilderStepOf({
+        ...fixed,
+        paperBinding: PAPER_BINDING.GENERATED,
+        paperQuestionCount: 0,
+        variantCount: 10,
+      }),
+      TEST_BUILDER_STEP.OFFER,
+    );
   });
 });

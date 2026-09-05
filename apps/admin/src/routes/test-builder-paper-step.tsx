@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
-import type { BaseConfigDetail, TestDetail } from '@iace/contracts';
-import { Alert, Badge, Skeleton, TruncatedText } from '@iace/ui';
+import {
+  MERIT_TYPE,
+  type BaseConfigDetail,
+  type BaseConfigSection,
+  type TestDetail,
+} from '@iace/contracts';
+import { Alert, Badge, Button, Skeleton, TruncatedText, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { hasPaper, sectionFullness, sectionTally } from './test-paper-view';
@@ -13,6 +17,19 @@ const CHIP_VARIANT = {
   SHORT: 'warning',
   FULL: 'success',
 } as const;
+
+/** What the configuration framed this section as — the numbers a paper is judged against. */
+function framingOf(section: BaseConfigSection): string {
+  const parts = [`${plural(section.marksPerQuestion, 'mark')} each`];
+  if (section.negativeMarks > 0) parts.push(`−${section.negativeMarks} per wrong answer`);
+  if (section.durationSec !== null) parts.push(`${Math.round(section.durationSec / 60)} minutes`);
+  if (section.meritOrQualifying === MERIT_TYPE.QUALIFYING) {
+    const cutoff = section.qualifyingCutoff;
+    parts.push(cutoff === null ? 'Qualifying' : `Qualifying at ${cutoff}`);
+  }
+  if (!section.mandatory) parts.push('Optional');
+  return parts.join(' · ');
+}
 
 /** The step is a way in, not the workbench: the paper is built on its own screen. */
 export function PaperStep({
@@ -59,19 +76,30 @@ export function PaperStep({
           const tally = sectionTally(section, held);
 
           return (
-            <li key={section.id}>
-              <Link
-                to={`${ROUTES.TEST_PAPER(detail.id)}?section=${encodeURIComponent(section.id)}`}
-                className="flex items-center gap-3 rounded-md border border-border px-4 py-3 transition-colors hover:bg-muted focus-visible:shadow-focus focus-visible:outline-none"
-              >
-                <TruncatedText className="min-w-0 flex-1 font-medium">{section.name}</TruncatedText>
-                {fullness && tally ? (
-                  <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge>
-                ) : (
-                  <Badge variant="neutral">{`${section.questionCount} questions`}</Badge>
-                )}
-                <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-              </Link>
+            <li
+              key={section.id}
+              className="flex items-center gap-3 rounded-md border border-border px-4 py-3"
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <TruncatedText className="font-medium">{section.name}</TruncatedText>
+                <TruncatedText className="text-sm text-muted-foreground">
+                  {framingOf(section)}
+                </TruncatedText>
+              </div>
+
+              {fullness && tally ? (
+                <Badge variant={CHIP_VARIANT[fullness]}>{tally}</Badge>
+              ) : (
+                <Badge variant="neutral">{plural(section.questionCount, 'question')}</Badge>
+              )}
+
+              <Button size="sm" variant="outline" asChild>
+                <Link
+                  to={`${ROUTES.TEST_PAPER(detail.id)}?section=${encodeURIComponent(section.id)}`}
+                >
+                  {paperExists ? 'Open' : 'Set up'}
+                </Link>
+              </Button>
             </li>
           );
         })}

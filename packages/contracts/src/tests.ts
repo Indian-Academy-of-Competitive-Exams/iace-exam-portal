@@ -438,6 +438,14 @@ export function offerRequirements(
   return [paperRequirement(test), seriesRequirement(test)];
 }
 
+/** Reopening lands on the step still owing work, so a half-built paper is never walked past. */
+export function testBuilderStepOf(test: Parameters<typeof offerRequirements>[0]): TestBuilderStep {
+  const paper = offerRequirements(test).find(
+    (requirement) => requirement.key === OFFER_REQUIREMENT.PAPER,
+  );
+  return paper?.met ? TEST_BUILDER_STEP.OFFER : TEST_BUILDER_STEP.PAPER;
+}
+
 function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
   if (test.paperBinding !== PAPER_BINDING.FIXED) {
     return {

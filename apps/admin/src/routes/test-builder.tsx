@@ -5,6 +5,7 @@ import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
   TEST_BUILDER_STEP,
   TEST_BUILDER_STEPS,
+  testBuilderStepOf,
   type BaseConfigDetail,
   type TestBuilderStep,
   type TestDetail,
@@ -99,8 +100,9 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
 
   const arrivedAt = (location.state as { step?: TestBuilderStep } | null)?.step;
+  // Landing on Offer past a half-built paper reads as though the paper were somebody else's problem.
   const [step, setStep] = useState<TestBuilderStep>(
-    arrivedAt ?? (detail ? TEST_BUILDER_STEP.OFFER : TEST_BUILDER_STEP.SETUP),
+    arrivedAt ?? (detail ? testBuilderStepOf(detail) : TEST_BUILDER_STEP.SETUP),
   );
 
   const chosenConfig = useQuery({
