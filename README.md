@@ -4,9 +4,10 @@ Full-stack learning platform for IACE (government-exam coaching — SSC, Banking
 
 ## Start here
 
-- **`CLAUDE.md`** — operating context: locked stack, data-model summary, key decisions, build order (read first).
-- **`docs/01-architecture-and-plan.md`** — architecture, live-test scaling design, roadmap.
-- **`docs/02-mocktest-feature-spec.md`** — the mock-test feature in detail.
+- **`CLAUDE.md`** — operating context: locked stack, key decisions, and what to read next (read first).
+- **`docs/01-architecture.md`** — architecture, live-test scaling design, deployment topology.
+- **`docs/02-domain-rules.md`** — the mock-test rules the schema cannot state.
+- **`docs/03-conventions.md`** — where code goes, table ownership, the event catalog.
 - **`docs/design/design-system.html`** — the living design-system style guide (open in a browser).
 - **`prisma/schema.prisma`** — the data model (source of truth).
 
@@ -16,7 +17,7 @@ TypeScript monorepo (Turborepo + pnpm) · NestJS API · **Vite + React + TS** fo
 
 `apps/test` is the test-taking portal (test player + report). The broader student platform — courses, performance — becomes a separate `apps/student` later.
 
-Both SPAs are thin by construction: the bootstrap, the session, the route guard and the chrome all come from `@iace/app-kit`, and the form and table kits from `@iace/ui`. What an app owns is its routes, its nav, its storage keys, its login screen and its dashboard — the things that genuinely differ. See `docs/03-shared-architecture.md` §2–§3.
+Both SPAs are thin by construction: the bootstrap, the session, the route guard and the chrome all come from `@iace/app-kit`, and the form and table kits from `@iace/ui`. What an app owns is its routes, its nav, its storage keys, its login screen and its dashboard — the things that genuinely differ. See `docs/03-conventions.md` §2–§3.
 
 ## Local prerequisites
 
@@ -156,11 +157,11 @@ Every backend feature ships with its tests in the same commit (see the guardrail
 
 The data model runs ahead of the code in two places, deliberately: the columns exist and are migrated, but nothing enforces them until the feature that owns them lands.
 
-| In the schema                       | Enforced when                                                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `Student.preTestReady`              | the test engine lands — a prompt for mother's/father's name + DOB on the way into a test, never a hard block       |
-| `BranchTestConfig` / `StudentGrant` | the test list and attempt-start endpoints exist — a student reaches a series by exam match, program match or grant |
-| `BaseConfig.locked`                 | a test built from it is first finalized — after that the shape only changes by cloning                             |
+| In the schema                           | Enforced when                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Student.preTestReady`                  | the test engine lands — a prompt for mother's/father's name + DOB on the way into a test, never a hard block              |
+| `TestSeries.branchIds` / `StudentGrant` | the test list and attempt-start endpoints exist — a series' kind decides who reaches it, and a grant overrides every kind |
+| `BaseConfig.locked`                     | a test built from it is first finalized — after that the shape only changes by cloning                                    |
 
 ## Notes
 

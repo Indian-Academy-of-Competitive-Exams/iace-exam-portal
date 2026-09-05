@@ -29,10 +29,7 @@ import {
 } from '../common/events';
 import { type DeviceContext } from './auth.types';
 
-/**
- * Owns `Admin` and `Page` (docs/03 §5) — and READS `Student` for credentials, which the students
- * module owns.
- */
+/** Owns no table (docs/03 §5): it READS `Student` for credentials, which the students module owns. */
 @Injectable()
 export class AuthService {
   constructor(

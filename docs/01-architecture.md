@@ -4,7 +4,7 @@ What this system is, and why the live test holds at 4–5K concurrent.
 
 The data model is `prisma/schema.prisma` and is not restated here. Module boundaries, table
 ownership and the event catalog are `docs/03-conventions.md`. The mock-test feature itself —
-render modes, results, the student journey — is `docs/02-mocktest-feature-spec.md`.
+render modes, results, the student journey — is `docs/02-domain-rules.md`.
 
 ---
 

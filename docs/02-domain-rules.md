@@ -103,6 +103,9 @@ public rollout unchanged.
 - A `StudentGrant` overrides every kind. It does not override the enable switch.
 - **The branch gate is `STANDARD`'s alone.** A student with no branch is still reached by a free
   series, a program, an event and a grant.
+- **A retired branch takes no new students.** Deactivating one is a service check, not a schema
+  constraint: nobody new may be placed in it and nobody may be transferred into it, while the
+  students already there keep the branch and everything it reaches.
 - A series is reached or it is not: no unlock, no prerequisite, no queue, nothing to ask for.
 - `Student.isTestBlocked` leaves the whole catalog readable and starts nothing.
 - `TestSeries.sequentialTests` orders the tests INSIDE a series: the first not yet finished is open

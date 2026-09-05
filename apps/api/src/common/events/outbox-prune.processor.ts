@@ -1,7 +1,7 @@
 /**
  * OutboxEvent is a hand-off buffer, not a record. A row exists so that a state change and the
  * event announcing it commit together, and it has done its whole job the moment a relay hands
- * it on — the audit log is where history lives (docs/schema-target.dbml, RETENTION).
+ * it on — the audit log is where history lives (docs/03 §5).
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';

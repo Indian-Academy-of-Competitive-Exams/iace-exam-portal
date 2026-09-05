@@ -125,12 +125,12 @@ That inserts the super admin (`developer@iace.co.in`), the eleven branches, the 
 exam and its two tiers, and the SSC CGL Tier 1 default base config with its four
 sections. It is idempotent — every insert is guarded, so running it twice changes nothing.
 
-The ONLINE branch is not optional. A student's branch is what `AccessResolver` reads to
-decide what they can reach, so a student without one resolves to an empty catalog however
-many exams they are enrolled on — and the admin screens lock every ONLINE student's branch
-to that row. It is a singleton the API refuses to duplicate, rename, retire or delete, so
-seeding it is the only comfortable way to bring it into being. Physical centres are added
-on the admin **Branches** screen.
+The ONLINE branch is not optional. A student's branch is what `AccessResolverService` reads
+to decide which STANDARD series they reach, so a student without one sees only what a free
+series, a program, an event or a grant opens, however many exams they are enrolled on — and
+the admin screens lock every ONLINE student's branch to that row. It is a singleton the API
+refuses to duplicate, rename, retire or delete, so seeding it is the only comfortable way
+to bring it into being. Physical centres are added on the admin **Branches** screen.
 
 Admins can't self‑register and nothing in the application creates one, so without this
 row there is no way into the admin app at all. To use a different address, edit
@@ -193,9 +193,7 @@ Before committing, the Husky pre‑commit hook runs format + lint + typecheck (a
 ## 10. Where to read next
 
 - `CLAUDE.md` — the operating manual (stack, scaling rules, conventions).
-- `docs/01-architecture-and-plan.md` — architecture & roadmap.
-- `docs/02-mocktest-feature-spec.md` — the mock‑test feature.
-- `docs/03-shared-architecture.md` — what's shared, module boundaries, conventions.
-- `docs/schema-target.dbml` — the whole data model as an ERD, with the judgement calls behind it.
-  Paste into dbdiagram.io to see it. `prisma/schema.prisma` still wins on any conflict.
+- `docs/01-architecture.md` — architecture, live-test scaling, deployment topology.
+- `docs/02-domain-rules.md` — the mock‑test rules the schema cannot state.
+- `docs/03-conventions.md` — what's shared, module boundaries, table ownership, events.
 - `prisma/schema.prisma` — the data model (source of truth).

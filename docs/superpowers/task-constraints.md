@@ -55,10 +55,9 @@ one, and never move one somewhere tracked to get it committed.
 keeping is worth putting where it will be found: `CLAUDE.md`, `docs/0*.md`, `docs/design/`, or this
 file. "It is written down in the plan" is not written down.
 
-Tracked under `docs/` and staying that way: `01-architecture-and-plan`, `02-mocktest-feature-spec`,
-`03-shared-architecture`, `design/design-system.html`, `local-setup`, `seed-exam-catalog`,
-`schema-target.dbml`, `WORKFLOW.md` and this file. Adding a document beside them is a deliberate
-change, not a side effect of finishing a task — ask first.
+Tracked under `docs/` and staying that way: `01-architecture`, `02-domain-rules`, `03-conventions`,
+`design/design-system.html`, `local-setup`, `seed-exam-catalog`, `WORKFLOW.md` and this file. Adding
+a document beside them is a deliberate change, not a side effect of finishing a task — ask first.
 
 </docs>
 

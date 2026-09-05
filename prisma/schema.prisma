@@ -1,9 +1,9 @@
 // ============================================================================
 // IACE Platform — V1 data model (PostgreSQL).
 //
-// Target of record: docs/schema-target.dbml. What Prisma cannot express —
-// partial-unique indexes, CHECK constraints, the locked-config immutability
-// trigger and the outbox poll index — is hand-written in the migration.
+// This file is the target of record. What Prisma cannot express — partial-unique
+// indexes, CHECK constraints, the locked-config immutability trigger and the
+// outbox poll index — is hand-written in the migration.
 // ============================================================================
 
 datasource db {
