@@ -178,7 +178,7 @@ export class AccessResolverService {
     if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
   }
 
-  /** What this student's branch adds to the clock here — from the catalog the gate just read. */
+  /** What this TEST adds to the clock here — from the catalog the gate just read. */
   async extraTimeSecFor(studentId: string, testId: string): Promise<number> {
     return (await this.windowFor(studentId, testId))?.extraTimeSec ?? 0;
   }

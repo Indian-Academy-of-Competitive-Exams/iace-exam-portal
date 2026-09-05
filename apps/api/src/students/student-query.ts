@@ -44,8 +44,7 @@ export function studentWhere(query: StudentListQuery): Prisma.StudentWhereInput 
   return and.length === 0 ? {} : { AND: and };
 }
 
-/** What a student reaches a series by: an exam enrolment or a program. An explicit grant is
- *  a row of its own and is not counted here. */
+/** Access a student carries themselves: an exam enrolment or a program. A grant is a row of its own, and FREE reaches everyone anyway. */
 function ownAccessFilter(hasNoneOfTheirOwn: boolean): Prisma.StudentWhereInput {
   const noneOfTheirOwn = {
     enrolledExams: { isEmpty: true },

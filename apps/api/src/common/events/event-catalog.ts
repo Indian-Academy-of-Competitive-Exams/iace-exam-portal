@@ -12,13 +12,13 @@ export const DOMAIN_EVENTS = {
   ATTEMPT_SUBMITTED: 'attempt.submitted',
   /** A first evaluation landed, and the aggregates want it. WIRED — see the scoring worker. */
   SCORING_COMPLETED: 'scoring.completed',
-  /** A series was enabled for a branch. TODO(docs/03 §6): emit from access/admin. */
+  /** A test was offered through a series a student reaches. TODO(docs/03 §6): emit from access/admin. */
   TEST_ASSIGNED: 'test.assigned',
   /** A paper question was excluded from scoring. TODO(docs/03 §6): from admin. */
   PAPER_QUESTION_DROPPED: 'paperQuestion.dropped',
   /** A paper question was awarded to everyone. TODO(docs/03 §6): from admin. */
   PAPER_QUESTION_BONUS: 'paperQuestion.bonus',
-  /** A student's PIN changed and every session was revoked. WIRED — see auth. */
+  /** A student's PIN changed; auth revoked the sessions before emitting. ANNOUNCED — no handler. */
   STUDENT_PIN_RESET: 'student.pin_reset',
   /** An audited write succeeded. WIRED — see the audit module. */
   AUDIT_ROW_ACTION: 'audit.row_action',
