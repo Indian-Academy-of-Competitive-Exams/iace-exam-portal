@@ -127,7 +127,6 @@ enum TestScope {
   FULL
   MODULE
   SECTIONAL
-  TOPIC
 }
 
 enum EvaluationMode {

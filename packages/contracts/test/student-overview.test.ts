@@ -61,7 +61,7 @@ describe('measureOf', () => {
 
   /** Nothing attempted is not nought per cent, which would read as every answer wrong. */
   it('reads an unattempted set as unmeasured, never as zero', () => {
-    const measure = measureOf(tallies, EVALUATION_MODE.PRACTICE, TEST_SCOPE.TOPIC);
+    const measure = measureOf(tallies, EVALUATION_MODE.PRACTICE, TEST_SCOPE.SECTIONAL);
 
     assert.equal(measure.attempted, 0);
     assert.equal(measure.accuracy, null);
@@ -73,7 +73,7 @@ describe('measureOf', () => {
     const measure = measureOf(
       [
         {
-          scope: TEST_SCOPE.TOPIC,
+          scope: TEST_SCOPE.SECTIONAL,
           evaluationMode: EVALUATION_MODE.RANKED,
           attempted: 4,
           correct: 4,
@@ -136,7 +136,7 @@ describe('scopesSat', () => {
         name: 'Reasoning',
         tallies: [
           {
-            scope: TEST_SCOPE.TOPIC,
+            scope: TEST_SCOPE.SECTIONAL,
             evaluationMode: EVALUATION_MODE.RANKED,
             attempted: 0,
             correct: 0,

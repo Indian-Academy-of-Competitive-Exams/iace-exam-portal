@@ -24,7 +24,6 @@ export interface TestFormValues {
   scope: TestScope;
   moduleId: string;
   sectionId: string;
-  topicIds: string[];
   evaluationMode: EvaluationMode;
   paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
@@ -45,7 +44,6 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
-    topicIds: scopeRef?.topicIds ?? [],
     evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
@@ -61,9 +59,6 @@ export function scopeRefOf(values: TestFormValues): TestScopeRef | null {
   }
   if (values.scope === TEST_SCOPE.SECTIONAL) {
     return values.sectionId ? { sectionId: values.sectionId } : null;
-  }
-  if (values.scope === TEST_SCOPE.TOPIC) {
-    return values.topicIds.length > 0 ? { topicIds: values.topicIds } : null;
   }
   return null;
 }
@@ -86,7 +81,6 @@ const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
   [TEST_SCOPE.FULL]: null,
   [TEST_SCOPE.MODULE]: 'moduleId',
   [TEST_SCOPE.SECTIONAL]: 'sectionId',
-  [TEST_SCOPE.TOPIC]: 'topicIds',
 };
 
 export function applyServerErrors(error: unknown, form: TestForm, scope: TestScope): void {

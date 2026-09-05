@@ -29,7 +29,6 @@ export const TEST_SCOPE = {
   FULL: 'FULL',
   MODULE: 'MODULE',
   SECTIONAL: 'SECTIONAL',
-  TOPIC: 'TOPIC',
 } as const;
 export const testScopeSchema = z.enum(TEST_SCOPE);
 export type TestScope = z.infer<typeof testScopeSchema>;
@@ -40,7 +39,6 @@ export const TEST_SCOPE_LABELS: Readonly<Record<TestScope, string>> = {
   FULL: 'Full paper',
   MODULE: 'Module',
   SECTIONAL: 'Sectional',
-  TOPIC: 'Topic',
 };
 
 /** RANKED produces a cohort rank and forces a FIXED paper; PRACTICE never ranks. */
@@ -103,7 +101,6 @@ export type PaperQuestionStatus = z.infer<typeof paperQuestionStatusSchema>;
 export const testScopeRefSchema = z.object({
   moduleId: z.string().min(1).optional(),
   sectionId: z.string().min(1).optional(),
-  topicIds: z.array(z.string().min(1)).min(1).optional(),
 });
 export type TestScopeRef = z.infer<typeof testScopeRefSchema>;
 

@@ -38,7 +38,6 @@ import {
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
-import { TopicMultiPicker } from '../components/taxonomy-picker';
 import { useSuggestedTestName } from '../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
 
@@ -343,10 +342,6 @@ function ScopeReference({
 }>) {
   const moduleId = useWatch({ control: form.control, name: 'moduleId' });
   const sectionId = useWatch({ control: form.control, name: 'sectionId' });
-  const topicIds = useWatch({ control: form.control, name: 'topicIds' });
-  const subjectIds = (config?.sections ?? [])
-    .map((section) => section.subjectId)
-    .filter((id): id is string => id !== null);
 
   if (scope === TEST_SCOPE.MODULE) {
     return (
@@ -387,22 +382,6 @@ function ScopeReference({
               hint: plural(section.questionCount, 'question'),
             }))}
             emptyLabel="This configuration has no sections"
-          />
-        )}
-      </FormField>
-    );
-  }
-
-  if (scope === TEST_SCOPE.TOPIC) {
-    return (
-      <FormField form={form} name="topicIds" label="Topics">
-        {(control) => (
-          <TopicMultiPicker
-            id={control.id}
-            subjectIds={subjectIds}
-            value={topicIds}
-            placeholder="Choose topics"
-            onChange={(next) => form.setValue('topicIds', next)}
           />
         )}
       </FormField>

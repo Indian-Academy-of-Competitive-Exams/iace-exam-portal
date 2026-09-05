@@ -169,7 +169,7 @@ describe('SubjectStrengthFigure', () => {
   });
 
   it('says nothing was measured rather than drawing an empty ranking', () => {
-    const { view } = shown(EVALUATION_MODE.PRACTICE, TEST_SCOPE.TOPIC);
+    const { view } = shown(EVALUATION_MODE.PRACTICE, TEST_SCOPE.MODULE);
 
     assert.ok(view.getByText('No question in this mode and scope has been marked yet.'));
   });
@@ -194,7 +194,7 @@ describe('SpeedAccuracyFigure', () => {
       <SpeedAccuracyFigure
         subjects={SUBJECTS}
         mode={EVALUATION_MODE.PRACTICE}
-        scope={TEST_SCOPE.TOPIC}
+        scope={TEST_SCOPE.MODULE}
       />,
     );
     const view = within(container);

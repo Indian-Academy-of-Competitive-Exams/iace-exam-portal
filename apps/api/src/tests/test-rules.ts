@@ -51,14 +51,12 @@ const SCOPE_REFERENCE_REQUIRED: Record<TestScope, keyof TestScopeRef | null> = {
   [TEST_SCOPE.FULL]: null,
   [TEST_SCOPE.MODULE]: 'moduleId',
   [TEST_SCOPE.SECTIONAL]: 'sectionId',
-  [TEST_SCOPE.TOPIC]: 'topicIds',
 };
 
 const SCOPE_REFERENCE_PROMPT: Record<TestScope, string> = {
   [TEST_SCOPE.FULL]: 'A full test covers the whole paper, so it names no part of it.',
   [TEST_SCOPE.MODULE]: 'A module test has to say which module it covers.',
   [TEST_SCOPE.SECTIONAL]: 'A sectional test has to say which section it covers.',
-  [TEST_SCOPE.TOPIC]: 'A topic test has to name at least one topic.',
 };
 
 /** A scope without its reference is a test nobody can build a paper for. */
