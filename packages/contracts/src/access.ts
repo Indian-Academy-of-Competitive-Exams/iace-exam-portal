@@ -4,6 +4,7 @@ import { csvIdQuery, matchModeQuery, optionalBooleanQuery, searchQuery } from '.
 import { paginationQuerySchema } from './envelope';
 import { canonicalNameSchema } from './naming';
 import { examCourseSchema } from './exams';
+import { evaluationModeSchema } from './tests';
 
 // ============================================================================
 // Access. A series' kind decides who reaches it, a grant overrides every kind,
@@ -157,6 +158,8 @@ export const testSeriesSchema = z.object({
   /** A graded ramp: each paper harder than the last. Order is `sequentialTests`, not this. */
   progressive: z.boolean(),
   kind: testSeriesKindSchema,
+  /** What its tests are judged as. Every test it holds carries this, so it is fixed once it holds one. */
+  evaluationMode: evaluationModeSchema,
   /** Which branches run it. STANDARD only — a CHECK refuses a value on any other kind. */
   branchIds: z.array(z.string()),
   /** Off until somebody switches it on; a series nobody enabled reaches nobody. */
@@ -222,6 +225,8 @@ export const createTestSeriesSchema = z.object({
   sequentialTests: z.boolean().optional(),
   progressive: z.boolean().optional(),
   kind: testSeriesKindSchema.optional(),
+  /** Absent is RANKED, and it stops being changeable the moment the series holds a test. */
+  evaluationMode: evaluationModeSchema.optional(),
   isEnabled: z.boolean().optional(),
   eventId: z.string().nullish(),
 });

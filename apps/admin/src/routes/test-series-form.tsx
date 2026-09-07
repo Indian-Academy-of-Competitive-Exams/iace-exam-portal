@@ -5,6 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
   type CreateTestSeriesBody,
+  EVALUATION_MODE,
+  EVALUATION_MODES,
+  EVALUATION_MODE_LABELS,
+  type EvaluationMode,
   FEATURE_KEYS,
   PERMISSION_LEVELS,
   type SeriesBranch,
@@ -45,6 +49,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import {
+  EVALUATION_MODE_HINTS,
   NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
@@ -71,6 +76,7 @@ interface SeriesFormValues {
   sequentialTests: boolean;
   progressive: boolean;
   kind: TestSeriesKind;
+  evaluationMode: EvaluationMode;
 }
 
 const seriesKey = (id: string) => [...QUERY_KEYS.TEST_SERIES, id] as const;
@@ -84,6 +90,7 @@ const SERVER_FIELDS = [
   'programCode',
   'eventId',
   'kind',
+  'evaluationMode',
 ] as const;
 
 const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
@@ -92,11 +99,55 @@ const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
   hint: TEST_SERIES_KIND_HINTS[value],
 }));
 
+const EVALUATION_ITEMS = EVALUATION_MODES.map((value) => ({
+  value,
+  label: EVALUATION_MODE_LABELS[value],
+  hint: EVALUATION_MODE_HINTS[value],
+}));
+
 /** A program and an event each belong to one kind, so both leave with the kind that carried them. */
 function chooseKind(form: UseFormReturn<SeriesFormValues>, next: TestSeriesKind): void {
   form.setValue('kind', next, { shouldDirty: true });
   if (next !== TEST_SERIES_KIND.PROGRAM) form.setValue('programCode', '', { shouldDirty: true });
   if (next !== TEST_SERIES_KIND.EVENT) form.setValue('eventId', '', { shouldDirty: true });
+}
+
+/** A series decides how its tests are judged, so it can only decide while it holds none. */
+function SeriesEvaluation({
+  form,
+  detail,
+}: Readonly<{ form: UseFormReturn<SeriesFormValues>; detail: TestSeriesSummary | null }>) {
+  const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
+  const held = detail?.testCount ?? 0;
+
+  return (
+    <>
+      <FormField form={form} name="evaluationMode" label="Evaluation">
+        {(control) => (
+          <Combobox
+            id={control.id}
+            aria-describedby={control['aria-describedby']}
+            aria-invalid={control['aria-invalid']}
+            clearable={false}
+            disabled={held > 0}
+            value={evaluationMode}
+            onChange={(next) =>
+              form.setValue('evaluationMode', next as EvaluationMode, { shouldDirty: true })
+            }
+            items={EVALUATION_ITEMS}
+          />
+        )}
+      </FormField>
+
+      {detail && held > 0 ? (
+        <Alert variant="info" className="sm:col-span-2">
+          Its {plural(held, 'test')} {held === 1 ? 'is' : 'are'} built as{' '}
+          {EVALUATION_MODE_LABELS[detail.evaluationMode]} and judged the way the series says, so it
+          cannot change while the series holds {held === 1 ? 'it' : 'them'}.
+        </Alert>
+      ) : null}
+    </>
+  );
 }
 
 /** The one target its kind requires, which is why exactly one of these is ever on screen. */
@@ -291,6 +342,7 @@ function valuesOf(detail: TestSeriesSummary | null): SeriesFormValues {
     sequentialTests: detail?.sequentialTests ?? false,
     progressive: detail?.progressive ?? false,
     kind: detail?.kind ?? TEST_SERIES_KIND.STANDARD,
+    evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
   };
 }
 
@@ -306,6 +358,7 @@ function bodyOf(values: SeriesFormValues): CreateTestSeriesBody {
     sequentialTests: values.sequentialTests,
     progressive: values.progressive,
     kind: values.kind,
+    evaluationMode: values.evaluationMode,
   };
 }
 
@@ -471,6 +524,8 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           >
             {(control) => <Textarea {...control} />}
           </FormField>
+
+          <SeriesEvaluation form={form} detail={detail} />
 
           <div className="flex flex-col gap-3 sm:col-span-2">
             <SeriesToggle

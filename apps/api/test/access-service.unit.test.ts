@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, TEST_SERIES_KIND } from '@iace/contracts';
+import {
+  AppException,
+  createTestSeriesSchema,
+  ErrorCodes,
+  EVALUATION_MODE,
+  TEST_SERIES_KIND,
+} from '@iace/contracts';
 import { ProgramsService } from '../src/access/programs.service';
 import { TestSeriesService } from '../src/access/test-series.service';
 import { StudentGrantsService } from '../src/access/student-grants.service';
@@ -699,5 +705,76 @@ describe('the access writes that bust the catalog cache', () => {
     assert.deepEqual(events.of(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED), [
       { testSeriesId: created.id },
     ]);
+  });
+});
+
+/** The rule the schema cannot state: a series decides how its tests are judged, once and for all. */
+describe('TestSeriesService — a series decides how its tests are judged', () => {
+  it('creates a series carrying the mode it was given', async () => {
+    const { series } = build();
+
+    const created = await series.create(draft({ evaluationMode: EVALUATION_MODE.PRACTICE }));
+
+    assert.equal(created.evaluationMode, EVALUATION_MODE.PRACTICE);
+  });
+
+  it('starts a series that named no mode as RANKED', async () => {
+    const { series } = build();
+
+    const created = await series.create(draft());
+
+    assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
+  });
+
+  it('changes the mode of a series holding no test', async () => {
+    const { series } = build({ series: [makeSeries({ id: 'srs_1' })] });
+
+    const saved = await series.update('srs_1', { evaluationMode: EVALUATION_MODE.PRACTICE });
+
+    assert.equal(saved.evaluationMode, EVALUATION_MODE.PRACTICE);
+  });
+
+  /** The failure this prevents: a sitting scored as practice re-read as a rank, or the other way. */
+  it('refuses to change the mode of a series holding tests, naming how many', async () => {
+    const { series, prisma } = build({
+      series: [makeSeries({ id: 'srs_1', evaluationMode: EVALUATION_MODE.PRACTICE })],
+      tests: [
+        { id: 'tst_1', testSeriesId: 'srs_1' },
+        { id: 'tst_2', testSeriesId: 'srs_1' },
+      ],
+    });
+
+    const error = await series
+      .update('srs_1', { evaluationMode: EVALUATION_MODE.RANKED })
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.CONFLICT);
+    assert.match(error.fieldErrors?.evaluationMode?.[0] ?? '', /2 tests/);
+    assert.equal(prisma.series[0]?.evaluationMode, EVALUATION_MODE.PRACTICE);
+  });
+
+  it('saves a series holding tests as long as the mode is the one it already has', async () => {
+    const { series } = build({
+      series: [makeSeries({ id: 'srs_1', evaluationMode: EVALUATION_MODE.PRACTICE })],
+      tests: [{ id: 'tst_1', testSeriesId: 'srs_1' }],
+    });
+
+    const saved = await series.update('srs_1', {
+      name: 'Renamed',
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+    });
+
+    assert.equal(saved.name, 'Renamed');
+  });
+
+  it('marks an unknown mode on the field the form registers', () => {
+    const parsed = createTestSeriesSchema.safeParse({
+      name: 'SSC CGL Tier 1 mocks',
+      evaluationMode: 'GRADED',
+    });
+
+    assert.equal(parsed.success, false);
+    assert.deepEqual(parsed.error?.issues[0]?.path, ['evaluationMode']);
   });
 });

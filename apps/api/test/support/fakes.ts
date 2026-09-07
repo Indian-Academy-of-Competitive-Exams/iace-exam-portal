@@ -3221,6 +3221,7 @@ export interface FakeSeriesRow {
   programCode: string | null;
   sequentialTests: boolean;
   kind: TestSeriesKind;
+  evaluationMode: EvaluationMode;
   eventId: string | null;
   branchIds: string[];
   isEnabled: boolean;
@@ -3261,6 +3262,7 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     programCode: null,
     sequentialTests: false,
     kind: TEST_SERIES_KIND.STANDARD,
+    evaluationMode: EVALUATION_MODE.RANKED,
     eventId: null,
     branchIds: [],
     isEnabled: true,
@@ -3520,6 +3522,8 @@ export class FakeAccessPrisma {
     const stage = this.examStages.find((candidate) => candidate.id === row.examStageId);
     return {
       ...row,
+      // Prisma computes this from the rows, so a fixture must not be able to claim otherwise.
+      _count: { tests: this.tests.filter((test) => test.testSeriesId === row.id).length },
       examStage: stage ? { id: stage.id, name: stage.name, exam: { code: 'SSC CGL' } } : null,
     };
   }

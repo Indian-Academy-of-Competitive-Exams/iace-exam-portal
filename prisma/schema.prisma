@@ -832,6 +832,8 @@ model TestSeries {
   progressive     Boolean        @default(false)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
   kind            TestSeriesKind @default(STANDARD)
+  // What its tests are judged as; every test it holds carries the same value.
+  evaluationMode  EvaluationMode @default(RANKED)
   eventId         String?
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -845,6 +847,7 @@ model TestSeries {
   grants        StudentGrant[]
   notifications Notification[]
 
+  @@unique([id, evaluationMode])
   @@index([examStageId])
   @@index([programCode])
   @@index([eventId])
