@@ -53,7 +53,7 @@ import {
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
-import { Prisma } from '@prisma/client';
+import { Prisma, type DeliveryChannel } from '@prisma/client';
 import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
 import { RollupOutbox } from '../../src/attempts/rollup-outbox';
 import { type Env } from '../../src/config/env.schema';
@@ -4153,23 +4153,33 @@ export interface FakeNotificationRow {
   type: NotificationType;
   title: string;
   body: string | null;
+  data?: unknown;
+  dedupeKey?: string | null;
+  actBy?: Date | null;
   testId: string | null;
   testSeriesId: string | null;
   isRead: boolean;
   createdAt: Date;
 }
 
+export interface FakeDeliveryRow {
+  notificationId: string;
+  channel: DeliveryChannel;
+}
+
 interface NotificationWhere {
   id?: string;
   studentId?: string;
   isRead?: boolean;
+  dedupeKey?: string;
 }
 
 function matchesNotification(row: FakeNotificationRow, where: NotificationWhere): boolean {
   return (
     (where.id === undefined || row.id === where.id) &&
     (where.studentId === undefined || row.studentId === where.studentId) &&
-    (where.isRead === undefined || row.isRead === where.isRead)
+    (where.isRead === undefined || row.isRead === where.isRead) &&
+    (where.dedupeKey === undefined || row.dedupeKey === where.dedupeKey)
   );
 }
 
@@ -4192,12 +4202,31 @@ export class FakeNotificationsPrisma {
     return this as unknown as PrismaService;
   }
 
-  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
-    return Promise.all(work);
+  readonly deliveries: FakeDeliveryRow[] = [];
+
+  /** Both forms: the array one the list endpoint uses, and the callback one `create` writes in. */
+  $transaction<T>(
+    work: Promise<T>[] | ((tx: FakeNotificationsPrisma) => Promise<T>),
+  ): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
   }
+
+  readonly notificationDelivery = {
+    createMany: ({ data }: { data: FakeDeliveryRow[] }) => {
+      this.deliveries.push(...data);
+      return Promise.resolve({ count: data.length });
+    },
+  };
 
   readonly notification = {
     create: ({ data }: { data: Omit<FakeNotificationRow, 'id' | 'isRead' | 'createdAt'> }) => {
+      const held =
+        data.dedupeKey != null &&
+        this.rows.some(
+          (row) => row.studentId === data.studentId && row.dedupeKey === data.dedupeKey,
+        );
+      if (held) return Promise.reject(uniqueViolation('Notification_student_dedupe_key'));
+
       this.seq += 1;
       const row: FakeNotificationRow = {
         ...data,

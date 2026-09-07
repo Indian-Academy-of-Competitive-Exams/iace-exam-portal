@@ -9,6 +9,8 @@ import {
   type Paginated,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUniqueViolation } from '../common/prisma-errors';
+import { escalationFor } from './notification-policy';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
 export interface NewNotification {
@@ -16,6 +18,12 @@ export interface NewNotification {
   type: NotificationType;
   title: string;
   body?: string;
+  /** Template variables, so any channel can render this row without the producer being present. */
+  data?: Record<string, string | number>;
+  /** The natural key of the fact behind it. Given one, writing twice is writing once. */
+  dedupeKey?: string;
+  /** When this stops being actionable. Given one, escalation stops waiting as it approaches. */
+  actBy?: Date;
   testId?: string;
   testSeriesId?: string;
 }
@@ -36,18 +44,50 @@ interface NotificationColumns {
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Books what policy allows to be spent; idempotent on dedupeKey so the outbox may redeliver. */
   async create(input: NewNotification): Promise<Notification> {
-    const row = await this.prisma.notification.create({
-      data: {
-        studentId: input.studentId,
-        type: input.type,
-        title: input.title,
-        body: input.body ?? null,
-        testId: input.testId ?? null,
-        testSeriesId: input.testSeriesId ?? null,
-      },
+    const plan = escalationFor(input.type, input.actBy ?? null, new Date());
+
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.notification.create({
+          data: {
+            studentId: input.studentId,
+            type: input.type,
+            title: input.title,
+            body: input.body ?? null,
+            data: input.data ?? Prisma.DbNull,
+            dedupeKey: input.dedupeKey ?? null,
+            actBy: input.actBy ?? null,
+            testId: input.testId ?? null,
+            testSeriesId: input.testSeriesId ?? null,
+          },
+        });
+
+        if (plan.channels.length > 0) {
+          await tx.notificationDelivery.createMany({
+            data: plan.channels.map((channel) => ({ notificationId: created.id, channel })),
+          });
+        }
+        return created;
+      });
+
+      return toNotification(row);
+    } catch (error) {
+      const already = isUniqueViolation(error) ? await this.byDedupeKey(input) : null;
+      if (!already) throw error;
+
+      return toNotification(already);
+    }
+  }
+
+  /** Only ever reached after a unique violation, so the row it looks for is already there. */
+  private async byDedupeKey(input: NewNotification): Promise<NotificationColumns | null> {
+    if (!input.dedupeKey) return null;
+
+    return this.prisma.notification.findFirst({
+      where: { studentId: input.studentId, dedupeKey: input.dedupeKey },
     });
-    return toNotification(row);
   }
 
   /** Null for a student who has been anonymised or removed — nothing to text, and nothing wrong. */

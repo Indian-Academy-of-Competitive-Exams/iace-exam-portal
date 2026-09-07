@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DeliveryChannel } from '@prisma/client';
 import { AppException, ErrorCodes, NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { NotificationsListener } from '../src/notifications/notifications.listener';
@@ -169,6 +170,70 @@ describe('NotificationsService — one student’s own bell', () => {
     assert.equal(typeof created.createdAt, 'string');
     assert.equal(created.body, null);
     assert.equal(created.testId, null);
+  });
+});
+
+describe('Writing a notification books what may be spent on it', () => {
+  it('books one pending delivery per paid channel the policy allows', async () => {
+    const { service, prisma } = build();
+
+    await service.create({
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.RESULT_READY,
+      title: 'Your result is ready',
+    });
+
+    assert.deepEqual(
+      prisma.deliveries.map((delivery) => delivery.channel),
+      [DeliveryChannel.WHATSAPP],
+    );
+  });
+
+  /** No IN_APP row: the notification itself IS that delivery, and mirroring it doubles the table. */
+  it('books nothing for a kind that never justifies paying', async () => {
+    const { service, prisma } = build();
+
+    await service.create({
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.ENROLLMENT_ADDED,
+      title: 'You have been enrolled',
+    });
+
+    assert.equal(prisma.rows.length, 1);
+    assert.equal(prisma.deliveries.length, 0);
+  });
+
+  /** What makes the outbox safe to redeliver: the loser reads back the row it lost to. */
+  it('writes one row when the same fact arrives twice', async () => {
+    const { service, prisma } = build();
+    const fact = {
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.RESULT_READY,
+      title: 'Your result is ready',
+      dedupeKey: 'result:att_1',
+    };
+
+    const first = await service.create(fact);
+    const second = await service.create(fact);
+
+    assert.equal(prisma.rows.length, 1);
+    assert.equal(second.id, first.id, 'the redelivery reads back the row it lost to');
+    assert.equal(prisma.deliveries.length, 1, 'and does not book a second paid message');
+  });
+
+  /** An ad-hoc announcement has no natural key, so saying it twice must remain possible. */
+  it('lets a keyless notification repeat', async () => {
+    const { service, prisma } = build();
+    const adHoc = {
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Branch closed tomorrow',
+    };
+
+    await service.create(adHoc);
+    await service.create(adHoc);
+
+    assert.equal(prisma.rows.length, 2);
   });
 });
 
