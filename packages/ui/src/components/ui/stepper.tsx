@@ -44,7 +44,7 @@ export function Stepper({
 }: Readonly<StepperProps>) {
   return (
     <nav aria-label={label} className={className}>
-      <ol className="flex flex-wrap items-center gap-1">
+      <ol className="flex flex-wrap items-center justify-center gap-1">
         {steps.map((step, index) => (
           <li key={step.value} className="flex items-center gap-1">
             <Step step={step} index={index} onSelect={onValueChange} />
