@@ -97,3 +97,27 @@ export const averagePercentile = (points: readonly { percentile: number | null }
   if (ranked.length === 0) return '—';
   return `${Math.round(ranked.reduce((sum, value) => sum + value, 0) / ranked.length)}`;
 };
+
+/** What a sat paper scored, joined onto its catalog card from the trend a screen already holds. */
+export interface TestResult {
+  attemptId: string;
+  score: number;
+  maxMarks: number;
+  percentile: number | null;
+}
+
+/** The newest sitting of each paper, so a retake's card shows the retake and not the first go. */
+export function resultsByTest(
+  points: readonly (TestResult & { testId: string })[],
+): ReadonlyMap<string, TestResult> {
+  const held = new Map<string, TestResult>();
+  for (const point of points) {
+    held.set(point.testId, {
+      attemptId: point.attemptId,
+      score: point.score,
+      maxMarks: point.maxMarks,
+      percentile: point.percentile,
+    });
+  }
+  return held;
+}

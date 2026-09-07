@@ -1,38 +1,48 @@
 import { Link } from 'react-router-dom';
 import { Progress, TruncatedText, linkVariants, plural } from '@iace/ui';
-import { ROUTES } from '../../lib/constants';
-import { seriesProgress, type Sittable } from '../../lib/catalog';
 import { type StudentCatalogSeries } from '@iace/contracts';
+import { ROUTES } from '../../lib/constants';
+import { seriesProgress, type Sittable, type TestResult } from '../../lib/catalog';
+import { Shelf } from '../ui';
 import { TestTile } from './test-tile';
 
 export interface SeriesShelfProps {
   series: StudentCatalogSeries;
   rows: readonly Sittable[];
   now: Date;
+  /** What each sat paper scored, keyed by test id — the trend the screen already holds. */
+  results: ReadonlyMap<string, TestResult>;
 }
 
-/** A shelf scrolls SIDEWAYS inside the page's vertical scroll — a different axis hides nothing. */
-export function SeriesShelf({ series, rows, now }: Readonly<SeriesShelfProps>) {
+export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelfProps>) {
   const progress = seriesProgress(series);
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex min-w-0 flex-col gap-1">
+    <Shelf
+      title={
         <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
-          <TruncatedText className="text-md font-semibold">{series.name}</TruncatedText>
+          <TruncatedText className="text-lg font-semibold tracking-tight">
+            {series.name}
+          </TruncatedText>
         </Link>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {progress.done} of {plural(progress.total, 'test')} done
-        </span>
-      </div>
-
-      <Progress value={progress.percent} size="sm" aria-label={`Progress through ${series.name}`} />
-
-      <div className="relative flex snap-x gap-3 overflow-x-auto pb-2">
-        {rows.map((row) => (
-          <TestTile key={row.test.id} row={row} now={now} />
-        ))}
-      </div>
-    </section>
+      }
+      meta={`${plural(progress.total, 'test')} · ${progress.done} sat`}
+      action={
+        <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
+          Open series
+        </Link>
+      }
+      banner={
+        <Progress
+          value={progress.percent}
+          size="sm"
+          aria-label={`Progress through ${series.name}`}
+        />
+      }
+    >
+      {rows.map((row) => (
+        <TestTile key={row.test.id} row={row} now={now} result={results.get(row.test.id)} />
+      ))}
+    </Shelf>
   );
 }

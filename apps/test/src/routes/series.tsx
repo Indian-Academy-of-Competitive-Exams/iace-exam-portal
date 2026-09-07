@@ -7,11 +7,8 @@ import {
   Button,
   DataTable,
   LoadingState,
-  Metric,
   PageFrame,
-  PageHeader,
   Progress,
-  SectionHeading,
   Skeleton,
   TruncatedText,
   linkVariants,
@@ -37,6 +34,7 @@ import {
   performanceReportQueryKey,
 } from '../lib/constants';
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
+import { Hero, PageBody, Section, StatTile, TileGrid } from '../components/ui';
 import { averageAccuracy, bestRank, seriesProgress, type SeriesProgress } from '../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
@@ -77,36 +75,39 @@ export function SeriesPage() {
   const sat = (trend.data?.points ?? []).filter((point) =>
     (series?.tests ?? []).some((test) => test.id === point.testId),
   );
-  const mean = averageAccuracy(sat);
 
   return (
     <PageFrame
       header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs
-              nav={NAV_ITEMS}
-              tail={[{ label: 'Tests', to: ROUTES.TESTS }, { label: series?.name ?? 'Series' }]}
-            />
-          }
-          title={series?.name ?? 'Series'}
-          meta={progress ? `${progress.done} of ${plural(progress.total, 'test')} done` : undefined}
-          action={
-            <Button asChild variant="outline">
-              <Link to={ROUTES.PERFORMANCE}>Your standing</Link>
-            </Button>
-          }
+        <PageCrumbs
+          nav={NAV_ITEMS}
+          tail={[{ label: 'Tests', to: ROUTES.TESTS }, { label: series?.name ?? 'Series' }]}
         />
       }
     >
-      {catalog.isLoading ? <LoadingState /> : null}
-      {catalog.data && !series ? (
-        <Alert variant="warning">This series is not one you reach.</Alert>
-      ) : null}
+      <PageBody>
+        {catalog.isLoading ? <LoadingState /> : null}
+        {catalog.data && !series ? (
+          <Alert variant="warning">This series is not one you reach.</Alert>
+        ) : null}
 
-      {series && progress ? (
-        <div className="grid min-h-0 gap-6 lg:grid-cols-[1fr_18rem]">
-          <div className="flex min-h-0 flex-col gap-4">
+        {series && progress ? (
+          <>
+            <Hero
+              eyebrow={series.examStage?.name}
+              title={series.name}
+              meta={`${progress.done} of ${plural(progress.total, 'test')} done`}
+              aside={
+                <Button asChild variant="outline">
+                  <Link to={ROUTES.PERFORMANCE}>Your standing</Link>
+                </Button>
+              }
+            />
+
+            <Progress value={progress.percent} aria-label="Tests done in this series" />
+
+            <Standing trend={trend} progress={progress} sat={sat} />
+
             {series.sequentialTests ? (
               /* ui-copy-ok: rule */
               <Alert variant="info">
@@ -117,32 +118,27 @@ export function SeriesPage() {
               </Alert>
             ) : null}
 
-            <Progress value={progress.percent} aria-label="Tests done in this series" />
+            <Section title="Tests" meta={plural(series.tests.length, 'test')}>
+              <DataTable
+                columns={episodeColumns(now)}
+                rows={series.tests}
+                rowKey={(row) => row.id}
+                isLoading={false}
+                empty="Nothing has been put in this series yet."
+              />
+            </Section>
+          </>
+        ) : null}
 
-            <DataTable
-              columns={episodeColumns(now)}
-              rows={series.tests}
-              rowKey={(row) => row.id}
-              isLoading={false}
-              empty="Nothing has been put in this series yet."
-            />
-          </div>
-
-          <aside className="flex flex-col gap-3">
-            <SectionHeading title="Standing" />
-            <Standing trend={trend} progress={progress} sat={sat} mean={mean} />
-          </aside>
-        </div>
-      ) : null}
-
-      {progression ? (
-        <div className="mt-6 flex flex-col gap-6">
-          <RampFigure progression={progression} />
-          {progression.subjects.length > 0 ? (
-            <MasteryFigure subjects={progression.subjects} />
-          ) : null}
-        </div>
-      ) : null}
+        {progression ? (
+          <>
+            <RampFigure progression={progression} />
+            {progression.subjects.length > 0 ? (
+              <MasteryFigure subjects={progression.subjects} />
+            ) : null}
+          </>
+        ) : null}
+      </PageBody>
     </PageFrame>
   );
 }
@@ -152,30 +148,22 @@ function Standing({
   trend,
   progress,
   sat,
-  mean,
 }: Readonly<{
   trend: { isLoading: boolean; isError: boolean };
   progress: SeriesProgress;
   sat: readonly PerformancePoint[];
-  mean: string;
 }>) {
-  if (trend.isLoading) {
-    return <Skeleton variant="row" className="h-32 rounded-lg" />;
-  }
-  if (trend.isError) {
-    return <Alert variant="danger">Your performance did not load.</Alert>;
-  }
+  if (trend.isLoading) return <Skeleton variant="row" className="h-24 rounded-xl" />;
+  if (trend.isError) return <Alert variant="danger">Your performance did not load.</Alert>;
+
+  const mean = averageAccuracy(sat);
+
   return (
-    <>
-      <Metric size="md" label="Tests done" value={progress.done} unit={`/ ${progress.total}`} />
-      <Metric size="md" label="Best rank" value={bestRank(sat)} />
-      <Metric
-        size="md"
-        label="Average accuracy"
-        value={mean}
-        unit={mean === '—' ? undefined : '%'}
-      />
-    </>
+    <TileGrid>
+      <StatTile label="Tests done" value={progress.done} unit={`/ ${progress.total}`} />
+      <StatTile label="Best rank" value={bestRank(sat)} />
+      <StatTile label="Average accuracy" value={mean} unit={mean === '—' ? undefined : '%'} />
+    </TileGrid>
   );
 }
 
@@ -201,6 +189,12 @@ function episodeColumns(now: Date): readonly DataTableColumn<StudentCatalogTest>
       ),
     },
     { key: 'when', header: 'When', cell: (row) => whenLine(row, now) },
+    {
+      key: 'sat',
+      header: 'Sat by',
+      numeric: true,
+      cell: (row) => row.sittingCount ?? '—',
+    },
     {
       key: 'go',
       cell: (row) => {

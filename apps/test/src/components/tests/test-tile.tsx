@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CalendarClock, CircleCheck, LockKeyhole } from 'lucide-react';
-import { Badge, Button, Card, CardContent, TruncatedText, plural } from '@iace/ui';
+import { Button, Card, TruncatedText, cn, linkVariants, plural } from '@iace/ui';
 import {
   ATTEMPT_STATUS,
   INSTITUTE_TIME_ZONE,
@@ -8,91 +7,112 @@ import {
   type StudentCatalogTest,
 } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
-import { type Sittable } from '../../lib/catalog';
+import { type Sittable, type TestResult } from '../../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
   dateStyle: 'medium',
-  timeStyle: 'short',
 });
 
-/** The tile's body opens what the test IS; its button does the one thing there is to do. */
-export function TestTile({ row, now }: Readonly<{ row: Sittable; now: Date }>) {
-  const { test } = row;
-  const done = row.bucket === TEST_BUCKET.DONE;
+/** The stripe and the pill say the same thing twice on purpose: one is scanned, one is read. */
+const STATES = {
+  DONE: { bar: 'bg-success', pill: 'bg-success-subtle text-success-ink', label: 'Done' },
+  LIVE: { bar: 'bg-primary', pill: 'bg-primary-subtle text-primary-ink', label: 'Open now' },
+  RUNNING: { bar: 'bg-warning', pill: 'bg-warning-subtle text-warning-ink', label: 'In progress' },
+  SHUT: { bar: 'bg-border-strong', pill: 'bg-muted text-muted-foreground', label: 'Scheduled' },
+} as const;
+
+/** The tile's body opens what the test IS; its foot does the one thing there is to do. */
+export function TestTile({
+  row,
+  now,
+  result,
+}: Readonly<{ row: Sittable; now: Date; result?: TestResult }>) {
+  const state = STATES[stateOf(row)];
 
   return (
-    <Card className="flex w-72 shrink-0 snap-start flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <Link to={ROUTES.TEST_ABOUT(test.id)} className="flex min-w-0 flex-col gap-1">
+    <Card className="flex w-72 shrink-0 snap-start flex-col overflow-hidden">
+      <span aria-hidden className={cn('h-1.5 w-full', state.bar)} />
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <span className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}>
+          {pillOf(row, state.label, result)}
+        </span>
+
+        <Link to={ROUTES.TEST_ABOUT(row.test.id)} className="flex min-w-0 flex-col gap-1">
           <TruncatedText className="text-md font-semibold text-foreground">
-            {test.title ?? 'Untitled test'}
+            {row.test.title ?? 'Untitled test'}
           </TruncatedText>
-          <TruncatedText className="text-sm text-muted-foreground">{row.seriesName}</TruncatedText>
         </Link>
 
-        <p className="text-xs text-muted-foreground">
-          {plural(test.totalQuestions, 'question')} · {test.totalMarks} marks ·{' '}
-          {Math.round(test.durationSec / 60)} minutes
-        </p>
+        <p className="text-xs text-muted-foreground">{paperLine(row.test)}</p>
+        <p className="text-xs text-muted-foreground">{whenLine(row.test, now)}</p>
 
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          {test.order === null ? null : <span className="tabular-nums">Test {test.order}</span>}
-          {/* The Done badge already says a finished sitting is finished. */}
-          {done || test.order === null ? null : <span aria-hidden>·</span>}
-          {done ? null : <span>{sittingState(row)}</span>}
-        </p>
-
-        {done ? (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CircleCheck aria-hidden className="size-3.5 shrink-0 text-success" />
-            <Badge variant="success">Done</Badge>
-          </p>
-        ) : (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CalendarClock aria-hidden className="size-3.5 shrink-0" />
-            {whenLine(test, now)}
-          </p>
-        )}
-
-        <div className="mt-auto">
-          <TileAction row={row} now={now} done={done} />
+        <div className="mt-auto pt-1">
+          <TileFoot row={row} result={result} />
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
 
-/** Sit it, read it back, or be told plainly why neither is on offer yet. */
-function TileAction({ row, now, done }: Readonly<{ row: Sittable; now: Date; done: boolean }>) {
+/** A sat paper shows what it scored; anything else shows the one thing there is to press. */
+function TileFoot({ row, result }: Readonly<{ row: Sittable; result?: TestResult }>) {
+  if (result) {
+    return (
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-lg font-semibold tabular-nums text-foreground">
+          {result.score}
+          <span className="text-xs font-medium text-muted-foreground">/{result.maxMarks}</span>
+        </span>
+        <Link
+          className={cn(linkVariants(), 'text-xs font-semibold')}
+          to={ROUTES.REPORT(result.attemptId)}
+        >
+          Report
+        </Link>
+      </div>
+    );
+  }
+
   if (row.action) {
     return (
       <Button asChild size="sm" className="w-full">
-        <Link to={ROUTES.TEST_INSTRUCTIONS(row.test.id)}>{buttonWord(row.action, done)}</Link>
+        <Link to={ROUTES.TEST_INSTRUCTIONS(row.test.id)}>
+          {row.action === 'RESUME' ? 'Resume' : 'Start test'}
+        </Link>
       </Button>
     );
   }
-  if (done) {
-    return (
-      <Button asChild size="sm" variant="outline" className="w-full">
-        <Link to={ROUTES.TEST_ABOUT(row.test.id)}>Review</Link>
-      </Button>
-    );
-  }
+
   return (
-    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <LockKeyhole aria-hidden className="size-3.5 shrink-0" />
-      {shutReason(row.test, now)}
-    </p>
+    <Button asChild size="sm" variant="outline" className="w-full">
+      <Link to={ROUTES.TEST_ABOUT(row.test.id)}>View details</Link>
+    </Button>
   );
 }
 
-/** Where an unfinished sitting stands — a state the action button only implies. */
-function sittingState(row: Sittable): string {
-  if (row.test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS) return 'In progress';
-  if (row.test.attemptStatus === ATTEMPT_STATUS.SUBMITTED) return 'Awaiting marks';
-  return 'Not started';
+function stateOf(row: Sittable): keyof typeof STATES {
+  if (row.test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS) return 'RUNNING';
+  if (row.bucket === TEST_BUCKET.DONE) return 'DONE';
+  return row.bucket === TEST_BUCKET.OPEN ? 'LIVE' : 'SHUT';
 }
+
+/** A finished paper's pill carries its percentile, which is the fact the reader came for. */
+function pillOf(row: Sittable, label: string, result?: TestResult): string {
+  if (result?.percentile != null) return `${label} · ${result.percentile}th`;
+  if (row.bucket === TEST_BUCKET.MISSED) return 'Entry closed';
+  return label;
+}
+
+const paperLine = (test: StudentCatalogTest) =>
+  [
+    plural(test.totalQuestions, 'question'),
+    `${Math.round(test.durationSec / 60)} minutes`,
+    test.sittingCount === null ? null : `${test.sittingCount} sat`,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
 
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
@@ -103,17 +123,4 @@ function whenLine(test: StudentCatalogTest, now: Date): string {
     return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
   }
   return 'Any time';
-}
-
-/** Why there is no button. "Waiting its turn" is not an error and must not read like one. */
-function shutReason(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
-  if (test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime()) return 'Entry closed';
-  return 'Waiting its turn';
-}
-
-/** A sat test with a retake left says so: "Start test" would read as though it never happened. */
-function buttonWord(action: 'START' | 'RESUME', done: boolean): string {
-  if (action === 'RESUME') return 'Resume';
-  return done ? 'Sit it again' : 'Start';
 }
