@@ -19,7 +19,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
-import { activationBlocker } from './test-rules';
+import {
+  activationBlocker,
+  seriesFitIssue,
+  seriesRefused,
+  SERIES_GONE_MESSAGE,
+} from './test-rules';
 
 const OFFERING_SELECT = {
   id: true,
@@ -197,21 +202,10 @@ export class OfferingService {
       where: { id: testSeriesId },
       select: { name: true, examStageId: true },
     });
+    if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
-    if (!series) {
-      const gone = 'That series no longer exists.';
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, gone, {
-        fieldErrors: { testSeriesId: [gone] },
-      });
-    }
-
-    // A stage-agnostic series carries any test; another stage's would serve this paper to its students.
-    if (series.examStageId === null || series.examStageId === test.examStageId) return;
-
-    const message = `${series.name} is built for a different exam stage, and a test reaches students through the series carrying it.`;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { testSeriesId: [message] },
-    });
+    const issue = seriesFitIssue(series, test);
+    if (issue) throw seriesRefused(issue);
   }
 
   /** The tests one series holds, in the order it holds them. */

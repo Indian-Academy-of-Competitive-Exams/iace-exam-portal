@@ -21,10 +21,12 @@ import {
   FakeTestsPrisma,
   makeBaseConfig,
   makeSection,
+  makeSeries,
   makeTest,
   rowAt,
   type FakeBaseConfigRow,
   type FakeSectionRow,
+  type FakeSeriesRow,
   type FakeTestModelRow,
 } from './support/fakes';
 
@@ -36,12 +38,32 @@ const SECTIONS: FakeSectionRow[] = [
   makeSection({ id: 'sec_2', name: 'Quantitative Aptitude', order: 2 }),
 ];
 
+/** Stage-agnostic, so only the tests that are ABOUT the stage rule have to think about it. */
+const SERIES: FakeSeriesRow[] = [
+  makeSeries({ id: 'srs_1', name: 'SSC CGL Tier 1 mocks', examStageId: null }),
+  makeSeries({
+    id: 'srs_practice',
+    name: 'SSC CGL Tier 1 drills',
+    examStageId: null,
+    evaluationMode: EVALUATION_MODE.PRACTICE,
+  }),
+];
+
 function serviceWith(
   tests: FakeTestModelRow[] = [],
   configs: FakeBaseConfigRow[] = [makeBaseConfig({ totalQuestions: 50, durationSec: 3600 })],
   usage: { attempts?: { testId: string }[] } = {},
+  series: FakeSeriesRow[] = SERIES,
 ) {
-  const prisma = new FakeTestsPrisma(tests, configs, SECTIONS, usage.attempts ?? []);
+  const prisma = new FakeTestsPrisma(
+    tests,
+    configs,
+    SECTIONS,
+    usage.attempts ?? [],
+    [],
+    [],
+    series,
+  );
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configsService = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
   const events = new FakeEventBus();
@@ -61,7 +83,10 @@ describe('TestsService — creating a draft from a config', () => {
   it('writes a draft whose shape is the config it points at', async () => {
     const { service } = serviceWith();
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     assert.equal(created.status, TEST_STATUS.DRAFT);
     assert.equal(created.totalQuestions, 50);
@@ -74,7 +99,12 @@ describe('TestsService — creating a draft from a config', () => {
     const { service } = serviceWith();
 
     const created = await service.create(
-      { baseConfigId: 'cfg_1', title: 'Mock 1', examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS },
+      {
+        baseConfigId: 'cfg_1',
+        title: 'Mock 1',
+        testSeriesId: 'srs_1',
+        examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS,
+      },
       ADMIN,
     );
 
@@ -85,7 +115,10 @@ describe('TestsService — creating a draft from a config', () => {
     const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.SSC_RAILWAYS });
     const { service } = serviceWith([], [config]);
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     assert.equal(created.examTemplate, EXAM_TEMPLATE.SSC_RAILWAYS);
   });
@@ -94,7 +127,10 @@ describe('TestsService — creating a draft from a config', () => {
   it('keeps the screen it was built with when the config is re-skinned', async () => {
     const config = makeBaseConfig({ examTemplate: EXAM_TEMPLATE.DEFAULT });
     const { service } = serviceWith([], [config]);
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     config.examTemplate = EXAM_TEMPLATE.SSC_RAILWAYS;
 
@@ -105,7 +141,10 @@ describe('TestsService — creating a draft from a config', () => {
     const config = makeBaseConfig({ totalQuestions: 50, durationSec: 3600 });
     const { service } = serviceWith([], [config]);
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     config.durationSec = 4800;
     config.totalQuestions = 60;
 
@@ -121,7 +160,10 @@ describe('TestsService — creating a draft from a config', () => {
       [makeBaseConfig({ id: 'cfg_1', examStageId: 'stage_2' })],
     );
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     // The composite FK is what keeps a test and its blueprint on one stage; the body has no say.
     assert.equal(created.examStageId, 'stage_2');
@@ -131,12 +173,58 @@ describe('TestsService — creating a draft from a config', () => {
   it('defaults to a full, ranked, fixed paper', async () => {
     const { service } = serviceWith();
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     assert.equal(created.scope, TEST_SCOPE.FULL);
     assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
     assert.equal(created.paperBinding, PAPER_BINDING.FIXED);
     assert.equal(created.maxRetakes, null);
+  });
+
+  /** The failure this prevents: a practice series holding a test the leaderboard then ranks. */
+  it('takes the mode off the series it is created in', async () => {
+    const { service, prisma } = serviceWith();
+
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Speed drill 1', testSeriesId: 'srs_practice' },
+      ADMIN,
+    );
+
+    assert.equal(created.evaluationMode, EVALUATION_MODE.PRACTICE);
+    assert.equal(created.testSeriesId, 'srs_practice');
+    assert.equal(prisma.tests[0]?.evaluationMode, EVALUATION_MODE.PRACTICE);
+  });
+
+  it('refuses a test in a series that is not there', async () => {
+    const { service, prisma } = serviceWith();
+
+    const error = await service
+      .create({ baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_gone' }, ADMIN)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.ok(error.fieldErrors?.testSeriesId?.[0]);
+    assert.equal(prisma.tests.length, 0);
+  });
+
+  /** The failure this prevents: a Tier 1 paper served to the Tier 2 students the series reaches. */
+  it('refuses a series built for another stage, and names it', async () => {
+    const { service, prisma } = serviceWith([], undefined, {}, [
+      makeSeries({ id: 'srs_1', name: 'SSC CHSL Tier 2 mocks', examStageId: 'stage_9' }),
+    ]);
+
+    const error = await service
+      .create({ baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' }, ADMIN)
+      .catch((e: unknown) => e);
+
+    assert.ok(AppException.is(error));
+    assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
+    assert.match(error.fieldErrors?.testSeriesId?.[0] ?? '', /SSC CHSL Tier 2 mocks/);
+    assert.equal(prisma.tests.length, 0);
   });
 
   it('refuses a ranked test on a generated paper', async () => {
@@ -148,7 +236,7 @@ describe('TestsService — creating a draft from a config', () => {
         {
           baseConfigId: 'cfg_1',
           title: 'Mock 1',
-          evaluationMode: EVALUATION_MODE.RANKED,
+          testSeriesId: 'srs_1',
           paperBinding: PAPER_BINDING.GENERATED,
         },
         ADMIN,
@@ -157,7 +245,7 @@ describe('TestsService — creating a draft from a config', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.ok(error.fieldErrors?.paperBinding?.[0]);
+    assert.match(error.fieldErrors?.paperBinding?.[0] ?? '', /SSC CGL Tier 1 mocks/);
     assert.equal(prisma.tests.length, 0);
   });
 
@@ -168,7 +256,7 @@ describe('TestsService — creating a draft from a config', () => {
       {
         baseConfigId: 'cfg_1',
         title: 'Mock 1',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
+        testSeriesId: 'srs_practice',
         paperBinding: PAPER_BINDING.GENERATED,
       },
       ADMIN,
@@ -181,7 +269,7 @@ describe('TestsService — creating a draft from a config', () => {
     const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', isActive: false })]);
 
     const error = await service
-      .create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN)
+      .create({ baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' }, ADMIN)
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -192,7 +280,10 @@ describe('TestsService — creating a draft from a config', () => {
   it('still builds on a locked config — the lock freezes its shape, not its use', async () => {
     const { service } = serviceWith([], [makeBaseConfig({ id: 'cfg_1', locked: true })]);
 
-    const created = await service.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const created = await service.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     assert.equal(created.baseConfigId, 'cfg_1');
   });
@@ -203,7 +294,15 @@ describe('TestsService — the scope has to name a part of the config', () => {
     const { service } = serviceWith();
 
     const error = await service
-      .create({ baseConfigId: 'cfg_1', title: 'Mock 1', scope: TEST_SCOPE.SECTIONAL }, ADMIN)
+      .create(
+        {
+          baseConfigId: 'cfg_1',
+          title: 'Mock 1',
+          testSeriesId: 'srs_1',
+          scope: TEST_SCOPE.SECTIONAL,
+        },
+        ADMIN,
+      )
       .catch((e: unknown) => e);
 
     assert.ok(AppException.is(error));
@@ -219,6 +318,7 @@ describe('TestsService — the scope has to name a part of the config', () => {
         {
           baseConfigId: 'cfg_1',
           title: 'Mock 1',
+          testSeriesId: 'srs_1',
           scope: TEST_SCOPE.SECTIONAL,
           scopeRef: { sectionId: 'sec_9' },
         },
@@ -237,6 +337,7 @@ describe('TestsService — the scope has to name a part of the config', () => {
       {
         baseConfigId: 'cfg_1',
         title: 'Mock 1',
+        testSeriesId: 'srs_1',
         scope: TEST_SCOPE.SECTIONAL,
         scopeRef: { sectionId: 'sec_2' },
       },
@@ -259,23 +360,6 @@ describe('TestsService — editing and removing', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-  });
-
-  /** The failure this prevents: a cutoff left on a paper that no longer ranks, which the CHECK refuses. */
-  it('takes the whole cohort schedule off a test turned into a practice one', async () => {
-    const { service, prisma } = serviceWith([
-      makeTest({ id: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 }),
-    ]);
-    prisma.programUnlocks.push({
-      testId: 'tst_1',
-      programCode: 'FOUNDATION',
-      opensAt: new Date('2026-09-01T03:30:00.000Z'),
-    });
-
-    await service.update('tst_1', { evaluationMode: EVALUATION_MODE.PRACTICE });
-
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [null, null]);
-    assert.equal(prisma.programUnlocks.length, 0);
   });
 
   it('leaves the schedule alone on an edit that keeps the test ranked', async () => {
@@ -317,11 +401,12 @@ describe('TestsService — editing and removing', () => {
 
   /** Too few papers and a cohort is back to sitting one, which is what fixed already does better. */
   it('refuses a paper per student with fewer papers than the floor to draw from', async () => {
-    const { service } = serviceWith([makeTest({ id: 'tst_1' })]);
+    const { service } = serviceWith([
+      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
+    ]);
 
     const error = await service
       .update('tst_1', {
-        evaluationMode: EVALUATION_MODE.PRACTICE,
         paperBinding: PAPER_BINDING.GENERATED,
         variantCount: MIN_PAPER_VARIANTS - 1,
       })
@@ -333,10 +418,11 @@ describe('TestsService — editing and removing', () => {
   });
 
   it('takes a paper per student at exactly the floor', async () => {
-    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
+    ]);
 
     await service.update('tst_1', {
-      evaluationMode: EVALUATION_MODE.PRACTICE,
       paperBinding: PAPER_BINDING.GENERATED,
       variantCount: MIN_PAPER_VARIANTS,
     });
@@ -364,12 +450,11 @@ describe('TestsService — editing and removing', () => {
 
   /** Switching over carries a count of 1 it never chose, so it starts from the default instead. */
   it('gives a test only now drawing per student a bank to draw from', async () => {
-    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
+    ]);
 
-    await service.update('tst_1', {
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-      paperBinding: PAPER_BINDING.GENERATED,
-    });
+    await service.update('tst_1', { paperBinding: PAPER_BINDING.GENERATED });
 
     assert.ok((prisma.tests[0]?.variantCount ?? 0) > 1);
   });
@@ -442,7 +527,9 @@ describe('TestsService — editing and removing', () => {
   });
 
   it('drops the paper when the test stops having one', async () => {
-    const { service, prisma } = serviceWith([makeTest({ id: 'tst_1' })]);
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', evaluationMode: EVALUATION_MODE.PRACTICE }),
+    ]);
     prisma.paperQuestions.push({
       id: 'pq_1',
       testId: 'tst_1',
@@ -458,10 +545,7 @@ describe('TestsService — editing and removing', () => {
     });
 
     // A paper belongs to a FIXED test; per-attempt draws would leave these rows unread forever.
-    await service.update('tst_1', {
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-      paperBinding: PAPER_BINDING.GENERATED,
-    });
+    await service.update('tst_1', { paperBinding: PAPER_BINDING.GENERATED });
 
     assert.equal(prisma.paperQuestions.length, 0);
   });

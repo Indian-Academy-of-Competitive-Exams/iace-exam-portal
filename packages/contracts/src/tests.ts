@@ -457,6 +457,8 @@ export const testSchema = z.object({
   attemptCount: z.number().int(),
   /** The one series carrying it. Null reaches nobody, which is what stops it being offered. */
   testSeriesId: z.string().nullable(),
+  /** That series' name, so a screen can say which one decided the mode without a second request. */
+  testSeriesName: z.string().nullable(),
   /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
   paperQuestionCount: z.number().int(),
   createdAt: z.string(),
@@ -620,7 +622,6 @@ export const DEFAULT_PAPER_VARIANTS = 10;
 const testOwnFieldsSchema = z.object({
   scope: testScopeSchema.optional(),
   scopeRef: testScopeRefSchema.nullish(),
-  evaluationMode: evaluationModeSchema.optional(),
   paperBinding: paperBindingSchema.optional(),
   /** Absent on create means take the config's; a test chooses its own screen from then on. */
   examTemplate: examTemplateSchema.optional(),
@@ -634,6 +635,8 @@ const testOwnFieldsSchema = z.object({
 export const createTestSchema = testOwnFieldsSchema.extend({
   title: testTitleSchema,
   baseConfigId: z.string().min(1, 'Choose a config'),
+  /** `evaluationMode` is absent for the same reason: the series decides it, and the body cannot. */
+  testSeriesId: z.string().min(1, 'Choose a series'),
 });
 export type CreateTestInput = z.input<typeof createTestSchema>;
 export type CreateTestBody = z.infer<typeof createTestSchema>;

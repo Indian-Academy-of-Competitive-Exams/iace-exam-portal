@@ -1,7 +1,6 @@
 import { useWatch } from 'react-hook-form';
 import {
   EVALUATION_MODE,
-  EVALUATION_MODES,
   EVALUATION_MODE_LABELS,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
@@ -13,9 +12,7 @@ import {
   TEST_SCOPES,
   TEST_SCOPE_LABELS,
   allowedPaperBindings,
-  allowsCohortScheduling,
   type BaseConfigDetail,
-  type EvaluationMode,
   type ExamTemplate,
   type PaperBinding,
   type TestDetail,
@@ -31,16 +28,11 @@ import {
   RadioGroupItem,
   plural,
 } from '@iace/ui';
-import {
-  EVALUATION_MODE_HINTS,
-  EXAM_TEMPLATE_LABELS,
-  PAPER_BINDING_HINTS,
-  PAPER_BINDING_LABELS,
-} from '../lib/constants';
+import { EXAM_TEMPLATE_LABELS, PAPER_BINDING_HINTS, PAPER_BINDING_LABELS } from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
-import { toMinutes } from '../lib/schedule-format';
+import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { useSuggestedTestName } from '../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
 
@@ -83,31 +75,10 @@ export function SetupStep({
       </FormSection>
 
       <FormSection title="Scoring">
-        <Rules form={form} detail={detail} config={config} sat={sat} />
+        <Rules form={form} config={config} sat={sat} />
       </FormSection>
     </>
   );
-}
-
-/** Named rather than cleared quietly: the schedule goes with the mode, and the admin reads which. */
-function scheduleDroppedBy(
-  detail: TestDetail | null,
-  evaluationMode: EvaluationMode,
-): string | null {
-  if (detail === null || allowsCohortScheduling(evaluationMode)) return null;
-
-  const unlocks = detail.programUnlocks.length;
-  const going = [
-    detail.lateEntrySec === null ? null : `late entry (${toMinutes(detail.lateEntrySec)} minutes)`,
-    detail.extraTimeSec === null ? null : `extra time (${toMinutes(detail.extraTimeSec)} minutes)`,
-    unlocks === 0 ? null : plural(unlocks, 'program opening'),
-  ].filter((part) => part !== null);
-
-  if (going.length === 0) return null;
-
-  const head = going.slice(0, -1).join(', ');
-  const tail = going.slice(-1).join('');
-  return head === '' ? tail : `${head} and ${tail}`;
 }
 
 /** A topic's name lives on the taxonomy rather than the config, so a topic test keeps the fallback. */
@@ -136,19 +107,33 @@ function Blueprint({
   const examId = useWatch({ control: form.control, name: 'examId' });
   const examStageId = useWatch({ control: form.control, name: 'examStageId' });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
+  const testSeriesId = useWatch({ control: form.control, name: 'testSeriesId' });
+  const testSeriesName = useWatch({ control: form.control, name: 'testSeriesName' });
   const chosen = useWatch({ control: form.control, name: 'examTemplate' });
   // Unchosen shows what the blueprint would give, which is exactly what the server would store.
   const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.DEFAULT;
 
-  /** A cascade: a stage belongs to one exam, and a configuration to one stage. */
+  /** The series decides the mode, and a ranked one leaves only the frozen paper. */
+  const pickSeries = (series: ChosenSeries) => {
+    form.setValue('testSeriesId', series.id, DIRTY);
+    form.setValue('testSeriesName', series.name, DIRTY);
+    form.setValue('evaluationMode', series.evaluationMode, DIRTY);
+    if (!allowedPaperBindings(series.evaluationMode).includes(form.getValues('paperBinding'))) {
+      form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
+    }
+  };
+
+  /** A cascade: a stage belongs to one exam, and both a configuration and a series to one stage. */
   const pickExam = (value: string) => {
     form.setValue('examId', value, DIRTY);
     form.setValue('examStageId', '', DIRTY);
     form.setValue('baseConfigId', '', DIRTY);
+    pickSeries(NO_SERIES);
   };
   const pickStage = (value: string) => {
     form.setValue('examStageId', value, DIRTY);
     form.setValue('baseConfigId', '', DIRTY);
+    pickSeries(NO_SERIES);
   };
 
   return (
@@ -195,6 +180,20 @@ function Blueprint({
                 examStageId={examStageId}
                 value={baseConfigId}
                 onChange={(value) => form.setValue('baseConfigId', value, DIRTY)}
+              />
+            )}
+          </FormField>
+
+          <FormField form={form} name="testSeriesId" label="Series">
+            {(control) => (
+              <TestSeriesPicker
+                id={control.id}
+                value={testSeriesId}
+                selectedLabel={testSeriesName || undefined}
+                placeholder="Choose a series"
+                clearable={false}
+                forExamStageId={examStageId}
+                onChange={pickSeries}
               />
             )}
           </FormField>
@@ -247,34 +246,24 @@ function Blueprint({
 
 function Rules({
   form,
-  detail,
   config,
   sat,
 }: Readonly<{
   form: TestForm;
-  detail: TestDetail | null;
   config: BaseConfigDetail | null;
   sat: boolean;
 }>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
   const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
-  const dropped = scheduleDroppedBy(detail, evaluationMode);
-
-  /** Ranked leaves only the frozen paper, so choosing it moves the binding rather than failing. */
-  const pickEvaluationMode = (value: string) => {
-    const mode = value as EvaluationMode;
-    form.setValue('evaluationMode', mode, DIRTY);
-    if (!allowedPaperBindings(mode).includes(paperBinding)) {
-      form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
-    }
-  };
+  const seriesName = useWatch({ control: form.control, name: 'testSeriesName' });
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {dropped === null ? null : (
-        <Alert variant="warning" className="sm:col-span-2 lg:col-span-3">
-          {`Saving removes this test's ${dropped}. A practice test opens at its time and nothing else.`}
+      {seriesName === '' ? null : (
+        <Alert variant="info" className="sm:col-span-2 lg:col-span-3">
+          Tests in {seriesName} are judged as {EVALUATION_MODE_LABELS[evaluationMode]}, and a test
+          does not choose its own.
         </Alert>
       )}
 
@@ -292,23 +281,6 @@ function Rules({
       </FormField>
 
       <ScopeReference form={form} scope={scope} config={config} disabled={sat} />
-
-      <FormField form={form} name="evaluationMode" label="Evaluation">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            value={evaluationMode}
-            clearable={false}
-            disabled={sat}
-            onChange={pickEvaluationMode}
-            items={EVALUATION_MODES.map((value) => ({
-              value,
-              label: EVALUATION_MODE_LABELS[value],
-              hint: EVALUATION_MODE_HINTS[value],
-            }))}
-          />
-        )}
-      </FormField>
 
       <FormField
         form={form}

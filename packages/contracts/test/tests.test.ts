@@ -82,7 +82,10 @@ describe('paperQuestionSchema', () => {
 describe('a test is named when it is created', () => {
   /** The failure this prevents: 'Untitled test' in the header and 'this test' in every confirm. */
   it('refuses a create with no name', () => {
-    assert.equal(createTestSchema.safeParse({ baseConfigId: 'cfg_1' }).success, false);
+    assert.equal(
+      createTestSchema.safeParse({ baseConfigId: 'cfg_1', testSeriesId: 'srs_1' }).success,
+      false,
+    );
   });
 
   it('refuses a name of whitespace', () => {
@@ -91,8 +94,36 @@ describe('a test is named when it is created', () => {
   });
 
   it('accepts a named create', () => {
-    const parsed = createTestSchema.safeParse({ baseConfigId: 'cfg_1', title: 'SSC CGL — Mock 1' });
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: 'SSC CGL — Mock 1',
+    });
     assert.equal(parsed.success, true);
+  });
+
+  /** A test reaches a student only through a series, and that series is what decides its mode. */
+  it('refuses a create that names no series', () => {
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      title: 'SSC CGL — Mock 1',
+    });
+
+    assert.equal(parsed.success, false);
+    assert.deepEqual(parsed.error?.issues[0]?.path, ['testSeriesId']);
+  });
+
+  /** The failure this prevents: a PRACTICE series holding the RANKED test a client asked for. */
+  it('drops an evaluation mode a client sends rather than judging it', () => {
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: 'SSC CGL — Mock 1',
+      evaluationMode: 'PRACTICE',
+    });
+
+    assert.equal(parsed.success, true);
+    assert.equal('evaluationMode' in (parsed.data ?? {}), false);
   });
 
   /** An edit that is not about the name leaves it alone rather than sending it back. */

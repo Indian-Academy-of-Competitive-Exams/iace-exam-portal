@@ -20,10 +20,14 @@ export interface TestFormValues {
   examId: string;
   examStageId: string;
   baseConfigId: string;
+  testSeriesId: string;
+  /** Held beside the id so the screen can name the series without asking the server for it again. */
+  testSeriesName: string;
   title: string;
   scope: TestScope;
   moduleId: string;
   sectionId: string;
+  /** Read off the chosen series and never sent: the server derives it from that series too. */
   evaluationMode: EvaluationMode;
   paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
@@ -40,6 +44,8 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     examId: detail?.examStage.exam.id ?? '',
     examStageId: detail?.examStageId ?? '',
     baseConfigId: detail?.baseConfigId ?? '',
+    testSeriesId: detail?.testSeriesId ?? '',
+    testSeriesName: detail?.testSeriesName ?? '',
     title: detail?.title ?? '',
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
@@ -69,6 +75,7 @@ export const RETAKES_NOT_A_NUMBER =
 /** The keys the server answers with. `scopeRef` has no control of its own — see `SCOPE_FIELDS`. */
 export const SERVER_FIELDS = [
   'baseConfigId',
+  'testSeriesId',
   'title',
   'paperBinding',
   'maxRetakes',
@@ -86,6 +93,7 @@ const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
 export function applyServerErrors(error: unknown, form: TestForm, scope: TestScope): void {
   applyFieldErrors(error, form.setError, [
     'baseConfigId',
+    'testSeriesId',
     'title',
     'paperBinding',
     'maxRetakes',

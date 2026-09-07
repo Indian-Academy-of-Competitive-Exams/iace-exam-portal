@@ -125,7 +125,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         title,
         scope: values.scope,
         scopeRef: scopeRefOf(values),
-        evaluationMode: values.evaluationMode,
         paperBinding: values.paperBinding,
         // Left out while unchosen, so the server takes the config's rather than guessing here.
         examTemplate: values.examTemplate ?? undefined,
@@ -134,7 +133,11 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
       };
       return detail
         ? api.admin.tests.update(detail.id, owned)
-        : api.admin.tests.create({ ...owned, baseConfigId: values.baseConfigId });
+        : api.admin.tests.create({
+            ...owned,
+            baseConfigId: values.baseConfigId,
+            testSeriesId: values.testSeriesId,
+          });
     },
     onSuccess: async (saved, { target }) => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
