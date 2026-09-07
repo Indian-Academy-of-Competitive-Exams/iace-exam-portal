@@ -2,7 +2,6 @@ import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
   DEFAULT_PAPER_VARIANTS,
-  EVALUATION_MODE,
   PAPER_BINDING,
   TEST_SCOPE,
   type EvaluationMode,
@@ -28,7 +27,7 @@ export interface TestFormValues {
   moduleId: string;
   sectionId: string;
   /** Read off the chosen series and never sent: the server derives it from that series too. */
-  evaluationMode: EvaluationMode;
+  evaluationMode: EvaluationMode | '';
   paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
   examTemplate: ExamTemplate | null;
@@ -50,7 +49,7 @@ export function valuesOf(detail: TestDetail | null): TestFormValues {
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
-    evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
+    evaluationMode: detail?.evaluationMode ?? '',
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),

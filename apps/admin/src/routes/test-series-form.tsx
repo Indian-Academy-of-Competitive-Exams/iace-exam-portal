@@ -587,7 +587,7 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
-        empty="No test is in this series yet. A test joins a series from its own Offer step."
+        empty="No test is in this series yet. A test names its series when it is created; its Offer step moves it to another."
       />
 
       {opening ? (

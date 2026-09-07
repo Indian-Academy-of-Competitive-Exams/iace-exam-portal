@@ -21,7 +21,8 @@ export interface TestNameSource {
   configName?: string;
   examStageId?: string;
   scope: TestScope;
-  evaluationMode: EvaluationMode;
+  /** Absent until a series is chosen, which is what decides it — an unnamed mode is a Mock. */
+  evaluationMode?: EvaluationMode;
   scopeName?: string | null;
 }
 

@@ -67,7 +67,7 @@ export const PAPER_BINDINGS = paperBindingSchema.options;
 /** What a test is called by: the part of the paper it covers, or failing that how it is judged. */
 export function testNameKind(input: {
   scope: TestScope;
-  evaluationMode: EvaluationMode;
+  evaluationMode?: EvaluationMode;
   scopeName?: string | null;
 }): string {
   const named = input.scopeName?.trim();

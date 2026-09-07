@@ -9,11 +9,13 @@ import {
   MIN_PAPER_VARIANTS,
   MAX_RETAKES_CEILING,
   PAPER_BINDING,
+  PAPER_BINDINGS,
   TEST_SCOPE,
   TEST_SCOPES,
   TEST_SCOPE_LABELS,
   allowedPaperBindings,
   type BaseConfigDetail,
+  type EvaluationMode,
   type ExamTemplate,
   type PaperBinding,
   type TestDetail,
@@ -67,7 +69,7 @@ export function SetupStep({
     configName: config?.name,
     examStageId: config?.examStageId,
     scope: values.scope,
-    evaluationMode: values.evaluationMode,
+    evaluationMode: values.evaluationMode || undefined,
     scopeName: scopeNameOf(values, config),
   });
 
@@ -123,10 +125,11 @@ function Blueprint({
 
   /** The series decides the mode, and a ranked one leaves only the frozen paper. */
   const pickSeries = (series: ChosenSeries) => {
+    const mode = series.id === '' ? '' : series.evaluationMode;
     form.setValue('testSeriesId', series.id, DIRTY);
     form.setValue('testSeriesName', series.name, DIRTY);
-    form.setValue('evaluationMode', series.evaluationMode, DIRTY);
-    if (!allowedPaperBindings(series.evaluationMode).includes(form.getValues('paperBinding'))) {
+    form.setValue('evaluationMode', mode, DIRTY);
+    if (mode && !allowedPaperBindings(mode).includes(form.getValues('paperBinding'))) {
       form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
     }
   };
@@ -271,6 +274,10 @@ function Blueprint({
   );
 }
 
+/** An unchosen series has no mode to narrow by, so nothing is ruled out until one is picked. */
+const bindingsFor = (evaluationMode: EvaluationMode | ''): readonly PaperBinding[] =>
+  evaluationMode ? allowedPaperBindings(evaluationMode) : PAPER_BINDINGS;
+
 function Rules({
   form,
   config,
@@ -296,6 +303,7 @@ function Rules({
           <Combobox
             id={control.id}
             value={evaluationMode}
+            placeholder="Set by its series"
             clearable={false}
             disabled
             onChange={noop}
@@ -340,7 +348,7 @@ function Rules({
             clearable={false}
             disabled={sat}
             onChange={(value) => form.setValue('paperBinding', value as PaperBinding, DIRTY)}
-            items={allowedPaperBindings(evaluationMode).map((value) => ({
+            items={bindingsFor(evaluationMode).map((value) => ({
               value,
               label: PAPER_BINDING_LABELS[value],
               hint: PAPER_BINDING_HINTS[value],
