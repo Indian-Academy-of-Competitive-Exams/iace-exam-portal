@@ -6,6 +6,7 @@ import { AuthModule } from '../auth';
 import { BranchesModule } from '../branches';
 import { ConfigsModule } from '../configs';
 import { type AccessModule } from '../access';
+import { type NotificationsModule } from '../notifications';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { StudentPrivacyService } from './student-privacy.service';
@@ -26,6 +27,12 @@ import { StudentConsentListener } from './student-consent.listener';
     // and a top-level import here re-enters a still-loading module.
     forwardRef(
       () => (module.require('../access') as { AccessModule: typeof AccessModule }).AccessModule,
+    ),
+    // Same re-entry: `notifications` reads students to resolve an announcement's audience.
+    forwardRef(
+      () =>
+        (module.require('../notifications') as { NotificationsModule: typeof NotificationsModule })
+          .NotificationsModule,
     ),
   ],
   controllers: [StudentsController],

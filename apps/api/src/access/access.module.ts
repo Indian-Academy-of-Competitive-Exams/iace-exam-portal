@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { ConfigsModule } from '../configs';
+import { NotificationsModule } from '../notifications';
 import {
   ProgramsController,
   StudentGrantsController,
@@ -16,7 +17,7 @@ import { AccessCacheListener } from './access-cache.listener';
 
 /** Owns `Program`, `TestSeries` and `StudentGrant` — how a test is reached. */
 @Module({
-  imports: [PrismaModule, RedisModule, ConfigsModule],
+  imports: [PrismaModule, RedisModule, ConfigsModule, NotificationsModule],
   controllers: [
     ProgramsController,
     TestSeriesController,

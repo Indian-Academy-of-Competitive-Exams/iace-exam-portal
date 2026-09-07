@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
+import { NotificationsModule } from '../notifications';
 import { AttemptsController } from './attempts.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
 import { AdminOverviewController, MeOverviewController } from './overview.controller';
@@ -41,7 +42,7 @@ import { SubmitService } from './submit.service';
 
 /** Owns `Attempt` — the live sitting. AccessModule because the start guard is the catalog's own. */
 @Module({
-  imports: [PrismaModule, RedisModule, QueueModule, AccessModule],
+  imports: [PrismaModule, RedisModule, QueueModule, AccessModule, NotificationsModule],
   controllers: [
     AttemptsController,
     MePerformanceController,
