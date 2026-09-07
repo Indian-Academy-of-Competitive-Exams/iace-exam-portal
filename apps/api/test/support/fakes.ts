@@ -53,7 +53,7 @@ import {
   type TestUi,
   type TimerTemplate,
 } from '@iace/contracts';
-import { Prisma, type DeliveryChannel } from '@prisma/client';
+import { Prisma, type DeliveryChannel, type DeliveryStatus } from '@prisma/client';
 import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
 import { RollupOutbox } from '../../src/attempts/rollup-outbox';
 import { type Env } from '../../src/config/env.schema';
@@ -4163,8 +4163,15 @@ export interface FakeNotificationRow {
 }
 
 export interface FakeDeliveryRow {
+  id: string;
   notificationId: string;
   channel: DeliveryChannel;
+  status: DeliveryStatus;
+  skipReason: string | null;
+  attempts: number;
+  lastError: string | null;
+  sentAt: Date | null;
+  failedAt: Date | null;
 }
 
 interface NotificationWhere {
@@ -4211,10 +4218,47 @@ export class FakeNotificationsPrisma {
     return typeof work === 'function' ? work(this) : Promise.all(work);
   }
 
+  private deliverySeq = 0;
+
   readonly notificationDelivery = {
-    createMany: ({ data }: { data: FakeDeliveryRow[] }) => {
-      this.deliveries.push(...data);
-      return Promise.resolve({ count: data.length });
+    create: ({ data }: { data: { notificationId: string; channel: DeliveryChannel } }) => {
+      this.deliverySeq += 1;
+      const row: FakeDeliveryRow = {
+        ...data,
+        id: `dlv_${this.deliverySeq}`,
+        status: 'PENDING' as DeliveryStatus,
+        skipReason: null,
+        attempts: 0,
+        lastError: null,
+        sentAt: null,
+        failedAt: null,
+      };
+      this.deliveries.push(row);
+      return Promise.resolve(row);
+    },
+
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.deliveries.find((candidate) => candidate.id === where.id);
+      if (!row) return Promise.resolve(null);
+
+      const notification = this.rows.find((held) => held.id === row.notificationId);
+      return Promise.resolve({ ...row, notification });
+    },
+
+    findMany: ({ where = {} }: { where?: { notificationId?: string; status?: string } } = {}) =>
+      Promise.resolve(
+        this.deliveries.filter(
+          (row) =>
+            (where.notificationId === undefined || row.notificationId === where.notificationId) &&
+            (where.status === undefined || row.status === where.status),
+        ),
+      ),
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeDeliveryRow> }) => {
+      const row = this.deliveries.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no delivery ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
     },
   };
 

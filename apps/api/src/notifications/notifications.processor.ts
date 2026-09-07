@@ -4,12 +4,22 @@
  * cannot send what an older payload said.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { type Job } from 'bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { type Job, type Queue } from 'bullmq';
+import { DeliveryStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { QUEUE_NAMES, QUEUE_POLICY, type NotificationJobData } from '../queue/queues';
+import {
+  QUEUE_NAMES,
+  QUEUE_POLICY,
+  notificationDeliveryJobId,
+  type NotificationDeliveryJobData,
+  type NotificationJobData,
+} from '../queue/queues';
 import { NotificationsService } from './notifications.service';
-import { parseIntent } from './notification-outbox';
+import { escalationFor } from './notification-policy';
+import { parseIntent, type NotificationIntent } from './notification-outbox';
+
+const MILLISECONDS_PER_SECOND = 1000;
 
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATIONS, {
@@ -21,6 +31,8 @@ export class NotificationsProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
+    private readonly deliveries: Queue<NotificationDeliveryJobData>,
   ) {
     super();
   }
@@ -47,6 +59,30 @@ export class NotificationsProcessor extends WorkerHost {
       return;
     }
 
-    await this.notifications.create(intent);
+    const written = await this.notifications.create(intent);
+    await this.schedule(written.id, intent);
+  }
+
+  /** The grace window: the free channels get this long before a paid one is bought. */
+  private async schedule(notificationId: string, intent: NotificationIntent): Promise<void> {
+    const plan = escalationFor(intent.type, intent.actBy ?? null, new Date());
+    if (plan.channels.length === 0) return;
+
+    const booked = await this.prisma.notificationDelivery.findMany({
+      where: { notificationId, status: DeliveryStatus.PENDING },
+      select: { id: true },
+    });
+
+    for (const row of booked) {
+      await this.deliveries.add(
+        QUEUE_NAMES.NOTIFICATION_DELIVERY,
+        { deliveryId: row.id },
+        {
+          // Keyed on the row, so a redelivered write schedules the same job rather than a second buy.
+          jobId: notificationDeliveryJobId(row.id),
+          delay: plan.deferSec * MILLISECONDS_PER_SECOND,
+        },
+      );
+    }
   }
 }

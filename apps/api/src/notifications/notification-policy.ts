@@ -74,3 +74,21 @@ export function escalationFor(
 
   return { channels: policy.escalate, deferSec: cannotWait ? 0 : policy.deferSec };
 }
+
+/** The escalate list as a plain sequence: the literal tuples narrow an empty one to `never[]`. */
+function chainFor(type: NotificationType): readonly PaidChannel[] {
+  return NOTIFICATION_POLICY[type].escalate;
+}
+
+/** The one channel tried first. The rest are a FALLBACK chain, not a fan-out — never booked together. */
+export function firstChannelFor(type: NotificationType): PaidChannel | null {
+  return chainFor(type)[0] ?? null;
+}
+
+/** What to try when a channel has terminally failed. Null means this message has run out of road. */
+export function nextChannelAfter(type: NotificationType, channel: PaidChannel): PaidChannel | null {
+  const order = chainFor(type);
+  const at = order.indexOf(channel);
+
+  return at >= 0 ? (order[at + 1] ?? null) : null;
+}

@@ -18,13 +18,15 @@ const INTENT = {
 function build() {
   const prisma = new FakeNotificationsPrisma();
   const queue = new FakeQueue();
+  const deliveries = new FakeQueue();
   const outbox = new NotificationOutbox(prisma.asService(), queue.asQueue());
   const service = new NotificationsService(prisma.asService());
   return {
     prisma,
     queue,
+    deliveries,
     outbox,
-    processor: new NotificationsProcessor(prisma.asService(), service),
+    processor: new NotificationsProcessor(prisma.asService(), service, deliveries.asQueue()),
   };
 }
 

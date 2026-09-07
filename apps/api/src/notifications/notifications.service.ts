@@ -10,7 +10,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
-import { escalationFor } from './notification-policy';
+import { firstChannelFor } from './notification-policy';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
 export interface NewNotification {
@@ -46,8 +46,6 @@ export class NotificationsService {
 
   /** Books what policy allows to be spent; idempotent on dedupeKey so the outbox may redeliver. */
   async create(input: NewNotification): Promise<Notification> {
-    const plan = escalationFor(input.type, input.actBy ?? null, new Date());
-
     try {
       const row = await this.prisma.$transaction(async (tx) => {
         const created = await tx.notification.create({
@@ -64,10 +62,10 @@ export class NotificationsService {
           },
         });
 
-        if (plan.channels.length > 0) {
-          await tx.notificationDelivery.createMany({
-            data: plan.channels.map((channel) => ({ notificationId: created.id, channel })),
-          });
+        // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
+        const channel = firstChannelFor(input.type);
+        if (channel) {
+          await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
         }
         return created;
       });

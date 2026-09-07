@@ -174,7 +174,7 @@ describe('NotificationsService — one student’s own bell', () => {
 });
 
 describe('Writing a notification books what may be spent on it', () => {
-  it('books one pending delivery per paid channel the policy allows', async () => {
+  it('books the channel the policy leads with', async () => {
     const { service, prisma } = build();
 
     await service.create({
@@ -186,6 +186,23 @@ describe('Writing a notification books what may be spent on it', () => {
     assert.deepEqual(
       prisma.deliveries.map((delivery) => delivery.channel),
       [DeliveryChannel.WHATSAPP],
+    );
+  });
+
+  /** The escalate list is a FALLBACK chain: booking it all at once would buy both messages. */
+  it('books only the first of a chain, never the whole of it', async () => {
+    const { service, prisma } = build();
+
+    await service.create({
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.TEST_ASSIGNED,
+      title: 'A test has been assigned',
+    });
+
+    assert.deepEqual(
+      prisma.deliveries.map((delivery) => delivery.channel),
+      [DeliveryChannel.WHATSAPP],
+      'SMS is what WhatsApp falls back TO, not something sent beside it',
     );
   });
 
