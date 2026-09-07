@@ -170,6 +170,24 @@ enum NotificationType {
   GENERIC
 }
 
+// Mirrors MESSAGE_CHANNELS in apps/api/src/common/messaging — the two are edited together.
+enum DeliveryChannel {
+  IN_APP
+  WEB_PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+// SKIPPED is a decision not to spend, and carries the reason it was made.
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  SKIPPED
+}
+
 enum StudentType {
   ONLINE
   OFFLINE
@@ -766,6 +784,7 @@ model Admin {
   updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
   permissions       AdminFeaturePermission[]
+  notifications     Notification[]
   sharesMade        PerformanceShare[]
   // The one createdById with a real relation: a draft names its author on screen and in a filter.
   questionsAuthored Question[]
@@ -986,24 +1005,64 @@ model ProcessedRollup {
 // ============================================================================
 
 model Notification {
-  id           String           @id @default(cuid())
-  studentId    String
-  type         NotificationType
-  title        String
-  body         String?
+  id        String           @id @default(cuid())
+  // Exactly one recipient, enforced by a CHECK the migration writes by hand. The admin side is
+  // shaped for and not built: nulling studentId now is what keeps that migration additive later.
+  studentId String?
+  adminId   String?
+  type      NotificationType
+  title     String
+  body      String?
+  // Template variables, so a message can be re-rendered for any channel from the row alone.
+  data      Json?
+  // The natural key of the FACT behind this, which is what makes a redelivered outbox row harmless.
+  dedupeKey String?
+  // When what this is about stops being actionable. Null means waiting costs the student nothing.
+  actBy     DateTime?        @db.Timestamptz(3)
+
   testId       String?
   testSeriesId String?
   isRead       Boolean          @default(false)
+  // Which channel actually brought them back, so the policy stops being an assumption.
+  openedVia    DeliveryChannel?
   createdAt    DateTime         @default(now()) @db.Timestamptz(3)
 
-  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  test       Test?       @relation(fields: [testId], references: [id])
-  testSeries TestSeries? @relation(fields: [testSeriesId], references: [id])
+  student    Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  admin      Admin?                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  test       Test?                  @relation(fields: [testId], references: [id])
+  testSeries TestSeries?            @relation(fields: [testSeriesId], references: [id])
+  deliveries NotificationDelivery[]
 
   @@index([studentId, createdAt])
   @@index([studentId, isRead])
   @@index([testId])
   @@index([testSeriesId])
+}
+
+// One row per channel that can FAIL — in-app has none, because the Notification row IS its delivery.
+model NotificationDelivery {
+  id                String          @id @default(cuid())
+  notificationId    String
+  channel           DeliveryChannel
+  status            DeliveryStatus  @default(PENDING)
+  // NO_TEMPLATE, NO_CONTACT, OPTED_OUT, ALREADY_READ — why we decided not to spend.
+  skipReason        String?
+  templateId        String?
+  // Dark until a provider that reports delivery is configured; indexed for the webhook that will.
+  providerMessageId String?
+  attempts          Int             @default(0)
+  lastError         String?
+  queuedAt          DateTime        @default(now()) @db.Timestamptz(3)
+  sentAt            DateTime?       @db.Timestamptz(3)
+  deliveredAt       DateTime?       @db.Timestamptz(3)
+  failedAt          DateTime?       @db.Timestamptz(3)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  // A retry UPDATES its row rather than appending, so this stays O(notifications x channels).
+  @@unique([notificationId, channel])
+  @@index([status, queuedAt])
+  @@index([providerMessageId])
 }
 
 // ============================================================================

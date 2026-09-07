@@ -283,9 +283,9 @@ export const updateSeriesBranchesSchema = z.object({ branchIds: z.array(z.string
 export type UpdateSeriesBranchesInput = z.input<typeof updateSeriesBranchesSchema>;
 export type UpdateSeriesBranchesBody = z.infer<typeof updateSeriesBranchesSchema>;
 
+/** No recipient: `/me/notifications` is always the caller's own, so naming them is dead weight. */
 export const notificationSchema = z.object({
   id: z.string(),
-  studentId: z.string(),
   type: notificationTypeSchema,
   title: z.string(),
   body: z.string().nullable(),

@@ -22,7 +22,6 @@ export interface NewNotification {
 
 interface NotificationColumns {
   id: string;
-  studentId: string;
   type: NotificationType;
   title: string;
   body: string | null;
@@ -97,7 +96,6 @@ export class NotificationsService {
 function toNotification(row: NotificationColumns): Notification {
   return {
     id: row.id,
-    studentId: row.studentId,
     type: row.type,
     title: row.title,
     body: row.body,
