@@ -2,8 +2,8 @@ import {
   AppException,
   DEFAULT_PAPER_VARIANTS,
   ErrorCodes,
-  EVALUATION_MODE_LABELS,
   MIN_PAPER_VARIANTS,
+  seriesModeMismatch,
   isPaperBindingAllowed,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -51,9 +51,6 @@ export const seriesRefused = (message: string): AppException =>
 const stageMismatch = (seriesName: string): string =>
   `${seriesName} is built for a different exam stage, and a test reaches students through the series carrying it.`;
 
-const modeMismatch = (seriesName: string, held: EvaluationMode, wanted: EvaluationMode): string =>
-  `${seriesName} judges its tests as ${EVALUATION_MODE_LABELS[held]} and this test is judged as ${EVALUATION_MODE_LABELS[wanted]}. A test is judged the way its series is, so move it to a ${EVALUATION_MODE_LABELS[wanted]} series instead.`;
-
 /** A series carries a test only if it is built for its stage and judges it the way it is judged. */
 export function seriesFitIssue(
   series: { name: string; examStageId: string | null; evaluationMode: EvaluationMode },
@@ -63,10 +60,8 @@ export function seriesFitIssue(
     return stageMismatch(series.name);
   }
   // A test being created has no mode of its own yet: the series it is born into decides it.
-  if (test.evaluationMode !== undefined && test.evaluationMode !== series.evaluationMode) {
-    return modeMismatch(series.name, series.evaluationMode, test.evaluationMode);
-  }
-  return null;
+  if (test.evaluationMode === undefined) return null;
+  return seriesModeMismatch(series.name, series.evaluationMode, test.evaluationMode);
 }
 
 export const TOO_FEW_VARIANTS_MESSAGE = `A test that draws a paper per student needs at least ${MIN_PAPER_VARIANTS} to draw from. Give it that many, or make it a fixed paper.`;

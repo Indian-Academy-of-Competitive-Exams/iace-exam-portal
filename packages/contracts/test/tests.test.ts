@@ -14,6 +14,7 @@ import {
   scopedQuestionCount,
   scopedMarks,
   scopedDurationSec,
+  seriesModeMismatch,
   testBuilderStepOf,
   owesAPaper,
   paperQuestionSchema,
@@ -56,6 +57,34 @@ describe('allowedPaperBindings', () => {
       PAPER_BINDING.FIXED,
       PAPER_BINDING.GENERATED,
     ]);
+  });
+});
+
+/** One sentence for both sides: the picker refuses the move in the server's own words. */
+describe('seriesModeMismatch', () => {
+  /** The failure this prevents: a confirm promising a move the server is about to refuse. */
+  it('names both modes when a ranked test is offered a practice series', () => {
+    const issue = seriesModeMismatch(
+      'SSC CGL 2026 — Drills',
+      EVALUATION_MODE.PRACTICE,
+      EVALUATION_MODE.RANKED,
+    );
+
+    assert.ok(issue);
+    assert.match(issue, /SSC CGL 2026 — Drills/);
+    assert.match(issue, /Practice/);
+    assert.match(issue, /Ranked/);
+  });
+
+  it('says nothing when the series judges the test the way it is judged', () => {
+    assert.equal(
+      seriesModeMismatch(
+        'SSC CGL 2026 — Drills',
+        EVALUATION_MODE.PRACTICE,
+        EVALUATION_MODE.PRACTICE,
+      ),
+      null,
+    );
   });
 });
 

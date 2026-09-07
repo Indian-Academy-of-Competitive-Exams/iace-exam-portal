@@ -93,6 +93,18 @@ export function allowsCohortScheduling(evaluationMode: EvaluationMode): boolean 
   return evaluationMode === EVALUATION_MODE.RANKED;
 }
 
+/** One sentence, so the picker refuses a move in the words the server would have refused it in. */
+export function seriesModeMismatch(
+  seriesName: string,
+  seriesMode: EvaluationMode,
+  testMode: EvaluationMode,
+): string | null {
+  if (seriesMode === testMode) return null;
+  const held = EVALUATION_MODE_LABELS[seriesMode];
+  const wanted = EVALUATION_MODE_LABELS[testMode];
+  return `${seriesName} judges its tests as ${held} and this test is judged as ${wanted}. A test is judged the way its series is, so move it to a ${wanted} series instead.`;
+}
+
 /** The only change a frozen paper permits, and both recompute every score. */
 export const PAPER_QUESTION_STATUS = {
   ACTIVE: 'ACTIVE',

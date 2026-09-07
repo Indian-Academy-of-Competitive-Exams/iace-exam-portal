@@ -9,6 +9,7 @@ import {
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
+  seriesModeMismatch,
   type TestDetail,
 } from '@iace/contracts';
 import {
@@ -62,6 +63,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const queryClient = useQueryClient();
   const refresh = useOfferingRefresh(detail.id);
   const [moving, setMoving] = useState<ChosenSeries | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const mode = EVALUATION_MODE_LABELS[detail.evaluationMode];
 
   const link = useQuery({
@@ -80,13 +82,22 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
     onError: () => setMoving(null),
   });
 
+  /** The server refuses this too; asking first keeps the confirm from promising a move it cannot make. */
+  const choose = (chosen: ChosenSeries) => {
+    if (chosen.id === '' || chosen.id === link.data?.testSeriesId) return;
+
+    const issue = seriesModeMismatch(chosen.name, chosen.evaluationMode, detail.evaluationMode);
+    setRefused(issue);
+    if (issue === null) setMoving(chosen);
+  };
+
   return (
     <FormSection title="Series">
       <Alert variant="info">
         {`A test is judged the way its series is, so this one can only move to another ${mode} series.`}
       </Alert>
 
-      <Field htmlFor="test-series" label="Series" className="max-w-lg">
+      <Field htmlFor="test-series" label="Series" className="max-w-lg" error={refused ?? undefined}>
         {(control) => (
           <TestSeriesPicker
             {...control}
@@ -95,7 +106,7 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
             selectedLabel={link.data?.name}
             disabled={detail.attemptCount > 0 || move.isPending}
             forExamStageId={detail.examStageId}
-            onChange={(chosen) => chosen.id !== link.data?.testSeriesId && setMoving(chosen)}
+            onChange={choose}
           />
         )}
       </Field>
