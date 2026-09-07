@@ -339,6 +339,14 @@ describe('TestSeriesService — what a series may point at', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.equal(prisma.series.length, 1);
   });
+
+  it('deletes one that carries no test, so the refusal is the count and not the table', async () => {
+    const { series, prisma } = build({ series: [makeSeries({ id: 'srs_1' })], tests: [] });
+
+    await series.remove('srs_1');
+
+    assert.equal(prisma.series.length, 0);
+  });
 });
 /** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */
 describe('TestSeriesService — a kind and its columns say the same thing', () => {
