@@ -7,6 +7,8 @@ export const QUEUE_NAMES = {
   ATTEMPT_SWEEP: 'attempt-sweep',
   OUTBOX_PRUNE: 'outbox-prune',
   ROLLUP: 'rollup',
+  NOTIFICATIONS: 'notifications',
+  NOTIFICATION_DELIVERY: 'notification-delivery',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -26,6 +28,10 @@ export const QUEUE_POLICY = {
   [QUEUE_NAMES.ATTEMPT_SWEEP]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.AUDIT_ARCHIVE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
   [QUEUE_NAMES.OUTBOX_PRUNE]: { concurrency: 1, attempts: 3, backoffMs: 2000 },
+  // Writing rows and booking deliveries. A broadcast arrives in chunks, so width beats depth here.
+  [QUEUE_NAMES.NOTIFICATIONS]: { concurrency: 4, attempts: 5, backoffMs: 5000 },
+  // Held narrow on purpose: this is what a rate-limited aggregator sees, and it is billable.
+  [QUEUE_NAMES.NOTIFICATION_DELIVERY]: { concurrency: 2, attempts: 4, backoffMs: 15000 },
 } as const satisfies Record<
   QueueName,
   { concurrency: number; attempts: number; backoffMs: number }
@@ -95,6 +101,26 @@ export function rollupRebuildJobId(testId: string): string {
 
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
 export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
+
+/** Ids only, like every other job: the worker re-reads the outbox row it is about to act on. */
+export interface NotificationJobData {
+  eventId: string;
+}
+
+/** One delivery row to attempt. The worker re-reads it, so a stale retry cannot send a stale message. */
+export interface NotificationDeliveryJobData {
+  deliveryId: string;
+}
+
+/** The EVENT's own: a redelivered relay is the same job, so one fact notifies once. */
+export function notificationJobId(eventId: string): string {
+  return `${QUEUE_NAMES.NOTIFICATIONS}-${eventId}`;
+}
+
+/** The DELIVERY ROW's own, so a re-queued escalation cannot buy the same message twice. */
+export function notificationDeliveryJobId(deliveryId: string): string {
+  return `${QUEUE_NAMES.NOTIFICATION_DELIVERY}-${deliveryId}`;
+}
 
 /** Payload for a leaderboard rebuild. One test's board, put back from the durable marks. */
 export interface LeaderboardRebuildJobData {

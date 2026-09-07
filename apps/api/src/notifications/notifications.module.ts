@@ -1,12 +1,20 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { QueueModule } from '../queue/queue.module';
 import { NotificationsListener } from './notifications.listener';
 import { NotificationsService } from './notifications.service';
+import { NotificationOutbox } from './notification-outbox';
+import { NotificationsProcessor } from './notifications.processor';
 
-/** Owns `Notification`. No controller of its own: a student's bell hangs off `me`. */
+/** Owns `Notification` and `NotificationDelivery`. No controller: a student's bell hangs off `me`. */
 @Module({
-  imports: [PrismaModule],
-  providers: [NotificationsService, NotificationsListener],
-  exports: [NotificationsService],
+  imports: [PrismaModule, QueueModule],
+  providers: [
+    NotificationsService,
+    NotificationsListener,
+    NotificationOutbox,
+    NotificationsProcessor,
+  ],
+  exports: [NotificationsService, NotificationOutbox],
 })
 export class NotificationsModule {}

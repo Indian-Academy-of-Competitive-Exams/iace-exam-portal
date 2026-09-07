@@ -4262,6 +4262,55 @@ export class FakeNotificationsPrisma {
       return Promise.resolve(row);
     },
   };
+
+  readonly outboxEvents: FakeOutboxRow[] = [];
+
+  private outboxSeq = 0;
+
+  readonly outboxEvent = {
+    create: ({ data }: { data: FakeOutboxInput }) => {
+      this.outboxSeq += 1;
+      const created: FakeOutboxRow = {
+        ...data,
+        id: `obx_${this.outboxSeq}`,
+        createdAt: new Date(this.outboxSeq),
+        processedAt: null,
+      };
+      this.outboxEvents.push(created);
+      return Promise.resolve({ id: created.id });
+    },
+
+    createMany: ({ data }: { data: FakeOutboxInput[] }) => {
+      for (const row of data) {
+        this.outboxSeq += 1;
+        this.outboxEvents.push({
+          ...row,
+          id: `obx_${this.outboxSeq}`,
+          createdAt: new Date(this.outboxSeq),
+          processedAt: null,
+        });
+      }
+      return Promise.resolve({ count: data.length });
+    },
+
+    findMany: ({ where, take }: { where: FakeOutboxWhere; take?: number }) =>
+      Promise.resolve(
+        this.outboxEvents
+          .filter((row) => matchesOutboxWhere(row, where))
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .slice(0, take),
+      ),
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.outboxEvents.find((row) => row.id === where.id) ?? null),
+
+    update: ({ where, data }: { where: { id: string }; data: Partial<FakeOutboxRow> }) => {
+      const row = this.outboxEvents.find((candidate) => candidate.id === where.id);
+      if (!row) throw new Error(`no outbox event ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
 }
 
 // --------------------------------------------------------------------------- scoring
