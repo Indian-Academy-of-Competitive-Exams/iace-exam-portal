@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Plus } from 'lucide-react';
+import { ArrowRightLeft, Clock, Plus, SquarePen } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import {
   FEATURE_KEYS,
+  EVALUATION_MODE_LABELS,
   PERMISSION_LEVELS,
   type SeriesTestRow,
   type TestSeriesSummary,
   fromInstituteWallTime,
   instituteWallTime,
+  seriesModeMismatch,
 } from '@iace/contracts';
 import {
   Button,
+  ConfirmDialog,
   DataTable,
   DateTimePicker,
   DropdownMenuItem,
@@ -28,6 +31,7 @@ import { api } from '../lib/api';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
+import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { testsKey } from './test-series-detail';
 
 /** The instant an exam starts, said in the institute's clock wherever the admin is sitting. */
@@ -35,10 +39,15 @@ import { testsKey } from './test-series-detail';
 interface UnlockFormValues {
   unlockAt: string;
 }
+
+interface MoveFormValues {
+  testSeriesId: string;
+}
 export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [opening, setOpening] = useState<SeriesTestRow | null>(null);
+  const [moving, setMoving] = useState<SeriesTestRow | null>(null);
 
   const tests = useQuery({
     queryKey: testsKey(series.id),
@@ -65,7 +74,7 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
       ) : null}
 
       <DataTable
-        columns={testColumns({ canWrite, onOpening: setOpening })}
+        columns={testColumns({ canWrite, onOpening: setOpening, onMoving: setMoving })}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
@@ -81,6 +90,16 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
           onSaved={held}
         />
       ) : null}
+
+      {moving ? (
+        <MoveDialog
+          key={moving.testId}
+          series={series}
+          row={moving}
+          onClose={() => setMoving(null)}
+          onMoved={held}
+        />
+      ) : null}
     </FormSection>
   );
 }
@@ -89,9 +108,10 @@ function testColumns(
   options: Readonly<{
     canWrite: boolean;
     onOpening: (row: SeriesTestRow) => void;
+    onMoving: (row: SeriesTestRow) => void;
   }>,
 ): DataTableColumn<SeriesTestRow>[] {
-  const { canWrite, onOpening } = options;
+  const { canWrite, onOpening, onMoving } = options;
 
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
@@ -113,9 +133,19 @@ function testColumns(
       cell: (row) =>
         canWrite ? (
           <RowActions label={`Actions for ${row.title ?? 'this test'}`}>
+            <DropdownMenuItem asChild>
+              <Link to={ROUTES.TEST(row.testId)}>
+                <SquarePen aria-hidden />
+                Open
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onOpening(row)}>
               <Clock aria-hidden />
               Set when it opens
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onMoving(row)}>
+              <ArrowRightLeft aria-hidden />
+              Move to another series
             </DropdownMenuItem>
           </RowActions>
         ) : null,
@@ -176,5 +206,90 @@ function UnlockDialog({
         )}
       </FormField>
     </FormDialog>
+  );
+}
+
+/** Every test here is judged the way this series is, so the row's mode is the series' own. */
+function MoveDialog({
+  series,
+  row,
+  onClose,
+  onMoved,
+}: Readonly<{
+  series: TestSeriesSummary;
+  row: SeriesTestRow;
+  onClose: () => void;
+  onMoved: (next: SeriesTestRow[]) => void;
+}>) {
+  const queryClient = useQueryClient();
+  const form = useForm<MoveFormValues>({ defaultValues: { testSeriesId: '' } });
+  const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES);
+  // Picked, not yet moved: choosing a series and agreeing to lose the old one are two questions.
+  const [confirming, setConfirming] = useState<ChosenSeries | null>(null);
+
+  const move = useMutation({
+    meta: { success: 'Test moved.' },
+    mutationFn: (testSeriesId: string) =>
+      api.admin.tests.moveToSeries(row.testId, { testSeriesId }),
+    onSuccess: async () => {
+      onClose();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
+      onMoved(await api.admin.testSeries.tests(series.id));
+    },
+    onError: (error) => {
+      setConfirming(null);
+      applyFieldErrors(error, form.setError, ['testSeriesId']);
+    },
+  });
+
+  /** Refused here rather than at the server, so the confirm never promises a move that cannot happen. */
+  const choose = (next: ChosenSeries) => {
+    setChosen(next);
+    form.setValue('testSeriesId', next.id, { shouldDirty: true });
+    const issue =
+      next.id === ''
+        ? null
+        : seriesModeMismatch(next.name, next.evaluationMode, series.evaluationMode);
+    if (issue) form.setError('testSeriesId', { type: 'validate', message: issue });
+    else form.clearErrors('testSeriesId');
+  };
+
+  return (
+    <>
+      <FormDialog
+        open={confirming === null}
+        onOpenChange={(open) => !open && onClose()}
+        form={form}
+        onSubmit={() => chosen.id !== '' && setConfirming(chosen)}
+        title={`Move ${row.title ?? 'this test'} to another series`}
+        description={`It is offered through ${series.name} today. A test is judged the way its series is, so it can only move to another ${EVALUATION_MODE_LABELS[series.evaluationMode]} series.`}
+        submitLabel="Choose it"
+        loading={move.isPending}
+      >
+        <FormField form={form} name="testSeriesId" label="Series">
+          {(control) => (
+            <TestSeriesPicker
+              id={control.id}
+              value={chosen.id}
+              selectedLabel={chosen.name || undefined}
+              placeholder="Choose a series"
+              clearable={false}
+              forExamStageId={series.examStageId ?? undefined}
+              onChange={choose}
+            />
+          )}
+        </FormField>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={`Move ${row.title ?? 'this test'} to ${confirming?.name ?? ''}?`}
+        description={`Students reached through ${series.name} stop being offered it, and students reached through ${confirming?.name ?? ''} start. Its paper and its opening time are untouched.`}
+        confirmLabel="Move it"
+        loading={move.isPending}
+        onConfirm={() => confirming && move.mutate(confirming.id)}
+      />
+    </>
   );
 }
