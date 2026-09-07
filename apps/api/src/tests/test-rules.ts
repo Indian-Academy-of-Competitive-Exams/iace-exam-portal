@@ -162,18 +162,10 @@ export function paperCompletenessIssues(
   return issues;
 }
 
-/** A test reaches a student only through a series, and only once its paper has stopped moving. */
-export function activationBlocker(test: {
-  isLocked: boolean;
-  testSeriesId: string | null;
-}): string | null {
-  if (!test.isLocked) {
-    return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
-  }
-  if (test.testSeriesId === null) {
-    return 'A test reaches a student only through a series. Put this one in a series before offering it.';
-  }
-  return null;
+/** A test reaches a student only once its paper has stopped moving; its series is a column now. */
+export function activationBlocker(test: { isLocked: boolean }): string | null {
+  if (test.isLocked) return null;
+  return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
 }
 
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */

@@ -88,7 +88,7 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
 
 function bench(
   attempt: FakeAttemptRow,
-  schedule: { scheduled: boolean; closesAt: string | null; extraTimeSec: number },
+  schedule: { closesAt: string | null; extraTimeSec: number },
   shape: FakeScoredTest = SHAPE,
 ) {
   const prisma = new FakeScoringPrisma([attempt], served(), shape);
@@ -110,12 +110,10 @@ function bench(
 const review = (...args: Parameters<typeof bench>) => bench(...args).service;
 
 const CLOSED_LONG_AGO = {
-  scheduled: true,
   closesAt: new Date(NOW.getTime() - 4 * HOUR).toISOString(),
   extraTimeSec: 0,
 };
 const STILL_OPEN = {
-  scheduled: true,
   closesAt: new Date(NOW.getTime() + HOUR).toISOString(),
   extraTimeSec: 0,
 };
@@ -194,18 +192,9 @@ describe('the Solution Report', () => {
     assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, RIGHT);
   });
 
-  it('serves a standalone paper immediately, because no cohort is sitting it together', async () => {
-    const attempt = scored();
-    const standalone = { scheduled: false, closesAt: null, extraTimeSec: 0 };
-
-    const report = await review(attempt, standalone).solutions(STUDENT, attempt.id, NOW);
-
-    assert.equal(report.questions.length, 2);
-  });
-
   it('refuses a scheduled paper nobody has capped entry on', async () => {
     const attempt = scored();
-    const uncapped = { scheduled: true, closesAt: null, extraTimeSec: 0 };
+    const uncapped = { closesAt: null, extraTimeSec: 0 };
 
     await assert.rejects(
       () => review(attempt, uncapped).solutions(STUDENT, attempt.id, NOW),

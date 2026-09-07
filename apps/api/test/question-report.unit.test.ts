@@ -115,10 +115,10 @@ function sittings() {
   ];
 }
 
-/** The gate's other input. A scheduled test with no close date is one nobody may see the key of. */
-function schedule(closesAt: string | null, scheduled = true): AccessResolverService {
+/** The gate's other input. A ranked test with no close date is one nobody may see the key of. */
+function schedule(closesAt: string | null): AccessResolverService {
   return {
-    testSchedule: () => Promise.resolve({ scheduled, closesAt, extraTimeSec: 0 }),
+    testSchedule: () => Promise.resolve({ closesAt, extraTimeSec: 0 }),
   } as unknown as AccessResolverService;
 }
 

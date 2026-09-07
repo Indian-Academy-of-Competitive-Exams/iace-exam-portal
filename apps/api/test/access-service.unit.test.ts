@@ -339,18 +339,6 @@ describe('TestSeriesService — what a series may point at', () => {
     assert.equal(error.code, ErrorCodes.CONFLICT);
     assert.equal(prisma.series.length, 1);
   });
-
-  /** The failure this prevents: a test taken out of a series, and the series then undeletable. */
-  it('deletes one a test was taken out of, rather than tripping its restrict key', async () => {
-    const { series, prisma } = build({
-      series: [makeSeries({ id: 'srs_1' })],
-      tests: [{ id: 'tst_1', testSeriesId: null }],
-    });
-
-    await series.remove('srs_1');
-
-    assert.equal(prisma.series.length, 0);
-  });
 });
 /** The four CHECKs answered before Postgres has to, which can only refuse an ordinary save as a 500. */
 describe('TestSeriesService — a kind and its columns say the same thing', () => {

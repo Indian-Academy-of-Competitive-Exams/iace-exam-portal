@@ -86,7 +86,7 @@ function served(): FakeServedAnswerRow[] {
   );
 }
 
-function platform(schedule: { scheduled: boolean; closesAt: string | null; extraTimeSec: number }) {
+function platform(schedule: { closesAt: string | null; extraTimeSec: number }) {
   const attempts = Object.keys(COHORT).map(sitting);
   const rows = served();
   const prisma = new FakeScoringPrisma(attempts, rows, SHAPE);
@@ -124,12 +124,10 @@ async function scoreEveryone(scoring: ScoringProcessor): Promise<void> {
 }
 
 const CLOSED = {
-  scheduled: true,
   closesAt: new Date(NOW.getTime() - 4 * HOUR).toISOString(),
   extraTimeSec: 0,
 };
 const OPEN = {
-  scheduled: true,
   closesAt: new Date(NOW.getTime() + HOUR).toISOString(),
   extraTimeSec: 0,
 };

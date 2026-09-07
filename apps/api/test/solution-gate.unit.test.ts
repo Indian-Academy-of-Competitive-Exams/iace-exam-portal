@@ -16,7 +16,6 @@ const HOUR = 3_600_000;
 function facts(overrides: Partial<SolutionGateFacts> = {}): SolutionGateFacts {
   return {
     evaluationMode: EVALUATION_MODE.RANKED,
-    scheduled: true,
     closesAt: new Date(NOW.getTime() - 2 * HOUR).toISOString(),
     durationSec: 3600,
     extraTimeSec: 0,
@@ -30,12 +29,6 @@ describe('the solution gate', () => {
 
     assert.equal(solutionsOpening(practice).state, SOLUTIONS_OPENING.NOW);
     assert.equal(solutionsAreOpen(practice, NOW), true);
-  });
-
-  it('opens a standalone paper immediately, because no cohort is sitting it together', () => {
-    const standalone = facts({ scheduled: false, closesAt: null });
-
-    assert.equal(solutionsAreOpen(standalone, NOW), true);
   });
 
   /** The failure this prevents: handing the key to one student while another is still writing. */

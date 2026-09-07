@@ -226,7 +226,7 @@ export class TestsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/series')
-  series(@Param('id') id: string): Promise<TestSeriesLink | null> {
+  series(@Param('id') id: string): Promise<TestSeriesLink> {
     return this.offering.series(id);
   }
 
@@ -237,7 +237,7 @@ export class TestsController {
   moveToSeries(
     @Param('id') id: string,
     @Body(new ZodBody(setTestSeriesSchema)) body: SetTestSeriesBody,
-  ): Promise<TestSeriesLink | null> {
+  ): Promise<TestSeriesLink> {
     return this.offering.moveToSeries(id, body);
   }
 

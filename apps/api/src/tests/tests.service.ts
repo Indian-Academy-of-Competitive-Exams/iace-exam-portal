@@ -79,7 +79,6 @@ export const AUDITED_TEST_FIELDS = [
   'title',
   'isLocked',
   'scope',
-  'evaluationMode',
   'paperBinding',
   'examTemplate',
   'maxRetakes',
@@ -192,7 +191,7 @@ export class TestsService {
     const scope = input.scope ?? test.scope;
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
     const paperBinding = input.paperBinding ?? test.paperBinding;
-    this.assertJudgeable(test.evaluationMode, paperBinding, test.testSeries?.name ?? null);
+    this.assertJudgeable(test.evaluationMode, paperBinding, test.testSeries.name);
     this.assertCovers(config, scope, scopeRef);
 
     // Papers are already drawn against a frozen count, so only an unfrozen one is raised to the floor.
@@ -247,9 +246,7 @@ export class TestsService {
 
     await this.prisma.test.delete({ where: { id } });
 
-    if (test.testSeriesId !== null) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-    }
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
   }
 
   /** A generated test with one paper is a fixed test wearing the wrong name. */
@@ -353,7 +350,7 @@ function toTest(row: TestRow): Test {
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     attemptCount: row._count.attempts,
     testSeriesId: row.testSeriesId,
-    testSeriesName: row.testSeries?.name ?? null,
+    testSeriesName: row.testSeries.name,
     paperQuestionCount: row._count.paperQuestions,
     createdAt: row.createdAt.toISOString(),
   };

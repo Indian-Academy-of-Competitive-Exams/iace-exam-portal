@@ -382,15 +382,6 @@ describe('AccessResolverService.testSchedule', () => {
       'tst_1',
     );
 
-  /** Standalone: it belongs to no series, so nothing schedules it and nothing shuts it. */
-  it('does not schedule a test that belongs to no series', async () => {
-    assert.deepEqual(await scheduleOf({ testSeriesId: null }), {
-      scheduled: false,
-      closesAt: null,
-      extraTimeSec: 0,
-    });
-  });
-
   it('shuts entry at the test’s own late-entry cutoff', async () => {
     const schedule = await scheduleOf({
       testSeriesId: 'srs_1',
@@ -399,17 +390,12 @@ describe('AccessResolverService.testSchedule', () => {
       extraTimeSec: 300,
     });
 
-    assert.deepEqual(schedule, {
-      scheduled: true,
-      closesAt: '2026-06-01T09:30:00.000Z',
-      extraTimeSec: 300,
-    });
+    assert.deepEqual(schedule, { closesAt: '2026-06-01T09:30:00.000Z', extraTimeSec: 300 });
   });
 
-  /** The failure this prevents: an unscheduled test reading as one whose entry has closed. */
-  it('leaves a scheduled test with no cutoff open to enter', async () => {
+  /** The failure this prevents: a test with no cutoff reading as one whose entry has closed. */
+  it('leaves a test with no cutoff open to enter', async () => {
     assert.deepEqual(await scheduleOf({ testSeriesId: 'srs_1' }), {
-      scheduled: true,
       closesAt: null,
       extraTimeSec: 0,
     });

@@ -122,10 +122,11 @@ function assertStaggerIsRanked(evaluationMode: EvaluationMode): void {
 
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
-const linkOf = (test: OfferingRow): TestSeriesLink | null =>
-  test.testSeriesId === null || test.testSeries === null
-    ? null
-    : { testSeriesId: test.testSeriesId, name: test.testSeries.name, order: test.seriesOrder };
+const linkOf = (test: OfferingRow): TestSeriesLink => ({
+  testSeriesId: test.testSeriesId,
+  name: test.testSeries.name,
+  order: test.seriesOrder,
+});
 
 /** How a finalized test is offered: through the one series carrying it, never on its own. */
 @Injectable()
@@ -136,17 +137,17 @@ export class OfferingService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  async series(testId: string): Promise<TestSeriesLink | null> {
+  async series(testId: string): Promise<TestSeriesLink> {
     return linkOf(await this.requireTest(testId));
   }
 
   /** One column, so the test's own clock is untouched by a move and cannot be re-saved away. */
-  async moveToSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink | null> {
+  async moveToSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink> {
     const test = await this.requireTest(testId);
     const next = input.testSeriesId;
     if (next === test.testSeriesId) return linkOf(test);
 
-    if (test.testSeriesId !== null) this.assertNotSat(test);
+    this.assertNotSat(test);
     await this.assertSeriesUsable(test, next);
 
     const moved = await this.prisma.test.update({
@@ -157,9 +158,7 @@ export class OfferingService {
 
     // Both sides: the catalog a student reads is cached against the series it moved between.
     for (const testSeriesId of [test.testSeriesId, next]) {
-      if (testSeriesId !== null) {
-        this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-      }
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     }
 
     return linkOf(moved);
@@ -296,7 +295,6 @@ export class OfferingService {
   /** Filed against the test, and the series carrying it loses its cached catalog. */
   private announce(test: OfferingRow): void {
     this.auditContext.setEntityId(test.id);
-    if (test.testSeriesId === null) return;
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
   }
 

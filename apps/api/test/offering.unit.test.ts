@@ -33,32 +33,22 @@ function serviceWith(test = makeTest({ id: 'tst_1' }), attempts: { testId: strin
   };
 }
 
-const finalized = () => makeTest({ id: 'tst_1', isLocked: true });
-
 const inSeries = (over: Parameters<typeof makeTest>[0] = {}) =>
   makeTest({ id: 'tst_1', testSeriesId: 'srs_1', seriesOrder: 1, ...over });
 
 const OPENS_AT = new Date('2026-09-01T04:30:00.000Z');
 
 describe('OfferingService — a test belongs to one series', () => {
-  it('writes the series onto the test itself and names it back', async () => {
-    const { service, prisma } = serviceWith();
-
-    const link = await service.moveToSeries('tst_1', { testSeriesId: 'srs_1' });
-
-    assert.deepEqual(link, {
-      testSeriesId: 'srs_1',
-      name: 'SSC CGL 2026 — Full length',
-      order: null,
-    });
-    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
-  });
-
-  it('replaces the series rather than adding to it', async () => {
+  it('replaces the series on the test itself and names the new one back', async () => {
     const { service, prisma } = serviceWith(inSeries());
 
-    await service.moveToSeries('tst_1', { testSeriesId: 'srs_2' });
+    const link = await service.moveToSeries('tst_1', { testSeriesId: 'srs_2' });
 
+    assert.deepEqual(link, {
+      testSeriesId: 'srs_2',
+      name: 'SSC CGL 2026 — Sectionals',
+      order: null,
+    });
     assert.equal(prisma.tests[0]?.testSeriesId, 'srs_2');
   });
 
@@ -79,12 +69,6 @@ describe('OfferingService — a test belongs to one series', () => {
       name: 'SSC CGL 2026 — Full length',
       order: 1,
     });
-  });
-
-  it('says a test is in no series rather than answering with an empty set', async () => {
-    const { service } = serviceWith();
-
-    assert.equal(await service.series('tst_1'), null);
   });
 
   it('tells the catalog cache about the series it left AND the one it joined', async () => {
@@ -116,7 +100,7 @@ describe('OfferingService — a test belongs to one series', () => {
 
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
-    assert.equal(prisma.tests[0]?.testSeriesId, null);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
   /** The failure this prevents: another stage's series serving this paper to its students. */
@@ -131,7 +115,7 @@ describe('OfferingService — a test belongs to one series', () => {
     assert.ok(AppException.is(error));
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
     assert.match(error.message, /different exam stage/);
-    assert.equal(prisma.tests[0]?.testSeriesId, null);
+    assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
   it('carries a stage-agnostic series, which belongs to no stage and so fits any test', async () => {
@@ -192,8 +176,8 @@ describe('OfferingService — a test belongs to one series', () => {
     assert.equal(prisma.tests[0]?.testSeriesId, 'srs_1');
   });
 
-  it('still lets a sat test that is in no series be given one', async () => {
-    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1' }), [{ testId: 'tst_1' }]);
+  it('leaves a sat test alone when the series it is given is the one it holds', async () => {
+    const { service, prisma } = serviceWith(inSeries(), [{ testId: 'tst_1' }]);
 
     await service.moveToSeries('tst_1', { testSeriesId: 'srs_1' });
 
@@ -236,18 +220,6 @@ describe('OfferingService — offering a test', () => {
     assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
   });
 
-  it('refuses to offer a test no series carries', async () => {
-    const { service, prisma } = serviceWith(finalized());
-
-    // The failure this prevents: an ACTIVE test no student has any route to.
-    const error = await service.setStatus('tst_1', TEST_STATUS.ACTIVE).catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.match(error.message, /only through a series/);
-    assert.equal(prisma.tests[0]?.status, TEST_STATUS.DRAFT);
-  });
-
   it('refuses to offer a test whose paper is not frozen', async () => {
     const { service, prisma } = serviceWith(inSeries());
 
@@ -263,7 +235,7 @@ describe('OfferingService — offering a test', () => {
       makeTest({ id: 'tst_1', status: TEST_STATUS.ACTIVE, isLocked: true }),
     );
 
-    // Withdrawing an offer needs no series and no frozen paper — only offering does.
+    // Withdrawing an offer asks nothing of a test — only offering does.
     await service.setStatus('tst_1', TEST_STATUS.INACTIVE);
 
     assert.equal(prisma.tests[0]?.status, TEST_STATUS.INACTIVE);

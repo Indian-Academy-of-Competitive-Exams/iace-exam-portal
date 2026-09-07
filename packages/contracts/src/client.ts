@@ -1216,8 +1216,8 @@ export function createApiClient(options: ApiClientOptions) {
             schema: finalizeResultSchema,
           }),
 
-        series: (id: string): Promise<TestSeriesLink | null> =>
-          request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema.nullable() }),
+        series: (id: string): Promise<TestSeriesLink> =>
+          request(ADMIN_TEST_PAPER_ROUTES.series(id), { schema: testSeriesLinkSchema }),
 
         offer: (id: string): Promise<OfferResult> =>
           request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
@@ -1230,11 +1230,11 @@ export function createApiClient(options: ApiClientOptions) {
             schema: testScheduleSchema,
           }),
 
-        moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink | null> =>
+        moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), {
             method: 'POST',
             body: input,
-            schema: testSeriesLinkSchema.nullable(),
+            schema: testSeriesLinkSchema,
           }),
 
         setStatus: (id: string, input: SetTestStatusInput): Promise<TestStatus> =>

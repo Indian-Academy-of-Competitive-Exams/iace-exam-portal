@@ -1464,7 +1464,7 @@ export interface FakeTestModelRow {
   finalizedAt: Date | null;
   createdById: string | null;
   createdAt: Date;
-  testSeriesId: string | null;
+  testSeriesId: string;
   seriesOrder: number | null;
   opensAt: Date | null;
   lateEntrySec: number | null;
@@ -1491,7 +1491,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     finalizedAt: null,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    testSeriesId: null,
+    testSeriesId: 'srs_1',
     seriesOrder: null,
     opensAt: null,
     lateEntrySec: null,
@@ -2285,7 +2285,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
         paperQuestions: this.paperQuestions.filter((paper) => paper.testId === row.id).length,
       },
-      testSeries: row.testSeriesId === null ? null : { name: this.seriesNameOf(row.testSeriesId) },
+      testSeries: { name: this.seriesNameOf(row.testSeriesId) },
       baseConfig: {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,
@@ -3239,7 +3239,7 @@ export interface FakeGrantRowAccess {
 /** What the series-delete guard reads: the RESTRICT column, and the join rows beside it. */
 export interface FakeAccessTestRow {
   id: string;
-  testSeriesId: string | null;
+  testSeriesId: string;
 }
 
 export function makeProgram(overrides: Partial<FakeProgramRow> = {}): FakeProgramRow {
