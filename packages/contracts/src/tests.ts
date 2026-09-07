@@ -88,6 +88,11 @@ export function allowedPaperBindings(evaluationMode: EvaluationMode): PaperBindi
   return PAPER_BINDINGS.filter((binding) => isPaperBindingAllowed(evaluationMode, binding));
 }
 
+/** A cutoff, an allowance and a per-program stagger all serve a cohort; practice just opens. */
+export function allowsCohortScheduling(evaluationMode: EvaluationMode): boolean {
+  return evaluationMode === EVALUATION_MODE.RANKED;
+}
+
 /** The only change a frozen paper permits, and both recompute every score. */
 export const PAPER_QUESTION_STATUS = {
   ACTIVE: 'ACTIVE',

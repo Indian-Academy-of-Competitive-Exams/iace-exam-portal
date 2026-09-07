@@ -261,6 +261,39 @@ describe('TestsService — editing and removing', () => {
     assert.equal(error.code, ErrorCodes.VALIDATION_ERROR);
   });
 
+  /** The failure this prevents: a cutoff left on a paper that no longer ranks, which the CHECK refuses. */
+  it('takes the whole cohort schedule off a test turned into a practice one', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 }),
+    ]);
+    prisma.programUnlocks.push({
+      testId: 'tst_1',
+      programCode: 'FOUNDATION',
+      opensAt: new Date('2026-09-01T03:30:00.000Z'),
+    });
+
+    await service.update('tst_1', { evaluationMode: EVALUATION_MODE.PRACTICE });
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [null, null]);
+    assert.equal(prisma.programUnlocks.length, 0);
+  });
+
+  it('leaves the schedule alone on an edit that keeps the test ranked', async () => {
+    const { service, prisma } = serviceWith([
+      makeTest({ id: 'tst_1', lateEntrySec: 1800, extraTimeSec: 600 }),
+    ]);
+    prisma.programUnlocks.push({
+      testId: 'tst_1',
+      programCode: 'FOUNDATION',
+      opensAt: new Date('2026-09-01T03:30:00.000Z'),
+    });
+
+    await service.update('tst_1', { title: 'Mock 1 (revised)' });
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+    assert.equal(prisma.programUnlocks.length, 1);
+  });
+
   it('refuses every change but the title once a student has sat it', async () => {
     const { service, prisma } = serviceWith(
       [makeTest({ id: 'tst_1', isLocked: true })],

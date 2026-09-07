@@ -499,6 +499,7 @@ model Test {
   testSeriesId       String?
   seriesOrder        Int?
   opensAt            DateTime?      @db.Timestamptz(3)
+  // Both RANKED-only, by CHECK: a cutoff and an allowance answer to a rank, and practice has none.
   lateEntrySec       Int?
   extraTimeSec       Int?
 

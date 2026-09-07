@@ -5,6 +5,8 @@ import {
   ErrorCodes,
   FORM_LEVEL_FIELD,
   TEST_STATUS,
+  allowsCohortScheduling,
+  type EvaluationMode,
   type SeriesTestRow,
   type SetSeriesTestUnlockBody,
   type SetProgramUnlockBody,
@@ -25,6 +27,7 @@ const OFFERING_SELECT = {
   isLocked: true,
   examStageId: true,
   opensAt: true,
+  evaluationMode: true,
   testSeriesId: true,
   seriesOrder: true,
   testSeries: { select: { name: true } },
@@ -80,6 +83,35 @@ function assertLateEntryHasAnOpening(opensAt: Date | null, lateEntrySec: number 
 
   throw new AppException(ErrorCodes.VALIDATION_ERROR, LATE_ENTRY_NEEDS_AN_OPENING, {
     fieldErrors: { lateEntrySec: [LATE_ENTRY_NEEDS_AN_OPENING] },
+  });
+}
+
+const WINDOW_IS_RANKED_ONLY =
+  'A practice test opens at its time and never shuts, so it takes no late entry and no extra time. Make this test ranked, or leave both blank.';
+
+/** The CHECK on the table in service form, so the admin reads a sentence and not a driver error. */
+function assertWindowIsRanked(evaluationMode: EvaluationMode, input: TestSchedule): void {
+  if (allowsCohortScheduling(evaluationMode)) return;
+
+  const refused = (['lateEntrySec', 'extraTimeSec'] as const).filter(
+    (field) => input[field] !== null,
+  );
+  if (refused.length === 0) return;
+
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, WINDOW_IS_RANKED_ONLY, {
+    fieldErrors: Object.fromEntries(refused.map((field) => [field, [WINDOW_IS_RANKED_ONLY]])),
+  });
+}
+
+const STAGGER_IS_RANKED_ONLY =
+  'A program opening staggers one cohort ahead of another, which only means something where a rank compares them. This test is practice, so it opens once for everybody.';
+
+/** A CHECK only ever sees its own row, so unlike the pair above this rule cannot live on the table. */
+function assertStaggerIsRanked(evaluationMode: EvaluationMode): void {
+  if (allowsCohortScheduling(evaluationMode)) return;
+
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, STAGGER_IS_RANKED_ONLY, {
+    fieldErrors: { opensAt: [STAGGER_IS_RANKED_ONLY] },
   });
 }
 
@@ -250,6 +282,7 @@ export class OfferingService {
     input: SetProgramUnlockBody,
   ): Promise<TestProgramUnlock[]> {
     const test = await this.requireTest(testId);
+    assertStaggerIsRanked(test.evaluationMode);
     await this.requireProgram(programCode);
     const opensAt = new Date(input.opensAt);
     assertOpensNoLaterThanTheTest(test.opensAt, opensAt);
@@ -283,6 +316,7 @@ export class OfferingService {
   /** The test's own clock, written where the resolver reads it. No branch row collapses onto it. */
   async setSchedule(testId: string, input: TestSchedule): Promise<TestSchedule> {
     const test = await this.requireTest(testId);
+    assertWindowIsRanked(test.evaluationMode, input);
     assertLateEntryHasAnOpening(test.opensAt, input.lateEntrySec);
 
     await this.prisma.test.update({ where: { id: testId }, data: input });

@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AppException, ErrorCodes, TEST_STATUS } from '@iace/contracts';
+import { AppException, ErrorCodes, EVALUATION_MODE, TEST_STATUS } from '@iace/contracts';
 import { OfferingService } from '../src/tests/offering.service';
 import { DOMAIN_EVENTS } from '../src/common/events';
 import { AuditContext } from '../src/audit';
@@ -402,6 +402,65 @@ describe('OfferingService — the test carries its own clock', () => {
     await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 300 });
 
     assert.equal(prisma.tests[0]?.extraTimeSec, 300);
+  });
+});
+
+describe('OfferingService — a practice test opens at its time and never shuts', () => {
+  const practice = () =>
+    makeTest({ id: 'tst_1', opensAt: OPENS_AT, evaluationMode: EVALUATION_MODE.PRACTICE });
+
+  const refusedField = (field: string) => (error: unknown) =>
+    AppException.is(error) && error.fieldErrors?.[field] !== undefined;
+
+  /** The failure this prevents: a cutoff shutting entry to a paper no rank ever reads. */
+  it('refuses late entry on a practice test, under the field that carries it', async () => {
+    const { service, prisma } = serviceWith(practice());
+
+    await assert.rejects(
+      () => service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: null }),
+      refusedField('lateEntrySec'),
+    );
+    assert.equal(prisma.tests[0]?.lateEntrySec, null);
+  });
+
+  /** The failure this prevents: an allowance compensating for a rank a practice sitting never enters. */
+  it('refuses extra time on a practice test, under the field that carries it', async () => {
+    const { service, prisma } = serviceWith(practice());
+
+    await assert.rejects(
+      () => service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 600 }),
+      refusedField('extraTimeSec'),
+    );
+    assert.equal(prisma.tests[0]?.extraTimeSec, null);
+  });
+
+  it('still takes a schedule that asks for neither', async () => {
+    const { service, prisma } = serviceWith(practice());
+
+    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: null });
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [null, null]);
+  });
+
+  it('leaves a ranked test able to carry both', async () => {
+    const { service, prisma } = serviceWith(makeTest({ id: 'tst_1', opensAt: OPENS_AT }));
+
+    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
+
+    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+  });
+
+  /** The failure this prevents: one cohort put ahead of another on a paper that ranks neither. */
+  it('refuses a program opening on a practice test', async () => {
+    const { service, prisma } = serviceWith(practice());
+    prisma.programCatalog.push({ code: 'FOUNDATION' });
+    const earlier = new Date(OPENS_AT.getTime() - 3_600_000).toISOString();
+
+    await assert.rejects(
+      () => service.setProgramUnlock('tst_1', 'FOUNDATION', { opensAt: earlier }),
+      refusedField('opensAt'),
+    );
+    assert.equal(prisma.programUnlocks.length, 0);
   });
 });
 

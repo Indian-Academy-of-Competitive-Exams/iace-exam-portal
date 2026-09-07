@@ -7,10 +7,12 @@ import {
   MIN_PAPER_VARIANTS,
   PAPER_BINDING,
   TEST_SCOPE,
+  allowsCohortScheduling,
   fieldDiff,
   scopedQuestionCount,
   scopedDurationSec,
   type BaseConfigDetail,
+  type EvaluationMode,
   type CreateTestBody,
   type Paginated,
   type DrawSpec,
@@ -81,6 +83,10 @@ export const AUDITED_TEST_FIELDS = [
   'maxRetakes',
   'status',
 ] as const;
+
+/** Practice carries no cohort scheduling, so the edit that makes a test one takes all of it off. */
+const turnsIntoPractice = (evaluationMode: EvaluationMode | undefined): boolean =>
+  evaluationMode !== undefined && !allowsCohortScheduling(evaluationMode);
 
 /** Owns `Test`: what it covers and how it is judged. Its shape is its `BaseConfig`'s. */
 @Injectable()
@@ -188,12 +194,17 @@ export class TestsService {
     const droppingThePaper =
       input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
 
+    const becomingPractice = turnsIntoPractice(input.evaluationMode);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       // Before the paper goes: the thaw reads it to give back what finalizing counted.
       if (thawsThePaper(input)) await thaw(tx, test);
 
       // A paper belongs to a FIXED test. Per-attempt leaves rows nothing will ever read.
       if (droppingThePaper) await tx.paperQuestion.deleteMany({ where: { testId: id } });
+
+      // A stagger puts one cohort ahead of another, which a test that ranks nobody cannot mean.
+      if (becomingPractice) await tx.testProgramUnlock.deleteMany({ where: { testId: id } });
 
       return tx.test.update({
         where: { id },
@@ -202,6 +213,7 @@ export class TestsService {
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
+          ...(becomingPractice ? { lateEntrySec: null, extraTimeSec: null } : {}),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
           ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),

@@ -13,6 +13,7 @@ import {
   TEST_SCOPES,
   TEST_SCOPE_LABELS,
   allowedPaperBindings,
+  allowsCohortScheduling,
   type BaseConfigDetail,
   type EvaluationMode,
   type ExamTemplate,
@@ -21,6 +22,7 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import {
+  Alert,
   Combobox,
   FormField,
   FormSection,
@@ -38,6 +40,7 @@ import {
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
+import { toMinutes } from '../lib/schedule-format';
 import { useSuggestedTestName } from '../lib/use-suggested-name';
 import { type TestForm, type TestFormValues } from './test-builder-form';
 
@@ -77,10 +80,31 @@ export function SetupStep({
       </FormSection>
 
       <FormSection title="Scoring">
-        <Rules form={form} config={config} sat={sat} />
+        <Rules form={form} detail={detail} config={config} sat={sat} />
       </FormSection>
     </>
   );
+}
+
+/** Named rather than cleared quietly: the schedule goes with the mode, and the admin reads which. */
+function scheduleDroppedBy(
+  detail: TestDetail | null,
+  evaluationMode: EvaluationMode,
+): string | null {
+  if (detail === null || allowsCohortScheduling(evaluationMode)) return null;
+
+  const unlocks = detail.programUnlocks.length;
+  const going = [
+    detail.lateEntrySec === null ? null : `late entry (${toMinutes(detail.lateEntrySec)} minutes)`,
+    detail.extraTimeSec === null ? null : `extra time (${toMinutes(detail.extraTimeSec)} minutes)`,
+    unlocks === 0 ? null : plural(unlocks, 'program opening'),
+  ].filter((part) => part !== null);
+
+  if (going.length === 0) return null;
+
+  const head = going.slice(0, -1).join(', ');
+  const tail = going.slice(-1).join('');
+  return head === '' ? tail : `${head} and ${tail}`;
 }
 
 /** A topic's name lives on the taxonomy rather than the config, so a topic test keeps the fallback. */
@@ -222,12 +246,19 @@ function Blueprint({
 
 function Rules({
   form,
+  detail,
   config,
   sat,
-}: Readonly<{ form: TestForm; config: BaseConfigDetail | null; sat: boolean }>) {
+}: Readonly<{
+  form: TestForm;
+  detail: TestDetail | null;
+  config: BaseConfigDetail | null;
+  sat: boolean;
+}>) {
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
   const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
+  const dropped = scheduleDroppedBy(detail, evaluationMode);
 
   /** Ranked leaves only the frozen paper, so choosing it moves the binding rather than failing. */
   const pickEvaluationMode = (value: string) => {
@@ -240,6 +271,12 @@ function Rules({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {dropped === null ? null : (
+        <Alert variant="warning" className="sm:col-span-2 lg:col-span-3">
+          {`Saving removes this test's ${dropped}. A practice test opens at its time and nothing else.`}
+        </Alert>
+      )}
+
       <FormField form={form} name="scope" label="Covers">
         {(control) => (
           <Combobox

@@ -6,6 +6,7 @@ import {
   AppException,
   OFFER_REQUIREMENT,
   TEST_STATUS,
+  allowsCohortScheduling,
   offerRequirements,
   type TestDetail,
 } from '@iace/contracts';
@@ -94,6 +95,18 @@ interface ProgramRefusal {
 
 const PROGRAM_RULE =
   'A program opening lets that cohort start earlier. Entry still closes at the same instant for everyone, so their window is longer rather than moved.';
+
+const PRACTICE_RULE =
+  'A practice test opens at its time and nothing else. Late entry, extra time and a program opening all answer to a rank, so they belong to a ranked test only.';
+
+const RANKED_RULES =
+  "Late entry is counted from the opening, extra time is added to every student's clock, and a program opening left later than the test's own is dropped.";
+
+/** The confirm names only what this test carries, so practice is never warned about a clock it lacks. */
+const scheduleConsequence = (count: number, ranked: boolean): string =>
+  [`${plural(count, 'change')} to when this test can be started.`, ranked && RANKED_RULES]
+    .filter(Boolean)
+    .join(' ');
 
 /** The server owns the rule; this only puts its refusal under the row that caused it. */
 const refusalOf = (programCode: string, error: unknown): ProgramRefusal | null => {
@@ -189,6 +202,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   // Late entry is counted from the opening, so the server refuses one without it.
   const hasAnOpening = held.opensAt !== '';
+  const ranked = allowsCohortScheduling(detail.evaluationMode);
 
   return (
     <FormSection title="Schedule">
@@ -210,59 +224,69 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
           )}
         </Field>
 
-        <Field
-          htmlFor="test-late-entry"
-          label="Late entry (minutes)"
-          className="w-44"
-          /* ui-copy-ok: rule */ hint="Counted from the opening, so the test needs one."
-        >
-          {(control) => (
-            <NumericInput
-              {...control}
-              placeholder="None"
-              disabled={!hasAnOpening}
-              value={held.lateEntry}
-              onChange={(event) => setField('lateEntry', digitsOnly(event.target.value))}
-            />
-          )}
-        </Field>
+        {ranked ? (
+          <>
+            <Field
+              htmlFor="test-late-entry"
+              label="Late entry (minutes)"
+              className="w-44"
+              /* ui-copy-ok: rule */ hint="Counted from the opening, so the test needs one."
+            >
+              {(control) => (
+                <NumericInput
+                  {...control}
+                  placeholder="None"
+                  disabled={!hasAnOpening}
+                  value={held.lateEntry}
+                  onChange={(event) => setField('lateEntry', digitsOnly(event.target.value))}
+                />
+              )}
+            </Field>
 
-        <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
-          {(control) => (
-            <NumericInput
-              {...control}
-              placeholder="None"
-              value={held.extraTime}
-              onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
-            />
-          )}
-        </Field>
+            <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
+              {(control) => (
+                <NumericInput
+                  {...control}
+                  placeholder="None"
+                  value={held.extraTime}
+                  onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
+                />
+              )}
+            </Field>
+          </>
+        ) : null}
       </div>
 
-      <SectionHeading level={3} title="Program openings" />
+      {ranked ? (
+        <>
+          <SectionHeading level={3} title="Program openings" />
 
-      <Alert variant="info">{PROGRAM_RULE}</Alert>
+          <Alert variant="info">{PROGRAM_RULE}</Alert>
 
-      {held.programs.map((row, index) => (
-        <ProgramOpeningRow
-          key={row.programCode}
-          row={row}
-          index={index}
-          error={refused?.programCode === row.programCode ? refused.message : undefined}
-          onChange={(next) => setProgram(row.programCode, next)}
-          onRemove={() => dropProgram(row.programCode)}
-        />
-      ))}
+          {held.programs.map((row, index) => (
+            <ProgramOpeningRow
+              key={row.programCode}
+              row={row}
+              index={index}
+              error={refused?.programCode === row.programCode ? refused.message : undefined}
+              onChange={(next) => setProgram(row.programCode, next)}
+              onRemove={() => dropProgram(row.programCode)}
+            />
+          ))}
 
-      <div className="w-72">
-        <ProgramPicker
-          value=""
-          clearable={false}
-          placeholder="Add a program"
-          aria-label="Add a program"
-          onChange={addProgram}
-        />
-      </div>
+          <div className="w-72">
+            <ProgramPicker
+              value=""
+              clearable={false}
+              placeholder="Add a program"
+              aria-label="Add a program"
+              onChange={addProgram}
+            />
+          </div>
+        </>
+      ) : (
+        <Alert variant="info">{PRACTICE_RULE}</Alert>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" disabled={changes.count === 0} onClick={() => setAsking(true)}>
@@ -277,7 +301,7 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
         open={asking}
         onOpenChange={(open) => !open && setAsking(false)}
         title="Save the schedule?"
-        description={`${plural(changes.count, 'change')} to when this test can be started. Late entry is counted from the opening, extra time is added to every student's clock, and a program opening left later than the test's own is dropped.`}
+        description={scheduleConsequence(changes.count, ranked)}
         confirmLabel="Save schedule"
         loading={save.isPending}
         onConfirm={() => save.mutate()}

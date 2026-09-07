@@ -146,6 +146,14 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   for a candidate who needs it folds in.
 - `TestProgramUnlock` staggers one test's opening for one program. A student in two programs takes
   the **earliest**, so the slower cohort never holds them back.
+- **All three of those are `RANKED` only: a practice test's whole schedule is `opensAt`.** Each
+  answers to a rank and to nothing else — a cutoff so a cohort sits together, an allowance so a
+  candidate who needs longer is not ranked as though they did not, a stagger to put one cohort
+  ahead of another. A practice attempt is never graded, so none of them separates or compensates
+  for anything. The pair on `Test` is held by `Test_practice_has_no_window_check`; the stagger
+  spans two tables, so `OfferingService` holds it alone — as the "earlier, never later" rule beside
+  it already does. An edit that turns a ranked test into a practice one **clears all three rather
+  than refusing**, and the screen names what is going before it saves.
 - Late entry is still counted from the test's **own** opening, never the program-shifted one: a
   program cohort gets a longer window, not a shifted one.
 - A test in no series is scheduled by nothing and shut by nothing.
