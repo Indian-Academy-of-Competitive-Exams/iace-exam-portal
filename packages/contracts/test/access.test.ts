@@ -34,6 +34,7 @@ const SERIES = {
       closesAt: null,
       attemptStatus: null,
       canStart: true,
+      sittingCount: 1284,
     },
   ],
 };
@@ -134,6 +135,7 @@ describe('testBucket', () => {
     closesAt: null,
     attemptStatus: null,
     canStart: true,
+    sittingCount: null,
     ...over,
   });
 

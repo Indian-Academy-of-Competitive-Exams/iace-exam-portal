@@ -91,6 +91,33 @@ export class LeaderboardService {
     });
   }
 
+  /** The board's own cardinality, which is what a score card already calls its cohort size. */
+  async sittingCounts(testIds: readonly string[]): Promise<ReadonlyMap<string, number>> {
+    const counts = new Map<string, number>();
+    if (testIds.length === 0) return counts;
+
+    const pipeline = this.redis.client.pipeline();
+    for (const testId of testIds) pipeline.zcard(redisKeys.testLeaderboard(testId));
+
+    const replies = await pipeline.exec().catch((error: unknown) => {
+      this.logger.error(
+        'Reading the sitting counts failed; the catalog stands without them',
+        error,
+      );
+      return null;
+    });
+    if (replies === null) return counts;
+
+    // Zero is left OUT: ZCARD cannot tell a cold board from an unsat paper, and neither is a crowd.
+    testIds.forEach((testId, index) => {
+      const reply = replies[index];
+      if (reply?.[0] === null && typeof reply[1] === 'number' && reply[1] > 0) {
+        counts.set(testId, reply[1]);
+      }
+    });
+    return counts;
+  }
+
   /** Built aside and swapped in: a rebuild that dies half-way leaves the board cold, not wrong. */
   async rebuild(testId: string): Promise<number> {
     const key = redisKeys.testLeaderboard(testId);

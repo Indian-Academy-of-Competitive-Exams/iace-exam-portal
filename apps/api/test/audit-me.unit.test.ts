@@ -6,6 +6,8 @@ import { AuditContext } from '../src/audit';
 import { StudentsService } from '../src/students/students.service';
 import { type ExamsService } from '../src/configs';
 import { type BranchesService } from '../src/branches/branches.service';
+import { type AccessResolverService } from '../src/access';
+import { type LeaderboardService } from '../src/attempts';
 import { type StorageService } from '../src/storage/storage.service';
 import {
   fakeStartingPins,
@@ -91,7 +93,13 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     new FakeEventBus().asService(),
     fakeNotificationOutbox(),
   );
-  const me = new MeService(students_, storage.asService(), auditContext);
+  const me = new MeService(
+    students_,
+    storage.asService(),
+    {} as AccessResolverService,
+    {} as LeaderboardService,
+    auditContext,
+  );
   return { prisma, auditContext, storage, me };
 }
 

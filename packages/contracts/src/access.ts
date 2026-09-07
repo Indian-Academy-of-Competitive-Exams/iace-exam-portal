@@ -364,6 +364,8 @@ export const studentCatalogTestSchema = z.object({
   /** Where this student has got to. Null is never opened; IN_PROGRESS is what Resume reopens. */
   attemptStatus: attemptStatusSchema.nullable(),
   canStart: z.boolean(),
+  /** Ranked sittings on this test's board. Null where it is empty or cold — never cached. */
+  sittingCount: z.number().int().nullable(),
 });
 export type StudentCatalogTest = z.infer<typeof studentCatalogTestSchema>;
 

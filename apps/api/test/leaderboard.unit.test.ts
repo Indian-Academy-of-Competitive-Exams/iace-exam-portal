@@ -295,3 +295,38 @@ describe('LeaderboardService', () => {
     assert.equal(await leaderboard.rank(rowAt(rows)), null);
   });
 });
+
+describe('LeaderboardService.sittingCounts — the crowd a catalog quotes', () => {
+  it('counts each board once, so a catalog and a score card name the same cohort', async () => {
+    const rows = [sat('att_a', 90, 20), sat('att_b', 60, 15)];
+    const { leaderboard } = board(rows);
+    for (const row of rows) await leaderboard.record(row);
+
+    const counts = await leaderboard.sittingCounts([TEST_ID]);
+
+    assert.equal(counts.get(TEST_ID), 2);
+  });
+
+  /** ZCARD answers 0 for a key that never existed, so a zero is never a crowd worth quoting. */
+  it('leaves an empty board OUT, so an unsat paper never reads as a counted zero', async () => {
+    const { leaderboard } = board([]);
+
+    const counts = await leaderboard.sittingCounts(['tst_never_sat']);
+
+    assert.equal(counts.has('tst_never_sat'), false);
+  });
+
+  it('asks Redis nothing when there is nothing to count', async () => {
+    const { leaderboard } = board([]);
+
+    assert.equal((await leaderboard.sittingCounts([])).size, 0);
+  });
+
+  /** The crowd is decoration on a catalog; an unreachable Redis must not cost the tests themselves. */
+  it('returns no counts rather than throwing when the pipeline is refused', async () => {
+    const { redis, leaderboard } = board([sat('att_a', 90, 20)]);
+    redis.pipelineFails = true;
+
+    assert.equal((await leaderboard.sittingCounts([TEST_ID])).size, 0);
+  });
+});

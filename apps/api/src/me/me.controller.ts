@@ -44,7 +44,6 @@ import { Actors, CurrentUser, type AuthenticatedUser } from '../common/security'
 import { ZodBody, ZodParam, ZodQuery } from '../common/zod-validation.pipe';
 import { Audit } from '../audit';
 import { AuthService, deviceFrom } from '../auth';
-import { AccessResolverService } from '../access';
 import { NotificationsService } from '../notifications';
 import { MeService } from './me.service';
 import { StudentPrivacyService } from '../students';
@@ -66,7 +65,6 @@ export class MeController {
   constructor(
     private readonly me: MeService,
     private readonly auth: AuthService,
-    private readonly access: AccessResolverService,
     private readonly notifications: NotificationsService,
     private readonly privacy: StudentPrivacyService,
   ) {}
@@ -110,7 +108,7 @@ export class MeController {
   /** Every series this student reaches, with today's window applied. */
   @Get('catalog')
   catalog(@CurrentUser() user: AuthenticatedUser): Promise<StudentCatalog> {
-    return this.access.catalog(user.id);
+    return this.me.catalog(user.id);
   }
 
   @Get('notifications')

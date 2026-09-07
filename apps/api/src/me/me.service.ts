@@ -5,10 +5,13 @@ import {
   fieldDiff,
   type DocumentKind,
   type Me,
+  type StudentCatalog,
   type UpdateMeBody,
 } from '@iace/contracts';
 import { StorageService } from '../storage/storage.service';
 import { StudentsService } from '../students';
+import { AccessResolverService } from '../access';
+import { LeaderboardService } from '../attempts';
 import { AuditContext } from '../audit';
 import { checkDocument, columnFor, documentKey } from './documents';
 
@@ -29,11 +32,31 @@ export class MeService {
   constructor(
     private readonly students: StudentsService,
     private readonly storage: StorageService,
+    private readonly access: AccessResolverService,
+    private readonly leaderboard: LeaderboardService,
     private readonly auditContext: AuditContext,
   ) {}
 
   profile(studentId: string): Promise<Me> {
     return this.students.detail(studentId);
+  }
+
+  /** The catalog, with each paper's crowd read live off its board rather than out of the cache. */
+  async catalog(studentId: string): Promise<StudentCatalog> {
+    const catalog = await this.access.catalog(studentId);
+    const tests = catalog.series.flatMap((series) => series.tests);
+    const counts = await this.leaderboard.sittingCounts(tests.map((test) => test.id));
+
+    return {
+      ...catalog,
+      series: catalog.series.map((series) => ({
+        ...series,
+        tests: series.tests.map((test) => ({
+          ...test,
+          sittingCount: counts.get(test.id) ?? null,
+        })),
+      })),
+    };
   }
 
   /** An enrolment cannot arrive here — see updateMeSchema for why. */

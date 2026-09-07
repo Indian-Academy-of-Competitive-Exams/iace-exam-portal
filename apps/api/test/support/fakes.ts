@@ -100,6 +100,9 @@ export class FakeRedis {
   private readonly store = new Map<string, Entry>();
   private nowMs = 1_700_000_000_000;
 
+  /** Set to make every pipeline reject, standing in for a Redis nobody can reach. */
+  pipelineFails = false;
+
   /** Move the clock forward; keys past their TTL disappear exactly as Redis would. */
   advanceSeconds(seconds: number): void {
     this.nowMs += seconds * 1000;
@@ -250,6 +253,24 @@ export class FakeRedis {
     /** Best first, inclusive at both ends — the slice a board's podium and neighbourhood are cut from. */
     zrevrange: (key: string, start: number, stop: number): Promise<string[]> =>
       Promise.resolve(this.descending(key).slice(start, stop < 0 ? undefined : stop + 1)),
+
+    /** Queues the calls and replays them as ioredis does — `[error, value]` per queued command. */
+    pipeline: () => {
+      const queued: (() => Promise<number>)[] = [];
+      const chain = {
+        zcard: (key: string) => {
+          queued.push(() => this.client.zcard(key));
+          return chain;
+        },
+        exec: async (): Promise<[Error | null, unknown][]> => {
+          if (this.pipelineFails) throw new Error('pipeline refused');
+          return Promise.all(
+            queued.map(async (run): Promise<[Error | null, unknown]> => [null, await run()]),
+          );
+        },
+      };
+      return chain;
+    },
 
     zcount: (key: string, min: string | number, max: string | number): Promise<number> => {
       const low = zBound(min);

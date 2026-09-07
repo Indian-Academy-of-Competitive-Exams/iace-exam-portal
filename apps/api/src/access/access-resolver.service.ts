@@ -404,7 +404,7 @@ const NONE_WAITING = -1;
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   const { extraTimeSec: _extraTimeSec, ...shown } = test;
   // A sat test stays startable: `maxRetakes` decides whether it may be sat again, not this.
-  return { ...shown, canStart: reachable && testIsOpen(test, now) };
+  return { ...shown, canStart: reachable && testIsOpen(test, now), sittingCount: null };
 }
 
 /** Why a sitting may not begin: a shut window is a different fact from having no access at all. */

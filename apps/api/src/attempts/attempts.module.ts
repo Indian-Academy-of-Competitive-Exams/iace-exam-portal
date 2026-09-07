@@ -82,6 +82,7 @@ import { SubmitService } from './submit.service';
     AttemptsService,
     AttemptPaperService,
     AttemptStateService,
+    LeaderboardService,
     ScoringOutbox,
     SubmitService,
   ],
