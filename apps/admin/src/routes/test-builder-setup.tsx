@@ -2,6 +2,7 @@ import { useWatch } from 'react-hook-form';
 import {
   EVALUATION_MODE,
   EVALUATION_MODE_LABELS,
+  EVALUATION_MODES,
   EXAM_TEMPLATE,
   EXAM_TEMPLATES,
   MAX_PAPER_VARIANTS,
@@ -19,7 +20,6 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import {
-  Alert,
   Combobox,
   FormField,
   FormSection,
@@ -28,7 +28,12 @@ import {
   RadioGroupItem,
   plural,
 } from '@iace/ui';
-import { EXAM_TEMPLATE_LABELS, PAPER_BINDING_HINTS, PAPER_BINDING_LABELS } from '../lib/constants';
+import {
+  EVALUATION_MODE_HINTS,
+  EXAM_TEMPLATE_LABELS,
+  PAPER_BINDING_HINTS,
+  PAPER_BINDING_LABELS,
+} from '../lib/constants';
 import { ExamPicker, ExamStagePicker } from '../components/exam-picker';
 import { BaseConfigPicker } from '../components/config-picker';
 import { ExamTemplatePreview } from '../components/exam-template-preview';
@@ -40,6 +45,9 @@ import { type TestForm, type TestFormValues } from './test-builder-form';
 
 // Only a dirty form makes leaving Setup save before it moves, so every pick here must mark one.
 const DIRTY = { shouldDirty: true } as const;
+
+// A disabled control never fires, but the prop is required.
+const noop = () => undefined;
 
 export function SetupStep({
   form,
@@ -145,6 +153,25 @@ function Blueprint({
             value={`${detail.examStage.exam.code} / ${detail.examStage.name}`}
           />
           <ReadOnlyField label="Base configuration" value={detail.baseConfigName} />
+
+          <FormField
+            form={form}
+            name="testSeriesId"
+            label="Series"
+            /* ui-copy-ok: rule */ hint="Changed on the Offer step, where a move is confirmed"
+          >
+            {(control) => (
+              <TestSeriesPicker
+                id={control.id}
+                value={testSeriesId}
+                selectedLabel={testSeriesName || undefined}
+                clearable={false}
+                disabled
+                forExamStageId={detail.examStageId}
+                onChange={pickSeries}
+              />
+            )}
+          </FormField>
         </>
       ) : (
         <>
@@ -256,16 +283,30 @@ function Rules({
   const scope = useWatch({ control: form.control, name: 'scope' });
   const evaluationMode = useWatch({ control: form.control, name: 'evaluationMode' });
   const paperBinding = useWatch({ control: form.control, name: 'paperBinding' });
-  const seriesName = useWatch({ control: form.control, name: 'testSeriesName' });
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {seriesName === '' ? null : (
-        <Alert variant="info" className="sm:col-span-2 lg:col-span-3">
-          Tests in {seriesName} are judged as {EVALUATION_MODE_LABELS[evaluationMode]}, and a test
-          does not choose its own.
-        </Alert>
-      )}
+      <FormField
+        form={form}
+        name="evaluationMode"
+        label="Evaluation"
+        /* ui-copy-ok: rule */ hint="Set by the series this test belongs to"
+      >
+        {(control) => (
+          <Combobox
+            id={control.id}
+            value={evaluationMode}
+            clearable={false}
+            disabled
+            onChange={noop}
+            items={EVALUATION_MODES.map((value) => ({
+              value,
+              label: EVALUATION_MODE_LABELS[value],
+              hint: EVALUATION_MODE_HINTS[value],
+            }))}
+          />
+        )}
+      </FormField>
 
       <FormField form={form} name="scope" label="Covers">
         {(control) => (
