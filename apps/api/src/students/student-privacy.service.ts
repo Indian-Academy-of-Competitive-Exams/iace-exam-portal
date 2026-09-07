@@ -17,6 +17,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppConfigService } from '../config/app-config.service';
+import { fromDateColumn } from '../common/time/institute-day';
 import { anonymizedProfile, anonymizedStudent } from './anonymize';
 
 const NO_STUDENT = 'No such student';
@@ -132,8 +133,7 @@ export class StudentPrivacyService {
       profile: student.profile && {
         motherName: student.profile.motherName,
         fatherName: student.profile.fatherName,
-        // A `@db.Date` column is a civil date at UTC midnight, so it is read as one.
-        dob: student.profile.dob?.toISOString().slice(0, 10) ?? null,
+        dob: student.profile.dob ? fromDateColumn(student.profile.dob) : null,
         email: student.profile.email,
         address: student.profile.address,
         gender: student.profile.gender,
