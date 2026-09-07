@@ -8,6 +8,7 @@ import {
   type ExamTemplate,
   type PaperBinding,
   type TestDetail,
+  type TestSeriesSummary,
   type TestScope,
   type TestScopeRef,
 } from '@iace/contracts';
@@ -37,19 +38,23 @@ export interface TestFormValues {
 
 export type TestForm = UseFormReturn<TestFormValues>;
 
-export function valuesOf(detail: TestDetail | null): TestFormValues {
+export function valuesOf(
+  detail: TestDetail | null,
+  fromSeries: TestSeriesSummary | null = null,
+): TestFormValues {
   const scopeRef = detail?.scopeRef ?? null;
   return {
     examId: detail?.examStage.exam.id ?? '',
-    examStageId: detail?.examStageId ?? '',
+    // A stage-agnostic series names none, and then the stage is still the admin's to pick.
+    examStageId: detail?.examStageId ?? fromSeries?.examStageId ?? '',
     baseConfigId: detail?.baseConfigId ?? '',
-    testSeriesId: detail?.testSeriesId ?? '',
-    testSeriesName: detail?.testSeriesName ?? '',
+    testSeriesId: detail?.testSeriesId ?? fromSeries?.id ?? '',
+    testSeriesName: detail?.testSeriesName ?? fromSeries?.name ?? '',
     title: detail?.title ?? '',
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
-    evaluationMode: detail?.evaluationMode ?? '',
+    evaluationMode: detail?.evaluationMode ?? fromSeries?.evaluationMode ?? '',
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Clock, Plus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import {
@@ -11,6 +12,7 @@ import {
   instituteWallTime,
 } from '@iace/contracts';
 import {
+  Button,
   DataTable,
   DateTimePicker,
   DropdownMenuItem,
@@ -23,7 +25,7 @@ import {
 } from '@iace/ui';
 import { applyFieldErrors } from '@iace/app-kit';
 import { api } from '../lib/api';
-import { QUERY_KEYS } from '../lib/constants';
+import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { opensLabel } from '../lib/schedule-format';
 import { useAuth } from '../providers/auth';
 import { testsKey } from './test-series-detail';
@@ -50,12 +52,24 @@ export function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>)
 
   return (
     <FormSection title="Tests">
+      {canWrite ? (
+        <div className="flex justify-end">
+          <Button size="sm" asChild>
+            {/* The series goes with it, so the builder opens knowing the mode and often the stage. */}
+            <Link to={`${ROUTES.TEST_NEW}?series=${series.id}`}>
+              <Plus aria-hidden />
+              New test
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+
       <DataTable
         columns={testColumns({ canWrite, onOpening: setOpening })}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
-        empty="No test is in this series yet. A test names its series when it is created; its Offer step moves it to another."
+        empty="No test in this series yet. Build the first one here; its Offer step moves it to another series later."
       />
 
       {opening ? (

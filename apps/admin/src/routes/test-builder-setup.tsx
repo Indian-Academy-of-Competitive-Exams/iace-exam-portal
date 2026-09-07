@@ -20,6 +20,7 @@ import {
   type ExamTemplate,
   type PaperBinding,
   type TestDetail,
+  type TestSeriesSummary,
   type TestScope,
 } from '@iace/contracts';
 import {
@@ -56,11 +57,13 @@ const noop = () => undefined;
 export function SetupStep({
   form,
   detail,
+  fromSeries,
   config,
   sat,
 }: Readonly<{
   form: TestForm;
   detail: TestDetail | null;
+  fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
   sat: boolean;
 }>) {
@@ -81,6 +84,7 @@ export function SetupStep({
         <Blueprint
           form={form}
           detail={detail}
+          fromSeries={fromSeries}
           config={config}
           suggestion={values.title?.trim() === '' ? suggested : undefined}
         />
@@ -108,11 +112,13 @@ function scopeNameOf(values: TestFormValues, config: BaseConfigDetail | null): s
 function Blueprint({
   form,
   detail,
+  fromSeries,
   config,
   suggestion,
 }: Readonly<{
   form: TestForm;
   detail: TestDetail | null;
+  fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
   suggestion?: string;
 }>) {
@@ -182,30 +188,39 @@ function Blueprint({
         </>
       ) : (
         <>
-          <FormField form={form} name="examId" label="Exam">
-            {(control) => (
-              <ExamPicker
-                id={control.id}
-                value={examId}
-                placeholder="Choose an exam"
-                clearable={false}
-                onChange={pickExam}
-              />
-            )}
-          </FormField>
+          {fromSeries?.examStage ? (
+            <ReadOnlyField
+              label="Stage"
+              value={`${fromSeries.examStage.examCode} / ${fromSeries.examStage.name}`}
+            />
+          ) : (
+            <>
+              <FormField form={form} name="examId" label="Exam">
+                {(control) => (
+                  <ExamPicker
+                    id={control.id}
+                    value={examId}
+                    placeholder="Choose an exam"
+                    clearable={false}
+                    onChange={pickExam}
+                  />
+                )}
+              </FormField>
 
-          <FormField form={form} name="examStageId" label="Stage">
-            {(control) => (
-              <ExamStagePicker
-                id={control.id}
-                examId={examId}
-                value={examStageId}
-                placeholder="Choose a stage"
-                clearable={false}
-                onChange={pickStage}
-              />
-            )}
-          </FormField>
+              <FormField form={form} name="examStageId" label="Stage">
+                {(control) => (
+                  <ExamStagePicker
+                    id={control.id}
+                    examId={examId}
+                    value={examStageId}
+                    placeholder="Choose a stage"
+                    clearable={false}
+                    onChange={pickStage}
+                  />
+                )}
+              </FormField>
+            </>
+          )}
 
           <FormField form={form} name="baseConfigId" label="Base configuration">
             {(control) => (
@@ -218,7 +233,14 @@ function Blueprint({
             )}
           </FormField>
 
-          <FormField form={form} name="testSeriesId" label="Series">
+          <FormField
+            form={form}
+            name="testSeriesId"
+            label="Series"
+            /* ui-copy-ok: rule */ hint={
+              fromSeries ? 'The series this test is being built in' : undefined
+            }
+          >
             {(control) => (
               <TestSeriesPicker
                 id={control.id}
@@ -226,6 +248,7 @@ function Blueprint({
                 selectedLabel={testSeriesName || undefined}
                 placeholder="Choose a series"
                 clearable={false}
+                disabled={fromSeries !== null}
                 forExamStageId={examStageId}
                 onChange={pickSeries}
               />
