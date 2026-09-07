@@ -7,6 +7,7 @@ import {
   FolderTree,
   GraduationCap,
   History,
+  Megaphone,
   KeyRound,
   Layers,
   Route,
@@ -104,6 +105,7 @@ export const ROUTES = {
   ADMINS: '/admins',
   PERMISSIONS: '/permissions',
   /** Every admin reaches these — the service, not the route, scopes what they see. */
+  ANNOUNCEMENTS: '/announcements',
   AUDIT: '/audit',
   AUDIT_IMPORTS: '/audit/imports',
   /** React Router's catch-all. */
@@ -402,6 +404,12 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.PERMISSIONS, label: 'Permissions', icon: KeyRound },
     ],
   },
+  {
+    label: 'Announcements',
+    icon: Megaphone,
+    featureKey: FEATURE_KEYS.NOTIFICATION_MANAGEMENT,
+    children: [{ to: ROUTES.ANNOUNCEMENTS, label: 'Sent', icon: Megaphone }],
+  },
   // Not superAdminOnly: every admin reaches this, scoped to their own rows.
   {
     label: 'Audit log',
@@ -427,6 +435,7 @@ const ADMIN = 'admin';
 export const QUERY_KEYS = {
   ADMINS: [ADMIN, 'admins'],
   AUTHORING: [ADMIN, 'authoring'],
+  ANNOUNCEMENTS: [ADMIN, 'announcements'],
   AUDIT: [ADMIN, 'audit'],
   BASE_CONFIG: [ADMIN, 'base-config'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],

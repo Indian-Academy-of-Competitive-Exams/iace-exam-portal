@@ -31,6 +31,7 @@ import { ImportProgramStudentsPage } from './routes/import-program-students';
 import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
+import { AnnouncementsPage } from './routes/announcements';
 import { ROUTES } from './lib/constants';
 
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
@@ -92,6 +93,7 @@ export function App() {
               redirect that looks like a broken link. */}
           <Route path={ROUTES.ADMINS} element={<AdminsPage />} />
           <Route path={ROUTES.PERMISSIONS} element={<PermissionsPage />} />
+          <Route path={ROUTES.ANNOUNCEMENTS} element={<AnnouncementsPage />} />
           <Route path={ROUTES.AUDIT} element={<AuditActivityPage />} />
           <Route path={ROUTES.AUDIT_IMPORTS} element={<AuditImportsPage />} />
         </Route>
