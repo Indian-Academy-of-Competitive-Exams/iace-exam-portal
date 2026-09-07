@@ -136,7 +136,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
   /** A new series has nowhere to fall back to, so Cancel leaves; an existing one returns to itself. */
   const cancel = () => {
-    if (!existing) return navigate(ROUTES.TEST_SERIES);
+    if (!existing) return navigate(ROUTES.TESTS);
     form.reset();
     setIsEditing(false);
   };

@@ -20,10 +20,9 @@ import { AuthoringHistoryPage } from './routes/authoring-history';
 import { TaxonomyPage } from './routes/taxonomy';
 import { BaseConfigsPage } from './routes/base-configs';
 import { BaseConfigFormPage } from './routes/base-config-form';
-import { TestsPage } from './routes/tests';
+import { TestsAndSeriesPage } from './routes/tests-and-series';
 import { TestBuilderPage } from './routes/test-builder';
 import { TestPaperPage } from './routes/test-paper';
-import { TestSeriesPage } from './routes/test-series';
 import { TestSeriesFormPage } from './routes/test-series-form';
 
 import { ImportEventCandidatesPage } from './routes/import-event-candidates';
@@ -75,14 +74,13 @@ export function App() {
           {/* Before the :id route, or "new" would be read as a config id. */}
           <Route path={ROUTES.BASE_CONFIG_NEW} element={<BaseConfigFormPage />} />
           <Route path={ROUTES.BASE_CONFIG_PATTERN} element={<BaseConfigFormPage />} />
-          <Route path={ROUTES.TEST_SERIES} element={<TestSeriesPage />} />
           {/* Before the :id route, or "new" would be read as a series id. */}
           <Route path={ROUTES.TEST_SERIES_NEW} element={<TestSeriesFormPage />} />
           <Route path={ROUTES.TEST_SERIES_PATTERN} element={<TestSeriesFormPage />} />
 
           <Route path={ROUTES.EVENT_IMPORT_PATTERN} element={<ImportEventCandidatesPage />} />
           <Route path={ROUTES.PROGRAM_IMPORT_PATTERN} element={<ImportProgramStudentsPage />} />
-          <Route path={ROUTES.TESTS} element={<TestsPage />} />
+          <Route path={ROUTES.TESTS} element={<TestsAndSeriesPage />} />
           {/* Ranked by specificity, not order: "configs", "series" and "new" outrank ":id". */}
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PATTERN} element={<TestBuilderPage />} />

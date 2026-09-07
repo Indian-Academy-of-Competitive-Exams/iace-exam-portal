@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   FEATURE_KEYS,
   PERMISSION_LEVELS,
@@ -10,16 +10,13 @@ import {
   type TestSeriesKind,
   type TestSeriesSummary,
 } from '@iace/contracts';
-import { PageCrumbs, useFilters, useListScreen } from '@iace/app-kit/browser';
+import { useFilters, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
-  Button,
   ConfirmDialog,
   DropdownMenuItem,
   ListView,
-  PageHeader,
   RowActions,
-  TableFrame,
   TruncatedText,
   linkVariants,
   plural,
@@ -29,7 +26,6 @@ import {
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
 import {
-  NAV_ITEMS,
   QUERY_KEYS,
   ROUTES,
   TEST_SERIES_KIND_LABELS,
@@ -112,7 +108,7 @@ function seriesColumns(
  * The offerings. A test reaches a student only through one of these, and only at a branch the
  * series is switched on for — which is why the reach of each one is a column rather than a click.
  */
-export function TestSeriesPage() {
+export function SeriesList() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
@@ -181,38 +177,18 @@ export function TestSeriesPage() {
     fetchPage: (params) => api.admin.testSeries.list(params),
   });
 
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Test series"
-      action={
-        canWrite ? (
-          <Button size="sm" asChild>
-            <Link to={ROUTES.TEST_SERIES_NEW}>
-              <Plus aria-hidden />
-              New series
-            </Link>
-          </Button>
-        ) : undefined
-      }
-    />
-  );
-
   return (
-    <TableFrame header={header}>
-      <ListView
-        list={series}
-        filters={filterSpec}
-        columns={columns}
-        rowKey={(row) => row.id}
-        empty="No series yet. Build the first one — a test reaches a student only through one."
-        emptyFiltered="No series match those filters."
-      />
-    </TableFrame>
+    <ListView
+      list={series}
+      filters={filterSpec}
+      columns={columns}
+      rowKey={(row) => row.id}
+      empty="No series yet. Build the first one — a test reaches a student only through one."
+      emptyFiltered="No series match those filters."
+    />
   );
 }
 
-/** How far a STANDARD series reaches. Every other kind reaches past branches, so it has none. */
 function BranchReach({ series }: Readonly<{ series: TestSeriesSummary }>) {
   if (series.kind !== TEST_SERIES_KIND.STANDARD) {
     return <span className="text-muted-foreground">Every branch</span>;
