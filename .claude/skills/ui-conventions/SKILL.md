@@ -1,6 +1,6 @@
 ---
 name: ui-conventions
-description: The binding shared-code and UI-behaviour rules for this repo - where a component lives (packages/ui vs app-kit vs apps), the shape of a list screen, navigation, confirm dialogs, loading states, pagination and chips. Use before writing or changing ANY screen, component, form, table, dialog, filter or nav entry in apps/admin or apps/test, and before adding anything to packages/ui or packages/app-kit.
+description: The binding shared-code and UI-behaviour rules for this repo - where a component lives (packages/ui vs app-kit vs apps), the shape of a list screen, navigation, confirm dialogs, loading states, pagination and chips, and which of the two composition languages a screen follows (admin is dense and data-first; apps/test follows the student design language in docs/design/student). Use before writing or changing ANY screen, component, form, table, dialog, filter or nav entry in apps/admin or apps/test, and before adding anything to packages/ui or packages/app-kit.
 ---
 
 # UI conventions
@@ -19,6 +19,24 @@ Files named in a bullet are the shape to STOP copying, not licence to add anothe
 
 </binding>
 
+<scope>
+
+**Two portals, one token set, two composition languages.** Everything below binds BOTH unless a
+bullet says otherwise — where a component lives, the frames and the scrolling, `Combobox`,
+`DatePicker`, confirm dialogs, and every `<copy>` rule are correctness rather than look, and
+`apps/test` needs them as much as `apps/admin`.
+
+Where they diverge a bullet is marked: **[admin]** for the dense, data-first language in
+`docs/design/design-system.html`, **[student]** for `docs/design/student/README.md`, which governs
+every `apps/test` screen. **Divergence happens ONLY above the primitive layer** — the tokens in
+`packages/ui/src/tokens.css` and the atoms built on them never fork, so a needed value is a shared
+token change, never a one-off in one portal.
+
+The in-exam CBT screen follows neither: it replicates the government paper faithfully
+(`docs/02-domain-rules.md` §7).
+
+</scope>
+
 ## Shared code
 
 - **Check `packages/ui` and `packages/app-kit` first.** Extend the shared component; never write a local variant.
@@ -31,9 +49,13 @@ Files named in a bullet are the shape to STOP copying, not licence to add anothe
 
 **Build the screen the way the app already builds that kind of screen.** Open two that do this job before writing a third; deviate only for a reason you can state in one sentence.
 
-- **List screen:** `TableFrame` with `PageHeader` in `header` and ONE `ListView` inside. Not a bare fragment, not a hand-rolled header above a card, and never `FilterBar` + `DataTable` + `Pagination` wired by hand again. `TableFrame.toolbar` survives for something a list does not own; nothing passes it today, so reaching for it needs a stated reason — a banner belonging to the list is `ListView`'s `banner`.
+- **[admin] List screen:** `TableFrame` with `PageHeader` in `header` and ONE `ListView` inside. Not a bare fragment, not a hand-rolled header above a card, and never `FilterBar` + `DataTable` + `Pagination` wired by hand again. `TableFrame.toolbar` survives for something a list does not own; nothing passes it today, so reaching for it needs a stated reason — a banner belonging to the list is `ListView`'s `banner`.
 - **The unit that repeats is the LIST, not the screen.** Two lists on a page = two `ListView`s; a list in an expand panel = a `ListView` with no frame. `useListScreen` is a HOOK, not a component, so it composes with whatever wraps a list — tabs, panels, `SuperAdminOnly`.
 - **A list with neither filters nor server pagination stays a bare `DataTable`** (`branches.tsx` loads every branch at once). That is the whole exception.
+- **[student]** a browse screen is not a list screen. It composes `PageFrame` with the student
+  pattern layer — a hero, then the supporting grid — and reaches for `PanelFrame` + a table only on
+  the dense screens the student README names. `ListView`'s filter spec still applies wherever a
+  student screen genuinely filters.
 - **Filters are a SPEC, not hand-built controls.** One array of `{ key, kind, label }` declares the URL keys, and from it come the controls, the active count, what Clear drops and the query — so those four cannot disagree. Kinds: `search`, `choice` (its `items` carry their own "Any …" row), `multi`, `date`, `custom` and `customMulti` for a server-searched paged picker. A sixth kind is a change to `ListFilter`, never a slot at a call site. `primary` sits beside the search box; the rest fold behind "Filters", and a set folded filter opens the fold.
 - **`toQuery` is where a filter stops being a string** — one control may set several params, and casts belong there, not in the spec. A CASCADE (a subject that must drop its topic) is a relationship the spec does not model, so those screens keep `useFilters` beside it and say so in one line. `useFilters` is also how you reach a URL key that is not a filter: the open tab, or a param that highlights a row.
 - **A set-valued filter choosing nothing means ALL of them, never none.** Three layers refuse to build an empty set — `csvQuery` returns undefined rather than `[]`, `queryString` drops an empty array, `ListView` counts it as no filter — because Prisma reads `in: []` as "match nothing" and would blank the table while looking like real data.
@@ -96,7 +118,8 @@ The people reading these screens ran exam centres before they saw them. Write fo
 
 ## Cards, confirms and controls
 
-- **A card marks a boundary. No boundary, no card.** It earns its border in two places: between SIBLING RECORDS, each card one of many of the same thing (`permissions.tsx`, one per admin), and between a SURFACE and the page (`TableFrame`). Elsewhere it is decoration costing a rule and `p-4`.
+- **[admin] A card marks a boundary. No boundary, no card.** It earns its border in two places: between SIBLING RECORDS, each card one of many of the same thing (`permissions.tsx`, one per admin), and between a SURFACE and the page (`TableFrame`). Elsewhere it is decoration costing a rule and `p-4`.
+- **[student] The card IS the composition.** On `PageFrame` the cards float on `--background` and the tint separates them, so a card needs no boundary to earn — a hero and then a grid of them is the shape. What survives both languages is the rule underneath: **never a card inside a card**, and inside a `PanelFrame` sub-sections divide with `border-border` hairlines.
   - **A page that is one continuous form is ONE section, not a stack of cards.** Headings and spacing group it. A card inside a card communicates nothing. The three screens this rule was written against — `base-config-form.tsx`, `student-detail.tsx`, `test-series-form.tsx` — have since been rebuilt on `FormSection`, so the shape to copy is theirs and the rule is what stopped it spreading.
   - **The section scrolls and its actions stay inside it.** Save and Cancel belong to the form, never floated into the page header or left below a scrollport. `FormDialog` is the worked example.
   - **Name the boundary in a sentence before reaching for a card.** If the sentence is "it groups the fields", spacing already did that.
@@ -122,6 +145,12 @@ The people reading these screens ran exam centres before they saw them. Write fo
 
 ## Design system
 
-Tailwind + shadcn/ui, tokens in `packages/ui`. Brand primary `#A8221B`; Cancel neutral grey;
-destructive crimson `#BE123C`; charts use the colorblind-safe set, never brand red. Light + dark via
-CSS variables. `docs/design/design-system.html` is the living style guide.
+Tailwind + shadcn/ui, tokens in `packages/ui` — **one set, both portals, never forked.** Brand
+primary `#A8221B`; Cancel neutral grey; destructive crimson `#BE123C`; charts use the
+colorblind-safe set, never brand red. Light + dark via CSS variables.
+
+- **[admin]** `docs/design/design-system.html` is the living style guide: dense, data-first.
+- **[student]** `docs/design/student/README.md` is the language for every `apps/test` screen —
+  the type ramp used at its top end, `--gap-section` rhythm, brick as a sparing accent, a hero
+  before the grid, and the pattern layer in `apps/test/src/components/ui/` that all of it is built
+  from. Its `.dc.html` files beside it are the visual reference.

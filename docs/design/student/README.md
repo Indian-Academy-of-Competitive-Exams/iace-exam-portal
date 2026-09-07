@@ -1,39 +1,94 @@
-# Student portal — visual reference designs
+# Student portal — the design language, and its visual reference
 
-These `.dc.html` files are the **visual reference** for the student design language
-(spec: `docs/superpowers/plans/2026-09-02-student-design-language.md`). They are the
-target for **structure, proportion, hierarchy, spacing rhythm and composition** — not
-code to copy.
+The rules the student portal (`apps/test`) is built to, and the `.dc.html` mockups that
+show them. `ui-conventions` is binding for both portals and points here for the bullets
+where the two differ; everything structural and editorial in that skill applies to
+`apps/test` unchanged.
 
-> That spec is **gitignored** — it is one task's scaffolding and is not in a clone. The
-> durable rules are `docs/design/design-system.html`, the tokens in `packages/ui`, and the
-> `ui-conventions` skill; where a section reference below points at the spec, read those.
+Admin's language is `docs/design/design-system.html`. This one is not a second design
+system — it is the same tokens composed differently.
 
-**How to use them when building:**
+## The principle
 
-1. **Read them for intent, not values.** Match the _layout_ (what sits where, the size
-   relationships, the whitespace rhythm, the hero-then-grid structure). Do **not** copy
-   their raw hex or fonts.
-2. **Map every value to a real token.** A 28–36px heading → `--text-2xl`/`--text-3xl` +
-   `--tracking-tight`; a 40px block gap → `--gap-section`; a 20px card pad →
-   `--pad-card`; a card → the shared `Card` (already `rounded-xl border shadow-sm`); the
-   one accent → `--red-600`, sparingly. The mapping table is §1 of the spec.
-3. **Ignore three things in these files:** the display font (`Hanken Grotesk`) — build
-   with **Inter only** (`--font-sans`); any raw hex — resolve to the nearest token; and
-   the **"i" glyph in the rail — it is NOT the brand.** The brand is the **IACE**
-   lockup rendered by the existing `Brandmark` component, and it sits in the
-   **top-left of the header**, with the rail as **nav icons only** (no brand glyph).
-   `Main.dc.html` and `MainPanel.dc.html` are the two Home treatments; **`MainPanel`**
-   is the cleaner, Inter-only, token-aligned one.
+**Admin and student share the same tokens and diverge in design language.**
 
-   **The chrome comes from the existing `AppShell` (rail, top-bar `Brandmark`, page
-   header) — do NOT rebuild it from these mockups.** These files inform the CONTENT
-   AREA only; the shell, its rail, and the IACE brandmark stay exactly as shipped.
+- **Shared, never forked:** `packages/ui/src/tokens.css` — every colour, the type ramp,
+  spacing, shadows, radii. And the primitive atoms — `Button`, `Badge`, `Card`, `Input`,
+  `Dialog`, `Skeleton` — live in `packages/ui` and both portals use them unchanged.
+- **Divergent:** the composition layer — how those atoms are arranged into screens.
+  `TableFrame` / `ListView` are the **admin** language, dense and data-first. The student
+  portal has its own, below. **Divergence happens ONLY above the primitive layer.**
 
-4. **Frames:** `Main` shows Home _on the background_ (`PageFrame` — the locked
-   direction). `MainPanel` shows the _contained-panel_ alternative (`PanelFrame`) — use
-   that pattern for the dense screens (question report, review, leaderboard) per §4.
+A change needing a new colour, spacing step, radius or shadow is a **token** change in
+`packages/ui`, shared with admin — never a one-off hex in a student component.
 
-Files: `Main` (Home, on-bg), `MainPanel` (Home, contained), `Tests`, `TestAbout`,
-`Result`, `Performance`. The live canvas (same content, pannable) is the fastest way
-for a human to eyeball proportions; these files are what a builder reads.
+## The rules, in real token names
+
+Airy, task- and motivation-first, mobile-first. The opposite of admin density.
+
+- **Type hierarchy is bold.** Page and hero titles use `--text-2xl` (28) / `--text-3xl`
+  (36) with `--tracking-tight` and `--weight-bold`; section headings `--text-lg` (18)
+  `--weight-semibold`; body `--text-base` (14). Use the top of the ramp with confidence.
+- **Whitespace is generous.** `--gap-section` (40) between blocks, `--pad-card` (20)
+  inside cards, `--gap-group` (16) between grouped items. Never `--pad-card-compact` or
+  admin's cell density on a student screen.
+- **Cards as-is.** The shared `Card` is already `rounded-xl border-border shadow-sm` — use
+  it, do not restyle it. Larger surfaces may take `--radius-2xl`.
+- **Brick is a sparing accent.** `--red-600` for one primary call to action, the active nav
+  disc on `--red-100`, and at most one hero figure per screen — never a fill, never a
+  default. Everything structural is neutral: `--foreground`, `--muted-foreground`,
+  `--border`.
+- **Charts stay blue-led** (`#2563eb`, `#0d9488`, `#b45309`, `#7c3aed`), never brick.
+- **No new fonts.** Inter (`--font-sans`) and the ramp do all the work; Nunito is the brand
+  mark only. A display face was tried in mock and rejected — it is not a token.
+- **Hero moments, not flat lists.** Every primary screen earns one confident focal element
+  — a greeting, a next-test card, a big percentile — before the supporting grid.
+
+## Which frame per screen
+
+Both frames are already in `packages/ui`; content shape chooses between them.
+
+- **`PageFrame` — content on the background.** The default here: cards float on
+  `--background` and the tint separates them. Home (locked), the dashboard, Performance,
+  Tests, a test's pre-test page, and the result's Score card and Compare tabs.
+- **`PanelFrame` — one contained `Card` surface.** For dense, single-body screens: the
+  per-question report, the solution review list, the leaderboard table, and the
+  list-heavy account screens. Sub-sections inside a panel divide with `border-border`
+  hairlines — never a card inside a card.
+
+**The chrome is the shipped `AppShell`, untouched.** The rail, the top bar and the IACE
+`Brandmark` come from it; this language governs the content area inside the frame, not the
+shell around it. The rail is nav icons only — the "i" square in the mockups is a
+placeholder to ignore.
+
+## The component vocabulary
+
+The student pattern layer belongs in `apps/test/src/components/ui/` — with the web app
+rather than in `packages/ui`, because the post-V1 React Native app will not reuse web
+components. Each piece is thin: a shared atom plus the rules above, and no new tokens.
+
+**Build a screen from that layer, never from bespoke markup.** The directory is the
+inventory. This file does not list what goes in it: the pieces are still being built, and a
+doc may only name what the source defines — `pnpm docs:check` enforces that.
+
+## Guardrails
+
+- **Tokens never fork.** A needed value is a `packages/ui` token, shared with admin.
+- **Shared atoms stay shared** — compose `Button`/`Card`/`Badge`, never re-implement them.
+- **Admin does not change** when the student language does.
+- **The exam CBT screen is untouched** — it replicates the government paper faithfully
+  (`docs/02-domain-rules.md` §7) and follows neither language.
+- No raw hex, no new fonts, no card-in-a-card, brick sparing, charts blue-led, and
+  no-narration copy — the existing lint rules enforce these.
+
+## The mockups
+
+Main (Home, on background), MainPanel (Home, contained), Tests, TestAbout, Result and
+Performance. They are the target for **structure, proportion, hierarchy,
+spacing rhythm and composition** — not code to copy.
+
+Read them for intent, not values: match what sits where, the size relationships and the
+whitespace rhythm, then map every value to a token above. Ignore three things in them —
+the display font (build with Inter only), any raw hex (resolve to the nearest token), and
+the "i" glyph in the rail. Main and MainPanel are the two Home treatments; **MainPanel** is
+the cleaner, Inter-only, token-aligned one, and Home itself is locked to `PageFrame`.
