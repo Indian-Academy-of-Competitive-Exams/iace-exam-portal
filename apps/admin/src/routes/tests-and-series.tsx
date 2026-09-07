@@ -21,7 +21,7 @@ export function TestsAndSeriesPage() {
   const header = (
     <PageHeader
       breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Tests and test series"
+      title="Tests & Test Series"
       // A test is built inside the series that carries it, so only a series is made from here.
       action={
         canWrite && view === VIEW.SERIES ? (

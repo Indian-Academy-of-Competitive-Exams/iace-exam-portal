@@ -20,7 +20,6 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, QUERY_KEYS, ROUTES } from '../lib/constants';
 import { type StageChoice } from '../components/exam-picker';
 import {
-  FIELD_TAB,
   SERIES_TAB,
   SERVER_FIELDS,
   bodyOf,
@@ -89,12 +88,10 @@ function seriesTitle(detail: TestSeriesSummary | null, isEditing: boolean): stri
   return isEditing ? `Edit ${detail.name}` : detail.name;
 }
 
-/** The tab carrying the first field the server refused, so the refusal is never on a hidden pane. */
-function refusedTab(error: unknown): SeriesTab | null {
+/** Every field the server can refuse is on the one form tab, so a refusal only has to open it. */
+function refusesTheForm(error: unknown): boolean {
   const fieldErrors = AppException.is(error) ? error.fieldErrors : undefined;
-  if (!fieldErrors) return null;
-  const first = SERVER_FIELDS.find((field) => fieldErrors[field]);
-  return first ? FIELD_TAB[first] : null;
+  return fieldErrors !== undefined && SERVER_FIELDS.some((field) => fieldErrors[field]);
 }
 
 function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>) {
@@ -103,7 +100,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
   const existing = detail !== null;
   // A new series opens ready to type; one that already exists opens read-only.
   const [isEditing, setIsEditing] = useState(!existing);
-  const [tab, setTab] = useState<SeriesTab>(SERIES_TAB.BASICS);
+  const [tab, setTab] = useState<SeriesTab>(SERIES_TAB.DETAILS);
 
   const form = useForm<SeriesFormValues>({ defaultValues: valuesOf(detail) });
 
@@ -121,8 +118,7 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
     },
     onError: (error) => {
       applyFieldErrors(error, form.setError, SERVER_FIELDS);
-      const refused = refusedTab(error);
-      if (refused) setTab(refused);
+      if (refusesTheForm(error)) setTab(SERIES_TAB.DETAILS);
     },
   });
 
@@ -145,9 +141,14 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
 
   const items: FormPanelTab[] = [
     {
-      value: SERIES_TAB.BASICS,
-      label: 'Basic details',
-      content: <SeriesBasics form={form} detail={detail} stage={stage} />,
+      value: SERIES_TAB.DETAILS,
+      label: 'Details & access',
+      content: (
+        <>
+          <SeriesBasics form={form} detail={detail} stage={stage} />
+          <SeriesAccess form={form} detail={detail} onPickStage={setStage} />
+        </>
+      ),
     },
     ...(detail
       ? [
@@ -159,11 +160,6 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
           },
         ]
       : []),
-    {
-      value: SERIES_TAB.ACCESS,
-      label: 'Access',
-      content: <SeriesAccess form={form} detail={detail} onPickStage={setStage} />,
-    },
     // The saved kind, not the chosen one: a series still carrying branches has to switch them off.
     ...(detail?.kind === TEST_SERIES_KIND.STANDARD
       ? [

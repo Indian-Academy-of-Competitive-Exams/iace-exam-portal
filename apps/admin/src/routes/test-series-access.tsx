@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { TEST_SERIES_KIND, type TestSeriesKind, type TestSeriesSummary } from '@iace/contracts';
-import { Checkbox, Combobox, ConfirmDialog, FormField, plural } from '@iace/ui';
+import { Checkbox, Combobox, ConfirmDialog, FormField, FormSection, plural } from '@iace/ui';
 import { api } from '../lib/api';
 import { QUERY_KEYS } from '../lib/constants';
 import { ExamStagePicker, type StageChoice } from '../components/exam-picker';
@@ -73,48 +73,50 @@ export function SeriesAccess({
   const spansACourse = kind === TEST_SERIES_KIND.FREE;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <FormField form={form} name="kind" label="Kind">
-        {(control) => (
-          <Combobox
-            id={control.id}
-            aria-describedby={control['aria-describedby']}
-            aria-invalid={control['aria-invalid']}
-            clearable={false}
-            value={kind}
-            onChange={(next) => chooseKind(form, next as TestSeriesKind)}
-            items={KIND_ITEMS}
-          />
-        )}
-      </FormField>
+    <FormSection title="Access">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField form={form} name="kind" label="Kind">
+          {(control) => (
+            <Combobox
+              id={control.id}
+              aria-describedby={control['aria-describedby']}
+              aria-invalid={control['aria-invalid']}
+              clearable={false}
+              value={kind}
+              onChange={(next) => chooseKind(form, next as TestSeriesKind)}
+              items={KIND_ITEMS}
+            />
+          )}
+        </FormField>
 
-      <FormField
-        form={form}
-        name="examStageId"
-        label="Stage"
-        /* ui-copy-ok: rule */ hint={
-          spansACourse ? 'Optional' : 'Only a free series goes without one'
-        }
-      >
-        {(control) => (
-          <ExamStagePicker
-            id={control.id}
-            value={examStageId}
-            clearable={spansACourse}
-            selectedLabel={
-              detail?.examStage
-                ? `${detail.examStage.examCode} / ${detail.examStage.name}`
-                : undefined
-            }
-            placeholder={spansACourse ? 'Any stage' : 'Choose a stage'}
-            onPick={onPickStage}
-            onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
-          />
-        )}
-      </FormField>
+        <FormField
+          form={form}
+          name="examStageId"
+          label="Stage"
+          /* ui-copy-ok: rule */ hint={
+            spansACourse ? 'Optional' : 'Only a free series goes without one'
+          }
+        >
+          {(control) => (
+            <ExamStagePicker
+              id={control.id}
+              value={examStageId}
+              clearable={spansACourse}
+              selectedLabel={
+                detail?.examStage
+                  ? `${detail.examStage.examCode} / ${detail.examStage.name}`
+                  : undefined
+              }
+              placeholder={spansACourse ? 'Any stage' : 'Choose a stage'}
+              onPick={onPickStage}
+              onChange={(value) => form.setValue('examStageId', value, { shouldDirty: true })}
+            />
+          )}
+        </FormField>
 
-      <KindTarget form={form} detail={detail} kind={kind} />
-    </div>
+        <KindTarget form={form} detail={detail} kind={kind} />
+      </div>
+    </FormSection>
   );
 }
 

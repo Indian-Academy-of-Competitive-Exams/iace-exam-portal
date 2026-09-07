@@ -19,11 +19,10 @@ import {
 
 /** One series read four ways. What more than one of its tabs needs lives here, and only that. */
 
-/** The four views of the one record. A tab that saves itself is standalone; the form spans the rest. */
+/** The three views of the one record. A tab that saves itself is standalone; the form is the other. */
 export const SERIES_TAB = {
-  BASICS: 'basics',
+  DETAILS: 'details',
   TESTS: 'tests',
-  ACCESS: 'access',
   BRANCHES: 'branches',
 } as const;
 export type SeriesTab = (typeof SERIES_TAB)[keyof typeof SERIES_TAB];
@@ -54,17 +53,6 @@ export const SERVER_FIELDS = [
   'kind',
   'evaluationMode',
 ] as const;
-
-/** Which tab holds each field, so a refused save opens the one carrying the first refusal. */
-export const FIELD_TAB: Readonly<Record<(typeof SERVER_FIELDS)[number], SeriesTab>> = {
-  name: SERIES_TAB.BASICS,
-  description: SERIES_TAB.BASICS,
-  evaluationMode: SERIES_TAB.BASICS,
-  examStageId: SERIES_TAB.ACCESS,
-  programCode: SERIES_TAB.ACCESS,
-  eventId: SERIES_TAB.ACCESS,
-  kind: SERIES_TAB.ACCESS,
-};
 
 export const KIND_ITEMS = TEST_SERIES_KINDS.map((value) => ({
   value,

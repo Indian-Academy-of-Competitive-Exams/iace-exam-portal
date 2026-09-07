@@ -387,7 +387,7 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     icon: ClipboardList,
     featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
     children: [
-      { to: ROUTES.TESTS, label: 'Tests and test series', icon: Layers },
+      { to: ROUTES.TESTS, label: 'Tests & Test Series', icon: Layers },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
     ],
   },
