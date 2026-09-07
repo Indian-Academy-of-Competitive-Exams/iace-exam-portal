@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f7f8fa;--surface:#fff;--ink:#16181d;--ink-2:#454b54;--muted:#737a84;
+    --border:#ecedf1;--border-2:#e2e4ea;--brick:#a8221b;--brick-subtle:#f7ece9;--brick-ink:#8f1f18;
+    --success:#15803d;--success-subtle:#eaf5ee;--success-ink:#166534;--blue:#2563eb;--slate:#94a3b8;
+    --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;
+    --sh-1:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.04);--sh-2:0 8px 30px rgba(16,24,40,.08);
+    --body:'Inter',system-ui,-apple-system,sans-serif;--disp:'Hanken Grotesk',var(--body);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--body);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px}
+  h1,h2,h3{font-family:var(--disp);letter-spacing:-.02em;margin:0}
+  .root{width:1280px;min-height:1000px;background:var(--bg);display:flex}
+  .rail{width:64px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+  .brand{width:36px;height:36px;border-radius:10px;background:var(--brick);color:#fff;font-family:var(--disp);font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .nav{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .nav.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .nav svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .tabs{height:56px;flex:none;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:26px;padding:0 40px}
+  .tab{font-size:14px;color:var(--muted);font-weight:500;height:56px;display:flex;align-items:center;border-bottom:2px solid transparent}
+  .tab.on{color:var(--ink);font-weight:600;border-bottom-color:var(--brick)}
+  .body{flex:1;padding:34px 40px}
+  .wrap{max-width:960px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-1)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat{font-family:var(--disp);font-variant-numeric:tabular-nums}
+  .btn{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;border-radius:var(--r-sm);background:var(--brick);color:#fff;font-weight:600;font-size:14px;border:none}
+  .btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none}
+  .btn.ghost{background:var(--surface);color:var(--ink-2);border:1px solid var(--border-2)}
+  a{color:var(--brick-ink);text-decoration:none}a:hover{color:var(--brick)}
+</style>
+</helmet>
+<div class="root">
+  <div class="rail">
+    <div class="brand">i</div>
+    <div class="nav" title="Home"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg></div>
+    <div class="nav" title="Tests"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+    <div class="nav on" title="Performance"><svg viewBox="0 0 24 24"><path d="M4 20V4"/><path d="M4 20h16"/><rect x="8" y="11" width="3" height="6"/><rect x="13" y="7" width="3" height="10"/></svg></div>
+    <div class="nav" title="Leaderboard"><svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2M7 5H5a2 2 0 0 0 0 4h2"/></svg></div>
+  </div>
+  <div class="main">
+    <div class="tabs">
+      <div class="tab on">Score card</div><div class="tab">Subjects</div><div class="tab">Solutions</div><div class="tab">Questions</div><div class="tab">Compare</div>
+      <div style="flex:1"></div>
+      <div style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px">SSC CGL Full Mock 08 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+    </div>
+    <div class="body">
+      <div class="wrap">
+
+        <!-- hero -->
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:18px">
+          <div style="padding:30px 34px;background:linear-gradient(150deg,#fdfbfa,#faf1ee)">
+            <div class="sh" style="color:var(--brick-ink)">Your result</div>
+            <div style="display:flex;align-items:flex-end;gap:40px;margin-top:14px">
+              <div>
+                <div style="display:flex;align-items:baseline;gap:4px"><span class="stat" style="font-size:64px;font-weight:800;line-height:.9;color:var(--brick-ink)">82</span><span class="stat" style="font-size:26px;font-weight:700;color:var(--brick-ink)">nd</span></div>
+                <div style="font-size:13px;color:var(--ink-2);font-weight:500;margin-top:6px">percentile · better than 1,226 of 1,284</div>
+              </div>
+              <div style="display:flex;gap:34px;padding-bottom:6px">
+                <div><div class="sh">Rank</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:3px">#58</div></div>
+                <div><div class="sh">Score</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:3px">164<span style="font-size:15px;color:var(--muted);font-weight:600">/200</span></div></div>
+                <div><div class="sh">Accuracy</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:3px">89<span style="font-size:15px;color:var(--muted);font-weight:600">%</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- you vs crowd -->
+        <div class="card" style="padding:22px 26px;margin-bottom:18px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Against everyone who sat this paper</div>
+          <svg viewBox="0 0 900 190" width="100%">
+            <line x1="30" y1="158" x2="872" y2="158" stroke="#dfe2e7" stroke-width="1"/>
+            <g fill="var(--slate)" opacity="0.45">
+              <rect x="70" y="146" width="48" height="12" rx="2"/><rect x="124" y="130" width="48" height="28" rx="2"/><rect x="178" y="108" width="48" height="50" rx="2"/><rect x="232" y="80" width="48" height="78" rx="2"/><rect x="286" y="56" width="48" height="102" rx="2"/><rect x="340" y="44" width="48" height="114" rx="2"/><rect x="394" y="48" width="48" height="110" rx="2"/><rect x="448" y="64" width="48" height="94" rx="2"/><rect x="502" y="86" width="48" height="72" rx="2"/><rect x="556" y="112" width="48" height="46" rx="2"/><rect x="610" y="132" width="48" height="26" rx="2"/><rect x="664" y="146" width="48" height="12" rx="2"/><rect x="718" y="152" width="48" height="6" rx="2"/>
+            </g>
+            <line x1="420" y1="30" x2="420" y2="158" stroke="#98a0ab" stroke-width="1.5" stroke-dasharray="4 4"/><text x="420" y="24" text-anchor="middle" font-size="12" fill="#737a84" font-family="Inter">Avg 142</text>
+            <line x1="628" y1="22" x2="628" y2="158" stroke="var(--brick)" stroke-width="2.5"/><text x="628" y="16" text-anchor="middle" font-size="13" font-weight="700" fill="var(--brick-ink)" font-family="Inter">You 164</text>
+            <line x1="770" y1="40" x2="770" y2="158" stroke="var(--success)" stroke-width="1.5"/><text x="770" y="34" text-anchor="middle" font-size="12" fill="var(--success-ink)" font-family="Inter">Top 188</text>
+          </svg>
+        </div>
+
+        <!-- sections + CTA -->
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px">
+          <div class="card" style="padding:22px 26px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:16px">Section by section</div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Quantitative Aptitude</span><span class="stat" style="font-weight:600">38 / 50</span></div><div style="height:7px;background:#f1f2f4;border-radius:99px"><div style="width:76%;height:7px;background:var(--blue);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>Reasoning</span><span class="stat" style="font-weight:600">46 / 50</span></div><div style="height:7px;background:#f1f2f4;border-radius:99px"><div style="width:92%;height:7px;background:var(--blue);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>English</span><span class="stat" style="font-weight:600">43 / 50</span></div><div style="height:7px;background:#f1f2f4;border-radius:99px"><div style="width:86%;height:7px;background:var(--blue);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>General Awareness</span><span class="stat" style="font-weight:600">37 / 50</span></div><div style="height:7px;background:#f1f2f4;border-radius:99px"><div style="width:74%;height:7px;background:var(--blue);border-radius:99px"></div></div></div>
+            </div>
+          </div>
+          <div class="card" style="padding:22px 24px;display:flex;flex-direction:column;justify-content:center;gap:14px">
+            <div><div style="font-size:15px;font-weight:600;font-family:var(--disp)">What next</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Solutions open when the test closes for everyone.</div></div>
+            <button class="btn" style="justify-content:center">Review solutions</button>
+            <button class="btn ghost" style="justify-content:center">Practice your 11 wrong</button>
+            <a style="font-size:12.5px;text-align:center;font-weight:500">Share this report</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f7f8fa;--surface:#fff;--ink:#16181d;--ink-2:#454b54;--muted:#737a84;
+    --border:#ecedf1;--border-2:#e2e4ea;--brick:#a8221b;--brick-subtle:#f7ece9;--brick-ink:#8f1f18;
+    --success:#15803d;--success-subtle:#eaf5ee;--success-ink:#166534;
+    --blue:#2563eb;--teal:#0d9488;--amber:#b45309;--violet:#7c3aed;--slate:#94a3b8;
+    --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;
+    --sh-1:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.04);
+    --body:'Inter',system-ui,-apple-system,sans-serif;--disp:'Hanken Grotesk',var(--body);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--body);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px}
+  h1,h2,h3{font-family:var(--disp);letter-spacing:-.02em;margin:0}
+  .root{width:1280px;min-height:1080px;background:var(--bg);display:flex}
+  .rail{width:64px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:6px}
+  .brand{width:36px;height:36px;border-radius:10px;background:var(--brick);color:#fff;font-family:var(--disp);font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .nav{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .nav.on{background:var(--brick-subtle);color:var(--brick-ink)}
+  .nav svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.75;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:60px;flex:none;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:14px;padding:0 40px}
+  .dd{display:inline-flex;align-items:center;gap:9px;height:38px;border:1px solid var(--border-2);border-radius:var(--r-sm);padding:0 13px;font-size:13.5px;font-weight:600;background:var(--surface)}
+  .dd svg{width:15px;height:15px;stroke:var(--muted);stroke-width:1.9;fill:none}
+  .toggle{display:inline-flex;background:#eef0f3;border-radius:var(--r-full);padding:3px}
+  .toggle span{padding:6px 13px;border-radius:var(--r-full);font-size:12.5px;font-weight:600;color:var(--ink-2)}
+  .toggle span.on{background:var(--surface);color:var(--ink);box-shadow:var(--sh-1)}
+  .av{width:34px;height:34px;border-radius:var(--r-full);background:#eef0f3;color:#454b54;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+  .body{flex:1;padding:28px 40px}
+  .wrap{max-width:1100px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-1)}
+  .sh{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat{font-family:var(--disp);font-variant-numeric:tabular-nums}
+  a{color:var(--brick-ink);text-decoration:none}a:hover{color:var(--brick)}
+</style>
+</helmet>
+<div class="root">
+  <div class="rail">
+    <div class="brand">i</div>
+    <div class="nav" title="Home"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg></div>
+    <div class="nav" title="Tests"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+    <div class="nav on" title="Performance"><svg viewBox="0 0 24 24"><path d="M4 20V4"/><path d="M4 20h16"/><rect x="8" y="11" width="3" height="6"/><rect x="13" y="7" width="3" height="10"/></svg></div>
+    <div class="nav" title="Leaderboard"><svg viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2M7 5H5a2 2 0 0 0 0 4h2"/></svg></div>
+  </div>
+  <div class="main">
+    <div class="top">
+      <div style="font-family:var(--disp);font-size:17px;font-weight:700;letter-spacing:-.02em">Performance</div>
+      <div class="dd">Overall <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+      <div style="flex:1"></div>
+      <div class="toggle"><span class="on">Ranked</span><span>Practice</span></div>
+      <div class="av">HD</div>
+    </div>
+    <div class="body">
+      <div class="wrap">
+
+        <!-- standing + accuracy/pace tiles -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px">
+          <div class="card" style="padding:18px 18px"><div class="sh">Avg percentile</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:7px">82<span style="font-size:14px;color:var(--muted);font-weight:600">nd</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">best 94th</div></div>
+          <div class="card" style="padding:18px 18px"><div class="sh">Avg score</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:7px">148<span style="font-size:14px;color:var(--muted);font-weight:600">/200</span></div></div>
+          <div class="card" style="padding:18px 18px"><div class="sh">Accuracy</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:7px">84<span style="font-size:14px;color:var(--muted);font-weight:600">%</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">2,940 attempted</div></div>
+          <div class="card" style="padding:18px 18px"><div class="sh">Pace</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:7px">38<span style="font-size:14px;color:var(--muted);font-weight:600">s/q</span></div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">cohort 41s</div></div>
+          <div class="card" style="padding:18px 18px"><div class="sh">Tests</div><div class="stat" style="font-size:26px;font-weight:700;margin-top:7px">28</div><div style="font-size:11.5px;color:var(--muted);margin-top:2px">ranked</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:18px">
+          <!-- subject strength -->
+          <div class="card" style="padding:22px 24px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Subject strength</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Accuracy across all ranked mocks</div>
+            <div style="display:flex;flex-direction:column;gap:15px">
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Reasoning <span style="color:var(--muted);font-size:11.5px">· 740</span></span><span class="stat" style="font-weight:600">91%</span></div><div style="height:8px;background:#f1f2f4;border-radius:99px"><div style="width:91%;height:8px;background:var(--teal);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>English <span style="color:var(--muted);font-size:11.5px">· 610</span></span><span class="stat" style="font-weight:600">83%</span></div><div style="height:8px;background:#f1f2f4;border-radius:99px"><div style="width:83%;height:8px;background:var(--teal);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>Quantitative <span style="color:var(--muted);font-size:11.5px">· 690</span></span><span class="stat" style="font-weight:600">78%</span></div><div style="height:8px;background:#f1f2f4;border-radius:99px"><div style="width:78%;height:8px;background:var(--blue);border-radius:99px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span>General Awareness <span style="color:var(--muted);font-size:11.5px">· 300</span></span><span class="stat" style="font-weight:600">61%</span></div><div style="height:8px;background:#f1f2f4;border-radius:99px"><div style="width:61%;height:8px;background:var(--amber);border-radius:99px"></div></div></div>
+            </div>
+          </div>
+
+          <!-- speed vs accuracy quadrant -->
+          <div class="card" style="padding:22px 24px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Speed vs accuracy</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Each dot is a subject — where you're fast and sharp, or slow and unsure</div>
+            <svg viewBox="0 0 520 300" width="100%">
+              <line x1="260" y1="20" x2="260" y2="270" stroke="#eceef1"/><line x1="40" y1="145" x2="500" y2="145" stroke="#eceef1"/>
+              <text x="48" y="34" font-size="10.5" fill="#a3a9b2" font-family="Inter">Accurate</text>
+              <text x="48" y="264" font-size="10.5" fill="#a3a9b2" font-family="Inter">Unsure</text>
+              <text x="452" y="288" font-size="10.5" fill="#a3a9b2" font-family="Inter">Slower</text>
+              <text x="44" y="288" font-size="10.5" fill="#a3a9b2" font-family="Inter">Faster</text>
+              <!-- dots: x=pace(left fast), y=accuracy(top high) -->
+              <g font-family="Inter" font-size="11.5" font-weight="600">
+                <circle cx="150" cy="60" r="9" fill="var(--teal)"/><text x="164" y="64" fill="var(--ink-2)">Reasoning</text>
+                <circle cx="300" cy="95" r="9" fill="var(--teal)"/><text x="314" y="99" fill="var(--ink-2)">English</text>
+                <circle cx="360" cy="130" r="11" fill="var(--blue)"/><text x="376" y="134" fill="var(--ink-2)">Quant</text>
+                <circle cx="410" cy="205" r="8" fill="var(--amber)"/><text x="424" y="209" fill="var(--ink-2)">GA</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- paper usage -->
+        <div class="card" style="padding:22px 26px;margin-top:18px;display:flex;align-items:center;gap:40px">
+          <div style="flex:none"><div style="font-size:14px;font-weight:600;margin-bottom:2px">How you use a paper</div><div style="font-size:12px;color:var(--muted)">Across all attempts</div></div>
+          <div style="flex:1;display:flex;gap:2px;height:14px;border-radius:99px;overflow:hidden">
+            <div style="width:70%;background:var(--blue)"></div><div style="width:8%;background:var(--amber)"></div><div style="width:22%;background:#dfe2e7"></div>
+          </div>
+          <div style="display:flex;gap:22px;font-size:12.5px;flex:none">
+            <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:3px;background:var(--blue)"></span>Correct 70%</span>
+            <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:3px;background:var(--amber)"></span>Wrong 8%</span>
+            <span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:3px;background:#dfe2e7"></span>Left 22%</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
