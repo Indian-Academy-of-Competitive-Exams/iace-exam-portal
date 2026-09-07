@@ -120,7 +120,8 @@ export function ProfilePage() {
       }
       header={
         <PageHeader
-          title="Your profile"
+          size="display"
+          title="Profile"
           action={
             ready && !isEditing ? (
               <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>

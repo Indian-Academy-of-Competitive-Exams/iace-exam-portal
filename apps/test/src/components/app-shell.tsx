@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Avatar, PageHeader } from '@iace/ui';
+import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/constants';
@@ -59,10 +59,11 @@ export function AppShell() {
 
 function DefaultPinGate() {
   return (
-    <div className="mx-auto max-w-lg">
-      <PageHeader title="PIN" />
-      <ChangePinCard onDefaultPin />
-    </div>
+    <PageFrame header={<PageHeader size="display" title="PIN" />}>
+      <div className="max-w-lg">
+        <ChangePinCard onDefaultPin />
+      </div>
+    </PageFrame>
   );
 }
 

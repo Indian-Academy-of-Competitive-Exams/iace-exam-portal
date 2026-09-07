@@ -9,7 +9,6 @@ import {
   LoadingState,
   PageHeader,
   PanelFrame,
-  SectionHeading,
   plural,
   type ListFilter,
 } from '@iace/ui';
@@ -35,6 +34,7 @@ import {
   leaderboardQueryKey,
 } from '../lib/constants';
 import { Podium, Standings } from '../components/leaderboard/board';
+import { Section } from '../components/ui';
 
 // TEST is the empty row, not a labelled one, so an unset URL shows the board it actually defaults to.
 const SCOPE_ITEMS = [
@@ -222,15 +222,13 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
         on this board.
       </Alert>
 
-      <div className="flex flex-col gap-3">
-        <SectionHeading title="Podium" />
+      <Section title="Podium">
         <Podium rows={board.podium} />
-      </div>
+      </Section>
 
-      <div className="flex min-h-0 flex-col gap-3">
-        <SectionHeading title="Standings" />
+      <Section title="Standings" meta={plural(board.cohortSize, 'student')}>
         <Standings board={board} empty="Everyone on this board is on the podium." />
-      </div>
+      </Section>
     </div>
   );
 }

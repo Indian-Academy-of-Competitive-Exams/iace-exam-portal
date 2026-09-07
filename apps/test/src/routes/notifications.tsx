@@ -1,7 +1,7 @@
 /**
  * The student's bell. A DELIBERATE deviation from the list-screen convention, for the same reason
- * `tests.tsx` gives: this is something a student reads, not an admin data table, so it is a feed of
- * cards rather than a ListView.
+ * `tests.tsx` gives: this is something a student reads, not an admin data table, so it is a feed
+ * parted by hairlines inside one panel rather than a ListView.
  */
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -122,15 +122,17 @@ function FeedRegion({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {rows.map((row) => (
-        <NotificationCard key={row.id} notification={row} />
-      ))}
+    <div className="flex flex-col">
+      <div className="flex flex-col divide-y divide-border">
+        {rows.map((row) => (
+          <NotificationRow key={row.id} notification={row} />
+        ))}
+      </div>
 
       {list.hasMore ? (
         <Button
           variant="outline"
-          className="self-center"
+          className="mt-4 self-center"
           onClick={list.loadMore}
           disabled={list.isLoadingMore}
         >
@@ -141,8 +143,8 @@ function FeedRegion({
   );
 }
 
-/** One of many of the same thing, which is the boundary a card is for. */
-function NotificationCard({ notification }: Readonly<{ notification: Notification }>) {
+/** A row in one panel, never its own card: a card inside the frame's card is a card in a card. */
+function NotificationRow({ notification }: Readonly<{ notification: Notification }>) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -166,8 +168,8 @@ function NotificationCard({ notification }: Readonly<{ notification: Notificatio
       type="button"
       onClick={read}
       className={cn(
-        'focus-visible:shadow-focus hover:bg-muted/50 rounded-lg border p-4 text-start transition-colors',
-        notification.isRead ? 'bg-card' : 'bg-card border-primary/40',
+        'focus-visible:shadow-focus hover:bg-muted/50 rounded-md p-4 text-start transition-colors',
+        notification.isRead ? null : 'border-s-2 border-primary',
       )}
     >
       <div className="flex items-start justify-between gap-3">

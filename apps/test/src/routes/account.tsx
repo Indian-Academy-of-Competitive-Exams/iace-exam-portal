@@ -1,21 +1,11 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  PageFrame,
-  PageHeader,
-  PinField,
-} from '@iace/ui';
+import { Alert, Button, PageFrame, PageHeader, PinField } from '@iace/ui';
 import { api } from '../lib/api';
+import { PageBody, SurfaceCard } from '../components/ui';
 import { useAuth } from '../providers/auth';
 
 const FORM_FIELDS = ['currentPin', 'newPin'] as const;
@@ -26,8 +16,10 @@ export function AccountPage() {
   const onDefaultPin = student?.hasDefaultPin ?? false;
 
   return (
-    <PageFrame header={<PageHeader title="Change PIN" />}>
-      <ChangePinCard onDefaultPin={onDefaultPin} />
+    <PageFrame header={<PageHeader size="display" title="PIN" />}>
+      <PageBody>
+        <ChangePinCard onDefaultPin={onDefaultPin} />
+      </PageBody>
     </PageFrame>
   );
 }
@@ -52,23 +44,15 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="size-4" aria-hidden />
-          {onDefaultPin ? 'Choose your own PIN' : 'Change your PIN'}
-        </CardTitle>
-        <CardDescription>
-          {onDefaultPin
-            ? // Said plainly. A student who does not know the PIN is guessable
-              // has no reason to change it, and "for your security" tells them
-              // nothing they can act on.
-              `Your PIN is currently the first ${PIN_LENGTH} digits of your mobile number, set for you when you were enrolled. Anyone with the class list can work it out — pick your own.`
-            : `Any ${PIN_LENGTH} digits. Changing it signs you out everywhere else.`}
-        </CardDescription>
-      </CardHeader>
+    <div className="flex flex-col gap-4">
+      {/* Said plainly: "for your security" tells a student nothing they can act on. */}
+      <Alert variant={onDefaultPin ? 'warning' : 'info'}>
+        {onDefaultPin
+          ? `Your PIN is the first ${PIN_LENGTH} digits of your mobile number, set for you when you were enrolled. Anyone holding the class list can work it out — pick your own.`
+          : `Any ${PIN_LENGTH} digits. Changing it signs you out everywhere else.`}
+      </Alert>
 
-      <CardContent>
+      <SurfaceCard title={onDefaultPin ? 'Choose your own PIN' : 'Change your PIN'}>
         <form
           className="flex max-w-xs flex-col gap-4"
           onSubmit={form.handleSubmit((values) => change.mutate(values))}
@@ -99,7 +83,7 @@ export function ChangePinCard({ onDefaultPin }: Readonly<{ onDefaultPin: boolean
             Save new PIN
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </SurfaceCard>
+    </div>
   );
 }

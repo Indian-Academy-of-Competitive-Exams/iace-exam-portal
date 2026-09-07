@@ -12,7 +12,6 @@ import {
   LoadingState,
   MeasureBars,
   Metric,
-  MetricGroup,
   PageHeader,
   ThemeToggle,
   plural,
@@ -21,6 +20,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { sharedReportQueryKey } from '../lib/constants';
+import { PageBody, StatBand } from '../components/ui';
 
 const UNMEASURED = '—';
 
@@ -83,7 +83,7 @@ function Body({
 
 function Report({ report }: Readonly<{ report: SharedReport }>) {
   return (
-    <div className="flex flex-col gap-6">
+    <PageBody>
       <Identity report={report} />
       <Headline report={report} />
       {report.bands.length > 0 ? (
@@ -98,7 +98,7 @@ function Report({ report }: Readonly<{ report: SharedReport }>) {
         A report the student shared. It shows their own result only — no answer key and no other
         student — and they can revoke this link at any time.
       </Alert>
-    </div>
+    </PageBody>
   );
 }
 
@@ -118,19 +118,21 @@ function Identity({ report }: Readonly<{ report: SharedReport }>) {
 
 function Headline({ report }: Readonly<{ report: SharedReport }>) {
   return (
-    <MetricGroup>
-      <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} />
+    <StatBand>
+      <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} size="md" />
       <Metric
         label="Rank"
         value={report.rank === null ? UNMEASURED : `#${report.rank}`}
         unit={report.cohortSize > 0 ? `of ${report.cohortSize}` : undefined}
+        size="md"
       />
       <Metric
         label="Percentile"
         value={report.percentile ?? UNMEASURED}
         unit={report.percentile === null ? undefined : 'th'}
+        size="md"
       />
-    </MetricGroup>
+    </StatBand>
   );
 }
 
