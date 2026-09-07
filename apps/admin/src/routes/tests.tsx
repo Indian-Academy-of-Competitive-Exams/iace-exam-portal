@@ -170,7 +170,7 @@ function deleteDescription(test: Test): string {
     test.paperQuestionCount > 0
       ? `the ${plural(test.paperQuestionCount, 'question')} drawn for it are discarded`
       : null,
-    test.testSeriesId === null ? null : 'it leaves its series',
+    'it leaves its series',
     test.status === TEST_STATUS.ACTIVE ? 'students stop being offered it' : null,
   ].filter((cost): cost is string => cost !== null);
 

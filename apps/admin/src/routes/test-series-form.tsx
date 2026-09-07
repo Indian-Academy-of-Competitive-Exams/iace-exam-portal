@@ -30,7 +30,7 @@ import {
   type SeriesTab,
 } from './test-series-detail';
 import { SeriesBasics } from './test-series-basics';
-import { SeriesAccess } from './test-series-access';
+import { SeriesAccess, SeriesSwitch } from './test-series-access';
 import { SeriesTests } from './test-series-tests';
 import { BranchSchedule } from './test-series-branches';
 
@@ -193,12 +193,16 @@ function SeriesEditor({ detail }: Readonly<{ detail: TestSeriesSummary | null }>
             breadcrumbs={<PageCrumbs nav={NAV_ITEMS} tail={existing ? [{ label: title }] : []} />}
             title={title}
             action={
-              isEditing ? undefined : (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil aria-hidden />
-                  Edit series
-                </Button>
-              )
+              // The switch saves itself, so it belongs to the record and not to the form's Edit.
+              <div className="flex items-center gap-3">
+                {detail ? <SeriesSwitch series={detail} /> : null}
+                {isEditing ? null : (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    <Pencil aria-hidden />
+                    Edit series
+                  </Button>
+                )}
+              </div>
             }
           />
 

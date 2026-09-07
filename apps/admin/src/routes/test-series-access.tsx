@@ -114,12 +114,6 @@ export function SeriesAccess({
       </FormField>
 
       <KindTarget form={form} detail={detail} kind={kind} />
-
-      {detail ? (
-        <div className="sm:col-span-2">
-          <SeriesSwitch series={detail} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -149,7 +143,7 @@ function switchQuestion(
 }
 
 /** The master switch. It changes who can sit a test, so it asks in both directions. */
-function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>) {
+export function SeriesSwitch({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState<boolean | null>(null);
 

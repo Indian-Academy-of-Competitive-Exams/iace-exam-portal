@@ -5,6 +5,7 @@ import { Power, X } from 'lucide-react';
 import {
   AppException,
   EVALUATION_MODE_LABELS,
+  OFFER_REQUIREMENT,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
@@ -479,9 +480,11 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
               label={requirement.label}
               /* ui-copy-ok: rule */ hint={requirement.owed ?? undefined}
             />
-            <Button size="sm" variant="outline" asChild>
-              <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
-            </Button>
+            {requirement.key === OFFER_REQUIREMENT.PAPER ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
+              </Button>
+            ) : null}
           </li>
         ))}
       </ul>

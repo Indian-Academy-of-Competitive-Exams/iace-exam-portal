@@ -467,10 +467,10 @@ export const testSchema = z.object({
   variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
-  /** The one series carrying it. The column requires one, so no row ever comes back null. */
-  testSeriesId: z.string().nullable(),
+  /** The one series carrying it. The column requires one, so this is never absent. */
+  testSeriesId: z.string(),
   /** That series' name, so a screen can say which one decided the mode without a second request. */
-  testSeriesName: z.string().nullable(),
+  testSeriesName: z.string(),
   /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
   paperQuestionCount: z.number().int(),
   createdAt: z.string(),

@@ -3778,7 +3778,7 @@ export interface FakeTestRow {
   totalMarks: number;
   scope?: TestScope;
   scopeRef?: TestScopeRef | null;
-  testSeriesId: string | null;
+  testSeriesId: string;
   seriesOrder: number | null;
   opensAt: Date | null;
   lateEntrySec: number | null;
@@ -3793,7 +3793,7 @@ export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
     durationSec: 3600,
     totalQuestions: 100,
     totalMarks: 200,
-    testSeriesId: null,
+    testSeriesId: 'srs_1',
     seriesOrder: null,
     opensAt: null,
     lateEntrySec: null,
