@@ -203,7 +203,7 @@ export class TestSeriesService {
       const tests = `${held} test${held === 1 ? '' : 's'}`;
       throw new AppException(
         ErrorCodes.CONFLICT,
-        `${tests} are offered through this series, and deleting it would take away the only route to them. Remove them from the series first.`,
+        `${tests} are offered through this series, and deleting it would take away the only route to them. Move them to another series first.`,
       );
     }
 

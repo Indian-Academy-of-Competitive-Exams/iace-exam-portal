@@ -233,7 +233,7 @@ function BranchReach({ series }: Readonly<{ series: TestSeriesSummary }>) {
 /** Names what would refuse the delete, so the dialog is not a guess the server then corrects. */
 function deleteDescription(series: TestSeriesSummary): string {
   if (series.testCount > 0) {
-    return `${plural(series.testCount, 'test')} are offered through ${series.name}, and deleting it would take away the only route to them — the server will refuse. Take the tests out of the series first.`;
+    return `${plural(series.testCount, 'test')} are offered through ${series.name}, and deleting it would take away the only route to them — the server will refuse. Move them to another series first.`;
   }
   return `No test is offered through ${series.name}. It is still refused if another series waits on this one before it opens. Every branch's row for it goes with it, and this cannot be undone.`;
 }
