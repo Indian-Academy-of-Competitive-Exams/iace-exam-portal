@@ -239,6 +239,7 @@ export {
   type TableFrameProps,
   type TableFrameTab,
   type TableFrameTabs,
+  type FrameFilters,
   type PageFrameProps,
   type PanelFrameProps,
 } from './components/ui/table-frame';

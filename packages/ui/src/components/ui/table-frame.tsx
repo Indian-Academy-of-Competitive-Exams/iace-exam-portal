@@ -20,22 +20,44 @@ const FILLS = 'flex min-h-0 flex-1 flex-col';
 
 const TableFrameContext = React.createContext(false);
 
+/** The spec a screen declares and the state driving it — one shape, whichever frame renders it. */
+export interface FrameFilters {
+  spec: readonly ListFilter[];
+  state: FilterState;
+  /** A mandatory scope the body is read through, never one of its filters — first in the bar. */
+  leading?: React.ReactNode;
+}
+
 export interface PageFrameProps {
   /** Pinned above the body — usually a `PageHeader` carrying the page's actions. */
   header?: React.ReactNode;
+  /** Pinned under the header, so a browse screen narrows without its controls scrolling away. */
+  filters?: FrameFilters;
   children: React.ReactNode;
   className?: string;
 }
 
 /** Any page that is not a list: header held still, body the only scroller. */
-export function PageFrame({ header, children, className }: Readonly<PageFrameProps>) {
+export function PageFrame({ header, filters, children, className }: Readonly<PageFrameProps>) {
   return (
     <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
+      <FrameFilterRow filters={filters} />
       {/* `pr-2` keeps right-aligned content clear of the scrollbar this very element draws. */}
       <div className={cn('relative min-h-0 flex-1 overflow-y-auto pr-2', className)}>
         {children}
       </div>
+    </div>
+  );
+}
+
+/** Nothing to narrow by is no bar at all — an empty strip of chrome reads as a broken one. */
+function FrameFilterRow({ filters }: Readonly<{ filters?: FrameFilters }>) {
+  if (!filters || (filters.spec.length === 0 && !filters.leading)) return null;
+
+  return (
+    <div className="shrink-0">
+      <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
     </div>
   );
 }
@@ -46,12 +68,7 @@ export interface PanelFrameProps {
   /** Pinned inside the card, above the filters — a banner the body does not own. */
   toolbar?: React.ReactNode;
   /** The spec a list screen would declare, and the state driving it. */
-  filters?: {
-    spec: readonly ListFilter[];
-    state: FilterState;
-    /** A mandatory scope the body is read through, never one of its filters — first in the bar. */
-    leading?: React.ReactNode;
-  };
+  filters?: FrameFilters;
   /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
   tabs?: TableFrameTabs;
   /** Hands the scrolling to the children — for a body that is itself two panes, each its own. */
