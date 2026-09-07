@@ -16,6 +16,7 @@ import {
   FakePrisma,
   makeBranch,
   makeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /**
@@ -69,6 +70,7 @@ function serviceWith(
       programs.asService(),
       new AuditContext(),
       events.asService(),
+      fakeNotificationOutbox(),
     ),
   };
 }

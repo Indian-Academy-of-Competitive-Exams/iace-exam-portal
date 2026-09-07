@@ -102,9 +102,15 @@ export function rollupRebuildJobId(testId: string): string {
 /** Long enough for a drop's re-scores to land before the rebuild reads them back. */
 export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
 
+/** Writing one request, or sweeping up whatever a crash left unrelayed. */
+export const NOTIFICATION_JOBS = { WRITE: 'write-notification', SWEEP: 'relay-sweep' } as const;
+
+/** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
+export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
+
 /** Ids only, like every other job: the worker re-reads the outbox row it is about to act on. */
 export interface NotificationJobData {
-  eventId: string;
+  eventId?: string;
 }
 
 /** One delivery row to attempt. The worker re-reads it, so a stale retry cannot send a stale message. */

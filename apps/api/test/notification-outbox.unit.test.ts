@@ -26,7 +26,12 @@ function build() {
     queue,
     deliveries,
     outbox,
-    processor: new NotificationsProcessor(prisma.asService(), service, deliveries.asQueue()),
+    processor: new NotificationsProcessor(
+      prisma.asService(),
+      service,
+      outbox,
+      deliveries.asQueue(),
+    ),
   };
 }
 

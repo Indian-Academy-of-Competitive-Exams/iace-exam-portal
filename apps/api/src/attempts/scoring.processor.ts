@@ -5,6 +5,7 @@ import { type Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
 import {
   ATTEMPT_STATUS,
+  NOTIFICATION_TYPE,
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
   type AnswerKey,
@@ -15,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES, QUEUE_POLICY, type ScoringJobData } from '../queue/queues';
 import { LeaderboardService } from './leaderboard.service';
 import { ROLLUP_REQUEST, RollupOutbox } from './rollup-outbox';
+import { NotificationOutbox } from '../notifications';
 import { DOMAIN_EVENTS, DomainEventBus } from '../common/events';
 import { scorePaper, type PaperScore, type ScorableQuestion } from './score-paper';
 
@@ -56,6 +58,7 @@ export class ScoringProcessor extends WorkerHost {
     private readonly leaderboard: LeaderboardService,
     private readonly rollup: RollupOutbox,
     private readonly events: DomainEventBus,
+    private readonly notifications: NotificationOutbox,
   ) {
     super();
   }
@@ -153,6 +156,17 @@ export class ScoringProcessor extends WorkerHost {
       },
       select: { id: true },
     });
+
+    // Same transaction as the marks: a student whose result committed is always one we owe a word to.
+    await this.notifications.request(tx, {
+      studentId: attempt.studentId,
+      type: NOTIFICATION_TYPE.RESULT_READY,
+      title: 'Your result is ready',
+      body: 'Open the test to see your score, rank and answers.',
+      dedupeKey: `result:${attempt.id}`,
+      testId: attempt.testId,
+    });
+
     return row.id;
   }
 

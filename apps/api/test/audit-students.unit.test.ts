@@ -13,6 +13,7 @@ import {
   FakePrisma,
   makeProfile,
   makeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /**
@@ -75,6 +76,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),
+    fakeNotificationOutbox(),
   );
   return { prisma, auditContext, service };
 }

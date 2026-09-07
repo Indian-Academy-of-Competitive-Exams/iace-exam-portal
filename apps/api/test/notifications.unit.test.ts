@@ -3,107 +3,17 @@ import { describe, it } from 'node:test';
 import { DeliveryChannel } from '@prisma/client';
 import { AppException, ErrorCodes, NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { NotificationsListener } from '../src/notifications/notifications.listener';
-import {
-  FakeMessageSender,
-  FakeNotificationsPrisma,
-  type FakeNotificationRow,
-} from './support/fakes';
+import { FakeNotificationsPrisma, type FakeNotificationRow } from './support/fakes';
 
-/**
- * Notifications are a REACTION to something that already happened, so the two guarantees are:
- * the right row for each event, and a failure here never reaching the producer.
- */
+/** A notification is written from a durable request, so the guarantee is one row per fact. */
 
 const PAGE = { page: 1, pageSize: 20, unreadOnly: undefined };
 
 function build(rows: FakeNotificationRow[] = [], mobiles: Record<string, string> = {}) {
   const prisma = new FakeNotificationsPrisma(rows, mobiles);
   const service = new NotificationsService(prisma.asService());
-  const sender = new FakeMessageSender();
-  return { prisma, service, sender, listener: new NotificationsListener(service, sender) };
+  return { prisma, service };
 }
-
-describe('NotificationsListener — one row per thing that happened', () => {
-  it('tells a student their result is ready, in the bell and by SMS', async () => {
-    const { listener, prisma, sender } = build([], { stu_1: '9876543210' });
-
-    await listener.onScoringCompleted({
-      attemptId: 'att_1',
-      testId: 'tst_1',
-      studentId: 'stu_1',
-      isGraded: true,
-    });
-
-    assert.equal(prisma.rows[0]?.type, NOTIFICATION_TYPE.RESULT_READY);
-    assert.equal(prisma.rows[0]?.testId, 'tst_1');
-    assert.equal(sender.lastMessage.kind, 'result_ready');
-    assert.equal(sender.lastMessage.to, '9876543210');
-  });
-
-  /** An anonymised student still has sittings, and nothing is left to text. */
-  it('writes the bell and sends nothing when there is no number to reach', async () => {
-    const { listener, prisma, sender } = build();
-
-    await listener.onScoringCompleted({
-      attemptId: 'att_1',
-      testId: 'tst_1',
-      studentId: 'stu_1',
-      isGraded: true,
-    });
-
-    assert.equal(prisma.rows.length, 1);
-    assert.equal(sender.sent.length, 0);
-  });
-
-  it('writes a grant the student can tap through to the series', async () => {
-    const { listener, prisma } = build();
-
-    await listener.onSeriesGranted({ studentId: 'stu_1', testSeriesId: 'srs_1' });
-
-    assert.equal(prisma.rows[0]?.type, NOTIFICATION_TYPE.GRANT_ADDED);
-    assert.equal(prisma.rows[0]?.testSeriesId, 'srs_1');
-  });
-
-  /** An enrolment opens whatever the exam reaches, which is not one series to link to. */
-  it('writes an enrolment with no deep link, naming the exams that were added', async () => {
-    const { listener, prisma } = build();
-
-    await listener.onEnrolmentAdded({ studentId: 'stu_1', examCodes: ['SSC CGL', 'RRB JE'] });
-
-    const row = prisma.rows[0];
-    assert.equal(row?.type, NOTIFICATION_TYPE.ENROLLMENT_ADDED);
-    assert.equal(row?.testSeriesId, null);
-    assert.equal(row?.testId, null);
-    assert.match(row?.body ?? '', /SSC CGL/);
-  });
-
-  /**
-   * THE failure this prevents: the unlock already happened. A notification that cannot be written
-   * must not take the write that caused it down with it.
-   */
-  it('swallows its own failure rather than failing the producer', async () => {
-    const failing = {
-      create: () => Promise.reject(new Error('postgres is down')),
-    } as unknown as NotificationsService;
-    const listener = new NotificationsListener(failing, new FakeMessageSender());
-
-    await assert.doesNotReject(() =>
-      listener.onEnrolmentAdded({ studentId: 'stu_1', examCodes: ['SSC CGL'] }),
-    );
-    await assert.doesNotReject(() =>
-      listener.onSeriesGranted({ studentId: 'stu_1', testSeriesId: 'srs_1' }),
-    );
-    await assert.doesNotReject(() =>
-      listener.onScoringCompleted({
-        attemptId: 'att_1',
-        testId: 'tst_1',
-        studentId: 'stu_1',
-        isGraded: true,
-      }),
-    );
-  });
-});
 
 describe('NotificationsService — one student’s own bell', () => {
   const twoStudents = () =>

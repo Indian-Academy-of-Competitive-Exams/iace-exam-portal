@@ -20,9 +20,9 @@ export const MESSAGE_KINDS = {
   OTP: 'otp',
   /** The PIN a roster import gave a student, which is the only time they are told one. */
   PIN: 'pin',
-  /** Sent when a scoring job finishes. WIRED — see the notifications listener. */
+  /** Sent when a scoring job finishes. WIRED — through the notification delivery ledger. */
   RESULT_READY: 'result_ready',
-  /** Not wired (docs/03 §10): nothing emits `test.assigned` yet. */
+  /** Reachable but unproduced: policy escalates it, and nothing asks for one yet. */
   TEST_ASSIGNED: 'test_assigned',
   /** Not wired (docs/03 §10): needs a scheduled job reading Test.opensAt/lateEntrySec. */
   TEST_REMINDER: 'test_reminder',

@@ -14,6 +14,7 @@ import {
   FakePrisma,
   makeProfile,
   makeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 describe('the student profile audit diff', () => {
@@ -88,6 +89,7 @@ function build(students = [makeStudent({ id: 'stu_1' })]) {
     new FakeCodeCatalog().asService(),
     auditContext,
     new FakeEventBus().asService(),
+    fakeNotificationOutbox(),
   );
   const me = new MeService(students_, storage.asService(), auditContext);
   return { prisma, auditContext, storage, me };

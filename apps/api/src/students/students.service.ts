@@ -3,6 +3,7 @@ import {
   AppException,
   BLOCKED_ENROLMENT_MESSAGE,
   ErrorCodes,
+  NOTIFICATION_TYPE,
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
@@ -25,6 +26,7 @@ import { ExamsService } from '../configs';
 import { type ProgramsService } from '../access';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { NotificationOutbox } from '../notifications';
 
 /** How long a signed link to somebody's photo stays usable. */
 const DOCUMENT_URL_TTL_SEC = 300;
@@ -85,6 +87,7 @@ export class StudentsService {
     private readonly programs: ProgramsService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
+    private readonly notifications: NotificationOutbox,
   ) {}
 
   // ==========================================================================
@@ -316,17 +319,30 @@ export class StudentsService {
         : {}),
     };
 
-    const updated = await this.prisma.student.update({ where: { id }, data: updatedColumns });
-
     const before = auditFieldsOf(student);
+    // The save and the word to the student commit together, so a crash cannot leave one without the other.
+    const { updated, examCodes } = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.student.update({ where: { id }, data: updatedColumns });
+
+      // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
+      const added = addedTo(before.enrolledExams, auditFieldsOf(row).enrolledExams);
+      if (added.length > 0) {
+        await this.notifications.request(tx, {
+          studentId: id,
+          type: NOTIFICATION_TYPE.ENROLLMENT_ADDED,
+          title: 'You have been enrolled in a new exam',
+          body: `Added: ${added.join(', ')}.`,
+          dedupeKey: `enrolment:${added.join(',')}`,
+        });
+      }
+      return { updated: row, examCodes: added };
+    });
+
     const after = auditFieldsOf(updated);
     this.auditContext.setChanged(fieldDiff(before, after, AUDITED_STUDENT_FIELDS));
     if (fieldDiff(before, after, ACCESS_STUDENT_FIELDS)) {
       this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId: id });
     }
-
-    // Only what was ADDED: an un-enrolment is not news, and the whole array is not what changed.
-    const examCodes = addedTo(before.enrolledExams, after.enrolledExams);
     if (examCodes.length > 0) {
       this.events.emit(DOMAIN_EVENTS.STUDENT_ENROLMENT_ADDED, { studentId: id, examCodes });
     }

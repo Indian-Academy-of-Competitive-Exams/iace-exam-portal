@@ -24,6 +24,7 @@ import {
   mcqOptions,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 const TEST_ID = 'tst_1';
@@ -108,6 +109,7 @@ function platform(schedule: { scheduled: boolean; closesAt: string | null; extra
       leaderboard,
       fakeRollupOutbox(prisma, new FakeQueue()),
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
     reports: new AttemptReportService(
       prisma.asService(),

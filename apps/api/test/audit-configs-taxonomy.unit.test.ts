@@ -20,6 +20,7 @@ import {
   makeExam,
   makeSubject,
   makeTopic,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 describe('the exam audit diff', () => {
@@ -121,6 +122,7 @@ describe('ExamsService.update — driven live, the diff a real edit contributes'
         null as never,
         new AuditContext(),
         new FakeEventBus().asService(),
+        fakeNotificationOutbox(),
       ),
       auditContext,
     );

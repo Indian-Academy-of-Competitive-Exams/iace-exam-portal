@@ -15,6 +15,7 @@ import {
   rowAt,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /** Three questions on one paper: the first right, the second wrong, the third never touched. */
@@ -57,6 +58,7 @@ function sitting(overrides: Partial<FakeAttemptRow> = {}): {
       leaderboard,
       fakeRollupOutbox(prisma, rollups),
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
   };
 }

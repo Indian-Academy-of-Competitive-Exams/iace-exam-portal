@@ -10,6 +10,7 @@ import { type Prisma } from '@prisma/client';
 import { type NotificationType } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  NOTIFICATION_JOBS,
   QUEUE_NAMES,
   RELAY_BATCH,
   RELAY_GRACE_SEC,
@@ -131,7 +132,7 @@ export class NotificationOutbox {
         this.logger.error(`Notification request ${row.id} carries no usable intent`);
       } else {
         await this.notifications.add(
-          QUEUE_NAMES.NOTIFICATIONS,
+          NOTIFICATION_JOBS.WRITE,
           { eventId: row.id },
           { jobId: notificationJobId(row.id) },
         );

@@ -10,6 +10,7 @@ import { LeaderboardService } from '../src/attempts/leaderboard.service';
 import { ScoringProcessor } from '../src/attempts/scoring.processor';
 import { RollupService } from '../src/attempts/rollup.service';
 import { ROLLUP_TYPE } from '../src/attempts/rollup-fold';
+import { ROLLUP_REQUEST } from '../src/attempts/rollup-outbox';
 import { cohortShapeOf, curveBandsOf, flagYours } from '../src/attempts/performance-analytics';
 import { ROLLUP_JOBS } from '../src/queue/queues';
 import {
@@ -25,6 +26,7 @@ import {
   type FakeAttemptRow,
   type FakeRollupTest,
   type FakeServedAnswerRow,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /** `o1` is the right answer on every question, so a choice reads as right, wrong or untouched. */
@@ -80,6 +82,7 @@ function world(
       leaderboard,
       outbox,
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
     rollup: new RollupService(prisma.asService()),
   };
@@ -334,7 +337,11 @@ describe('RollupService — rebuilding a scope', () => {
         [ROLLUP_JOBS.REBUILD_TEST, 'rollup-rebuild-tst_1'],
       ],
     );
-    assert.equal(built.prisma.outboxEvents.length, 2, 'a re-score writes no fold event of its own');
+    // By type: scoring writes a notification request into the same table, and that is not a fold.
+    const folds = built.prisma.outboxEvents.filter(
+      (row) => row.eventType === ROLLUP_REQUEST.EVENT_TYPE,
+    );
+    assert.equal(folds.length, 2, 'a re-score writes no fold event of its own');
   });
 
   it('backfills to exactly what folding each sitting as it landed would have written', async () => {

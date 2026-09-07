@@ -55,6 +55,7 @@ import {
 } from '@iace/contracts';
 import { Prisma, type DeliveryChannel, type DeliveryStatus } from '@prisma/client';
 import { ScoringOutbox } from '../../src/attempts/scoring-outbox';
+import { NotificationOutbox } from '../../src/notifications/notification-outbox';
 import { RollupOutbox } from '../../src/attempts/rollup-outbox';
 import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
@@ -759,6 +760,12 @@ function sortByKeys<T extends Record<string, unknown>>(
 
 /** Just enough Prisma for the auth service: find by unique key, and upsert. */
 export class FakePrisma {
+  private readonly outbox = fakeOutboxTable();
+
+  readonly outboxEvents = this.outbox.rows;
+
+  readonly outboxEvent = this.outbox.api;
+
   private nextId = 1;
 
   constructor(
@@ -1122,8 +1129,9 @@ export class FakePrisma {
       ),
   };
 
-  /** The service reads and counts in one transaction; order is preserved. */
-  $transaction = (operations: Promise<unknown>[]) => Promise.all(operations);
+  /** Both forms: the array a paged read uses, and the callback a write-plus-request runs in. */
+  $transaction = <T>(work: Promise<T>[] | ((tx: FakePrisma) => Promise<T>)): Promise<T[] | T> =>
+    typeof work === 'function' ? work(this) : Promise.all(work);
 
   asService(): PrismaService {
     return this as unknown as PrismaService;
@@ -1631,6 +1639,54 @@ function matchesOutboxWhere(row: FakeOutboxRow, where: FakeOutboxWhere): boolean
 
 /** What a caller hands `create`: the row without the three columns the table fills in. */
 type FakeOutboxInput = Omit<FakeOutboxRow, 'id' | 'createdAt' | 'processedAt'>;
+
+/** One OutboxEvent table any fake can hold, now that producers write a request beside their row. */
+export function fakeOutboxTable() {
+  const rows: FakeOutboxRow[] = [];
+  let seq = 0;
+
+  const insert = (data: FakeOutboxInput): FakeOutboxRow => {
+    seq += 1;
+    const created: FakeOutboxRow = {
+      ...data,
+      id: `obx_${seq}`,
+      createdAt: new Date(seq),
+      processedAt: null,
+    };
+    rows.push(created);
+    return created;
+  };
+
+  return {
+    rows,
+    api: {
+      create: ({ data }: { data: FakeOutboxInput }) => Promise.resolve({ id: insert(data).id }),
+
+      createMany: ({ data }: { data: FakeOutboxInput[] }) => {
+        data.forEach(insert);
+        return Promise.resolve({ count: data.length });
+      },
+
+      findMany: ({ where, take }: { where: FakeOutboxWhere; take?: number }) =>
+        Promise.resolve(
+          rows
+            .filter((row) => matchesOutboxWhere(row, where))
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+            .slice(0, take),
+        ),
+
+      findUnique: ({ where }: { where: { id: string } }) =>
+        Promise.resolve(rows.find((row) => row.id === where.id) ?? null),
+
+      update: ({ where, data }: { where: { id: string }; data: Partial<FakeOutboxRow> }) => {
+        const row = rows.find((candidate) => candidate.id === where.id);
+        if (!row) throw new Error(`no outbox event ${where.id}`);
+        Object.assign(row, data);
+        return Promise.resolve(row);
+      },
+    },
+  };
+}
 
 /** A durable event waiting to be handed to a queue. */
 export interface FakeOutboxRow {
@@ -3283,6 +3339,12 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
 
 /** Enough Prisma for the access services: the catalog, the series and its branches. */
 export class FakeAccessPrisma {
+  private readonly outbox = fakeOutboxTable();
+
+  readonly outboxEvents = this.outbox.rows;
+
+  readonly outboxEvent = this.outbox.api;
+
   private seq = 0;
 
   constructor(
@@ -4307,54 +4369,11 @@ export class FakeNotificationsPrisma {
     },
   };
 
-  readonly outboxEvents: FakeOutboxRow[] = [];
+  private readonly outbox = fakeOutboxTable();
 
-  private outboxSeq = 0;
+  readonly outboxEvents = this.outbox.rows;
 
-  readonly outboxEvent = {
-    create: ({ data }: { data: FakeOutboxInput }) => {
-      this.outboxSeq += 1;
-      const created: FakeOutboxRow = {
-        ...data,
-        id: `obx_${this.outboxSeq}`,
-        createdAt: new Date(this.outboxSeq),
-        processedAt: null,
-      };
-      this.outboxEvents.push(created);
-      return Promise.resolve({ id: created.id });
-    },
-
-    createMany: ({ data }: { data: FakeOutboxInput[] }) => {
-      for (const row of data) {
-        this.outboxSeq += 1;
-        this.outboxEvents.push({
-          ...row,
-          id: `obx_${this.outboxSeq}`,
-          createdAt: new Date(this.outboxSeq),
-          processedAt: null,
-        });
-      }
-      return Promise.resolve({ count: data.length });
-    },
-
-    findMany: ({ where, take }: { where: FakeOutboxWhere; take?: number }) =>
-      Promise.resolve(
-        this.outboxEvents
-          .filter((row) => matchesOutboxWhere(row, where))
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-          .slice(0, take),
-      ),
-
-    findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.outboxEvents.find((row) => row.id === where.id) ?? null),
-
-    update: ({ where, data }: { where: { id: string }; data: Partial<FakeOutboxRow> }) => {
-      const row = this.outboxEvents.find((candidate) => candidate.id === where.id);
-      if (!row) throw new Error(`no outbox event ${where.id}`);
-      Object.assign(row, data);
-      return Promise.resolve(row);
-    },
-  };
+  readonly outboxEvent = this.outbox.api;
 }
 
 // --------------------------------------------------------------------------- scoring
@@ -4698,6 +4717,14 @@ function uniqueByTest(rows: readonly FakeAttemptRow[]): { testId: string }[] {
 /** The seam a paper edit asks for a re-score through. Nothing here exercises the scoring itself. */
 export function fakeScoringOutbox(prisma: FakeTestsPrisma): ScoringOutbox {
   return new ScoringOutbox(prisma.asService(), new FakeQueue().asQueue());
+}
+
+/** For the services that now take one only to write a request beside their own row. */
+export function fakeNotificationOutbox(prisma?: {
+  asService(): PrismaService;
+}): NotificationOutbox {
+  const store = prisma ?? new FakeNotificationsPrisma();
+  return new NotificationOutbox(store.asService(), new FakeQueue().asQueue());
 }
 
 /** The rollup rows the performance report reads, plus the catalog it resolves a scope through. */

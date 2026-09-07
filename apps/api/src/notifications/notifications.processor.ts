@@ -9,6 +9,7 @@ import { type Job, type Queue } from 'bullmq';
 import { DeliveryStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  NOTIFICATION_JOBS,
   QUEUE_NAMES,
   QUEUE_POLICY,
   notificationDeliveryJobId,
@@ -17,7 +18,7 @@ import {
 } from '../queue/queues';
 import { NotificationsService } from './notifications.service';
 import { escalationFor } from './notification-policy';
-import { parseIntent, type NotificationIntent } from './notification-outbox';
+import { NotificationOutbox, parseIntent, type NotificationIntent } from './notification-outbox';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
@@ -31,6 +32,7 @@ export class NotificationsProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly outbox: NotificationOutbox,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
   ) {
@@ -38,7 +40,11 @@ export class NotificationsProcessor extends WorkerHost {
   }
 
   async process(job: Job<NotificationJobData>): Promise<void> {
-    await this.write(job.data.eventId);
+    if (job.name === NOTIFICATION_JOBS.SWEEP) {
+      await this.outbox.relay();
+      return;
+    }
+    if (job.data.eventId) await this.write(job.data.eventId);
   }
 
   /** Idempotent through the dedupe key, so a retried job re-reads its own row instead of adding one. */

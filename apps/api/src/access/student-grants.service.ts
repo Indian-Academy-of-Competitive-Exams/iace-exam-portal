@@ -3,6 +3,7 @@ import {
   AppException,
   ErrorCodes,
   type ExamCourse,
+  NOTIFICATION_TYPE,
   type GrantSeriesBody,
   STUDENT_SERIES_SOURCE,
   type StudentGrantRow,
@@ -14,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditContext } from '../audit';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
+import { NotificationOutbox } from '../notifications';
 import { reachableBy } from './access-resolver.service';
 
 /** What a series reaches by, and what a student carries, as `reachableBy` weighs the two. */
@@ -71,6 +73,7 @@ export class StudentGrantsService {
     private readonly prisma: PrismaService,
     private readonly auditContext: AuditContext,
     private readonly events: DomainEventBus,
+    private readonly notifications: NotificationOutbox,
   ) {}
 
   async list(studentId: string): Promise<StudentGrantRow[]> {
@@ -159,22 +162,37 @@ export class StudentGrantsService {
     }
 
     const key = { studentId, testSeriesId: input.testSeriesId };
-    const held = await this.prisma.studentGrant.findUnique({
-      where: { studentId_testSeriesId: key },
-      select: { testSeriesId: true },
-    });
+    // One transaction, so the read that decides "is this new" cannot lose a race with a second grant.
+    const held = await this.prisma.$transaction(async (tx) => {
+      const already = await tx.studentGrant.findUnique({
+        where: { studentId_testSeriesId: key },
+        select: { testSeriesId: true },
+      });
 
-    // Granting twice is not an error: the roster it came from is often re-read.
-    await this.prisma.studentGrant.upsert({
-      where: { studentId_testSeriesId: key },
-      create: { ...key, createdById },
-      update: {},
+      // Granting twice is not an error: the roster it came from is often re-read.
+      await tx.studentGrant.upsert({
+        where: { studentId_testSeriesId: key },
+        create: { ...key, createdById },
+        update: {},
+      });
+
+      // Only what the grant CHANGED is told: re-reading a roster must not ring the bell again.
+      if (!already) {
+        await this.notifications.request(tx, {
+          studentId,
+          type: NOTIFICATION_TYPE.GRANT_ADDED,
+          title: 'A test series was added to your account',
+          body: 'Your institute has given you access to it.',
+          dedupeKey: `grant:${input.testSeriesId}`,
+          testSeriesId: input.testSeriesId,
+        });
+      }
+      return already;
     });
 
     // A grant has no row of its own to name — it is filed against the student it was made about.
     this.auditContext.setEntityId(studentId);
     this.events.emit(DOMAIN_EVENTS.STUDENT_ACCESS_CHANGED, { studentId });
-    // Only what the grant CHANGED is announced: re-reading a roster must not ring the bell again.
     if (!held) this.events.emit(DOMAIN_EVENTS.SERIES_GRANTED, key);
 
     return this.list(studentId);

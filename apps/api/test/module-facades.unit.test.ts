@@ -14,6 +14,7 @@ import {
   FakeRedis,
   makeBranch,
   makeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /**
@@ -120,6 +121,7 @@ function studentsWith(student = makeStudent()) {
       null as never,
       null as never,
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
     student,
   };
@@ -208,6 +210,7 @@ describe('the counts the configs module asks for', () => {
       null as never,
       null as never,
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     );
 
     assert.equal(await students.countEnrolledIn('SSC CGL'), 2);

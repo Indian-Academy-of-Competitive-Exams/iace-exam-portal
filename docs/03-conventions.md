@@ -185,9 +185,9 @@ there for whatever wants to hear about it later.
 | `student.pin_reset`                             | auth, both reset paths                                                                                        | —                                            | announced |
 | `student.access_changed`                        | students (enrolments, programs, branch, block, deactivation), access (grant / revoke), events (roster change) | access (busts that student's cached catalog) | wired     |
 | `access.catalog_changed`                        | access (series write), tests (finalize and every offering write)                                              | access (busts every cached catalog)          | wired     |
-| `student.enrolment_added`                       | students, carrying only the exam codes one save ADDED                                                         | notifications                                | wired     |
-| `series.granted`                                | access, on a grant that did not already exist                                                                 | notifications                                | wired     |
-| `scoring.completed`                             | the scoring worker                                                                                            | notifications (result ready)                 | wired     |
+| `student.enrolment_added`                       | students, carrying only the exam codes one save ADDED                                                         | —                                            | announced |
+| `series.granted`                                | access, on a grant that did not already exist                                                                 | —                                            | announced |
+| `scoring.completed`                             | the scoring worker                                                                                            | —                                            | announced |
 | `attempt.submitted`                             | —                                                                                                             | —                                            | declared  |
 | `test.assigned`                                 | —                                                                                                             | —                                            | declared  |
 | `paperQuestion.dropped` / `paperQuestion.bonus` | —                                                                                                             | —                                            | declared  |
@@ -196,8 +196,20 @@ Submit and scoring do not go through the bus: they go through `OutboxEvent` and 
 queue, which is the durable path and the right one for a write that must not be lost. The rollup
 fold rides one of those outbox rows, and the row's type string reuses the `scoring.completed` name —
 same words, different mechanism, and the bus never sees it. The declared names are reserved for the
-reactions that would layer on top of the durable path: a notification on submit, a notification when
-a test is assigned, a rescore when a paper question is dropped or made a bonus.
+reactions that would layer on top of the durable path: a notification on submit, a rescore when a
+paper question is dropped or made a bonus.
+
+**Notifications left the bus for the same reason.** They used to be `@OnEvent` handlers that
+swallowed their own failure, so a result-ready could be lost between the scoring that produced it
+and the row a student reads, with nothing to retry it and nothing to say it had gone. Each producer
+now writes a `notification.requested` outbox row inside its OWN transaction — the fact and the
+intent to tell somebody commit together — and `NotificationOutbox` relays it. The three events above
+are still emitted and are now **announced**: the work they describe is done by the producer inline,
+and the name stays for whatever wants to hear it later.
+
+This inverts one guarantee deliberately. A notification that cannot be written now FAILS the write
+that caused it, where before it was swallowed. That is the point: rolling the grant back is
+recoverable, and a student silently never told is not.
 
 Rule: any cross-module _reaction_ goes through this catalog as an event, not a direct call.
 

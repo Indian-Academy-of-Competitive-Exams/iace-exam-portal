@@ -22,6 +22,7 @@ import {
   makeStudent,
   type FakeExam,
   type FakeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 /** The catalog, exercised through the service rather than its rule helpers. */
@@ -38,6 +39,7 @@ function serviceWith(exams: FakeExam[] = [makeExam()], students: FakeStudent[] =
       null as never,
       null as never,
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
     new AuditContext(),
   );

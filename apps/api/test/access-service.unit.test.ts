@@ -21,6 +21,7 @@ import {
   makeProgram,
   makeSeries,
   makeStudent,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 const ADMIN = 'adm_1';
@@ -59,7 +60,12 @@ function build(
       auditContext,
       events.asService(),
     ),
-    grants: new StudentGrantsService(prisma.asService(), auditContext, events.asService()),
+    grants: new StudentGrantsService(
+      prisma.asService(),
+      auditContext,
+      events.asService(),
+      fakeNotificationOutbox(),
+    ),
   };
 }
 

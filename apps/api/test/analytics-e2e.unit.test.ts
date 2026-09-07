@@ -28,6 +28,7 @@ import {
   mcqOptions,
   type FakeAttemptRow,
   type FakeServedAnswerRow,
+  fakeNotificationOutbox,
 } from './support/fakes';
 
 const TEST_ID = 'tst_1';
@@ -181,6 +182,7 @@ function platform() {
       leaderboard,
       fakeRollupOutbox(scoringPrisma, new FakeQueue()),
       new FakeEventBus().asService(),
+      fakeNotificationOutbox(),
     ),
     shares: new PerformanceShareService(
       sharePrisma.asService(),

@@ -1,7 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, type OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { type Queue } from 'bullmq';
 import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
-import { NotificationsListener } from './notifications.listener';
+import { NOTIFICATION_JOBS, NOTIFICATION_SWEEP_EVERY_MS, QUEUE_NAMES } from '../queue/queues';
 import { NotificationsService } from './notifications.service';
 import { NotificationOutbox } from './notification-outbox';
 import { NotificationsProcessor } from './notifications.processor';
@@ -12,11 +14,21 @@ import { NotificationDeliveryProcessor } from './notification-delivery.processor
   imports: [PrismaModule, QueueModule],
   providers: [
     NotificationsService,
-    NotificationsListener,
     NotificationOutbox,
     NotificationsProcessor,
     NotificationDeliveryProcessor,
   ],
   exports: [NotificationsService, NotificationOutbox],
 })
-export class NotificationsModule {}
+export class NotificationsModule implements OnModuleInit {
+  constructor(@InjectQueue(QUEUE_NAMES.NOTIFICATIONS) private readonly notifications: Queue) {}
+
+  /** Fixed scheduler id: what stops a redeploy from stacking a second sweep. */
+  async onModuleInit(): Promise<void> {
+    await this.notifications.upsertJobScheduler(
+      NOTIFICATION_JOBS.SWEEP,
+      { every: NOTIFICATION_SWEEP_EVERY_MS },
+      { name: NOTIFICATION_JOBS.SWEEP },
+    );
+  }
+}
