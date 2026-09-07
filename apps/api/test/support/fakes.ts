@@ -62,7 +62,11 @@ import { type RedisService } from '../../src/redis/redis.service';
 import { type MetricsService } from '../../src/common/metrics';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type StorageService } from '../../src/storage/storage.service';
-import { type MessageSender, type OutboundMessage } from '../../src/common/messaging';
+import {
+  type MessageChannel,
+  type MessageSender,
+  type OutboundMessage,
+} from '../../src/common/messaging';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
 import { type PinService } from '../../src/auth/pin/pin.service';
@@ -354,7 +358,14 @@ export class FakeConfig {
 export class FakeMessageSender implements MessageSender {
   readonly sent: OutboundMessage[] = [];
 
+  /** Channels this provider pretends it cannot reach, so a fallback has something to catch. */
+  constructor(private readonly unreachable: readonly MessageChannel[] = []) {}
+
   send(message: OutboundMessage): Promise<void> {
+    if (this.unreachable.includes(message.channel)) {
+      return Promise.reject(new Error(`${message.channel} is down`));
+    }
+
     this.sent.push(message);
     return Promise.resolve();
   }

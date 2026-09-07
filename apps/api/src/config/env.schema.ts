@@ -54,10 +54,18 @@ export const NODE_ENVS = {
   PRODUCTION: 'production',
 } as const;
 
-/** Outbound delivery. CONSOLE is refused in production; SMS is the aggregator configured below. */
+/** Outbound delivery. CONSOLE is refused in production; WHATSAPP still needs SMS behind it. */
 export const OTP_SENDERS = {
   CONSOLE: 'console',
   SMS: 'sms',
+  WHATSAPP: 'whatsapp',
+} as const;
+
+/** Who carries WhatsApp. Meta direct or Interakt in front of it — the same platform either way. */
+export const WHATSAPP_PROVIDERS = {
+  NONE: 'none',
+  CLOUD: 'cloud',
+  INTERAKT: 'interakt',
 } as const;
 
 /** A body-parser size, in the form `bytes` understands: 100b, 256kb, 10mb. */
@@ -157,6 +165,23 @@ export const envSchema = z.object({
   SMS_TEMPLATE_RESULT_READY: optional,
   SMS_TEMPLATE_TEST_ASSIGNED: optional,
   SMS_TEMPLATE_TEST_REMINDER: optional,
+
+  // WhatsApp, as a shape rather than a vendor: Meta's Cloud API direct, or Interakt in front of it.
+  WHATSAPP_PROVIDER: z.enum(WHATSAPP_PROVIDERS).default(WHATSAPP_PROVIDERS.NONE),
+  // The language a template was REGISTERED in. A mismatch is rejected, not translated.
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en'),
+  WHATSAPP_CLOUD_PHONE_NUMBER_ID: optional,
+  WHATSAPP_CLOUD_ACCESS_TOKEN: optional,
+  WHATSAPP_CLOUD_API_VERSION: z.string().default('v23.0'),
+  WHATSAPP_INTERAKT_URL: z.string().default('https://api.interakt.ai/v1/public/message/'),
+  WHATSAPP_INTERAKT_API_KEY: optional,
+
+  // One approved template name per kind, same rule as the DLT ids above.
+  WHATSAPP_TEMPLATE_OTP: optional,
+  WHATSAPP_TEMPLATE_PIN: optional,
+  WHATSAPP_TEMPLATE_RESULT_READY: optional,
+  WHATSAPP_TEMPLATE_TEST_ASSIGNED: optional,
+  WHATSAPP_TEMPLATE_TEST_REMINDER: optional,
 });
 
 /** An empty allowlist reflects whatever origin asks, which is no allowlist at all. */

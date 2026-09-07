@@ -9,6 +9,7 @@ export const MESSAGE_SENDER = Symbol('MESSAGE_SENDER');
 export const MESSAGE_CHANNELS = {
   SMS: 'sms',
   EMAIL: 'email',
+  WHATSAPP: 'whatsapp',
   IN_APP: 'in_app',
 } as const;
 
@@ -28,6 +29,9 @@ export const MESSAGE_KINDS = {
 } as const;
 
 export type MessageKind = (typeof MESSAGE_KINDS)[keyof typeof MESSAGE_KINDS];
+
+/** The kinds a sender is WAITING on: nobody gets in without them, so a missing template is fatal. */
+export const REQUIRED_KINDS = new Set<MessageKind>([MESSAGE_KINDS.OTP, MESSAGE_KINDS.PIN]);
 
 export interface OutboundMessage {
   channel: MessageChannel;

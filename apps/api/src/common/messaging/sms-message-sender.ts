@@ -9,13 +9,11 @@ import { AppConfigService } from '../../config/app-config.service';
 import {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
+  REQUIRED_KINDS,
   type MessageKind,
   type MessageSender,
   type OutboundMessage,
 } from './message-sender';
-
-/** The two the sender is WAITING on: nobody gets in without them, so a missing template is fatal. */
-const REQUIRED_KINDS = new Set<MessageKind>([MESSAGE_KINDS.OTP, MESSAGE_KINDS.PIN]);
 
 /** Which env var carries each kind's registered template. Adding a kind is adding a line to both. */
 const TEMPLATE_KEYS = {

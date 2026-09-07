@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import {
   ActorTypes,
@@ -23,6 +23,8 @@ import { type StoredOtp } from '../auth.types';
 /** OTP lifecycle. */
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
+
   constructor(
     private readonly redis: RedisService,
     private readonly config: AppConfigService,
@@ -67,16 +69,7 @@ export class OtpService {
       await this.redis.client.set(cooldownKey, '1', 'EX', cooldownSec);
     }
 
-    await this.sender.send({
-      channel: channelFor(actor),
-      kind: MESSAGE_KINDS.OTP,
-      to: identifier,
-      actor,
-      subject: 'Your IACE verification code',
-      body: `${code} is your IACE verification code. It expires in ${ttlSec} seconds.`,
-      // The SMS provider fills its DLT template from these; console and email send `body` as written.
-      data: { code, ttlSec },
-    });
+    await this.deliver(actor, identifier, code, ttlSec);
 
     return {
       sent: true,
@@ -89,6 +82,34 @@ export class OtpService {
         ? { devCode: code }
         : {}),
     };
+  }
+
+  /** WhatsApp first where it is on, SMS the moment it does not — a student is waiting. */
+  private async deliver(
+    actor: ActorType,
+    identifier: string,
+    code: string,
+    ttlSec: number,
+  ): Promise<void> {
+    const message = {
+      kind: MESSAGE_KINDS.OTP,
+      to: identifier,
+      actor,
+      subject: 'Your IACE verification code',
+      // The SMS provider fills its DLT template from these; console and email send `body` as written.
+      body: `${code} is your IACE verification code. It expires in ${ttlSec} seconds.`,
+      data: { code, ttlSec },
+    };
+
+    const channel = channelFor(actor, this.config);
+    try {
+      await this.sender.send({ ...message, channel });
+    } catch (error) {
+      if (channel !== MESSAGE_CHANNELS.WHATSAPP) throw error;
+
+      this.logger.warn(`WhatsApp OTP failed for ${actor}, falling back to SMS`);
+      await this.sender.send({ ...message, channel: MESSAGE_CHANNELS.SMS });
+    }
   }
 
   /**
@@ -146,6 +167,10 @@ export class OtpService {
  * Students are reached on the mobile number they signed up with, admins on their email address —
  * the same split the two identity tables have.
  */
-function channelFor(actor: ActorType): MessageChannel {
-  return actor === ActorTypes.STUDENT ? MESSAGE_CHANNELS.SMS : MESSAGE_CHANNELS.EMAIL;
+function channelFor(actor: ActorType, config: AppConfigService): MessageChannel {
+  if (actor !== ActorTypes.STUDENT) return MESSAGE_CHANNELS.EMAIL;
+
+  return config.get('OTP_SENDER') === OTP_SENDERS.WHATSAPP
+    ? MESSAGE_CHANNELS.WHATSAPP
+    : MESSAGE_CHANNELS.SMS;
 }

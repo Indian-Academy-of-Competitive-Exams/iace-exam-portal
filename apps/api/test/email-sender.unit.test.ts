@@ -84,30 +84,48 @@ describe('EmailMessageSender', () => {
 });
 
 describe('RoutedMessageSender', () => {
-  const both = () => {
+  const all = () => {
     const sms = new FakeMessageSender();
     const email = new FakeMessageSender();
-    return { sms, email, routed: new RoutedMessageSender(sms, email) };
+    const whatsapp = new FakeMessageSender();
+    const routed = new RoutedMessageSender({
+      [MESSAGE_CHANNELS.SMS]: sms,
+      [MESSAGE_CHANNELS.EMAIL]: email,
+      [MESSAGE_CHANNELS.WHATSAPP]: whatsapp,
+    });
+    return { sms, email, whatsapp, routed };
   };
 
-  /** A student is reached by SMS and an admin by email, which is the whole reason this exists. */
+  /** A student is reached by WhatsApp or SMS and an admin by email — the whole reason this exists. */
   it('sends each channel to the provider that speaks it', async () => {
-    const { sms, email, routed } = both();
+    const { sms, email, whatsapp, routed } = all();
 
     await routed.send(message({ channel: MESSAGE_CHANNELS.SMS, to: '9876543210' }));
+    await routed.send(message({ channel: MESSAGE_CHANNELS.WHATSAPP, to: '9812345678' }));
     await routed.send(message());
 
     assert.equal(sms.lastMessage.to, '9876543210');
+    assert.equal(whatsapp.lastMessage.to, '9812345678');
     assert.equal(email.lastMessage.to, 'admin@iace.co.in');
   });
 
   /** An in-app notification is a row somebody reads, never a message anybody sends. */
   it('refuses a channel nothing delivers', async () => {
-    const { routed } = both();
+    const { routed } = all();
 
     await assert.rejects(
       (routed as MessageSender).send(message({ channel: MESSAGE_CHANNELS.IN_APP })),
       /in_app/,
     );
+  });
+
+  /** WhatsApp switched off must route nowhere, rather than fall through to a provider that lies. */
+  it('refuses WhatsApp when nobody is carrying it', async () => {
+    const routed = new RoutedMessageSender({
+      [MESSAGE_CHANNELS.SMS]: new FakeMessageSender(),
+      [MESSAGE_CHANNELS.EMAIL]: new FakeMessageSender(),
+    });
+
+    await assert.rejects(routed.send(message({ channel: MESSAGE_CHANNELS.WHATSAPP })), /whatsapp/);
   });
 });
