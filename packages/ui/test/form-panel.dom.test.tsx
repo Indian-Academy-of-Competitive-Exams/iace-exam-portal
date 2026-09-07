@@ -9,6 +9,61 @@ afterEach(cleanup);
 
 const scrollports = (root: HTMLElement) => root.querySelectorAll('.overflow-y-auto');
 
+describe('FormPanel — tabs are views of one record', () => {
+  const panel = (value: string, onValueChange = () => {}) => (
+    <FormPanel
+      disabled
+      footer={<button type="button">Save</button>}
+      tabs={{
+        value,
+        onValueChange,
+        items: [
+          { value: 'basics', label: 'Basic details', content: <Input aria-label="Name" /> },
+          {
+            value: 'tests',
+            label: 'Tests',
+            standalone: true,
+            content: <button type="button">Move</button>,
+          },
+        ],
+      }}
+    >
+      {null}
+    </FormPanel>
+  );
+
+  /** The failure this prevents: read-only froze the row actions of a list that saves itself. */
+  it('leaves a standalone tab live while the form is read-only', () => {
+    render(panel('tests'));
+
+    assert.ok(!screen.getByRole('button', { name: 'Move' }).matches(':disabled'), 'still live');
+  });
+
+  /** `.disabled` reflects an element's OWN attribute, so the guarantee is `:disabled`. */
+  it('still freezes a form tab when the form is read-only', () => {
+    render(panel('basics'));
+
+    assert.ok(screen.getByLabelText('Name').matches(':disabled'), 'the field is inert');
+  });
+
+  /** A tab that saves itself owns no part of the form, so the form's Save has nothing to do there. */
+  it('hides the footer on a standalone tab and shows it on a form tab', () => {
+    const { unmount } = render(panel('tests'));
+    assert.equal(screen.queryByRole('button', { name: 'Save' }), null);
+    unmount();
+
+    render(panel('basics'));
+    assert.ok(screen.getByRole('button', { name: 'Save' }));
+  });
+
+  /** A form spanning tabs must not lose what was typed on the one you looked away from. */
+  it('keeps a form tab mounted while another is open', () => {
+    render(panel('tests'));
+
+    assert.ok(screen.getByLabelText('Name'));
+  });
+});
+
 describe('FormPanel', () => {
   /** A card scrolling inside a frame that scrolls strands content between the two bars. */
   it('has exactly one scrollport', () => {

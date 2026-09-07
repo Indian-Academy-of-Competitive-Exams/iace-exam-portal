@@ -2,6 +2,21 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Card } from './card';
 import { Separator } from './separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
+
+export interface FormPanelTab {
+  value: string;
+  label: string;
+  content: React.ReactNode;
+  /** A tab that saves itself: outside the fieldset and without the footer, so read-only never freezes it. */
+  standalone?: boolean;
+}
+
+export interface FormPanelTabs {
+  value: string;
+  onValueChange: (value: string) => void;
+  items: readonly FormPanelTab[];
+}
 
 export interface FormPanelProps {
   /** Pinned above the card — a `PageHeader` and its trail. */
@@ -14,7 +29,9 @@ export interface FormPanelProps {
   disabled?: boolean;
   /** Below the fields behind a divider, OUTSIDE the fieldset — a section Edit does not own. */
   after?: React.ReactNode;
-  children: React.ReactNode;
+  /** Views of ONE record. The form spans every tab that is not `standalone`, under one footer. */
+  tabs?: FormPanelTabs;
+  children?: React.ReactNode;
   className?: string;
 }
 
@@ -35,15 +52,20 @@ export function FormPanel({
   onSubmit,
   disabled,
   after,
+  tabs,
   children,
   className,
 }: Readonly<FormPanelProps>) {
-  const body = (
+  const inForm = (content: React.ReactNode) => (
+    // A fieldset disables every control under it natively; `contents` keeps it out of the layout.
+    <fieldset disabled={disabled} className="contents">
+      <FormDisabled.Provider value={disabled ?? false}>{content}</FormDisabled.Provider>
+    </fieldset>
+  );
+
+  const plain = (
     <div className={cn(BODY, className)}>
-      {/* A fieldset disables every control under it natively; `contents` keeps it out of the layout. */}
-      <fieldset disabled={disabled} className="contents">
-        <FormDisabled.Provider value={disabled ?? false}>{children}</FormDisabled.Provider>
-      </fieldset>
+      {inForm(children)}
       {after ? (
         <>
           <Separator />
@@ -52,11 +74,53 @@ export function FormPanel({
       ) : null}
     </div>
   );
-  const foot = footer ? (
-    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-4">
-      {footer}
-    </div>
+
+  const strip = tabs ? (
+    <>
+      {/* The rule runs the card's full width, so the strip reads as the card's own edge. */}
+      <div className="shrink-0 border-b border-border px-6 pt-4">
+        <TabsList className="border-b-0">
+          {tabs.items.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+      {tabs.items.map((tab) => (
+        <TabsContent
+          key={tab.value}
+          value={tab.value}
+          // A form tab stays mounted: its values and its errors outlive a look at another tab.
+          forceMount={tab.standalone ? undefined : true}
+          className={cn(BODY, 'pt-6', className)}
+        >
+          {tab.standalone ? tab.content : inForm(tab.content)}
+        </TabsContent>
+      ))}
+    </>
   ) : null;
+
+  const body = tabs ? (
+    <Tabs
+      value={tabs.value}
+      onValueChange={tabs.onValueChange}
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      {strip}
+    </Tabs>
+  ) : (
+    plain
+  );
+
+  // A tab that saves itself owns no part of the form, so the form's Save has nothing to do there.
+  const onStandalone = tabs?.items.some((tab) => tab.value === tabs.value && tab.standalone);
+  const foot =
+    footer && !onStandalone ? (
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-4">
+        {footer}
+      </div>
+    ) : null;
 
   return (
     <div data-page-frame className="flex min-h-0 flex-1 flex-col">
