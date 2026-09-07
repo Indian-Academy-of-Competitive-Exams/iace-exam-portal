@@ -4,12 +4,14 @@
  * cards rather than a ListView.
  */
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfinitePages } from '@iace/app-kit';
 import { useFilterSpec } from '@iace/app-kit/browser';
 import { BellOff, SearchX } from 'lucide-react';
 import {
   Alert,
   Badge,
+  Button,
   EmptyState,
   PageHeader,
   PanelFrame,
@@ -62,26 +64,23 @@ export function NotificationsPage() {
   const filters = useFilterSpec(FILTERS);
   const unreadOnly = filters.values.state === READ_STATE.UNREAD;
 
-  const list = useQuery({
+  // Paged, not pinned to the first: a student with thirty results must be able to reach the oldest.
+  const list = useInfinitePages({
     queryKey: notificationsQueryKey(unreadOnly),
-    queryFn: () =>
+    fetchPage: (page) =>
       api.me.notifications({
         ...(unreadOnly ? { unreadOnly: 'true' } : {}),
-        page: 1,
+        page,
         pageSize: NOTIFICATIONS_PAGE_SIZE,
       }),
   });
 
-  const rows = list.data?.items ?? [];
-
   return (
     <PanelFrame
-      header={
-        <PageHeader title="Notifications" meta={plural(list.data?.total ?? 0, 'notification')} />
-      }
+      header={<PageHeader title="Notifications" meta={plural(list.total, 'notification')} />}
       filters={{ spec: FILTERS, state: filters }}
     >
-      <FeedRegion list={list} rows={rows} unreadOnly={unreadOnly} />
+      <FeedRegion list={list} rows={list.items} unreadOnly={unreadOnly} />
     </PanelFrame>
   );
 }
@@ -92,7 +91,13 @@ function FeedRegion({
   rows,
   unreadOnly,
 }: Readonly<{
-  list: { isLoading: boolean; isError: boolean };
+  list: {
+    isLoading: boolean;
+    isError: boolean;
+    isLoadingMore: boolean;
+    hasMore: boolean;
+    loadMore: () => void;
+  };
   rows: readonly Notification[];
   unreadOnly: boolean;
 }>) {
@@ -121,6 +126,17 @@ function FeedRegion({
       {rows.map((row) => (
         <NotificationCard key={row.id} notification={row} />
       ))}
+
+      {list.hasMore ? (
+        <Button
+          variant="outline"
+          className="self-center"
+          onClick={list.loadMore}
+          disabled={list.isLoadingMore}
+        >
+          Show older
+        </Button>
+      ) : null}
     </div>
   );
 }

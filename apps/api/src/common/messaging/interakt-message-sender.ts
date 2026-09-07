@@ -5,7 +5,12 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
-import { MESSAGE_CHANNELS, type MessageSender, type OutboundMessage } from './message-sender';
+import {
+  MESSAGE_CHANNELS,
+  MessageNotConfiguredError,
+  type MessageSender,
+  type OutboundMessage,
+} from './message-sender';
 import {
   INDIA_DIALLING_CODE,
   nationalMobile,
@@ -34,8 +39,9 @@ export class InteraktMessageSender implements MessageSender {
 
     const template = whatsappTemplateFor(this.config, message.kind, message.data);
     if (!template) {
+      // Off, not broken — but the caller is told, or it would record this as delivered.
       this.logger.warn(`Not sending "${message.kind}": no WhatsApp template is configured for it.`);
-      return;
+      throw new MessageNotConfiguredError(message.kind);
     }
 
     await this.post({

@@ -15,6 +15,7 @@ export {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
   MESSAGE_SENDER,
+  MessageNotConfiguredError,
   REQUIRED_KINDS,
   type MessageChannel,
   type MessageKind,

@@ -62,7 +62,8 @@ export const announcementStatsSchema = z.object({
 });
 export type AnnouncementStats = z.infer<typeof announcementStatsSchema>;
 
-export const announcementSchema = z.object({
+/** What the row itself carries. Counting the ledger per row would be six queries each. */
+export const announcementSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
   body: z.string(),
@@ -71,6 +72,11 @@ export const announcementSchema = z.object({
   estimatedCostPaise: z.number(),
   createdBy: z.object({ id: z.string(), fullName: z.string().nullable(), email: z.string() }),
   createdAt: z.string(),
+});
+export type AnnouncementSummary = z.infer<typeof announcementSummarySchema>;
+
+/** One announcement with its delivery counted — read when a row is opened, never per row. */
+export const announcementSchema = announcementSummarySchema.extend({
   stats: announcementStatsSchema,
 });
 export type Announcement = z.infer<typeof announcementSchema>;

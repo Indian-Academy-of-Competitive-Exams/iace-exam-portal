@@ -4283,6 +4283,20 @@ export class FakeNotificationsPrisma {
   private deliverySeq = 0;
 
   readonly notificationDelivery = {
+    upsert: ({
+      where,
+      create,
+    }: {
+      where: { notificationId_channel: { notificationId: string; channel: DeliveryChannel } };
+      create: { notificationId: string; channel: DeliveryChannel };
+    }) => {
+      const key = where.notificationId_channel;
+      const held = this.deliveries.find(
+        (row) => row.notificationId === key.notificationId && row.channel === key.channel,
+      );
+      return held ? Promise.resolve(held) : this.notificationDelivery.create({ data: create });
+    },
+
     create: ({ data }: { data: { notificationId: string; channel: DeliveryChannel } }) => {
       this.deliverySeq += 1;
       const row: FakeDeliveryRow = {

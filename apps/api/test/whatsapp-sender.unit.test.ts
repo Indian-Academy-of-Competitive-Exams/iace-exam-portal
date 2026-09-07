@@ -3,7 +3,12 @@ import { afterEach, describe, it } from 'node:test';
 import { ActorTypes } from '@iace/contracts';
 import { WhatsAppCloudMessageSender } from '../src/common/messaging/whatsapp-cloud-message-sender';
 import { InteraktMessageSender } from '../src/common/messaging/interakt-message-sender';
-import { MESSAGE_CHANNELS, MESSAGE_KINDS, type OutboundMessage } from '../src/common/messaging';
+import {
+  MESSAGE_CHANNELS,
+  MESSAGE_KINDS,
+  MessageNotConfiguredError,
+  type OutboundMessage,
+} from '../src/common/messaging';
 import { FakeConfig } from './support/fakes';
 
 const CONFIGURED = {
@@ -168,11 +173,14 @@ describe('A kind with no approved template', () => {
     );
   });
 
-  /** An announcement nobody registered a template for is off, not broken. */
-  it('is simply off for every other kind', async () => {
+  /** Off, not broken — but the caller is TOLD, or it would record a message nobody sent as sent. */
+  it('is off for every other kind, and says so rather than resolving', async () => {
     const calls = capture();
 
-    await cloud().send(message({ kind: MESSAGE_KINDS.RESULT_READY, data: { testId: 'tst_1' } }));
+    await assert.rejects(
+      cloud().send(message({ kind: MESSAGE_KINDS.RESULT_READY, data: { testId: 'tst_1' } })),
+      MessageNotConfiguredError,
+    );
 
     assert.equal(calls.length, 0);
   });

@@ -7,6 +7,7 @@ import {
   createAnnouncementSchema,
   type Announcement,
   type AnnouncementPreview,
+  type AnnouncementSummary,
   type CreateAnnouncementBody,
   type Paginated,
   type PaginationQuery,
@@ -25,7 +26,7 @@ export class AnnouncementsController {
   @Get()
   list(
     @Query(new ZodQuery(announcementListQuerySchema)) query: PaginationQuery,
-  ): Promise<Paginated<Announcement>> {
+  ): Promise<Paginated<AnnouncementSummary>> {
     return this.announcements.list(query);
   }
 

@@ -50,6 +50,14 @@ export interface OutboundMessage {
   data?: Record<string, string | number>;
 }
 
+/** A kind with no template is OFF, not broken — and not sent, which a recorder must tell apart. */
+export class MessageNotConfiguredError extends Error {
+  constructor(readonly kind: MessageKind) {
+    super(`No template is configured for "${kind}".`);
+    this.name = 'MessageNotConfiguredError';
+  }
+}
+
 export interface MessageSender {
   send(message: OutboundMessage): Promise<void>;
 }

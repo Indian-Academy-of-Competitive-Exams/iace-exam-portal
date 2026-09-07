@@ -65,29 +65,41 @@ export function escalationFor(
   type: NotificationType,
   actBy: Date | null,
   now: Date,
+  override?: readonly PaidChannel[],
 ): EscalationPlan {
   const policy = NOTIFICATION_POLICY[type];
-  if (policy.escalate.length === 0) return { channels: [], deferSec: 0 };
+  const channels = chainFor(type, override);
+  if (channels.length === 0) return { channels: [], deferSec: 0 };
 
   const leftToAct = actBy === null ? Infinity : actBy.getTime() - now.getTime();
   const cannotWait = leftToAct <= (policy.deferSec + ACTION_MARGIN_SEC) * MS;
 
-  return { channels: policy.escalate, deferSec: cannotWait ? 0 : policy.deferSec };
+  return { channels, deferSec: cannotWait ? 0 : policy.deferSec };
 }
 
-/** The escalate list as a plain sequence: the literal tuples narrow an empty one to `never[]`. */
-function chainFor(type: NotificationType): readonly PaidChannel[] {
-  return NOTIFICATION_POLICY[type].escalate;
+/** What governs ONE notification: an admin's own choice, or the kind's policy. Every reader asks this. */
+export function chainFor(
+  type: NotificationType,
+  override?: readonly PaidChannel[],
+): readonly PaidChannel[] {
+  return override ?? NOTIFICATION_POLICY[type].escalate;
 }
 
 /** The one channel tried first. The rest are a FALLBACK chain, not a fan-out — never booked together. */
-export function firstChannelFor(type: NotificationType): PaidChannel | null {
-  return chainFor(type)[0] ?? null;
+export function firstChannelFor(
+  type: NotificationType,
+  override?: readonly PaidChannel[],
+): PaidChannel | null {
+  return chainFor(type, override)[0] ?? null;
 }
 
 /** What to try when a channel has terminally failed. Null means this message has run out of road. */
-export function nextChannelAfter(type: NotificationType, channel: PaidChannel): PaidChannel | null {
-  const order = chainFor(type);
+export function nextChannelAfter(
+  type: NotificationType,
+  channel: PaidChannel,
+  override?: readonly PaidChannel[],
+): PaidChannel | null {
+  const order = chainFor(type, override);
   const at = order.indexOf(channel);
 
   return at >= 0 ? (order[at + 1] ?? null) : null;

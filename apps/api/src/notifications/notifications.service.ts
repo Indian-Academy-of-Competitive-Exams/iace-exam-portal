@@ -68,7 +68,7 @@ export class NotificationsService {
         });
 
         // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
-        const channel = input.escalate?.[0] ?? firstChannelFor(input.type);
+        const channel = firstChannelFor(input.type, input.escalate);
         if (channel) {
           await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
         }

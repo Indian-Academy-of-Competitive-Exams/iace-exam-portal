@@ -9,6 +9,7 @@ import { AppConfigService } from '../../config/app-config.service';
 import {
   MESSAGE_CHANNELS,
   MESSAGE_KINDS,
+  MessageNotConfiguredError,
   REQUIRED_KINDS,
   type MessageKind,
   type MessageSender,
@@ -43,12 +44,12 @@ export class SmsMessageSender implements MessageSender {
 
     const templateId = this.templateFor(message.kind);
     if (!templateId) {
-      // An announcement nobody registered a template for is off, not broken.
       if (REQUIRED_KINDS.has(message.kind)) {
         throw new Error(`No DLT template is configured for "${message.kind}".`);
       }
+      // Off, not broken — but the caller is told, or it would record this as delivered.
       this.logger.warn(`Not sending "${message.kind}": no DLT template is configured for it.`);
-      return;
+      throw new MessageNotConfiguredError(message.kind);
     }
 
     await this.post({

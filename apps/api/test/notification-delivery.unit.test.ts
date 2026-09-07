@@ -4,7 +4,11 @@ import { DeliveryChannel, DeliveryStatus } from '@prisma/client';
 import { NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
 import { NotificationDeliveryProcessor } from '../src/notifications/notification-delivery.processor';
 import { NotificationsService } from '../src/notifications/notifications.service';
-import { MESSAGE_CHANNELS } from '../src/common/messaging';
+import {
+  MESSAGE_CHANNELS,
+  MessageNotConfiguredError,
+  type MessageSender,
+} from '../src/common/messaging';
 import { FakeMessageSender, FakeNotificationsPrisma, FakeQueue } from './support/fakes';
 
 /** The only place money is spent, so every branch here is either a send or a decision not to. */
@@ -123,5 +127,32 @@ describe('When a channel will not take it', () => {
 
     assert.equal(prisma.deliveries.length, 1);
     assert.equal(queue.jobs.length, 0);
+  });
+});
+
+describe('A channel with no template registered', () => {
+  /** Prevents a sender that resolves without sending being recorded as delivered. */
+  it('is recorded as skipped, never as sent', async () => {
+    const prisma = new FakeNotificationsPrisma([], MOBILES);
+    const service = new NotificationsService(prisma.asService());
+    const unconfigured: MessageSender = {
+      send: () => Promise.reject(new MessageNotConfiguredError('announcement')),
+    };
+    const processor = new NotificationDeliveryProcessor(
+      prisma.asService(),
+      service,
+      unconfigured,
+      new FakeQueue().asQueue(),
+    );
+    await service.create({
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.RESULT_READY,
+      title: 'Your result is ready',
+    });
+
+    await processor.deliver(prisma.deliveries[0]?.id ?? '', 1);
+
+    assert.equal(prisma.deliveries[0]?.status, DeliveryStatus.SKIPPED);
+    assert.equal(prisma.deliveries[0]?.skipReason, 'NO_TEMPLATE');
   });
 });

@@ -131,7 +131,9 @@ import {
   ANNOUNCEMENT_ROUTES,
   announcementPreviewSchema,
   announcementSchema,
+  announcementSummarySchema,
   type Announcement,
+  type AnnouncementSummary,
   type AnnouncementListQueryInput,
   type AnnouncementPreview,
   type CreateAnnouncementInput,
@@ -763,9 +765,9 @@ export function createApiClient(options: ApiClientOptions) {
     admin: {
       /** What an admin says to a cohort, and what reaching them cost. */
       announcements: {
-        list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<Announcement>> =>
+        list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<AnnouncementSummary>> =>
           requestPaginated(`${ANNOUNCEMENT_ROUTES.list}${queryString({ ...query })}`, {
-            schema: announcementSchema.array(),
+            schema: announcementSummarySchema.array(),
           }),
 
         /** Asked while composing. Changes nothing — the cohort is read off the body. */

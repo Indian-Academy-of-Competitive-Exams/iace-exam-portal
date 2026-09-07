@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell } from 'lucide-react';
-import { Button, Tooltip, TooltipContent, TooltipTrigger, plural } from '@iace/ui';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
 import { api } from '../lib/api';
 import { ROUTES, UNREAD_POLL_MS, UNREAD_QUERY_KEY } from '../lib/constants';
 
@@ -17,7 +17,7 @@ export function NotificationBell() {
   });
 
   const count = unread.data?.total ?? 0;
-  const label = count > 0 ? `Notifications, ${plural(count, 'unread')}` : 'Notifications';
+  const label = count > 0 ? `Notifications, ${count} unread` : 'Notifications';
 
   return (
     <Tooltip>

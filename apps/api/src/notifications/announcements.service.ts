@@ -14,6 +14,7 @@ import {
   type AnnouncementChannel,
   type AnnouncementPreview,
   type AnnouncementStats,
+  type AnnouncementSummary,
   type CreateAnnouncementBody,
   type PaginationQuery,
   type Paginated,
@@ -25,10 +26,15 @@ import { SKIP_REASONS, type PaidChannel } from './notification-policy';
 import { NotificationOutbox, type NotificationIntent } from './notification-outbox';
 
 /** How many recipients one fan-out writes per statement. */
-const CHUNK = 500;
+const CHUNK = 1000;
 
-/** A cohort is read by id only: the rest of a student row is not what a fan-out needs. */
-const RECIPIENT_SELECT = { id: true, mobile: true } as const;
+/** Prisma's interactive default is 5s, which a 50,000-row fan-out does not fit in. */
+const FAN_OUT_TIMEOUT_MS = 120_000;
+
+const FAN_OUT_MAX_WAIT_MS = 10_000;
+
+/** A cohort is read by id alone: nothing else about a student is what a fan-out needs. */
+const RECIPIENT_SELECT = { id: true } as const;
 
 @Injectable()
 export class AnnouncementsService {
@@ -62,44 +68,54 @@ export class AnnouncementsService {
 
   /** One transaction, so a crash cannot leave half a cohort told and no record of the send. */
   async send(input: CreateAnnouncementBody, createdById: string): Promise<Announcement> {
-    const priced = await this.preview(input.audience, input.paidChannels);
-    if (priced.overCap) {
+    const cap = this.config.get('NOTIFICATION_MAX_RECIPIENTS');
+    const where = cohortWhere(input.audience);
+
+    // Judged on the rows fetched, not an earlier count: `cap + 1` both bounds and detects.
+    const recipients = await this.prisma.student.findMany({
+      where,
+      select: RECIPIENT_SELECT,
+      take: cap + 1,
+    });
+
+    if (recipients.length > cap) {
       throw new AppException(
         ErrorCodes.VALIDATION_ERROR,
-        `That reaches ${priced.recipientCount} students, over the ${priced.cap} a single send allows`,
+        `That reaches more than the ${cap} students a single send allows`,
       );
     }
-    if (priced.recipientCount === 0) {
+    if (recipients.length === 0) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, 'That reaches nobody');
     }
 
-    const recipients = await this.prisma.student.findMany({
-      where: cohortWhere(input.audience),
-      select: RECIPIENT_SELECT,
-    });
+    const reachable = await this.prisma.student.count({ where: { ...where, mobile: { not: '' } } });
+    const estimatedCostPaise = this.priceOf(reachable, input.paidChannels);
 
-    const id = await this.prisma.$transaction(async (tx) => {
-      const announcement = await tx.announcement.create({
-        data: {
-          title: input.title,
-          body: input.body,
-          audience: input.audience as unknown as Prisma.InputJsonValue,
-          paidChannels: [...input.paidChannels],
-          recipientCount: recipients.length,
-          estimatedCostPaise: priced.estimatedCostPaise,
-          createdById,
-        },
-        select: { id: true },
-      });
+    const id = await this.prisma.$transaction(
+      async (tx) => {
+        const announcement = await tx.announcement.create({
+          data: {
+            title: input.title,
+            body: input.body,
+            audience: input.audience as unknown as Prisma.InputJsonValue,
+            paidChannels: [...input.paidChannels],
+            recipientCount: recipients.length,
+            estimatedCostPaise,
+            createdById,
+          },
+          select: { id: true },
+        });
 
-      for (const batch of chunked(recipients)) {
-        await this.outbox.requestMany(
-          tx,
-          batch.map((student) => this.intentFor(student.id, announcement.id, input)),
-        );
-      }
-      return announcement.id;
-    });
+        for (const batch of chunked(recipients)) {
+          await this.outbox.requestMany(
+            tx,
+            batch.map((student) => this.intentFor(student.id, announcement.id, input)),
+          );
+        }
+        return announcement.id;
+      },
+      { maxWait: FAN_OUT_MAX_WAIT_MS, timeout: FAN_OUT_TIMEOUT_MS },
+    );
 
     return this.detail(id);
   }
@@ -134,7 +150,8 @@ export class AnnouncementsService {
     return leading ? reachable * (rate[leading] ?? 0) : 0;
   }
 
-  async list(query: PaginationQuery): Promise<Paginated<Announcement>> {
+  /** Rows only. Counting the ledger per row would be six queries each; the panel asks for its own. */
+  async list(query: PaginationQuery): Promise<Paginated<AnnouncementSummary>> {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.announcement.findMany({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -145,13 +162,7 @@ export class AnnouncementsService {
       this.prisma.announcement.count(),
     ]);
 
-    const stats = await Promise.all(rows.map((row) => this.statsOf(row.id)));
-    return {
-      items: rows.map((row, at) => toAnnouncement(row, stats[at] as AnnouncementStats)),
-      page: query.page,
-      pageSize: query.pageSize,
-      total,
-    };
+    return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
   }
 
   async detail(id: string): Promise<Announcement> {
@@ -161,7 +172,7 @@ export class AnnouncementsService {
     });
     if (!row) throw new AppException(ErrorCodes.NOT_FOUND, 'No such announcement');
 
-    return toAnnouncement(row, await this.statsOf(id));
+    return { ...toSummary(row), stats: await this.statsOf(id) };
   }
 
   /** Counted off the ledger rather than stored: a delivery's status keeps moving after the send. */
@@ -212,7 +223,7 @@ interface AnnouncementRow {
   createdBy: { id: string; fullName: string | null; email: string };
 }
 
-function toAnnouncement(row: AnnouncementRow, stats: AnnouncementStats): Announcement {
+function toSummary(row: AnnouncementRow): AnnouncementSummary {
   return {
     id: row.id,
     title: row.title,
@@ -222,6 +233,5 @@ function toAnnouncement(row: AnnouncementRow, stats: AnnouncementStats): Announc
     estimatedCostPaise: row.estimatedCostPaise,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
-    stats,
   };
 }

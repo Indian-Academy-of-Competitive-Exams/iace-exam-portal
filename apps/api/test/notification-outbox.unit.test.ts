@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DeliveryChannel } from '@prisma/client';
 import { NOTIFICATION_TYPE } from '@iace/contracts';
 import { NotificationOutbox } from '../src/notifications/notification-outbox';
 import { NotificationsProcessor } from '../src/notifications/notifications.processor';
@@ -129,5 +130,46 @@ describe('Acting on a relayed request', () => {
     await processor.write('obx_missing');
 
     assert.equal(prisma.rows.length, 0);
+  });
+});
+
+describe('An announcement, end to end', () => {
+  /** Prevents a scheduler asking POLICY, not what was BOOKED, leaving every announcement unsent. */
+  it('books the channel an admin chose and actually queues it', async () => {
+    const { prisma, deliveries, outbox, processor } = build();
+    const eventId = await outbox.request(prisma.asService(), {
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Branch closed tomorrow',
+      dedupeKey: 'announcement:anc_1',
+      announcementId: 'anc_1',
+      escalate: [DeliveryChannel.WHATSAPP],
+    });
+
+    await processor.write(eventId);
+
+    assert.deepEqual(
+      prisma.deliveries.map((delivery) => delivery.channel),
+      [DeliveryChannel.WHATSAPP],
+    );
+    assert.equal(deliveries.jobs.length, 1, 'booked is not enough; it has to be queued');
+  });
+
+  /** An in-app-only announcement spends nothing, so there is nothing to book and nothing to queue. */
+  it('queues nothing when the admin chose no paid channel', async () => {
+    const { prisma, deliveries, outbox, processor } = build();
+    const eventId = await outbox.request(prisma.asService(), {
+      studentId: 'stu_1',
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Branch closed tomorrow',
+      announcementId: 'anc_1',
+      escalate: [],
+    });
+
+    await processor.write(eventId);
+
+    assert.equal(prisma.rows.length, 1);
+    assert.equal(prisma.deliveries.length, 0);
+    assert.equal(deliveries.jobs.length, 0);
   });
 });

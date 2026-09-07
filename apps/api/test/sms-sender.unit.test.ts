@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { ActorTypes } from '@iace/contracts';
 import { SmsMessageSender } from '../src/common/messaging/sms-message-sender';
-import { MESSAGE_CHANNELS, MESSAGE_KINDS, type OutboundMessage } from '../src/common/messaging';
+import {
+  MESSAGE_CHANNELS,
+  MESSAGE_KINDS,
+  MessageNotConfiguredError,
+  type OutboundMessage,
+} from '../src/common/messaging';
 import { FakeConfig } from './support/fakes';
 
 const CONFIGURED = {
@@ -67,10 +72,14 @@ describe('SmsMessageSender', () => {
   });
 
   /** Turning a message on is registering its template — a code change would defeat the point. */
+  /** Off, not broken — but the caller is TOLD, or it would record a message nobody sent as sent. */
   it('does not send an announcement whose template nobody has registered', async () => {
     const calls = capture();
 
-    await sender().send(message({ kind: MESSAGE_KINDS.RESULT_READY }));
+    await assert.rejects(
+      sender().send(message({ kind: MESSAGE_KINDS.RESULT_READY })),
+      MessageNotConfiguredError,
+    );
 
     assert.equal(calls.length, 0);
   });

@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   MESSAGE_KINDS,
   MESSAGE_SENDER,
+  MessageNotConfiguredError,
   type MessageKind,
   type MessageSender,
 } from '../common/messaging';
@@ -71,7 +72,14 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       where: { id: deliveryId },
       include: { notification: { include: { announcement: true } } },
     });
-    if (!row || row.status !== DeliveryStatus.PENDING) return;
+    if (!row) return;
+
+    // Already failed means booking the NEXT channel threw; both are keyed, so asking again repairs.
+    if (row.status === DeliveryStatus.FAILED) {
+      await this.fallBack(row.notification, row.channel as PaidChannel);
+      return;
+    }
+    if (row.status !== DeliveryStatus.PENDING) return;
 
     // The grace window's whole purpose: the free channels already reached them, so this is free too.
     if (row.notification.isRead) {
@@ -109,6 +117,13 @@ export class NotificationDeliveryProcessor extends WorkerHost {
         data: { status: DeliveryStatus.SENT, sentAt: new Date(), attempts: attempt },
       });
     } catch (error) {
+      // Nothing was sent and nothing will be: retrying a template that does not exist buys nothing.
+      if (error instanceof MessageNotConfiguredError) {
+        await this.skip(deliveryId, SKIP_REASONS.NO_TEMPLATE);
+        await this.fallBack(row.notification, channel);
+        return;
+      }
+
       await this.recordFailure(deliveryId, attempt, error);
 
       // Under the cap this rethrows, which is what tells BullMQ to back off and try the SAME channel.
@@ -141,14 +156,18 @@ export class NotificationDeliveryProcessor extends WorkerHost {
 
   /** Books the next channel in the chain. Nothing to book means this message has run out of road. */
   private async fallBack(notification: NotificationWithChain, from: PaidChannel): Promise<void> {
-    const next = nextInChain(notification, from);
+    const chosen = notification.announcement?.paidChannels as PaidChannel[] | undefined;
+    const next = nextChannelAfter(notification.type, from, chosen);
     if (!next) {
       this.logger.warn(`Notification ${notification.id} could not be delivered on any channel`);
       return;
     }
 
-    const booked = await this.prisma.notificationDelivery.create({
-      data: { notificationId: notification.id, channel: next },
+    // Upsert, not create: a repair pass must find the row it made last time rather than collide.
+    const booked = await this.prisma.notificationDelivery.upsert({
+      where: { notificationId_channel: { notificationId: notification.id, channel: next } },
+      create: { notificationId: notification.id, channel: next },
+      update: {},
     });
     await this.deliveries.add(
       QUEUE_NAMES.NOTIFICATION_DELIVERY,
@@ -156,15 +175,6 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       { jobId: notificationDeliveryJobId(booked.id) },
     );
   }
-}
-
-/** An announcement's chain is what the ADMIN chose to spend on it; everything else follows policy. */
-function nextInChain(notification: NotificationWithChain, from: PaidChannel): PaidChannel | null {
-  const chosen = notification.announcement?.paidChannels as PaidChannel[] | undefined;
-  if (!chosen) return nextChannelAfter(notification.type, from);
-
-  const at = chosen.indexOf(from);
-  return at >= 0 ? (chosen[at + 1] ?? null) : null;
 }
 
 function variablesOf(data: unknown): Record<string, string | number> | undefined {

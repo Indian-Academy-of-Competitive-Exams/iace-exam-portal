@@ -71,13 +71,14 @@ export class NotificationsProcessor extends WorkerHost {
 
   /** The grace window: the free channels get this long before a paid one is bought. */
   private async schedule(notificationId: string, intent: NotificationIntent): Promise<void> {
-    const plan = escalationFor(intent.type, intent.actBy ?? null, new Date());
-    if (plan.channels.length === 0) return;
-
+    // The BOOKED rows are the truth about what may be spent; policy only says how long to wait.
     const booked = await this.prisma.notificationDelivery.findMany({
       where: { notificationId, status: DeliveryStatus.PENDING },
       select: { id: true },
     });
+    if (booked.length === 0) return;
+
+    const plan = escalationFor(intent.type, intent.actBy ?? null, new Date(), intent.escalate);
 
     for (const row of booked) {
       await this.deliveries.add(

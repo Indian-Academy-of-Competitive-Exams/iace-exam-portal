@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { FEATURE_KEYS, PERMISSION_LEVELS, type Announcement } from '@iace/contracts';
-import { useQueryClient } from '@tanstack/react-query';
+import { FEATURE_KEYS, PERMISSION_LEVELS, type AnnouncementSummary } from '@iace/contracts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
@@ -11,6 +11,7 @@ import {
   Metric,
   MetricGroup,
   PageHeader,
+  Skeleton,
   TableFrame,
   TruncatedText,
   type DataTableColumn,
@@ -80,7 +81,7 @@ export function AnnouncementsPage() {
   );
 }
 
-const COLUMNS: DataTableColumn<Announcement>[] = [
+const COLUMNS: DataTableColumn<AnnouncementSummary>[] = [
   {
     key: 'title',
     header: 'Title',
@@ -103,7 +104,6 @@ const COLUMNS: DataTableColumn<Announcement>[] = [
       ),
   },
   { key: 'cost', header: 'Cost', cell: (row) => rupees(row.estimatedCostPaise) },
-  { key: 'read', header: 'Read', cell: (row) => row.stats.readCount.toLocaleString('en-IN') },
   {
     key: 'by',
     header: 'Sent by',
@@ -112,21 +112,28 @@ const COLUMNS: DataTableColumn<Announcement>[] = [
   },
 ];
 
-/** A row's own detail, never searched across, so it opens under the row rather than on a screen. */
-function AnnouncementPanel({ announcement }: Readonly<{ announcement: Announcement }>) {
-  const { stats } = announcement;
+/** A row's own detail. The ledger is counted HERE — per row on the list is six queries each. */
+function AnnouncementPanel({ announcement }: Readonly<{ announcement: AnnouncementSummary }>) {
+  const detail = useQuery({
+    queryKey: [...QUERY_KEYS.ANNOUNCEMENTS, announcement.id],
+    queryFn: () => api.admin.announcements.detail(announcement.id),
+  });
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm">{announcement.body}</p>
 
-      <MetricGroup>
-        <Metric label="Sent" value={stats.sent} />
-        <Metric label="Delivered" value={stats.delivered} />
-        <Metric label="Failed" value={stats.failed} />
-        <Metric label="Read" value={stats.readCount} />
-        <Metric label="Not bought" value={stats.savedByRead} />
-      </MetricGroup>
+      {detail.data ? (
+        <MetricGroup>
+          <Metric label="Sent" value={detail.data.stats.sent} />
+          <Metric label="Delivered" value={detail.data.stats.delivered} />
+          <Metric label="Failed" value={detail.data.stats.failed} />
+          <Metric label="Read" value={detail.data.stats.readCount} />
+          <Metric label="Not bought" value={detail.data.stats.savedByRead} />
+        </MetricGroup>
+      ) : (
+        <Skeleton variant="row" className="h-16" />
+      )}
     </div>
   );
 }
