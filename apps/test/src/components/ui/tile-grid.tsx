@@ -26,7 +26,7 @@ export interface StatTileProps extends MetricProps {
 export function StatTile({ foot, className, ...metric }: Readonly<StatTileProps>) {
   return (
     <Card className={cn('flex flex-col gap-1 p-5', className)}>
-      <Metric size="md" {...metric} />
+      <Metric size="sm" {...metric} />
       {foot ? <span className="text-xs text-muted-foreground">{foot}</span> : null}
     </Card>
   );

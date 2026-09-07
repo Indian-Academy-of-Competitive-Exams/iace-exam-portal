@@ -96,8 +96,9 @@ export function PageFrame({
 function FrameFilterRow({ filters }: Readonly<{ filters?: FrameFilters }>) {
   if (!filters || (filters.spec.length === 0 && !filters.leading)) return null;
 
+  // The bar sits on the PAGE here, so its controls and their notches paint the page, not a card.
   return (
-    <div className="shrink-0">
+    <div className="shrink-0 [--surface:var(--background)]">
       <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
     </div>
   );

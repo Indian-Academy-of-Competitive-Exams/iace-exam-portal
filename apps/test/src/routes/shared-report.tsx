@@ -119,18 +119,18 @@ function Identity({ report }: Readonly<{ report: SharedReport }>) {
 function Headline({ report }: Readonly<{ report: SharedReport }>) {
   return (
     <StatBand>
-      <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} size="md" />
+      <Metric label="Score" value={report.score} unit={`/ ${report.maxMarks}`} size="sm" />
       <Metric
         label="Rank"
         value={report.rank === null ? UNMEASURED : `#${report.rank}`}
         unit={report.cohortSize > 0 ? `of ${report.cohortSize}` : undefined}
-        size="md"
+        size="sm"
       />
       <Metric
         label="Percentile"
         value={report.percentile ?? UNMEASURED}
         unit={report.percentile === null ? undefined : 'th'}
-        size="md"
+        size="sm"
       />
     </StatBand>
   );

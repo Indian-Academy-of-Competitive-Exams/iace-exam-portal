@@ -104,9 +104,14 @@ function Body({
       )}
 
       <MetricGroup>
-        <Metric label="Pace" value={report.paceIndex ?? DASH} unit={paceUnit(report.paceIndex)} />
-        <Metric label="Cohort" value={report.cohortSize} unit="sittings" />
-        <Metric label="Questions" value={report.questions.length} />
+        <Metric
+          label="Pace"
+          value={report.paceIndex ?? DASH}
+          unit={paceUnit(report.paceIndex)}
+          size="sm"
+        />
+        <Metric label="Cohort" value={report.cohortSize} unit="sittings" size="sm" />
+        <Metric label="Questions" value={report.questions.length} size="sm" />
       </MetricGroup>
 
       <ListView

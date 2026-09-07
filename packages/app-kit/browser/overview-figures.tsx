@@ -58,13 +58,13 @@ export function ModeTiles({ measure }: Readonly<{ measure: SubjectMeasure }>) {
   return (
     <div className="flex items-start gap-6">
       <Metric
-        size="md"
+        size="sm"
         label="Accuracy"
         value={percentLabel(measure.accuracy, UNMEASURED)}
         unit={`of ${measure.attempted}`}
       />
       <Metric
-        size="md"
+        size="sm"
         label="Pace"
         value={measure.pace === null ? UNMEASURED : `${Math.round(measure.pace)}s`}
         unit="per question"

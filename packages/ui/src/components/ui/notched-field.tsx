@@ -17,7 +17,7 @@ export function NotchedField({ htmlFor, label, children, className }: Readonly<N
 
       <label
         htmlFor={htmlFor}
-        // Masks the border it sits on, and every filter bar sits on a card.
+        // Masks the border it sits on, painting whatever surface the bar was put on.
         className="pointer-events-none absolute -top-2 left-2 max-w-[calc(100%-1rem)] truncate bg-card px-1 text-xs text-muted-foreground"
       >
         {label}

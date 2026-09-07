@@ -2,11 +2,11 @@ import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
-export type MetricSize = 'md' | 'lg';
+export type MetricSize = 'sm' | 'md' | 'lg';
 
 const metricValue = cva('font-semibold tabular-nums tracking-tight text-foreground', {
   variants: {
-    size: { md: 'text-2xl', lg: 'text-3xl' },
+    size: { sm: 'text-xl', md: 'text-2xl', lg: 'text-3xl' },
   },
   defaultVariants: { size: 'lg' },
 });

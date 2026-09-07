@@ -63,9 +63,9 @@ export function TestInstructionsPage() {
     <PageFrame header={<PageHeader size="display" title={paper.title ?? 'Instructions'} />}>
       <PageBody className="pb-6">
         <StatBand>
-          <Metric label="Duration (minutes)" value={Math.round(paper.durationSec / 60)} size="md" />
-          <Metric label="Questions" value={paper.totalQuestions} size="md" />
-          <Metric label="Sections" value={paper.sections.length} size="md" />
+          <Metric label="Duration (minutes)" value={Math.round(paper.durationSec / 60)} size="sm" />
+          <Metric label="Questions" value={paper.totalQuestions} size="sm" />
+          <Metric label="Sections" value={paper.sections.length} size="sm" />
         </StatBand>
 
         <Sections paper={paper} />

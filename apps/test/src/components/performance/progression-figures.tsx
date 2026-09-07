@@ -37,7 +37,7 @@ export function RampFigure({ progression }: Readonly<{ progression: SeriesProgre
     <ChartFigure
       title="Percentile against difficulty"
       meta={`${plural(steps.length, 'test')} · percentile ${shift(spanOf(climb))} · difficulty ${shift(spanOf(ramp))}`}
-      figure={<Metric size="md" label="Latest" value={latest?.value ?? UNMEASURED} />}
+      figure={<Metric size="sm" label="Latest" value={latest?.value ?? UNMEASURED} />}
     >
       <AlignedPlots
         secondaryLabel="Paper difficulty"

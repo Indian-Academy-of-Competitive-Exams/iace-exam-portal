@@ -63,9 +63,9 @@ export function SubmittedPage() {
 function OwnEffort({ sitting }: Readonly<{ sitting: EndedSitting }>) {
   return (
     <StatBand>
-      <Metric label="Answered" value={sitting.answered} unit={`of ${sitting.total}`} size="md" />
-      <Metric label="Left" value={sitting.unanswered} size="md" />
-      <Metric label="Marked for review" value={sitting.markedForReview} size="md" />
+      <Metric label="Answered" value={sitting.answered} unit={`of ${sitting.total}`} size="sm" />
+      <Metric label="Left" value={sitting.unanswered} size="sm" />
+      <Metric label="Marked for review" value={sitting.markedForReview} size="sm" />
     </StatBand>
   );
 }

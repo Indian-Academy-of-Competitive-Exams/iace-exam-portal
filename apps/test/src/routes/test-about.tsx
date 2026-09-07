@@ -101,14 +101,14 @@ export function TestAboutPage() {
             {listed ? <Shut test={listed} now={now} /> : null}
 
             <StatBand>
-              <Metric label="Questions" value={brief.data.totalQuestions} size="md" />
+              <Metric label="Questions" value={brief.data.totalQuestions} size="sm" />
               <Metric
                 label="Duration (minutes)"
                 value={Math.round(brief.data.durationSec / 60)}
-                size="md"
+                size="sm"
               />
-              <Metric label="Total marks" value={totalMarksOf(brief.data)} size="md" />
-              <Metric label="Negative" value={negativeOf(brief.data)} size="md" />
+              <Metric label="Total marks" value={totalMarksOf(brief.data)} size="sm" />
+              <Metric label="Negative" value={negativeOf(brief.data)} size="sm" />
             </StatBand>
 
             <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
@@ -171,19 +171,16 @@ const SECTION_COLUMNS: readonly DataTableColumn<ExamBrief['sections'][number]>[]
   },
 ];
 
-/** The window as a value beside the title, which is where a student looks for it first. */
+/** A time is prose, not a figure: set at a headline size it shouts over the title beside it. */
 function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
-  if (test.opensAt === null && test.closesAt === null) {
-    return <Metric label="Opens" value="Any time" size="md" />;
-  }
-
   return (
     <div className="flex flex-col gap-1">
-      <Metric
-        label="Opens"
-        value={test.opensAt === null ? 'Any time' : WHEN.format(new Date(test.opensAt))}
-        size="md"
-      />
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Opens
+      </span>
+      <span className="text-md font-semibold text-foreground">
+        {test.opensAt === null ? 'Any time' : WHEN.format(new Date(test.opensAt))}
+      </span>
       {test.closesAt === null ? null : (
         <span className="text-sm text-muted-foreground">
           {`Entry closes ${WHEN.format(new Date(test.closesAt))}`}

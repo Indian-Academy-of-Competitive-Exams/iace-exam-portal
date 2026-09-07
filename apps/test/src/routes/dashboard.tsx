@@ -133,9 +133,9 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
 
   return (
     <StatBand>
-      <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="md" />
-      <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="md" />
-      <Metric label="Tests taken" value={standing.testsAttempted} size="md" />
+      <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="sm" />
+      <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
+      <Metric label="Tests taken" value={standing.testsAttempted} size="sm" />
     </StatBand>
   );
 }
