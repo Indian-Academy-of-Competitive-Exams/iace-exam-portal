@@ -188,12 +188,15 @@ describe('OfferingService — a test belongs to one series', () => {
 /** The defect this closes: the old whole-set save rebuilt the link and dropped `unlockAt` with it. */
 describe('OfferingService — a re-save cannot wipe the clock', () => {
   it('moves a test from one series to another without losing its opening', async () => {
-    const { service, prisma } = serviceWith(inSeries({ opensAt: OPENS_AT, lateEntrySec: 1800 }));
+    const { service, prisma } = serviceWith(
+      inSeries({ opensAt: OPENS_AT, lateEntrySec: 1800, extraTimeSec: 600 }),
+    );
 
     await service.moveToSeries('tst_1', { testSeriesId: 'srs_2' });
 
     assert.deepEqual(prisma.tests[0]?.opensAt, OPENS_AT);
     assert.equal(prisma.tests[0]?.lateEntrySec, 1800);
+    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
   });
 
   /** The opening survived, so the rows it overtook have to survive with it. */

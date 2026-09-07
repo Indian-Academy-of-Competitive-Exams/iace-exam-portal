@@ -54,7 +54,7 @@ const stageMismatch = (seriesName: string): string =>
 /** A series carries a test only if it is built for its stage and judges it the way it is judged. */
 export function seriesFitIssue(
   series: { name: string; examStageId: string | null; evaluationMode: EvaluationMode },
-  test: { examStageId: string; evaluationMode?: EvaluationMode },
+  test: { examStageId: string; evaluationMode: EvaluationMode | undefined },
 ): string | null {
   if (series.examStageId !== null && series.examStageId !== test.examStageId) {
     return stageMismatch(series.name);

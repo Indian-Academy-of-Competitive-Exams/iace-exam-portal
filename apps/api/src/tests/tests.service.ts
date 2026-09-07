@@ -170,7 +170,7 @@ export class TestsService {
     });
     if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
-    const issue = seriesFitIssue(series, { examStageId });
+    const issue = seriesFitIssue(series, { examStageId, evaluationMode: undefined });
     if (issue) throw seriesRefused(issue);
 
     return series;

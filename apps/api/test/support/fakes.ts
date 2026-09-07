@@ -3226,7 +3226,6 @@ export interface FakeSeriesRow {
   branchIds: string[];
   isEnabled: boolean;
   createdAt: Date;
-  _count: { tests: number };
 }
 
 export interface FakeGrantRowAccess {
@@ -3268,7 +3267,6 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     isEnabled: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
-    _count: { tests: overrides._count?.tests ?? 0 },
   };
 }
 

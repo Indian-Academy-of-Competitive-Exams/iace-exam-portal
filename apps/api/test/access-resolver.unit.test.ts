@@ -646,7 +646,7 @@ describe('AccessCacheListener', () => {
     const listener = new AccessCacheListener(failing);
 
     await assert.doesNotReject(() => listener.onStudentAccessChanged({ studentId: 'stu_1' }));
-    await assert.doesNotReject(() => listener.onCatalogChanged({ testSeriesId: null }));
+    await assert.doesNotReject(() => listener.onCatalogChanged({ testSeriesId: 'srs_1' }));
   });
 });
 

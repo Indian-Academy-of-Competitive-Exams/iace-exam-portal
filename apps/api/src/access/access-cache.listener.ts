@@ -29,7 +29,7 @@ export class AccessCacheListener {
     try {
       await this.resolver.invalidateAll();
     } catch (error) {
-      this.logger.error(`Catalog bust failed for series ${event.testSeriesId ?? 'all'}`, error);
+      this.logger.error(`Catalog bust failed for series ${event.testSeriesId}`, error);
     }
   }
 }
