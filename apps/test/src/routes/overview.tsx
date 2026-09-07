@@ -10,8 +10,6 @@ import {
   Field,
   LoadingState,
   PageFrame,
-  PageHeader,
-  SectionHeading,
   SegmentedControl,
 } from '@iace/ui';
 import {
@@ -19,7 +17,6 @@ import {
   ModeTiles,
   PageCrumbs,
   SpeedAccuracyFigure,
-  StandingTiles,
   SubjectStrengthFigure,
 } from '@iace/app-kit/browser';
 import { newestFirst } from '@iace/app-kit';
@@ -44,6 +41,7 @@ import {
   PICKER_WIDTH,
   ROUTES,
 } from '../lib/constants';
+import { Hero, HeroFigure, PageBody, Section, StatTile, TileGrid } from '../components/ui';
 
 const UNTITLED = 'Untitled test';
 
@@ -66,13 +64,21 @@ export function OverviewPage() {
   const sat = newestFirst(trend.data?.points ?? []);
 
   return (
-    <PageFrame
-      header={
-        <PageHeader
-          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+    <PageFrame header={<PageCrumbs nav={NAV_ITEMS} />}>
+      <PageBody>
+        <Hero
           title="Performance"
-          meta={overview.data?.standing.lastAttemptAt ? satOn(overview.data) : undefined}
-          action={
+          meta={overview.data ? satOn(overview.data) : undefined}
+          figure={
+            overview.data && overview.data.standing.testsEvaluated > 0 ? (
+              <HeroFigure
+                value={overview.data.standing.avgPercentile ?? '—'}
+                unit={overview.data.standing.avgPercentile === null ? undefined : 'th'}
+                caption={bestLine(overview.data)}
+              />
+            ) : undefined
+          }
+          aside={
             sat.length > 0 ? (
               <Combobox
                 value=""
@@ -90,11 +96,11 @@ export function OverviewPage() {
             ) : undefined
           }
         />
-      }
-    >
-      {overview.isLoading ? <LoadingState /> : null}
-      {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
-      {overview.data ? <Body overview={overview.data} /> : null}
+
+        {overview.isLoading ? <LoadingState /> : null}
+        {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
+        {overview.data ? <Body overview={overview.data} /> : null}
+      </PageBody>
     </PageFrame>
   );
 }
@@ -122,7 +128,7 @@ function Body({ overview }: Readonly<{ overview: StudentOverview }>) {
   const view = { subjects: overview.subjects, mode, scope: chosen };
 
   return (
-    <div className="flex flex-col gap-8">
+    <>
       {overview.standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
@@ -131,26 +137,42 @@ function Body({ overview }: Readonly<{ overview: StudentOverview }>) {
         </Alert>
       ) : null}
 
-      <StandingTiles standing={overview.standing} />
+      <TileGrid>
+        <StatTile label="Average score" value={overview.standing.avgScore ?? '—'} />
+        <StatTile
+          label="Tests marked"
+          value={overview.standing.testsEvaluated}
+          foot={
+            overview.standing.practiceAttempts > 0
+              ? `${overview.standing.practiceAttempts} practice`
+              : undefined
+          }
+        />
+        <StatTile label="Tests taken" value={overview.standing.testsAttempted} />
+      </TileGrid>
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <ModeTiles measure={overview.byMode[mode]} />
+      <Section
+        title="Accuracy and pace"
+        meta={EVALUATION_MODE_LABELS[mode]}
+        action={
           <SegmentedControl
             value={mode}
             onChange={(next) => setMode(next as EvaluationMode)}
             items={MODE_ITEMS}
             aria-label="Evaluation mode"
           />
-        </div>
+        }
+      >
+        <ModeTiles measure={overview.byMode[mode]} />
+      </Section>
 
-        <DispositionFigure disposition={overview.disposition} />
-      </section>
+      <DispositionFigure disposition={overview.disposition} />
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <SectionHeading title="Subjects" meta={EVALUATION_MODE_LABELS[mode]} />
-          {scopes.length > 1 ? (
+      <Section
+        title="Subjects"
+        meta={EVALUATION_MODE_LABELS[mode]}
+        action={
+          scopes.length > 1 ? (
             <Field htmlFor="subjectScope" label="Scope" className="min-w-44">
               {({ id, 'aria-describedby': describedBy }) => (
                 <Combobox
@@ -166,15 +188,15 @@ function Body({ overview }: Readonly<{ overview: StudentOverview }>) {
                 />
               )}
             </Field>
-          ) : null}
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
+          ) : undefined
+        }
+      >
+        <div className="grid items-start gap-4 xl:grid-cols-2">
           <SubjectStrengthFigure {...view} />
           <SpeedAccuracyFigure {...view} />
         </div>
-      </section>
-    </div>
+      </Section>
+    </>
   );
 }
 
@@ -182,6 +204,12 @@ const satOn = (overview: StudentOverview) =>
   overview.standing.lastAttemptAt === null
     ? undefined
     : `Last sat ${WHEN.format(new Date(overview.standing.lastAttemptAt))}`;
+
+/** The average alone is half the story; the best is what a student is actually chasing. */
+const bestLine = (overview: StudentOverview) =>
+  overview.standing.bestPercentile === null
+    ? 'average percentile'
+    : `average percentile · best ${overview.standing.bestPercentile}`;
 
 /** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */
 function sittingHint(point: PerformancePoint): string {

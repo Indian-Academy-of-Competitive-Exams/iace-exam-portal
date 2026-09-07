@@ -33,21 +33,62 @@ export interface PageFrameProps {
   header?: React.ReactNode;
   /** Pinned under the header, so a browse screen narrows without its controls scrolling away. */
   filters?: FrameFilters;
-  children: React.ReactNode;
+  /** Views of one record, on the background rather than inside a card. */
+  tabs?: TableFrameTabs;
+  children?: React.ReactNode;
   className?: string;
 }
 
 /** Any page that is not a list: header held still, body the only scroller. */
-export function PageFrame({ header, filters, children, className }: Readonly<PageFrameProps>) {
-  return (
+export function PageFrame({
+  header,
+  filters,
+  tabs,
+  children,
+  className,
+}: Readonly<PageFrameProps>) {
+  // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
+  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto pr-2', className);
+
+  const body = tabs ? (
+    <>
+      <div className="mb-4 flex shrink-0 items-center gap-3 border-b border-border">
+        <TabsList className="min-w-0 flex-1 border-b-0">
+          {tabs.items.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.action ? (
+          <span className="flex shrink-0 items-center gap-2">{tabs.action}</span>
+        ) : null}
+      </div>
+      {tabs.items.map((tab) => (
+        <TabsContent key={tab.value} value={tab.value} className={cn(scroller, 'pt-0')}>
+          {tab.content}
+        </TabsContent>
+      ))}
+    </>
+  ) : (
+    // `pr-2` keeps right-aligned content clear of the scrollbar this very element draws.
+    <div className={scroller}>{children}</div>
+  );
+
+  const frame = (
     <div data-page-frame className={FILLS}>
       {header ? <div className="shrink-0">{header}</div> : null}
       <FrameFilterRow filters={filters} />
-      {/* `pr-2` keeps right-aligned content clear of the scrollbar this very element draws. */}
-      <div className={cn('relative min-h-0 flex-1 overflow-y-auto pr-2', className)}>
-        {children}
-      </div>
+      {body}
     </div>
+  );
+
+  return tabs ? (
+    <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
+      {frame}
+    </Tabs>
+  ) : (
+    frame
   );
 }
 

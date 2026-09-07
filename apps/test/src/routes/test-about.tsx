@@ -6,9 +6,8 @@ import {
   Button,
   DataTable,
   LoadingState,
+  Metric,
   PageFrame,
-  PageHeader,
-  SectionHeading,
   StatRow,
   TruncatedText,
   linkVariants,
@@ -18,6 +17,7 @@ import {
 import { PageCrumbs } from '@iace/app-kit/browser';
 import {
   INSTITUTE_TIME_ZONE,
+  LANGUAGE_MODE,
   TEST_BUCKET,
   testAction,
   testBucket,
@@ -33,35 +33,15 @@ import {
   NAV_ITEMS,
   PERFORMANCE_QUERY_KEY,
   ROUTES,
-  analyticsQueryKey,
   briefQueryKey,
 } from '../lib/constants';
+import { Hero, PageBody, Section, StatBand, SurfaceCard } from '../components/ui';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
   dateStyle: 'medium',
   timeStyle: 'short',
 });
-
-type BriefSection = ExamBrief['sections'][number];
-
-const SECTION_COLUMNS: readonly DataTableColumn<BriefSection>[] = [
-  {
-    key: 'name',
-    header: 'Section',
-    className: 'max-w-[16rem]',
-    cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
-  },
-  { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
-  { key: 'marks', header: 'Marks each', numeric: true, cell: (row) => row.marksPerQuestion },
-  { key: 'negative', header: 'Negative', numeric: true, cell: (row) => row.negativeMarks },
-  {
-    key: 'total',
-    header: 'Section marks',
-    numeric: true,
-    cell: (row) => round(row.questionCount * row.marksPerQuestion),
-  },
-];
 
 const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   {
@@ -71,6 +51,7 @@ const PAST_COLUMNS: readonly DataTableColumn<PerformancePoint>[] = [
   },
   { key: 'marks', header: 'Marks', cell: (row) => `${row.score} / ${row.maxMarks}` },
   { key: 'rank', header: 'Rank', numeric: true, cell: (row) => row.rank ?? '—' },
+  { key: 'percentile', header: 'Percentile', numeric: true, cell: (row) => row.percentile ?? '—' },
   {
     key: 'open',
     cell: (row) => (
@@ -93,92 +74,143 @@ export function TestAboutPage() {
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
 
-  const listed = (catalog.data?.series ?? [])
-    .flatMap((series) => series.tests)
-    .find((test) => test.id === testId);
+  const series = catalog.data?.series.find((row) => row.tests.some((test) => test.id === testId));
+  const listed = series?.tests.find((test) => test.id === testId);
   const past = (trend.data?.points ?? []).filter((point) => point.testId === testId).reverse();
-
-  const cohortOf = useQuery({
-    queryKey: analyticsQueryKey(past[0]?.attemptId ?? ''),
-    queryFn: () => api.me.analytics(past[0]?.attemptId ?? ''),
-    enabled: past.length > 0,
-  });
 
   return (
     <PageFrame
       header={
-        <PageHeader
-          breadcrumbs={
-            <PageCrumbs
-              nav={NAV_ITEMS}
-              tail={[{ label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) }]}
-            />
-          }
-          title={brief.data?.title ?? 'Test'}
-          meta={
-            brief.data
-              ? `${plural(brief.data.totalQuestions, 'question')} · ${Math.round(brief.data.durationSec / 60)} minutes`
-              : undefined
-          }
-          action={<Exits testId={testId} listed={listed} now={now} hasPast={past.length > 0} />}
+        <PageCrumbs
+          nav={NAV_ITEMS}
+          tail={[
+            { label: 'Tests', to: ROUTES.TESTS },
+            { label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) },
+          ]}
         />
       }
     >
-      {brief.isLoading ? <LoadingState /> : null}
-      {brief.data ? (
-        <div className="flex flex-col gap-8">
-          {listed ? <Window test={listed} now={now} /> : null}
+      <PageBody>
+        {brief.isLoading ? <LoadingState /> : null}
 
-          <section className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-            <StatRow label="Questions" value={brief.data.totalQuestions} />
-            <StatRow
-              label="Duration"
-              value={`${Math.round(brief.data.durationSec / 60)} minutes`}
+        {brief.data ? (
+          <>
+            <Hero
+              eyebrow={series?.name}
+              title={brief.data.title ?? 'Test'}
+              aside={listed ? <Window test={listed} /> : undefined}
             />
-            <StatRow label="Total marks" value={totalMarksOf(brief.data)} />
-            <StatRow
-              label="Languages"
-              value={brief.data.languages
-                .map((code: LanguageCode) => LANGUAGE_LABELS[code])
-                .join(', ')}
-            />
-          </section>
 
-          <section className="flex flex-col gap-3">
-            <SectionHeading title="Sections" />
-            <DataTable
-              columns={SECTION_COLUMNS}
-              rows={brief.data.sections}
-              rowKey={(row) => row.id}
-              isLoading={false}
-              empty="This paper has no sections."
-            />
-          </section>
+            {listed ? <Shut test={listed} now={now} /> : null}
 
-          {cohortOf.data ? (
-            <section className="grid gap-x-8 gap-y-2 sm:grid-cols-3">
-              <SectionHeading title="Cohort" className="sm:col-span-3" />
-              <StatRow label="Topper" value={cohortOf.data.cohort.topperScore ?? '—'} />
-              <StatRow label="Average" value={cohortOf.data.cohort.averageScore ?? '—'} />
-              <StatRow label="Sat by" value={cohortOf.data.cohort.cohortSize ?? '—'} />
-            </section>
-          ) : null}
-
-          {past.length > 0 ? (
-            <section className="flex flex-col gap-3">
-              <SectionHeading title="Past attempts" />
-              <DataTable
-                columns={PAST_COLUMNS}
-                rows={past}
-                rowKey={(row) => row.attemptId}
-                isLoading={false}
-                empty="You have not sat this test yet."
+            <StatBand>
+              <Metric label="Questions" value={brief.data.totalQuestions} size="md" />
+              <Metric
+                label="Duration (minutes)"
+                value={Math.round(brief.data.durationSec / 60)}
+                size="md"
               />
-            </section>
-          ) : null}
-        </div>
-      ) : null}
+              <Metric label="Total marks" value={totalMarksOf(brief.data)} size="md" />
+              <Metric label="Negative" value={negativeOf(brief.data)} size="md" />
+            </StatBand>
+
+            <div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
+              <SurfaceCard title="Sections" meta={plural(brief.data.sections.length, 'section')}>
+                <DataTable
+                  columns={SECTION_COLUMNS}
+                  rows={brief.data.sections}
+                  rowKey={(row) => row.id}
+                  isLoading={false}
+                  empty="This paper has no sections."
+                />
+              </SurfaceCard>
+
+              <SurfaceCard title="The paper">
+                <div className="flex flex-col gap-2">
+                  <StatRow label="Languages" value={languagesOf(brief.data)} />
+                  <StatRow label="Sectional timing" value={sectionalOf(brief.data)} />
+                  {listed?.sittingCount === null || listed === undefined ? null : (
+                    <StatRow label="Sat by" value={listed.sittingCount} />
+                  )}
+                </div>
+              </SurfaceCard>
+            </div>
+
+            <Exits testId={testId} listed={listed} now={now} hasPast={past.length > 0} />
+
+            {past.length > 0 ? (
+              <Section title="Past attempts" meta={plural(past.length, 'attempt')}>
+                <DataTable
+                  columns={PAST_COLUMNS}
+                  rows={past}
+                  rowKey={(row) => row.attemptId}
+                  isLoading={false}
+                  empty="You have not sat this test yet."
+                />
+              </Section>
+            ) : null}
+          </>
+        ) : null}
+      </PageBody>
     </PageFrame>
+  );
+}
+
+const SECTION_COLUMNS: readonly DataTableColumn<ExamBrief['sections'][number]>[] = [
+  {
+    key: 'name',
+    header: 'Section',
+    className: 'max-w-[16rem]',
+    cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
+  },
+  { key: 'questions', header: 'Questions', numeric: true, cell: (row) => row.questionCount },
+  { key: 'marks', header: 'Marks each', numeric: true, cell: (row) => row.marksPerQuestion },
+  { key: 'negative', header: 'Negative', numeric: true, cell: (row) => row.negativeMarks },
+  {
+    key: 'total',
+    header: 'Section marks',
+    numeric: true,
+    cell: (row) => round(row.questionCount * row.marksPerQuestion),
+  },
+];
+
+/** The window as a value beside the title, which is where a student looks for it first. */
+function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
+  if (test.opensAt === null && test.closesAt === null) {
+    return <Metric label="Opens" value="Any time" size="md" />;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Metric
+        label="Opens"
+        value={test.opensAt === null ? 'Any time' : WHEN.format(new Date(test.opensAt))}
+        size="md"
+      />
+      {test.closesAt === null ? null : (
+        <span className="text-sm text-muted-foreground">
+          {`Entry closes ${WHEN.format(new Date(test.closesAt))}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A shut window is a consequence, so it is an Alert — the variant carries half of it. */
+function Shut({ test, now }: Readonly<{ test: StudentCatalogTest; now: Date }>) {
+  const bucket = testBucket(test, now);
+  if (bucket === TEST_BUCKET.OPEN || bucket === TEST_BUCKET.DONE) return null;
+
+  return (
+    /* ui-copy-ok: consequence */
+    <Alert variant={bucket === TEST_BUCKET.MISSED ? 'warning' : 'info'}>
+      <span className="flex items-center gap-2">
+        <CalendarClock aria-hidden />
+        {bucket === TEST_BUCKET.MISSED
+          ? 'Entry has closed for this paper; your past attempts stay here.'
+          : 'This paper has not opened yet. Nothing can be started until it does.'}
+      </span>
+    </Alert>
   );
 }
 
@@ -196,12 +228,7 @@ function Exits({
   const action = listed ? testAction(listed) : null;
 
   return (
-    <span className="flex flex-wrap items-center gap-2">
-      {hasPast ? (
-        <Button asChild variant="outline">
-          <Link to={ROUTES.TESTS}>Back to your tests</Link>
-        </Button>
-      ) : null}
+    <div className="flex flex-wrap items-center gap-3">
       {action ? (
         <Button asChild>
           <Link to={ROUTES.TEST_INSTRUCTIONS(testId)}>
@@ -211,35 +238,13 @@ function Exits({
       ) : (
         <Button disabled>{listed ? shutReason(listed, now) : 'Not open to you'}</Button>
       )}
-    </span>
+      {hasPast ? (
+        <Button asChild variant="outline">
+          <Link to={ROUTES.TESTS}>Back to your tests</Link>
+        </Button>
+      ) : null}
+    </div>
   );
-}
-
-/** The clock, in an Alert rather than as prose: the variant carries half of it before a word. */
-function Window({ test, now }: Readonly<{ test: StudentCatalogTest; now: Date }>) {
-  const bucket = testBucket(test, now);
-  if (bucket === TEST_BUCKET.OPEN) return null;
-
-  return (
-    /* ui-copy-ok: consequence */
-    <Alert variant={bucket === TEST_BUCKET.MISSED ? 'warning' : 'info'}>
-      <span className="flex items-center gap-2">
-        <CalendarClock aria-hidden />
-        {whenLine(test, now)}
-      </span>
-    </Alert>
-  );
-}
-
-function whenLine(test: StudentCatalogTest, now: Date): string {
-  if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
-    return `Opens ${WHEN.format(new Date(test.opensAt))}`;
-  }
-  if (test.closesAt !== null) {
-    const closed = Date.parse(test.closesAt) <= now.getTime();
-    return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
-  }
-  return 'No fixed time — sit it whenever you are ready';
 }
 
 function shutReason(test: StudentCatalogTest, now: Date): string {
@@ -255,5 +260,23 @@ const totalMarksOf = (brief: ExamBrief) =>
       0,
     ),
   );
+
+/** One figure where every section agrees, and a range where they do not — never a wrong single one. */
+function negativeOf(brief: ExamBrief): string {
+  const values = [...new Set(brief.sections.map((section) => section.negativeMarks))].sort(
+    (a, b) => a - b,
+  );
+  if (values.length === 0) return '—';
+  if (values.length === 1) return `−${values[0]}`;
+  return `−${values[0]} to −${values.at(-1)}`;
+}
+
+const languagesOf = (brief: ExamBrief) => {
+  const named = brief.languages.map((code: LanguageCode) => LANGUAGE_LABELS[code]).join(', ');
+  return brief.languageMode === LANGUAGE_MODE.DUAL ? `${named} (side by side)` : named;
+};
+
+const sectionalOf = (brief: ExamBrief) =>
+  brief.sections.some((section) => section.durationSec !== null) ? 'Yes' : 'No';
 
 const round = (value: number) => Math.round(value * 100) / 100;

@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, LoadingState, SectionHeading } from '@iace/ui';
+import { Alert, LoadingState } from '@iace/ui';
 import { ComparisonCards, type ComparisonItem } from '@iace/ui';
 import {
   LEADERBOARD_SCOPES,
@@ -15,6 +15,7 @@ import {
   leaderboardQueryKey,
   performanceReportQueryKey,
 } from '../lib/constants';
+import { PageBody, Section } from '../components/ui';
 import { AttemptCompare } from '../components/performance/attempt-compare';
 import { Podium, Standings } from '../components/leaderboard/board';
 
@@ -41,7 +42,7 @@ export function ComparePanel() {
   const sittings = (trend.data?.points ?? []).filter((point) => point.testId === testId);
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageBody>
       {ranked ? (
         <Against cohort={report.data.cohort} report={report.data} />
       ) : (
@@ -49,8 +50,7 @@ export function ComparePanel() {
       )}
 
       {ranked ? (
-        <div className="flex min-h-0 flex-col gap-4">
-          <SectionHeading title="Leaderboard" />
+        <Section title="Leaderboard">
           {board.isLoading ? <LoadingState /> : null}
           {board.data ? (
             <>
@@ -58,14 +58,14 @@ export function ComparePanel() {
               <Standings board={board.data} empty="Nobody has been ranked on this paper yet." />
             </>
           ) : null}
-        </div>
+        </Section>
       ) : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
           This sitting is not ranked, so it stands against your own best rather than a cohort.
         </Alert>
       )}
-    </div>
+    </PageBody>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Combobox, PageHeader, PanelFrame } from '@iace/ui';
+import { Combobox, PageFrame, PageHeader, PanelFrame } from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
 import { INSTITUTE_TIME_ZONE, type PerformancePoint } from '@iace/contracts';
@@ -8,6 +8,9 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, PERFORMANCE_QUERY_KEY, PICKER_WIDTH, ROUTES } from '../lib/constants';
 
 const UNTITLED = 'Untitled test';
+
+/** Dense, single-body tabs stay one contained surface; the rest float their cards on the page. */
+const PANEL_TABS = new Set(['solutions', 'questions']);
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -24,9 +27,10 @@ export function ReportShell() {
   const current = sat.points.find((point) => point.attemptId === attemptId) ?? null;
 
   const tab = reportTabOf(pathname, ROUTES.REPORT(attemptId));
+  const Frame = PANEL_TABS.has(tab) ? PanelFrame : PageFrame;
 
   return (
-    <PanelFrame
+    <Frame
       header={
         <PageHeader
           breadcrumbs={

@@ -7,16 +7,9 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
-import {
-  Alert,
-  LoadingState,
-  Metric,
-  MetricGroup,
-  PageFrame,
-  PageHeader,
-  SectionHeading,
-} from '@iace/ui';
+import { Alert, LoadingState, Metric, PageFrame, PageHeader } from '@iace/ui';
 import { api } from '../lib/api';
+import { PageBody, Section, StatBand } from '../components/ui';
 import { ROUTES, scoreCardQueryKey } from '../lib/constants';
 import { type EndedSitting } from '../components/exam/engine/use-exam-view';
 
@@ -49,11 +42,10 @@ export function SubmittedPage() {
 
   return (
     <PageFrame header={<PageHeader size="display" title="Handed in" />}>
-      <div className="flex flex-col gap-8">
+      <PageBody>
         {handedIn ? <OwnEffort sitting={handedIn} /> : null}
 
-        <section className="flex flex-col gap-3">
-          <SectionHeading title="Marking" />
+        <Section title="Marking">
           {failed ? (
             <Alert variant="danger">
               Your score card did not load. It is safe — open it from your performance.
@@ -61,19 +53,19 @@ export function SubmittedPage() {
           ) : (
             <LoadingState>Marking your paper</LoadingState>
           )}
-        </section>
-      </div>
+        </Section>
+      </PageBody>
     </PageFrame>
   );
 }
 
-/** His own paper, not the cohort's: nothing here needs the marking to have run. */
+/** Their own paper, not the cohort's: nothing here needs the marking to have run. */
 function OwnEffort({ sitting }: Readonly<{ sitting: EndedSitting }>) {
   return (
-    <MetricGroup>
-      <Metric label="Answered" value={sitting.answered} unit={`of ${sitting.total}`} />
-      <Metric label="Left" value={sitting.unanswered} />
-      <Metric label="Marked for review" value={sitting.markedForReview} />
-    </MetricGroup>
+    <StatBand>
+      <Metric label="Answered" value={sitting.answered} unit={`of ${sitting.total}`} size="md" />
+      <Metric label="Left" value={sitting.unanswered} size="md" />
+      <Metric label="Marked for review" value={sitting.markedForReview} size="md" />
+    </StatBand>
   );
 }

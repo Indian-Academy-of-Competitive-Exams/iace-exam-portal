@@ -5,9 +5,7 @@ import {
   DataTable,
   LoadingState,
   Metric,
-  MetricGroup,
   Progress,
-  SectionHeading,
   StatRow,
   TruncatedText,
   plural,
@@ -29,6 +27,15 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
+import {
+  Hero,
+  HeroFigure,
+  PageBody,
+  Section,
+  SurfaceCard,
+  TileGrid,
+  StatTile,
+} from '../components/ui';
 
 const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
   {
@@ -55,12 +62,10 @@ export function ScoreCardPanel() {
     queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
   });
 
-  return (
-    <>
-      {card.isLoading ? <LoadingState /> : null}
-      {card.data ? <Result card={card.data} report={report.data ?? null} /> : null}
-    </>
-  );
+  if (card.isLoading) return <LoadingState />;
+  if (!card.data) return null;
+
+  return <Result card={card.data} report={report.data ?? null} />;
 }
 
 function Result({ card, report }: Readonly<{ card: ScoreCard; report: PerformanceReport | null }>) {
@@ -71,7 +76,34 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
   const trajectory = report?.trajectory ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageBody>
+      <Hero
+        tone="accent"
+        eyebrow="Your result"
+        title="Score card"
+        figure={
+          <HeroFigure
+            value={card.percentile ?? '—'}
+            unit={card.percentile === null ? undefined : 'th'}
+            caption={beaten(card)}
+          />
+        }
+        aside={
+          <>
+            <Metric
+              label="Rank"
+              value={card.rank ?? '—'}
+              unit={
+                card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
+              }
+              size="md"
+            />
+            <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} size="md" />
+            <Metric label="Accuracy" value={accuracy} unit="%" size="md" />
+          </>
+        }
+      />
+
       {card.provisional ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info" dismissible>
@@ -87,47 +119,30 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         </Alert>
       )}
 
-      <MetricGroup>
-        <Metric label="Percentile" value={card.percentile ?? '—'} />
-        <Metric
-          label="Rank"
-          value={card.rank ?? '—'}
-          unit={
-            card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
-          }
-        />
-        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} />
-        <Metric label="Percentage" value={card.percentage} unit="%" />
-        <Metric label="Questions" value={card.totalQuestions} />
-        <Metric label="Duration" value={minutes(card.durationSec)} />
-      </MetricGroup>
-
-      <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
-        <StatRow label="Correct" value={card.correctCount} />
-        <StatRow label="Wrong" value={card.wrongCount} />
-        <StatRow label="Unattempted" value={card.unattemptedCount} />
-        <StatRow
+      <TileGrid>
+        <StatTile label="Correct" value={card.correctCount} />
+        <StatTile label="Wrong" value={card.wrongCount} />
+        <StatTile label="Unattempted" value={card.unattemptedCount} />
+        <StatTile label="Questions" value={card.totalQuestions} />
+        <StatTile
           label="Time taken"
-          value={`${minutes(card.timeTakenSec)} of ${minutes(card.durationSec)}`}
+          value={minutes(card.timeTakenSec)}
+          foot={`of ${minutes(card.durationSec)}`}
         />
-      </div>
+      </TileGrid>
 
-      <div className="flex flex-col gap-2">
-        <SectionHeading title="Accuracy" />
+      <SurfaceCard
+        title="Accuracy"
+        meta={`${card.correctCount} right of ${plural(attempted, 'attempt')}`}
+      >
         <Progress value={accuracy} aria-label="Accuracy" />
-        <StatRow
-          label={`${card.correctCount} right of ${plural(attempted, 'attempt')}`}
-          value={`${accuracy}%`}
-        />
-      </div>
-
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        {report === null ? null : <DifficultyFigure difficulty={report.difficulty} />}
-        {curve === null ? null : <CohortFigure cohort={curve} />}
-      </div>
+        <StatRow label="Percentage" value={`${card.percentage}%`} />
+      </SurfaceCard>
 
       {report === null ? null : (
         <div className="grid items-start gap-4 lg:grid-cols-2">
+          <DifficultyFigure difficulty={report.difficulty} />
+          {curve === null ? null : <CohortFigure cohort={curve} />}
           <MarksFigure composition={report.composition} counts={paperCounts(report.sections)} />
           <TimeFigure
             time={report.time}
@@ -137,8 +152,7 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         </div>
       )}
 
-      <div className="flex min-h-0 flex-col gap-2">
-        <SectionHeading title="Sections" />
+      <Section title="Sections" meta={plural(card.sections.length, 'section')}>
         <DataTable
           columns={SECTION_COLUMNS}
           rows={card.sections}
@@ -146,11 +160,17 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
           isLoading={false}
           empty="This paper had no sections."
         />
-      </div>
+      </Section>
 
       {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
-    </div>
+    </PageBody>
   );
+}
+
+/** The percentile said in people, which is the way a student actually reads it. */
+function beaten(card: ScoreCard): string {
+  if (card.rank === null || card.cohortSize === null) return 'percentile';
+  return `percentile · better than ${card.cohortSize - card.rank} of ${card.cohortSize}`;
 }
 
 /** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */

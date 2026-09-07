@@ -9,16 +9,17 @@ import {
   Checkbox,
   Combobox,
   Field,
+  Metric,
   PageFrame,
   PageHeader,
   SkeletonParagraph,
-  StatRow,
   plural,
 } from '@iace/ui';
 import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { LANGUAGE_LABELS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
 import { SystemCheck } from '../components/system-check';
+import { DividedList, DividedRow, PageBody, Section, StatBand } from '../components/ui';
 
 /** What a student reads before the clock starts. Nothing here starts it — the last button does. */
 
@@ -59,19 +60,17 @@ export function TestInstructionsPage() {
   const ready = declared && picked;
 
   return (
-    <PageFrame header={<PageHeader title={paper.title ?? 'Instructions'} />}>
-      <div className="flex flex-col gap-6 pb-6">
-        <div className="grid gap-x-6 sm:grid-cols-2">
-          <StatRow label="Duration" value={minutes(paper.durationSec)} />
-          <StatRow label="Questions" value={String(paper.totalQuestions)} />
-        </div>
+    <PageFrame header={<PageHeader size="display" title={paper.title ?? 'Instructions'} />}>
+      <PageBody className="pb-6">
+        <StatBand>
+          <Metric label="Duration (minutes)" value={Math.round(paper.durationSec / 60)} size="md" />
+          <Metric label="Questions" value={paper.totalQuestions} size="md" />
+          <Metric label="Sections" value={paper.sections.length} size="md" />
+        </StatBand>
 
         <Sections paper={paper} />
 
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            What the colours mean
-          </h2>
+        <Section title="Palette">
           <div className="flex flex-wrap gap-2">
             {PALETTE_LEGEND.map((entry) => (
               <Badge key={entry.state} variant={entry.variant}>
@@ -79,7 +78,7 @@ export function TestInstructionsPage() {
               </Badge>
             ))}
           </div>
-        </section>
+        </Section>
 
         <SystemCheck />
 
@@ -133,32 +132,30 @@ export function TestInstructionsPage() {
         >
           I am ready to begin
         </Button>
-      </div>
+      </PageBody>
     </PageFrame>
   );
 }
 
 function Sections({ paper }: Readonly<{ paper: ExamBrief }>) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold tracking-tight text-foreground">
-        {plural(paper.sections.length, 'section')}
-      </h2>
-      <div className="flex flex-col gap-2">
+    <Section title="Sections" meta={plural(paper.sections.length, 'section')}>
+      <DividedList>
         {paper.sections.map((section) => (
-          <div
-            key={section.id}
-            className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-border p-3"
-          >
-            <span className="text-sm font-medium text-foreground">{section.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {`${plural(section.questionCount, 'question')} · +${section.marksPerQuestion} / −${section.negativeMarks}${
-                section.durationSec === null ? '' : ` · ${minutes(section.durationSec)}`
-              }`}
-            </span>
-          </div>
+          <DividedRow key={section.id} title={section.name} meta={sectionLine(section)} />
         ))}
-      </div>
-    </section>
+      </DividedList>
+    </Section>
   );
+}
+
+function sectionLine(section: ExamBrief['sections'][number]): string {
+  const clock = section.durationSec === null ? null : minutes(section.durationSec);
+  return [
+    plural(section.questionCount, 'question'),
+    `+${section.marksPerQuestion} / −${section.negativeMarks}`,
+    clock,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
 }

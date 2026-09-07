@@ -5,8 +5,8 @@ import {
   Badge,
   DataTable,
   LoadingState,
-  SectionHeading,
   TruncatedText,
+  plural,
   type DataTableColumn,
 } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
@@ -17,6 +17,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey } from '../lib/constants';
+import { PageBody, Section } from '../components/ui';
 
 const DASH = '—';
 
@@ -47,7 +48,7 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
   const measured = report.sections.some((section) => section.cohortSampleSize > 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageBody>
       {measured ? null : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
@@ -56,8 +57,7 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
         </Alert>
       )}
 
-      <div className="flex min-h-0 flex-col gap-2">
-        <SectionHeading title="Sections" />
+      <Section title="Sections" meta={plural(report.sections.length, 'section')}>
         <DataTable
           columns={COLUMNS}
           rows={report.sections}
@@ -65,10 +65,10 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
           isLoading={false}
           empty="This paper had no sections."
         />
-      </div>
+      </Section>
 
       {report.sections.length > 0 ? <SectionsFigure sections={report.sections} /> : null}
-    </div>
+    </PageBody>
   );
 }
 
