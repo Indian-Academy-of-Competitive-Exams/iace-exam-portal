@@ -90,7 +90,6 @@ export const ROUTES = {
   TEST_PAPER: (id: string) => `/tests/${id}/paper`,
   TEST_PAPER_PATTERN: '/tests/:id/paper',
   /** The unit of offering: a test reaches a student only through a series. */
-  TEST_SERIES: '/tests/series',
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
   TEST_SERIES_PATTERN: '/tests/series/:id',
@@ -390,9 +389,8 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
     icon: ClipboardList,
     featureKey: FEATURE_KEYS.TEST_MANAGEMENT,
     children: [
-      { to: ROUTES.TESTS, label: 'All tests', icon: ClipboardList },
+      { to: ROUTES.TESTS, label: 'Tests & Test Series', icon: Layers },
       { to: ROUTES.BASE_CONFIGS, label: 'Base configurations', icon: SlidersHorizontal },
-      { to: ROUTES.TEST_SERIES, label: 'Test series', icon: Layers },
     ],
   },
   {

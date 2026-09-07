@@ -2,13 +2,13 @@ import { type UseFormReturn } from 'react-hook-form';
 import {
   AppException,
   DEFAULT_PAPER_VARIANTS,
-  EVALUATION_MODE,
   PAPER_BINDING,
   TEST_SCOPE,
   type EvaluationMode,
   type ExamTemplate,
   type PaperBinding,
   type TestDetail,
+  type TestSeriesSummary,
   type TestScope,
   type TestScopeRef,
 } from '@iace/contracts';
@@ -20,11 +20,15 @@ export interface TestFormValues {
   examId: string;
   examStageId: string;
   baseConfigId: string;
+  testSeriesId: string;
+  /** Held beside the id so the screen can name the series without asking the server for it again. */
+  testSeriesName: string;
   title: string;
   scope: TestScope;
   moduleId: string;
   sectionId: string;
-  evaluationMode: EvaluationMode;
+  /** Read off the chosen series and never sent: the server derives it from that series too. */
+  evaluationMode: EvaluationMode | '';
   paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
   examTemplate: ExamTemplate | null;
@@ -34,17 +38,23 @@ export interface TestFormValues {
 
 export type TestForm = UseFormReturn<TestFormValues>;
 
-export function valuesOf(detail: TestDetail | null): TestFormValues {
+export function valuesOf(
+  detail: TestDetail | null,
+  fromSeries: TestSeriesSummary | null = null,
+): TestFormValues {
   const scopeRef = detail?.scopeRef ?? null;
   return {
     examId: detail?.examStage.exam.id ?? '',
-    examStageId: detail?.examStageId ?? '',
+    // A stage-agnostic series names none, and then the stage is still the admin's to pick.
+    examStageId: detail?.examStageId ?? fromSeries?.examStageId ?? '',
     baseConfigId: detail?.baseConfigId ?? '',
+    testSeriesId: detail?.testSeriesId ?? fromSeries?.id ?? '',
+    testSeriesName: detail?.testSeriesName ?? fromSeries?.name ?? '',
     title: detail?.title ?? '',
     scope: detail?.scope ?? TEST_SCOPE.FULL,
     moduleId: scopeRef?.moduleId ?? '',
     sectionId: scopeRef?.sectionId ?? '',
-    evaluationMode: detail?.evaluationMode ?? EVALUATION_MODE.RANKED,
+    evaluationMode: detail?.evaluationMode ?? fromSeries?.evaluationMode ?? '',
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
     maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
@@ -69,6 +79,7 @@ export const RETAKES_NOT_A_NUMBER =
 /** The keys the server answers with. `scopeRef` has no control of its own — see `SCOPE_FIELDS`. */
 export const SERVER_FIELDS = [
   'baseConfigId',
+  'testSeriesId',
   'title',
   'paperBinding',
   'maxRetakes',
@@ -86,6 +97,7 @@ const SCOPE_FIELDS: Readonly<Record<TestScope, keyof TestFormValues | null>> = {
 export function applyServerErrors(error: unknown, form: TestForm, scope: TestScope): void {
   applyFieldErrors(error, form.setError, [
     'baseConfigId',
+    'testSeriesId',
     'title',
     'paperBinding',
     'maxRetakes',

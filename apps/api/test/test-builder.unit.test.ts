@@ -56,7 +56,14 @@ function builder(questions = [...bank(8, 'sub_r', 'r'), ...bank(8, 'sub_q', 'q')
     [],
     questions,
     [],
-    [makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 mocks' })],
+    [
+      makeSeries({ id: 'srs_1', name: 'SSC CGL 2026 mocks' }),
+      makeSeries({
+        id: 'srs_2',
+        name: 'SSC CGL 2026 drills',
+        evaluationMode: EVALUATION_MODE.PRACTICE,
+      }),
+    ],
   );
   const stages = new ExamStagesService(prisma.asService(), new AuditContext());
   const configs = new BaseConfigsService(prisma.asService(), stages, new AuditContext());
@@ -96,7 +103,10 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
   it('walks config -> draft -> paper -> finalize -> series -> offered', async () => {
     const { tests, paper, finalizer, offering, prisma } = builder();
 
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     assert.equal(draft.status, TEST_STATUS.DRAFT);
     assert.equal(draft.totalQuestions, 5);
 
@@ -107,7 +117,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(frozen.finalizedByThisCall, true);
     assert.equal(frozen.frozenQuestions, 5);
 
-    await offering.setSeries(draft.id, { testSeriesId: 'srs_1' });
+    await offering.moveToSeries(draft.id, { testSeriesId: 'srs_1' });
     const status = await offering.setStatus(draft.id, TEST_STATUS.ACTIVE);
 
     // A publishable mock: frozen, carried by a series, and offered.
@@ -119,9 +129,12 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(prisma.configs[0]?.locked, false);
   });
 
-  it('will not offer a test until every step before it is done', async () => {
+  it('will not offer a test until its paper is frozen', async () => {
     const { tests, paper, finalizer, offering } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 2' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 2', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     const beforeFinalize = await offering
       .setStatus(draft.id, TEST_STATUS.ACTIVE)
@@ -131,13 +144,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
-    // Frozen but in no series: still not offerable, because a test reaches a student through one.
-    const beforeSeries = await offering
-      .setStatus(draft.id, TEST_STATUS.ACTIVE)
-      .catch((e: unknown) => e);
-    assert.ok(AppException.is(beforeSeries));
-
-    await offering.setSeries(draft.id, { testSeriesId: 'srs_1' });
+    // The other half of the gate is the series, and creation is what already gave it one.
     assert.equal(await offering.setStatus(draft.id, TEST_STATUS.ACTIVE), TEST_STATUS.ACTIVE);
   });
 });
@@ -151,7 +158,7 @@ describe('the invariants Phase 2 must not have broken', () => {
         {
           baseConfigId: 'cfg_1',
           title: 'Mock 1',
-          evaluationMode: EVALUATION_MODE.RANKED,
+          testSeriesId: 'srs_1',
           paperBinding: PAPER_BINDING.GENERATED,
         },
         ADMIN,
@@ -160,7 +167,10 @@ describe('the invariants Phase 2 must not have broken', () => {
     assert.ok(AppException.is(atCreate));
     assert.equal(atCreate.code, ErrorCodes.VALIDATION_ERROR);
 
-    const ranked = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const ranked = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     const atEdit = await tests
       .update(ranked.id, { paperBinding: PAPER_BINDING.GENERATED })
       .catch((e: unknown) => e);
@@ -169,7 +179,10 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   it('one paper per sitting: once it is sat it cannot be edited, and a second finalize does nothing', async () => {
     const { tests, paper, finalizer, prisma } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
@@ -197,7 +210,10 @@ describe('the invariants Phase 2 must not have broken', () => {
   /** The failure this prevents: LEAST_SERVED biased for good against questions that never moved. */
   it('gives back the use it counted, so a refreeze does not count the same question twice', async () => {
     const { tests, paper, finalizer, prisma } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
 
@@ -230,7 +246,10 @@ describe('the invariants Phase 2 must not have broken', () => {
 
   it('gives nothing back for a draft that was never frozen', async () => {
     const { tests, paper, prisma } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
 
     await pickWholePaper(paper, draft.id);
     await paper.removeQuestions(draft.id, [rowAt(prisma.paperQuestions).id]);
@@ -244,7 +263,10 @@ describe('the invariants Phase 2 must not have broken', () => {
   /** Nobody has sat it, so there is nothing to protect — but the freeze cannot survive the edit. */
   it('lets a frozen paper nobody has sat be edited, and thaws it in doing so', async () => {
     const { tests, paper, finalizer, prisma } = builder();
-    const draft = await tests.create({ baseConfigId: 'cfg_1', title: 'Mock 1' }, ADMIN);
+    const draft = await tests.create(
+      { baseConfigId: 'cfg_1', title: 'Mock 1', testSeriesId: 'srs_1' },
+      ADMIN,
+    );
     await pickWholePaper(paper, draft.id);
     await finalizer.finalize(draft.id);
     assert.equal(prisma.tests[0]?.isLocked, true);
@@ -266,7 +288,7 @@ describe('the invariants Phase 2 must not have broken', () => {
       {
         baseConfigId: 'cfg_1',
         title: 'Mock 1',
-        evaluationMode: EVALUATION_MODE.PRACTICE,
+        testSeriesId: 'srs_2',
         paperBinding: PAPER_BINDING.GENERATED,
       },
       ADMIN,

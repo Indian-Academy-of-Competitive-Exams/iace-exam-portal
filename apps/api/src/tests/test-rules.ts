@@ -1,7 +1,9 @@
 import {
+  AppException,
   DEFAULT_PAPER_VARIANTS,
-  EVALUATION_MODE,
+  ErrorCodes,
   MIN_PAPER_VARIANTS,
+  seriesModeMismatch,
   isPaperBindingAllowed,
   PAPER_BINDING,
   TEST_SCOPE,
@@ -15,22 +17,51 @@ import {
 
 /** The rules that keep a test honest — pure, so they are testable without a database. */
 
-/** What a test is when the admin says nothing. Written explicitly, not left to the column. */
+/** What a test is when the admin says nothing. The mode is absent: its series decides that. */
 export const TEST_DEFAULTS = {
   scope: TEST_SCOPE.FULL,
-  evaluationMode: EVALUATION_MODE.RANKED,
   paperBinding: PAPER_BINDING.FIXED,
 } as const;
 
 export const RANKED_NEEDS_FIXED_MESSAGE =
   'A ranked test puts every student on one leaderboard, so they all have to sit the same paper. Choose a fixed paper, or make this a practice test.';
 
+/** The same rule said against the series that decided the mode, since no screen can change it here. */
+export const rankedSeriesNeedsFixed = (seriesName: string): string =>
+  `${seriesName} puts every student on one leaderboard, so its tests all sit the same paper. Choose a fixed paper, or put this test in a practice series.`;
+
 /** A rank only means something if everyone sat the same paper. */
 export function paperBindingIssue(
   evaluationMode: EvaluationMode,
   paperBinding: PaperBinding,
+  seriesName: string | null = null,
 ): string | null {
-  return isPaperBindingAllowed(evaluationMode, paperBinding) ? null : RANKED_NEEDS_FIXED_MESSAGE;
+  if (isPaperBindingAllowed(evaluationMode, paperBinding)) return null;
+  return seriesName === null ? RANKED_NEEDS_FIXED_MESSAGE : rankedSeriesNeedsFixed(seriesName);
+}
+
+export const SERIES_GONE_MESSAGE = 'That series no longer exists.';
+
+/** Every refusal of a series lands on the one control that chose it, so all of them are thrown alike. */
+export const seriesRefused = (message: string): AppException =>
+  new AppException(ErrorCodes.VALIDATION_ERROR, message, {
+    fieldErrors: { testSeriesId: [message] },
+  });
+
+const stageMismatch = (seriesName: string): string =>
+  `${seriesName} is built for a different exam stage, and a test reaches students through the series carrying it.`;
+
+/** A series carries a test only if it is built for its stage and judges it the way it is judged. */
+export function seriesFitIssue(
+  series: { name: string; examStageId: string | null; evaluationMode: EvaluationMode },
+  test: { examStageId: string; evaluationMode: EvaluationMode | undefined },
+): string | null {
+  if (series.examStageId !== null && series.examStageId !== test.examStageId) {
+    return stageMismatch(series.name);
+  }
+  // A test being created has no mode of its own yet: the series it is born into decides it.
+  if (test.evaluationMode === undefined) return null;
+  return seriesModeMismatch(series.name, series.evaluationMode, test.evaluationMode);
 }
 
 export const TOO_FEW_VARIANTS_MESSAGE = `A test that draws a paper per student needs at least ${MIN_PAPER_VARIANTS} to draw from. Give it that many, or make it a fixed paper.`;
@@ -131,18 +162,10 @@ export function paperCompletenessIssues(
   return issues;
 }
 
-/** A test reaches a student only through a series, and only once its paper has stopped moving. */
-export function activationBlocker(test: {
-  isLocked: boolean;
-  testSeriesId: string | null;
-}): string | null {
-  if (!test.isLocked) {
-    return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
-  }
-  if (test.testSeriesId === null) {
-    return 'A test reaches a student only through a series. Put this one in a series before offering it.';
-  }
-  return null;
+/** A test reaches a student only once its paper has stopped moving; its series is a column now. */
+export function activationBlocker(test: { isLocked: boolean }): string | null {
+  if (test.isLocked) return null;
+  return 'Finalize this test before offering it. Until its paper is frozen there is nothing for a student to sit.';
 }
 
 /** Being SAT is the only history: `Attempt.testId` is the one dependency the database refuses. */

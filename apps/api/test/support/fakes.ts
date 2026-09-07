@@ -1483,7 +1483,7 @@ export interface FakeTestModelRow {
   finalizedAt: Date | null;
   createdById: string | null;
   createdAt: Date;
-  testSeriesId: string | null;
+  testSeriesId: string;
   seriesOrder: number | null;
   opensAt: Date | null;
   lateEntrySec: number | null;
@@ -1510,7 +1510,7 @@ export function makeTest(overrides: Partial<FakeTestModelRow> = {}): FakeTestMod
     finalizedAt: null,
     createdById: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    testSeriesId: null,
+    testSeriesId: 'srs_1',
     seriesOrder: null,
     opensAt: null,
     lateEntrySec: null,
@@ -2352,7 +2352,7 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         attempts: this.attempts.filter((attempt) => attempt.testId === row.id).length,
         paperQuestions: this.paperQuestions.filter((paper) => paper.testId === row.id).length,
       },
-      testSeries: row.testSeriesId === null ? null : { name: this.seriesNameOf(row.testSeriesId) },
+      testSeries: { name: this.seriesNameOf(row.testSeriesId) },
       baseConfig: {
         name: config?.name ?? '',
         totalQuestions: config?.totalQuestions ?? 0,
@@ -3288,11 +3288,11 @@ export interface FakeSeriesRow {
   programCode: string | null;
   sequentialTests: boolean;
   kind: TestSeriesKind;
+  evaluationMode: EvaluationMode;
   eventId: string | null;
   branchIds: string[];
   isEnabled: boolean;
   createdAt: Date;
-  _count: { tests: number };
 }
 
 export interface FakeGrantRowAccess {
@@ -3305,7 +3305,7 @@ export interface FakeGrantRowAccess {
 /** What the series-delete guard reads: the RESTRICT column, and the join rows beside it. */
 export interface FakeAccessTestRow {
   id: string;
-  testSeriesId: string | null;
+  testSeriesId: string;
 }
 
 export function makeProgram(overrides: Partial<FakeProgramRow> = {}): FakeProgramRow {
@@ -3328,12 +3328,12 @@ export function makeSeries(overrides: Partial<FakeSeriesRow> = {}): FakeSeriesRo
     programCode: null,
     sequentialTests: false,
     kind: TEST_SERIES_KIND.STANDARD,
+    evaluationMode: EVALUATION_MODE.RANKED,
     eventId: null,
     branchIds: [],
     isEnabled: true,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
-    _count: { tests: overrides._count?.tests ?? 0 },
   };
 }
 
@@ -3593,6 +3593,8 @@ export class FakeAccessPrisma {
     const stage = this.examStages.find((candidate) => candidate.id === row.examStageId);
     return {
       ...row,
+      // Prisma computes this from the rows, so a fixture must not be able to claim otherwise.
+      _count: { tests: this.tests.filter((test) => test.testSeriesId === row.id).length },
       examStage: stage ? { id: stage.id, name: stage.name, exam: { code: 'SSC CGL' } } : null,
     };
   }
@@ -3849,7 +3851,7 @@ export interface FakeTestRow {
   totalMarks: number;
   scope?: TestScope;
   scopeRef?: TestScopeRef | null;
-  testSeriesId: string | null;
+  testSeriesId: string;
   seriesOrder: number | null;
   opensAt: Date | null;
   lateEntrySec: number | null;
@@ -3864,7 +3866,7 @@ export function makeTestRow(overrides: Partial<FakeTestRow> = {}): FakeTestRow {
     durationSec: 3600,
     totalQuestions: 100,
     totalMarks: 200,
-    testSeriesId: null,
+    testSeriesId: 'srs_1',
     seriesOrder: null,
     opensAt: null,
     lateEntrySec: null,

@@ -98,8 +98,7 @@ export interface StudentAccessChangedEvent {
 }
 
 export interface AccessCatalogChangedEvent {
-  /** Null when the change was about a test that carries no series. */
-  testSeriesId: string | null;
+  testSeriesId: string;
 }
 
 export interface StudentEnrolmentAddedEvent {

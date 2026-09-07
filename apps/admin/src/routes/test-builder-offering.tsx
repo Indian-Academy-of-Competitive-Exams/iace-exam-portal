@@ -4,10 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Power, X } from 'lucide-react';
 import {
   AppException,
+  EVALUATION_MODE_LABELS,
   OFFER_REQUIREMENT,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
+  seriesModeMismatch,
   type TestDetail,
 } from '@iace/contracts';
 import {
@@ -27,7 +29,7 @@ import {
   plural,
 } from '@iace/ui';
 import { api } from '../lib/api';
-import { ProgramPicker, TestSeriesPicker } from '../components/access-picker';
+import { ProgramPicker, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { QUERY_KEYS, ROUTES } from '../lib/constants';
 import { toSeconds } from '../lib/schedule-format';
 import {
@@ -50,39 +52,78 @@ function useOfferingRefresh(testId: string) {
   };
 }
 
+/** The series it leaves may not exist yet, and then nobody loses the test on the way out. */
+const moveConsequence = (to: string, from: string | undefined): string => {
+  const leaving =
+    from === undefined ? '' : `Students reached through ${from} stop being offered this test. `;
+  return `${leaving}It is offered through ${to} from now on. Its paper and its opening time are untouched.`;
+};
+
 export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
   const queryClient = useQueryClient();
   const refresh = useOfferingRefresh(detail.id);
+  const [moving, setMoving] = useState<ChosenSeries | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
+  const mode = EVALUATION_MODE_LABELS[detail.evaluationMode];
 
   const link = useQuery({
     queryKey: SERIES_LINK_KEY(detail.id),
     queryFn: () => api.admin.tests.series(detail.id),
   });
 
-  const setSeries = useMutation({
-    meta: { success: 'Series updated.' },
-    mutationFn: (testSeriesId: string | null) =>
-      api.admin.tests.setSeries(detail.id, { testSeriesId }),
+  const move = useMutation({
+    meta: { success: 'Test moved.' },
+    mutationFn: (testSeriesId: string) => api.admin.tests.moveToSeries(detail.id, { testSeriesId }),
     onSuccess: async (next) => {
+      setMoving(null);
       queryClient.setQueryData(SERIES_LINK_KEY(detail.id), next);
       await refresh();
     },
+    onError: () => setMoving(null),
   });
 
+  /** The server refuses this too; asking first keeps the confirm from promising a move it cannot make. */
+  const choose = (chosen: ChosenSeries) => {
+    if (chosen.id === '' || chosen.id === link.data?.testSeriesId) {
+      setRefused(null);
+      return;
+    }
+
+    const issue = seriesModeMismatch(chosen.name, chosen.evaluationMode, detail.evaluationMode);
+    setRefused(issue);
+    if (issue === null) setMoving(chosen);
+  };
+
   return (
-    <Field htmlFor="test-series" label="Series">
-      {(control) => (
-        <TestSeriesPicker
-          {...control}
-          clearable
-          value={link.data?.testSeriesId ?? ''}
-          selectedLabel={link.data?.name}
-          disabled={setSeries.isPending}
-          forExamStageId={detail.examStageId}
-          onChange={(chosen) => setSeries.mutate(chosen.id === '' ? null : chosen.id)}
-        />
-      )}
-    </Field>
+    <FormSection title="Series">
+      <Alert variant="info">
+        {`A test is judged the way its series is, so this one can only move to another ${mode} series.`}
+      </Alert>
+
+      <Field htmlFor="test-series" label="Series" className="max-w-lg" error={refused ?? undefined}>
+        {(control) => (
+          <TestSeriesPicker
+            {...control}
+            clearable={false}
+            value={link.data?.testSeriesId ?? ''}
+            selectedLabel={link.data?.name}
+            disabled={detail.attemptCount > 0 || move.isPending}
+            forExamStageId={detail.examStageId}
+            onChange={choose}
+          />
+        )}
+      </Field>
+
+      <ConfirmDialog
+        open={moving !== null}
+        onOpenChange={(open) => !open && setMoving(null)}
+        title={`Move ${detail.title ?? 'this test'} to ${moving?.name ?? ''}?`}
+        description={moveConsequence(moving?.name ?? '', link.data?.name)}
+        confirmLabel="Move it"
+        loading={move.isPending}
+        onConfirm={() => moving && move.mutate(moving.id)}
+      />
+    </FormSection>
   );
 }
 

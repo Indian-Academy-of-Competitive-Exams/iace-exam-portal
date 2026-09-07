@@ -7,12 +7,10 @@ import {
   MIN_PAPER_VARIANTS,
   PAPER_BINDING,
   TEST_SCOPE,
-  allowsCohortScheduling,
   fieldDiff,
   scopedQuestionCount,
   scopedDurationSec,
   type BaseConfigDetail,
-  type EvaluationMode,
   type CreateTestBody,
   type Paginated,
   type DrawSpec,
@@ -29,10 +27,13 @@ import { AuditContext } from '../audit';
 import { BaseConfigsService } from '../configs';
 import {
   SAT_TEST_MESSAGE,
+  SERIES_GONE_MESSAGE,
   locksOutTestEdit,
   thawsThePaper,
   paperBindingIssue,
   scopeRefIssue,
+  seriesFitIssue,
+  seriesRefused,
   TEST_DEFAULTS,
   testDeletionBlocker,
   variantCountFor,
@@ -66,6 +67,7 @@ const TEST_INCLUDE = {
       exam: { select: { id: true, code: true, name: true, course: true } },
     },
   },
+  testSeries: { select: { name: true } },
   programUnlocks: { select: { programCode: true, opensAt: true } },
   _count: { select: { attempts: true, paperQuestions: true } },
 } as const satisfies Prisma.TestInclude;
@@ -77,16 +79,11 @@ export const AUDITED_TEST_FIELDS = [
   'title',
   'isLocked',
   'scope',
-  'evaluationMode',
   'paperBinding',
   'examTemplate',
   'maxRetakes',
   'status',
 ] as const;
-
-/** Practice carries no cohort scheduling, so the edit that makes a test one takes all of it off. */
-const turnsIntoPractice = (evaluationMode: EvaluationMode | undefined): boolean =>
-  evaluationMode !== undefined && !allowsCohortScheduling(evaluationMode);
 
 /** Owns `Test`: what it covers and how it is judged. Its shape is its `BaseConfig`'s. */
 @Injectable()
@@ -130,15 +127,15 @@ export class TestsService {
     };
   }
 
-  /** The stage comes off the CONFIG, never the body — the composite FK needs them agreeing. */
+  /** The stage comes off the CONFIG and the mode off the SERIES, never the body. */
   async create(input: CreateTestBody, createdById: string): Promise<TestDetail> {
     const config = await this.configs.assertUsable(input.baseConfigId);
+    const series = await this.seriesCarrying(input.testSeriesId, config.examStageId);
 
     const scope = input.scope ?? TEST_DEFAULTS.scope;
-    const evaluationMode = input.evaluationMode ?? TEST_DEFAULTS.evaluationMode;
     const paperBinding = input.paperBinding ?? TEST_DEFAULTS.paperBinding;
     const scopeRef = input.scopeRef ?? null;
-    this.assertJudgeable(evaluationMode, paperBinding);
+    this.assertJudgeable(series.evaluationMode, paperBinding, series.name);
     this.assertCovers(config, scope, scopeRef);
     const variantCount = variantCountFor(paperBinding, input.variantCount);
     this.assertDrawable(paperBinding, variantCount);
@@ -147,12 +144,13 @@ export class TestsService {
       data: {
         baseConfigId: config.id,
         examStageId: config.examStageId,
+        testSeriesId: series.id,
         title: input.title,
         // The config only supplies the default; from here the test owns which screen it wears.
         examTemplate: input.examTemplate ?? config.examTemplate,
         scope,
         scopeRef: toJson(scopeRef),
-        evaluationMode,
+        evaluationMode: series.evaluationMode,
         paperBinding,
         maxRetakes: input.maxRetakes ?? null,
         variantCount,
@@ -162,6 +160,20 @@ export class TestsService {
     });
 
     return this.detail(created.id);
+  }
+
+  /** The series a test is born into: it decides the mode, so it is read before anything is written. */
+  private async seriesCarrying(testSeriesId: string, examStageId: string) {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: { id: true, name: true, examStageId: true, evaluationMode: true },
+    });
+    if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
+
+    const issue = seriesFitIssue(series, { examStageId, evaluationMode: undefined });
+    if (issue) throw seriesRefused(issue);
+
+    return series;
   }
 
   async update(id: string, input: UpdateTestBody): Promise<TestDetail> {
@@ -179,7 +191,7 @@ export class TestsService {
     const scope = input.scope ?? test.scope;
     const scopeRef = input.scopeRef === undefined ? scopeRefOf(test) : (input.scopeRef ?? null);
     const paperBinding = input.paperBinding ?? test.paperBinding;
-    this.assertJudgeable(input.evaluationMode ?? test.evaluationMode, paperBinding);
+    this.assertJudgeable(test.evaluationMode, paperBinding, test.testSeries.name);
     this.assertCovers(config, scope, scopeRef);
 
     // Papers are already drawn against a frozen count, so only an unfrozen one is raised to the floor.
@@ -194,8 +206,6 @@ export class TestsService {
     const droppingThePaper =
       input.paperBinding === PAPER_BINDING.GENERATED && test.paperBinding !== input.paperBinding;
 
-    const becomingPractice = turnsIntoPractice(input.evaluationMode);
-
     const updated = await this.prisma.$transaction(async (tx) => {
       // Before the paper goes: the thaw reads it to give back what finalizing counted.
       if (thawsThePaper(input)) await thaw(tx, test);
@@ -203,17 +213,12 @@ export class TestsService {
       // A paper belongs to a FIXED test. Per-attempt leaves rows nothing will ever read.
       if (droppingThePaper) await tx.paperQuestion.deleteMany({ where: { testId: id } });
 
-      // A stagger puts one cohort ahead of another, which a test that ranks nobody cannot mean.
-      if (becomingPractice) await tx.testProgramUnlock.deleteMany({ where: { testId: id } });
-
       return tx.test.update({
         where: { id },
         data: {
           ...(input.title === undefined ? {} : { title: input.title }),
           ...(input.scope === undefined ? {} : { scope: input.scope }),
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
-          ...(input.evaluationMode === undefined ? {} : { evaluationMode: input.evaluationMode }),
-          ...(becomingPractice ? { lateEntrySec: null, extraTimeSec: null } : {}),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
           ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
@@ -241,9 +246,7 @@ export class TestsService {
 
     await this.prisma.test.delete({ where: { id } });
 
-    if (test.testSeriesId !== null) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-    }
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
   }
 
   /** A generated test with one paper is a fixed test wearing the wrong name. */
@@ -259,8 +262,9 @@ export class TestsService {
   private assertJudgeable(
     evaluationMode: TestRow['evaluationMode'],
     paperBinding: TestRow['paperBinding'],
+    seriesName: string | null,
   ): void {
-    const issue = paperBindingIssue(evaluationMode, paperBinding);
+    const issue = paperBindingIssue(evaluationMode, paperBinding, seriesName);
     if (issue) {
       throw new AppException(ErrorCodes.VALIDATION_ERROR, issue, {
         fieldErrors: { paperBinding: [issue] },
@@ -346,6 +350,7 @@ function toTest(row: TestRow): Test {
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     attemptCount: row._count.attempts,
     testSeriesId: row.testSeriesId,
+    testSeriesName: row.testSeries.name,
     paperQuestionCount: row._count.paperQuestions,
     createdAt: row.createdAt.toISOString(),
   };

@@ -12,11 +12,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
-import {
-  ALREADY_FINALIZED_MESSAGE,
-  activationBlocker,
-  paperCompletenessIssues,
-} from './test-rules';
+import { ALREADY_FINALIZED_MESSAGE, paperCompletenessIssues } from './test-rules';
 import { PaperService } from './paper.service';
 
 const FINALIZE_SELECT = {
@@ -60,16 +56,13 @@ export class FinalizeService {
   /** One transaction: as two calls, a failure between them froze a test and offered it to nobody. */
   async offer(testId: string): Promise<OfferResult> {
     const test = await this.requireTest(testId);
-    this.assertOfferable(test);
 
     const frozen = test.isLocked
       ? await this.openAlreadyFrozen(test)
       : { ...(await this.finalize(testId, TEST_STATUS.ACTIVE)), status: TEST_STATUS.ACTIVE };
 
     // The series carrying it: the catalog a student reads is cached against it.
-    if (test.testSeriesId !== null) {
-      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
-    }
+    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
     return frozen;
   }
 
@@ -82,14 +75,6 @@ export class FinalizeService {
       });
     }
     return { ...(await this.alreadyFinalized(test)), status: TEST_STATUS.ACTIVE };
-  }
-
-  private assertOfferable(test: FinalizeRow): void {
-    const blocker = activationBlocker({ isLocked: true, testSeriesId: test.testSeriesId });
-    if (!blocker) return;
-    throw new AppException(ErrorCodes.CONFLICT, blocker, {
-      fieldErrors: { [FORM_LEVEL_FIELD]: [blocker] },
-    });
   }
 
   async finalize(testId: string, opening?: TestStatus): Promise<FinalizeResult> {

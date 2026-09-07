@@ -146,6 +146,8 @@ export {
   FormSection,
   useFormDisabled,
   type FormPanelProps,
+  type FormPanelTab,
+  type FormPanelTabs,
   type FormSectionProps,
 } from './components/ui/form-panel';
 export { RowActions, type RowActionsProps } from './components/ui/row-actions';

@@ -1,0 +1,897 @@
+// IACE — generated from prisma/schema.prisma
+// Generated 2026-09-07. Source of truth is the Prisma schema.
+// Arrays are marked note:'array' (DBML has no native array type); native DB types are lifted from @db.*
+
+Enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+Enum DifficultyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+Enum SupportedLanguage {
+  EN
+  HI
+  TE
+}
+
+Enum QuestionType {
+  SINGLE_MCQ
+  TEXT_FIELD
+}
+
+Enum AnswerMode {
+  EXACT
+  NUMERIC
+}
+
+Enum QuestionStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+Enum TestUi {
+  CBT
+  OMR
+  GENERIC
+  TYPING
+}
+
+Enum NavigationPolicy {
+  FREE
+  FORWARD_ONLY
+}
+
+Enum LanguageMode {
+  SINGLE
+  DUAL
+}
+
+Enum ExamTemplate {
+  DEFAULT
+  SSC_RAILWAYS
+}
+
+Enum TimerTemplate {
+  COMPOSITE_FREE
+  SECTIONAL_LOCKED
+  SESSION_MODULE_LOCKED
+  PER_ITEM_TIMED
+}
+
+Enum ExamCourse {
+  SSC
+  RRB
+  BANKING
+  AP_TS_POLICE
+}
+
+Enum ExamMode {
+  CBT
+  OMR
+  PSYCHOMETRIC
+  SKILL
+  PHYSICAL
+  INTERVIEW
+  DESCRIPTIVE
+}
+
+Enum MeritType {
+  MERIT
+  QUALIFYING
+}
+
+Enum StageDisposition {
+  CONDUCTED
+  PARTIAL
+  CATALOG_ONLY
+}
+
+Enum TestStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+Enum TestScope {
+  FULL
+  MODULE
+  SECTIONAL
+}
+
+Enum EvaluationMode {
+  RANKED
+  PRACTICE
+}
+
+Enum PaperBinding {
+  FIXED
+  GENERATED
+}
+
+Enum PaperQuestionStatus {
+  ACTIVE
+  DROPPED
+  BONUS
+}
+
+Enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EVALUATED
+  EXPIRED
+}
+
+Enum AnswerState {
+  NOT_VISITED
+  NOT_ANSWERED
+  ANSWERED
+  MARKED_REVIEW
+  ANSWERED_MARKED
+}
+
+Enum NotificationType {
+  TEST_ASSIGNED
+  RESULT_READY
+  ENROLLMENT_ADDED
+  GRANT_ADDED
+  GENERIC
+}
+
+Enum StudentType {
+  ONLINE
+  OFFLINE
+  NON_IACE
+}
+
+Enum BranchType {
+  PHYSICAL
+  VIRTUAL
+}
+
+Enum ImportSource {
+  INDIVIDUAL
+  SHEET
+  SCRIPT
+  SELF_SIGNUP
+}
+
+Enum TestSeriesKind {
+  STANDARD
+  FREE
+  PROGRAM
+  EVENT
+}
+
+Enum UnlockState {
+  LOCKED
+  UNLOCKED
+}
+
+Enum PermissionLevel {
+  READ
+  WRITE
+}
+
+Enum AuditFeature {
+  STUDENT
+  STUDENT_PROFILE
+  BRANCH
+  ADMIN
+  QUESTION
+  TEST
+  TEST_SERIES
+  BASE_CONFIG
+  BRANCH_TEST_CONFIG
+  EXAM_TAXONOMY
+  TAXONOMY_SUBJECT
+  TAXONOMY_TOPIC
+  FEATURE_PERMISSION
+}
+
+Enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  ACTIVATE
+  DEACTIVATE
+  BLOCK
+  UNBLOCK
+  IMPORT
+}
+
+Enum ActorType {
+  ADMIN
+  STUDENT
+  SCRIPT
+  SYSTEM
+}
+
+Enum ConsentPurpose {
+  PLATFORM
+}
+
+Table Exam {
+  id text [pk, default: `cuid()`]
+  course ExamCourse [not null]
+  code text [unique, not null]
+  name text [not null]
+  description text
+  isActive boolean [not null, default: true]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (course)
+  }
+}
+
+Table ExamStage {
+  id text [pk, default: `cuid()`]
+  examId text [not null]
+  stageKey text [unique, not null]
+  name text [not null]
+  order integer [not null, default: 0]
+  mode ExamMode [not null, default: 'CBT']
+  disposition StageDisposition [not null, default: 'CONDUCTED']
+  isActive boolean [not null, default: true]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (examId)
+    (examId, order)
+    (disposition)
+  }
+}
+
+Table BaseConfig {
+  id text [pk, default: `cuid()`]
+  examStageId text [not null]
+  name text [not null]
+  isDefault boolean [not null, default: false]
+  clonedFromId text
+  version integer [not null, default: 1]
+  isActive boolean [not null, default: true]
+  locked boolean [not null, default: false]
+  totalQuestions integer [not null]
+  totalMarks decimal(8, 2) [not null]
+  durationSec integer [not null]
+  timerTemplate TimerTemplate [not null, default: 'COMPOSITE_FREE']
+  navigation NavigationPolicy [not null, default: 'FREE']
+  optionalSectionCount integer
+  defaultTestUi TestUi [not null, default: 'CBT']
+  examTemplate ExamTemplate [not null, default: 'DEFAULT']
+  languageMode LanguageMode [not null, default: 'SINGLE']
+  languages SupportedLanguage [not null, note: 'array']
+  shuffleQuestions boolean [not null, default: true]
+  shuffleOptions boolean [not null, default: true]
+  calculatorEnabled boolean [not null, default: false]
+  featureFlags jsonb
+  scoringVersion integer [not null, default: 1]
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (id, examStageId) [unique]
+    (examStageId)
+    (clonedFromId)
+    (isDefault)
+  }
+}
+
+Table BaseConfigModule {
+  id text [pk, default: `cuid()`]
+  baseConfigId text [not null]
+  name text [not null]
+  order integer [not null]
+  durationSec integer
+  indexes {
+    (baseConfigId, order) [unique]
+    (baseConfigId, id) [unique]
+  }
+}
+
+Table BaseConfigSection {
+  id text [pk, default: `cuid()`]
+  baseConfigId text [not null]
+  moduleId text
+  name text [not null]
+  order integer [not null]
+  subjectId text
+  questionCount integer [not null]
+  marksPerQuestion decimal(6, 2) [not null]
+  negativeMarks decimal(6, 2) [not null]
+  durationSec integer
+  perQuestionSec integer
+  mandatory boolean [not null, default: true]
+  meritOrQualifying MeritType [not null, default: 'MERIT']
+  qualifyingCutoff decimal(6, 2)
+  patternNote text
+  indexes {
+    (baseConfigId, moduleId, order) [unique]
+    (baseConfigId, id) [unique]
+    (subjectId)
+    (moduleId)
+  }
+}
+
+Table Subject {
+  id text [pk, default: `cuid()`]
+  name text [unique, not null]
+  code text [unique]
+}
+
+Table Topic {
+  id text [pk, default: `cuid()`]
+  subjectId text [not null]
+  name text [not null]
+  indexes {
+    (subjectId, name) [unique]
+  }
+}
+
+Table Question {
+  id text [pk, default: `cuid()`]
+  questionCode text [unique]
+  type QuestionType [not null, default: 'SINGLE_MCQ']
+  subjectId text [not null]
+  topicId text
+  difficulty DifficultyLevel [not null]
+  status QuestionStatus [not null, default: 'DRAFT']
+  currentVersionId text
+  tags text [not null, note: 'array']
+  stemHash text
+  fixedUseCount integer [not null, default: 0]
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (subjectId, difficulty, status)
+    (topicId)
+    (stemHash)
+    (fixedUseCount)
+    (createdById)
+    (tags)
+  }
+}
+
+Table QuestionVersion {
+  id text [pk, default: `cuid()`]
+  questionId text [not null]
+  version integer [not null]
+  content jsonb [not null]
+  options jsonb
+  answerKey jsonb
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (questionId, version) [unique]
+    (questionId, id) [unique]
+  }
+}
+
+Table Test {
+  id text [pk, default: `cuid()`]
+  title text
+  baseConfigId text [not null]
+  examStageId text [not null]
+  scope TestScope [not null, default: 'FULL']
+  scopeRef jsonb
+  evaluationMode EvaluationMode [not null]
+  paperBinding PaperBinding [not null, default: 'FIXED']
+  maxRetakes integer
+  questionPoolFilter jsonb
+  examTemplate ExamTemplate [not null, default: 'DEFAULT']
+  variantCount integer [not null, default: 1]
+  status TestStatus [not null, default: 'DRAFT']
+  isLocked boolean [not null, default: false]
+  version integer [not null, default: 0]
+  finalizedAt timestamptz(3)
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  testSeriesId text [not null]
+  seriesOrder integer
+  opensAt timestamptz(3)
+  lateEntrySec integer
+  extraTimeSec integer
+  indexes {
+    (id, baseConfigId) [unique]
+    (baseConfigId)
+    (examStageId)
+    (status)
+    (testSeriesId)
+  }
+}
+
+Table PaperQuestion {
+  id text [pk, default: `cuid()`]
+  testId text [not null]
+  baseConfigId text [not null]
+  baseConfigSectionId text [not null]
+  questionId text [not null]
+  questionVersionId text [not null]
+  variant integer [not null, default: 0]
+  order integer [not null]
+  marks decimal(6, 2) [not null]
+  negativeMarks decimal(6, 2) [not null]
+  status PaperQuestionStatus [not null, default: 'ACTIVE']
+  indexes {
+    (testId, variant, questionId) [unique]
+    (testId, variant, order) [unique]
+    (id, questionId, questionVersionId) [unique]
+    (id, baseConfigSectionId) [unique]
+    (questionId)
+    (questionVersionId)
+    (baseConfigId, baseConfigSectionId)
+  }
+}
+
+Table Attempt {
+  id text [pk, default: `cuid()`]
+  testId text [not null]
+  studentId text [not null]
+  attemptNo integer [not null, default: 1]
+  isGraded boolean [not null, default: true]
+  status AttemptStatus [not null, default: 'IN_PROGRESS']
+  startedAt timestamptz(3) [not null, default: `now()`]
+  endsAt timestamptz(3) [not null]
+  submittedAt timestamptz(3)
+  evaluatedAt timestamptz(3)
+  shuffleSeed integer [not null]
+  languages SupportedLanguage [not null, note: 'array']
+  sectionState jsonb
+  score decimal(8, 2)
+  correctCount integer
+  wrongCount integer
+  unattemptedCount integer
+  sectionScores jsonb
+  lastRank integer
+  lastPercentile decimal(5, 2)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, studentId, attemptNo) [unique]
+    (studentId, createdAt)
+    (testId, status)
+    (testId, score)
+  }
+}
+
+Table AttemptQuestion {
+  attemptId text [not null]
+  questionId text [not null]
+  paperQuestionId text
+  questionVersionId text [not null]
+  baseConfigSectionId text [not null]
+  order integer [not null]
+  selectedOptionId text
+  typedAnswer text
+  state AnswerState [not null, default: 'NOT_VISITED']
+  timeSpentSec integer [not null, default: 0]
+  isCorrect boolean
+  marksAwarded decimal(6, 2)
+  answeredAt timestamptz(3)
+  indexes {
+    (attemptId, questionId) [pk]
+    (questionId)
+    (paperQuestionId)
+    (baseConfigSectionId)
+    (attemptId, order)
+  }
+}
+
+Table PerformanceShare {
+  id text [pk, default: `cuid()`]
+  token text [unique, not null]
+  attemptId text [not null]
+  createdByAdminId text
+  expiresAt timestamptz(3)
+  revokedAt timestamptz(3)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (attemptId)
+    (createdByAdminId)
+  }
+}
+
+Table Student {
+  id text [pk, default: `cuid()`]
+  mobile text [not null]
+  externalRef text
+  studentType StudentType [not null]
+  enrolledCourses ExamCourse [not null, note: 'array']
+  programs text [not null, note: 'array']
+  enrolledExams text [not null, note: 'array']
+  currentBranchId text
+  pinHash text
+  pinIsDefault boolean [not null, default: true]
+  fullName text
+  preTestReady boolean [not null, default: false]
+  profileCompleted boolean [not null, default: false]
+  isActive boolean [not null, default: true]
+  isTestBlocked boolean [not null, default: false]
+  deletedAt timestamptz(3)
+  anonymizedAt timestamptz(3)
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (mobile)
+    (externalRef)
+    (enrolledCourses)
+    (enrolledExams)
+    (programs)
+    (currentBranchId)
+    (anonymizedAt)
+  }
+}
+
+Table StudentProfile {
+  id text [pk, default: `cuid()`]
+  studentId text [unique, not null]
+  motherName text
+  fatherName text
+  dob date
+  email text
+  address text
+  gender Gender
+  photoUrl text
+  aadhaarVerified boolean [not null, default: false]
+  panVerified boolean [not null, default: false]
+  tenthMarksheetUrl text
+  educationDetails jsonb
+  pastExamHistory jsonb
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+}
+
+Table StudentConsent {
+  id text [pk, default: `cuid()`]
+  studentId text [not null]
+  purpose ConsentPurpose [not null]
+  version text [not null]
+  granted boolean [not null]
+  recordedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId, purpose, recordedAt)
+  }
+}
+
+Table Admin {
+  id text [pk, default: `cuid()`]
+  email text [unique, not null]
+  fullName text
+  isSuperAdmin boolean [not null, default: false]
+  isActive boolean [not null, default: true]
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+}
+
+Table AdminFeaturePermission {
+  adminId text [not null]
+  featureKey text [not null]
+  level PermissionLevel [not null]
+  indexes {
+    (adminId, featureKey, level) [pk]
+    (featureKey)
+  }
+}
+
+Table Branch {
+  id text [pk, default: `cuid()`]
+  name text [not null]
+  type BranchType [not null]
+  isActive boolean [not null, default: true]
+  deletedAt timestamptz(3)
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (name)
+  }
+}
+
+Table Program {
+  id text [pk, default: `cuid()`]
+  code text [unique, not null]
+  name text [not null]
+  isActive boolean [not null, default: true]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+}
+
+Table TestSeries {
+  id text [pk, default: `cuid()`]
+  name text [not null]
+  description text
+  examStageId text
+  programCode text
+  sequentialTests boolean [not null, default: false]
+  progressive boolean [not null, default: false]
+  kind TestSeriesKind [not null, default: 'STANDARD']
+  evaluationMode EvaluationMode [not null, default: 'RANKED']
+  eventId text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+  branchIds text [not null, note: 'array']
+  isEnabled boolean [not null, default: false]
+  indexes {
+    (id, evaluationMode) [unique]
+    (examStageId)
+    (programCode)
+    (eventId)
+    (branchIds)
+  }
+}
+
+Table StudentGrant {
+  studentId text [not null]
+  testSeriesId text [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  createdById text
+  indexes {
+    (studentId, testSeriesId) [pk]
+    (testSeriesId)
+  }
+}
+
+Table Event {
+  id text [pk, default: `cuid()`]
+  name text [not null]
+  description text
+  isActive boolean [not null, default: true]
+  createdById text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  updatedAt timestamptz(3) [not null, default: `now()`]
+}
+
+Table EventCandidate {
+  eventId text [not null]
+  studentId text [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (eventId, studentId) [pk]
+    (studentId)
+  }
+}
+
+Table TestProgramUnlock {
+  testId text [not null]
+  programCode text [not null]
+  opensAt timestamptz(3) [not null]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (testId, programCode) [pk]
+    (programCode)
+  }
+}
+
+Table ImportLog {
+  id text [pk, default: `cuid()`]
+  feature AuditFeature [not null]
+  source ImportSource [not null]
+  actorId text
+  fileS3Key text
+  total integer [not null, default: 0]
+  created integer [not null, default: 0]
+  updated integer [not null, default: 0]
+  skipped integer [not null, default: 0]
+  failed integer [not null, default: 0]
+  status text [not null]
+  errors jsonb
+  startedAt timestamptz(3) [not null, default: `now()`]
+  finishedAt timestamptz(3)
+  indexes {
+    (feature, startedAt)
+  }
+}
+
+Table RowActionLog {
+  id text [pk, default: `cuid()`]
+  feature AuditFeature [not null]
+  entityId text [not null]
+  entityLabel text
+  action AuditAction [not null]
+  actorType ActorType [not null]
+  actorId text
+  changed jsonb
+  importLogId text
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (feature, entityId, createdAt)
+    (actorId, createdAt)
+    (createdAt)
+    (importLogId)
+  }
+}
+
+Table OutboxEvent {
+  id text [pk, default: `cuid()`]
+  aggregateType text [not null]
+  aggregateId text [not null]
+  eventType text [not null]
+  payload jsonb
+  createdAt timestamptz(3) [not null, default: `now()`]
+  processedAt timestamptz(3)
+  indexes {
+    (processedAt, createdAt)
+    (aggregateType, aggregateId, createdAt)
+  }
+}
+
+Table ProcessedRollup {
+  attemptId text [not null]
+  rollupType text [not null]
+  processedAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (attemptId, rollupType) [pk]
+  }
+}
+
+Table Notification {
+  id text [pk, default: `cuid()`]
+  studentId text [not null]
+  type NotificationType [not null]
+  title text [not null]
+  body text
+  testId text
+  testSeriesId text
+  isRead boolean [not null, default: false]
+  createdAt timestamptz(3) [not null, default: `now()`]
+  indexes {
+    (studentId, createdAt)
+    (studentId, isRead)
+    (testId)
+    (testSeriesId)
+  }
+}
+
+Table StudentStat {
+  studentId text [pk]
+  testsAttempted integer [not null, default: 0]
+  testsEvaluated integer [not null, default: 0]
+  sumScore decimal(16, 2) [not null, default: 0]
+  sumPercentile decimal(16, 2) [not null, default: 0]
+  bestPercentile decimal(5, 2)
+  totalAnswered integer [not null, default: 0]
+  totalCorrect integer [not null, default: 0]
+  totalWrong integer [not null, default: 0]
+  totalUnattempted integer [not null, default: 0]
+  sumTimeSec bigint [not null, default: 0]
+  practiceAttempts integer [not null, default: 0]
+  lastAttemptAt timestamptz(3)
+  computedThrough timestamptz(3)
+  computedAt timestamptz(3) [not null]
+}
+
+Table StudentSubjectStat {
+  studentId text [not null]
+  subjectId text [not null]
+  scope TestScope [not null]
+  evaluationMode EvaluationMode [not null]
+  attempted integer [not null, default: 0]
+  correct integer [not null, default: 0]
+  wrong integer [not null, default: 0]
+  sumTimeSec bigint [not null, default: 0]
+  computedAt timestamptz(3) [not null]
+  indexes {
+    (studentId, subjectId, scope, evaluationMode) [pk]
+    (subjectId)
+  }
+}
+
+Table TestStat {
+  testId text [pk]
+  attemptCount integer [not null, default: 0]
+  evaluatedCount integer [not null, default: 0]
+  sumScore decimal(18, 2) [not null, default: 0]
+  maxScore decimal(8, 2)
+  minScore decimal(8, 2)
+  sumTimeSec bigint [not null, default: 0]
+  scoreHistogram jsonb
+  topperAttemptId text
+  attemptsIncluded integer [not null, default: 0]
+  computedAt timestamptz(3) [not null]
+  indexes {
+    (topperAttemptId)
+  }
+}
+
+Table TestSectionStat {
+  testId text [not null]
+  baseConfigSectionId text [not null]
+  attempted integer [not null, default: 0]
+  sumScore decimal(18, 2) [not null, default: 0]
+  sumTimeSec bigint [not null, default: 0]
+  computedAt timestamptz(3) [not null]
+  indexes {
+    (testId, baseConfigSectionId) [pk]
+    (baseConfigSectionId)
+  }
+}
+
+Table TestQuestionStat {
+  testId text [not null]
+  paperQuestionId text [not null]
+  questionId text [not null]
+  attemptedCount integer [not null, default: 0]
+  correctCount integer [not null, default: 0]
+  wrongCount integer [not null, default: 0]
+  skippedCount integer [not null, default: 0]
+  sumTimeSec bigint [not null, default: 0]
+  optionCounts jsonb
+  pValue decimal(5, 4)
+  discrimination decimal(6, 4)
+  computedAt timestamptz(3) [not null]
+  indexes {
+    (testId, paperQuestionId) [pk]
+    (paperQuestionId)
+    (questionId)
+  }
+}
+
+Ref: ExamStage.examId > Exam.id
+Ref: BaseConfig.examStageId > ExamStage.id
+Ref: BaseConfig.clonedFromId > BaseConfig.id [delete: restrict]
+Ref: BaseConfigModule.baseConfigId > BaseConfig.id [delete: cascade]
+Ref: BaseConfigSection.baseConfigId > BaseConfig.id [delete: cascade]
+Ref: BaseConfigSection.(baseConfigId, moduleId) > BaseConfigModule.(baseConfigId, id) [delete: restrict]
+Ref: BaseConfigSection.subjectId > Subject.id [delete: restrict]
+Ref: Topic.subjectId > Subject.id
+Ref: Question.subjectId > Subject.id
+Ref: Question.createdById > Admin.id [delete: restrict]
+Ref: Question.topicId > Topic.id [delete: restrict]
+Ref: Question.(id, currentVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
+Ref: QuestionVersion.questionId > Question.id
+Ref: Test.(baseConfigId, examStageId) > BaseConfig.(id, examStageId) [delete: restrict]
+Ref: Test.examStageId > ExamStage.id
+Ref: Test.(testSeriesId, evaluationMode) > TestSeries.(id, evaluationMode) [delete: restrict]
+Ref: PaperQuestion.(testId, baseConfigId) > Test.(id, baseConfigId) [delete: cascade]
+Ref: PaperQuestion.(baseConfigId, baseConfigSectionId) > BaseConfigSection.(baseConfigId, id) [delete: restrict]
+Ref: PaperQuestion.questionId > Question.id
+Ref: PaperQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
+Ref: Attempt.testId > Test.id
+Ref: Attempt.studentId > Student.id
+Ref: AttemptQuestion.attemptId > Attempt.id [delete: cascade]
+Ref: AttemptQuestion.questionId > Question.id
+Ref: AttemptQuestion.(questionId, questionVersionId) > QuestionVersion.(questionId, id) [delete: restrict]
+Ref: AttemptQuestion.(paperQuestionId, questionId, questionVersionId) > PaperQuestion.(id, questionId, questionVersionId) [delete: restrict]
+Ref: AttemptQuestion.(paperQuestionId, baseConfigSectionId) > PaperQuestion.(id, baseConfigSectionId) [delete: restrict]
+Ref: AttemptQuestion.baseConfigSectionId > BaseConfigSection.id
+Ref: PerformanceShare.attemptId > Attempt.id [delete: restrict]
+Ref: PerformanceShare.createdByAdminId > Admin.id [delete: restrict]
+Ref: Student.currentBranchId > Branch.id [delete: restrict]
+Ref: StudentProfile.studentId > Student.id [delete: cascade]
+Ref: StudentConsent.studentId > Student.id [delete: cascade]
+Ref: AdminFeaturePermission.adminId > Admin.id [delete: cascade]
+Ref: TestSeries.examStageId > ExamStage.id [delete: restrict]
+Ref: TestSeries.programCode > Program.code [delete: restrict]
+Ref: TestSeries.eventId > Event.id [delete: restrict]
+Ref: StudentGrant.studentId > Student.id [delete: cascade]
+Ref: StudentGrant.testSeriesId > TestSeries.id [delete: cascade]
+Ref: EventCandidate.eventId > Event.id [delete: cascade]
+Ref: EventCandidate.studentId > Student.id [delete: cascade]
+Ref: TestProgramUnlock.testId > Test.id [delete: cascade]
+Ref: TestProgramUnlock.programCode > Program.code [delete: restrict]
+Ref: RowActionLog.importLogId > ImportLog.id [delete: restrict]
+Ref: ProcessedRollup.attemptId > Attempt.id [delete: cascade]
+Ref: Notification.studentId > Student.id [delete: cascade]
+Ref: Notification.testId > Test.id
+Ref: Notification.testSeriesId > TestSeries.id
+Ref: StudentStat.studentId > Student.id [delete: cascade]
+Ref: StudentSubjectStat.studentId > Student.id [delete: cascade]
+Ref: StudentSubjectStat.subjectId > Subject.id
+Ref: TestStat.testId > Test.id [delete: cascade]
+Ref: TestStat.topperAttemptId > Attempt.id
+Ref: TestSectionStat.testId > Test.id [delete: cascade]
+Ref: TestSectionStat.baseConfigSectionId > BaseConfigSection.id
+Ref: TestQuestionStat.testId > Test.id [delete: cascade]
+Ref: TestQuestionStat.paperQuestionId > PaperQuestion.id [delete: cascade]
+Ref: TestQuestionStat.questionId > Question.id

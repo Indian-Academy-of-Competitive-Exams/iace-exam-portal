@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PAGE_SIZE_MAX } from '@iace/contracts';
+import { EVALUATION_MODE, PAGE_SIZE_MAX, type EvaluationMode } from '@iace/contracts';
 import { useInfinitePages } from '@iace/app-kit';
 import { Combobox, MultiCombobox, plural } from '@iace/ui';
 import { api } from '../lib/api';
@@ -89,9 +89,17 @@ export interface ChosenSeries {
   name: string;
   /** A grant onto a switched-off series opens nothing yet, which only the dialog can say. */
   isEnabled: boolean;
+  /** What its tests are judged as, since a test created in it is given this and cannot set its own. */
+  evaluationMode: EvaluationMode;
 }
 
-const NO_SERIES: ChosenSeries = { id: '', name: '', isEnabled: false };
+/** What a cleared series picker hands back, so nothing has to spell out the empty shape twice. */
+export const NO_SERIES: ChosenSeries = {
+  id: '',
+  name: '',
+  isEnabled: false,
+  evaluationMode: EVALUATION_MODE.RANKED,
+};
 
 /** The row comes back with the id because what asks for a series next is a dialog naming it. */
 export function TestSeriesPicker({
@@ -109,6 +117,8 @@ export function TestSeriesPicker({
   }
 >) {
   const [search, setSearch] = useState('');
+  // Empty is a stage ASKED for and not yet picked, which the server would read as no filter at all.
+  const awaitingStage = forExamStageId === '';
 
   const pages = useInfinitePages({
     queryKey: [
@@ -126,6 +136,7 @@ export function TestSeriesPicker({
         notReachedBy,
         forExamStageId,
       }),
+    enabled: !awaitingStage,
   });
 
   const items = pages.items.map((series) => ({
@@ -136,13 +147,20 @@ export function TestSeriesPicker({
 
   const chosenOf = (value: string): ChosenSeries => {
     const row = pages.items.find((series) => series.id === value);
-    return row ? { id: row.id, name: row.name, isEnabled: row.isEnabled } : NO_SERIES;
+    if (!row) return NO_SERIES;
+    return {
+      id: row.id,
+      name: row.name,
+      isEnabled: row.isEnabled,
+      evaluationMode: row.evaluationMode,
+    };
   };
 
   return (
     <Combobox
       {...props}
-      placeholder={props.placeholder ?? 'No series'}
+      disabled={awaitingStage || props.disabled}
+      placeholder={awaitingStage ? 'Choose a stage first' : (props.placeholder ?? 'No series')}
       items={items}
       onChange={(value) => onChange(chosenOf(value))}
       search={search}

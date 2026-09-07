@@ -340,8 +340,8 @@ describe('FinalizeService — a test drawn per student', () => {
 });
 
 describe('FinalizeService — offering', () => {
-  const build = (over: Partial<FakeTestModelRow> = {}, testSeriesId: string | null = 'srs_1') =>
-    serviceWith(wholePaper(), makeTest({ id: 'tst_1', testSeriesId, ...over }));
+  const build = (over: Partial<FakeTestModelRow> = {}) =>
+    serviceWith(wholePaper(), makeTest({ id: 'tst_1', ...over }));
 
   it('freezes and opens in one write, so neither can land without the other', async () => {
     const { service, prisma } = build();
@@ -352,18 +352,6 @@ describe('FinalizeService — offering', () => {
     assert.equal(result.finalizedByThisCall, true);
     assert.equal(prisma.tests[0]?.isLocked, true);
     assert.equal(prisma.tests[0]?.status, TEST_STATUS.ACTIVE);
-  });
-
-  /** The failure this prevents: a paper frozen for a test no series carries, offered to nobody. */
-  it('refuses before it writes anything when no series carries it', async () => {
-    const { service, prisma } = build({}, null);
-
-    const error = await service.offer('tst_1').catch((e: unknown) => e);
-
-    assert.ok(AppException.is(error));
-    assert.equal(error.code, ErrorCodes.CONFLICT);
-    assert.equal(prisma.tests[0]?.isLocked, false);
-    assert.equal(prisma.tests[0]?.status, TEST_STATUS.DRAFT);
   });
 
   it('opens a retired test again without re-freezing its paper', async () => {

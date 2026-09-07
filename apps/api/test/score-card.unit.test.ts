@@ -127,9 +127,9 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
 }
 
 /** How the test is offered institute-wide, which is what a final standing waits for. */
-type Schedule = { scheduled: boolean; closesAt: string | null; extraTimeSec: number };
+type Schedule = { closesAt: string | null; extraTimeSec: number };
 
-const OPEN_ENDED: Schedule = { scheduled: true, closesAt: null, extraTimeSec: 0 };
+const OPEN_ENDED: Schedule = { closesAt: null, extraTimeSec: 0 };
 
 function report(attempts: FakeAttemptRow[], schedule: Schedule = OPEN_ENDED) {
   const prisma = new FakeScoringPrisma(attempts, answers(), SHAPE);
@@ -236,12 +236,10 @@ describe('the Score Card', () => {
   it('calls the standing provisional while anybody can still sit the paper', async () => {
     const attempt = scored();
     const open = report([attempt], {
-      scheduled: true,
       closesAt: new Date(NOW.getTime() + 60_000).toISOString(),
       extraTimeSec: 0,
     });
     const shut = report([attempt], {
-      scheduled: true,
       closesAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(),
       extraTimeSec: 0,
     });
@@ -254,7 +252,6 @@ describe('the Score Card', () => {
   it('keeps it provisional until the last sitting that could have started has ended', async () => {
     const attempt = scored();
     const { service } = report([attempt], {
-      scheduled: true,
       closesAt: new Date(NOW.getTime() - 30 * 60_000).toISOString(),
       extraTimeSec: 0,
     });

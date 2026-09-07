@@ -226,7 +226,7 @@ export class TestsController {
 
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.READ)
   @Get(':id/series')
-  series(@Param('id') id: string): Promise<TestSeriesLink | null> {
+  series(@Param('id') id: string): Promise<TestSeriesLink> {
     return this.offering.series(id);
   }
 
@@ -234,11 +234,11 @@ export class TestsController {
   @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
   @Post(':id/series')
   @HttpCode(HttpStatus.OK)
-  setSeries(
+  moveToSeries(
     @Param('id') id: string,
     @Body(new ZodBody(setTestSeriesSchema)) body: SetTestSeriesBody,
-  ): Promise<TestSeriesLink | null> {
-    return this.offering.setSeries(id, body);
+  ): Promise<TestSeriesLink> {
+    return this.offering.moveToSeries(id, body);
   }
 
   @Audit(AUDIT_FEATURE.TEST, AUDIT_ACTION.UPDATE)
@@ -281,16 +281,5 @@ export class SeriesTestsController {
     @Body(new ZodBody(setSeriesTestUnlockSchema)) body: SetSeriesTestUnlockBody,
   ): Promise<SeriesTestRow[]> {
     return this.offering.setUnlock(seriesId, testId, body);
-  }
-
-  @Audit(AUDIT_FEATURE.TEST_SERIES, AUDIT_ACTION.UPDATE)
-  @RequiresFeature(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE)
-  @Delete(':testId')
-  @HttpCode(HttpStatus.OK)
-  remove(
-    @Param('seriesId') seriesId: string,
-    @Param('testId') testId: string,
-  ): Promise<SeriesTestRow[]> {
-    return this.offering.removeFromSeries(seriesId, testId);
   }
 }

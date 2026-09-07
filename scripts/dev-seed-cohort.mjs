@@ -225,12 +225,18 @@ async function writePaper(prisma, stageId, assigned) {
   });
 
   const finalizedAt = new Date();
+  // A late-entry cap is what lets entry CLOSE, which is what opens the solution gate.
   await prisma.test.create({
     data: {
       id: IDS.test,
       title: '[COHORT] Scoring rehearsal — Mock 1',
       baseConfigId: IDS.config,
       examStageId: stageId,
+      testSeriesId: IDS.series,
+      evaluationMode: 'RANKED',
+      seriesOrder: 1,
+      opensAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
+      lateEntrySec: LATE_ENTRY_SEC,
       status: 'ACTIVE',
       isLocked: true,
       version: 1,
@@ -286,16 +292,6 @@ async function writeOffering(prisma, stageId) {
       examStageId: stageId,
       branchIds: [branchId],
       isEnabled: true,
-    },
-  });
-  // A late-entry cap is what lets entry CLOSE, which is what opens the solution gate.
-  await prisma.test.update({
-    where: { id: IDS.test },
-    data: {
-      testSeriesId: IDS.series,
-      seriesOrder: 1,
-      opensAt: new Date(Date.now() - SUBMITTED_DAYS_AGO * DAY_MS),
-      lateEntrySec: LATE_ENTRY_SEC,
     },
   });
   return branchId;
@@ -437,8 +433,8 @@ async function main() {
       process.exit(1);
     }
 
-    const paper = await writePaper(prisma, stage.id, assigned);
     const branchId = await writeOffering(prisma, stage.id);
+    const paper = await writePaper(prisma, stage.id, assigned);
     const students = await writeStudents(prisma, branchId, stage.exam.code, stage.exam.course);
     const { attempts, items } = await writeSittings(prisma, paper);
 

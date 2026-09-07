@@ -82,11 +82,12 @@ Setup, then paper, then offer. There is no certificate step.
   request that lost writes nothing.
 - Finalize increments `Question.fixedUseCount` for every question it served. Thawing decrements it,
   or a refreeze would count twice.
-- Offering a test needs a frozen paper **and** a series: a test reaches a student only through one.
+- Offering a test needs a frozen paper and nothing else. The series it reaches a student through is
+  not a second condition: a test is created inside one and cannot leave.
 - Editing a finalized test **thaws** its paper unless the edit could not change what the paper holds
   — a rename and a re-skin cannot. Once the test has been **sat**, only its title moves.
-- A sat test is never deleted, and the series cannot drop it from its own side either — it is part
-  of the record of everyone who sat it, wherever it was offered. Retire it; it keeps its results.
+- A sat test is never deleted — it is part of the record of everyone who sat it. Retire it; it keeps
+  its results.
 
 ## 4. Lock on first attempt
 
@@ -107,6 +108,10 @@ Reach is to a **series**, never a test. There are no groups, no batches, no acce
 shareable link, and the only per-student row in the model is a grant — which is why this scales to a
 public rollout unchanged.
 
+- **A test belongs to exactly one series and is created inside it.** It MOVES between series and is
+  never unlinked: the catalog walks series → tests, so a test in no series reaches nobody — a state
+  with no valid ending rather than a test waiting to be placed. Once anybody has sat it, it stops
+  moving: it is part of the record of everyone who did, in the series they sat it in.
 - `TestSeries.isEnabled` gates every path. A series nobody switched on reaches nobody.
 - **The kind decides who reaches it.** `FREE` reaches every student. `STANDARD` reaches a student
   whose current branch is on the series' `branchIds` and whose enrolled courses include the course of
@@ -140,6 +145,13 @@ public rollout unchanged.
 
 Scheduling belongs to the **test**, and a series has no availability of its own.
 
+- **A series declares `evaluationMode`, and every test it holds carries the same one.** A test never
+  chooses its own: it takes the series' mode at creation, and a move into a series that judges its
+  tests the other way is refused. **A series' mode is fixed once it holds a test.** The composite
+  foreign key does not cascade, so Postgres refuses to rewrite a mode a test still points at —
+  editing the series would otherwise reinterpret sittings already scored the other way, silently.
+  `TestSeriesService` refuses it first and names the count, so an admin reads a sentence rather than
+  a constraint error. An empty series may still change.
 - `Test.opensAt` is one instant for the whole institute. `Test.lateEntrySec` counts **from that
   opening** and is what shuts entry. `Test.extraTimeSec` is added to the duration once, where the
   server computes the deadline — an allowance rather than a separate flow, which is where extra time
@@ -152,11 +164,11 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   ahead of another. A practice attempt is never graded, so none of them separates or compensates
   for anything. The pair on `Test` is held by `Test_practice_has_no_window_check`; the stagger
   spans two tables, so `OfferingService` holds it alone — as the "earlier, never later" rule beside
-  it already does. An edit that turns a ranked test into a practice one **clears all three rather
-  than refusing**, and the screen names what is going before it saves.
+  it already does. **Nothing flips a test from ranked to practice**, so none of the three is ever
+  cleared out from under an admin: the mode arrives with the series, and a test only moves to a
+  series that judges it the same way.
 - Late entry is still counted from the test's **own** opening, never the program-shifted one: a
   program cohort gets a longer window, not a shifted one.
-- A test in no series is scheduled by nothing and shut by nothing.
 - `canStart` is derived from the clock on **every read** and never stored, so a test opens on time
   with nothing having to bust a cache key.
 - Late entry blocks **starting** a test, never seeing one, and a refusal names which fact refused it:
@@ -202,10 +214,10 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
 - Marks are durable and a rank is a cache, so a Redis that is down must not fail the scoring. The
   rank and percentile on the attempt are snapshots; the live figures are read from Redis.
 - **The answer key is a second read past one gate, never a join,** so a refusal never held it. A
-  practice test opens solutions immediately, and so does a test no series arranged — there is no
-  cohort it could spoil. A ranked test offered in a series waits until entry has shut everywhere
-  **and** the last sitting that could have started has ended. A scheduled test nobody capped entry on
-  never opens them, and the student is told so without being promised a date the gate cannot keep.
+  practice test opens solutions immediately: there is no cohort it could spoil. A ranked test waits
+  until entry has shut everywhere **and** the last sitting that could have started has ended. Where
+  entry never shuts — no opening, or no cutoff on one — the key never opens, and the student is told
+  so without being promised a date the gate cannot keep.
 - Answer-level detail is captured from day one — option chosen, verdict, marked-for-review state, and
   time per question and per section — so analytics derive later without re-instrumenting.
 - `PerformanceShare` is the only unauthenticated door onto a report: a random token rather than a

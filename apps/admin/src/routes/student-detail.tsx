@@ -45,7 +45,7 @@ import {
   TruncatedText,
   type DataTableColumn,
 } from '@iace/ui';
-import { TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
+import { NO_SERIES, TestSeriesPicker, type ChosenSeries } from '../components/access-picker';
 import { api } from '../lib/api';
 import { WHEN_FORMATTER } from '../lib/audit-vocabulary';
 import {
@@ -382,8 +382,6 @@ function SeriesList({
   );
 }
 
-const NO_SERIES_CHOSEN: ChosenSeries = { id: '', name: '', isEnabled: false };
-
 /** A grant is filed against the student either way; whether it OPENS anything is the series' switch. */
 function grantConsequence(chosen: ChosenSeries): string {
   if (!chosen.isEnabled) {
@@ -468,7 +466,7 @@ function EventsCard({ detail }: Readonly<{ detail: StudentDetail }>) {
 /** Everything this student reaches and what opens each; a grant is one of the three, not the whole. */
 function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
   const queryClient = useQueryClient();
-  const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES_CHOSEN);
+  const [chosen, setChosen] = useState<ChosenSeries>(NO_SERIES);
   const [granting, setGranting] = useState(false);
   const [revoking, setRevoking] = useState<StudentSeriesAccess | null>(null);
   const studentId = detail.id;
@@ -490,7 +488,7 @@ function SeriesAccessCard({ detail }: Readonly<{ detail: StudentDetail }>) {
     mutationFn: () => api.admin.grants.create(studentId, { testSeriesId: chosen.id }),
     onSuccess: async () => {
       setGranting(false);
-      setChosen(NO_SERIES_CHOSEN);
+      setChosen(NO_SERIES);
       await refresh();
     },
     // Drop out of the confirm on failure, or it is left asking a question already answered.

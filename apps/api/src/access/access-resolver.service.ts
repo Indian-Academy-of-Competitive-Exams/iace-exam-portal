@@ -105,7 +105,6 @@ interface ResolvedSeries {
 
 /** How a test is offered institute-wide. `closesAt` null means somebody can always still enter. */
 export interface TestSchedule {
-  scheduled: boolean;
   closesAt: string | null;
   extraTimeSec: number;
 }
@@ -187,16 +186,15 @@ export class AccessResolverService {
   async testSchedule(testId: string): Promise<TestSchedule> {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },
-      select: { testSeriesId: true, opensAt: true, lateEntrySec: true, extraTimeSec: true },
+      select: { opensAt: true, lateEntrySec: true, extraTimeSec: true },
     });
-    // Standalone: it belongs to no series, so nothing schedules it and nothing shuts it.
-    if (!test?.testSeriesId) return { scheduled: false, closesAt: null, extraTimeSec: 0 };
+    if (test === null) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
 
     const { closesAt } = testWindow({
       unlockAt: test.opensAt?.toISOString() ?? null,
       lateEntrySec: test.lateEntrySec,
     });
-    return { scheduled: true, closesAt, extraTimeSec: test.extraTimeSec ?? 0 };
+    return { closesAt, extraTimeSec: test.extraTimeSec ?? 0 };
   }
 
   /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */

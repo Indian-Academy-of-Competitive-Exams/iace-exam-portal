@@ -19,7 +19,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventBus, DOMAIN_EVENTS } from '../common/events';
 import { AuditContext } from '../audit';
-import { activationBlocker } from './test-rules';
+import {
+  activationBlocker,
+  seriesFitIssue,
+  seriesRefused,
+  SERIES_GONE_MESSAGE,
+} from './test-rules';
 
 const OFFERING_SELECT = {
   id: true,
@@ -117,10 +122,11 @@ function assertStaggerIsRanked(evaluationMode: EvaluationMode): void {
 
 type OfferingRow = Prisma.TestGetPayload<{ select: typeof OFFERING_SELECT }>;
 
-const linkOf = (test: OfferingRow): TestSeriesLink | null =>
-  test.testSeriesId === null || test.testSeries === null
-    ? null
-    : { testSeriesId: test.testSeriesId, name: test.testSeries.name, order: test.seriesOrder };
+const linkOf = (test: OfferingRow): TestSeriesLink => ({
+  testSeriesId: test.testSeriesId,
+  name: test.testSeries.name,
+  order: test.seriesOrder,
+});
 
 /** How a finalized test is offered: through the one series carrying it, never on its own. */
 @Injectable()
@@ -131,19 +137,18 @@ export class OfferingService {
     private readonly auditContext: AuditContext,
   ) {}
 
-  async series(testId: string): Promise<TestSeriesLink | null> {
+  async series(testId: string): Promise<TestSeriesLink> {
     return linkOf(await this.requireTest(testId));
   }
 
   /** One column, so the test's own clock is untouched by a move and cannot be re-saved away. */
-  async setSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink | null> {
+  async moveToSeries(testId: string, input: SetTestSeriesBody): Promise<TestSeriesLink> {
     const test = await this.requireTest(testId);
     const next = input.testSeriesId;
     if (next === test.testSeriesId) return linkOf(test);
 
-    this.assertStillReachable(test, next);
-    if (test.testSeriesId !== null) this.assertNotSat(test);
-    if (next !== null) await this.assertSeriesUsable(test, next);
+    this.assertNotSat(test);
+    await this.assertSeriesUsable(test, next);
 
     const moved = await this.prisma.test.update({
       where: { id: testId },
@@ -153,9 +158,7 @@ export class OfferingService {
 
     // Both sides: the catalog a student reads is cached against the series it moved between.
     for (const testSeriesId of [test.testSeriesId, next]) {
-      if (testSeriesId !== null) {
-        this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-      }
+      this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
     }
 
     return linkOf(moved);
@@ -180,38 +183,16 @@ export class OfferingService {
     return status;
   }
 
-  /** The mirror of the activation rule: what is offered must stay reachable while it is offered. */
-  private assertStillReachable(test: OfferingRow, next: string | null): void {
-    if (next !== null || test.status !== TEST_STATUS.ACTIVE) return;
-
-    const message =
-      'This test is being offered, and a test reaches a student only through a series. Retire it before taking it out of its series.';
-    throw new AppException(ErrorCodes.CONFLICT, message, {
-      fieldErrors: { testSeriesId: [message] },
-    });
-  }
-
-  /** A series must exist, and must be built for this test's stage or for no stage at all. */
+  /** A series must exist, be built for this test's stage, and judge it the way it is judged. */
   private async assertSeriesUsable(test: OfferingRow, testSeriesId: string): Promise<void> {
     const series = await this.prisma.testSeries.findUnique({
       where: { id: testSeriesId },
-      select: { name: true, examStageId: true },
+      select: { name: true, examStageId: true, evaluationMode: true },
     });
+    if (series === null) throw seriesRefused(SERIES_GONE_MESSAGE);
 
-    if (!series) {
-      const gone = 'That series no longer exists.';
-      throw new AppException(ErrorCodes.VALIDATION_ERROR, gone, {
-        fieldErrors: { testSeriesId: [gone] },
-      });
-    }
-
-    // A stage-agnostic series carries any test; another stage's would serve this paper to its students.
-    if (series.examStageId === null || series.examStageId === test.examStageId) return;
-
-    const message = `${series.name} is built for a different exam stage, and a test reaches students through the series carrying it.`;
-    throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
-      fieldErrors: { testSeriesId: [message] },
-    });
+    const issue = seriesFitIssue(series, test);
+    if (issue) throw seriesRefused(issue);
   }
 
   /** The tests one series holds, in the order it holds them. */
@@ -243,20 +224,6 @@ export class OfferingService {
     await this.prisma.$transaction(async (tx) => {
       await tx.test.update({ where: { id: testId }, data: { opensAt } });
       await dropUnlocksTheOpeningOvertook(tx, testId, opensAt);
-    });
-
-    this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
-    return this.testsIn(testSeriesId);
-  }
-
-  /** The series drops the test from its own side. Refused once anyone has sat it. */
-  async removeFromSeries(testSeriesId: string, testId: string): Promise<SeriesTestRow[]> {
-    const test = await this.requireTestIn(testSeriesId, testId);
-    this.assertNotSat(test);
-
-    await this.prisma.test.update({
-      where: { id: testId },
-      data: { testSeriesId: null, seriesOrder: null },
     });
 
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId });
@@ -328,7 +295,6 @@ export class OfferingService {
   /** Filed against the test, and the series carrying it loses its cached catalog. */
   private announce(test: OfferingRow): void {
     this.auditContext.setEntityId(test.id);
-    if (test.testSeriesId === null) return;
     this.events.emit(DOMAIN_EVENTS.ACCESS_CATALOG_CHANGED, { testSeriesId: test.testSeriesId });
   }
 
@@ -344,7 +310,7 @@ export class OfferingService {
     if (test._count.attempts === 0) return;
 
     // A test students have sat is part of their record wherever it was offered.
-    const message = `This test has ${attempts(test._count.attempts)} on it, so it cannot be taken out of a series.`;
+    const message = `This test has ${attempts(test._count.attempts)} on it, so it cannot be moved to another series.`;
     throw new AppException(ErrorCodes.CONFLICT, message, {
       fieldErrors: { [FORM_LEVEL_FIELD]: [message] },
     });

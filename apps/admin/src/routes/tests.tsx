@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   EVALUATION_MODE_LABELS,
   FEATURE_KEYS,
@@ -11,16 +11,13 @@ import {
   TEST_STATUSES,
   type Test,
 } from '@iace/contracts';
-import { PageCrumbs, useListScreen } from '@iace/app-kit/browser';
+import { useListScreen } from '@iace/app-kit/browser';
 import {
   Badge,
-  Button,
   ConfirmDialog,
   DropdownMenuItem,
   ListView,
-  PageHeader,
   RowActions,
-  TableFrame,
   TruncatedText,
   linkVariants,
   plural,
@@ -29,7 +26,7 @@ import {
 } from '@iace/ui';
 import { StageCell } from '../components/stage-cell';
 import { api } from '../lib/api';
-import { NAV_ITEMS, QUERY_KEYS, ROUTES, TEST_STATUS_LABELS } from '../lib/constants';
+import { QUERY_KEYS, ROUTES, TEST_STATUS_LABELS } from '../lib/constants';
 import { durationLabel } from '../lib/duration';
 import { useAuth } from '../providers/auth';
 import { ExamMultiPicker } from '../components/exam-picker';
@@ -116,7 +113,7 @@ function testColumns(canWrite: boolean, refresh: () => void): DataTableColumn<Te
 }
 
 /** Every test built from a stage's blueprints, whatever step of the build it has reached. */
-export function TestsPage() {
+export function TestsList() {
   const { can } = useAuth();
   const canWrite = can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const queryClient = useQueryClient();
@@ -137,34 +134,15 @@ export function TestsPage() {
     fetchPage: (params) => api.admin.tests.list(params),
   });
 
-  const header = (
-    <PageHeader
-      breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
-      title="Tests"
-      action={
-        canWrite ? (
-          <Button size="sm" asChild>
-            <Link to={ROUTES.TEST_NEW}>
-              <Plus aria-hidden />
-              New test
-            </Link>
-          </Button>
-        ) : undefined
-      }
-    />
-  );
-
   return (
-    <TableFrame header={header}>
-      <ListView
-        list={tests}
-        filters={TEST_FILTERS}
-        columns={columns}
-        rowKey={(test) => test.id}
-        empty="No tests yet. Build the first one on a base configuration."
-        emptyFiltered="No tests match those filters."
-      />
-    </TableFrame>
+    <ListView
+      list={tests}
+      filters={TEST_FILTERS}
+      columns={columns}
+      rowKey={(test) => test.id}
+      empty="No tests yet. Open a series and build the first one inside it."
+      emptyFiltered="No tests match those filters."
+    />
   );
 }
 
@@ -192,7 +170,7 @@ function deleteDescription(test: Test): string {
     test.paperQuestionCount > 0
       ? `the ${plural(test.paperQuestionCount, 'question')} drawn for it are discarded`
       : null,
-    test.testSeriesId === null ? null : 'it leaves its series',
+    'it leaves its series',
     test.status === TEST_STATUS.ACTIVE ? 'students stop being offered it' : null,
   ].filter((cost): cost is string => cost !== null);
 

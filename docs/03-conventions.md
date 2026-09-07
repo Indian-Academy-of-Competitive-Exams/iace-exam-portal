@@ -100,6 +100,9 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `access` reads `Test` to resolve a student's catalog and to block deleting a series that still
   holds tests. `tests` is the only writer, and it emits `access.catalog_changed` on every offering
   write, so the cache cannot go stale behind it; the read is what still wants a facade.
+- `tests` reads `TestSeries` to take the mode a test is judged by — the series decides it, and it is
+  denormalised onto `Test` so the composite foreign key holds the two together. Only the read
+  crosses; the copy lands on the test's own row.
 - `me` aggregates `students`, `auth`, `access` and `notifications`. This is the one to copy —
   everything arrives through a module barrel.
 

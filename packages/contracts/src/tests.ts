@@ -67,7 +67,7 @@ export const PAPER_BINDINGS = paperBindingSchema.options;
 /** What a test is called by: the part of the paper it covers, or failing that how it is judged. */
 export function testNameKind(input: {
   scope: TestScope;
-  evaluationMode: EvaluationMode;
+  evaluationMode?: EvaluationMode;
   scopeName?: string | null;
 }): string {
   const named = input.scopeName?.trim();
@@ -91,6 +91,18 @@ export function allowedPaperBindings(evaluationMode: EvaluationMode): PaperBindi
 /** A cutoff, an allowance and a per-program stagger all serve a cohort; practice just opens. */
 export function allowsCohortScheduling(evaluationMode: EvaluationMode): boolean {
   return evaluationMode === EVALUATION_MODE.RANKED;
+}
+
+/** One sentence, so the picker refuses a move in the words the server would have refused it in. */
+export function seriesModeMismatch(
+  seriesName: string,
+  seriesMode: EvaluationMode,
+  testMode: EvaluationMode,
+): string | null {
+  if (seriesMode === testMode) return null;
+  const held = EVALUATION_MODE_LABELS[seriesMode];
+  const wanted = EVALUATION_MODE_LABELS[testMode];
+  return `${seriesName} judges its tests as ${held} and this test is judged as ${wanted}. A test is judged the way its series is, so move it to a ${wanted} series instead.`;
 }
 
 /** The only change a frozen paper permits, and both recompute every score. */
@@ -455,8 +467,10 @@ export const testSchema = z.object({
   variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
-  /** The one series carrying it. Null reaches nobody, which is what stops it being offered. */
-  testSeriesId: z.string().nullable(),
+  /** The one series carrying it. The column requires one, so this is never absent. */
+  testSeriesId: z.string(),
+  /** That series' name, so a screen can say which one decided the mode without a second request. */
+  testSeriesName: z.string(),
   /** How much of the paper is drawn, so a screen knows the work left without reading the paper. */
   paperQuestionCount: z.number().int(),
   createdAt: z.string(),
@@ -496,10 +510,9 @@ export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 
-/** The two things a test owes before students can be given it. Both are shown, ticked or not. */
+/** What a test owes before students can be given it. Each is shown, ticked or not. */
 export const OFFER_REQUIREMENT = {
   PAPER: 'PAPER',
-  SERIES: 'SERIES',
 } as const;
 export type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
 
@@ -516,15 +529,10 @@ export interface OfferRequirement {
 export function offerRequirements(
   test: Pick<
     Test,
-    | 'isLocked'
-    | 'paperBinding'
-    | 'paperQuestionCount'
-    | 'totalQuestions'
-    | 'testSeriesId'
-    | 'variantCount'
+    'isLocked' | 'paperBinding' | 'paperQuestionCount' | 'totalQuestions' | 'variantCount'
   >,
 ): OfferRequirement[] {
-  return [paperRequirement(test), seriesRequirement(test)];
+  return [paperRequirement(test)];
 }
 
 /** Whether a paper is still owed. The stepper's tick, the checklist and the landing step all read it. */
@@ -556,16 +564,6 @@ function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferR
     met,
     label: `All ${test.totalQuestions} questions are on the paper`,
     owed: met ? null : `${test.paperQuestionCount} chosen so far`,
-  };
-}
-
-function seriesRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  const met = test.testSeriesId !== null;
-  return {
-    key: OFFER_REQUIREMENT.SERIES,
-    met,
-    label: 'It is in a test series, which is the only way a student reaches it',
-    owed: met ? null : 'In none yet',
   };
 }
 
@@ -620,7 +618,6 @@ export const DEFAULT_PAPER_VARIANTS = 10;
 const testOwnFieldsSchema = z.object({
   scope: testScopeSchema.optional(),
   scopeRef: testScopeRefSchema.nullish(),
-  evaluationMode: evaluationModeSchema.optional(),
   paperBinding: paperBindingSchema.optional(),
   /** Absent on create means take the config's; a test chooses its own screen from then on. */
   examTemplate: examTemplateSchema.optional(),
@@ -634,6 +631,8 @@ const testOwnFieldsSchema = z.object({
 export const createTestSchema = testOwnFieldsSchema.extend({
   title: testTitleSchema,
   baseConfigId: z.string().min(1, 'Choose a config'),
+  /** `evaluationMode` is absent for the same reason: the series decides it, and the body cannot. */
+  testSeriesId: z.string().min(1, 'Choose a series'),
 });
 export type CreateTestInput = z.input<typeof createTestSchema>;
 export type CreateTestBody = z.infer<typeof createTestSchema>;
@@ -760,9 +759,9 @@ export const testSeriesLinkSchema = z.object({
 });
 export type TestSeriesLink = z.infer<typeof testSeriesLinkSchema>;
 
-/** One series or none. A test belongs to exactly one, so this REPLACES rather than adds. */
+/** The series it moves to. A test belongs to exactly one and is never left in none. */
 export const setTestSeriesSchema = z.object({
-  testSeriesId: z.string().min(1).nullable(),
+  testSeriesId: z.string().min(1),
 });
 export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
 export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;

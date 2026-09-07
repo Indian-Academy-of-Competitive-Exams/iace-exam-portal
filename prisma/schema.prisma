@@ -498,7 +498,8 @@ model Test {
   examStageId        String
   scope              TestScope      @default(FULL)
   scopeRef           Json?
-  evaluationMode     EvaluationMode @default(RANKED)
+  // Denormalised from TestSeries so the composite FK below is always enforced.
+  evaluationMode     EvaluationMode
   paperBinding       PaperBinding   @default(FIXED)
   maxRetakes         Int?
   questionPoolFilter Json?
@@ -514,7 +515,7 @@ model Test {
   createdById        String?
   createdAt          DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
-  testSeriesId       String?
+  testSeriesId       String
   seriesOrder        Int?
   opensAt            DateTime?      @db.Timestamptz(3)
   // Both RANKED-only, by CHECK: a cutoff and an allowance answer to a rank, and practice has none.
@@ -530,7 +531,7 @@ model Test {
   sectionStats   TestSectionStat[]
   questionStats  TestQuestionStat[]
   programUnlocks TestProgramUnlock[]
-  testSeries     TestSeries?         @relation(fields: [testSeriesId], references: [id], onDelete: Restrict)
+  testSeries     TestSeries          @relation(fields: [testSeriesId, evaluationMode], references: [id, evaluationMode], onDelete: Restrict, onUpdate: NoAction)
 
   @@unique([id, baseConfigId])
   @@index([baseConfigId])
@@ -852,6 +853,8 @@ model TestSeries {
   progressive     Boolean        @default(false)
   // What the series IS: FREE also reaches by an enrolled course, PROGRAM only by program, EVENT only the candidates on its Event.
   kind            TestSeriesKind @default(STANDARD)
+  // What its tests are judged as; every test it holds carries the same value.
+  evaluationMode  EvaluationMode @default(RANKED)
   eventId         String?
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -865,6 +868,7 @@ model TestSeries {
   grants        StudentGrant[]
   notifications Notification[]
 
+  @@unique([id, evaluationMode])
   @@index([examStageId])
   @@index([programCode])
   @@index([eventId])

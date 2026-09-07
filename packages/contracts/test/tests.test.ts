@@ -14,6 +14,7 @@ import {
   scopedQuestionCount,
   scopedMarks,
   scopedDurationSec,
+  seriesModeMismatch,
   testBuilderStepOf,
   owesAPaper,
   paperQuestionSchema,
@@ -59,6 +60,34 @@ describe('allowedPaperBindings', () => {
   });
 });
 
+/** One sentence for both sides: the picker refuses the move in the server's own words. */
+describe('seriesModeMismatch', () => {
+  /** The failure this prevents: a confirm promising a move the server is about to refuse. */
+  it('names both modes when a ranked test is offered a practice series', () => {
+    const issue = seriesModeMismatch(
+      'SSC CGL 2026 — Drills',
+      EVALUATION_MODE.PRACTICE,
+      EVALUATION_MODE.RANKED,
+    );
+
+    assert.ok(issue);
+    assert.match(issue, /SSC CGL 2026 — Drills/);
+    assert.match(issue, /Practice/);
+    assert.match(issue, /Ranked/);
+  });
+
+  it('says nothing when the series judges the test the way it is judged', () => {
+    assert.equal(
+      seriesModeMismatch(
+        'SSC CGL 2026 — Drills',
+        EVALUATION_MODE.PRACTICE,
+        EVALUATION_MODE.PRACTICE,
+      ),
+      null,
+    );
+  });
+});
+
 describe('paperQuestionSchema', () => {
   /** A paper row pins a version, which is what makes a past result reproducible. */
   it('requires the version the paper serves', () => {
@@ -82,17 +111,52 @@ describe('paperQuestionSchema', () => {
 describe('a test is named when it is created', () => {
   /** The failure this prevents: 'Untitled test' in the header and 'this test' in every confirm. */
   it('refuses a create with no name', () => {
-    assert.equal(createTestSchema.safeParse({ baseConfigId: 'cfg_1' }).success, false);
+    assert.equal(
+      createTestSchema.safeParse({ baseConfigId: 'cfg_1', testSeriesId: 'srs_1' }).success,
+      false,
+    );
   });
 
   it('refuses a name of whitespace', () => {
-    const parsed = createTestSchema.safeParse({ baseConfigId: 'cfg_1', title: '   ' });
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: '   ',
+    });
     assert.equal(parsed.success, false);
   });
 
   it('accepts a named create', () => {
-    const parsed = createTestSchema.safeParse({ baseConfigId: 'cfg_1', title: 'SSC CGL — Mock 1' });
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: 'SSC CGL — Mock 1',
+    });
     assert.equal(parsed.success, true);
+  });
+
+  /** A test reaches a student only through a series, and that series is what decides its mode. */
+  it('refuses a create that names no series', () => {
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      title: 'SSC CGL — Mock 1',
+    });
+
+    assert.equal(parsed.success, false);
+    assert.deepEqual(parsed.error?.issues[0]?.path, ['testSeriesId']);
+  });
+
+  /** The failure this prevents: a PRACTICE series holding the RANKED test a client asked for. */
+  it('drops an evaluation mode a client sends rather than judging it', () => {
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: 'SSC CGL — Mock 1',
+      evaluationMode: 'PRACTICE',
+    });
+
+    assert.equal(parsed.success, true);
+    assert.equal('evaluationMode' in (parsed.data ?? {}), false);
   });
 
   /** An edit that is not about the name leaves it alone rather than sending it back. */
@@ -123,14 +187,14 @@ describe('offerRequirements', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
   const met = (test: Parameters<typeof offerRequirements>[0]) =>
     offerRequirements(test).map((requirement) => requirement.met);
 
-  it('is ready when the paper is whole and a series carries it', () => {
-    assert.deepEqual(met(fixed), [true, true]);
+  /** A test is created inside a series and cannot leave, so the paper is all that is left to owe. */
+  it('is ready when the paper is whole', () => {
+    assert.deepEqual(met(fixed), [true]);
   });
 
   /** The failure this prevents: offering a half-picked paper and finding out at the freeze. */
@@ -141,21 +205,16 @@ describe('offerRequirements', () => {
     assert.equal(paper?.owed, '64 chosen so far');
   });
 
-  it('is not ready while no series carries it', () => {
-    assert.deepEqual(met({ ...fixed, testSeriesId: null }), [true, false]);
-  });
-
   /** A frozen paper is whole by definition — a retired test must be offerable again. */
   it('takes a frozen paper as whole however its rows are counted', () => {
-    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true, true]);
+    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true]);
   });
 
   /** A generated test has no paper to check: the draw happens at the freeze, not before it. */
-  it('asks a generated test for nothing but a series', () => {
+  it('asks a generated test for nothing at all', () => {
     const generated = { ...fixed, paperBinding: PAPER_BINDING.GENERATED, paperQuestionCount: 0 };
 
-    assert.deepEqual(met(generated), [true, true]);
-    assert.deepEqual(met({ ...generated, testSeriesId: null }), [true, false]);
+    assert.deepEqual(met(generated), [true]);
   });
 });
 
@@ -165,7 +224,6 @@ describe('testBuilderStepOf', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
 
@@ -362,7 +420,6 @@ describe('owesAPaper', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
 

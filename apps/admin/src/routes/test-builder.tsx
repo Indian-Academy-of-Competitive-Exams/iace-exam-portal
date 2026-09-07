@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import {
@@ -10,6 +10,7 @@ import {
   type BaseConfigDetail,
   type TestBuilderStep,
   type TestDetail,
+  type TestSeriesSummary,
 } from '@iace/contracts';
 import { bannerMessage, isNotNumeric, optionalNumber } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
@@ -62,13 +63,22 @@ function doneSteps(detail: TestDetail | null): ReadonlySet<TestBuilderStep> {
 
 export function TestBuilderPage() {
   const { id } = useParams();
+  const [search] = useSearchParams();
   const existing = id !== undefined;
   const testId = id ?? '';
+  // Built from inside a series: it names the series, and with it the mode and often the stage.
+  const fromSeriesId = existing ? null : search.get('series');
 
   const test = useQuery({
     queryKey: TEST_KEY(testId),
     queryFn: () => api.admin.tests.detail(testId),
     enabled: existing,
+  });
+
+  const fromSeries = useQuery({
+    queryKey: [...QUERY_KEYS.TEST_SERIES, fromSeriesId ?? ''],
+    queryFn: () => api.admin.testSeries.detail(fromSeriesId ?? ''),
+    enabled: fromSeriesId !== null,
   });
 
   if (existing && test.isLoading) {
@@ -86,18 +96,24 @@ export function TestBuilderPage() {
     return <Alert variant="danger">Could not load this test.</Alert>;
   }
 
+  // Held until the series is here: `useForm` reads its defaults once, so a late arrival is ignored.
+  if (fromSeriesId !== null && fromSeries.isLoading) return <SkeletonParagraph lines={5} />;
+
   // Mounted only once the saved test is here, so a refetch cannot throw away a half-typed edit.
-  return <TestBuilder detail={test.data ?? null} />;
+  return <TestBuilder detail={test.data ?? null} fromSeries={fromSeries.data ?? null} />;
 }
 
-function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
+function TestBuilder({
+  detail,
+  fromSeries,
+}: Readonly<{ detail: TestDetail | null; fromSeries: TestSeriesSummary | null }>) {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const existing = detail !== null;
   const sat = (detail?.attemptCount ?? 0) > 0;
 
-  const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail) });
+  const form = useForm<TestFormValues>({ defaultValues: valuesOf(detail, fromSeries) });
   const baseConfigId = useWatch({ control: form.control, name: 'baseConfigId' });
   const scope = useWatch({ control: form.control, name: 'scope' });
 
@@ -125,7 +141,6 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         title,
         scope: values.scope,
         scopeRef: scopeRefOf(values),
-        evaluationMode: values.evaluationMode,
         paperBinding: values.paperBinding,
         // Left out while unchosen, so the server takes the config's rather than guessing here.
         examTemplate: values.examTemplate ?? undefined,
@@ -134,7 +149,11 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
       };
       return detail
         ? api.admin.tests.update(detail.id, owned)
-        : api.admin.tests.create({ ...owned, baseConfigId: values.baseConfigId });
+        : api.admin.tests.create({
+            ...owned,
+            baseConfigId: values.baseConfigId,
+            testSeriesId: values.testSeriesId,
+          });
     },
     onSuccess: async (saved, { target }) => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TESTS });
@@ -221,7 +240,14 @@ function TestBuilder({ detail }: Readonly<{ detail: TestDetail | null }>) {
         </>
       }
     >
-      <StepBody step={step} form={form} detail={detail} config={config} sat={sat} />
+      <StepBody
+        step={step}
+        form={form}
+        detail={detail}
+        fromSeries={fromSeries}
+        config={config}
+        sat={sat}
+      />
     </FormPanel>
   );
 }
@@ -272,12 +298,14 @@ function StepBody({
   step,
   form,
   detail,
+  fromSeries,
   config,
   sat,
 }: Readonly<{
   step: TestBuilderStep;
   form: UseFormReturn<TestFormValues>;
   detail: TestDetail | null;
+  fromSeries: TestSeriesSummary | null;
   config: BaseConfigDetail | null;
   sat: boolean;
 }>) {
@@ -291,7 +319,7 @@ function StepBody({
       ) : null}
 
       {step === TEST_BUILDER_STEP.SETUP ? (
-        <SetupStep form={form} detail={detail} config={config} sat={sat} />
+        <SetupStep form={form} detail={detail} fromSeries={fromSeries} config={config} sat={sat} />
       ) : null}
 
       {step === TEST_BUILDER_STEP.PAPER ? <PaperStep detail={detail} config={config} /> : null}
