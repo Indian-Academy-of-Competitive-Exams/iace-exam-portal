@@ -385,3 +385,16 @@ describe('AppShell — which row is current', () => {
     );
   });
 });
+
+describe('AppShell — a control the whole app needs', () => {
+  /** The bell carries an unread count, so it has to survive the breakpoint swap in both trees. */
+  for (const isDesktop of [true, false]) {
+    it(`renders headerEnd on ${isDesktop ? 'desktop' : 'mobile'}`, () => {
+      setDesktop(isDesktop);
+
+      renderShell({ headerEnd: <button type="button">Bell</button> });
+
+      assert.ok(screen.getByRole('button', { name: 'Bell' }));
+    });
+  }
+});

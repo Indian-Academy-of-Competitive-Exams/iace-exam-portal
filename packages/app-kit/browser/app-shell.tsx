@@ -42,6 +42,8 @@ export interface AppShellProps {
   portal?: string;
   /** Beside the portal label — the admin's Super admin badge. */
   brandSuffix?: ReactNode;
+  /** Before the theme toggle — a control that must be reachable from every screen. */
+  headerEnd?: ReactNode;
   /** The only way home: no nav row does that job. */
   homeTo?: string;
   /** Optional: an app with no permissions passes nothing and every section shows. */
@@ -63,6 +65,7 @@ export function AppShell({
   userMenuItems,
   portal,
   brandSuffix,
+  headerEnd,
   homeTo = '/',
   can,
   width = 'wide',
@@ -112,6 +115,7 @@ export function AppShell({
             {brandSuffix}
 
             <div className="flex flex-1 items-center justify-end gap-1">
+              {headerEnd}
               <ThemeToggle />
               <UserMenu
                 label={userLabel}

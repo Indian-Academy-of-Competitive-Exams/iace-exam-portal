@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
+import { BarChart3, Bell, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { type BadgeProps } from '@iace/ui';
 import {
@@ -49,6 +49,7 @@ export const ROUTES = {
   /** Public: no session, no nav, one student's own report opened by a token. */
   SHARED_REPORT_PATTERN: sharedReportPath(':token'),
   LEADERBOARD: '/leaderboard',
+  NOTIFICATIONS: '/notifications',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -59,6 +60,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
+  { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
 ];
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
@@ -66,6 +68,18 @@ export const PICKER_WIDTH = { REPORT: 'w-[31rem]' } as const;
 
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
+
+/** The bell's own count, kept apart from the list so paging never disturbs the header. */
+export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;
+
+export const notificationsQueryKey = (unreadOnly: boolean) =>
+  ['me', 'notifications', { unreadOnly }] as const;
+
+/** No WebSockets in this stack, so the bell asks. Slow enough to be invisible on the API. */
+export const UNREAD_POLL_MS = 60_000;
+
+/** One page of the bell, and the page size the header count is asked for. */
+export const NOTIFICATIONS_PAGE_SIZE = 20;
 
 /** One sitting's marks, and the worked solutions the gate may still be holding back. */
 export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];

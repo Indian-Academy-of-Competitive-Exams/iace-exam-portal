@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
+import { NotificationBell } from './notification-bell';
 
 /** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {
@@ -22,6 +23,7 @@ export function AppShell() {
       onSignOut={() => void signOut()}
       userMenuItems={USER_MENU_ITEMS}
       userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
+      headerEnd={<NotificationBell />}
       userAvatar={
         <Avatar
           src={me.data?.profile?.photoUrl}

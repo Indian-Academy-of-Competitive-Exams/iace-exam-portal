@@ -113,6 +113,9 @@ import {
   type GrantSeriesInput,
   type Program,
   type ProgramListQueryInput,
+  notificationSchema,
+  type Notification,
+  type NotificationListQueryInput,
   studentCatalogSchema,
   type StudentCatalog,
   type StudentGrantRow,
@@ -646,6 +649,15 @@ export function createApiClient(options: ApiClientOptions) {
       /** Every series this student reaches, with what is open right now. */
       catalog: (): Promise<StudentCatalog> =>
         request(ME_ROUTES.catalog, { schema: studentCatalogSchema }),
+
+      /** The bell, newest first. `meta.total` under `unreadOnly` is the count the header shows. */
+      notifications: (query: NotificationListQueryInput = {}): Promise<Paginated<Notification>> =>
+        requestPaginated(`${ME_ROUTES.notifications}${queryString({ ...query })}`, {
+          schema: notificationSchema.array(),
+        }),
+
+      readNotification: (id: string): Promise<Notification> =>
+        request(ME_ROUTES.readNotification(id), { method: 'PATCH', schema: notificationSchema }),
 
       /** What the student reads before the clock starts. */
       testBrief: (testId: string): Promise<ExamBrief> =>

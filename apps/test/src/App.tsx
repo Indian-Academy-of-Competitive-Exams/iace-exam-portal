@@ -18,6 +18,7 @@ import { SolutionPanel } from './routes/review';
 import { QuestionReportPanel } from './routes/question-report';
 import { ReportRedirect, ReportShell } from './routes/report';
 import { LeaderboardPage } from './routes/leaderboard';
+import { NotificationsPage } from './routes/notifications';
 
 /** Every screen that draws charts, so the plotting library stays off the first payload. */
 const DashboardPage = React.lazy(() =>
@@ -67,6 +68,7 @@ export function App() {
           <Route path={ROUTES.TESTS} element={<TestsPage />} />
           <Route path={ROUTES.PERFORMANCE} element={whileLoading(<OverviewPage />)} />
           <Route path={ROUTES.LEADERBOARD} element={<LeaderboardPage />} />
+          <Route path={ROUTES.NOTIFICATIONS} element={<NotificationsPage />} />
           <Route path={ROUTES.SERIES_PATTERN} element={<SeriesPage />} />
           <Route path={ROUTES.TEST_ABOUT_PATTERN} element={<TestAboutPage />} />
           <Route path={ROUTES.TEST_INSTRUCTIONS_PATTERN} element={<TestInstructionsPage />} />
