@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Pencil, Power, Trash2 } from 'lucide-react';
+import { Clock, Pencil, Power } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
@@ -569,7 +569,6 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
   const queryClient = useQueryClient();
   const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
   const [opening, setOpening] = useState<SeriesTestRow | null>(null);
-  const [removing, setRemoving] = useState<SeriesTestRow | null>(null);
 
   const tests = useQuery({
     queryKey: testsKey(series.id),
@@ -581,20 +580,10 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
     void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TEST_SERIES });
   };
 
-  const remove = useMutation({
-    meta: { success: 'Test removed from this series.' },
-    mutationFn: (row: SeriesTestRow) => api.admin.testSeries.removeTest(series.id, row.testId),
-    onSuccess: (next) => {
-      setRemoving(null);
-      held(next);
-    },
-    onError: () => setRemoving(null),
-  });
-
   return (
     <FormSection title="Tests">
       <DataTable
-        columns={testColumns({ canWrite, onOpening: setOpening, onRemove: setRemoving })}
+        columns={testColumns({ canWrite, onOpening: setOpening })}
         rows={tests.data ?? []}
         rowKey={(row) => row.testId}
         isLoading={tests.isLoading}
@@ -610,17 +599,6 @@ function SeriesTests({ series }: Readonly<{ series: TestSeriesSummary }>) {
           onSaved={held}
         />
       ) : null}
-
-      <ConfirmDialog
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
-        destructive
-        title={`Remove ${removing?.title ?? 'this test'} from ${series.name}?`}
-        description={`Students reach it through this series and would stop being able to. The test itself, its paper and every other series it is in are untouched, and it can be put back at any time.`}
-        confirmLabel="Remove it"
-        loading={remove.isPending}
-        onConfirm={() => removing && remove.mutate(removing)}
-      />
     </FormSection>
   );
 }
@@ -629,10 +607,9 @@ function testColumns(
   options: Readonly<{
     canWrite: boolean;
     onOpening: (row: SeriesTestRow) => void;
-    onRemove: (row: SeriesTestRow) => void;
   }>,
 ): DataTableColumn<SeriesTestRow>[] {
-  const { canWrite, onOpening, onRemove } = options;
+  const { canWrite, onOpening } = options;
 
   return [
     { key: 'order', header: '#', numeric: true, cell: (row) => row.order ?? '—' },
@@ -658,12 +635,6 @@ function testColumns(
               <Clock aria-hidden />
               Set when it opens
             </DropdownMenuItem>
-            {row.attemptCount === 0 ? (
-              <DropdownMenuItem destructive onSelect={() => onRemove(row)}>
-                <Trash2 aria-hidden />
-                Remove from this series
-              </DropdownMenuItem>
-            ) : null}
           </RowActions>
         ) : null,
     },

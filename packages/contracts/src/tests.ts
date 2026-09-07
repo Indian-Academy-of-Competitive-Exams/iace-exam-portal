@@ -763,9 +763,9 @@ export const testSeriesLinkSchema = z.object({
 });
 export type TestSeriesLink = z.infer<typeof testSeriesLinkSchema>;
 
-/** One series or none. A test belongs to exactly one, so this REPLACES rather than adds. */
+/** The series it moves to. A test belongs to exactly one and is never left in none. */
 export const setTestSeriesSchema = z.object({
-  testSeriesId: z.string().min(1).nullable(),
+  testSeriesId: z.string().min(1),
 });
 export type SetTestSeriesInput = z.input<typeof setTestSeriesSchema>;
 export type SetTestSeriesBody = z.infer<typeof setTestSeriesSchema>;

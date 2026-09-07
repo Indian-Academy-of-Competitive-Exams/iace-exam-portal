@@ -117,7 +117,7 @@ describe('the Phase-2 milestone — a config becomes a publishable mock', () => 
     assert.equal(frozen.finalizedByThisCall, true);
     assert.equal(frozen.frozenQuestions, 5);
 
-    await offering.setSeries(draft.id, { testSeriesId: 'srs_1' });
+    await offering.moveToSeries(draft.id, { testSeriesId: 'srs_1' });
     const status = await offering.setStatus(draft.id, TEST_STATUS.ACTIVE);
 
     // A publishable mock: frozen, carried by a series, and offered.

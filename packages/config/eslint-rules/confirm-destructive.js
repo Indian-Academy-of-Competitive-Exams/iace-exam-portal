@@ -9,7 +9,7 @@
 const DESTRUCTIVE_METHODS = new Set([
   'remove',
   'removeMember',
-  'removeTest',
+  'moveToSeries',
   'setActive',
   'setTestBlocked',
   'addMembers',

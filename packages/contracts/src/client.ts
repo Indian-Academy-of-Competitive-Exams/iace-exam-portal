@@ -1064,12 +1064,6 @@ export function createApiClient(options: ApiClientOptions) {
             body: input,
             schema: seriesTestRowSchema.array(),
           }),
-
-        removeTest: (id: string, testId: string): Promise<SeriesTestRow[]> =>
-          request(ADMIN_SERIES_ROUTES.test(id, testId), {
-            method: 'DELETE',
-            schema: seriesTestRowSchema.array(),
-          }),
       },
 
       /** Every series a student reaches and what opens each one, the branch gate already applied. */
@@ -1236,7 +1230,7 @@ export function createApiClient(options: ApiClientOptions) {
             schema: testScheduleSchema,
           }),
 
-        setSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink | null> =>
+        moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink | null> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), {
             method: 'POST',
             body: input,
