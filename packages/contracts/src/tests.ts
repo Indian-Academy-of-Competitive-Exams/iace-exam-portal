@@ -467,7 +467,7 @@ export const testSchema = z.object({
   variantCount: z.number().int(),
   /** What depends on it, so a confirm names the consequence instead of guessing at it. */
   attemptCount: z.number().int(),
-  /** The one series carrying it. Null reaches nobody, which is what stops it being offered. */
+  /** The one series carrying it. The column requires one, so no row ever comes back null. */
   testSeriesId: z.string().nullable(),
   /** That series' name, so a screen can say which one decided the mode without a second request. */
   testSeriesName: z.string().nullable(),

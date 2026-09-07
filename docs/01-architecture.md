@@ -72,8 +72,8 @@ adaptive practice, certificates.
 - **Scheduling belongs to the test:** `Test.opensAt`, `Test.lateEntrySec` (counted from the
   opening), `Test.extraTimeSec`. It blocks _starting_ a test, never seeing one, and `canStart` is
   derived from the clock on every read rather than stored. Series to test is one-to-many:
-  `Test.testSeriesId` (nullable) with `seriesOrder`; there is no join table and no standalone
-  sitting.
+  `Test.testSeriesId` (required) with `seriesOrder`; there is no join table, no standalone test and
+  no standalone sitting.
 - **Admin panel:** questions, tests, series, students, branches, grants, and an operational
   overview. Admins are scoped by feature key only — there is no branch scoping on an admin.
 
