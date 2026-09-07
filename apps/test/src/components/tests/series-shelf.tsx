@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Progress, TruncatedText, linkVariants, plural } from '@iace/ui';
+import { TruncatedText, linkVariants, plural } from '@iace/ui';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { seriesProgress, type Sittable, type TestResult } from '../../lib/catalog';
@@ -31,13 +31,6 @@ export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelf
         <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
           Open series
         </Link>
-      }
-      banner={
-        <Progress
-          value={progress.percent}
-          size="sm"
-          aria-label={`Progress through ${series.name}`}
-        />
       }
     >
       {rows.map((row) => (

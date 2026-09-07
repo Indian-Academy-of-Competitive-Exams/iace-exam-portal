@@ -8,7 +8,6 @@ import {
   DataTable,
   LoadingState,
   PageFrame,
-  Progress,
   Skeleton,
   TruncatedText,
   linkVariants,
@@ -103,8 +102,6 @@ export function SeriesPage() {
                 </Button>
               }
             />
-
-            <Progress value={progress.percent} aria-label="Tests done in this series" />
 
             <Standing trend={trend} progress={progress} sat={sat} />
 

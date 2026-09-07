@@ -12,7 +12,8 @@ export type HeroTone = keyof typeof TONES;
 export interface HeroProps {
   /** The overline above the title — where this sits, in the exam world's own words. */
   eyebrow?: React.ReactNode;
-  title: React.ReactNode;
+  /** Omitted where the figure IS the headline and a title would only repeat the tab above it. */
+  title?: React.ReactNode;
   /** A value under the title. Never a sentence about the screen. */
   meta?: React.ReactNode;
   /** The one number this screen is about, read before the title's words are. */
@@ -47,7 +48,9 @@ export function Hero({
             {eyebrow}
           </span>
         ) : null}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        {title ? (
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        ) : null}
         {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
         {figure ? <div className="mt-2">{figure}</div> : null}
       </div>

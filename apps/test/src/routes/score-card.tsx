@@ -5,8 +5,6 @@ import {
   DataTable,
   LoadingState,
   Metric,
-  Progress,
-  StatRow,
   TruncatedText,
   plural,
   type DataTableColumn,
@@ -27,15 +25,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
-import {
-  Hero,
-  HeroFigure,
-  PageBody,
-  Section,
-  SurfaceCard,
-  TileGrid,
-  StatTile,
-} from '../components/ui';
+import { Hero, HeroFigure, PageBody, Section, StatTile, TileGrid } from '../components/ui';
 
 const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
   {
@@ -80,28 +70,8 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
       <Hero
         tone="accent"
         eyebrow="Your result"
-        title="Score card"
-        figure={
-          <HeroFigure
-            value={card.percentile ?? '—'}
-            unit={card.percentile === null ? undefined : 'th'}
-            caption={beaten(card)}
-          />
-        }
-        aside={
-          <>
-            <Metric
-              label="Rank"
-              value={card.rank ?? '—'}
-              unit={
-                card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
-              }
-              size="md"
-            />
-            <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} size="md" />
-            <Metric label="Accuracy" value={accuracy} unit="%" size="md" />
-          </>
-        }
+        figure={<Headline card={card} />}
+        aside={<Beside card={card} accuracy={accuracy} />}
       />
 
       {card.provisional ? (
@@ -124,20 +94,13 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         <StatTile label="Wrong" value={card.wrongCount} />
         <StatTile label="Unattempted" value={card.unattemptedCount} />
         <StatTile label="Questions" value={card.totalQuestions} />
+        <StatTile label="Percentage" value={card.percentage} unit="%" />
         <StatTile
           label="Time taken"
           value={minutes(card.timeTakenSec)}
           foot={`of ${minutes(card.durationSec)}`}
         />
       </TileGrid>
-
-      <SurfaceCard
-        title="Accuracy"
-        meta={`${card.correctCount} right of ${plural(attempted, 'attempt')}`}
-      >
-        <Progress value={accuracy} aria-label="Accuracy" />
-        <StatRow label="Percentage" value={`${card.percentage}%`} />
-      </SurfaceCard>
 
       {report === null ? null : (
         <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -164,6 +127,36 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
 
       {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
     </PageBody>
+  );
+}
+
+/** An unranked sitting has no percentile to lead with, so its marks take the headline instead. */
+function Headline({ card }: Readonly<{ card: ScoreCard }>) {
+  if (card.percentile === null) {
+    return <HeroFigure value={card.score} unit={`/ ${card.maxMarks}`} caption="marks" />;
+  }
+  return <HeroFigure value={card.percentile} unit="th" caption={beaten(card)} />;
+}
+
+/** Never the figure twice: what leads the hero is dropped from what stands beside it. */
+function Beside({ card, accuracy }: Readonly<{ card: ScoreCard; accuracy: number }>) {
+  return (
+    <>
+      {card.percentile === null ? null : (
+        <Metric
+          label="Rank"
+          value={card.rank ?? '—'}
+          unit={
+            card.rank === null || card.cohortSize === null ? undefined : `of ${card.cohortSize}`
+          }
+          size="md"
+        />
+      )}
+      {card.percentile === null ? null : (
+        <Metric label="Marks" value={card.score} unit={`/ ${card.maxMarks}`} size="md" />
+      )}
+      <Metric label="Accuracy" value={accuracy} unit="%" size="md" />
+    </>
   );
 }
 

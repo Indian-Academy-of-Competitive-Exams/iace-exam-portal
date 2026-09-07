@@ -83,10 +83,7 @@ export function TestAboutPage() {
       header={
         <PageCrumbs
           nav={NAV_ITEMS}
-          tail={[
-            { label: 'Tests', to: ROUTES.TESTS },
-            { label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) },
-          ]}
+          tail={[{ label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) }]}
         />
       }
     >
