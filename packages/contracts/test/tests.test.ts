@@ -118,7 +118,11 @@ describe('a test is named when it is created', () => {
   });
 
   it('refuses a name of whitespace', () => {
-    const parsed = createTestSchema.safeParse({ baseConfigId: 'cfg_1', title: '   ' });
+    const parsed = createTestSchema.safeParse({
+      baseConfigId: 'cfg_1',
+      testSeriesId: 'srs_1',
+      title: '   ',
+    });
     assert.equal(parsed.success, false);
   });
 
@@ -183,14 +187,14 @@ describe('offerRequirements', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
   const met = (test: Parameters<typeof offerRequirements>[0]) =>
     offerRequirements(test).map((requirement) => requirement.met);
 
-  it('is ready when the paper is whole and a series carries it', () => {
-    assert.deepEqual(met(fixed), [true, true]);
+  /** A test is created inside a series and cannot leave, so the paper is all that is left to owe. */
+  it('is ready when the paper is whole', () => {
+    assert.deepEqual(met(fixed), [true]);
   });
 
   /** The failure this prevents: offering a half-picked paper and finding out at the freeze. */
@@ -201,21 +205,16 @@ describe('offerRequirements', () => {
     assert.equal(paper?.owed, '64 chosen so far');
   });
 
-  it('is not ready while no series carries it', () => {
-    assert.deepEqual(met({ ...fixed, testSeriesId: null }), [true, false]);
-  });
-
   /** A frozen paper is whole by definition — a retired test must be offerable again. */
   it('takes a frozen paper as whole however its rows are counted', () => {
-    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true, true]);
+    assert.deepEqual(met({ ...fixed, isLocked: true, paperQuestionCount: 0 }), [true]);
   });
 
   /** A generated test has no paper to check: the draw happens at the freeze, not before it. */
-  it('asks a generated test for nothing but a series', () => {
+  it('asks a generated test for nothing at all', () => {
     const generated = { ...fixed, paperBinding: PAPER_BINDING.GENERATED, paperQuestionCount: 0 };
 
-    assert.deepEqual(met(generated), [true, true]);
-    assert.deepEqual(met({ ...generated, testSeriesId: null }), [true, false]);
+    assert.deepEqual(met(generated), [true]);
   });
 });
 
@@ -225,7 +224,6 @@ describe('testBuilderStepOf', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
 
@@ -422,7 +420,6 @@ describe('owesAPaper', () => {
     paperBinding: PAPER_BINDING.FIXED,
     paperQuestionCount: 100,
     totalQuestions: 100,
-    testSeriesId: 'srs_1',
     variantCount: 1,
   };
 

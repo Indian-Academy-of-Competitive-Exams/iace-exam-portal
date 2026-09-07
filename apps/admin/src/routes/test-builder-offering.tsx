@@ -5,7 +5,6 @@ import { Power, X } from 'lucide-react';
 import {
   AppException,
   EVALUATION_MODE_LABELS,
-  OFFER_REQUIREMENT,
   TEST_STATUS,
   allowsCohortScheduling,
   offerRequirements,
@@ -84,7 +83,10 @@ export function SeriesStep({ detail }: Readonly<{ detail: TestDetail }>) {
 
   /** The server refuses this too; asking first keeps the confirm from promising a move it cannot make. */
   const choose = (chosen: ChosenSeries) => {
-    if (chosen.id === '' || chosen.id === link.data?.testSeriesId) return;
+    if (chosen.id === '' || chosen.id === link.data?.testSeriesId) {
+      setRefused(null);
+      return;
+    }
 
     const issue = seriesModeMismatch(chosen.name, chosen.evaluationMode, detail.evaluationMode);
     setRefused(issue);
@@ -477,11 +479,9 @@ export function PublishStep({ detail }: Readonly<{ detail: TestDetail }>) {
               label={requirement.label}
               /* ui-copy-ok: rule */ hint={requirement.owed ?? undefined}
             />
-            {requirement.key === OFFER_REQUIREMENT.PAPER ? (
-              <Button size="sm" variant="outline" asChild>
-                <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
-              </Button>
-            ) : null}
+            <Button size="sm" variant="outline" asChild>
+              <Link to={ROUTES.TEST_PAPER(detail.id)}>Open paper</Link>
+            </Button>
           </li>
         ))}
       </ul>

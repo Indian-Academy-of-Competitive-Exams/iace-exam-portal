@@ -510,10 +510,9 @@ export const testBuilderStepSchema = z.enum(TEST_BUILDER_STEP);
 export type TestBuilderStep = z.infer<typeof testBuilderStepSchema>;
 export const TEST_BUILDER_STEPS = testBuilderStepSchema.options;
 
-/** The two things a test owes before students can be given it. Both are shown, ticked or not. */
+/** What a test owes before students can be given it. Each is shown, ticked or not. */
 export const OFFER_REQUIREMENT = {
   PAPER: 'PAPER',
-  SERIES: 'SERIES',
 } as const;
 export type OfferRequirementKey = (typeof OFFER_REQUIREMENT)[keyof typeof OFFER_REQUIREMENT];
 
@@ -530,15 +529,10 @@ export interface OfferRequirement {
 export function offerRequirements(
   test: Pick<
     Test,
-    | 'isLocked'
-    | 'paperBinding'
-    | 'paperQuestionCount'
-    | 'totalQuestions'
-    | 'testSeriesId'
-    | 'variantCount'
+    'isLocked' | 'paperBinding' | 'paperQuestionCount' | 'totalQuestions' | 'variantCount'
   >,
 ): OfferRequirement[] {
-  return [paperRequirement(test), seriesRequirement(test)];
+  return [paperRequirement(test)];
 }
 
 /** Whether a paper is still owed. The stepper's tick, the checklist and the landing step all read it. */
@@ -570,16 +564,6 @@ function paperRequirement(test: Parameters<typeof offerRequirements>[0]): OfferR
     met,
     label: `All ${test.totalQuestions} questions are on the paper`,
     owed: met ? null : `${test.paperQuestionCount} chosen so far`,
-  };
-}
-
-function seriesRequirement(test: Parameters<typeof offerRequirements>[0]): OfferRequirement {
-  const met = test.testSeriesId !== null;
-  return {
-    key: OFFER_REQUIREMENT.SERIES,
-    met,
-    label: 'It is in a test series, which is the only way a student reaches it',
-    owed: met ? null : 'In none yet',
   };
 }
 
