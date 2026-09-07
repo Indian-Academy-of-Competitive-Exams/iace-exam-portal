@@ -194,8 +194,8 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
   if (!seriesId) {
     return (
       <Alert variant="info">
-        A test opens through the series carrying it. Put this one in a series above, and its clock
-        can be set here.
+        A test reaches a student only through a series. This one is in none, so it cannot be offered
+        and has no opening of its own. Choose one above and its clock can be set here.
       </Alert>
     );
   }
