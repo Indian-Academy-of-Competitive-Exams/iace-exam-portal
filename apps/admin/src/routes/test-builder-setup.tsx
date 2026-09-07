@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useWatch } from 'react-hook-form';
 import {
   EVALUATION_MODE,
@@ -22,6 +23,7 @@ import {
   type TestScope,
 } from '@iace/contracts';
 import {
+  Alert,
   Combobox,
   FormField,
   FormSection,
@@ -120,18 +122,20 @@ function Blueprint({
   const testSeriesId = useWatch({ control: form.control, name: 'testSeriesId' });
   const testSeriesName = useWatch({ control: form.control, name: 'testSeriesName' });
   const chosen = useWatch({ control: form.control, name: 'examTemplate' });
+  const [forcedToFixed, setForcedToFixed] = useState(false);
   // Unchosen shows what the blueprint would give, which is exactly what the server would store.
   const examTemplate = chosen ?? config?.examTemplate ?? EXAM_TEMPLATE.DEFAULT;
 
   /** The series decides the mode, and a ranked one leaves only the frozen paper. */
   const pickSeries = (series: ChosenSeries) => {
     const mode = series.id === '' ? '' : series.evaluationMode;
+    const forced =
+      mode !== '' && !allowedPaperBindings(mode).includes(form.getValues('paperBinding'));
     form.setValue('testSeriesId', series.id, DIRTY);
     form.setValue('testSeriesName', series.name, DIRTY);
     form.setValue('evaluationMode', mode, DIRTY);
-    if (mode && !allowedPaperBindings(mode).includes(form.getValues('paperBinding'))) {
-      form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
-    }
+    if (forced) form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
+    setForcedToFixed(forced);
   };
 
   /** A cascade: a stage belongs to one exam, and both a configuration and a series to one stage. */
@@ -229,6 +233,12 @@ function Blueprint({
           </FormField>
         </>
       )}
+
+      {forcedToFixed ? (
+        <Alert variant="warning" className="sm:col-span-2">
+          {`${testSeriesName} is a Ranked series, so Paper changed from Generated to Fixed: a rank only means something if every student sat the same paper.`}
+        </Alert>
+      ) : null}
 
       <FormField form={form} name="title" label="Name">
         {(control) => (
