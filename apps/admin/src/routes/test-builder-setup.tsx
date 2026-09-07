@@ -46,6 +46,9 @@ import { type TestForm, type TestFormValues } from './test-builder-form';
 
 /** Everything a test writes itself: the blueprint it is built on, and how it is judged. */
 
+// Only a dirty form makes leaving Setup save before it moves, so every pick here must mark one.
+const DIRTY = { shouldDirty: true } as const;
+
 export function SetupStep({
   form,
   detail,
@@ -139,13 +142,13 @@ function Blueprint({
 
   /** A cascade: a stage belongs to one exam, and a configuration to one stage. */
   const pickExam = (value: string) => {
-    form.setValue('examId', value);
-    form.setValue('examStageId', '');
-    form.setValue('baseConfigId', '');
+    form.setValue('examId', value, DIRTY);
+    form.setValue('examStageId', '', DIRTY);
+    form.setValue('baseConfigId', '', DIRTY);
   };
   const pickStage = (value: string) => {
-    form.setValue('examStageId', value);
-    form.setValue('baseConfigId', '');
+    form.setValue('examStageId', value, DIRTY);
+    form.setValue('baseConfigId', '', DIRTY);
   };
 
   return (
@@ -191,7 +194,7 @@ function Blueprint({
                 id={control.id}
                 examStageId={examStageId}
                 value={baseConfigId}
-                onChange={(value) => form.setValue('baseConfigId', value)}
+                onChange={(value) => form.setValue('baseConfigId', value, DIRTY)}
               />
             )}
           </FormField>
@@ -218,9 +221,7 @@ function Blueprint({
             legend="Exam template"
             hideLegend
             value={examTemplate}
-            onValueChange={(next) =>
-              form.setValue('examTemplate', next as ExamTemplate, { shouldDirty: true })
-            }
+            onValueChange={(next) => form.setValue('examTemplate', next as ExamTemplate, DIRTY)}
             className="grid max-w-2xl gap-3 sm:grid-cols-2"
           >
             {EXAM_TEMPLATES.map((value) => (
@@ -263,9 +264,9 @@ function Rules({
   /** Ranked leaves only the frozen paper, so choosing it moves the binding rather than failing. */
   const pickEvaluationMode = (value: string) => {
     const mode = value as EvaluationMode;
-    form.setValue('evaluationMode', mode);
+    form.setValue('evaluationMode', mode, DIRTY);
     if (!allowedPaperBindings(mode).includes(paperBinding)) {
-      form.setValue('paperBinding', PAPER_BINDING.FIXED);
+      form.setValue('paperBinding', PAPER_BINDING.FIXED, DIRTY);
     }
   };
 
@@ -284,7 +285,7 @@ function Rules({
             value={scope}
             clearable={false}
             disabled={sat}
-            onChange={(value) => form.setValue('scope', value as TestScope)}
+            onChange={(value) => form.setValue('scope', value as TestScope, DIRTY)}
             items={TEST_SCOPES.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] }))}
           />
         )}
@@ -325,7 +326,7 @@ function Rules({
             value={paperBinding}
             clearable={false}
             disabled={sat}
-            onChange={(value) => form.setValue('paperBinding', value as PaperBinding)}
+            onChange={(value) => form.setValue('paperBinding', value as PaperBinding, DIRTY)}
             items={allowedPaperBindings(evaluationMode).map((value) => ({
               value,
               label: PAPER_BINDING_LABELS[value],
@@ -390,7 +391,7 @@ function ScopeReference({
             clearable={false}
             disabled={disabled}
             placeholder="Choose a module"
-            onChange={(value) => form.setValue('moduleId', value)}
+            onChange={(value) => form.setValue('moduleId', value, DIRTY)}
             items={(config?.modules ?? []).map((module) => ({
               value: module.id,
               label: module.name,
@@ -412,7 +413,7 @@ function ScopeReference({
             clearable={false}
             disabled={disabled}
             placeholder="Choose a section"
-            onChange={(value) => form.setValue('sectionId', value)}
+            onChange={(value) => form.setValue('sectionId', value, DIRTY)}
             items={(config?.sections ?? []).map((section) => ({
               value: section.id,
               label: section.name,
