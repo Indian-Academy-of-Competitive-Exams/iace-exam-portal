@@ -895,3 +895,79 @@ Ref: TestSectionStat.baseConfigSectionId > BaseConfigSection.id
 Ref: TestQuestionStat.testId > Test.id [delete: cascade]
 Ref: TestQuestionStat.paperQuestionId > PaperQuestion.id [delete: cascade]
 Ref: TestQuestionStat.questionId > Question.id
+
+// ============================================================================
+//  TABLE GROUPS — visual domains, rendered as areas in ChartDB / dbdiagram.
+//  Purely presentational; no effect on the generated SQL / Prisma schema.
+//  Colors are kept as comments: @dbml/core rejects `[color: ...]` on a
+//  TableGroup (dbdiagram.io-only syntax), and it would break parsing here.
+// ============================================================================
+
+TableGroup "Exam Taxonomy" { // color: #B83939
+  Exam
+  ExamStage
+}
+
+TableGroup "Base Configs" { // color: #C2703D
+  BaseConfig
+  BaseConfigModule
+  BaseConfigSection
+}
+
+TableGroup "Question Bank" { // color: #B8860B
+  Subject
+  Topic
+  Question
+  QuestionVersion
+}
+
+TableGroup "Tests & Papers" { // color: #2E7D5B
+  Test
+  PaperQuestion
+}
+
+TableGroup "Attempts" { // color: #2563A8
+  Attempt
+  AttemptQuestion
+  PerformanceShare
+}
+
+TableGroup "People & Identity" { // color: #6D4AA8
+  Student
+  StudentProfile
+  Admin
+  StudentConsent
+}
+
+TableGroup "Admin Permissions" { // color: #8A4A8F
+  AdminFeaturePermission
+}
+
+TableGroup "Access: Programs / Branches / Series" { // color: #1F7A8C
+  Branch
+  TestSeries
+  Program
+  StudentGrant
+  TestProgramUnlock
+}
+
+TableGroup "Analytics Rollups" { // color: #3F7E44
+  StudentStat
+  StudentSubjectStat
+  TestStat
+  TestSectionStat
+  TestQuestionStat
+}
+
+TableGroup "Audit, Notifications & Durability" { // color: #6B6B6B
+  ImportLog
+  RowActionLog
+  Notification
+  OutboxEvent
+  ProcessedRollup
+}
+
+TableGroup "Events" { // color: #A85A2E
+  Event
+  EventCandidate
+}
