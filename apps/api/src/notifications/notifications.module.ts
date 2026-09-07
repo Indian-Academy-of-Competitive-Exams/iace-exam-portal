@@ -8,11 +8,15 @@ import { NotificationsService } from './notifications.service';
 import { NotificationOutbox } from './notification-outbox';
 import { NotificationsProcessor } from './notifications.processor';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
+import { AnnouncementsService } from './announcements.service';
+import { AnnouncementsController } from './announcements.controller';
 
 /** Owns `Notification` and `NotificationDelivery`. No controller: a student's bell hangs off `me`. */
 @Module({
   imports: [PrismaModule, QueueModule],
+  controllers: [AnnouncementsController],
   providers: [
+    AnnouncementsService,
     NotificationsService,
     NotificationOutbox,
     NotificationsProcessor,

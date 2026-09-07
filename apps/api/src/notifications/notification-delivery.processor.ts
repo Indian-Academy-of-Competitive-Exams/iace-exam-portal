@@ -6,7 +6,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { type Job, type Queue } from 'bullmq';
-import { DeliveryStatus } from '@prisma/client';
+import { DeliveryStatus, type DeliveryChannel } from '@prisma/client';
 import { ActorTypes, NOTIFICATION_TYPE, type NotificationType } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -34,9 +34,16 @@ import {
 const KIND_OF: Partial<Record<NotificationType, MessageKind>> = {
   [NOTIFICATION_TYPE.RESULT_READY]: MESSAGE_KINDS.RESULT_READY,
   [NOTIFICATION_TYPE.TEST_ASSIGNED]: MESSAGE_KINDS.TEST_ASSIGNED,
+  [NOTIFICATION_TYPE.GENERIC]: MESSAGE_KINDS.ANNOUNCEMENT,
 };
 
 const ATTEMPT_CAP = QUEUE_POLICY[QUEUE_NAMES.NOTIFICATION_DELIVERY].attempts;
+
+interface NotificationWithChain {
+  id: string;
+  type: NotificationType;
+  announcement: { paidChannels: DeliveryChannel[] } | null;
+}
 
 @Injectable()
 @Processor(QUEUE_NAMES.NOTIFICATION_DELIVERY, {
@@ -62,7 +69,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
   async deliver(deliveryId: string, attempt: number): Promise<void> {
     const row = await this.prisma.notificationDelivery.findUnique({
       where: { id: deliveryId },
-      include: { notification: true },
+      include: { notification: { include: { announcement: true } } },
     });
     if (!row || row.status !== DeliveryStatus.PENDING) return;
 
@@ -82,7 +89,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
     const mobile = await this.notifications.mobileOf(row.notification.studentId ?? '');
     if (!mobile) {
       await this.skip(deliveryId, SKIP_REASONS.NO_CONTACT);
-      await this.fallBack(row.notification.id, row.notification.type, channel);
+      await this.fallBack(row.notification, channel);
       return;
     }
 
@@ -107,7 +114,7 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       // Under the cap this rethrows, which is what tells BullMQ to back off and try the SAME channel.
       if (attempt < ATTEMPT_CAP) throw error;
 
-      await this.fallBack(row.notification.id, row.notification.type, channel);
+      await this.fallBack(row.notification, channel);
     }
   }
 
@@ -133,19 +140,15 @@ export class NotificationDeliveryProcessor extends WorkerHost {
   }
 
   /** Books the next channel in the chain. Nothing to book means this message has run out of road. */
-  private async fallBack(
-    notificationId: string,
-    type: NotificationType,
-    from: PaidChannel,
-  ): Promise<void> {
-    const next = nextChannelAfter(type, from);
+  private async fallBack(notification: NotificationWithChain, from: PaidChannel): Promise<void> {
+    const next = nextInChain(notification, from);
     if (!next) {
-      this.logger.warn(`Notification ${notificationId} could not be delivered on any channel`);
+      this.logger.warn(`Notification ${notification.id} could not be delivered on any channel`);
       return;
     }
 
     const booked = await this.prisma.notificationDelivery.create({
-      data: { notificationId, channel: next },
+      data: { notificationId: notification.id, channel: next },
     });
     await this.deliveries.add(
       QUEUE_NAMES.NOTIFICATION_DELIVERY,
@@ -153,6 +156,15 @@ export class NotificationDeliveryProcessor extends WorkerHost {
       { jobId: notificationDeliveryJobId(booked.id) },
     );
   }
+}
+
+/** An announcement's chain is what the ADMIN chose to spend on it; everything else follows policy. */
+function nextInChain(notification: NotificationWithChain, from: PaidChannel): PaidChannel | null {
+  const chosen = notification.announcement?.paidChannels as PaidChannel[] | undefined;
+  if (!chosen) return nextChannelAfter(notification.type, from);
+
+  const at = chosen.indexOf(from);
+  return at >= 0 ? (chosen[at + 1] ?? null) : null;
 }
 
 function variablesOf(data: unknown): Record<string, string | number> | undefined {

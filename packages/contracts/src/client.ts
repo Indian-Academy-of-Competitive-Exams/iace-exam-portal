@@ -128,6 +128,15 @@ import {
   type UpdateTestSeriesInput,
 } from './access';
 import {
+  ANNOUNCEMENT_ROUTES,
+  announcementPreviewSchema,
+  announcementSchema,
+  type Announcement,
+  type AnnouncementListQueryInput,
+  type AnnouncementPreview,
+  type CreateAnnouncementInput,
+} from './announcements';
+import {
   ADMIN_BASE_CONFIG_ROUTES,
   baseConfigDetailSchema,
   baseConfigSchema,
@@ -752,6 +761,32 @@ export function createApiClient(options: ApiClientOptions) {
     },
 
     admin: {
+      /** What an admin says to a cohort, and what reaching them cost. */
+      announcements: {
+        list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<Announcement>> =>
+          requestPaginated(`${ANNOUNCEMENT_ROUTES.list}${queryString({ ...query })}`, {
+            schema: announcementSchema.array(),
+          }),
+
+        /** Asked while composing. Changes nothing — the cohort is read off the body. */
+        preview: (input: CreateAnnouncementInput): Promise<AnnouncementPreview> =>
+          request(ANNOUNCEMENT_ROUTES.preview, {
+            method: 'POST',
+            body: input,
+            schema: announcementPreviewSchema,
+          }),
+
+        send: (input: CreateAnnouncementInput): Promise<Announcement> =>
+          request(ANNOUNCEMENT_ROUTES.create, {
+            method: 'POST',
+            body: input,
+            schema: announcementSchema,
+          }),
+
+        detail: (id: string): Promise<Announcement> =>
+          request(ANNOUNCEMENT_ROUTES.detail(id), { schema: announcementSchema }),
+      },
+
       students: {
         list: (query: StudentListQueryInput = {}): Promise<Paginated<StudentSummary>> =>
           requestPaginated(`${ADMIN_STUDENT_ROUTES.list}${queryString({ ...query })}`, {

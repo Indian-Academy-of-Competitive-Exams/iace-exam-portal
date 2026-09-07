@@ -14,6 +14,7 @@ const TEMPLATE_KEYS = {
   [MESSAGE_KINDS.RESULT_READY]: 'WHATSAPP_TEMPLATE_RESULT_READY',
   [MESSAGE_KINDS.TEST_ASSIGNED]: 'WHATSAPP_TEMPLATE_TEST_ASSIGNED',
   [MESSAGE_KINDS.TEST_REMINDER]: 'WHATSAPP_TEMPLATE_TEST_REMINDER',
+  [MESSAGE_KINDS.ANNOUNCEMENT]: 'WHATSAPP_TEMPLATE_ANNOUNCEMENT',
 } as const satisfies Record<MessageKind, string>;
 
 /** Template variables are POSITIONAL, so this order IS the registered template's order. */
@@ -23,6 +24,7 @@ const TEMPLATE_VARIABLES = {
   [MESSAGE_KINDS.RESULT_READY]: ['testId'],
   [MESSAGE_KINDS.TEST_ASSIGNED]: ['testId'],
   [MESSAGE_KINDS.TEST_REMINDER]: ['testId'],
+  [MESSAGE_KINDS.ANNOUNCEMENT]: ['message'],
 } as const satisfies Record<MessageKind, readonly string[]>;
 
 /** Meta's authentication category mandates a button, and it repeats the code the body already carries. */

@@ -165,6 +165,13 @@ export const envSchema = z.object({
   SMS_TEMPLATE_RESULT_READY: optional,
   SMS_TEMPLATE_TEST_ASSIGNED: optional,
   SMS_TEMPLATE_TEST_REMINDER: optional,
+  SMS_TEMPLATE_ANNOUNCEMENT: optional,
+
+  // What one paid message costs in PAISE, so a preview is priced in what the invoice will say.
+  NOTIFICATION_COST_WHATSAPP_PAISE: z.coerce.number().int().nonnegative().default(17),
+  NOTIFICATION_COST_SMS_PAISE: z.coerce.number().int().nonnegative().default(18),
+  // The wall a mistargeted broadcast hits instead of an invoice.
+  NOTIFICATION_MAX_RECIPIENTS: z.coerce.number().int().positive().default(50000),
 
   // WhatsApp, as a shape rather than a vendor: Meta's Cloud API direct, or Interakt in front of it.
   WHATSAPP_PROVIDER: z.enum(WHATSAPP_PROVIDERS).default(WHATSAPP_PROVIDERS.NONE),
@@ -182,6 +189,7 @@ export const envSchema = z.object({
   WHATSAPP_TEMPLATE_RESULT_READY: optional,
   WHATSAPP_TEMPLATE_TEST_ASSIGNED: optional,
   WHATSAPP_TEMPLATE_TEST_REMINDER: optional,
+  WHATSAPP_TEMPLATE_ANNOUNCEMENT: optional,
 });
 
 /** An empty allowlist reflects whatever origin asks, which is no allowlist at all. */

@@ -22,6 +22,7 @@ const TEMPLATE_KEYS = {
   [MESSAGE_KINDS.RESULT_READY]: 'SMS_TEMPLATE_RESULT_READY',
   [MESSAGE_KINDS.TEST_ASSIGNED]: 'SMS_TEMPLATE_TEST_ASSIGNED',
   [MESSAGE_KINDS.TEST_REMINDER]: 'SMS_TEMPLATE_TEST_REMINDER',
+  [MESSAGE_KINDS.ANNOUNCEMENT]: 'SMS_TEMPLATE_ANNOUNCEMENT',
 } as const satisfies Record<MessageKind, string>;
 
 /** Long enough for a slow aggregator, short enough that a student is not left watching a spinner. */

@@ -8,6 +8,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { type Queue } from 'bullmq';
 import { type Prisma } from '@prisma/client';
 import { type NotificationType } from '@iace/contracts';
+import { type PaidChannel } from './notification-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   NOTIFICATION_JOBS,
@@ -39,6 +40,8 @@ export interface NotificationIntent {
   body?: string;
   data?: Record<string, string | number>;
   dedupeKey?: string;
+  announcementId?: string;
+  escalate?: readonly PaidChannel[];
   actBy?: Date;
   testId?: string;
   testSeriesId?: string;
@@ -170,6 +173,8 @@ export function parseIntent(payload: Prisma.JsonValue | null): NotificationInten
     ...(typeof held.body === 'string' ? { body: held.body } : {}),
     ...(isVariables(held.data) ? { data: held.data } : {}),
     ...(typeof held.dedupeKey === 'string' ? { dedupeKey: held.dedupeKey } : {}),
+    ...(typeof held.announcementId === 'string' ? { announcementId: held.announcementId } : {}),
+    ...(Array.isArray(held.escalate) ? { escalate: held.escalate as PaidChannel[] } : {}),
     ...(typeof held.actBy === 'string' ? { actBy: new Date(held.actBy) } : {}),
     ...(typeof held.testId === 'string' ? { testId: held.testId } : {}),
     ...(typeof held.testSeriesId === 'string' ? { testSeriesId: held.testSeriesId } : {}),

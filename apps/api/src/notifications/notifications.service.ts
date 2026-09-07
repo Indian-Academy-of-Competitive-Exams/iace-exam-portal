@@ -10,7 +10,7 @@ import {
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { isUniqueViolation } from '../common/prisma-errors';
-import { firstChannelFor } from './notification-policy';
+import { firstChannelFor, type PaidChannel } from './notification-policy';
 
 /** What one notification is written from. `testSeriesId` is the deep link, not decoration. */
 export interface NewNotification {
@@ -22,6 +22,10 @@ export interface NewNotification {
   data?: Record<string, string | number>;
   /** The natural key of the fact behind it. Given one, writing twice is writing once. */
   dedupeKey?: string;
+  /** The announcement this belongs to. Its paidChannels become this message's fallback chain. */
+  announcementId?: string;
+  /** Overrides the policy's chain — what an admin chose to spend on this one send. */
+  escalate?: readonly PaidChannel[];
   /** When this stops being actionable. Given one, escalation stops waiting as it approaches. */
   actBy?: Date;
   testId?: string;
@@ -56,6 +60,7 @@ export class NotificationsService {
             body: input.body ?? null,
             data: input.data ?? Prisma.DbNull,
             dedupeKey: input.dedupeKey ?? null,
+            announcementId: input.announcementId ?? null,
             actBy: input.actBy ?? null,
             testId: input.testId ?? null,
             testSeriesId: input.testSeriesId ?? null,
@@ -63,7 +68,7 @@ export class NotificationsService {
         });
 
         // Only the FIRST: the rest are what a terminal failure falls back to, not a second send.
-        const channel = firstChannelFor(input.type);
+        const channel = input.escalate?.[0] ?? firstChannelFor(input.type);
         if (channel) {
           await tx.notificationDelivery.create({ data: { notificationId: created.id, channel } });
         }

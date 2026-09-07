@@ -4376,6 +4376,87 @@ export class FakeNotificationsPrisma {
   readonly outboxEvent = this.outbox.api;
 }
 
+// --------------------------------------------------------------------------- announcements
+// ---------------------------------------------------------------------------
+
+export interface FakeAnnouncementRow {
+  id: string;
+  title: string;
+  body: string;
+  paidChannels: string[];
+  recipientCount: number;
+  estimatedCostPaise: number;
+  createdById: string;
+  createdAt: Date;
+  createdBy: { id: string; fullName: string | null; email: string };
+}
+
+/** Enough Prisma for a send: a cohort to count, a record to write, and the outbox beside it. */
+export class FakeAnnouncementsPrisma {
+  readonly students: { id: string; mobile: string }[];
+
+  readonly announcements: FakeAnnouncementRow[] = [];
+
+  constructor(count = 3) {
+    this.students = Array.from({ length: count }, (_, at) => ({
+      id: `stu_${at + 1}`,
+      mobile: `98765432${String(at).padStart(2, '0')}`,
+    }));
+  }
+
+  private readonly outbox = fakeOutboxTable();
+
+  readonly outboxEvents = this.outbox.rows;
+
+  readonly outboxEvent = this.outbox.api;
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+
+  $transaction<T>(
+    work: Promise<T>[] | ((tx: FakeAnnouncementsPrisma) => Promise<T>),
+  ): Promise<T[] | T> {
+    return typeof work === 'function' ? work(this) : Promise.all(work);
+  }
+
+  /** The only two shapes the service asks for: every student, and the ones with a number. */
+  readonly student = {
+    count: ({ where }: { where?: { mobile?: unknown } } = {}) =>
+      Promise.resolve(
+        where?.mobile === undefined
+          ? this.students.length
+          : this.students.filter((row) => row.mobile !== '').length,
+      ),
+
+    findMany: () => Promise.resolve(this.students),
+  };
+
+  readonly announcement = {
+    create: ({ data }: { data: Omit<FakeAnnouncementRow, 'id' | 'createdAt' | 'createdBy'> }) => {
+      const row: FakeAnnouncementRow = {
+        ...data,
+        id: `anc_${this.announcements.length + 1}`,
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        createdBy: { id: data.createdById, fullName: 'An Admin', email: 'admin@iace.co.in' },
+      };
+      this.announcements.push(row);
+      return Promise.resolve(row);
+    },
+
+    findUnique: ({ where }: { where: { id: string } }) =>
+      Promise.resolve(this.announcements.find((row) => row.id === where.id) ?? null),
+
+    findMany: () => Promise.resolve(this.announcements),
+
+    count: () => Promise.resolve(this.announcements.length),
+  };
+
+  readonly notification = { count: () => Promise.resolve(0) };
+
+  readonly notificationDelivery = { count: () => Promise.resolve(0) };
+}
+
 // --------------------------------------------------------------------------- scoring
 // ---------------------------------------------------------------------------
 

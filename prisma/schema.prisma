@@ -785,6 +785,7 @@ model Admin {
 
   permissions       AdminFeaturePermission[]
   notifications     Notification[]
+  announcementsSent Announcement[]
   sharesMade        PerformanceShare[]
   // The one createdById with a real relation: a draft names its author on screen and in a filter.
   questionsAuthored Question[]
@@ -1020,23 +1021,49 @@ model Notification {
   // When what this is about stops being actionable. Null means waiting costs the student nothing.
   actBy     DateTime?        @db.Timestamptz(3)
 
-  testId       String?
-  testSeriesId String?
-  isRead       Boolean          @default(false)
+  testId         String?
+  testSeriesId   String?
+  announcementId String?
+  isRead         Boolean          @default(false)
   // Which channel actually brought them back, so the policy stops being an assumption.
-  openedVia    DeliveryChannel?
-  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  openedVia      DeliveryChannel?
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
 
-  student    Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  admin      Admin?                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
-  test       Test?                  @relation(fields: [testId], references: [id])
-  testSeries TestSeries?            @relation(fields: [testSeriesId], references: [id])
-  deliveries NotificationDelivery[]
+  student      Student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  admin        Admin?                 @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  test         Test?                  @relation(fields: [testId], references: [id])
+  testSeries   TestSeries?            @relation(fields: [testSeriesId], references: [id])
+  announcement Announcement?          @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
 
   @@index([studentId, createdAt])
   @@index([studentId, isRead])
   @@index([testId])
   @@index([testSeriesId])
+  @@index([announcementId])
+}
+
+// What an admin said, to whom, and what it was expected to cost. One row per SEND: there are no
+// drafts, so a row existing means it went out.
+model Announcement {
+  id                 String            @id @default(cuid())
+  title              String
+  body               String
+  // The student filter as written, so "who was this sent to" is answerable and reproducible.
+  audience           Json
+  // Paid channels the admin opted into. Empty is in-app only, which is free.
+  paidChannels       DeliveryChannel[]
+  // Counted and priced at SEND time: today's rates would misreport what last month actually cost.
+  recipientCount     Int
+  estimatedCostPaise Int
+  createdById        String
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+
+  createdBy     Admin          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@index([createdAt])
+  @@index([createdById])
 }
 
 // One row per channel that can FAIL — in-app has none, because the Notification row IS its delivery.

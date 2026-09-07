@@ -26,6 +26,8 @@ export const MESSAGE_KINDS = {
   TEST_ASSIGNED: 'test_assigned',
   /** Not wired (docs/03 §10): needs a scheduled job reading Test.opensAt/lateEntrySec. */
   TEST_REMINDER: 'test_reminder',
+  /** An admin's own words, which still travel inside a registered template's one variable slot. */
+  ANNOUNCEMENT: 'announcement',
 } as const;
 
 export type MessageKind = (typeof MESSAGE_KINDS)[keyof typeof MESSAGE_KINDS];
