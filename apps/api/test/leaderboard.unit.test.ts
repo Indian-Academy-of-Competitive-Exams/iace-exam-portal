@@ -9,7 +9,7 @@ import {
   percentileOf,
   timeTakenSec,
 } from '../src/attempts/leaderboard-score';
-import { LeaderboardService } from '../src/attempts/leaderboard.service';
+import { LeaderboardService, rebuildJobId } from '../src/attempts/leaderboard.service';
 import { redisKeys } from '../src/redis/redis.keys';
 import {
   FakeQueue,
@@ -328,5 +328,19 @@ describe('LeaderboardService.sittingCounts — the crowd a catalog quotes', () =
     redis.pipelineFails = true;
 
     assert.equal((await leaderboard.sittingCounts([TEST_ID])).size, 0);
+  });
+});
+
+describe('a board nobody has warmed yet', () => {
+  /** The bug this prevents: 5,000 readers of a cold board creating 5,000 identical rebuild jobs. */
+  it('asks for the same rebuild however many readers find it cold', async () => {
+    const { rebuilds, leaderboard } = board([]);
+
+    await leaderboard.standing(TEST_ID, 'att_a');
+    await leaderboard.standing(TEST_ID, 'att_a');
+
+    assert.equal(rebuilds.jobs.length, 2);
+    assert.equal(rebuilds.jobs[0]?.jobId, rebuildJobId(TEST_ID));
+    assert.equal(rebuilds.jobs[0]?.jobId, rebuilds.jobs[1]?.jobId);
   });
 });

@@ -187,10 +187,17 @@ export class LeaderboardService {
   /** True when the board was empty — a wiped or expired Redis, repaired by a job and not by a read. */
   private async askForRebuildIfCold(testId: string): Promise<boolean> {
     if ((await this.redis.client.zcard(redisKeys.testLeaderboard(testId))) > 0) return false;
-    await this.rebuilds.add(QUEUE_NAMES.LEADERBOARD_REBUILD, { testId });
+    await this.rebuilds.add(
+      QUEUE_NAMES.LEADERBOARD_REBUILD,
+      { testId },
+      { jobId: rebuildJobId(testId) },
+    );
     return true;
   }
 }
+
+/** One id per test, so every reader of a cold board asks for the same rebuild and not its own. */
+export const rebuildJobId = (testId: string) => `${QUEUE_NAMES.LEADERBOARD_REBUILD}:${testId}`;
 
 /** ZADD takes score and member in pairs, so a whole page goes over the wire as one command. */
 function toMember(row: {
