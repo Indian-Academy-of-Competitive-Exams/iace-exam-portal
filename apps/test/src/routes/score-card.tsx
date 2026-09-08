@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Metric, cn } from '@iace/ui';
+import { Info } from 'lucide-react';
+import { Badge, Button, Metric, Tooltip, TooltipContent, TooltipTrigger, cn } from '@iace/ui';
 import {
   CohortFigure,
   MarksFigure,
@@ -9,9 +10,12 @@ import {
   type Benchmark,
 } from '@iace/app-kit/browser';
 import {
+  EVALUATION_MODE,
+  EVALUATION_MODE_LABELS,
   PERFORMANCE_SCOPES,
   paperCounts,
   type CohortCurve,
+  type EvaluationMode,
   type PerformanceReport,
   type ScoreCard,
   type SectionalStanding,
@@ -51,22 +55,8 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         eyebrow="Your result"
         figure={<Headline card={card} />}
         aside={<Beside card={card} accuracy={accuracy} />}
+        corner={<Corner card={card} mode={report?.evaluationMode ?? null} />}
       />
-
-      {card.provisional ? (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info" dismissible>
-          This standing can still move: others can still sit this test. It settles once the test has
-          closed for everyone.
-        </Alert>
-      ) : null}
-
-      {card.isGraded ? null : (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info" dismissible>
-          This was a retake, so it is marked but it does not carry a rank.
-        </Alert>
-      )}
 
       <TileGrid className="lg:grid-cols-6 xl:grid-cols-6">
         <StatTile label="Correct" value={card.correctCount} />
@@ -104,6 +94,53 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
       {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
     </PageBody>
   );
+}
+
+/** What the paper IS, and what qualifies the figures — out of the way of the number itself. */
+function Corner({ card, mode }: Readonly<{ card: ScoreCard; mode: EvaluationMode | null }>) {
+  const notices = noticesFor(card);
+
+  return (
+    <>
+      {mode === null ? null : (
+        <Badge variant={mode === EVALUATION_MODE.RANKED ? 'primary' : 'neutral'}>
+          {EVALUATION_MODE_LABELS[mode]}
+        </Badge>
+      )}
+
+      {notices.length === 0 ? null : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Info aria-hidden />
+              <span className="sr-only">About this result</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <span className="flex flex-col gap-2">
+              {notices.map((notice) => (
+                <span key={notice}>{notice}</span>
+              ))}
+            </span>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </>
+  );
+}
+
+/** Each one is a CONSEQUENCE the figures cannot show: what can still move it, and what it misses. */
+function noticesFor(card: ScoreCard): string[] {
+  const notices: string[] = [];
+  if (card.provisional) {
+    notices.push(
+      'This standing can still move: others can still sit this test. It settles once the test has closed for everyone.',
+    );
+  }
+  if (!card.isGraded) {
+    notices.push('This was a retake, so it is marked but it does not carry a rank.');
+  }
+  return notices;
 }
 
 /** An unranked sitting has no percentile to lead with, so its marks take the headline instead. */
