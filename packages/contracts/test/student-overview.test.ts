@@ -11,6 +11,7 @@ import {
   distractorThatWon,
   effortPerSitting,
   overallModeGap,
+  placeInSpread,
   questionReportInsights,
   scopesSat,
   standingTiles,
@@ -392,6 +393,7 @@ describe('effortPerSitting', () => {
 
     assert.equal(effort.questions, 73);
     assert.equal(effort.timeSec, 400);
+    assert.equal(effort.perServedSec, 5.45);
   });
 
   it('has nothing to divide by before a first sitting', () => {
@@ -400,7 +402,7 @@ describe('effortPerSitting', () => {
       { correct: 0, wrong: 0, unattempted: 0 },
     );
 
-    assert.deepEqual(effort, { questions: null, timeSec: null });
+    assert.deepEqual(effort, { questions: null, timeSec: null, perServedSec: null });
   });
 });
 
@@ -557,5 +559,24 @@ describe('standingTiles names the split behind the sitting count', () => {
     );
 
     assert.equal(tiles.at(-1)?.foot, '7 in practice');
+  });
+});
+
+describe('placeInSpread', () => {
+  it('reads a score against the floor and the top the paper was actually scored', () => {
+    assert.equal(placeInSpread(50, 0, 100), 50);
+    assert.equal(placeInSpread(-5, -10, 10), 25);
+  });
+
+  /** A spread of one point is not a spread: dividing by it would put everyone at either end. */
+  it('refuses a spread it cannot divide', () => {
+    assert.equal(placeInSpread(50, null, 100), null);
+    assert.equal(placeInSpread(50, 100, 100), null);
+    assert.equal(placeInSpread(50, 0, null), null);
+  });
+
+  it('clamps a score outside the spread rather than reporting past the ends', () => {
+    assert.equal(placeInSpread(120, 0, 100), 100);
+    assert.equal(placeInSpread(-20, 0, 100), 0);
   });
 });

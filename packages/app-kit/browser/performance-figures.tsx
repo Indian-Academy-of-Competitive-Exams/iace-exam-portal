@@ -26,6 +26,7 @@ import {
   type SectionalStanding,
   type TimeUse,
   percentLabel,
+  placeInSpread,
 } from '@iace/contracts';
 
 const UNMEASURED = '—';
@@ -99,6 +100,7 @@ export function CohortFigure({
   }
   // The floor of the spread, so "you are 40 marks off the top" reads against a range, not a point.
   const lowest = cohort.bands[0]?.from ?? null;
+  const place = placeInSpread(cohort.score, lowest, cohort.topperScore);
 
   return (
     <ChartFigure
@@ -134,6 +136,9 @@ export function CohortFigure({
           )}
           {lowest === null ? null : (
             <StatRow label="Spread" value={`${lowest} to ${cohort.topperScore}`} />
+          )}
+          {place === null ? null : (
+            <StatRow label="Up that spread" value={percentLabel(place, UNMEASURED)} />
           )}
         </div>
       )}

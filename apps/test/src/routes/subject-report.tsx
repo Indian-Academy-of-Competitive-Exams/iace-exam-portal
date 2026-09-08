@@ -89,6 +89,18 @@ const COLUMNS: readonly DataTableColumn<SectionalStanding>[] = [
     cell: (row) => minutes(row.topperTimeSec),
   },
   {
+    key: 'rate',
+    header: 'Marks a minute',
+    numeric: true,
+    cell: (row) => perMinute(row.score, row.timeSpentSec),
+  },
+  {
+    key: 'cohortRate',
+    header: 'Average a minute',
+    numeric: true,
+    cell: (row) => perMinute(row.cohortAverageScore, row.cohortAverageTimeSec),
+  },
+  {
     key: 'standing',
     header: 'Standing',
     cell: (row) => {
@@ -102,6 +114,12 @@ function standingOf(row: SectionalStanding) {
   if (row.cohortAverageScore === null) return STANDINGS.NONE;
   if (row.score > row.cohortAverageScore) return STANDINGS.ABOVE;
   return row.score < row.cohortAverageScore ? STANDINGS.BELOW : STANDINGS.LEVEL;
+}
+
+/** What a minute in this section actually bought — the one figure that crosses marks with time. */
+function perMinute(score: number | null, seconds: number | null): string {
+  if (score === null || seconds === null || seconds === 0) return DASH;
+  return (Math.round((score / (seconds / 60)) * 100) / 100).toFixed(2);
 }
 
 /** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */

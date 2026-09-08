@@ -169,6 +169,10 @@ export function DispositionFigure({
               label="Time a sitting"
               value={effort.timeSec === null ? UNMEASURED : spent(effort.timeSec)}
             />
+            <StatRow
+              label="Time a question served"
+              value={effort.perServedSec === null ? UNMEASURED : `${effort.perServedSec}s`}
+            />
           </>
         )}
       </div>
@@ -236,7 +240,7 @@ export function TimeReturnFigure({ subjects, mode, scope, className }: Readonly<
     key: share.subjectId,
     label: share.name,
     value: Math.round(share.payoff),
-    caption: `${Math.round(share.timeShare)}% of the clock · ${Math.round(share.correctShare)}% of the marks`,
+    caption: `${spent(share.sumTimeSec)} and ${share.correct} right · ${Math.round(share.timeShare)}% of the clock, ${Math.round(share.correctShare)}% of the marks`,
   }));
 
   return (

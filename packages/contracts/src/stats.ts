@@ -241,6 +241,8 @@ export function dispositionRates(disposition: Disposition): DispositionRates {
 export interface EffortPerSitting {
   questions: number | null;
   timeSec: number | null;
+  /** Over everything SERVED, not everything answered — the pace a whole paper is finished at. */
+  perServedSec: number | null;
 }
 
 export function effortPerSitting(
@@ -248,12 +250,13 @@ export function effortPerSitting(
   disposition: Disposition,
 ): EffortPerSitting {
   const sittings = standing.testsAttempted;
-  if (sittings === 0) return { questions: null, timeSec: null };
+  if (sittings === 0) return { questions: null, timeSec: null, perServedSec: null };
   const served = disposition.correct + disposition.wrong + disposition.unattempted;
 
   return {
     questions: Math.round(served / sittings),
     timeSec: Math.round(standing.sumTimeSec / sittings),
+    perServedSec: served === 0 ? null : round2(standing.sumTimeSec / served),
   };
 }
 
@@ -489,6 +492,17 @@ export const percentilePointSchema = z.object({
   cohortSize: z.number().int().nullable(),
 });
 export type PercentilePoint = z.infer<typeof percentilePointSchema>;
+
+/** Where a score falls between the floor and the top of what the paper was actually scored. */
+export function placeInSpread(
+  score: number,
+  lowest: number | null,
+  topper: number | null,
+): number | null {
+  if (lowest === null || topper === null || topper <= lowest) return null;
+  const share = ((score - lowest) / (topper - lowest)) * 100;
+  return round2(Math.min(100, Math.max(0, share)));
+}
 
 /** One column of the cohort's score distribution: `from` inclusive, `to` exclusive. */
 export const cohortBandSchema = z.object({
