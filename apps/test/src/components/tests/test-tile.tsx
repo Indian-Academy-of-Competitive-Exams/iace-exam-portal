@@ -14,12 +14,24 @@ const WHEN = new Intl.DateTimeFormat('en-IN', {
   dateStyle: 'medium',
 });
 
-/** The stripe and the pill say the same thing twice on purpose: one is scanned, one is read. */
+/** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {
-  DONE: { bar: 'bg-success', pill: 'bg-success-subtle text-success-ink', label: 'Done' },
-  LIVE: { bar: 'bg-primary', pill: 'bg-primary-subtle text-primary-ink', label: 'Open now' },
-  RUNNING: { bar: 'bg-warning', pill: 'bg-warning-subtle text-warning-ink', label: 'In progress' },
-  SHUT: { bar: 'bg-border-strong', pill: 'bg-muted text-muted-foreground', label: 'Scheduled' },
+  DONE: {
+    wash: 'from-success-subtle/60',
+    pill: 'bg-success-subtle text-success-ink',
+    label: 'Done',
+  },
+  LIVE: {
+    wash: 'from-primary-subtle/60',
+    pill: 'bg-primary-subtle text-primary-ink',
+    label: 'Open now',
+  },
+  RUNNING: {
+    wash: 'from-warning-subtle/60',
+    pill: 'bg-warning-subtle text-warning-ink',
+    label: 'In progress',
+  },
+  SHUT: { wash: 'from-muted/70', pill: 'bg-muted text-muted-foreground', label: 'Scheduled' },
 } as const;
 
 /** The tile's body opens what the test IS; its foot does the one thing there is to do. */
@@ -31,9 +43,12 @@ export function TestTile({
   const state = STATES[stateOf(row)];
 
   return (
-    <Card className="flex w-72 shrink-0 snap-start flex-col overflow-hidden">
-      <span aria-hidden className={cn('h-1.5 w-full', state.bar)} />
-
+    <Card
+      className={cn(
+        'flex w-72 shrink-0 snap-start flex-col bg-gradient-to-b to-card to-70%',
+        state.wash,
+      )}
+    >
       <div className="flex flex-1 flex-col gap-3 p-4">
         <span className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}>
           {pillOf(row, state.label, result)}

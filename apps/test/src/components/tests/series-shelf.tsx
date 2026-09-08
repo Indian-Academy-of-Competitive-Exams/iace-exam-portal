@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { TruncatedText, linkVariants, plural } from '@iace/ui';
+import { ChevronRight } from 'lucide-react';
+import { TruncatedText, cn, linkVariants, plural } from '@iace/ui';
 import { type StudentCatalogSeries } from '@iace/contracts';
 import { ROUTES } from '../../lib/constants';
 import { seriesProgress, type Sittable, type TestResult } from '../../lib/catalog';
@@ -20,18 +21,18 @@ export function SeriesShelf({ series, rows, now, results }: Readonly<SeriesShelf
   return (
     <Shelf
       title={
-        <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
+        // The name IS the way in, so the icon is sized by this link rather than at the glyph.
+        <Link
+          className={cn(linkVariants(), 'flex min-w-0 items-center gap-1 [&_svg]:size-4')}
+          to={ROUTES.SERIES(series.id)}
+        >
           <TruncatedText className="text-lg font-semibold tracking-tight">
             {series.name}
           </TruncatedText>
+          <ChevronRight aria-hidden className="shrink-0" />
         </Link>
       }
       meta={`${plural(progress.total, 'test')} · ${progress.done} sat`}
-      action={
-        <Link className={linkVariants()} to={ROUTES.SERIES(series.id)}>
-          Open series
-        </Link>
-      }
     >
       {rows.map((row) => (
         <TestTile key={row.test.id} row={row} now={now} result={results.get(row.test.id)} />
