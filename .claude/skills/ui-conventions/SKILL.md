@@ -153,4 +153,4 @@ colorblind-safe set, never brand red. Light + dark via CSS variables.
 - **[student]** `docs/design/student/README.md` is the language for every `apps/test` screen —
   the type ramp used at its top end, `--gap-section` rhythm, brick as a sparing accent, a hero
   before the grid, and the pattern layer in `apps/test/src/components/ui/` that all of it is built
-  from. Its `.dc.html` files beside it are the visual reference.
+  from.

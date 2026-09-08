@@ -60,8 +60,8 @@ Do not break these — they are why the live test holds at 4–5K:
   the event catalog, service tiers, and what CI mechanically enforces. Its section numbers are an
   interface that source comments cite, so renumbering is a breaking change.
 - `docs/design/design-system.html` — living style guide, and the **admin** composition language.
-- `docs/design/student/` — the **student** composition language for `apps/test`, with its visual
-  reference. One token set, two compositions; `ui-conventions` marks the bullets that differ.
+- `docs/design/student/README.md` — the **student** composition language for `apps/test`.
+  One token set, two compositions; `ui-conventions` marks the bullets that differ.
 - `.claude/skills/ui-conventions/` — the binding UI rules. The constraints file above says when to
   invoke it; this is where it lives.
 - `graft/` — the wiring graph of every TypeScript and JavaScript file, queried with the `graft` CLI

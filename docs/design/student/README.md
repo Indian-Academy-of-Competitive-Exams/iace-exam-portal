@@ -1,9 +1,12 @@
-# Student portal — the design language, and its visual reference
+# Student portal — the design language
 
-The rules the student portal (`apps/test`) is built to, and the `.dc.html` mockups that
-show them. `ui-conventions` is binding for both portals and points here for the bullets
-where the two differ; everything structural and editorial in that skill applies to
-`apps/test` unchanged.
+The rules the student portal (`apps/test`) is built to. `ui-conventions` is binding for
+both portals and points here for the bullets where the two differ; everything structural
+and editorial in that skill applies to `apps/test` unchanged.
+
+The mockups this was written from are gone: they were a starting point, and a screenshot
+of an early idea outlives its usefulness the day the screen ships. The rules below and
+the pattern layer in `apps/test/src/components/ui/` are what the portal is built to.
 
 Admin's language is `docs/design/design-system.html`. This one is not a second design
 system — it is the same tokens composed differently.
