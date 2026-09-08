@@ -25,11 +25,16 @@ export class AttemptSweeperProcessor extends WorkerHost {
   }
 
   async process(): Promise<void> {
-    for (const attempt of await this.expired()) {
-      // Through the same gate the student uses, so a race resolves to one submission.
-      await this.submit.expire(attempt.id).catch((error: unknown) => {
-        this.logger.error(`Sweeping attempt ${attempt.id} failed`, error);
-      });
+    const stranded = await this.expired();
+    for (let at = 0; at < stranded.length; at += SWEEP_LANES) {
+      await Promise.all(
+        stranded.slice(at, at + SWEEP_LANES).map((attempt) =>
+          // Through the same gate the student uses, so a race resolves to one submission.
+          this.submit.expire(attempt.id).catch((error: unknown) => {
+            this.logger.error(`Sweeping attempt ${attempt.id} failed`, error);
+          }),
+        ),
+      );
     }
     // The reconciler: a crash between the commit and the queue leaves a request nobody handed on.
     await this.outbox.relay().catch((error: unknown) => {
@@ -84,6 +89,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
     return this.prisma.attempt.findMany({
       where: { status: ATTEMPT_STATUS.IN_PROGRESS, endsAt: { lt: cutoff } },
       select: { id: true },
+      take: SWEEP_BATCH,
     });
   }
 }
@@ -92,3 +98,9 @@ const MILLISECONDS_PER_SECOND = 1000;
 
 /** How many stranded sittings one sweep asks about. The next sweep takes the rest. */
 const RESCORE_BATCH = 100;
+
+/** How many stranded sittings one sweep ends. The next sweep takes the rest. */
+export const SWEEP_BATCH = 200;
+
+/** Ended side by side rather than one after another; the last student waited for all of them. */
+export const SWEEP_LANES = 8;
