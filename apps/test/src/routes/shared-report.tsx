@@ -89,7 +89,7 @@ function Report({ report }: Readonly<{ report: SharedReport }>) {
         <Cohort report={report} />
       ) : (
         <Alert variant="info">
-          Too few sittings to show a cohort curve without naming another student.
+          Too few sittings to show the spread without naming another student.
         </Alert>
       )}
       {report.sections.length > 0 ? <Sections report={report} /> : null}
@@ -153,7 +153,7 @@ function Cohort({ report }: Readonly<{ report: SharedReport }>) {
   }
 
   return (
-    <ChartFigure title="Cohort standing" meta={plural(report.cohortSize, 'sitting')}>
+    <ChartFigure title="Standing" meta={plural(report.cohortSize, 'sitting')}>
       <DistributionPlot
         height={PLOT_HEIGHT}
         bands={report.bands}
@@ -162,7 +162,7 @@ function Cohort({ report }: Readonly<{ report: SharedReport }>) {
         max={report.bands.at(-1)?.to ?? report.score}
         axisSuffix="marks"
         countLabel="Sittings"
-        aria-label="Where this sitting sits in the cohort's score distribution"
+        aria-label="Where this sitting sits in the spread of scores"
       />
     </ChartFigure>
   );

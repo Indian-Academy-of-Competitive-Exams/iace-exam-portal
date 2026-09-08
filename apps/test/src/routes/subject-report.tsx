@@ -15,9 +15,9 @@ const DASH = '—';
 
 /** Where a section stands against the field. A cutoff would be a line; this is a position. */
 const STANDINGS = {
-  ABOVE: { label: 'Above cohort', variant: 'success' },
-  LEVEL: { label: 'At cohort', variant: 'neutral' },
-  BELOW: { label: 'Below cohort', variant: 'warning' },
+  ABOVE: { label: 'Above average', variant: 'success' },
+  LEVEL: { label: 'At average', variant: 'neutral' },
+  BELOW: { label: 'Below average', variant: 'warning' },
   NONE: { label: DASH, variant: 'neutral' },
 } as const;
 
@@ -44,8 +44,8 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
       {measured ? null : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
-          No cohort has been counted for this paper yet, so the columns comparing you to it are
-          empty.
+          No average has been counted for this paper yet, so the columns comparing you to everyone
+          else are empty.
         </Alert>
       )}
 
@@ -78,7 +78,7 @@ const COLUMNS: readonly DataTableColumn<SectionalStanding>[] = [
   { key: 'yourTime', header: 'Your time', numeric: true, cell: (row) => minutes(row.timeSpentSec) },
   {
     key: 'cohortTime',
-    header: 'Cohort time',
+    header: 'Average time',
     numeric: true,
     cell: (row) => minutes(row.cohortAverageTimeSec),
   },

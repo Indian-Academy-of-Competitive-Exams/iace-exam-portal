@@ -202,7 +202,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
         icon={Trophy}
         title="Not ranked"
         // ui-copy-ok: rule
-        hint="A practice paper is never placed against a cohort."
+        hint="A practice paper is never ranked."
         action={
           <Button asChild>
             <Link to={ROUTES.PERFORMANCE}>Go to your performance</Link>

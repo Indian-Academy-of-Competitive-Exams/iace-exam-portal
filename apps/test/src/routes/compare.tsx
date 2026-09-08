@@ -1,7 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert } from '@iace/ui';
-import { ComparisonCards, type ComparisonItem } from '@iace/ui';
+import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
 import {
   LEADERBOARD_SCOPES,
   PERFORMANCE_SCOPES,
@@ -62,7 +61,8 @@ export function ComparePanel() {
       ) : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
-          This sitting is not ranked, so it stands against your own best rather than a cohort.
+          This sitting is not ranked, so it stands against your own best rather than against
+          everyone.
         </Alert>
       )}
     </PageBody>
@@ -90,14 +90,14 @@ function Against({
     },
     {
       key: 'average',
-      label: 'Cohort average',
+      label: 'Average',
       value: cohort.averageScore ?? 0,
       max,
       display: String(cohort.averageScore ?? '—'),
       segments: [
         { key: 'average', label: 'Marks', value: cohort.averageScore ?? 0, tone: 'neutral' },
       ],
-      caption: `${cohort.cohortSize} sittings`,
+      caption: plural(cohort.cohortSize, 'sitting'),
     },
     {
       key: 'topper',

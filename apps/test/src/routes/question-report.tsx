@@ -110,7 +110,7 @@ function Body({
           unit={paceUnit(report.paceIndex)}
           size="sm"
         />
-        <Metric label="Cohort" value={report.cohortSize} unit="sittings" size="sm" />
+        <Metric label="Sittings" value={report.cohortSize} size="sm" />
         <Metric label="Questions" value={report.questions.length} size="sm" />
       </MetricGroup>
 
@@ -188,7 +188,7 @@ function columnsFor(solutionsOpen: boolean): DataTableColumn<QuestionReportRow>[
     },
     {
       key: 'cohortTime',
-      header: 'Cohort time',
+      header: 'Average time',
       numeric: true,
       cell: (row) => seconds(row.cohortAverageTimeSec),
     },
@@ -201,7 +201,7 @@ function columnsFor(solutionsOpen: boolean): DataTableColumn<QuestionReportRow>[
     { key: 'authored', header: 'Difficulty', cell: (row) => row.predefinedDifficulty ?? DASH },
     {
       key: 'system',
-      header: 'Cohort difficulty',
+      header: 'Actual difficulty',
       cell: (row) =>
         row.systemDifficulty === null ? (
           DASH

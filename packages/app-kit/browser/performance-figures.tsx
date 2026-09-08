@@ -100,7 +100,7 @@ export function CohortFigure({
 
   return (
     <ChartFigure
-      title="Cohort standing"
+      title="Standing"
       meta={plural(cohort.cohortSize, 'sitting')}
       figure={
         <Metric
@@ -119,7 +119,7 @@ export function CohortFigure({
         max={cohort.bands.at(-1)?.to ?? cohort.score}
         axisSuffix="marks"
         countLabel="Sittings"
-        aria-label="Where this sitting sits in the cohort's score distribution"
+        aria-label="Where this sitting sits in the spread of scores"
       />
     </ChartFigure>
   );
@@ -139,7 +139,7 @@ function BenchmarkRow({
 }: Readonly<{ mine: number; benchmark: Benchmark; format: (value: number) => string }>) {
   const rows = [
     { key: 'you', label: 'You', value: format(mine) },
-    { key: 'average', label: 'Cohort average', value: at(benchmark.average, format) },
+    { key: 'average', label: 'Average', value: at(benchmark.average, format) },
     { key: 'topper', label: 'Topper', value: at(benchmark.topper, format) },
   ];
 
@@ -224,13 +224,13 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
       {compared ? (
         <DivergingBars
           items={items}
-          belowLabel="Below the cohort"
-          aboveLabel="Above the cohort"
-          aria-label="Each section's marks against the cohort average"
+          belowLabel="Below average"
+          aboveLabel="Above average"
+          aria-label="Each section's marks against the average"
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <Alert variant="info">No cohort has been counted for this paper yet.</Alert>
+          <Alert variant="info">No average has been counted for this paper yet.</Alert>
           <div className="flex flex-col gap-2">
             {sections.map((section) => (
               <StatRow
@@ -279,7 +279,7 @@ export function DifficultyFigure({
         columns={columns}
         height={COLUMN_HEIGHT}
         suffix="%"
-        aria-label="Accuracy by difficulty band, against the cohort"
+        aria-label="Accuracy by difficulty band, against the average"
       />
     </ChartFigure>
   );

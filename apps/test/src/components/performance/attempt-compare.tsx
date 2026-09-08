@@ -37,7 +37,7 @@ function marksAgainst(score: number, maxMarks: number): CompositionSegment[] {
   ];
 }
 
-/** A practice paper stands against the two sittings that mean something: your best, and the topper. */
+/** A practice paper stands against what does mean something: your best, the average, the topper. */
 export function AttemptCompare({
   sittings,
   cohort,
@@ -70,6 +70,19 @@ export function AttemptCompare({
     },
   ];
 
+  // A practice paper is not ranked, but everyone who sat it still averages to something.
+  if (cohort?.averageScore != null) {
+    items.push({
+      key: 'average',
+      label: 'Average',
+      value: cohort.averageScore,
+      max: latest.maxMarks,
+      display: String(cohort.averageScore),
+      segments: marksAgainst(cohort.averageScore, latest.maxMarks),
+      caption: plural(cohort.cohortSize, 'sitting'),
+    });
+  }
+
   if (cohort?.topperScore != null) {
     items.push({
       key: 'topper',
@@ -88,8 +101,8 @@ export function AttemptCompare({
       <Alert variant="info">
         <Info />
         <span>
-          A practice paper is not ranked against a cohort. It is measured against your own best, and
-          the paper topper where one is on record.
+          A practice paper is not ranked. It is measured against your own best, the average across
+          the test, and the paper topper where one is on record.
         </span>
       </Alert>
 

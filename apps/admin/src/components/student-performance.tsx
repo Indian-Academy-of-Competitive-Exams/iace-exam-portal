@@ -188,9 +188,9 @@ function Standing({
     return <CohortFigure cohort={cohort} youLabel={STUDENT_MARKER} />;
   }
   if (onOneSitting) {
-    return <Alert variant="info">No cohort has been counted for this paper yet.</Alert>;
+    return <Alert variant="info">No average has been counted for this paper yet.</Alert>;
   }
-  return <Alert variant="info">A cohort curve is one paper&apos;s; All time spans several.</Alert>;
+  return <Alert variant="info">A spread is one paper&apos;s; All time spans several.</Alert>;
 }
 
 function ModeBadge({ mode }: Readonly<{ mode: EvaluationMode | null }>) {
