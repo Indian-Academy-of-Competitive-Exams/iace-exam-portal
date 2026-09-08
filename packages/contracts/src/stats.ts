@@ -9,7 +9,6 @@ import {
   type EvaluationMode,
   type TestScope,
 } from './tests';
-import { civilDate } from './common';
 import { todayISO } from './students';
 import {
   analyticsBucketSchema,
@@ -221,11 +220,27 @@ export function standingTiles(
 // the one before. Every date here is a `YYYY-MM-DD` on the institute's clock.
 // ============================================================================
 
-/** One day on the strip, and how many sittings landed on it. */
-export interface PracticeDay {
-  date: string;
-  sittings: number;
-}
+/** One day on the calendar, and how many sittings landed on it. */
+export const practiceDaySchema = z.object({
+  date: z.string(),
+  sittings: z.number().int(),
+});
+export type PracticeDay = z.infer<typeof practiceDaySchema>;
+export const practiceDayListSchema = z.array(practiceDaySchema);
+
+/** How far back a calendar may be asked for: this month and the one before it, with room. */
+export const PRACTICE_DAYS_MAX = 92;
+
+/** The window's floor, as a civil date. A range wider than the calendar draws is refused. */
+export const practiceDaysQuerySchema = z.object({
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((from) => from >= shiftCivilDate(todayISO(), -PRACTICE_DAYS_MAX), {
+      message: `No further back than ${PRACTICE_DAYS_MAX} days`,
+    }),
+});
+export type PracticeDaysQuery = z.infer<typeof practiceDaysQuerySchema>;
 
 const DAY_MS = 86_400_000;
 
@@ -235,43 +250,57 @@ export function shiftCivilDate(date: string, days: number): string {
   return new Date(at.getTime() + days * DAY_MS).toISOString().slice(0, 10);
 }
 
-/** The window ending TODAY, oldest first, so a strip reads left to right into the present. */
-export function practiceDays(
-  points: readonly PerformancePoint[],
-  days: number,
+/** The first day of the month before this one — where "this month and last" starts. */
+export function startOfLastMonth(today: string = todayISO()): string {
+  const [year, month] = today.split('-').map(Number);
+  const back = (month ?? 1) === 1;
+  const at = back
+    ? `${(year ?? 0) - 1}-12`
+    : `${year}-${String((month ?? 1) - 1).padStart(2, '0')}`;
+  return `${at}-01`;
+}
+
+/** Every day from `from` to `today` inclusive, oldest first, zeros filled in. */
+export function practiceWindow(
+  sat: readonly PracticeDay[],
+  from: string,
   today: string = todayISO(),
 ): PracticeDay[] {
-  const counted = new Map<string, number>();
-  for (const point of points) {
-    if (point.submittedAt === null) continue;
-    const day = civilDate(new Date(point.submittedAt));
-    counted.set(day, (counted.get(day) ?? 0) + 1);
+  const counted = new Map(sat.map((day) => [day.date, day.sittings]));
+  const days: PracticeDay[] = [];
+  for (let date = from; date <= today; date = shiftCivilDate(date, 1)) {
+    days.push({ date, sittings: counted.get(date) ?? 0 });
   }
-
-  return Array.from({ length: days }, (_unused, index) => {
-    const date = shiftCivilDate(today, index - (days - 1));
-    return { date, sittings: counted.get(date) ?? 0 };
-  });
+  return days;
 }
 
 /** Consecutive days ending today, or yesterday: a day still in progress cannot break a run. */
-export function currentStreak(
-  points: readonly PerformancePoint[],
-  today: string = todayISO(),
-): number {
-  const sat = new Set<string>();
-  for (const point of points) {
-    if (point.submittedAt !== null) sat.add(civilDate(new Date(point.submittedAt)));
-  }
-
-  let day = sat.has(today) ? today : shiftCivilDate(today, -1);
+export function currentStreak(sat: readonly PracticeDay[], today: string = todayISO()): number {
+  const days = daysWithSittings(sat);
+  let day = days.has(today) ? today : shiftCivilDate(today, -1);
   let run = 0;
-  while (sat.has(day)) {
+  while (days.has(day)) {
     run += 1;
     day = shiftCivilDate(day, -1);
   }
   return run;
 }
+
+/** The longest run anywhere in what was counted — the best they have ever kept up. */
+export function longestStreak(sat: readonly PracticeDay[]): number {
+  const days = daysWithSittings(sat);
+  let best = 0;
+  for (const day of days) {
+    if (days.has(shiftCivilDate(day, -1))) continue;
+    let run = 0;
+    for (let at = day; days.has(at); at = shiftCivilDate(at, 1)) run += 1;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
+const daysWithSittings = (sat: readonly PracticeDay[]) =>
+  new Set(sat.filter((day) => day.sittings > 0).map((day) => day.date));
 
 /** The three shares the disposition can answer. LIFETIME: it never split ranked from practice. */
 export interface DispositionRates {

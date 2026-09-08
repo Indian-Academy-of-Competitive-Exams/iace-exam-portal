@@ -10,8 +10,10 @@ import {
   currentStreak,
   dispositionRates,
   distractorThatWon,
-  practiceDays,
+  longestStreak,
+  practiceWindow,
   shiftCivilDate,
+  startOfLastMonth,
   effortPerSitting,
   overallModeGap,
   placeInSpread,
@@ -25,7 +27,6 @@ import {
   subjectShares,
   type OverviewStanding,
   type SubjectMeasure,
-  type PerformancePoint,
   type QuestionReportRow,
   type EvaluationMode,
   type SubjectStanding,
@@ -713,55 +714,43 @@ describe('subjectShares names the share of answers too', () => {
   });
 });
 
-describe('practice days', () => {
-  const sat = (attemptId: string, submittedAt: string | null): PerformancePoint =>
-    ({
-      attemptId,
-      attemptNo: 1,
-      testId: 'tst_1',
-      testTitle: 'Mock',
-      evaluationMode: EVALUATION_MODE.PRACTICE,
-      submittedAt,
-      score: 1,
-      maxMarks: 10,
-      percentage: 10,
-      accuracy: 10,
-      rank: null,
-      percentile: null,
-    }) as PerformancePoint;
+describe('practiceWindow', () => {
+  const sat = (date: string, sittings = 1) => ({ date, sittings });
 
-  /** 04:00 IST is 22:30 UTC the day before: the civil date is what a streak is counted in. */
-  it('files a sitting on the institute day, not the UTC one', () => {
-    const days = practiceDays([sat('a', '2026-09-07T22:30:00.000Z')], 2, '2026-09-08');
+  it('fills every day from the floor to today, zeros included, oldest first', () => {
+    const window = practiceWindow([sat('2026-09-07', 2)], '2026-09-05', '2026-09-08');
 
-    assert.deepEqual(days, [
-      { date: '2026-09-07', sittings: 0 },
-      { date: '2026-09-08', sittings: 1 },
+    assert.deepEqual(window, [
+      { date: '2026-09-05', sittings: 0 },
+      { date: '2026-09-06', sittings: 0 },
+      { date: '2026-09-07', sittings: 2 },
+      { date: '2026-09-08', sittings: 0 },
     ]);
   });
 
-  it('returns the window oldest first, counting every sitting on a day', () => {
-    const days = practiceDays(
-      [sat('a', '2026-09-08T06:00:00.000Z'), sat('b', '2026-09-08T09:00:00.000Z')],
-      3,
-      '2026-09-08',
-    );
+  it('ignores a counted day outside the window it was asked for', () => {
+    const window = practiceWindow([sat('2026-08-01')], '2026-09-07', '2026-09-08');
 
-    assert.deepEqual(
-      days.map((day) => day.date),
-      ['2026-09-06', '2026-09-07', '2026-09-08'],
+    assert.equal(
+      window.every((day) => day.sittings === 0),
+      true,
     );
-    assert.equal(days.at(-1)?.sittings, 2);
+  });
+});
+
+describe('startOfLastMonth', () => {
+  it('opens on the first of the month before this one', () => {
+    assert.equal(startOfLastMonth('2026-09-08'), '2026-08-01');
   });
 
-  it('ignores a sitting that was never submitted', () => {
-    assert.equal(practiceDays([sat('a', null)], 1, '2026-09-08')[0]?.sittings, 0);
+  /** January's previous month is in the previous YEAR, which a naive decrement gets wrong. */
+  it('crosses the year end', () => {
+    assert.equal(startOfLastMonth('2026-01-15'), '2025-12-01');
   });
 });
 
 describe('currentStreak', () => {
-  const on = (day: string): PerformancePoint =>
-    ({ attemptId: day, submittedAt: `${day}T06:00:00.000Z` }) as PerformancePoint;
+  const on = (date: string) => ({ date, sittings: 1 });
 
   it('counts the run of days ending today', () => {
     const run = currentStreak([on('2026-09-06'), on('2026-09-07'), on('2026-09-08')], '2026-09-08');
@@ -778,12 +767,36 @@ describe('currentStreak', () => {
     assert.equal(currentStreak([on('2026-09-05'), on('2026-09-06')], '2026-09-08'), 0);
   });
 
-  it('counts a day sat twice once', () => {
-    assert.equal(currentStreak([on('2026-09-08'), on('2026-09-08')], '2026-09-08'), 1);
-  });
-
   it('has no run without a sitting', () => {
     assert.equal(currentStreak([], '2026-09-08'), 0);
+    assert.equal(currentStreak([{ date: '2026-09-08', sittings: 0 }], '2026-09-08'), 0);
+  });
+});
+
+describe('longestStreak', () => {
+  const on = (date: string) => ({ date, sittings: 1 });
+
+  it('finds the best run anywhere, not the one ending today', () => {
+    const best = longestStreak([
+      on('2026-08-01'),
+      on('2026-08-02'),
+      on('2026-08-03'),
+      on('2026-08-04'),
+      on('2026-09-07'),
+      on('2026-09-08'),
+    ]);
+
+    assert.equal(best, 4);
+  });
+
+  it('counts a lone day as a run of one, and nothing as none', () => {
+    assert.equal(longestStreak([on('2026-09-08')]), 1);
+    assert.equal(longestStreak([]), 0);
+  });
+
+  /** A run crossing a month end is one run: the calendar is not what breaks it. */
+  it('runs across a month boundary', () => {
+    assert.equal(longestStreak([on('2026-08-31'), on('2026-09-01')]), 2);
   });
 });
 

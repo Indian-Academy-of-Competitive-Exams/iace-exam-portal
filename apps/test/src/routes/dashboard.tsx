@@ -22,6 +22,7 @@ import {
   INSTITUTE_TIME_ZONE,
   dispositionRates,
   instituteWallTime,
+  startOfLastMonth,
   percentLabel,
   type PerformancePoint,
   type StudentOverview,
@@ -38,6 +39,7 @@ import {
 import { api } from '../lib/api';
 import {
   CATALOG_QUERY_KEY,
+  practiceDaysQueryKey,
   OVERVIEW_QUERY_KEY,
   PERFORMANCE_QUERY_KEY,
   ROUTES,
@@ -81,6 +83,11 @@ export function DashboardPage() {
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
+  const from = startOfLastMonth();
+  const practice = useQuery({
+    queryKey: practiceDaysQueryKey(from),
+    queryFn: () => api.me.practiceDays(from),
+  });
 
   const now = new Date();
   const waiting = waitingOn(sittablesOf(catalog.data?.series ?? [], now));
@@ -111,7 +118,7 @@ export function DashboardPage() {
           <div className="min-w-0 xl:col-span-2">
             <Trend trend={trend} points={trend.data?.points ?? []} />
           </div>
-          <StreakFigure points={trend.data?.points ?? []} />
+          <StreakFigure days={practice.data ?? []} />
         </div>
 
         {waiting.length > 1 ? (

@@ -4950,18 +4950,22 @@ export class FakePerformancePrisma {
         status: AttemptStatus;
         id?: string;
         testId?: string;
+        submittedAt?: { gte: Date };
         test?: { testSeriesId: string };
       };
       orderBy?: { submittedAt?: { sort: 'desc'; nulls?: 'first' | 'last' } };
       take?: number;
     }) => {
       const inSeries = where.test?.testSeriesId;
+      const floor = where.submittedAt?.gte;
       const matched = this.data.attempts.filter(
         (row) =>
           row.studentId === where.studentId &&
           row.status === where.status &&
           (where.id === undefined || row.id === where.id) &&
           (where.testId === undefined || row.testId === where.testId) &&
+          (floor === undefined ||
+            (row.submittedAt !== null && row.submittedAt.getTime() >= floor.getTime())) &&
           (inSeries === undefined ||
             this.data.tests.some(
               (test) => test.testSeriesId === inSeries && test.id === row.testId,

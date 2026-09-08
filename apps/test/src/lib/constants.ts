@@ -69,6 +69,9 @@ export const PICKER_WIDTH = { REPORT: 'w-[26rem]', SCOPE: 'w-44' } as const;
 /** The student catalog, cached under one key so a submit can drop it. */
 export const CATALOG_QUERY_KEY = ['me', 'catalog'] as const;
 
+/** Keyed by the window's floor: a new month asks for a new range, not a stale one. */
+export const practiceDaysQueryKey = (from: string) => ['me', 'practice-days', from] as const;
+
 /** The bell's own count, kept apart from the list so paging never disturbs the header. */
 export const UNREAD_QUERY_KEY = ['me', 'notifications', 'unread'] as const;
 

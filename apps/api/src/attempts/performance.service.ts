@@ -20,7 +20,10 @@ import {
   type SatSeries,
   type ScoreCardSection,
   type SeriesProgression,
+  civilDate,
+  type PracticeDay,
 } from '@iace/contracts';
+import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService, type Standing } from './leaderboard.service';
 import { marksBySection, numberOrNull, sectionsWithScores } from './attempt-report';
@@ -275,6 +278,27 @@ export class PerformanceAnalyticsService {
       // A null order is a rung nobody numbered, so it keeps the place the ordered read gave it.
       order: new Map(series.tests.map((row, index) => [row.id, row.seriesOrder ?? index])),
     };
+  }
+
+  /** Sitting counts by institute day. Two columns over one indexed student — no paper is read. */
+  async practiceDays(studentId: string, from: string): Promise<PracticeDay[]> {
+    const floor = startOfInstituteDay(from);
+    const rows = await this.prisma.attempt.findMany({
+      where: {
+        studentId,
+        status: ATTEMPT_STATUS.EVALUATED,
+        submittedAt: { gte: floor },
+      },
+      select: { submittedAt: true },
+    });
+
+    const counted = new Map<string, number>();
+    for (const row of rows) {
+      if (row.submittedAt === null) continue;
+      const day = civilDate(row.submittedAt);
+      counted.set(day, (counted.get(day) ?? 0) + 1);
+    }
+    return [...counted].map(([date, sittings]) => ({ date, sittings }));
   }
 
   /** The scope picker's only honest list: a series they have never sat has no report to show. */

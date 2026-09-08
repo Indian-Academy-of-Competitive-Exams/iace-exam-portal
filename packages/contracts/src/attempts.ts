@@ -320,6 +320,8 @@ export const ME_ATTEMPT_ROUTES = {
   analytics: (attemptId: string) => `/me/attempts/${attemptId}/analytics`,
   questionReport: (attemptId: string) => `/me/attempts/${attemptId}/question-report`,
   performance: '/me/performance',
+  /** Sitting COUNTS by institute day, so a calendar is not capped by the trend's twenty. */
+  practiceDays: '/me/performance/days',
 } as const;
 
 /** How a sitting ended. A second submit reports the first one's outcome rather than refusing. */

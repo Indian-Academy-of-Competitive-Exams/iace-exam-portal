@@ -176,10 +176,12 @@ import {
   OVERVIEW_ROUTES,
   PERFORMANCE_ROUTES,
   performanceReportSchema,
+  practiceDayListSchema,
   questionReportSchema,
   satSeriesListSchema,
   studentOverviewSchema,
   type PerformanceReport,
+  type PracticeDay,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
@@ -723,6 +725,12 @@ export function createApiClient(options: ApiClientOptions) {
       /** Every test this student has sat, oldest first. */
       performance: (): Promise<PerformanceTrend> =>
         request(ME_ATTEMPT_ROUTES.performance, { schema: performanceTrendSchema }),
+
+      /** Sitting counts by institute day, for the calendar the trend's twenty cannot fill. */
+      practiceDays: (from: string): Promise<PracticeDay[]> =>
+        request(`${ME_ATTEMPT_ROUTES.practiceDays}${queryString({ from })}`, {
+          schema: practiceDayListSchema,
+        }),
 
       /** The cutoff-free metric set for one sitting, one paper, one series or the whole career. */
       performanceReport: (query: PerformanceReportQueryInput): Promise<PerformanceReport> =>

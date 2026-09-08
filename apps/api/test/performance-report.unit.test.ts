@@ -1146,3 +1146,63 @@ describe('the performance report — the payload whitelist', () => {
     assert.deepEqual([...keysIn(ramp, keysIn(sitting))].toSorted(), REPORT_FIELDS);
   });
 });
+
+describe('the days a student practised on', () => {
+  /** 04:00 IST is 22:30 UTC the day before: the calendar files it on the institute's day. */
+  it('counts by institute day, not by the UTC one the instant is stored in', async () => {
+    const { service } = benchFor([
+      sat('att_1', '2026-09-07T22:30:00.000Z'),
+      sat('att_2', '2026-09-08T04:00:00.000Z'),
+    ]);
+
+    const days = await service.practiceDays(STUDENT, '2026-09-01');
+
+    assert.deepEqual(days.toSorted(byDate), [{ date: '2026-09-08', sittings: 2 }]);
+  });
+
+  it('counts every sitting that landed on a day', async () => {
+    const { service } = benchFor([
+      sat('att_1', '2026-09-06T06:00:00.000Z'),
+      sat('att_2', '2026-09-06T09:00:00.000Z'),
+      sat('att_3', '2026-09-07T09:00:00.000Z'),
+    ]);
+
+    const days = await service.practiceDays(STUDENT, '2026-09-01');
+
+    assert.deepEqual(days.toSorted(byDate), [
+      { date: '2026-09-06', sittings: 2 },
+      { date: '2026-09-07', sittings: 1 },
+    ]);
+  });
+
+  /** The floor is an institute midnight, so a sitting early on the floor day is still inside it. */
+  it('keeps the floor day and drops what came before it', async () => {
+    const { service } = benchFor([
+      sat('att_1', '2026-09-05T23:00:00.000Z'),
+      sat('att_2', '2026-09-06T01:00:00.000Z'),
+    ]);
+
+    const days = await service.practiceDays(STUDENT, '2026-09-06');
+
+    assert.deepEqual(days.toSorted(byDate), [{ date: '2026-09-06', sittings: 2 }]);
+  });
+
+  it('answers a student who has sat nothing with no days rather than an error', async () => {
+    const { service } = benchFor([]);
+
+    assert.deepEqual(await service.practiceDays(STUDENT, '2026-09-01'), []);
+  });
+});
+
+const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
+
+/** An evaluated sitting and nothing else: the calendar reads two columns and no paper. */
+const sat = (id: string, submittedAt: string) =>
+  makeAttempt({
+    id,
+    studentId: STUDENT,
+    status: ATTEMPT_STATUS.EVALUATED,
+    submittedAt: new Date(submittedAt),
+  });
+
+const benchFor = (attempts: FakeAttemptRow[]) => bench({ attempts, served: [] });
