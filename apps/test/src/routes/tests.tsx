@@ -3,7 +3,7 @@
  * rather than an admin data table, so it is a shelf per series, not a ListView.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import { ClipboardList, SearchX } from 'lucide-react';
 import {
   Alert,
@@ -21,7 +21,7 @@ import {
   type StudentCatalogSeries,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, PERFORMANCE_QUERY_KEY } from '../lib/constants';
+import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
 import {
   matching,
   resultsByTest,
@@ -92,7 +92,14 @@ export function TestsPage() {
 
   return (
     <PageFrame
-      header={<PageHeader size="display" title="Tests" meta={plural(rows.length, 'test')} />}
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+          size="display"
+          title="Tests"
+          meta={plural(rows.length, 'test')}
+        />
+      }
       filters={{ spec: FILTERS, state: filters }}
       filtersBesideTitle
     >

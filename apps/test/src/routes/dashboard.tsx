@@ -17,7 +17,7 @@ import {
   type PlotReference,
 } from '@iace/ui';
 import { newestFirst } from '@iace/app-kit';
-import { StreakFigure } from '@iace/app-kit/browser';
+import { PageCrumbs, StreakFigure } from '@iace/app-kit/browser';
 import {
   INSTITUTE_TIME_ZONE,
   dispositionRates,
@@ -39,10 +39,11 @@ import {
 import { api } from '../lib/api';
 import {
   CATALOG_QUERY_KEY,
-  practiceDaysQueryKey,
+  NAV_ITEMS,
   OVERVIEW_QUERY_KEY,
   PERFORMANCE_QUERY_KEY,
   ROUTES,
+  practiceDaysQueryKey,
 } from '../lib/constants';
 import { continueWith, openNow, sittablesOf, upNext, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
@@ -97,6 +98,7 @@ export function DashboardPage() {
     <PageFrame
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           size="display"
           title={greetingFor(now, student?.fullName)}
           action={

@@ -29,8 +29,9 @@ import {
 import { DocumentCard } from '../components/document-card';
 import { HistoryEditor } from '../components/history-editor';
 import { PreTestPrompt } from '../components/pre-test-prompt';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { ME_QUERY_KEY, PROFILE_QUERY_KEY } from '../lib/constants';
+import { ME_QUERY_KEY, NAV_ITEMS, PROFILE_QUERY_KEY } from '../lib/constants';
 
 /** The names the FORM registers. The server keys errors the same way, and matches on the leaf too. */
 const FORM_FIELDS = [
@@ -120,6 +121,7 @@ export function ProfilePage() {
       }
       header={
         <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           size="display"
           title="Profile"
           action={

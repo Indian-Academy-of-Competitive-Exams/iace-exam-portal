@@ -8,9 +8,10 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { Alert, LoadingState, Metric, PageFrame, PageHeader } from '@iace/ui';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { PageBody, Section, StatBand } from '../components/ui';
-import { ROUTES, scoreCardQueryKey } from '../lib/constants';
+import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
 import { type EndedSitting } from '../components/exam/engine/use-exam-view';
 
 const MARKING_POLL_MS = 3000;
@@ -41,7 +42,11 @@ export function SubmittedPage() {
   const failed = card.isError && !isPending(card.error);
 
   return (
-    <PageFrame header={<PageHeader size="display" title="Handed in" />}>
+    <PageFrame
+      header={
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="Handed in" />
+      }
+    >
       <PageBody>
         {handedIn ? <OwnEffort sitting={handedIn} /> : null}
 

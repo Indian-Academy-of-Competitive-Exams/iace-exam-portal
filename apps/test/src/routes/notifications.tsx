@@ -7,7 +7,7 @@ import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
-import { useFilterSpec } from '@iace/app-kit/browser';
+import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
 import { BellOff, SearchX } from 'lucide-react';
 import {
   Alert,
@@ -28,6 +28,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import {
+  NAV_ITEMS,
   NOTIFICATIONS_PAGE_SIZE,
   ROUTES,
   UNREAD_QUERY_KEY,
@@ -80,7 +81,13 @@ export function NotificationsPage() {
 
   return (
     <PanelFrame
-      header={<PageHeader title="Notifications" meta={plural(list.total, 'notification')} />}
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+          title="Notifications"
+          meta={plural(list.total, 'notification')}
+        />
+      }
       filters={{ spec: FILTERS, state: filters }}
       filtersBesideTitle
     >

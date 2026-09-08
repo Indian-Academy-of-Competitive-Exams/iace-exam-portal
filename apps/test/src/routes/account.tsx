@@ -4,7 +4,9 @@ import { useMutation } from '@tanstack/react-query';
 import { PIN_LENGTH, changePinSchema, type ChangePinInput } from '@iace/contracts';
 import { applyFieldErrors } from '@iace/app-kit';
 import { Alert, Button, PageFrame, PageHeader, PinField } from '@iace/ui';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
+import { NAV_ITEMS } from '../lib/constants';
 import { PageBody, SurfaceCard } from '../components/ui';
 import { useAuth } from '../providers/auth';
 
@@ -16,7 +18,11 @@ export function AccountPage() {
   const onDefaultPin = student?.hasDefaultPin ?? false;
 
   return (
-    <PageFrame header={<PageHeader size="display" title="PIN" />}>
+    <PageFrame
+      header={
+        <PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} size="display" title="PIN" />
+      }
+    >
       <PageBody>
         <ChangePinCard onDefaultPin={onDefaultPin} />
       </PageBody>

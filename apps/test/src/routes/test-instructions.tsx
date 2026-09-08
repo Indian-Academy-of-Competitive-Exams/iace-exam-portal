@@ -15,9 +15,9 @@ import {
   SkeletonParagraph,
   plural,
 } from '@iace/ui';
-import { useFullscreen } from '@iace/app-kit/browser';
+import { PageCrumbs, useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { LANGUAGE_LABELS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
+import { LANGUAGE_LABELS, NAV_ITEMS, PALETTE_LEGEND, ROUTES } from '../lib/constants';
 import { SystemCheck } from '../components/system-check';
 import { DividedList, DividedRow, PageBody, Section, StatBand } from '../components/ui';
 
@@ -40,7 +40,9 @@ export function TestInstructionsPage() {
 
   if (brief.isLoading) {
     return (
-      <PageFrame header={<PageHeader title="Instructions" />}>
+      <PageFrame
+        header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Instructions" />}
+      >
         <SkeletonParagraph lines={6} />
       </PageFrame>
     );
@@ -48,7 +50,9 @@ export function TestInstructionsPage() {
 
   if (!brief.data) {
     return (
-      <PageFrame header={<PageHeader title="Instructions" />}>
+      <PageFrame
+        header={<PageHeader breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />} title="Instructions" />}
+      >
         <Alert variant="danger">This test is not open to you.</Alert>
       </PageFrame>
     );
@@ -60,7 +64,20 @@ export function TestInstructionsPage() {
   const ready = declared && picked;
 
   return (
-    <PageFrame header={<PageHeader size="display" title={paper.title ?? 'Instructions'} />}>
+    <PageFrame
+      header={
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[{ label: paper.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) }]}
+            />
+          }
+          size="display"
+          title={paper.title ?? 'Instructions'}
+        />
+      }
+    >
       <PageBody className="pb-6">
         <StatBand>
           <Metric label="Duration (minutes)" value={Math.round(paper.durationSec / 60)} size="sm" />
