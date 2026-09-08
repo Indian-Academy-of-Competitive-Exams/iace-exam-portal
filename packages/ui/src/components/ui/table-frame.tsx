@@ -40,6 +40,8 @@ export interface PageFrameProps {
   filtersBesideTitle?: boolean;
   /** Views of one record, on the background rather than inside a card. */
   tabs?: TableFrameTabs;
+  /** Hands the scrolling to the children — for a body whose table should scroll, not the page. */
+  fills?: boolean;
   children?: React.ReactNode;
   className?: string;
 }
@@ -50,11 +52,14 @@ export function PageFrame({
   filters,
   filtersBesideTitle = false,
   tabs,
+  fills = false,
   children,
   className,
 }: Readonly<PageFrameProps>) {
   // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
-  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', REGION_BLEED, className);
+  const scroller = fills
+    ? cn(FILLS, className)
+    : cn('relative min-h-0 flex-1 overflow-y-auto', REGION_BLEED, className);
 
   const body = tabs ? (
     <>
@@ -100,12 +105,15 @@ export function PageFrame({
     </div>
   );
 
+  // The context is what tells a table inside to fill its pane rather than cap itself half way down.
+  const rooted = fills ? <TableFrameContext value={true}>{frame}</TableFrameContext> : frame;
+
   return tabs ? (
     <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className={FILLS}>
-      {frame}
+      {rooted}
     </Tabs>
   ) : (
-    frame
+    rooted
   );
 }
 

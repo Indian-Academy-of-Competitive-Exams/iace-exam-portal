@@ -7,7 +7,7 @@ import {
   ListView,
   MeasureBars,
   Metric,
-  MetricGroup,
+  Card,
   TruncatedText,
   type DataTableColumn,
   type ListFilter,
@@ -24,7 +24,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { questionReportQueryKey } from '../lib/constants';
-import { ReportSkeleton } from '../components/ui';
+import { ReportSkeleton, StatBand } from '../components/ui';
 
 const DASH = '—';
 
@@ -96,14 +96,20 @@ function Body({
     clearFilters: () => onFilter(QUESTION_FILTERS.ALL),
   };
 
+  // Options with every count at zero are four empty bars, so the chevron promises nothing.
+  const split =
+    report.solutionsOpen &&
+    report.questions.some((row) => row.optionCounts.some((option) => option.count > 0));
+
   return (
-    <div className="flex min-h-0 flex-col gap-6">
+    // Every ancestor between the frame and the table has to shrink, or the page takes the scroll.
+    <div className="flex min-h-0 flex-1 flex-col gap-6">
       {report.closedReason === null ? null : (
         /* ui-copy-ok: consequence */
         <Alert variant="info">{report.closedReason}</Alert>
       )}
 
-      <MetricGroup>
+      <StatBand>
         <Metric
           label="Pace"
           value={report.paceIndex ?? DASH}
@@ -112,24 +118,26 @@ function Body({
         />
         <Metric label="Sittings" value={report.cohortSize} size="sm" />
         <Metric label="Questions" value={report.questions.length} size="sm" />
-      </MetricGroup>
+      </StatBand>
 
-      <ListView
-        list={list}
-        filters={[STATUS_FILTER]}
-        columns={columns}
-        rowKey={(row) => row.questionId}
-        empty="This paper served no questions."
-        emptyFiltered="No question matches that filter."
-        expand={
-          report.solutionsOpen
-            ? {
-                render: (row) => <Distribution row={row} />,
-                label: (row) => `Answers to question ${row.order}`,
-              }
-            : undefined
-        }
-      />
+      <Card className="flex min-h-0 flex-1 flex-col p-4">
+        <ListView
+          list={list}
+          filters={[STATUS_FILTER]}
+          columns={columns}
+          rowKey={(row) => row.questionId}
+          empty="This paper served no questions."
+          emptyFiltered="No question matches that filter."
+          expand={
+            split
+              ? {
+                  render: (row) => <Distribution row={row} />,
+                  label: (row) => `Answers to question ${row.order}`,
+                }
+              : undefined
+          }
+        />
+      </Card>
     </div>
   );
 }

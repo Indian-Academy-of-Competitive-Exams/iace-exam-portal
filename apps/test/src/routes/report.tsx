@@ -7,7 +7,6 @@ import {
   Combobox,
   PageFrame,
   PageHeader,
-  PanelFrame,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -35,8 +34,8 @@ import {
 
 const UNTITLED = 'Untitled test';
 
-/** Dense, single-body tabs stay one contained surface; the rest float their cards on the page. */
-const PANEL_TABS = new Set(['questions']);
+/** The one tab whose body is a table long enough to want the scroll for itself. */
+const QUESTIONS_TAB = 'questions';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -53,10 +52,11 @@ export function ReportShell() {
   const current = sat.points.find((point) => point.attemptId === attemptId) ?? null;
 
   const tab = reportTabOf(pathname, ROUTES.REPORT(attemptId));
-  const Frame = PANEL_TABS.has(tab) ? PanelFrame : PageFrame;
 
   return (
-    <Frame
+    <PageFrame
+      // The question report is a long table: it takes the scroll so its heading and pager hold.
+      fills={tab === QUESTIONS_TAB}
       header={
         <PageHeader
           breadcrumbs={
