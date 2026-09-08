@@ -4,7 +4,6 @@ import {
   DonutPlot,
   MeasureBars,
   Metric,
-  MetricGroup,
   QuadrantPlot,
   plural,
   type CompositionSegment,
@@ -17,7 +16,6 @@ import {
   percentLabel,
   type Disposition,
   type EvaluationMode,
-  type OverviewStanding,
   type SubjectMeasure,
   type SubjectStanding,
   type TestScope,
@@ -32,25 +30,6 @@ export interface SubjectView {
   mode: EvaluationMode;
   /** Null is every scope summed, which is what the subject charts open on. */
   scope: TestScope | null;
-}
-
-/** The ranked standing only: percentile and score are gated on an evaluated sitting. */
-export function StandingTiles({ standing }: Readonly<{ standing: OverviewStanding }>) {
-  return (
-    <MetricGroup>
-      <Metric
-        label="Average percentile"
-        value={standing.avgPercentile ?? UNMEASURED}
-        unit={standing.bestPercentile === null ? undefined : `best ${standing.bestPercentile}`}
-      />
-      <Metric
-        label="Tests marked"
-        value={standing.testsEvaluated}
-        unit={standing.practiceAttempts > 0 ? `${standing.practiceAttempts} practice` : undefined}
-      />
-      <Metric label="Average score" value={standing.avgScore ?? UNMEASURED} />
-    </MetricGroup>
-  );
 }
 
 /** The only two tiles the toggle moves, summed off the subject rows that key on the mode. */

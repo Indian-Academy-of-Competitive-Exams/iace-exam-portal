@@ -286,7 +286,7 @@ export class PerformanceAnalyticsService {
         },
       },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, progressive: true },
+      select: { id: true, name: true, progressive: true, evaluationMode: true },
     });
     return rows;
   }

@@ -11,6 +11,7 @@ import {
   PageFrame,
   PageHeader,
   SegmentedControl,
+  plural,
 } from '@iace/ui';
 import {
   DispositionFigure,
@@ -27,6 +28,7 @@ import {
   INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
   scopesSat,
+  standingTiles,
   type EvaluationMode,
   type PerformancePoint,
   type StudentOverview,
@@ -52,6 +54,7 @@ import {
 } from '../components/ui';
 
 const UNTITLED = 'Untitled test';
+const DASH = '—';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -66,6 +69,7 @@ const MODE_ITEMS = EVALUATION_MODES.map((mode) => ({
 /** Where Performance opens: the whole career off the two rollup tables, no test chosen. */
 export function OverviewPage() {
   const navigate = useNavigate();
+  const [mode, setMode] = useState<EvaluationMode>(EVALUATION_MODE.RANKED);
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
 
@@ -80,33 +84,35 @@ export function OverviewPage() {
           title="Performance"
           meta={overview.data ? satOn(overview.data) : undefined}
           action={
-            sat.length > 0 ? (
-              <Combobox
-                value=""
-                onChange={(attemptId) => navigate(ROUTES.REPORT(attemptId))}
-                items={sat.map((point) => ({
-                  value: point.attemptId,
-                  label: point.testTitle ?? UNTITLED,
-                  hint: sittingHint(point),
-                }))}
-                placeholder="Open one test"
-                clearable={false}
-                aria-label="Test"
-                className={PICKER_WIDTH.REPORT}
+            <span className="flex flex-wrap items-center gap-3">
+              <SegmentedControl
+                value={mode}
+                onChange={(next) => setMode(next as EvaluationMode)}
+                items={MODE_ITEMS}
+                aria-label="Evaluation mode"
               />
-            ) : undefined
+              {sat.length > 0 ? (
+                <Combobox
+                  value=""
+                  onChange={(attemptId) => navigate(ROUTES.REPORT(attemptId))}
+                  items={sat.map((point) => ({
+                    value: point.attemptId,
+                    label: point.testTitle ?? UNTITLED,
+                    hint: sittingHint(point),
+                  }))}
+                  placeholder="Open one test"
+                  clearable={false}
+                  aria-label="Test"
+                  className={PICKER_WIDTH.REPORT}
+                />
+              ) : null}
+            </span>
           }
         />
       }
     >
       <PageBody>
-        {overview.data && overview.data.standing.testsEvaluated > 0 ? (
-          <HeroFigure
-            value={overview.data.standing.avgPercentile ?? '—'}
-            unit={overview.data.standing.avgPercentile === null ? undefined : 'th'}
-            caption={bestLine(overview.data)}
-          />
-        ) : null}
+        {overview.data ? <Headline overview={overview.data} mode={mode} /> : null}
 
         {overview.isLoading ? (
           <>
@@ -115,14 +121,41 @@ export function OverviewPage() {
           </>
         ) : null}
         {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
-        {overview.data ? <Body overview={overview.data} /> : null}
+        {overview.data ? <Body overview={overview.data} mode={mode} /> : null}
       </PageBody>
     </PageFrame>
   );
 }
 
-function Body({ overview }: Readonly<{ overview: StudentOverview }>) {
-  const [mode, setMode] = useState<EvaluationMode>(EVALUATION_MODE.RANKED);
+/** Percentile is a RANKED standing; practice has no placing, so it leads on what it does have. */
+function Headline({
+  overview,
+  mode,
+}: Readonly<{ overview: StudentOverview; mode: EvaluationMode }>) {
+  const measure = overview.byMode[mode];
+
+  if (mode === EVALUATION_MODE.PRACTICE) {
+    if (measure.accuracy === null) return null;
+    return (
+      <HeroFigure
+        value={Math.round(measure.accuracy)}
+        unit="%"
+        caption={`accuracy across ${plural(measure.attempted, 'practice answer')}`}
+      />
+    );
+  }
+
+  if (overview.standing.testsEvaluated === 0) return null;
+  return (
+    <HeroFigure
+      value={overview.standing.avgPercentile ?? DASH}
+      unit={overview.standing.avgPercentile === null ? undefined : 'th'}
+      caption={bestLine(overview)}
+    />
+  );
+}
+
+function Body({ overview, mode }: Readonly<{ overview: StudentOverview; mode: EvaluationMode }>) {
   const [scope, setScope] = useState<TestScope | null>(null);
 
   if (overview.standing.testsAttempted === 0) {
@@ -145,40 +178,21 @@ function Body({ overview }: Readonly<{ overview: StudentOverview }>) {
 
   return (
     <>
-      {overview.standing.testsEvaluated === 0 ? (
+      {mode === EVALUATION_MODE.RANKED && overview.standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
           No ranked test of yours has been marked yet, so there is no percentile or score to stand
-          on. Everything below is what your practice has counted.
+          on. Switch to Practice for what your practice has counted.
         </Alert>
       ) : null}
 
       <TileGrid>
-        <StatTile label="Average score" value={overview.standing.avgScore ?? '—'} />
-        <StatTile
-          label="Tests marked"
-          value={overview.standing.testsEvaluated}
-          foot={
-            overview.standing.practiceAttempts > 0
-              ? `${overview.standing.practiceAttempts} practice`
-              : undefined
-          }
-        />
-        <StatTile label="Tests taken" value={overview.standing.testsAttempted} />
+        {standingTiles(overview.standing, overview.byMode[mode], mode).map((tile) => (
+          <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} />
+        ))}
       </TileGrid>
 
-      <Section
-        title="Accuracy and pace"
-        meta={EVALUATION_MODE_LABELS[mode]}
-        action={
-          <SegmentedControl
-            value={mode}
-            onChange={(next) => setMode(next as EvaluationMode)}
-            items={MODE_ITEMS}
-            aria-label="Evaluation mode"
-          />
-        }
-      >
+      <Section title="Accuracy and pace" meta={EVALUATION_MODE_LABELS[mode]}>
         <ModeTiles measure={overview.byMode[mode]} />
       </Section>
 

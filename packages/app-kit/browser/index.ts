@@ -57,7 +57,6 @@ export {
   DispositionFigure,
   ModeTiles,
   SpeedAccuracyFigure,
-  StandingTiles,
   SubjectStrengthFigure,
   type SubjectView,
 } from './overview-figures';

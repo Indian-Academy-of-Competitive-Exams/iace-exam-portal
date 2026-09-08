@@ -6,6 +6,9 @@ import {
   TEST_SCOPE,
   measureOf,
   scopesSat,
+  standingTiles,
+  type OverviewStanding,
+  type SubjectMeasure,
   type SubjectStanding,
 } from '../src';
 
@@ -147,5 +150,59 @@ describe('scopesSat', () => {
     ];
 
     assert.deepEqual(scopesSat(untouched, EVALUATION_MODE.RANKED), []);
+  });
+});
+
+describe('standingTiles', () => {
+  const STANDING: OverviewStanding = {
+    testsAttempted: 5,
+    testsEvaluated: 4,
+    practiceAttempts: 1,
+    avgPercentile: 63.3,
+    bestPercentile: 88.5,
+    avgScore: 65,
+    lastAttemptAt: '2026-08-30T09:00:00.000Z',
+  };
+  const MEASURE: SubjectMeasure = {
+    attempted: 50,
+    correct: 31,
+    accuracy: 62,
+    sumTimeSec: 700,
+    pace: 14,
+  };
+
+  it('leads on score and marking when the reader is on ranked', () => {
+    const tiles = standingTiles(STANDING, MEASURE, EVALUATION_MODE.RANKED);
+
+    assert.deepEqual(
+      tiles.map((tile) => [tile.label, tile.value]),
+      [
+        ['Average score', 65],
+        ['Tests marked', 4],
+        ['Tests taken', 5],
+      ],
+    );
+  });
+
+  /** A practice sitting is never evaluated against a board, so restating its score would be a lie. */
+  it('answers with what practice counted, never a ranked figure under another name', () => {
+    const tiles = standingTiles(STANDING, MEASURE, EVALUATION_MODE.PRACTICE);
+
+    assert.deepEqual(
+      tiles.map((tile) => [tile.label, tile.value]),
+      [
+        ['Practice sittings', 1],
+        ['Questions answered', 50],
+        ['Tests taken', 5],
+      ],
+    );
+    assert.ok(!tiles.some((tile) => tile.value === STANDING.avgScore));
+    assert.ok(!tiles.some((tile) => tile.value === STANDING.avgPercentile));
+  });
+
+  it('leaves an unmarked score null, for the screen to dash rather than read as zero', () => {
+    const tiles = standingTiles({ ...STANDING, avgScore: null }, MEASURE, EVALUATION_MODE.RANKED);
+
+    assert.equal(tiles[0]?.value, null);
   });
 });

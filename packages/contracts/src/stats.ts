@@ -175,6 +175,36 @@ export function measureOf(
   };
 }
 
+/** A headline tile, whose value the screen renders — a dash for null is design, not contract. */
+export interface StandingTile {
+  key: string;
+  label: string;
+  value: number | null;
+}
+
+/** Percentile, score and marking need an evaluated RANKED sitting; practice answers differently. */
+export function standingTiles(
+  standing: OverviewStanding,
+  measure: SubjectMeasure,
+  mode: EvaluationMode,
+): StandingTile[] {
+  const taken = { key: 'taken', label: 'Tests taken', value: standing.testsAttempted };
+
+  if (mode === EVALUATION_MODE.PRACTICE) {
+    return [
+      { key: 'sittings', label: 'Practice sittings', value: standing.practiceAttempts },
+      { key: 'answered', label: 'Questions answered', value: measure.attempted },
+      taken,
+    ];
+  }
+
+  return [
+    { key: 'score', label: 'Average score', value: standing.avgScore },
+    { key: 'marked', label: 'Tests marked', value: standing.testsEvaluated },
+    taken,
+  ];
+}
+
 /** Every scope sat IN THIS MODE: one sat only in practice must not be offered to a ranked chart. */
 export const scopesSat = (
   subjects: readonly SubjectStanding[],
@@ -449,6 +479,8 @@ export const satSeriesSchema = z.object({
   id: z.string(),
   name: z.string(),
   progressive: z.boolean(),
+  /** A composite FK ties every test to its series' mode, so this speaks for all of them. */
+  evaluationMode: evaluationModeSchema,
 });
 export type SatSeries = z.infer<typeof satSeriesSchema>;
 export const satSeriesListSchema = z.array(satSeriesSchema);
@@ -490,6 +522,7 @@ export type PerformanceReport = z.infer<typeof performanceReportSchema>;
 export interface SatTest {
   testId: string;
   title: string | null;
+  evaluationMode: EvaluationMode;
   /** The most recent sitting of it — what the picker orders by and defaults to. */
   lastAttemptId: string;
   lastSatAt: string | null;
@@ -503,6 +536,7 @@ export function testsSat(points: readonly PerformancePoint[]): SatTest[] {
     seen.set(point.testId, {
       testId: point.testId,
       title: point.testTitle,
+      evaluationMode: point.evaluationMode,
       lastAttemptId: point.attemptId,
       lastSatAt: point.submittedAt,
     });

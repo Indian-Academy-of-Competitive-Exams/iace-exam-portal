@@ -20,7 +20,7 @@ import {
   type Leaderboard,
   type LeaderboardQueryInput,
   type LeaderboardScope,
-  type SatSeries,
+  type EvaluationMode,
   type SatTest,
 } from '@iace/contracts';
 import { api } from '../lib/api';
@@ -45,6 +45,9 @@ const SCOPE_ITEMS = [
 
 const UNTITLED = 'Untitled test';
 
+const isRanked = (row: Readonly<{ evaluationMode: EvaluationMode }>) =>
+  row.evaluationMode === EVALUATION_MODE.RANKED;
+
 function scopeIdFor(scope: LeaderboardScope, testId: string, seriesId: string): string {
   if (scope === LEADERBOARD_SCOPES.TEST) return testId;
   if (scope === LEADERBOARD_SCOPES.SERIES) return seriesId;
@@ -59,7 +62,8 @@ function queryFor(scope: LeaderboardScope, scopeId: string): LeaderboardQueryInp
 
 export function LeaderboardPage() {
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
-  const sat = testsSat(trend.data?.points ?? []);
+  // A practice paper is never ranked, so offering one here promises a board that cannot exist.
+  const sat = testsSat(trend.data?.points ?? []).filter(isRanked);
 
   // A cascade the spec can't model: `scope` decides the second control, so it's read raw first.
   const scopeParam = useFilters<'scope'>();
@@ -72,7 +76,7 @@ export function LeaderboardPage() {
     queryFn: () => api.me.performanceSeries(),
     enabled: onSeries,
   });
-  const seriesRows = series.data ?? [];
+  const seriesRows = (series.data ?? []).filter(isRanked);
 
   // The empty row falls back to sat[0] (testsSat sorts most-recent-first), so it wears that title.
   const TEST_FILTER = {
@@ -98,10 +102,11 @@ export function LeaderboardPage() {
     ],
   } as const;
 
+  // Nothing ranked to pick from leaves the board control alone in the bar, still reachable.
   let FILTERS;
-  if (scope === LEADERBOARD_SCOPES.SERIES) {
+  if (scope === LEADERBOARD_SCOPES.SERIES && seriesRows.length > 0) {
     FILTERS = [SERIES_FILTER] as const satisfies readonly ListFilter[];
-  } else if (scope === LEADERBOARD_SCOPES.TEST) {
+  } else if (scope === LEADERBOARD_SCOPES.TEST && sat.length > 0) {
     FILTERS = [TEST_FILTER] as const satisfies readonly ListFilter[];
   } else {
     FILTERS = [] as const satisfies readonly ListFilter[];
@@ -115,7 +120,8 @@ export function LeaderboardPage() {
   const board = useQuery({
     queryKey: leaderboardQueryKey(scope, scopeId),
     queryFn: () => api.me.leaderboard(queryFor(scope, scopeId)),
-    enabled: scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== '',
+    // No ranked sitting means no board at ANY scope, all-time included — so nothing is asked for.
+    enabled: sat.length > 0 && (scope === LEADERBOARD_SCOPES.ALL_TIME || scopeId !== ''),
   });
 
   const boardControl = (
@@ -139,12 +145,16 @@ export function LeaderboardPage() {
           meta={standingMeta(board.data)}
         />
       }
-      filters={
-        sat.length > 0 ? { spec: FILTERS, state: filters, leading: boardControl } : undefined
-      }
+      filters={{ spec: FILTERS, state: filters, leading: boardControl }}
       filtersBesideTitle
     >
-      <Body trend={trend} series={series} board={board} tests={sat} onSeries={onSeries} />
+      <Body
+        trend={trend}
+        series={{ ...series, length: seriesRows.length }}
+        board={board}
+        tests={sat}
+        onSeries={onSeries}
+      />
     </PanelFrame>
   );
 }
@@ -163,7 +173,7 @@ function Body({
   onSeries,
 }: Readonly<{
   trend: QueryState;
-  series: QueryState & { data?: SatSeries[] };
+  series: QueryState & { length: number };
   board: QueryState & { data?: Leaderboard };
   tests: readonly SatTest[];
   onSeries: boolean;
@@ -174,7 +184,7 @@ function Body({
     return (
       <EmptyState
         icon={ClipboardList}
-        title="No tests sat yet"
+        title="No ranked test sat yet"
         action={
           <Button asChild>
             <Link to={ROUTES.TESTS}>Go to your tests</Link>
@@ -186,7 +196,7 @@ function Body({
 
   if (onSeries) {
     if (series.isError) return <Alert variant="danger">Your test series did not load.</Alert>;
-    if (series.data?.length === 0) return <EmptyState icon={Layers} title="No test series sat" />;
+    if (series.length === 0) return <EmptyState icon={Layers} title="No ranked test series sat" />;
   }
 
   if (board.isError) return <Alert variant="danger">This leaderboard did not load.</Alert>;
@@ -196,6 +206,7 @@ function Body({
 }
 
 function Board({ board }: Readonly<{ board: Leaderboard }>) {
+  // Only a hand-typed URL reaches here now, but a practice paper still has no board to draw.
   if (board.evaluationMode === EVALUATION_MODE.PRACTICE) {
     return (
       <EmptyState

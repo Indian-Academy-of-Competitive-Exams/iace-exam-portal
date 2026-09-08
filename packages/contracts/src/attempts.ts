@@ -14,7 +14,7 @@ import {
   questionOptionSchema,
   questionTypeSchema,
 } from './questions';
-import { paperQuestionStatusSchema } from './tests';
+import { evaluationModeSchema, paperQuestionStatusSchema } from './tests';
 
 // ============================================================================
 // Attempts. One row holds the live state and the scored result — there is no
@@ -556,6 +556,8 @@ export const performancePointSchema = z.object({
   attemptNo: z.number().int(),
   testId: z.string(),
   testTitle: z.string().nullable(),
+  /** Ranked or practice: only a ranked paper has a board, so a picker for one filters on it. */
+  evaluationMode: evaluationModeSchema,
   submittedAt: z.string().nullable(),
   score: z.number(),
   maxMarks: z.number(),

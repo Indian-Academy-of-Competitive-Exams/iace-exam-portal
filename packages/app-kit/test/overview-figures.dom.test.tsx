@@ -8,7 +8,6 @@ import {
   measureOf,
   type Disposition,
   type EvaluationMode,
-  type OverviewStanding,
   type SubjectStanding,
   type TestScope,
 } from '@iace/contracts';
@@ -16,21 +15,10 @@ import {
   DispositionFigure,
   ModeTiles,
   SpeedAccuracyFigure,
-  StandingTiles,
   SubjectStrengthFigure,
 } from '../browser/overview-figures';
 
 afterEach(cleanup);
-
-const STANDING: OverviewStanding = {
-  testsAttempted: 5,
-  testsEvaluated: 4,
-  practiceAttempts: 1,
-  avgPercentile: 63.3,
-  bestPercentile: 88.5,
-  avgScore: 65,
-  lastAttemptAt: '2026-08-30T09:00:00.000Z',
-};
 
 const DISPOSITION: Disposition = { correct: 200, wrong: 100, unattempted: 120 };
 
@@ -72,7 +60,6 @@ const everyTally = SUBJECTS.flatMap((subject) => subject.tallies);
 function Dashboard({ mode, scope }: Readonly<{ mode: EvaluationMode; scope: TestScope | null }>) {
   return (
     <>
-      <StandingTiles standing={STANDING} />
       <ModeTiles measure={measureOf(everyTally, mode)} />
       <DispositionFigure disposition={DISPOSITION} />
       <SubjectStrengthFigure subjects={SUBJECTS} mode={mode} scope={scope} />
@@ -101,19 +88,6 @@ describe('the ranked and practice toggle', () => {
     const practice = shown(EVALUATION_MODE.PRACTICE);
     assert.ok(practice.view.getByText('62%'));
     assert.ok(practice.view.getByText('14s'));
-  });
-
-  /** Percentile has no practice meaning, so the toggle must not appear to move the standing. */
-  it('leaves the ranked standing tiles exactly where they were', () => {
-    const ranked = shown(EVALUATION_MODE.RANKED);
-    assert.ok(ranked.view.getByText('63.3'));
-    assert.ok(ranked.view.getByText('best 88.5'));
-
-    cleanup();
-
-    const practice = shown(EVALUATION_MODE.PRACTICE);
-    assert.ok(practice.view.getByText('63.3'));
-    assert.ok(practice.view.getByText('best 88.5'));
   });
 
   /** `StudentSubjectStat` never counted an unattempted question, so the donut has no per-mode source. */
