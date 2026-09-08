@@ -56,6 +56,7 @@ export {
 export {
   DispositionFigure,
   ModeTiles,
+  ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
   type SubjectView,

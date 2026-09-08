@@ -7,7 +7,6 @@ import {
   Button,
   Combobox,
   EmptyState,
-  Field,
   PageFrame,
   PageHeader,
   SegmentedControl,
@@ -17,6 +16,7 @@ import {
   DispositionFigure,
   ModeTiles,
   PageCrumbs,
+  ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
 } from '@iace/app-kit/browser';
@@ -27,6 +27,7 @@ import {
   EVALUATION_MODES,
   INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
+  bestSitting,
   scopesSat,
   standingTiles,
   type EvaluationMode,
@@ -45,9 +46,9 @@ import {
 } from '../lib/constants';
 import {
   BlockPairSkeleton,
+  Hero,
   HeroFigure,
   PageBody,
-  Section,
   StatTile,
   TileGrid,
   TilesSkeleton,
@@ -66,14 +67,17 @@ const MODE_ITEMS = EVALUATION_MODES.map((mode) => ({
   label: EVALUATION_MODE_LABELS[mode],
 }));
 
-/** Where Performance opens: the whole career off the two rollup tables, no test chosen. */
+/** Three bands wide, not eight blocks tall: the standing, its counts, then the figures in one row. */
 export function OverviewPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<EvaluationMode>(EVALUATION_MODE.RANKED);
+  const [scope, setScope] = useState<TestScope | null>(null);
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
 
   const sat = newestFirst(trend.data?.points ?? []);
+  const scopes = overview.data ? scopesSat(overview.data.subjects, mode) : [];
+  const chosen = scope !== null && scopes.includes(scope) ? scope : null;
 
   return (
     <PageFrame
@@ -91,6 +95,19 @@ export function OverviewPage() {
                 items={MODE_ITEMS}
                 aria-label="Evaluation mode"
               />
+              {scopes.length > 1 ? (
+                <Combobox
+                  aria-label="Scope"
+                  clearable={false}
+                  value={chosen ?? ANY_SCOPE}
+                  onChange={(next) => setScope(next === ANY_SCOPE ? null : (next as TestScope))}
+                  items={[
+                    { value: ANY_SCOPE, label: 'Every scope' },
+                    ...scopes.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] })),
+                  ]}
+                  className={PICKER_WIDTH.SCOPE}
+                />
+              ) : null}
               {sat.length > 0 ? (
                 <Combobox
                   value=""
@@ -112,8 +129,6 @@ export function OverviewPage() {
       }
     >
       <PageBody>
-        {overview.data ? <Headline overview={overview.data} mode={mode} /> : null}
-
         {overview.isLoading ? (
           <>
             <TilesSkeleton count={3} />
@@ -121,43 +136,30 @@ export function OverviewPage() {
           </>
         ) : null}
         {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
-        {overview.data ? <Body overview={overview.data} mode={mode} /> : null}
+        {overview.data ? (
+          <Body
+            overview={overview.data}
+            mode={mode}
+            scope={chosen}
+            sittings={(trend.data?.points ?? []).filter((point) => point.evaluationMode === mode)}
+          />
+        ) : null}
       </PageBody>
     </PageFrame>
   );
 }
 
-/** Percentile is a RANKED standing; practice has no placing, so it leads on what it does have. */
-function Headline({
+function Body({
   overview,
   mode,
-}: Readonly<{ overview: StudentOverview; mode: EvaluationMode }>) {
-  const measure = overview.byMode[mode];
-
-  if (mode === EVALUATION_MODE.PRACTICE) {
-    if (measure.accuracy === null) return null;
-    return (
-      <HeroFigure
-        value={Math.round(measure.accuracy)}
-        unit="%"
-        caption={`accuracy across ${plural(measure.attempted, 'practice answer')}`}
-      />
-    );
-  }
-
-  if (overview.standing.testsEvaluated === 0) return null;
-  return (
-    <HeroFigure
-      value={overview.standing.avgPercentile ?? DASH}
-      unit={overview.standing.avgPercentile === null ? undefined : 'th'}
-      caption={bestLine(overview)}
-    />
-  );
-}
-
-function Body({ overview, mode }: Readonly<{ overview: StudentOverview; mode: EvaluationMode }>) {
-  const [scope, setScope] = useState<TestScope | null>(null);
-
+  scope,
+  sittings,
+}: Readonly<{
+  overview: StudentOverview;
+  mode: EvaluationMode;
+  scope: TestScope | null;
+  sittings: readonly PerformancePoint[];
+}>) {
   if (overview.standing.testsAttempted === 0) {
     return (
       <EmptyState
@@ -172,12 +174,18 @@ function Body({ overview, mode }: Readonly<{ overview: StudentOverview; mode: Ev
     );
   }
 
-  const scopes = scopesSat(overview.subjects, mode);
-  const chosen = scope !== null && scopes.includes(scope) ? scope : null;
-  const view = { subjects: overview.subjects, mode, scope: chosen };
+  const view = { subjects: overview.subjects, mode, scope };
+  const headline = headlineOf(overview, mode, sittings);
+  const measured = overview.byMode[mode].attempted > 0;
+  const pace = <ModeTiles measure={overview.byMode[mode]} />;
 
   return (
     <>
+      {/* With no headline the pace tiles lead, or the band would sit empty down its whole left. */}
+      {headline !== null || measured ? (
+        <Hero tone="accent" figure={headline ?? pace} aside={headline ? pace : undefined} />
+      ) : null}
+
       {mode === EVALUATION_MODE.RANKED && overview.standing.testsEvaluated === 0 ? (
         /* ui-copy-ok: consequence */
         <Alert variant="info">
@@ -186,47 +194,49 @@ function Body({ overview, mode }: Readonly<{ overview: StudentOverview; mode: Ev
         </Alert>
       ) : null}
 
-      <TileGrid>
+      <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
         {standingTiles(overview.standing, overview.byMode[mode], mode).map((tile) => (
           <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} />
         ))}
       </TileGrid>
 
-      <Section title="Accuracy and pace" meta={EVALUATION_MODE_LABELS[mode]}>
-        <ModeTiles measure={overview.byMode[mode]} />
-      </Section>
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
+        <DispositionFigure disposition={overview.disposition} />
+        <SubjectStrengthFigure {...view} />
+      </div>
 
-      <DispositionFigure disposition={overview.disposition} />
-
-      <Section
-        title="Subjects"
-        meta={EVALUATION_MODE_LABELS[mode]}
-        action={
-          scopes.length > 1 ? (
-            <Field htmlFor="subjectScope" label="Scope" className="min-w-44">
-              {({ id, 'aria-describedby': describedBy }) => (
-                <Combobox
-                  id={id}
-                  aria-describedby={describedBy}
-                  clearable={false}
-                  value={chosen ?? ANY_SCOPE}
-                  onChange={(next) => setScope(next === ANY_SCOPE ? null : (next as TestScope))}
-                  items={[
-                    { value: ANY_SCOPE, label: 'Every scope' },
-                    ...scopes.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] })),
-                  ]}
-                />
-              )}
-            </Field>
-          ) : undefined
-        }
-      >
-        <div className="grid items-start gap-4 xl:grid-cols-2">
-          <SubjectStrengthFigure {...view} />
-          <SpeedAccuracyFigure {...view} />
-        </div>
-      </Section>
+      {/* Full width: its dot labels collide with the quadrant corners in anything narrower. */}
+      <SpeedAccuracyFigure {...view} />
     </>
+  );
+}
+
+/** Percentile is a RANKED standing; practice has no placing, so its best sitting is the target. */
+function headlineOf(
+  overview: StudentOverview,
+  mode: EvaluationMode,
+  sittings: readonly PerformancePoint[],
+) {
+  if (mode === EVALUATION_MODE.PRACTICE) {
+    const best = bestSitting(sittings);
+    if (best === null) return null;
+    return (
+      <HeroFigure
+        value={Math.round(best.percentage)}
+        unit="%"
+        caption={`best of ${plural(sittings.length, 'practice sitting')} · ${best.score} of ${best.maxMarks}`}
+      />
+    );
+  }
+
+  if (overview.standing.testsEvaluated === 0) return null;
+  return (
+    <HeroFigure
+      value={overview.standing.avgPercentile ?? DASH}
+      unit={overview.standing.avgPercentile === null ? undefined : 'th'}
+      caption={bestLine(overview)}
+    />
   );
 }
 

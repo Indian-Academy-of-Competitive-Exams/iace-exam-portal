@@ -179,7 +179,7 @@ describe('standingTiles', () => {
       [
         ['Average score', 65],
         ['Tests marked', 4],
-        ['Tests taken', 5],
+        ['Sittings', 5],
       ],
     );
   });
@@ -193,7 +193,7 @@ describe('standingTiles', () => {
       [
         ['Practice sittings', 1],
         ['Questions answered', 50],
-        ['Tests taken', 5],
+        ['Correct', 31],
       ],
     );
     assert.ok(!tiles.some((tile) => tile.value === STANDING.avgScore));
@@ -204,5 +204,34 @@ describe('standingTiles', () => {
     const tiles = standingTiles({ ...STANDING, avgScore: null }, MEASURE, EVALUATION_MODE.RANKED);
 
     assert.equal(tiles[0]?.value, null);
+  });
+});
+
+/** `testsAttempted` is every sitting, so under practice it would restate `practiceAttempts`. */
+describe('standingTiles never shows one number twice', () => {
+  it('gives practice three distinct counts when nothing of theirs is ranked', () => {
+    const standing: OverviewStanding = {
+      testsAttempted: 9,
+      testsEvaluated: 0,
+      practiceAttempts: 9,
+      avgPercentile: null,
+      bestPercentile: null,
+      avgScore: null,
+      lastAttemptAt: null,
+    };
+    const measure: SubjectMeasure = {
+      attempted: 48,
+      correct: 8,
+      accuracy: 16.67,
+      sumTimeSec: 373,
+      pace: 7.77,
+    };
+
+    const values = standingTiles(standing, measure, EVALUATION_MODE.PRACTICE).map(
+      (tile) => tile.value,
+    );
+
+    assert.deepEqual(values, [9, 48, 8]);
+    assert.equal(new Set(values).size, values.length);
   });
 });

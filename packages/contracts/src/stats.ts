@@ -188,20 +188,19 @@ export function standingTiles(
   measure: SubjectMeasure,
   mode: EvaluationMode,
 ): StandingTile[] {
-  const taken = { key: 'taken', label: 'Tests taken', value: standing.testsAttempted };
-
   if (mode === EVALUATION_MODE.PRACTICE) {
     return [
       { key: 'sittings', label: 'Practice sittings', value: standing.practiceAttempts },
       { key: 'answered', label: 'Questions answered', value: measure.attempted },
-      taken,
+      { key: 'correct', label: 'Correct', value: measure.correct },
     ];
   }
 
   return [
     { key: 'score', label: 'Average score', value: standing.avgScore },
     { key: 'marked', label: 'Tests marked', value: standing.testsEvaluated },
-    taken,
+    // Sittings, not tests: `testsAttempted` counts every one, so six retakes of a paper are six.
+    { key: 'sittings', label: 'Sittings', value: standing.testsAttempted },
   ];
 }
 
