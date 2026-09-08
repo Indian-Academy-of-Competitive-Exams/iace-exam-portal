@@ -51,6 +51,7 @@ export {
 } from './autosave-policy';
 export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
+export { POLL_FIRST_MS, POLL_GIVES_UP_AFTER, POLL_MAX_MS, pollDelayMs } from './poll-policy';
 export {
   CohortFigure,
   DifficultyFigure,

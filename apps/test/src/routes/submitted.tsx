@@ -8,13 +8,11 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { Alert, LoadingState, Metric, PageFrame, PageHeader } from '@iace/ui';
-import { PageCrumbs } from '@iace/app-kit/browser';
+import { PageCrumbs, POLL_GIVES_UP_AFTER, pollDelayMs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { PageBody, Section, StatBand } from '../components/ui';
 import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
 import { type EndedSitting } from '../components/exam/engine/use-exam-view';
-
-const MARKING_POLL_MS = 3000;
 
 /** A queued marking job is the only reason the card 409s; anything else is a real failure. */
 const isPending = (error: unknown): boolean =>
@@ -29,9 +27,8 @@ export function SubmittedPage() {
     queryKey: scoreCardQueryKey(attemptId),
     queryFn: () => api.me.scoreCard(attemptId),
     enabled: attemptId !== '',
-    refetchInterval: (query) => (query.state.data ? false : MARKING_POLL_MS),
-    retry: (_count, error) => isPending(error),
-    retryDelay: MARKING_POLL_MS,
+    retry: (count, error) => isPending(error) && count < POLL_GIVES_UP_AFTER,
+    retryDelay: (count) => pollDelayMs(count),
   });
 
   const marked = card.data !== undefined;
