@@ -4850,7 +4850,12 @@ export interface FakePerformanceData {
   attempts: FakeAttemptRow[];
   served: FakeServedAnswerRow[];
   shape: FakeScoredTest;
-  students: { id: string; deletedAt: Date | null; currentBranchId?: string | null }[];
+  students: {
+    id: string;
+    deletedAt: Date | null;
+    currentBranchId?: string | null;
+    createdAt?: Date;
+  }[];
   series: { id: string; name: string; progressive?: boolean }[];
   /** Membership is the test's own column, so a rung is a test carrying the series' id. */
   tests: { id: string; testSeriesId: string; seriesOrder?: number | null }[];

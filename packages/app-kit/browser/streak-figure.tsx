@@ -1,10 +1,11 @@
 import { ChartFigure, Metric, Tooltip, TooltipContent, TooltipTrigger, cn, plural } from '@iace/ui';
+import { useEffect, useRef } from 'react';
 import {
   currentStreak,
   instituteDayLabel,
   longestStreak,
   practiceWindow,
-  startOfLastMonth,
+  type PracticeCalendar,
   type PracticeDay,
 } from '@iace/contracts';
 
@@ -16,16 +17,24 @@ const heatOf = (sittings: number) => HEAT[Math.min(sittings, HEAT.length - 1)];
 /** A civil date carries no zone, so its month is read where it is stored: at UTC midnight. */
 const MONTH = new Intl.DateTimeFormat('en-IN', { month: 'short', timeZone: 'UTC' });
 
-/** Which days were practised across this month and the last, and the two runs behind them. */
+/** Every day since the account opened, and the two runs behind them. */
 export function StreakFigure({
-  days,
+  calendar,
   className,
-}: Readonly<{ days: readonly PracticeDay[]; className?: string }>) {
-  const window = practiceWindow(days, startOfLastMonth());
+}: Readonly<{ calendar: PracticeCalendar; className?: string }>) {
+  const { days } = calendar;
+  const window = practiceWindow(days, calendar.from);
   const weeks = weeksOf(window);
   const sat = window.filter((day) => day.sittings > 0).length;
   const now = currentStreak(days);
   const best = longestStreak(days);
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // Today is the right-hand edge, and today is what a reader opens this to see.
+  useEffect(() => {
+    const held = scroller.current;
+    if (held !== null) held.scrollLeft = held.scrollWidth;
+  }, [weeks.length]);
 
   return (
     <ChartFigure
@@ -39,9 +48,10 @@ export function StreakFigure({
       }
       className={cn('min-w-0', className)}
     >
-      <div className="flex gap-1">
+      {/* Sideways inside the page's vertical scroll — a different axis hides nothing. */}
+      <div ref={scroller} className="flex gap-1 overflow-x-auto pb-1">
         {weeks.map((week) => (
-          <div key={week.key} className="flex flex-col gap-1">
+          <div key={week.key} className="flex shrink-0 flex-col gap-1">
             <span className="h-4 text-[0.625rem] leading-4 text-muted-foreground">
               {week.month ?? ''}
             </span>

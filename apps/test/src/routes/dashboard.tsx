@@ -22,7 +22,6 @@ import {
   INSTITUTE_TIME_ZONE,
   dispositionRates,
   instituteWallTime,
-  startOfLastMonth,
   percentLabel,
   type PerformancePoint,
   type StudentOverview,
@@ -43,7 +42,7 @@ import {
   OVERVIEW_QUERY_KEY,
   PERFORMANCE_QUERY_KEY,
   ROUTES,
-  practiceDaysQueryKey,
+  PRACTICE_DAYS_QUERY_KEY,
 } from '../lib/constants';
 import { continueWith, openNow, sittablesOf, upNext, type Sittable } from '../lib/catalog';
 import { useAuth } from '../providers/auth';
@@ -84,10 +83,9 @@ export function DashboardPage() {
   const overview = useQuery({ queryKey: OVERVIEW_QUERY_KEY, queryFn: () => api.me.overview() });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
-  const from = startOfLastMonth();
   const practice = useQuery({
-    queryKey: practiceDaysQueryKey(from),
-    queryFn: () => api.me.practiceDays(from),
+    queryKey: PRACTICE_DAYS_QUERY_KEY,
+    queryFn: () => api.me.practiceDays(),
   });
 
   const now = new Date();
@@ -120,7 +118,7 @@ export function DashboardPage() {
           <div className="min-w-0 xl:col-span-2">
             <Trend trend={trend} points={trend.data?.points ?? []} />
           </div>
-          <StreakFigure days={practice.data ?? []} />
+          {practice.data ? <StreakFigure calendar={practice.data} /> : null}
         </div>
 
         {waiting.length > 1 ? (

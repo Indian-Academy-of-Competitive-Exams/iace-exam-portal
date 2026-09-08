@@ -21,7 +21,7 @@ import {
   type ScoreCardSection,
   type SeriesProgression,
   civilDate,
-  type PracticeDay,
+  type PracticeCalendar,
 } from '@iace/contracts';
 import { startOfInstituteDay } from '../common/time/institute-day';
 import { PrismaService } from '../prisma/prisma.service';
@@ -280,8 +280,15 @@ export class PerformanceAnalyticsService {
     };
   }
 
-  /** Sitting counts by institute day. Two columns over one indexed student — no paper is read. */
-  async practiceDays(studentId: string, from: string): Promise<PracticeDay[]> {
+  /** Sitting counts by institute day, since the account opened. No paper is read, ever. */
+  async practiceDays(studentId: string): Promise<PracticeCalendar> {
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, deletedAt: null },
+      select: { createdAt: true },
+    });
+    if (!student) throw new AppException(ErrorCodes.NOT_FOUND, 'No such student');
+
+    const from = civilDate(student.createdAt);
     const floor = startOfInstituteDay(from);
     const rows = await this.prisma.attempt.findMany({
       where: {
@@ -298,7 +305,7 @@ export class PerformanceAnalyticsService {
       const day = civilDate(row.submittedAt);
       counted.set(day, (counted.get(day) ?? 0) + 1);
     }
-    return [...counted].map(([date, sittings]) => ({ date, sittings }));
+    return { from, days: [...counted].map(([date, sittings]) => ({ date, sittings })) };
   }
 
   /** The scope picker's only honest list: a series they have never sat has no report to show. */

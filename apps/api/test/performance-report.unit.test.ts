@@ -1155,7 +1155,7 @@ describe('the days a student practised on', () => {
       sat('att_2', '2026-09-08T04:00:00.000Z'),
     ]);
 
-    const days = await service.practiceDays(STUDENT, '2026-09-01');
+    const { days } = await service.practiceDays(STUDENT);
 
     assert.deepEqual(days.toSorted(byDate), [{ date: '2026-09-08', sittings: 2 }]);
   });
@@ -1167,7 +1167,7 @@ describe('the days a student practised on', () => {
       sat('att_3', '2026-09-07T09:00:00.000Z'),
     ]);
 
-    const days = await service.practiceDays(STUDENT, '2026-09-01');
+    const { days } = await service.practiceDays(STUDENT);
 
     assert.deepEqual(days.toSorted(byDate), [
       { date: '2026-09-06', sittings: 2 },
@@ -1175,22 +1175,34 @@ describe('the days a student practised on', () => {
     ]);
   });
 
-  /** The floor is an institute midnight, so a sitting early on the floor day is still inside it. */
-  it('keeps the floor day and drops what came before it', async () => {
-    const { service } = benchFor([
-      sat('att_1', '2026-09-05T23:00:00.000Z'),
-      sat('att_2', '2026-09-06T01:00:00.000Z'),
-    ]);
+  /** The account's own first institute day is the floor, and the client draws from it. */
+  it('opens the window on the day the account was made', async () => {
+    const { service } = benchFor([sat('att_1', '2026-09-06T01:00:00.000Z')], '2026-08-15');
 
-    const days = await service.practiceDays(STUDENT, '2026-09-06');
+    const calendar = await service.practiceDays(STUDENT);
 
-    assert.deepEqual(days.toSorted(byDate), [{ date: '2026-09-06', sittings: 2 }]);
+    assert.equal(calendar.from, '2026-08-15');
+  });
+
+  /** Nothing was sat before the account existed, so the floor cannot cut a sitting off. */
+  it('keeps a sitting made on the opening day itself', async () => {
+    const { service } = benchFor([sat('att_1', '2026-09-06T01:00:00.000Z')], '2026-09-06');
+
+    const { days } = await service.practiceDays(STUDENT);
+
+    assert.deepEqual(days, [{ date: '2026-09-06', sittings: 1 }]);
   });
 
   it('answers a student who has sat nothing with no days rather than an error', async () => {
     const { service } = benchFor([]);
 
-    assert.deepEqual(await service.practiceDays(STUDENT, '2026-09-01'), []);
+    assert.deepEqual((await service.practiceDays(STUDENT)).days, []);
+  });
+
+  it('refuses to answer for a student who is not there', async () => {
+    const { service } = benchFor([]);
+
+    await assert.rejects(() => service.practiceDays('stu_missing'));
   });
 });
 
@@ -1205,4 +1217,16 @@ const sat = (id: string, submittedAt: string) =>
     submittedAt: new Date(submittedAt),
   });
 
-const benchFor = (attempts: FakeAttemptRow[]) => bench({ attempts, served: [] });
+const benchFor = (attempts: FakeAttemptRow[], joined = '2026-08-01') =>
+  bench({
+    attempts,
+    served: [],
+    students: [
+      {
+        id: STUDENT,
+        deletedAt: null,
+        currentBranchId: 'br_1',
+        createdAt: new Date(`${joined}T00:00:00.000Z`),
+      },
+    ],
+  });

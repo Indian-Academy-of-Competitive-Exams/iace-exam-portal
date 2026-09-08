@@ -228,19 +228,12 @@ export const practiceDaySchema = z.object({
 export type PracticeDay = z.infer<typeof practiceDaySchema>;
 export const practiceDayListSchema = z.array(practiceDaySchema);
 
-/** How far back a calendar may be asked for: this month and the one before it, with room. */
-export const PRACTICE_DAYS_MAX = 92;
-
-/** The window's floor, as a civil date. A range wider than the calendar draws is refused. */
-export const practiceDaysQuerySchema = z.object({
-  from: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine((from) => from >= shiftCivilDate(todayISO(), -PRACTICE_DAYS_MAX), {
-      message: `No further back than ${PRACTICE_DAYS_MAX} days`,
-    }),
+/** The window the SERVER chose, with the days inside it — the account decides how far back. */
+export const practiceCalendarSchema = z.object({
+  from: z.string(),
+  days: practiceDayListSchema,
 });
-export type PracticeDaysQuery = z.infer<typeof practiceDaysQuerySchema>;
+export type PracticeCalendar = z.infer<typeof practiceCalendarSchema>;
 
 const DAY_MS = 86_400_000;
 
