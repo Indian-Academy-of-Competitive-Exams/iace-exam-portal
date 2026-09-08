@@ -25,17 +25,7 @@ export class AttemptSweeperProcessor extends WorkerHost {
   }
 
   async process(): Promise<void> {
-    const stranded = await this.expired();
-    for (let at = 0; at < stranded.length; at += SWEEP_LANES) {
-      await Promise.all(
-        stranded.slice(at, at + SWEEP_LANES).map((attempt) =>
-          // Through the same gate the student uses, so a race resolves to one submission.
-          this.submit.expire(attempt.id).catch((error: unknown) => {
-            this.logger.error(`Sweeping attempt ${attempt.id} failed`, error);
-          }),
-        ),
-      );
-    }
+    await this.endStranded();
     // The reconciler: a crash between the commit and the queue leaves a request nobody handed on.
     await this.outbox.relay().catch((error: unknown) => {
       this.logger.error('Relaying the scoring requests nobody handed on failed', error);
@@ -46,6 +36,35 @@ export class AttemptSweeperProcessor extends WorkerHost {
     await this.askAgainForUnscored().catch((error: unknown) => {
       this.logger.error('Asking again for the sittings nobody scored failed', error);
     });
+  }
+
+  /** Drains the backlog in one run: the cap bounds what a read holds, not what a sweep ends. */
+  private async endStranded(): Promise<void> {
+    for (;;) {
+      const stranded = await this.expired();
+      if (stranded.length === 0) return;
+
+      let ended = 0;
+      for (let at = 0; at < stranded.length; at += SWEEP_LANES) {
+        const lane = await Promise.all(
+          stranded.slice(at, at + SWEEP_LANES).map((attempt) => this.end(attempt.id)),
+        );
+        ended += lane.filter(Boolean).length;
+      }
+      // Stops on a batch nothing could end, which the next read would hand back unchanged forever.
+      if (stranded.length < SWEEP_BATCH || ended === 0) return;
+    }
+  }
+
+  /** Through the same gate the student uses, so a race resolves to one submission. */
+  private async end(attemptId: string): Promise<boolean> {
+    try {
+      await this.submit.expire(attemptId);
+      return true;
+    } catch (error: unknown) {
+      this.logger.error(`Sweeping attempt ${attemptId} failed`, error);
+      return false;
+    }
   }
 
   /** A job that exhausted its retries left an ended sitting with no score, and nothing owned it. */
@@ -99,7 +118,7 @@ const MILLISECONDS_PER_SECOND = 1000;
 /** How many stranded sittings one sweep asks about. The next sweep takes the rest. */
 const RESCORE_BATCH = 100;
 
-/** How many stranded sittings one sweep ends. The next sweep takes the rest. */
+/** How many stranded sittings one read holds. A sweep keeps reading until the backlog is gone. */
 export const SWEEP_BATCH = 200;
 
 /** Ended side by side rather than one after another; the last student waited for all of them. */

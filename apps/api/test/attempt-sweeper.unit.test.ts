@@ -2,7 +2,11 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ATTEMPT_STATUS } from '@iace/contracts';
-import { AttemptSweeperProcessor, SWEEP_LANES } from '../src/attempts/attempt-sweeper.processor';
+import {
+  AttemptSweeperProcessor,
+  SWEEP_BATCH,
+  SWEEP_LANES,
+} from '../src/attempts/attempt-sweeper.processor';
 import { FakeTestsPrisma, makeAttempt } from './support/fakes';
 
 const LATE = new Date(Date.now() - 60 * 60 * 1000);
@@ -14,14 +18,14 @@ function strandedRows(count: number) {
   );
 }
 
-/** A hand-rolled `expire()` double: records which ids it was asked to end, and can fail on one. */
-function build(count: number, refuse?: string) {
+/** A hand-rolled `expire()` double: records which ids it was asked to end, and can fail on some. */
+function build(count: number, refuse: (attemptId: string) => boolean = () => false) {
   const prisma = new FakeTestsPrisma([], undefined, undefined, [], [], [], [], strandedRows(count));
   const asked: string[] = [];
   const submit = {
     expire: (attemptId: string) => {
       asked.push(attemptId);
-      if (attemptId === refuse) return Promise.reject(new Error('expire refused'));
+      if (refuse(attemptId)) return Promise.reject(new Error('expire refused'));
       const row = prisma.attemptRows.find((candidate) => candidate.id === attemptId);
       if (row) row.status = ATTEMPT_STATUS.SUBMITTED;
       return Promise.resolve();
@@ -51,7 +55,7 @@ describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => 
   /** The bug this prevents: one student's failed expire taking every other lane down with it. */
   it('keeps ending the rest when one expire in the batch is refused', async () => {
     const count = SWEEP_LANES + 2;
-    const { prisma, asked, sweeper } = build(count, 'att_1');
+    const { prisma, asked, sweeper } = build(count, (id) => id === 'att_1');
 
     await sweeper.process();
 
@@ -62,5 +66,25 @@ describe('AttemptSweeperProcessor — one sweep, many stranded sittings', () => 
     );
     const ended = prisma.attemptRows.filter((row) => row.status === ATTEMPT_STATUS.SUBMITTED);
     assert.equal(ended.length, count - 1);
+  });
+
+  /** The bug this prevents: a cap on the read becoming a cap on the rate under a mass failure. */
+  it('keeps reading until the backlog is gone, not one batch a sweep', async () => {
+    const count = SWEEP_BATCH * 2 + 7;
+    const { prisma, sweeper } = build(count);
+
+    await sweeper.process();
+
+    const ended = prisma.attemptRows.filter((row) => row.status === ATTEMPT_STATUS.SUBMITTED);
+    assert.equal(ended.length, count);
+  });
+
+  /** The bug this prevents: a full batch nothing can end, read and refused for ever. */
+  it('stops rather than re-reading a batch it made no progress on', async () => {
+    const { asked, sweeper } = build(SWEEP_BATCH + 5, () => true);
+
+    await sweeper.process();
+
+    assert.equal(asked.length, SWEEP_BATCH, 'a second read of the same rows is the loop');
   });
 });
