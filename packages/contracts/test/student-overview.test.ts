@@ -5,14 +5,19 @@ import {
   SUBJECT_SAMPLE_FLOOR,
   TEST_SCOPE,
   measureOf,
+  ANSWER_STATE,
+  PAPER_QUESTION_STATUS,
   dispositionRates,
+  distractorThatWon,
   effortPerSitting,
+  questionReportInsights,
   scopesSat,
   standingTiles,
   subjectModeGaps,
   subjectShares,
   type OverviewStanding,
   type SubjectMeasure,
+  type QuestionReportRow,
   type SubjectStanding,
 } from '../src';
 
@@ -395,5 +400,101 @@ describe('effortPerSitting', () => {
     );
 
     assert.deepEqual(effort, { questions: null, timeSec: null });
+  });
+});
+
+describe('questionReportInsights', () => {
+  const row = (over: Partial<QuestionReportRow>): QuestionReportRow =>
+    ({
+      questionId: 'q',
+      paperQuestionId: 'pq',
+      order: 1,
+      baseConfigSectionId: 'sec',
+      state: ANSWER_STATE.ANSWERED,
+      selectedOptionId: null,
+      typedAnswer: null,
+      isCorrect: null,
+      marksAwarded: null,
+      marks: 2,
+      negativeMarks: 0.5,
+      disposition: PAPER_QUESTION_STATUS.ACTIVE,
+      timeSpentSec: 0,
+      predefinedDifficulty: null,
+      attemptRate: null,
+      accuracy: null,
+      cohortAverageTimeSec: null,
+      systemDifficulty: null,
+      topperTimeSec: null,
+      topperMarksAwarded: null,
+      optionCounts: [],
+      correctAnswer: null,
+      ...over,
+    }) as QuestionReportRow;
+
+  it('splits the clock by what each question actually returned', () => {
+    const insights = questionReportInsights([
+      row({ isCorrect: true, timeSpentSec: 20 }),
+      row({ isCorrect: false, timeSpentSec: 50 }),
+      row({ isCorrect: null, timeSpentSec: 30 }),
+    ]);
+
+    assert.equal(insights.timeOnCorrectSec, 20);
+    assert.equal(insights.timeOnWrongSec, 50);
+    assert.equal(insights.timeOnBlankSec, 30);
+    assert.equal(insights.wastedShare, 80);
+  });
+
+  /** A question nobody else answered either is not a question they lost their nerve on. */
+  it('counts a blank against the field, not against the paper', () => {
+    const insights = questionReportInsights([
+      row({ isCorrect: null, attemptRate: 0.9 }),
+      row({ isCorrect: null, attemptRate: 0.1 }),
+      row({ isCorrect: null, attemptRate: null }),
+      row({ isCorrect: false, attemptRate: 0.9 }),
+    ]);
+
+    assert.equal(insights.blankButAnswerable, 1);
+  });
+
+  it('has no share to report when the paper took no time at all', () => {
+    assert.equal(questionReportInsights([row({})]).wastedShare, null);
+  });
+});
+
+describe('distractorThatWon', () => {
+  const counts = (values: readonly [number, number, boolean][]) =>
+    values.map(([position, count, isCorrect], index) => ({
+      optionId: `o${index}`,
+      position,
+      isCorrect,
+      count,
+    }));
+
+  it('names the option the field reached for most', () => {
+    const won = distractorThatWon({
+      optionCounts: counts([
+        [1, 3, false],
+        [2, 11, false],
+        [3, 6, true],
+      ]),
+    } as QuestionReportRow);
+
+    assert.equal(won?.position, 2);
+    assert.equal(won?.count, 11);
+    assert.equal(won?.isCorrect, false);
+  });
+
+  /** Every option at zero is a question the rollup has not counted, not a question nobody answered. */
+  it('says nothing where nothing was counted', () => {
+    assert.equal(
+      distractorThatWon({
+        optionCounts: counts([
+          [1, 0, false],
+          [2, 0, true],
+        ]),
+      } as QuestionReportRow),
+      null,
+    );
+    assert.equal(distractorThatWon({ optionCounts: [] } as unknown as QuestionReportRow), null);
   });
 });

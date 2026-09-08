@@ -17,7 +17,9 @@ import {
 import {
   QUESTION_FILTERS,
   SYSTEM_DIFFICULTY,
+  distractorThatWon,
   percentLabel,
+  questionReportInsights,
   type QuestionFilter,
   type QuestionReport,
   type QuestionReportRow,
@@ -86,6 +88,7 @@ function Body({
     [report.questions, filter],
   );
   const columns = useMemo(() => columnsFor(report.solutionsOpen), [report.solutionsOpen]);
+  const insights = useMemo(() => questionReportInsights(report.questions), [report.questions]);
 
   const list: ListState<QuestionReportRow> = {
     rows,
@@ -118,6 +121,13 @@ function Body({
         />
         <Metric label="Sittings" value={report.cohortSize} size="sm" />
         <Metric label="Questions" value={report.questions.length} size="sm" />
+        <Metric label="Left blank, most answered" value={insights.blankButAnswerable} size="sm" />
+        <Metric
+          label="Time that bought nothing"
+          value={percentLabel(insights.wastedShare, DASH)}
+          unit={clock(insights.timeOnWrongSec + insights.timeOnBlankSec)}
+          size="sm"
+        />
       </StatBand>
 
       <Card className="flex min-h-0 flex-1 flex-col p-4">
@@ -148,20 +158,42 @@ function chosen(value: unknown): QuestionFilter {
   return held === '' ? QUESTION_FILTERS.ALL : (held as QuestionFilter);
 }
 
-/** How the cohort split across the options, and which one the key names. */
+/** How the cohort split across the options, which one the key names, and which one was theirs. */
 function Distribution({ row }: Readonly<{ row: QuestionReportRow }>) {
   if (row.optionCounts.length === 0) {
     return <p className="text-sm text-muted-foreground">{DASH}</p>;
   }
   const bars: MeasureBar[] = row.optionCounts.map((option) => ({
     key: option.optionId,
-    label: `Option ${option.position}${option.isCorrect ? ' — correct' : ''}`,
+    label: `Option ${option.position}${optionMark(option, row.selectedOptionId)}`,
     value: option.count,
     tone: option.isCorrect ? 2 : 1,
   }));
   const total = row.optionCounts.reduce((sum, option) => sum + option.count, 0);
+  const won = distractorThatWon(row);
 
-  return <MeasureBars bars={bars} max={total} />;
+  return (
+    <div className="flex flex-col gap-3">
+      <MeasureBars bars={bars} max={total} />
+      {won === null || won.isCorrect || row.isCorrect === true ? null : (
+        /* ui-copy-ok: consequence */
+        <Alert variant="warning">
+          Option {won.position} pulled {won.count} of {total} — the same wrong answer most of the
+          field reached for.
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+/** Names both facts a bar can carry, so the key and the reader's own pick never need two charts. */
+function optionMark(
+  option: Readonly<{ isCorrect: boolean; optionId: string }>,
+  chosen: string | null,
+): string {
+  const marks = [option.isCorrect ? 'correct' : null, option.optionId === chosen ? 'yours' : null];
+  const named = marks.filter((mark) => mark !== null);
+  return named.length === 0 ? '' : ` — ${named.join(', ')}`;
 }
 
 function columnsFor(solutionsOpen: boolean): DataTableColumn<QuestionReportRow>[] {
@@ -260,6 +292,8 @@ function correctAnswer(row: QuestionReportRow): string {
   const correct = row.optionCounts.find((option) => option.isCorrect);
   return correct === undefined ? DASH : `Option ${correct.position}`;
 }
+
+const clock = (seconds: number) => (seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m`);
 
 /** Above one is slower than the field, below it faster; the unit says which without a sentence. */
 function paceUnit(pace: number | null): string | undefined {

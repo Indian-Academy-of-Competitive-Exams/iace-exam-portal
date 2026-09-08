@@ -19,7 +19,9 @@ import {
 import { newestFirst } from '@iace/app-kit';
 import {
   INSTITUTE_TIME_ZONE,
+  dispositionRates,
   instituteWallTime,
+  percentLabel,
   type PerformancePoint,
   type StudentOverview,
 } from '@iace/contracts';
@@ -186,7 +188,7 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
   if (!data || data.standing.testsAttempted === 0) return null;
 
   const { standing, disposition } = data;
-  const answered = disposition.correct + disposition.wrong;
+  const rates = dispositionRates(disposition);
 
   return (
     <>
@@ -202,13 +204,9 @@ function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
         <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="sm" />
         <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
         <Metric label="Average score" value={standing.avgScore ?? '—'} size="sm" />
-        <Metric label="Tests taken" value={standing.testsAttempted} size="sm" />
-        <Metric
-          label="Accuracy"
-          value={answered === 0 ? '—' : Math.round((disposition.correct / answered) * 100)}
-          unit={answered === 0 ? undefined : '%'}
-          size="sm"
-        />
+        <Metric label="Sittings" value={standing.testsAttempted} size="sm" />
+        <Metric label="Accuracy" value={percentLabel(rates.accuracy, '—')} size="sm" />
+        <Metric label="Attempted" value={percentLabel(rates.attemptRate, '—')} size="sm" />
       </StatBand>
     </>
   );

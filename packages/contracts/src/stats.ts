@@ -784,6 +784,56 @@ export const questionReportRowSchema = z.object({
 });
 export type QuestionReportRow = z.infer<typeof questionReportRowSchema>;
 
+/** Above this share of the field answering it, a question the reader left blank was answerable. */
+export const MOST_OF_THE_FIELD = 0.5;
+
+/** What one paper says about how it was WORKED, as opposed to how much of it was known. */
+export interface QuestionReportInsights {
+  /** Left blank while most of the field answered — the questions nerve or the clock cost. */
+  blankButAnswerable: number;
+  timeOnCorrectSec: number;
+  timeOnWrongSec: number;
+  timeOnBlankSec: number;
+  /** Of the whole clock, the share that bought no marks at all. */
+  wastedShare: number | null;
+}
+
+export function questionReportInsights(rows: readonly QuestionReportRow[]): QuestionReportInsights {
+  let blankButAnswerable = 0;
+  let timeOnCorrectSec = 0;
+  let timeOnWrongSec = 0;
+  let timeOnBlankSec = 0;
+
+  for (const row of rows) {
+    if (row.isCorrect === true) timeOnCorrectSec += row.timeSpentSec;
+    else if (row.isCorrect === false) timeOnWrongSec += row.timeSpentSec;
+    else {
+      timeOnBlankSec += row.timeSpentSec;
+      if (row.attemptRate !== null && row.attemptRate >= MOST_OF_THE_FIELD) blankButAnswerable += 1;
+    }
+  }
+
+  const total = timeOnCorrectSec + timeOnWrongSec + timeOnBlankSec;
+  return {
+    blankButAnswerable,
+    timeOnCorrectSec,
+    timeOnWrongSec,
+    timeOnBlankSec,
+    wastedShare: total === 0 ? null : round2(((timeOnWrongSec + timeOnBlankSec) / total) * 100),
+  };
+}
+
+type CountedOption = QuestionReportRow['optionCounts'][number];
+
+/** The option most of the field chose. Null where nothing was counted at all. */
+export function distractorThatWon(row: QuestionReportRow): CountedOption | null {
+  const top = row.optionCounts.reduce<CountedOption | null>(
+    (best, option) => (best === null || option.count > best.count ? option : best),
+    null,
+  );
+  return top === null || top.count === 0 ? null : top;
+}
+
 export const questionReportSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
