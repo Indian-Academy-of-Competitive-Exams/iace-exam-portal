@@ -29,14 +29,15 @@ export function Combobox({
   const placeholder = list.placeholder ?? 'Choose…';
 
   const selected = list.items.find((item) => item.value === value);
+  const chosen = selected?.label ?? selectedLabel ?? (value || null);
 
   return (
     <ComboboxShell
       {...list}
       open={open}
       onOpenChange={setOpen}
-      triggerLabel={selected?.label ?? selectedLabel ?? (value || placeholder)}
-      triggerMuted={!selected && !selectedLabel}
+      triggerLabel={chosen ?? placeholder}
+      triggerMuted={chosen === null}
     >
       {clearable ? (
         <ComboboxOption

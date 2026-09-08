@@ -196,6 +196,8 @@
 
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
+  /* Lighter than muted, which is REAL secondary content: a placeholder must not read as a value. */
+  --placeholder: var(--slate-400);
   --border: #e2e8f0;
   /* The scrollbar. Thin and muted because a card's own body is the scrollport now: a
      platform-width bar in brand-free grey sits on the rounded edge and reads as a seam. */
@@ -438,6 +440,7 @@
   --foreground-secondary: #cbd5e1;
   --muted: #1b212a;
   --muted-foreground: #94a3b8;
+  --placeholder: #64748b;
   --border: #262c35;
   --border-strong: #343b47;
   --scrollbar-thumb: #343b47;

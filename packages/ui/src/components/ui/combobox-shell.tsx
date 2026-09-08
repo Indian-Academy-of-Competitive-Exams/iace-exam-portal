@@ -14,7 +14,7 @@ export const FIELD_TRIGGER_CLASS = [
   'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface px-3 text-sm shadow-sm',
   'transition-[box-shadow,border-color] hover:border-ring',
   'focus-visible:border-ring focus-visible:shadow-focus focus-visible:outline-none',
-  'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled disabled:text-disabled-foreground',
+  'disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled',
 ].join(' ');
 
 /** Stable no-op for the unsearchable case — a new arrow each render would make
@@ -118,7 +118,7 @@ export function ComboboxShell({
         disabled={disabled}
         className={cn(FIELD_TRIGGER_CLASS, className)}
       >
-        <span ref={labelRef} className={cn('truncate', triggerMuted && 'text-muted-foreground')}>
+        <span ref={labelRef} className={cn('truncate', triggerMuted && 'text-placeholder')}>
           {triggerLabel}
         </span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -228,18 +228,32 @@ export function ComboboxOption({
       aria-selected={selected}
       onClick={onSelect}
       className={cn(
-        'flex w-full items-start justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
-        'hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
+        'flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+        'focus-visible:outline-none',
+        selected ? 'bg-primary-subtle hover:bg-primary-subtle' : 'hover:bg-muted',
+        'focus-visible:bg-muted',
         muted && 'text-muted-foreground',
       )}
     >
+      {/* A box, not a tick: it says what is NOT chosen too, which a tick only ever leaves blank. */}
+      <span
+        aria-hidden
+        className={cn(
+          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border [&_svg]:size-3',
+          selected
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border-strong bg-surface',
+        )}
+      >
+        {selected ? <Check strokeWidth={3} /> : null}
+      </span>
+
       <span className="min-w-0 flex-1">
         <span className="block break-words">{label}</span>
         {hint ? (
           <span className="block break-words text-xs text-muted-foreground">{hint}</span>
         ) : null}
       </span>
-      {selected ? <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> : null}
     </button>
   );
 }

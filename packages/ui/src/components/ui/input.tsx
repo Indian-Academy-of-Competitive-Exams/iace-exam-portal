@@ -20,7 +20,7 @@ const CONTROL = [
   'border-input text-foreground shadow-sm transition-[box-shadow,border-color]',
   'focus-within:border-ring focus-within:shadow-focus',
   'has-[input:disabled]:cursor-not-allowed has-[input:disabled]:border-disabled-border',
-  'has-[input:disabled]:bg-disabled has-[input:disabled]:text-disabled-foreground',
+  'has-[input:disabled]:bg-disabled',
   'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-within:shadow-focus-invalid',
 ].join(' ');
 
@@ -76,8 +76,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           }}
           className={cn(
             'h-full w-full min-w-0 bg-transparent text-foreground outline-none',
-            'placeholder:text-muted-foreground',
-            'disabled:cursor-not-allowed disabled:text-disabled-foreground',
+            'placeholder:text-placeholder',
+            'disabled:cursor-not-allowed',
           )}
           {...props}
         />

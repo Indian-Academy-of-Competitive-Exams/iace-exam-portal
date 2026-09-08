@@ -281,7 +281,7 @@ export function DatePicker({
           className={cn(FIELD_TRIGGER_CLASS, className)}
           {...aria}
         >
-          <span className={cn('truncate', !selected && 'text-muted-foreground')}>
+          <span className={cn('truncate', !selected && 'text-placeholder')}>
             {selected ? TRIGGER_LABEL.format(new Date(`${value}T00:00:00Z`)) : placeholder}
           </span>
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />

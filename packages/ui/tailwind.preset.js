@@ -84,6 +84,7 @@ module.exports = {
         card: { DEFAULT: token('--surface'), foreground: token('--foreground') },
         popover: { DEFAULT: token('--surface'), foreground: token('--foreground') },
         muted: { DEFAULT: token('--muted'), foreground: token('--muted-foreground') },
+        placeholder: token('--placeholder'),
         // The three tokens.css declared for a switched-off control and nothing read.
         disabled: {
           DEFAULT: token('--disabled-bg'),
