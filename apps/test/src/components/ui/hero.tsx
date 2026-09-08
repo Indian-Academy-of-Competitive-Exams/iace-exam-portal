@@ -20,8 +20,6 @@ export interface HeroProps {
   figure?: React.ReactNode;
   /** The right-hand block — a window, a chip, the actions. */
   aside?: React.ReactNode;
-  /** Top right — what the screen IS, and any notice about it, out of the reading's way. */
-  corner?: React.ReactNode;
   tone?: HeroTone;
   className?: string;
 }
@@ -33,29 +31,30 @@ export function Hero({
   meta,
   figure,
   aside,
-  corner,
   tone = 'plain',
   className,
 }: Readonly<HeroProps>) {
   return (
-    <div className={cn('flex flex-col gap-2', TONES[tone], className)}>
-      {corner ? <div className="flex items-center justify-end gap-2">{corner}</div> : null}
-
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
-        <div className="flex min-w-0 flex-col gap-2">
-          {eyebrow ? (
-            <span className="text-xs font-semibold uppercase tracking-wide text-primary-ink">
-              {eyebrow}
-            </span>
-          ) : null}
-          {title ? (
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          ) : null}
-          {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
-          {figure ? <div className="mt-2">{figure}</div> : null}
-        </div>
-        {aside ? <div className="flex shrink-0 flex-wrap items-end gap-8">{aside}</div> : null}
+    <div
+      className={cn(
+        'flex flex-wrap items-end justify-between gap-x-10 gap-y-6',
+        TONES[tone],
+        className,
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-2">
+        {eyebrow ? (
+          <span className="text-xs font-semibold uppercase tracking-wide text-primary-ink">
+            {eyebrow}
+          </span>
+        ) : null}
+        {title ? (
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        ) : null}
+        {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
+        {figure ? <div className="mt-2">{figure}</div> : null}
       </div>
+      {aside ? <div className="flex shrink-0 flex-wrap items-end gap-8">{aside}</div> : null}
     </div>
   );
 }

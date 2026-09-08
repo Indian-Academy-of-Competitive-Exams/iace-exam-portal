@@ -1,11 +1,37 @@
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Combobox, PageFrame, PageHeader, PanelFrame } from '@iace/ui';
+import { Info } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Combobox,
+  PageFrame,
+  PageHeader,
+  PanelFrame,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@iace/ui';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { REPORT_TABS, newestFirst, reportTabOf } from '@iace/app-kit';
-import { INSTITUTE_TIME_ZONE, type PerformancePoint } from '@iace/contracts';
+import {
+  EVALUATION_MODE,
+  EVALUATION_MODE_LABELS,
+  INSTITUTE_TIME_ZONE,
+  PERFORMANCE_SCOPES,
+  type EvaluationMode,
+  type PerformancePoint,
+  type ScoreCard,
+} from '@iace/contracts';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PERFORMANCE_QUERY_KEY, PICKER_WIDTH, ROUTES } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  PERFORMANCE_QUERY_KEY,
+  PICKER_WIDTH,
+  ROUTES,
+  performanceReportQueryKey,
+  scoreCardQueryKey,
+} from '../lib/constants';
 
 const UNTITLED = 'Untitled test';
 
@@ -63,6 +89,7 @@ export function ReportShell() {
       tabs={{
         value: tab,
         onValueChange: (next) => navigate(ROUTES.REPORT_TAB(attemptId, next)),
+        action: <Standing attemptId={attemptId} />,
         // Only the open tab's content renders, and the ROUTER is what decides what that is.
         items: REPORT_TABS.map((held) => ({
           value: held.path,
@@ -72,6 +99,68 @@ export function ReportShell() {
       }}
     />
   );
+}
+
+/** What the paper IS and what qualifies it — on the strip, so it holds on every tab. */
+function Standing({ attemptId }: Readonly<{ attemptId: string }>) {
+  const card = useQuery({
+    queryKey: scoreCardQueryKey(attemptId),
+    queryFn: () => api.me.scoreCard(attemptId),
+  });
+  const report = useQuery({
+    queryKey: performanceReportQueryKey(PERFORMANCE_SCOPES.ATTEMPT, attemptId),
+    queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
+  });
+
+  const mode = report.data?.evaluationMode ?? null;
+  const notices = card.data ? noticesFor(card.data) : [];
+
+  return (
+    <>
+      {mode === null ? null : <ModeBadge mode={mode} />}
+      {notices.length === 0 ? null : <Notices notices={notices} />}
+    </>
+  );
+}
+
+const ModeBadge = ({ mode }: Readonly<{ mode: EvaluationMode }>) => (
+  <Badge variant={mode === EVALUATION_MODE.RANKED ? 'primary' : 'neutral'}>
+    {EVALUATION_MODE_LABELS[mode]}
+  </Badge>
+);
+
+function Notices({ notices }: Readonly<{ notices: readonly string[] }>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <Info aria-hidden />
+          <span className="sr-only">About this result</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">
+        <span className="flex flex-col gap-2">
+          {notices.map((notice) => (
+            <span key={notice}>{notice}</span>
+          ))}
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Each one is a CONSEQUENCE the figures cannot show: what can still move it, and what it misses. */
+function noticesFor(card: ScoreCard): string[] {
+  const notices: string[] = [];
+  if (card.provisional) {
+    notices.push(
+      'This standing can still move: others can still sit this test. It settles once the test has closed for everyone.',
+    );
+  }
+  if (!card.isGraded) {
+    notices.push('This was a retake, so it is marked but it does not carry a rank.');
+  }
+  return notices;
 }
 
 /** A link written before the shell existed still lands on the tab it was always asking for. */
