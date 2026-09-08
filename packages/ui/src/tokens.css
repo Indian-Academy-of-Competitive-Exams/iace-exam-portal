@@ -552,6 +552,20 @@
   box-shadow: none;
 }
 
+/* Recharts 3 turns its accessibility layer on by default, which stamps tabindex on the chart
+   surface AND on every internal layer, sector and dot. The rule above then rings each of them:
+   a pointer landing anywhere on a figure lit a 4px double ring around an implementation detail.
+
+   The layer itself stays ON — it is what gives the charts arrow-key navigation and screen-reader
+   output, and the moving tooltip is the feedback a keyboard user actually reads. Only the ring
+   stands down, because a chart is a figure and not a control. */
+.recharts-wrapper :where([tabindex]):focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper :where([tabindex]):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 /* Not optional — a candidate with vestibular sensitivity should not be
    fighting your transitions during a timed exam. */
 @media (prefers-reduced-motion: reduce) {
