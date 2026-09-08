@@ -97,7 +97,12 @@ export const Transliterate = Extension.create({
         key: transliterateKey,
         state: {
           init: () => null,
-          apply: (tr, current) => (tr.getMeta(transliterateKey) as IndicScript | null) ?? current,
+          // Only an absent meta means "keep": null is English asking to be typed through.
+          apply: (tr, current) => {
+            const asked = tr.getMeta(transliterateKey) as IndicScript | null | undefined;
+            if (asked === undefined) return current;
+            return asked;
+          },
         },
         props: {
           handleTextInput: (view, from, to, text) => {
