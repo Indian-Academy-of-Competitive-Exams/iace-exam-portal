@@ -1,8 +1,16 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
+/** Whether what is being drawn sits ON a card or straight on the page. */
+const OnCardContext = React.createContext(false);
+
+/** A table asks this to know if its heading has a surface under it or the page's own background. */
+export function useOnCard(): boolean {
+  return React.useContext(OnCardContext);
+}
+
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+  ({ className, children, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
@@ -10,7 +18,9 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
         className,
       )}
       {...props}
-    />
+    >
+      <OnCardContext value={true}>{children}</OnCardContext>
+    </div>
   ),
 );
 Card.displayName = 'Card';

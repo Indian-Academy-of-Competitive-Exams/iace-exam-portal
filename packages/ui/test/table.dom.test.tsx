@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { DataTable, type DataTableColumn } from '../src/components/ui/data-table';
 import { PAGE_CONTENT_CLASS, TableFrame } from '../src/components/ui/table-frame';
 import { Pagination } from '../src/components/ui/pagination';
+import { Card } from '../src/components/ui/card';
 import { Tabs, TabsContent, TabsList } from '../src/components/ui/tabs';
 
 afterEach(cleanup);
@@ -84,8 +85,20 @@ describe('table rows', () => {
 
     assert.match(heading.className, /sticky/);
     assert.match(heading.className, /top-0/);
-    assert.match(heading.className, /bg-card/, 'or rows show through it');
+    assert.match(heading.className, /bg-(card|surface)/, 'or rows show through it');
     assert.match(document.querySelector('table')?.className ?? '', /border-separate/);
+  });
+
+  /** The failure this prevents: a heading floating on a card, which already IS the surface. */
+  it('float the heading on the page and rest it on a card', () => {
+    render(table());
+    assert.match(screen.getByRole('columnheader', { name: 'Student' }).className, /rounded-s-lg/);
+    cleanup();
+
+    render(<Card>{table()}</Card>);
+    const onCard = screen.getByRole('columnheader', { name: 'Student' });
+    assert.doesNotMatch(onCard.className, /rounded-s-lg/);
+    assert.match(onCard.className, /bg-card/);
   });
 
   /** `border-separate` renders no `<tr>` border, and a sticky heading keeps a cell one. */

@@ -21,18 +21,17 @@ const alertVariants = cva(
 
 export interface AlertProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {
-  /** Lets the reader put it away once read. A `danger` one stays: it is not theirs to dismiss. */
+  /** On by default: a message that has been read is clutter. Pass false to pin one open. */
   dismissible?: boolean;
   onDismiss?: () => void;
 }
 
 /** `danger` renders `role="alert"` (assertive); everything else an `<output>` (polite). */
 const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant, dismissible, onDismiss, children, ...props }, ref) => {
+  ({ className, variant, dismissible = true, onDismiss, children, ...props }, ref) => {
     const [shown, setShown] = React.useState(true);
     const assertive = variant === 'danger' || variant === undefined;
-    // Nothing about a failure is the reader's to wave away, so danger never takes the control.
-    const closes = dismissible === true && !assertive;
+    const closes = dismissible;
 
     if (!shown) return null;
 

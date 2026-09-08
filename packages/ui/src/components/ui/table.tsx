@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { Skeleton } from './skeleton';
+import { useOnCard } from './card';
 import { useInTableFrame } from './table-frame';
 
 export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
@@ -47,13 +48,23 @@ TableHeader.displayName = 'TableHeader';
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tbody
-    ref={ref}
-    className={cn('[&>tr:hover>td]:before:bg-muted', '[&>tr:last-child>td]:border-b-0', className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const onCard = useOnCard();
+
+  return (
+    <tbody
+      ref={ref}
+      className={cn(
+        '[&>tr:hover>td]:before:bg-muted',
+        '[&>tr:last-child>td]:border-b-0',
+        // Off a card the heading floats free, so the divider under it belongs to the first row.
+        onCard || '[&>tr:first-child>td]:border-t [&>tr:first-child>td]:border-border',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 TableBody.displayName = 'TableBody';
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
@@ -81,21 +92,28 @@ export interface TableCellProps extends React.ThHTMLAttributes<HTMLTableCellElem
   numeric?: boolean;
 }
 
-/** `bg-card` is not decoration: without it the rows scroll through the heading. */
+/** A band on all four corners. Its divider is the first row's top rule, so no radius bends it. */
+const FLOATING_HEAD = 'bg-surface first:rounded-s-lg last:rounded-e-lg';
+
+/** A surface is not decoration: without one the rows scroll through the heading. */
 const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ className, numeric, ...props }, ref) => (
-    <th
-      ref={ref}
-      className={cn(
-        'sticky top-0 z-[1] bg-card',
-        'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-muted-foreground',
-        RULE,
-        numeric && 'text-right tabular-nums',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, numeric, ...props }, ref) => {
+    const onCard = useOnCard();
+
+    return (
+      <th
+        ref={ref}
+        className={cn(
+          'sticky top-0 z-[1]',
+          onCard ? cn('bg-card', RULE) : FLOATING_HEAD,
+          'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-muted-foreground',
+          numeric && 'text-right tabular-nums',
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 TableHead.displayName = 'TableHead';
 

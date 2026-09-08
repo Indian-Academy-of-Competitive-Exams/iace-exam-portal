@@ -239,12 +239,8 @@ describe('PageHeader', () => {
 });
 
 describe('Alert', () => {
-  it('lets a reader put away a notice they have read', () => {
-    render(
-      <Alert variant="info" dismissible>
-        This standing can still move.
-      </Alert>,
-    );
+  it('lets a reader put away a notice they have read, without being asked to opt in', () => {
+    render(<Alert variant="info">This standing can still move.</Alert>);
 
     assert.ok(screen.getByText('This standing can still move.'));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
@@ -252,20 +248,22 @@ describe('Alert', () => {
     assert.equal(screen.queryByText('This standing can still move.'), null);
   });
 
-  /** The failure this prevents: waving away the one variant that reports something wrong. */
-  it('gives a danger alert no way to be dismissed', () => {
-    render(
-      <Alert variant="danger" dismissible>
-        Your performance did not load.
-      </Alert>,
-    );
+  /** Every bar closes, danger included — a read message is clutter whatever it reported. */
+  it('gives a danger alert the same control as any other', () => {
+    render(<Alert variant="danger">Your performance did not load.</Alert>);
 
-    assert.ok(screen.getByText('Your performance did not load.'));
-    assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    assert.equal(screen.queryByText('Your performance did not load.'), null);
   });
 
-  it('stays where nobody asked for a way to close it', () => {
-    render(<Alert variant="info">A fact they could not infer.</Alert>);
+  /** The failure this prevents: a message that must stay put quietly growing a way out. */
+  it('pins one open where a caller says it must not close', () => {
+    render(
+      <Alert variant="info" dismissible={false}>
+        A fact they could not infer.
+      </Alert>,
+    );
 
     assert.equal(screen.queryByRole('button', { name: 'Dismiss' }), null);
   });
