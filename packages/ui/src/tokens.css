@@ -208,12 +208,12 @@
   --input: #e2e8f0;
   --ring: #2563eb;
 
-  --primary: #a8221b;
-  --primary-hover: #922119;
-  --primary-active: #7e2018;
+  --primary: #bf0d10;
+  --primary-hover: #a60b0e;
+  --primary-active: #8f0a0c;
   --primary-foreground: #ffffff;
-  --primary-subtle: #f8e4e1;
-  --primary-ink: #922119;
+  --primary-subtle: #fee3e1;
+  --primary-ink: #a60b0e;
 
   --secondary: #f1f5f9;
   --secondary-hover: #e2e8f0;
