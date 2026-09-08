@@ -48,23 +48,13 @@ TableHeader.displayName = 'TableHeader';
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => {
-  const onCard = useOnCard();
-
-  return (
-    <tbody
-      ref={ref}
-      className={cn(
-        '[&>tr:hover>td]:before:bg-muted',
-        '[&>tr:last-child>td]:border-b-0',
-        // Off a card the heading floats free, so the divider under it belongs to the first row.
-        onCard || '[&>tr:first-child>td]:border-t [&>tr:first-child>td]:border-border',
-        className,
-      )}
-      {...props}
-    />
-  );
-});
+>(({ className, ...props }, ref) => (
+  <tbody
+    ref={ref}
+    className={cn('[&>tr:hover>td]:before:bg-muted', '[&>tr:last-child>td]:border-b-0', className)}
+    {...props}
+  />
+));
 TableBody.displayName = 'TableBody';
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
@@ -92,8 +82,13 @@ export interface TableCellProps extends React.ThHTMLAttributes<HTMLTableCellElem
   numeric?: boolean;
 }
 
-/** A band on all four corners. Its divider is the first row's top rule, so no radius bends it. */
-const FLOATING_HEAD = 'bg-surface first:rounded-s-lg last:rounded-e-lg';
+/** Inset from the cell, so air opens under it and the rule stays on the cell where nothing bends it. */
+const FLOATING_HEAD = [
+  // No `relative` here: `sticky` already positions the cell, and merge would drop it for this.
+  'isolate bg-background',
+  "before:absolute before:inset-x-0 before:inset-y-[3px] before:-z-10 before:content-['']",
+  'before:bg-surface first:before:rounded-s-lg last:before:rounded-e-lg',
+].join(' ');
 
 /** A surface is not decoration: without one the rows scroll through the heading. */
 const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
@@ -105,7 +100,8 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableCellProps>(
         ref={ref}
         className={cn(
           'sticky top-0 z-[1]',
-          onCard ? cn('bg-card', RULE) : FLOATING_HEAD,
+          onCard ? 'bg-card' : FLOATING_HEAD,
+          RULE,
           'px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-muted-foreground',
           numeric && 'text-right tabular-nums',
           className,

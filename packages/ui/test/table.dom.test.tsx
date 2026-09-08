@@ -85,7 +85,7 @@ describe('table rows', () => {
 
     assert.match(heading.className, /sticky/);
     assert.match(heading.className, /top-0/);
-    assert.match(heading.className, /bg-(card|surface)/, 'or rows show through it');
+    assert.match(heading.className, /bg-(card|background)/, 'or rows show through it');
     assert.match(document.querySelector('table')?.className ?? '', /border-separate/);
   });
 
