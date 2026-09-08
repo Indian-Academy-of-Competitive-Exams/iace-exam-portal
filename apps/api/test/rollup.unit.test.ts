@@ -436,3 +436,99 @@ describe('RollupOutbox — getting the fold asked for', () => {
     assert.equal(built.prisma.studentStat.rows[0]?.testsAttempted, 1);
   });
 });
+
+describe('RollupService — rebuilding a student who sits more than one kind of paper', () => {
+  /** One totals map replays every sitting, so a subject-only key merges the kinds of paper. */
+  it('keeps one row per scope and mode rather than merging them into whichever came first', async () => {
+    const built = world(
+      [
+        sitting('att_full', { testId: 'tst_1' }),
+        sitting('att_sec', { testId: 'tst_2', isGraded: false }),
+      ],
+      [
+        ...paper('att_full', [RIGHT, RIGHT, RIGHT, RIGHT]),
+        ...paper('att_sec', [WRONG, WRONG, null, null]),
+      ],
+      [
+        makeRollupTest(),
+        makeRollupTest({
+          id: 'tst_2',
+          scope: TEST_SCOPE.SECTIONAL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+        }),
+      ],
+    );
+
+    await counted(built, 'att_full');
+    await counted(built, 'att_sec');
+    await built.rollup.rebuildStudent('stu_1');
+
+    const rows = built.prisma.studentSubjectStat.rows;
+    const reasoning = rows.filter((row) => row.subjectId === 'sub_reasoning');
+
+    assert.equal(reasoning.length, 2, 'one row for each kind of paper the subject was sat on');
+
+    const ranked = reasoning.find(
+      (row) => row.scope === TEST_SCOPE.FULL && row.evaluationMode === EVALUATION_MODE.RANKED,
+    );
+    const practice = reasoning.find(
+      (row) =>
+        row.scope === TEST_SCOPE.SECTIONAL && row.evaluationMode === EVALUATION_MODE.PRACTICE,
+    );
+
+    assert.deepEqual(
+      { attempted: ranked?.attempted, correct: ranked?.correct, wrong: ranked?.wrong },
+      { attempted: 2, correct: 2, wrong: 0 },
+    );
+    assert.deepEqual(
+      { attempted: practice?.attempted, correct: practice?.correct, wrong: practice?.wrong },
+      { attempted: 2, correct: 0, wrong: 2 },
+    );
+  });
+
+  /** A rebuild writes outright, so it must land on exactly what the incremental fold had built. */
+  it('lands a rebuild on the same rows the fold left behind', async () => {
+    const build = () =>
+      world(
+        [
+          sitting('att_full', { testId: 'tst_1' }),
+          sitting('att_sec', { testId: 'tst_2', isGraded: false }),
+        ],
+        [
+          ...paper('att_full', [RIGHT, WRONG, RIGHT, null]),
+          ...paper('att_sec', [WRONG, RIGHT, null, RIGHT]),
+        ],
+        [
+          makeRollupTest(),
+          makeRollupTest({
+            id: 'tst_2',
+            scope: TEST_SCOPE.SECTIONAL,
+            evaluationMode: EVALUATION_MODE.PRACTICE,
+          }),
+        ],
+      );
+
+    const folded = build();
+    await counted(folded, 'att_full');
+    await counted(folded, 'att_sec');
+
+    const rebuilt = build();
+    await counted(rebuilt, 'att_full');
+    await counted(rebuilt, 'att_sec');
+    await rebuilt.rollup.rebuildStudent('stu_1');
+
+    const order = <T extends { subjectId: string; scope: string; evaluationMode: string }>(
+      rows: readonly T[],
+    ) =>
+      [...rows].sort((a, b) =>
+        `${a.subjectId}${a.scope}${a.evaluationMode}`.localeCompare(
+          `${b.subjectId}${b.scope}${b.evaluationMode}`,
+        ),
+      );
+
+    assert.deepEqual(
+      withoutStamps(order(rebuilt.prisma.studentSubjectStat.rows)),
+      withoutStamps(order(folded.prisma.studentSubjectStat.rows)),
+    );
+  });
+});

@@ -272,13 +272,18 @@ export function mergedQuestion(held: QuestionTotals | null, delta: QuestionTotal
   };
 }
 
+/** Whatever `StudentSubjectStat` is keyed by, minus the student a whole totals map already is. */
+const subjectKey = (subjectId: string, scope: TestScope, mode: EvaluationMode) =>
+  [subjectId, scope, mode].join('\u0000');
+
 function addToSubject(
   subjects: Map<string, SubjectTotals>,
   attempt: FoldableAttempt,
   question: FoldableQuestion,
 ): void {
   if (question.subjectId === null) return;
-  const held = subjects.get(question.subjectId) ?? {
+  const key = subjectKey(question.subjectId, attempt.scope, attempt.evaluationMode);
+  const held = subjects.get(key) ?? {
     subjectId: question.subjectId,
     scope: attempt.scope,
     evaluationMode: attempt.evaluationMode,
@@ -291,7 +296,7 @@ function addToSubject(
   if (question.isCorrect !== null) held.attempted += 1;
   if (question.isCorrect === true) held.correct += 1;
   if (question.isCorrect === false) held.wrong += 1;
-  subjects.set(question.subjectId, held);
+  subjects.set(key, held);
 }
 
 /** A question nobody pinned to a paper row cannot be item-analysed: two papers are not one. */
