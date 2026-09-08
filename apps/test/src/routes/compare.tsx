@@ -2,10 +2,12 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, ComparisonCards, plural, type ComparisonItem } from '@iace/ui';
 import {
+  EVALUATION_MODE,
   LEADERBOARD_SCOPES,
   PERFORMANCE_SCOPES,
   percentLabel,
   type CohortCurve,
+  type EvaluationMode,
   type PerformanceReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
@@ -27,28 +29,37 @@ export function ComparePanel() {
   });
   const trend = useQuery({ queryKey: PERFORMANCE_QUERY_KEY, queryFn: () => api.me.performance() });
 
-  const testId = report.data?.scopeId ?? '';
-  const ranked = (report.data?.cohort?.cohortSize ?? 0) > 0;
+  // `scopeId` on an ATTEMPT report is the ATTEMPT's id, so the paper has to come from elsewhere.
+  const points = trend.data?.points ?? [];
+  const testId =
+    report.data?.cohort?.testId ??
+    points.find((point) => point.attemptId === attemptId)?.testId ??
+    '';
+  // A crowd is not a ranking: a practice paper has sittings and no board, so the MODE decides.
+  const mode = report.data?.evaluationMode ?? null;
+  const placed = mode === EVALUATION_MODE.RANKED && (report.data?.cohort?.cohortSize ?? 0) > 0;
   const board = useQuery({
     queryKey: leaderboardQueryKey(LEADERBOARD_SCOPES.TEST, testId),
     queryFn: () => api.me.leaderboard({ scope: LEADERBOARD_SCOPES.TEST, testId }),
-    enabled: ranked && testId !== '',
+    enabled: placed && testId !== '',
   });
 
   if (report.isLoading) return <ReportSkeleton />;
   if (!report.data) return null;
 
-  const sittings = (trend.data?.points ?? []).filter((point) => point.testId === testId);
+  const sittings = points.filter((point) => point.testId === testId);
 
   return (
     <PageBody>
-      {ranked ? (
+      {placed ? (
         <Against cohort={report.data.cohort} report={report.data} />
       ) : (
         <AttemptCompare sittings={sittings} cohort={report.data.cohort} />
       )}
 
-      {ranked ? (
+      <Standing mode={mode} placed={placed} />
+
+      {placed ? (
         <Section title="Leaderboard">
           {board.isLoading ? <RowsSkeleton rows={5} /> : null}
           {board.data ? (
@@ -58,14 +69,20 @@ export function ComparePanel() {
             </>
           ) : null}
         </Section>
-      ) : (
-        /* ui-copy-ok: consequence */
-        <Alert variant="info">
-          This sitting is not ranked, so it stands against your own best rather than against
-          everyone.
-        </Alert>
-      )}
+      ) : null}
     </PageBody>
+  );
+}
+
+/** Only the ranked-but-unplaced case: a practice paper says its own piece inside the comparison. */
+function Standing({ mode, placed }: Readonly<{ mode: EvaluationMode | null; placed: boolean }>) {
+  if (placed || mode !== EVALUATION_MODE.RANKED) return null;
+
+  return (
+    /* ui-copy-ok: consequence */
+    <Alert variant="info">
+      Nobody has been ranked on this paper yet, so it stands against your own attempts for now.
+    </Alert>
   );
 }
 
