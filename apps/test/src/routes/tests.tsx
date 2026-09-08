@@ -14,7 +14,12 @@ import {
   plural,
   type ListFilter,
 } from '@iace/ui';
-import { EXAM_COURSES, type ExamCourse, type StudentCatalogSeries } from '@iace/contracts';
+import {
+  EXAM_COURSES,
+  TEST_BUCKET,
+  type ExamCourse,
+  type StudentCatalogSeries,
+} from '@iace/contracts';
 import { api } from '../lib/api';
 import { CATALOG_QUERY_KEY, PERFORMANCE_QUERY_KEY } from '../lib/constants';
 import {
@@ -55,6 +60,18 @@ export function TestsPage() {
       primary: true,
       items: courseItems(catalog.data?.series ?? []),
     },
+    {
+      key: 'state',
+      kind: 'choice',
+      label: 'State',
+      items: STATE_ITEMS,
+    },
+    {
+      key: 'series',
+      kind: 'choice',
+      label: 'Series',
+      items: seriesItems(catalog.data?.series ?? []),
+    },
   ] as const satisfies readonly ListFilter[];
 
   const filters = useFilterSpec(FILTERS);
@@ -62,8 +79,14 @@ export function TestsPage() {
 
   const now = new Date();
   const reaches = catalog.data?.series ?? [];
-  const series = reaches.filter((row) => course === ANY_FAMILY || row.examStage?.course === course);
-  const rows = matching(sittablesOf(series, now), filters.values.q);
+  const chosenSeries = filters.values.series || ANY_FAMILY;
+  const series = reaches
+    .filter((row) => course === ANY_FAMILY || row.examStage?.course === course)
+    .filter((row) => chosenSeries === ANY_FAMILY || row.id === chosenSeries);
+  const rows = inState(
+    matching(sittablesOf(series, now), filters.values.q),
+    filters.values.state || ANY_FAMILY,
+  );
   const emptiness = emptyReason(reaches.length, rows.length);
   const results = resultsByTest(trend.data?.points ?? []);
 
@@ -71,6 +94,7 @@ export function TestsPage() {
     <PageFrame
       header={<PageHeader size="display" title="Tests" meta={plural(rows.length, 'test')} />}
       filters={{ spec: FILTERS, state: filters }}
+      filtersBesideTitle
     >
       <PageBody>
         {catalog.data?.testBlocked ? (
@@ -153,6 +177,26 @@ function shelves(
   return series
     .map((row) => ({ row, tests: rows.filter((sittable) => sittable.seriesId === row.id) }))
     .filter(({ tests }) => tests.length > 0);
+}
+
+/** Where a paper stands for this student — the one thing they scan a shelf for. */
+const STATE_ITEMS = [
+  { value: ANY_FAMILY, label: 'Any state' },
+  { value: TEST_BUCKET.OPEN, label: 'Open now' },
+  { value: TEST_BUCKET.LATER, label: 'Scheduled' },
+  { value: TEST_BUCKET.DONE, label: 'Done' },
+  { value: TEST_BUCKET.MISSED, label: 'Entry closed' },
+] as const;
+
+const inState = (rows: readonly Sittable[], state: string) =>
+  state === ANY_FAMILY ? [...rows] : rows.filter((row) => row.bucket === state);
+
+/** Only the series this student reaches; a filter offering one row is a filter offering nothing. */
+function seriesItems(series: readonly StudentCatalogSeries[]) {
+  return [
+    { value: ANY_FAMILY, label: 'Any series' },
+    ...series.map((row) => ({ value: row.id, label: row.name })),
+  ];
 }
 
 /** Only the courses this student actually reaches; a filter offering nothing is noise. */

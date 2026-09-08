@@ -36,6 +36,8 @@ export interface PageFrameProps {
   header?: React.ReactNode;
   /** Pinned under the header, so a browse screen narrows without its controls scrolling away. */
   filters?: FrameFilters;
+  /** Sits the controls BESIDE the title instead of under it — for a header with no action. */
+  filtersBesideTitle?: boolean;
   /** Views of one record, on the background rather than inside a card. */
   tabs?: TableFrameTabs;
   children?: React.ReactNode;
@@ -46,6 +48,7 @@ export interface PageFrameProps {
 export function PageFrame({
   header,
   filters,
+  filtersBesideTitle = false,
   tabs,
   children,
   className,
@@ -77,10 +80,22 @@ export function PageFrame({
     <div className={scroller}>{children}</div>
   );
 
-  const frame = (
-    <div data-page-frame className={FILLS}>
+  // A title with nothing beside it leaves the row empty, so the controls take that space.
+  const top = filtersBesideTitle ? (
+    <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+      <div className="min-w-0 flex-1">{header}</div>
+      <FrameFilterRow filters={filters} beside />
+    </div>
+  ) : (
+    <>
       {header ? <div className="shrink-0">{header}</div> : null}
       <FrameFilterRow filters={filters} />
+    </>
+  );
+
+  const frame = (
+    <div data-page-frame className={FILLS}>
+      {top}
       {body}
     </div>
   );
@@ -95,12 +110,21 @@ export function PageFrame({
 }
 
 /** Nothing to narrow by is no bar at all — an empty strip of chrome reads as a broken one. */
-function FrameFilterRow({ filters }: Readonly<{ filters?: FrameFilters }>) {
+function FrameFilterRow({
+  filters,
+  beside = false,
+}: Readonly<{ filters?: FrameFilters; beside?: boolean }>) {
   if (!filters || (filters.spec.length === 0 && !filters.leading)) return null;
 
   // The bar sits on the PAGE here, so its controls and their notches paint the page, not a card.
   return (
-    <div className="shrink-0 [--surface:var(--background)]">
+    <div
+      className={cn(
+        'shrink-0 [--surface:var(--background)]',
+        // Beside a title the controls belong at the region's edge, not adrift in the middle.
+        beside && 'flex min-w-0 flex-1 justify-end',
+      )}
+    >
       <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
     </div>
   );
@@ -113,6 +137,8 @@ export interface PanelFrameProps {
   toolbar?: React.ReactNode;
   /** The spec a list screen would declare, and the state driving it. */
   filters?: FrameFilters;
+  /** Lifts the controls OUT of the card, beside the title — for a header with no action. */
+  filtersBesideTitle?: boolean;
   /** Views of one record. The strip sits inside the card and holds still, as a list's does. */
   tabs?: TableFrameTabs;
   /** Hands the scrolling to the children — for a body that is itself two panes, each its own. */
@@ -126,6 +152,7 @@ export function PanelFrame({
   header,
   toolbar,
   filters,
+  filtersBesideTitle = false,
   tabs,
   fills,
   children,
@@ -135,7 +162,7 @@ export function PanelFrame({
   const scroller = cn(fills ? FILLS : 'relative min-h-0 flex-1 overflow-y-auto', className);
 
   const bar =
-    filters && (filters.spec.length > 0 || filters.leading) ? (
+    filters && (filters.spec.length > 0 || filters.leading) && !filtersBesideTitle ? (
       <div className="shrink-0">
         <FilterRow state={filters.state} filters={filters.spec} leading={filters.leading} />
       </div>
@@ -166,9 +193,19 @@ export function PanelFrame({
     <div className={scroller}>{children}</div>
   );
 
+  // A title with nothing beside it leaves the row empty, so the controls take that space.
+  const top = filtersBesideTitle ? (
+    <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-4">
+      <div className="min-w-0 flex-1">{header}</div>
+      <FrameFilterRow filters={filters} beside />
+    </div>
+  ) : (
+    <>{header ? <div className="shrink-0">{header}</div> : null}</>
+  );
+
   const frame = (
     <div data-page-frame className={FILLS}>
-      {header ? <div className="shrink-0">{header}</div> : null}
+      {top}
       <Card className={cn(FILLS, 'p-4')}>
         {toolbar ? <div className="shrink-0">{toolbar}</div> : null}
         {bar}

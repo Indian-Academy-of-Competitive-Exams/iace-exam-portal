@@ -142,6 +142,7 @@ export function LeaderboardPage() {
       filters={
         sat.length > 0 ? { spec: FILTERS, state: filters, leading: boardControl } : undefined
       }
+      filtersBesideTitle
     >
       <Body trend={trend} series={series} board={board} tests={sat} onSeries={onSeries} />
     </PanelFrame>

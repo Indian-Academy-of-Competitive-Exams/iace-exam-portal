@@ -82,6 +82,7 @@ export function NotificationsPage() {
     <PanelFrame
       header={<PageHeader title="Notifications" meta={plural(list.total, 'notification')} />}
       filters={{ spec: FILTERS, state: filters }}
+      filtersBesideTitle
     >
       <FeedRegion list={list} rows={list.items} unreadOnly={unreadOnly} />
     </PanelFrame>
