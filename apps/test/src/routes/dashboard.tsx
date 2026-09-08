@@ -17,6 +17,7 @@ import {
   type PlotReference,
 } from '@iace/ui';
 import { newestFirst } from '@iace/app-kit';
+import { StreakFigure } from '@iace/app-kit/browser';
 import {
   INSTITUTE_TIME_ZONE,
   dispositionRates,
@@ -106,7 +107,12 @@ export function DashboardPage() {
 
         <Standing overview={overview} />
 
-        <Trend trend={trend} points={trend.data?.points ?? []} />
+        <div className="grid items-start gap-4 xl:grid-cols-3">
+          <div className="min-w-0 xl:col-span-2">
+            <Trend trend={trend} points={trend.data?.points ?? []} />
+          </div>
+          <StreakFigure points={trend.data?.points ?? []} />
+        </div>
 
         {waiting.length > 1 ? (
           <Section

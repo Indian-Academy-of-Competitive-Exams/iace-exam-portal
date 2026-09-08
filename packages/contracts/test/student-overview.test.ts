@@ -7,8 +7,11 @@ import {
   measureOf,
   ANSWER_STATE,
   PAPER_QUESTION_STATUS,
+  currentStreak,
   dispositionRates,
   distractorThatWon,
+  practiceDays,
+  shiftCivilDate,
   effortPerSitting,
   overallModeGap,
   placeInSpread,
@@ -22,6 +25,7 @@ import {
   subjectShares,
   type OverviewStanding,
   type SubjectMeasure,
+  type PerformancePoint,
   type QuestionReportRow,
   type EvaluationMode,
   type SubjectStanding,
@@ -706,5 +710,87 @@ describe('subjectShares names the share of answers too', () => {
     assert.equal(a?.attemptedShare, 75);
     assert.equal(b?.attemptedShare, 25);
     assert.equal(b?.timeShare, 75);
+  });
+});
+
+describe('practice days', () => {
+  const sat = (attemptId: string, submittedAt: string | null): PerformancePoint =>
+    ({
+      attemptId,
+      attemptNo: 1,
+      testId: 'tst_1',
+      testTitle: 'Mock',
+      evaluationMode: EVALUATION_MODE.PRACTICE,
+      submittedAt,
+      score: 1,
+      maxMarks: 10,
+      percentage: 10,
+      accuracy: 10,
+      rank: null,
+      percentile: null,
+    }) as PerformancePoint;
+
+  /** 04:00 IST is 22:30 UTC the day before: the civil date is what a streak is counted in. */
+  it('files a sitting on the institute day, not the UTC one', () => {
+    const days = practiceDays([sat('a', '2026-09-07T22:30:00.000Z')], 2, '2026-09-08');
+
+    assert.deepEqual(days, [
+      { date: '2026-09-07', sittings: 0 },
+      { date: '2026-09-08', sittings: 1 },
+    ]);
+  });
+
+  it('returns the window oldest first, counting every sitting on a day', () => {
+    const days = practiceDays(
+      [sat('a', '2026-09-08T06:00:00.000Z'), sat('b', '2026-09-08T09:00:00.000Z')],
+      3,
+      '2026-09-08',
+    );
+
+    assert.deepEqual(
+      days.map((day) => day.date),
+      ['2026-09-06', '2026-09-07', '2026-09-08'],
+    );
+    assert.equal(days.at(-1)?.sittings, 2);
+  });
+
+  it('ignores a sitting that was never submitted', () => {
+    assert.equal(practiceDays([sat('a', null)], 1, '2026-09-08')[0]?.sittings, 0);
+  });
+});
+
+describe('currentStreak', () => {
+  const on = (day: string): PerformancePoint =>
+    ({ attemptId: day, submittedAt: `${day}T06:00:00.000Z` }) as PerformancePoint;
+
+  it('counts the run of days ending today', () => {
+    const run = currentStreak([on('2026-09-06'), on('2026-09-07'), on('2026-09-08')], '2026-09-08');
+
+    assert.equal(run, 3);
+  });
+
+  /** The day is not over: breaking a run before the reader could keep it would be wrong. */
+  it('holds a run that ends yesterday, because today is still in progress', () => {
+    assert.equal(currentStreak([on('2026-09-06'), on('2026-09-07')], '2026-09-08'), 2);
+  });
+
+  it('is broken once a whole day was missed', () => {
+    assert.equal(currentStreak([on('2026-09-05'), on('2026-09-06')], '2026-09-08'), 0);
+  });
+
+  it('counts a day sat twice once', () => {
+    assert.equal(currentStreak([on('2026-09-08'), on('2026-09-08')], '2026-09-08'), 1);
+  });
+
+  it('has no run without a sitting', () => {
+    assert.equal(currentStreak([], '2026-09-08'), 0);
+  });
+});
+
+describe('shiftCivilDate', () => {
+  it('crosses a month and a year end without a zone getting involved', () => {
+    assert.equal(shiftCivilDate('2026-09-01', -1), '2026-08-31');
+    assert.equal(shiftCivilDate('2026-12-31', 1), '2027-01-01');
+    assert.equal(shiftCivilDate('2028-02-28', 1), '2028-02-29');
   });
 });

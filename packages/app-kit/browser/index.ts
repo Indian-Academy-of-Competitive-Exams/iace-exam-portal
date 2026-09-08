@@ -65,6 +65,7 @@ export {
   TimeReturnFigure,
   type SubjectView,
 } from './overview-figures';
+export { StreakFigure } from './streak-figure';
 export { ProtectedRoute } from './protected-route';
 export { useFilters } from './use-filters';
 export { useFullscreen, type FullscreenHandle } from './use-fullscreen';

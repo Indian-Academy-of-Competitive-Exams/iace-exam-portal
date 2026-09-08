@@ -9,6 +9,8 @@ import {
   type EvaluationMode,
   type TestScope,
 } from './tests';
+import { civilDate } from './common';
+import { todayISO } from './students';
 import {
   analyticsBucketSchema,
   answerStateSchema,
@@ -211,6 +213,64 @@ export function standingTiles(
       foot: standing.practiceAttempts > 0 ? `${standing.practiceAttempts} in practice` : undefined,
     },
   ];
+}
+
+// ============================================================================
+// Practice days. A civil date, never an instant: a sitting submitted at 04:00
+// IST belongs to that day, and `getUTC*` on the stored instant would put it on
+// the one before. Every date here is a `YYYY-MM-DD` on the institute's clock.
+// ============================================================================
+
+/** One day on the strip, and how many sittings landed on it. */
+export interface PracticeDay {
+  date: string;
+  sittings: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/** A civil date shifted by whole days. Safe on the string: a calendar date carries no zone. */
+export function shiftCivilDate(date: string, days: number): string {
+  const at = new Date(`${date}T00:00:00.000Z`);
+  return new Date(at.getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The window ending TODAY, oldest first, so a strip reads left to right into the present. */
+export function practiceDays(
+  points: readonly PerformancePoint[],
+  days: number,
+  today: string = todayISO(),
+): PracticeDay[] {
+  const counted = new Map<string, number>();
+  for (const point of points) {
+    if (point.submittedAt === null) continue;
+    const day = civilDate(new Date(point.submittedAt));
+    counted.set(day, (counted.get(day) ?? 0) + 1);
+  }
+
+  return Array.from({ length: days }, (_unused, index) => {
+    const date = shiftCivilDate(today, index - (days - 1));
+    return { date, sittings: counted.get(date) ?? 0 };
+  });
+}
+
+/** Consecutive days ending today, or yesterday: a day still in progress cannot break a run. */
+export function currentStreak(
+  points: readonly PerformancePoint[],
+  today: string = todayISO(),
+): number {
+  const sat = new Set<string>();
+  for (const point of points) {
+    if (point.submittedAt !== null) sat.add(civilDate(new Date(point.submittedAt)));
+  }
+
+  let day = sat.has(today) ? today : shiftCivilDate(today, -1);
+  let run = 0;
+  while (sat.has(day)) {
+    run += 1;
+    day = shiftCivilDate(day, -1);
+  }
+  return run;
 }
 
 /** The three shares the disposition can answer. LIFETIME: it never split ranked from practice. */
