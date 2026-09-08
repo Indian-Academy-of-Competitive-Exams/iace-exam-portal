@@ -113,4 +113,13 @@ export class AttemptsController {
   ): Promise<LiveAttemptState> {
     return this.state.save(user.id, id, body);
   }
+
+  /** The sitting as the server holds it, so a reloaded tab does not show a blank palette. */
+  @Get('attempts/:id/state')
+  liveState(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LiveAttemptState> {
+    return this.state.current(user.id, id);
+  }
 }

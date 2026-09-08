@@ -261,4 +261,30 @@ describe('AttemptStateService', () => {
     const state = await service.read('att_1');
     assert.equal(state?.answers.q1?.selectedOptionId, 'opt_a');
   });
+
+  describe('reading a sitting back', () => {
+    const now = new Date('2026-09-01T05:00:00.000Z');
+
+    /** The bug this prevents: a mid-test reload showing a blank palette while the answers are safe. */
+    it('returns what the sitting holds, without changing it', async () => {
+      const { service } = build();
+      await service.save('stu_1', 'att_1', { revision: 1, answers: [change()] }, now);
+
+      const shown = await service.current('stu_1', 'att_1', now);
+
+      assert.equal(shown.answers['q1']?.state, ANSWER_STATE.ANSWERED);
+      assert.equal(shown.answers['q1']?.selectedOptionId, 'opt_a');
+      assert.equal(shown.revision, 1, 'reading must not move the revision on');
+    });
+
+    it("reads another student's sitting as missing, never as refused", async () => {
+      const { service } = build();
+      await service.save('stu_1', 'att_1', { revision: 1, answers: [change()] }, now);
+
+      await assert.rejects(
+        () => service.current('stu_2', 'att_1', now),
+        (error: unknown) => AppException.is(error) && error.code === ErrorCodes.NOT_FOUND,
+      );
+    });
+  });
 });

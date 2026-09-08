@@ -699,6 +699,10 @@ export function createApiClient(options: ApiClientOptions) {
           schema: liveAttemptStateSchema,
         }),
 
+      /** What the server is holding, so a reloaded tab can seed its answers instead of starting blank. */
+      attemptState: (attemptId: string): Promise<LiveAttemptState> =>
+        request(ME_ATTEMPT_ROUTES.state(attemptId), { schema: liveAttemptStateSchema }),
+
       /** Ends it. A second call reports the first one's outcome rather than refusing. */
       submitAttempt: (attemptId: string): Promise<SubmittedAttempt> =>
         request(ME_ATTEMPT_ROUTES.submit(attemptId), {

@@ -63,6 +63,15 @@ export class AttemptStateService {
     return shown(next, now);
   }
 
+  /** What a reloaded screen needs. `require` already refuses another student and rebuilds a lost key. */
+  async current(
+    studentId: string,
+    attemptId: string,
+    now: Date = new Date(),
+  ): Promise<LiveAttemptState> {
+    return shown(await this.require(studentId, attemptId), now);
+  }
+
   /** The last read, which also shuts the door — one command, so a race has no in-between to lose. */
   async take(attemptId: string): Promise<HeldState | null> {
     const held = await this.redis.takeJson<HeldState>(redisKeys.attemptState(attemptId));

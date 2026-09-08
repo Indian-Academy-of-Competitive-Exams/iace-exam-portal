@@ -57,6 +57,20 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
   const revision = useRef(0);
   const inFlight = useRef(false);
 
+  // Seeded once from the server: a reloaded tab has answers it cannot otherwise see.
+  useEffect(() => {
+    let live = true;
+    void api.me.attemptState(attemptId).then((held) => {
+      if (!live) return;
+      // Merged under, never over: an answer given while this flew is the newer one.
+      setAnswers((mine) => ({ ...held.answers, ...mine }));
+      setSections((mine) => ({ ...held.sections, ...mine }));
+    });
+    return () => {
+      live = false;
+    };
+  }, [attemptId]);
+
   const flush = useCallback(async () => {
     if (inFlight.current) return;
     const changes = [...pending.current.values()];
