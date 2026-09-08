@@ -4,6 +4,7 @@
  * on the server, and what a save could not deliver stays queued for the next one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { autosaveDelayMs, shouldFlushNow } from '@iace/app-kit/browser';
 import {
   ANSWER_STATE,
   type AnswerChange,
@@ -12,9 +13,6 @@ import {
   type SectionProgress,
 } from '@iace/contracts';
 import { api } from './api';
-
-/** Often enough that a crash costs a question or two, rare enough to be nothing at 5,000 sittings. */
-export const AUTOSAVE_EVERY_MS = 25_000;
 
 export interface AttemptStateHandle {
   answers: Readonly<Record<string, LiveAnswer>>;
@@ -91,9 +89,15 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     }
   }, [attemptId]);
 
+  // Rescheduled each time, so the jitter is redrawn rather than fixed at mount.
   useEffect(() => {
-    const timer = setInterval(() => void flush(), AUTOSAVE_EVERY_MS);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      void flush();
+      timer = setTimeout(tick, autosaveDelayMs());
+    };
+    timer = setTimeout(tick, autosaveDelayMs());
+    return () => clearTimeout(timer);
   }, [flush]);
 
   // The first question is open from the moment the paper is on screen, not from the first click.
@@ -105,15 +109,19 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     openedAt.current = Date.now();
   }, []);
 
-  const answer = useCallback((questionId: string, next: AnswerIntent) => {
-    const spent = Math.max(0, Math.round((Date.now() - openedAt.current) / 1000));
+  const answer = useCallback(
+    (questionId: string, next: AnswerIntent) => {
+      const spent = Math.max(0, Math.round((Date.now() - openedAt.current) / 1000));
 
-    setAnswers((held) => {
-      const change = changeFor(questionId, held[questionId], next, spent);
-      pending.current.set(questionId, change);
-      return { ...held, [questionId]: answerOf(change, held[questionId]) };
-    });
-  }, []);
+      setAnswers((held) => {
+        const change = changeFor(questionId, held[questionId], next, spent);
+        pending.current.set(questionId, change);
+        if (shouldFlushNow(pending.current.size)) void flush();
+        return { ...held, [questionId]: answerOf(change, held[questionId]) };
+      });
+    },
+    [flush],
+  );
 
   const closeSection = useCallback((sectionId: string, remainingSec: number) => {
     const progress: SectionProgress = { remainingSec, closed: true };

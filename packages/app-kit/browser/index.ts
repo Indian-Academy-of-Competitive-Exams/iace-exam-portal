@@ -42,6 +42,13 @@ export function createBrowserTokenStore(storageKey: string): TokenStore {
 export { AppProviders } from './app-providers';
 export { AppShell, type AppShellProps, type NavItem, type ShellWidth } from './app-shell';
 export { useWorkspace } from './app-shell/use-workspace';
+export {
+  AUTOSAVE_AT_COUNT,
+  AUTOSAVE_EVERY_MS,
+  AUTOSAVE_JITTER_MS,
+  autosaveDelayMs,
+  shouldFlushNow,
+} from './autosave-policy';
 export { mountApp } from './mount-app';
 export { PageCrumbs } from './page-crumbs';
 export {
