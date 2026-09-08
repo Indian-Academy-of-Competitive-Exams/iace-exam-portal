@@ -1617,17 +1617,23 @@ export interface FakeAttemptQuestionRow {
 
 /** A queue that only remembers. Every add is recorded, so two hand-offs never read as one. */
 export class FakeQueue {
-  readonly jobs: { name: string; data: unknown; jobId?: string }[] = [];
+  readonly jobs: { name: string; data: unknown; jobId?: string; removeOnComplete?: boolean }[] = [];
 
   /** Set to make the next add throw: the crash between a commit and the queue. */
   failNext = false;
 
-  add(name: string, data: unknown, options?: { jobId?: string }): Promise<void> {
+  add(
+    name: string,
+    data: unknown,
+    options?: { jobId?: string; removeOnComplete?: boolean },
+  ): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
       return Promise.reject(new Error('queue unreachable'));
     }
-    this.jobs.push({ name, data, jobId: options?.jobId });
+    const removeOnComplete =
+      options?.removeOnComplete === undefined ? {} : { removeOnComplete: options.removeOnComplete };
+    this.jobs.push({ name, data, jobId: options?.jobId, ...removeOnComplete });
     return Promise.resolve();
   }
 

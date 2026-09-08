@@ -190,7 +190,7 @@ export class LeaderboardService {
     await this.rebuilds.add(
       QUEUE_NAMES.LEADERBOARD_REBUILD,
       { testId },
-      { jobId: rebuildJobId(testId) },
+      { jobId: rebuildJobId(testId), removeOnComplete: true },
     );
     return true;
   }

@@ -343,4 +343,13 @@ describe('a board nobody has warmed yet', () => {
     assert.equal(rebuilds.jobs[0]?.jobId, rebuildJobId(TEST_ID));
     assert.equal(rebuilds.jobs[0]?.jobId, rebuilds.jobs[1]?.jobId);
   });
+
+  /** The bug this prevents: a completed rebuild's jobId outliving it and swallowing the next one. */
+  it('asks the queue to drop the job once it completes, so a later cold read is not silently lost', async () => {
+    const { rebuilds, leaderboard } = board([]);
+
+    await leaderboard.standing(TEST_ID, 'att_a');
+
+    assert.equal(rebuilds.jobs[0]?.removeOnComplete, true);
+  });
 });
