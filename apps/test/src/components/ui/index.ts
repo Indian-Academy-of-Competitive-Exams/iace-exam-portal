@@ -10,6 +10,7 @@ export {
   BandSkeleton,
   BlockPairSkeleton,
   BlockSkeleton,
+  PageSkeleton,
   ReportSkeleton,
   RowsSkeleton,
   TilesSkeleton,

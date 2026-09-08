@@ -1,4 +1,4 @@
-import { Skeleton } from '@iace/ui';
+import { PageFrame, Skeleton } from '@iace/ui';
 import { PageBody } from './page-body';
 import { TileGrid } from './tile-grid';
 
@@ -55,5 +55,14 @@ export function ReportSkeleton() {
       <TilesSkeleton count={5} />
       <BlockPairSkeleton />
     </PageBody>
+  );
+}
+
+/** A lazy route's wait: the chunk owns the frame, so its fallback has to bring one of its own. */
+export function PageSkeleton() {
+  return (
+    <PageFrame>
+      <ReportSkeleton />
+    </PageFrame>
   );
 }
