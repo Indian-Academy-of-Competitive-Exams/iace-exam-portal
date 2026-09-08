@@ -223,7 +223,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
     );
   }
   if (board.cohortSize === 0) {
-    return <EmptyState icon={Trophy} title="No standings yet" />;
+    return <EmptyState icon={Trophy} title="No ranks yet" />;
   }
 
   return (
@@ -237,7 +237,7 @@ function Board({ board }: Readonly<{ board: Leaderboard }>) {
         <Podium rows={board.podium} />
       </Section>
 
-      <Section title="Standings" meta={plural(board.cohortSize, 'student')}>
+      <Section title="Ranks" meta={plural(board.cohortSize, 'student')}>
         <Standings board={board} empty="Everyone on this board is on the podium." />
       </Section>
     </div>

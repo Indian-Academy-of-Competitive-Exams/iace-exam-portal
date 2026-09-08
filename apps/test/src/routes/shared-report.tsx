@@ -153,7 +153,7 @@ function Cohort({ report }: Readonly<{ report: SharedReport }>) {
   }
 
   return (
-    <ChartFigure title="Standing" meta={plural(report.cohortSize, 'sitting')}>
+    <ChartFigure title="Score spread" meta={plural(report.cohortSize, 'sitting')}>
       <DistributionPlot
         height={PLOT_HEIGHT}
         bands={report.bands}

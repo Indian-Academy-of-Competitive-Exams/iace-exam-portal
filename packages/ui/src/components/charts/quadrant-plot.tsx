@@ -132,7 +132,9 @@ export function QuadrantPlot({
           content={
             <PlotTip<QuadrantPoint>
               title={(point) => point.label}
-              rows={(point) => rowsFor(point, xSuffix, ySuffix)}
+              rows={(point) =>
+                rowsFor(point, xSuffix, ySuffix, cornerOf(point, xGuide, yGuide, quadrants))
+              }
             />
           }
         />
@@ -178,11 +180,29 @@ type TickProps<T> = Partial<T> & { suffix: string };
 
 const tickText = (value: unknown, suffix: string) => `${Math.round(Number(value ?? 0))}${suffix}`;
 
-function rowsFor(point: QuadrantPoint, xSuffix: string, ySuffix: string): ChartTipRow[] {
+function rowsFor(
+  point: QuadrantPoint,
+  xSuffix: string,
+  ySuffix: string,
+  corner: string,
+): ChartTipRow[] {
   const rows: ChartTipRow[] = [
+    { key: 'corner', value: corner },
     { key: 'y', value: `${point.y}${ySuffix}`, swatch: SERIES_SWATCH[1] },
     { key: 'x', value: `${point.x}${xSuffix}` },
   ];
   if (point.caption !== undefined) rows.push({ key: 'caption', value: point.caption });
   return rows;
+}
+
+/** Which corner a dot fell in, named exactly as that corner is on the plot behind it. */
+function cornerOf(
+  point: QuadrantPoint,
+  xGuide: number,
+  yGuide: number,
+  quadrants: QuadrantLabels,
+): string {
+  const high = point.y >= yGuide;
+  if (point.x < xGuide) return high ? quadrants.lowXHighY : quadrants.lowXLowY;
+  return high ? quadrants.highXHighY : quadrants.highXLowY;
 }

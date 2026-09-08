@@ -104,7 +104,7 @@ export function CohortFigure({
 
   return (
     <ChartFigure
-      title="Standing"
+      title="Score spread"
       meta={plural(cohort.cohortSize, 'sitting')}
       figure={
         <Metric

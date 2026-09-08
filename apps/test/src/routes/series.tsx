@@ -97,7 +97,7 @@ export function SeriesPage() {
           meta={progress ? `${progress.done} of ${plural(progress.total, 'test')} done` : undefined}
           action={
             <Button asChild variant="outline">
-              <Link to={ROUTES.PERFORMANCE}>Your standing</Link>
+              <Link to={ROUTES.PERFORMANCE}>Your performance</Link>
             </Button>
           }
         />

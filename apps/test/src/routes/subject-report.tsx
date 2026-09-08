@@ -102,7 +102,7 @@ const COLUMNS: readonly DataTableColumn<SectionalStanding>[] = [
   },
   {
     key: 'standing',
-    header: 'Standing',
+    header: 'Against average',
     cell: (row) => {
       const held = standingOf(row);
       return <Badge variant={held.variant}>{held.label}</Badge>;
