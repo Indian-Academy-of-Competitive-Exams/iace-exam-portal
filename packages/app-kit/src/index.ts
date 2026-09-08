@@ -15,6 +15,7 @@ export {
   AUTOSAVE_EVERY_MS,
   AUTOSAVE_JITTER_MS,
   autosaveDelayMs,
+  seedRevision,
   shouldFlushNow,
 } from './autosave-policy';
 export {

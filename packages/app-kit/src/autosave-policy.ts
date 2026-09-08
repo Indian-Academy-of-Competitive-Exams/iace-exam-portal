@@ -1,4 +1,8 @@
-/** When a sitting sends what it has. A timer alone makes 5,000 clients save in lockstep. */
+/**
+ * When a sitting sends what it has, and under which revision.
+ * A timer alone makes 5,000 clients save in lockstep; a counter that restarts at 0
+ * makes the server drop every batch behind what it already holds.
+ */
 
 export const AUTOSAVE_EVERY_MS = 25_000;
 
@@ -14,4 +18,9 @@ export function autosaveDelayMs(random: () => number = Math.random): number {
 
 export function shouldFlushNow(pendingCount: number): boolean {
   return pendingCount >= AUTOSAVE_AT_COUNT;
+}
+
+/** The client's counter, never backwards: below what the server holds, every batch is dropped. */
+export function seedRevision(current: number, held: number): number {
+  return Math.max(current, held);
 }

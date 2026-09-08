@@ -5,6 +5,7 @@ import {
   AUTOSAVE_EVERY_MS,
   AUTOSAVE_JITTER_MS,
   autosaveDelayMs,
+  seedRevision,
   shouldFlushNow,
 } from '../src/autosave-policy';
 
@@ -38,5 +39,32 @@ describe('when a sitting saves what it has', () => {
     assert.equal(shouldFlushNow(AUTOSAVE_AT_COUNT - 1), false);
     assert.equal(shouldFlushNow(AUTOSAVE_AT_COUNT), true);
     assert.equal(shouldFlushNow(0), false);
+  });
+});
+
+describe('when a sitting picks its revision counter back up', () => {
+  /** The failure this prevents: a reloaded counter replaying as stale for ~17 minutes of work. */
+  it('takes the next batch past what the server is already holding', () => {
+    const serverHolds = 40;
+
+    for (const counter of [0, 1, 39, 40, 41]) {
+      const next = seedRevision(counter, serverHolds) + 1;
+      assert.ok(next > serverHolds, `a batch sent at ${next} would be dropped as stale`);
+    }
+  });
+
+  /** Seeded from the reload AND from every save, and a flush can be in flight across either. */
+  it('never moves the counter backwards', () => {
+    const races: readonly (readonly [number, number])[] = [
+      [41, 40],
+      [40, 40],
+      [7, 3],
+      [0, 0],
+    ];
+
+    for (const [current, held] of races) {
+      assert.ok(seedRevision(current, held) >= current, `fell below the client's ${current}`);
+      assert.ok(seedRevision(current, held) >= held, `fell below the server's ${held}`);
+    }
   });
 });

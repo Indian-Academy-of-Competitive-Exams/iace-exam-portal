@@ -4,7 +4,7 @@
  * on the server, and what a save could not deliver stays queued for the next one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { autosaveDelayMs, shouldFlushNow } from '@iace/app-kit';
+import { autosaveDelayMs, seedRevision, shouldFlushNow } from '@iace/app-kit';
 import {
   ANSWER_STATE,
   type AnswerChange,
@@ -66,7 +66,7 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
       setAnswers((mine) => ({ ...held.answers, ...mine }));
       setSections((mine) => ({ ...held.sections, ...mine }));
       // Never backwards: a flush racing this GET may already have moved the counter on.
-      revision.current = Math.max(revision.current, held.revision);
+      revision.current = seedRevision(revision.current, held.revision);
     });
     return () => {
       live = false;
@@ -84,20 +84,30 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
     pendingSections.current = {};
     inFlight.current = true;
     revision.current += 1;
+    const sent = revision.current;
     setIsSaving(true);
 
-    try {
-      await api.me.saveAttemptState(attemptId, {
-        revision: revision.current,
-        answers: changes,
-        sections: movedSections,
-      });
-      setHasUnsaved(false);
-    } catch {
+    // Under whatever arrived while this flew, never over it: that copy is the newer one.
+    const requeue = () => {
       for (const change of changes) {
         if (!pending.current.has(change.questionId)) pending.current.set(change.questionId, change);
       }
       pendingSections.current = { ...movedSections, ...pendingSections.current };
+    };
+
+    try {
+      const saved = await api.me.saveAttemptState(attemptId, {
+        revision: sent,
+        answers: changes,
+        sections: movedSections,
+      });
+      // A server already past what we sent dropped this batch as stale and answered 200 anyway.
+      const dropped = saved.revision > sent;
+      revision.current = seedRevision(revision.current, saved.revision);
+      if (dropped) requeue();
+      setHasUnsaved(dropped);
+    } catch {
+      requeue();
       setHasUnsaved(true);
     } finally {
       inFlight.current = false;
