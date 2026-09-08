@@ -1,16 +1,19 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList } from 'lucide-react';
 import {
   Alert,
   Button,
-  EmptyState,
+  ChartFigure,
+  LinePlot,
   Metric,
   PageFrame,
   Skeleton,
   cn,
   linkVariants,
   plural,
+  type LinePoint,
+  type PlotBand,
+  type PlotReference,
 } from '@iace/ui';
 import { newestFirst } from '@iace/app-kit';
 import {
@@ -42,6 +45,11 @@ import { useAuth } from '../providers/auth';
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
   dateStyle: 'medium',
+});
+
+const WHEN_EXACT = new Intl.DateTimeFormat('en-IN', {
+  timeZone: INSTITUTE_TIME_ZONE,
+  dateStyle: 'medium',
   timeStyle: 'short',
 });
 
@@ -52,6 +60,18 @@ const GREETINGS = [
   { until: 24, word: 'Good evening' },
 ] as const;
 
+/** How many sittings the landing screen looks back over before it sends them to Performance. */
+const RECENT_RESULTS = 3;
+
+/** viewBox units against the wide box a full-width plot uses, not pixels. */
+const TREND_HEIGHT = 190;
+
+/** Drawn so a low line reads as a low SCORE rather than as a plot that failed to render. */
+const TREND_TICKS = [0, 25, 50, 75, 100];
+
+/** Where a percentile stops being a middle and starts being a placing worth chasing. */
+const TOP_QUARTER: PlotBand = { from: 75, to: 100, label: 'Top quarter' };
+
 /** Where a student lands. A strict subset of Performance — the headline, and the way to the rest. */
 export function DashboardPage() {
   const { identity: student } = useAuth();
@@ -60,8 +80,8 @@ export function DashboardPage() {
   const catalog = useQuery({ queryKey: CATALOG_QUERY_KEY, queryFn: () => api.me.catalog() });
 
   const now = new Date();
-  const rows = sittablesOf(catalog.data?.series ?? [], now);
-  const latest = newestFirst(trend.data?.points ?? [])[0];
+  const waiting = waitingOn(sittablesOf(catalog.data?.series ?? [], now));
+  const recent = newestFirst(trend.data?.points ?? []).slice(0, RECENT_RESULTS);
 
   return (
     <PageFrame>
@@ -77,36 +97,66 @@ export function DashboardPage() {
 
         <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 
-        <NextUp catalog={catalog} rows={rows} now={now} />
+        <NextUp catalog={catalog} waiting={waiting} now={now} />
 
         <Standing overview={overview} />
 
-        <Section
-          title="Continue"
-          action={
-            <Link className={linkVariants()} to={ROUTES.TESTS}>
-              See all tests
-            </Link>
-          }
-        >
-          <ContinueRegion catalog={catalog} rows={rows} latest={latest} now={now} />
-        </Section>
+        <Trend trend={trend} points={trend.data?.points ?? []} />
+
+        {waiting.length > 1 ? (
+          <Section
+            title="Also waiting"
+            action={
+              <Link className={linkVariants()} to={ROUTES.TESTS}>
+                See all tests
+              </Link>
+            }
+          >
+            <DividedList>
+              {waiting.slice(1).map((row) => (
+                <DividedRow
+                  key={row.test.id}
+                  lead={<LaneLabel lane={laneOf(row)} />}
+                  title={row.test.title ?? 'Untitled test'}
+                  meta={papersLine(row, now)}
+                  action={<TestExit row={row} small />}
+                />
+              ))}
+            </DividedList>
+          </Section>
+        ) : null}
+
+        <RecentResults trend={trend} recent={recent} />
       </PageBody>
     </PageFrame>
   );
 }
 
-/** The one paper worth pointing at before anything else on the screen. */
+/** The one paper worth pointing at, and never nothing — an absent block explains itself. */
 function NextUp({
   catalog,
-  rows,
+  waiting,
   now,
-}: Readonly<{ catalog: QueryState; rows: readonly Sittable[]; now: Date }>) {
+}: Readonly<{ catalog: QueryState; waiting: readonly Sittable[]; now: Date }>) {
   if (catalog.isLoading) return <Skeleton variant="row" className="h-28 rounded-xl" />;
   if (catalog.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
 
-  const row = continueWith(rows) ?? openNow(rows)[0] ?? upNext(rows)[0];
-  if (!row) return null;
+  const row = waiting[0];
+  if (!row) {
+    return (
+      /* ui-copy-ok: rule */
+      <Alert variant="info">
+        <span className="flex flex-wrap items-center justify-between gap-3">
+          <span>
+            Nothing is open for you to sit. Your branch opens the next one when it is ready.
+          </span>
+          <Button asChild size="sm" variant="outline">
+            <Link to={ROUTES.TESTS}>Go to your tests</Link>
+          </Button>
+        </span>
+      </Alert>
+    );
+  }
 
   return (
     <SurfaceCard>
@@ -124,82 +174,140 @@ function NextUp({
   );
 }
 
+/** The standing itself, always on screen — a dash is an answer, and the Alert below says why. */
 function Standing({ overview }: Readonly<{ overview: OverviewQuery }>) {
   if (overview.isLoading) return <Skeleton variant="row" className="h-24 rounded-xl" />;
   if (overview.isError) return <Alert variant="danger">Your performance did not load.</Alert>;
 
-  const standing = overview.data?.standing;
-  if (!standing || standing.testsAttempted === 0) return null;
+  const data = overview.data;
+  if (!data || data.standing.testsAttempted === 0) return null;
+
+  const { standing, disposition } = data;
+  const answered = disposition.correct + disposition.wrong;
 
   return (
-    <StatBand>
-      <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="sm" />
-      <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
-      <Metric label="Tests taken" value={standing.testsAttempted} size="sm" />
-    </StatBand>
+    <>
+      {standing.testsEvaluated === 0 ? (
+        /* ui-copy-ok: consequence */
+        <Alert variant="info">
+          No ranked test of yours has been marked yet, so there is no percentile or score to stand
+          on. Everything below is what your practice has counted.
+        </Alert>
+      ) : null}
+
+      <StatBand>
+        <Metric label="Average percentile" value={standing.avgPercentile ?? '—'} size="sm" />
+        <Metric label="Best percentile" value={standing.bestPercentile ?? '—'} size="sm" />
+        <Metric label="Average score" value={standing.avgScore ?? '—'} size="sm" />
+        <Metric label="Tests taken" value={standing.testsAttempted} size="sm" />
+        <Metric
+          label="Accuracy"
+          value={answered === 0 ? '—' : Math.round((disposition.correct / answered) * 100)}
+          unit={answered === 0 ? undefined : '%'}
+          size="sm"
+        />
+      </StatBand>
+    </>
   );
 }
 
-/** The catalog's own load state, distinct from a genuinely empty one — an error is not "nothing". */
-function ContinueRegion({
-  catalog,
-  rows,
-  latest,
-  now,
-}: Readonly<{
-  catalog: QueryState;
-  rows: readonly Sittable[];
-  latest: PerformancePoint | undefined;
-  now: Date;
-}>) {
-  if (catalog.isLoading) return <Skeleton variant="row" className="h-40 rounded-xl" />;
-  if (catalog.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
+/** The line a student came to see. It plots the percentile once one exists, and the marks until. */
+function Trend({
+  trend,
+  points,
+}: Readonly<{ trend: QueryState; points: readonly PerformancePoint[] }>) {
+  if (trend.isLoading) return <Skeleton variant="row" className="h-48 rounded-xl" />;
+  if (trend.isError) return null;
 
-  const running = continueWith(rows);
-  const open = openNow(rows).filter((row) => row.test.id !== running?.test.id);
-  const next = upNext(rows);
-  const nothing = !running && open.length === 0 && next.length === 0 && latest === undefined;
-
-  if (nothing) {
-    return (
-      <EmptyState
-        icon={ClipboardList}
-        title="Nothing waiting"
-        action={
-          <Button asChild>
-            <Link to={ROUTES.TESTS}>Go to your tests</Link>
-          </Button>
-        }
-      />
-    );
-  }
+  const line = trendOf(points);
+  if (line === null) return null;
 
   return (
-    <DividedList>
-      {[running, open[0], next[0]]
-        .filter((row) => row !== undefined)
-        .map((row) => (
+    <ChartFigure title={line.title} meta={plural(points.length, 'sitting')}>
+      <LinePlot
+        points={line.points}
+        ticks={TREND_TICKS}
+        band={line.band}
+        reference={line.reference}
+        suffix={line.suffix}
+        height={TREND_HEIGHT}
+        aria-label={line.title}
+      />
+    </ChartFigure>
+  );
+}
+
+interface Trendline {
+  title: string;
+  suffix: string;
+  points: LinePoint[];
+  band?: PlotBand;
+  reference?: PlotReference;
+}
+
+/** A percentile needs a marked ranked sitting; until there is one the same line reads the marks. */
+function trendOf(points: readonly PerformancePoint[]): Trendline | null {
+  if (points.length === 0) return null;
+  const ranked = points.some((point) => point.percentile !== null);
+
+  const plotted = points.map((point) => ({
+    key: point.attemptId,
+    label: point.testTitle ?? 'Untitled test',
+    value: ranked ? point.percentile : point.percentage,
+    caption: `${point.score} of ${point.maxMarks} marks`,
+  }));
+
+  const mean = average(plotted.map((point) => point.value));
+
+  return {
+    title: ranked ? 'Percentile' : 'Score',
+    suffix: ranked ? '' : '%',
+    points: plotted,
+    band: ranked ? TOP_QUARTER : undefined,
+    reference: mean === null ? undefined : { value: mean, label: 'Your average', tone: 'neutral' },
+  };
+}
+
+/** Null-safe because an unranked sitting has no percentile, and a mean of nothing is not zero. */
+function average(values: readonly (number | null)[]): number | null {
+  const held = values.filter((value) => value !== null);
+  if (held.length === 0) return null;
+  return Math.round(held.reduce((sum, value) => sum + value, 0) / held.length);
+}
+
+/** The last few sittings, so a student who has finished everything still lands on something. */
+function RecentResults({
+  trend,
+  recent,
+}: Readonly<{ trend: QueryState; recent: readonly PerformancePoint[] }>) {
+  if (trend.isLoading) return <Skeleton variant="row" className="h-40 rounded-xl" />;
+  if (trend.isError) return <Alert variant="danger">Your results did not load.</Alert>;
+  if (recent.length === 0) return null;
+
+  return (
+    <Section
+      title="Recent results"
+      action={
+        <Link className={linkVariants()} to={ROUTES.PERFORMANCE}>
+          See your performance
+        </Link>
+      }
+    >
+      <DividedList>
+        {recent.map((point) => (
           <DividedRow
-            key={row.test.id}
-            lead={<LaneLabel lane={laneOf(row)} />}
-            title={row.test.title ?? 'Untitled test'}
-            meta={papersLine(row, now)}
-            action={<TestExit row={row} small />}
+            key={point.attemptId}
+            title={point.testTitle ?? 'Untitled test'}
+            meta={resultLine(point)}
+            action={
+              <Button asChild size="sm" variant="outline">
+                <Link to={ROUTES.REPORT(point.attemptId)}>View report</Link>
+              </Button>
+            }
           />
         ))}
-      {latest ? (
-        <DividedRow
-          lead={<LaneLabel lane="Result ready" />}
-          title={latest.testTitle ?? 'Untitled test'}
-          meta={resultLine(latest)}
-          action={
-            <Button asChild size="sm" variant="outline">
-              <Link to={ROUTES.REPORT(latest.attemptId)}>View report</Link>
-            </Button>
-          }
-        />
-      ) : null}
-    </DividedList>
+      </DividedList>
+    </Section>
   );
 }
 
@@ -208,7 +316,6 @@ const LANE_TONE = {
   'In progress': 'text-warning-ink',
   'Open now': 'text-primary-ink',
   'Up next': 'text-muted-foreground',
-  'Result ready': 'text-success-ink',
 } as const;
 
 type Lane = keyof typeof LANE_TONE;
@@ -234,6 +341,13 @@ function TestExit({ row, small }: Readonly<{ row: Sittable; small?: boolean }>) 
   );
 }
 
+/** One paper each, in the order a student would reach for them — never the same one twice. */
+function waitingOn(rows: readonly Sittable[]): Sittable[] {
+  const running = continueWith(rows);
+  const open = openNow(rows).find((row) => row.test.id !== running?.test.id);
+  return [running, open, upNext(rows)[0]].filter((row) => row !== undefined);
+}
+
 const laneOf = (row: Sittable): Lane => {
   if (row.action === 'RESUME') return 'In progress';
   return row.action === 'START' ? 'Open now' : 'Up next';
@@ -253,6 +367,7 @@ const resultLine = (point: PerformancePoint) =>
     `${point.score} of ${point.maxMarks} marks`,
     point.percentile === null ? null : `${point.percentile}th percentile`,
     point.rank === null ? null : `rank ${point.rank}`,
+    point.submittedAt === null ? null : `sat ${WHEN.format(new Date(point.submittedAt))}`,
   ]
     .filter((part) => part !== null)
     .join(' · ');
@@ -260,9 +375,9 @@ const resultLine = (point: PerformancePoint) =>
 function whenLine(row: Sittable, now: Date): string | null {
   const { opensAt, closesAt } = row.test;
   if (opensAt !== null && Date.parse(opensAt) > now.getTime()) {
-    return `opens ${WHEN.format(new Date(opensAt))}`;
+    return `opens ${WHEN_EXACT.format(new Date(opensAt))}`;
   }
-  return closesAt === null ? null : `closes ${WHEN.format(new Date(closesAt))}`;
+  return closesAt === null ? null : `closes ${WHEN_EXACT.format(new Date(closesAt))}`;
 }
 
 function greetingFor(now: Date, name: string | null | undefined): string {
