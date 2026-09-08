@@ -148,6 +148,16 @@ describe('applyBatch', () => {
     assert.equal(isStale(first, { revision: 5, answers: [] }), false);
   });
 
+  /** The failure a reload's revision seed prevents: an unseeded counter restarting at 0 replays as stale for however long it takes to climb past what the server already holds. */
+  it('takes a reloaded client back once its counter is seeded from what the server holds', () => {
+    const server = held({ revision: 40 });
+
+    assert.equal(isStale(server, { revision: 1, answers: [] }), true);
+
+    const seeded = Math.max(0, server.revision) + 1;
+    assert.equal(isStale(server, { revision: seeded, answers: [] }), false);
+  });
+
   it('merges section clocks without dropping the ones it does not carry', () => {
     const first = applyBatch(held(), {
       revision: 1,

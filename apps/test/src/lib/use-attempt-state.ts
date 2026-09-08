@@ -65,6 +65,8 @@ export function useAttemptState(attemptId: string): AttemptStateHandle {
       // Merged under, never over: an answer given while this flew is the newer one.
       setAnswers((mine) => ({ ...held.answers, ...mine }));
       setSections((mine) => ({ ...held.sections, ...mine }));
+      // Never backwards: a flush racing this GET may already have moved the counter on.
+      revision.current = Math.max(revision.current, held.revision);
     });
     return () => {
       live = false;
