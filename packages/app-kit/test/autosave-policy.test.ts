@@ -6,7 +6,7 @@ import {
   AUTOSAVE_JITTER_MS,
   autosaveDelayMs,
   shouldFlushNow,
-} from '../browser/autosave-policy';
+} from '../src/autosave-policy';
 
 describe('when a sitting saves what it has', () => {
   /** 5,000 sittings that began together must not come back to the server together. */

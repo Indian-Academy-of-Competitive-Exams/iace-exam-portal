@@ -8,7 +8,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
 import { Alert, LoadingState, Metric, PageFrame, PageHeader } from '@iace/ui';
-import { PageCrumbs, POLL_GIVES_UP_AFTER, pollDelayMs } from '@iace/app-kit/browser';
+import { pollDelayMs, shouldKeepPolling } from '@iace/app-kit';
+import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
 import { PageBody, Section, StatBand } from '../components/ui';
 import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
@@ -27,7 +28,7 @@ export function SubmittedPage() {
     queryKey: scoreCardQueryKey(attemptId),
     queryFn: () => api.me.scoreCard(attemptId),
     enabled: attemptId !== '',
-    retry: (count, error) => isPending(error) && count < POLL_GIVES_UP_AFTER,
+    retry: (count, error) => isPending(error) && shouldKeepPolling(count),
     retryDelay: (count) => pollDelayMs(count),
   });
 

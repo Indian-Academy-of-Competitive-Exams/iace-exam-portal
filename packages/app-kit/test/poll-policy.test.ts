@@ -5,7 +5,8 @@ import {
   POLL_GIVES_UP_AFTER,
   POLL_MAX_MS,
   pollDelayMs,
-} from '../browser/poll-policy';
+  shouldKeepPolling,
+} from '../src/poll-policy';
 
 describe('waiting for a queued job to land', () => {
   /** Marking takes about a quarter second; a fixed three-second poll is almost all of the wait. */
@@ -22,10 +23,19 @@ describe('waiting for a queued job to land', () => {
 
   /** The bug this prevents: a dead job polled forever, so the error the screen can show never arrives. */
   it('gives up in a bounded number of tries', () => {
-    assert.ok(POLL_GIVES_UP_AFTER > 0);
     let waited = 0;
-    for (let at = 0; at < POLL_GIVES_UP_AFTER; at += 1) waited += pollDelayMs(at);
+    let asked = 0;
+    while (asked < RUNAWAY && shouldKeepPolling(asked)) {
+      waited += pollDelayMs(asked);
+      asked += 1;
+    }
+
+    assert.ok(asked > 0, 'asks at least once');
+    assert.equal(shouldKeepPolling(asked), false, 'stops asking rather than polling a dead job');
     assert.ok(waited >= 60_000, 'waits at least a minute before calling it failed');
     assert.ok(waited <= 300_000, 'does not leave the student for five minutes');
   });
 });
+
+/** Far past any real ceiling, so a predicate that never stops fails the test instead of hanging it. */
+const RUNAWAY = 10_000;

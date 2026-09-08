@@ -4,7 +4,7 @@
  * on the server, and what a save could not deliver stays queued for the next one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { autosaveDelayMs, shouldFlushNow } from '@iace/app-kit/browser';
+import { autosaveDelayMs, shouldFlushNow } from '@iace/app-kit';
 import {
   ANSWER_STATE,
   type AnswerChange,
