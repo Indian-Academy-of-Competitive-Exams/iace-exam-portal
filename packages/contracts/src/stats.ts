@@ -298,6 +298,8 @@ export interface SubjectShare {
   attempted: number;
   correct: number;
   sumTimeSec: number;
+  /** Of everything answered in this mode, the share this subject took. */
+  attemptedShare: number;
   timeShare: number;
   correctShare: number;
   /** Correct share minus time share: above zero the subject is paying for the clock it takes. */
@@ -315,6 +317,7 @@ export function subjectShares(
 
   const totalTime = measured.reduce((sum, row) => sum + row.measure.sumTimeSec, 0);
   const totalCorrect = measured.reduce((sum, row) => sum + row.measure.correct, 0);
+  const totalAttempted = measured.reduce((sum, row) => sum + row.measure.attempted, 0);
 
   return measured.map(({ subject, measure }) => {
     const timeShare = totalTime === 0 ? 0 : round2((measure.sumTimeSec / totalTime) * 100);
@@ -325,11 +328,76 @@ export function subjectShares(
       attempted: measure.attempted,
       correct: measure.correct,
       sumTimeSec: measure.sumTimeSec,
+      attemptedShare: totalAttempted === 0 ? 0 : round2((measure.attempted / totalAttempted) * 100),
       timeShare,
       correctShare,
       payoff: round2(correctShare - timeShare),
     };
   });
+}
+
+/** Served and never answered — the rows every other figure filters out, which is what hides them. */
+export function untouchedSubjects(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+  scope: TestScope | null = null,
+): SubjectStanding[] {
+  return subjects.filter((subject) => {
+    const served = subject.tallies.some(
+      (tally) => tally.evaluationMode === mode && (scope === null || tally.scope === scope),
+    );
+    return served && measureOf(subject.tallies, mode, scope).attempted === 0;
+  });
+}
+
+/** The kinds of paper this mode has never asked for. The enum IS the catalogue; nothing to fetch. */
+export const scopesNotSat = (
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+): TestScope[] => {
+  const sat = new Set(scopesSat(subjects, mode));
+  return TEST_SCOPES.filter((scope) => !sat.has(scope));
+};
+
+/** Two scopes set against each other, per subject: whether a full paper holds what a short one showed. */
+export interface ScopeComparison {
+  first: TestScope;
+  second: TestScope;
+  subjects: {
+    subjectId: string;
+    name: string;
+    first: SubjectMeasure;
+    second: SubjectMeasure;
+    accuracyGap: number | null;
+  }[];
+}
+
+/** The two scopes this mode has the most behind it — a comparison needs volume on both sides. */
+export function scopeComparison(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+): ScopeComparison | null {
+  const busiest = volumeByScope(subjects, mode)
+    .filter((row) => row.attempted > 0)
+    .sort((a, b) => b.attempted - a.attempted);
+  const first = busiest[0]?.scope;
+  const second = busiest[1]?.scope;
+  if (first === undefined || second === undefined) return null;
+  const compared = subjects
+    .map((subject) => {
+      const one = measureOf(subject.tallies, mode, first);
+      const two = measureOf(subject.tallies, mode, second);
+      return {
+        subjectId: subject.subjectId,
+        name: subject.name,
+        first: one,
+        second: two,
+        accuracyGap: gapBetween(one.accuracy, two.accuracy),
+      };
+    })
+    .filter((row) => row.accuracyGap !== null);
+
+  return compared.length === 0 ? null : { first, second, subjects: compared };
 }
 
 /** How much of each kind of paper has been sat in this mode. A scope missing here is a blind spot. */

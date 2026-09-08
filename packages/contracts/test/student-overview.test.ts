@@ -12,6 +12,9 @@ import {
   effortPerSitting,
   overallModeGap,
   placeInSpread,
+  scopeComparison,
+  scopesNotSat,
+  untouchedSubjects,
   questionReportInsights,
   scopesSat,
   standingTiles,
@@ -20,7 +23,9 @@ import {
   type OverviewStanding,
   type SubjectMeasure,
   type QuestionReportRow,
+  type EvaluationMode,
   type SubjectStanding,
+  type TestScope,
 } from '../src';
 
 describe('measureOf', () => {
@@ -578,5 +583,128 @@ describe('placeInSpread', () => {
   it('clamps a score outside the spread rather than reporting past the ends', () => {
     assert.equal(placeInSpread(120, 0, 100), 100);
     assert.equal(placeInSpread(-20, 0, 100), 0);
+  });
+});
+
+describe('the blind spots every other figure filters out', () => {
+  const tally = (scope: TestScope, mode: EvaluationMode, attempted: number, sumTimeSec = 0) => ({
+    scope,
+    evaluationMode: mode,
+    attempted,
+    correct: 0,
+    sumTimeSec,
+  });
+
+  const subjects: SubjectStanding[] = [
+    {
+      subjectId: 'sub_e',
+      name: 'English Comprehension',
+      tallies: [tally(TEST_SCOPE.FULL, EVALUATION_MODE.PRACTICE, 0, 40)],
+    },
+    {
+      subjectId: 'sub_q',
+      name: 'Quantitative Aptitude',
+      tallies: [tally(TEST_SCOPE.FULL, EVALUATION_MODE.PRACTICE, 12)],
+    },
+  ];
+
+  /** The row exists because a paper asked; the zero is the answer that never came. */
+  it('names a subject served and never answered', () => {
+    const untouched = untouchedSubjects(subjects, EVALUATION_MODE.PRACTICE);
+
+    assert.deepEqual(
+      untouched.map((subject) => subject.name),
+      ['English Comprehension'],
+    );
+  });
+
+  it('holds nothing against a mode that was never sat at all', () => {
+    assert.deepEqual(untouchedSubjects(subjects, EVALUATION_MODE.RANKED), []);
+  });
+
+  it('lists the kinds of paper this mode has never asked for', () => {
+    const missing = scopesNotSat(subjects, EVALUATION_MODE.PRACTICE);
+
+    assert.ok(!missing.includes(TEST_SCOPE.FULL));
+    assert.ok(missing.includes(TEST_SCOPE.SECTIONAL));
+  });
+});
+
+describe('scopeComparison', () => {
+  const tally = (scope: TestScope, attempted: number, correct: number) => ({
+    scope,
+    evaluationMode: EVALUATION_MODE.RANKED,
+    attempted,
+    correct,
+    sumTimeSec: 100,
+  });
+
+  const subjects: SubjectStanding[] = [
+    {
+      subjectId: 'sub_q',
+      name: 'Quantitative Aptitude',
+      tallies: [tally(TEST_SCOPE.FULL, 100, 40), tally(TEST_SCOPE.SECTIONAL, 50, 35)],
+    },
+  ];
+
+  it('sets the two busiest kinds of paper against each other', () => {
+    const compared = scopeComparison(subjects, EVALUATION_MODE.RANKED);
+
+    assert.equal(compared?.first, TEST_SCOPE.FULL);
+    assert.equal(compared?.second, TEST_SCOPE.SECTIONAL);
+    assert.equal(compared?.subjects[0]?.accuracyGap, -30);
+  });
+
+  /** One kind of paper is not a comparison, and calling it one would invent a second side. */
+  it('refuses a comparison with only one kind of paper behind it', () => {
+    const one: SubjectStanding[] = [
+      {
+        subjectId: 'sub_q',
+        name: 'Quantitative Aptitude',
+        tallies: [tally(TEST_SCOPE.FULL, 10, 5)],
+      },
+    ];
+
+    assert.equal(scopeComparison(one, EVALUATION_MODE.RANKED), null);
+    assert.equal(scopeComparison([], EVALUATION_MODE.RANKED), null);
+  });
+});
+
+describe('subjectShares names the share of answers too', () => {
+  it('splits answers, clock and marks across the subjects', () => {
+    const subjects: SubjectStanding[] = [
+      {
+        subjectId: 'a',
+        name: 'A',
+        tallies: [
+          {
+            scope: TEST_SCOPE.FULL,
+            evaluationMode: EVALUATION_MODE.PRACTICE,
+            attempted: 30,
+            correct: 10,
+            sumTimeSec: 100,
+          },
+        ],
+      },
+      {
+        subjectId: 'b',
+        name: 'B',
+        tallies: [
+          {
+            scope: TEST_SCOPE.FULL,
+            evaluationMode: EVALUATION_MODE.PRACTICE,
+            attempted: 10,
+            correct: 10,
+            sumTimeSec: 300,
+          },
+        ],
+      },
+    ];
+
+    const [a, b] = subjectShares(subjects, EVALUATION_MODE.PRACTICE);
+
+    assert.equal(a?.attemptedShare, 75);
+    assert.equal(b?.attemptedShare, 25);
+    assert.equal(b?.timeShare, 75);
   });
 });

@@ -13,10 +13,12 @@ import {
   plural,
 } from '@iace/ui';
 import {
+  BlindSpots,
   DispositionFigure,
   ModeGapFigure,
   ModeTiles,
   PageCrumbs,
+  ScopeGapFigure,
   ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
@@ -216,6 +218,8 @@ function Body({
         ))}
       </TileGrid>
 
+      <BlindSpots subjects={overview.subjects} mode={mode} scope={scope} />
+
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
         <DispositionFigure
@@ -225,6 +229,11 @@ function Body({
         <SubjectStrengthFigure {...view} />
         <TimeReturnFigure {...view} className="lg:col-span-2" />
         <ModeGapFigure subjects={overview.subjects} scope={scope} className="lg:col-span-2" />
+        <ScopeGapFigure
+          subjects={overview.subjects}
+          mode={mode}
+          className="lg:col-span-2 xl:col-span-4"
+        />
       </div>
 
       {/* Full width: its dot labels collide with the quadrant corners in anything narrower. */}

@@ -267,11 +267,14 @@ export function SectionsFigure({ sections }: Readonly<{ sections: readonly Secti
   );
 }
 
-/** Their clock beside the two the rollup now carries: what the field spent here, and the topper. */
+/** Their marks and clock beside the field's: what everyone scored here says which section was hard. */
 function sectionCaption(section: SectionalStanding): string {
   const held = [`${section.score} of ${section.maxMarks}`, minutes(section.timeSpentSec)];
+  if (section.cohortAverageScore !== null && section.maxMarks > 0) {
+    held.push(`field ${Math.round((section.cohortAverageScore / section.maxMarks) * 100)}%`);
+  }
   if (section.cohortAverageTimeSec !== null) {
-    held.push(`cohort ${minutes(section.cohortAverageTimeSec)}`);
+    held.push(`average ${minutes(section.cohortAverageTimeSec)}`);
   }
   if (section.topperTimeSec !== null) held.push(`topper ${minutes(section.topperTimeSec)}`);
   return held.join(' · ');

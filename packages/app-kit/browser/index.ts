@@ -54,9 +54,11 @@ export {
   TrajectoryFigure,
 } from './performance-figures';
 export {
+  BlindSpots,
   DispositionFigure,
   ModeGapFigure,
   ModeTiles,
+  ScopeGapFigure,
   ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,

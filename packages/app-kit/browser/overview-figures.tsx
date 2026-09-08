@@ -22,8 +22,11 @@ import {
   measureOf,
   percentLabel,
   overallModeGap,
+  scopeComparison,
+  scopesNotSat,
   subjectModeGaps,
   subjectShares,
+  untouchedSubjects,
   type Disposition,
   type EffortPerSitting,
   type EvaluationMode,
@@ -31,6 +34,7 @@ import {
   type SubjectMeasure,
   type SubjectStanding,
   type TestScope,
+  TEST_SCOPE_LABELS,
 } from '@iace/contracts';
 
 const UNMEASURED = '—';
@@ -102,6 +106,81 @@ export function ScoreTrendFigure({
         />
       )}
     </ChartFigure>
+  );
+}
+
+/** A short paper proves knowledge; a long one proves it survives. This is the difference. */
+export function ScopeGapFigure({
+  subjects,
+  mode,
+  className,
+}: Readonly<{
+  subjects: readonly SubjectStanding[];
+  mode: EvaluationMode;
+  className?: string;
+}>) {
+  const compared = scopeComparison(subjects, mode);
+  const items: DivergingItem[] =
+    compared?.subjects.map((row) => ({
+      key: row.subjectId,
+      label: row.name,
+      value: row.accuracyGap === null ? null : Math.round(row.accuracyGap),
+      caption: `${percentLabel(row.first.accuracy, UNMEASURED)} of ${row.first.attempted} · ${percentLabel(row.second.accuracy, UNMEASURED)} of ${row.second.attempted}`,
+    })) ?? [];
+
+  return (
+    <ChartFigure
+      title={
+        compared === null ? 'Across kinds of paper' : titleFor(compared.first, compared.second)
+      }
+      meta={plural(items.length, 'subject')}
+      className={cn('min-w-0', className)}
+    >
+      {compared === null ? (
+        /* ui-copy-ok: rule */
+        <Alert variant="info">
+          Two kinds of paper are needed to compare them. Sit a second kind to see this.
+        </Alert>
+      ) : (
+        <DivergingBars
+          items={items}
+          labelWidth={SUBJECT_LABEL_WIDTH}
+          belowLabel={`Weaker on ${TEST_SCOPE_LABELS[compared.first].toLowerCase()}`}
+          aboveLabel={`Stronger on ${TEST_SCOPE_LABELS[compared.first].toLowerCase()}`}
+          aria-label="Each subject's accuracy on one kind of paper against another"
+        />
+      )}
+    </ChartFigure>
+  );
+}
+
+const titleFor = (first: TestScope, second: TestScope) =>
+  `${TEST_SCOPE_LABELS[first]} against ${TEST_SCOPE_LABELS[second].toLowerCase()}`;
+
+/** A subject a paper asked about and never got an answer to, and a kind of paper never sat. */
+export function BlindSpots({
+  subjects,
+  mode,
+  scope,
+}: Readonly<{
+  subjects: readonly SubjectStanding[];
+  mode: EvaluationMode;
+  scope: TestScope | null;
+}>) {
+  const untouched = untouchedSubjects(subjects, mode, scope);
+  const missing = scopesNotSat(subjects, mode);
+  if (untouched.length === 0 && missing.length === 0) return null;
+
+  return (
+    /* ui-copy-ok: consequence */
+    <Alert variant="warning">
+      {untouched.length > 0
+        ? `Served and never answered: ${untouched.map((subject) => subject.name).join(', ')}. `
+        : ''}
+      {missing.length > 0
+        ? `Never sat: ${missing.map((value) => TEST_SCOPE_LABELS[value].toLowerCase()).join(', ')}.`
+        : ''}
+    </Alert>
   );
 }
 
@@ -240,7 +319,7 @@ export function TimeReturnFigure({ subjects, mode, scope, className }: Readonly<
     key: share.subjectId,
     label: share.name,
     value: Math.round(share.payoff),
-    caption: `${spent(share.sumTimeSec)} and ${share.correct} right · ${Math.round(share.timeShare)}% of the clock, ${Math.round(share.correctShare)}% of the marks`,
+    caption: `${spent(share.sumTimeSec)} and ${share.correct} right · ${Math.round(share.attemptedShare)}% of answers, ${Math.round(share.timeShare)}% of clock, ${Math.round(share.correctShare)}% of marks`,
   }));
 
   return (

@@ -59,7 +59,7 @@ function Body({ report }: Readonly<{ report: PerformanceReport }>) {
         />
       </Section>
 
-      {report.sections.length > 0 ? <SectionsFigure sections={report.sections} /> : null}
+      {measured ? <SectionsFigure sections={report.sections} /> : null}
     </PageBody>
   );
 }
