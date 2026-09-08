@@ -45,6 +45,8 @@ export interface DivergingBarsProps {
   /** Named under the axis so the two directions never rely on hue alone. */
   belowLabel?: string;
   aboveLabel?: string;
+  /** The label gutter. Widen it where the names are long — a subject, not a section. */
+  labelWidth?: number;
   'aria-label': string;
   className?: string;
 }
@@ -66,6 +68,7 @@ export function DivergingBars({
   aboveSeries = 1,
   belowLabel,
   aboveLabel,
+  labelWidth = LABEL_WIDTH,
   className,
   ...props
 }: Readonly<DivergingBarsProps>) {
@@ -87,10 +90,10 @@ export function DivergingBars({
       <YAxis
         type="category"
         dataKey="key"
-        width={LABEL_WIDTH}
+        width={labelWidth}
         axisLine={false}
         tickLine={false}
-        tick={<ItemTick items={items} />}
+        tick={<ItemTick items={items} labelWidth={labelWidth} />}
       />
 
       <Tooltip
@@ -199,9 +202,12 @@ function DirectionLabels({ below, above, viewBox }: Readonly<DirectionLabelsProp
   );
 }
 
-type ItemTickProps = Partial<YAxisTickContentProps> & { items: readonly DivergingItem[] };
+type ItemTickProps = Partial<YAxisTickContentProps> & {
+  items: readonly DivergingItem[];
+  labelWidth: number;
+};
 
-function ItemTick({ x, y, payload, items }: Readonly<ItemTickProps>) {
+function ItemTick({ x, y, payload, items, labelWidth }: Readonly<ItemTickProps>) {
   const item = items[payload?.index ?? -1];
   if (item === undefined) return null;
 
@@ -209,7 +215,7 @@ function ItemTick({ x, y, payload, items }: Readonly<ItemTickProps>) {
     <PlotTickText
       x={Number(x)}
       y={Number(y)}
-      width={LABEL_WIDTH - LABEL_GAP}
+      width={labelWidth - LABEL_GAP}
       anchor="end"
       vertical="middle"
     >

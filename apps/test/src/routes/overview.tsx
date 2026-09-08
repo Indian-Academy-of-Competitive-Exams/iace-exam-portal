@@ -14,11 +14,13 @@ import {
 } from '@iace/ui';
 import {
   DispositionFigure,
+  ModeGapFigure,
   ModeTiles,
   PageCrumbs,
   ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
+  TimeReturnFigure,
 } from '@iace/app-kit/browser';
 import { newestFirst } from '@iace/app-kit';
 import {
@@ -28,6 +30,7 @@ import {
   INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
   bestSitting,
+  effortPerSitting,
   scopesSat,
   standingTiles,
   type EvaluationMode,
@@ -202,8 +205,13 @@ function Body({
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
-        <DispositionFigure disposition={overview.disposition} />
+        <DispositionFigure
+          disposition={overview.disposition}
+          effort={effortPerSitting(overview.standing, overview.disposition)}
+        />
         <SubjectStrengthFigure {...view} />
+        <TimeReturnFigure {...view} className="lg:col-span-2" />
+        <ModeGapFigure subjects={overview.subjects} scope={scope} className="lg:col-span-2" />
       </div>
 
       {/* Full width: its dot labels collide with the quadrant corners in anything narrower. */}

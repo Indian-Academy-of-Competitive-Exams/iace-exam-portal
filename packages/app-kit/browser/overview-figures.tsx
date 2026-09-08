@@ -4,20 +4,27 @@ import {
   DonutPlot,
   MeasureBars,
   Metric,
+  DivergingBars,
   LinePlot,
   QuadrantPlot,
+  StatRow,
   cn,
   plural,
   type CompositionSegment,
+  type DivergingItem,
   type LinePoint,
   type MeasureBar,
   type QuadrantPoint,
 } from '@iace/ui';
 import {
   SUBJECT_SAMPLE_FLOOR,
+  dispositionRates,
   measureOf,
   percentLabel,
+  subjectModeGaps,
+  subjectShares,
   type Disposition,
+  type EffortPerSitting,
   type EvaluationMode,
   type PerformancePoint,
   type SubjectMeasure,
@@ -27,6 +34,8 @@ import {
 
 const UNMEASURED = '—';
 const PLOT_HEIGHT = 300;
+/** A subject's name is long where a section's is short: 'General Intelligence and Reasoning'. */
+const SUBJECT_LABEL_WIDTH = 210;
 
 /** Which mode and scope a subject figure is being read in. Both are the reader's own choice. */
 export interface SubjectView {
@@ -114,9 +123,11 @@ function spent(seconds: number): string {
 /** LIFETIME: no per-mode unattempted exists to bind it to, so the toggle must not seem to. */
 export function DispositionFigure({
   disposition,
+  effort,
   className,
-}: Readonly<{ disposition: Disposition; className?: string }>) {
-  const total = disposition.correct + disposition.wrong + disposition.unattempted;
+}: Readonly<{ disposition: Disposition; effort?: EffortPerSitting; className?: string }>) {
+  const rates = dispositionRates(disposition);
+  const total = rates.served;
   const segments: CompositionSegment[] = [
     { key: 'correct', label: 'Correct', value: disposition.correct, tone: 'positive' },
     { key: 'wrong', label: 'Wrong', value: disposition.wrong, tone: 'negative' },
@@ -137,6 +148,93 @@ export function DispositionFigure({
         }}
         aria-label="Correct, wrong and unattempted across every sitting"
       />
+      <div className="flex flex-col gap-1 border-t border-border pt-3">
+        <StatRow label="Attempted" value={percentLabel(rates.attemptRate, UNMEASURED)} />
+        <StatRow label="Correct of answered" value={percentLabel(rates.accuracy, UNMEASURED)} />
+        <StatRow label="Wrong of answered" value={percentLabel(rates.errorRate, UNMEASURED)} />
+        {effort === undefined ? null : (
+          <>
+            <StatRow label="Questions a sitting" value={effort.questions ?? UNMEASURED} />
+            <StatRow
+              label="Time a sitting"
+              value={effort.timeSec === null ? UNMEASURED : spent(effort.timeSec)}
+            />
+          </>
+        )}
+      </div>
+    </ChartFigure>
+  );
+}
+
+/** Ranked minus practice: a subject that drops when it counts is nerve or clock, not knowledge. */
+export function ModeGapFigure({
+  subjects,
+  scope,
+  className,
+}: Readonly<{
+  subjects: readonly SubjectStanding[];
+  scope: TestScope | null;
+  className?: string;
+}>) {
+  const gaps = subjectModeGaps(subjects, scope).filter((gap) => gap.accuracyGap !== null);
+  const items: DivergingItem[] = gaps.map((gap) => ({
+    key: gap.subjectId,
+    label: gap.name,
+    value: gap.accuracyGap === null ? null : Math.round(gap.accuracyGap),
+    caption: `${percentLabel(gap.ranked.accuracy, UNMEASURED)} ranked · ${percentLabel(gap.practice.accuracy, UNMEASURED)} practice`,
+  }));
+
+  return (
+    <ChartFigure
+      title="Ranked against practice"
+      meta={plural(items.length, 'subject')}
+      className={cn('min-w-0', className)}
+    >
+      {items.length === 0 ? (
+        /* ui-copy-ok: rule */
+        <Alert variant="info">
+          A gap needs both sides. Sit a subject ranked and in practice to see one.
+        </Alert>
+      ) : (
+        <DivergingBars
+          items={items}
+          labelWidth={SUBJECT_LABEL_WIDTH}
+          belowLabel="Drops when ranked"
+          aboveLabel="Holds when ranked"
+          aria-label="Each subject's ranked accuracy against its practice accuracy"
+        />
+      )}
+    </ChartFigure>
+  );
+}
+
+/** Share of the marks minus share of the clock: below the line a subject is not paying its way. */
+export function TimeReturnFigure({ subjects, mode, scope, className }: Readonly<SubjectView>) {
+  const shares = subjectShares(subjects, mode, scope).filter((share) => share.sumTimeSec > 0);
+  const items: DivergingItem[] = shares.map((share) => ({
+    key: share.subjectId,
+    label: share.name,
+    value: Math.round(share.payoff),
+    caption: `${Math.round(share.timeShare)}% of the clock · ${Math.round(share.correctShare)}% of the marks`,
+  }));
+
+  return (
+    <ChartFigure
+      title="Time against return"
+      meta={plural(items.length, 'subject')}
+      className={cn('min-w-0', className)}
+    >
+      {items.length === 0 ? (
+        <NothingMeasured />
+      ) : (
+        <DivergingBars
+          items={items}
+          labelWidth={SUBJECT_LABEL_WIDTH}
+          belowLabel="Takes more than it gives"
+          aboveLabel="Gives more than it takes"
+          aria-label="Each subject's share of correct answers against its share of the clock"
+        />
+      )}
     </ChartFigure>
   );
 }

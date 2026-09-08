@@ -5,8 +5,12 @@ import {
   SUBJECT_SAMPLE_FLOOR,
   TEST_SCOPE,
   measureOf,
+  dispositionRates,
+  effortPerSitting,
   scopesSat,
   standingTiles,
+  subjectModeGaps,
+  subjectShares,
   type OverviewStanding,
   type SubjectMeasure,
   type SubjectStanding,
@@ -161,6 +165,7 @@ describe('standingTiles', () => {
     avgPercentile: 63.3,
     bestPercentile: 88.5,
     avgScore: 65,
+    sumTimeSec: 7_200,
     lastAttemptAt: '2026-08-30T09:00:00.000Z',
   };
   const MEASURE: SubjectMeasure = {
@@ -217,6 +222,7 @@ describe('standingTiles never shows one number twice', () => {
       avgPercentile: null,
       bestPercentile: null,
       avgScore: null,
+      sumTimeSec: 3_600,
       lastAttemptAt: null,
     };
     const measure: SubjectMeasure = {
@@ -233,5 +239,161 @@ describe('standingTiles never shows one number twice', () => {
 
     assert.deepEqual(values, [9, 48, 8]);
     assert.equal(new Set(values).size, values.length);
+  });
+});
+
+describe('dispositionRates', () => {
+  it('reads the three shares off one partition', () => {
+    const rates = dispositionRates({ correct: 8, wrong: 40, unattempted: 612 });
+
+    assert.equal(rates.served, 660);
+    assert.equal(rates.answered, 48);
+    assert.equal(rates.attemptRate, 7.27);
+    assert.equal(rates.accuracy, 16.67);
+    assert.equal(rates.errorRate, 83.33);
+  });
+
+  /** A nought would read as "answered nothing right", which is not what nothing answered means. */
+  it('leaves every share null when nothing was answered, never zero', () => {
+    const rates = dispositionRates({ correct: 0, wrong: 0, unattempted: 100 });
+
+    assert.equal(rates.attemptRate, 0);
+    assert.equal(rates.accuracy, null);
+    assert.equal(rates.errorRate, null);
+  });
+
+  it('has nothing to divide by when nothing was served', () => {
+    const rates = dispositionRates({ correct: 0, wrong: 0, unattempted: 0 });
+
+    assert.equal(rates.attemptRate, null);
+    assert.equal(rates.served, 0);
+  });
+});
+
+describe('subjectModeGaps', () => {
+  const subjects: SubjectStanding[] = [
+    {
+      subjectId: 'sub_q',
+      name: 'Quantitative Aptitude',
+      tallies: [
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.RANKED,
+          attempted: 50,
+          correct: 20,
+          sumTimeSec: 500,
+        },
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+          attempted: 50,
+          correct: 35,
+          sumTimeSec: 1_000,
+        },
+      ],
+    },
+    {
+      subjectId: 'sub_g',
+      name: 'General Awareness',
+      tallies: [
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+          attempted: 20,
+          correct: 10,
+          sumTimeSec: 100,
+        },
+      ],
+    },
+  ];
+
+  it('measures the drop from practice to ranked, in accuracy points', () => {
+    const [quant] = subjectModeGaps(subjects);
+
+    assert.equal(quant?.name, 'Quantitative Aptitude');
+    assert.equal(quant?.accuracyGap, -30);
+    assert.equal(quant?.paceGap, -10);
+  });
+
+  /** One side measured is not a gap: reporting it as zero would invent a subject that holds up. */
+  it('drops a subject sat in only one mode rather than calling it level', () => {
+    const gaps = subjectModeGaps(subjects);
+
+    assert.equal(gaps.length, 1);
+    assert.ok(!gaps.some((gap) => gap.name === 'General Awareness'));
+  });
+});
+
+describe('subjectShares', () => {
+  const subjects: SubjectStanding[] = [
+    {
+      subjectId: 'sub_q',
+      name: 'Quantitative Aptitude',
+      tallies: [
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+          attempted: 40,
+          correct: 10,
+          sumTimeSec: 900,
+        },
+      ],
+    },
+    {
+      subjectId: 'sub_r',
+      name: 'Reasoning',
+      tallies: [
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+          attempted: 40,
+          correct: 30,
+          sumTimeSec: 300,
+        },
+      ],
+    },
+  ];
+
+  it('marks the subject that eats the clock without paying it back', () => {
+    const [quant, reasoning] = subjectShares(subjects, EVALUATION_MODE.PRACTICE);
+
+    assert.equal(quant?.timeShare, 75);
+    assert.equal(quant?.correctShare, 25);
+    assert.equal(quant?.payoff, -50);
+
+    assert.equal(reasoning?.payoff, 50);
+  });
+
+  it('leaves out a subject with nothing attempted in this mode', () => {
+    assert.deepEqual(subjectShares(subjects, EVALUATION_MODE.RANKED), []);
+  });
+});
+
+describe('effortPerSitting', () => {
+  const standing: OverviewStanding = {
+    testsAttempted: 9,
+    testsEvaluated: 0,
+    practiceAttempts: 9,
+    avgPercentile: null,
+    bestPercentile: null,
+    avgScore: null,
+    sumTimeSec: 3_600,
+    lastAttemptAt: null,
+  };
+
+  it('divides the lifetime totals by the sittings behind them', () => {
+    const effort = effortPerSitting(standing, { correct: 8, wrong: 40, unattempted: 612 });
+
+    assert.equal(effort.questions, 73);
+    assert.equal(effort.timeSec, 400);
+  });
+
+  it('has nothing to divide by before a first sitting', () => {
+    const effort = effortPerSitting(
+      { ...standing, testsAttempted: 0 },
+      { correct: 0, wrong: 0, unattempted: 0 },
+    );
+
+    assert.deepEqual(effort, { questions: null, timeSec: null });
   });
 });

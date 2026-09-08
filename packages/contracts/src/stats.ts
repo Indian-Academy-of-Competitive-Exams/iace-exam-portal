@@ -92,6 +92,8 @@ export const overviewStandingSchema = z.object({
   avgPercentile: z.number().nullable(),
   bestPercentile: z.number().nullable(),
   avgScore: z.number().nullable(),
+  /** Every sitting's clock, ranked and practice alike — the denominator of per-sitting effort. */
+  sumTimeSec: z.number().int(),
   lastAttemptAt: z.string().nullable(),
 });
 export type OverviewStanding = z.infer<typeof overviewStandingSchema>;
@@ -203,6 +205,139 @@ export function standingTiles(
     { key: 'sittings', label: 'Sittings', value: standing.testsAttempted },
   ];
 }
+
+/** The three shares the disposition can answer. LIFETIME: it never split ranked from practice. */
+export interface DispositionRates {
+  served: number;
+  answered: number;
+  /** Of everything served, the share actually answered — a finishing problem shows up here first. */
+  attemptRate: number | null;
+  accuracy: number | null;
+  /** Of what was answered, the share that was wrong. Negative marking makes this the costly one. */
+  errorRate: number | null;
+}
+
+export function dispositionRates(disposition: Disposition): DispositionRates {
+  const answered = disposition.correct + disposition.wrong;
+  const served = answered + disposition.unattempted;
+
+  return {
+    served,
+    answered,
+    attemptRate: served === 0 ? null : round2((answered / served) * 100),
+    accuracy: answered === 0 ? null : round2((disposition.correct / answered) * 100),
+    errorRate: answered === 0 ? null : round2((disposition.wrong / answered) * 100),
+  };
+}
+
+/** What one sitting costs on average — the effort figures a lifetime total cannot say on its own. */
+export interface EffortPerSitting {
+  questions: number | null;
+  timeSec: number | null;
+}
+
+export function effortPerSitting(
+  standing: OverviewStanding,
+  disposition: Disposition,
+): EffortPerSitting {
+  const sittings = standing.testsAttempted;
+  if (sittings === 0) return { questions: null, timeSec: null };
+  const served = disposition.correct + disposition.wrong + disposition.unattempted;
+
+  return {
+    questions: Math.round(served / sittings),
+    timeSec: Math.round(standing.sumTimeSec / sittings),
+  };
+}
+
+/** One subject read in BOTH modes: whether it survives the paper that counts is the whole point. */
+export interface SubjectModeGap {
+  subjectId: string;
+  name: string;
+  ranked: SubjectMeasure;
+  practice: SubjectMeasure;
+  /** Ranked minus practice. Null unless BOTH sides were measured — a gap needs two ends. */
+  accuracyGap: number | null;
+  paceGap: number | null;
+}
+
+export function subjectModeGaps(
+  subjects: readonly SubjectStanding[],
+  scope: TestScope | null = null,
+): SubjectModeGap[] {
+  return subjects
+    .map((subject) => {
+      const ranked = measureOf(subject.tallies, EVALUATION_MODE.RANKED, scope);
+      const practice = measureOf(subject.tallies, EVALUATION_MODE.PRACTICE, scope);
+      return {
+        subjectId: subject.subjectId,
+        name: subject.name,
+        ranked,
+        practice,
+        accuracyGap: gapBetween(ranked.accuracy, practice.accuracy),
+        paceGap: gapBetween(ranked.pace, practice.pace),
+      };
+    })
+    .filter((gap) => gap.accuracyGap !== null || gap.paceGap !== null);
+}
+
+/** Where the hours went against what they bought back, each as a share of the mode's own total. */
+export interface SubjectShare {
+  subjectId: string;
+  name: string;
+  attempted: number;
+  correct: number;
+  sumTimeSec: number;
+  timeShare: number;
+  correctShare: number;
+  /** Correct share minus time share: above zero the subject is paying for the clock it takes. */
+  payoff: number;
+}
+
+export function subjectShares(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+  scope: TestScope | null = null,
+): SubjectShare[] {
+  const measured = subjects
+    .map((subject) => ({ subject, measure: measureOf(subject.tallies, mode, scope) }))
+    .filter((row) => row.measure.attempted > 0);
+
+  const totalTime = measured.reduce((sum, row) => sum + row.measure.sumTimeSec, 0);
+  const totalCorrect = measured.reduce((sum, row) => sum + row.measure.correct, 0);
+
+  return measured.map(({ subject, measure }) => {
+    const timeShare = totalTime === 0 ? 0 : round2((measure.sumTimeSec / totalTime) * 100);
+    const correctShare = totalCorrect === 0 ? 0 : round2((measure.correct / totalCorrect) * 100);
+    return {
+      subjectId: subject.subjectId,
+      name: subject.name,
+      attempted: measure.attempted,
+      correct: measure.correct,
+      sumTimeSec: measure.sumTimeSec,
+      timeShare,
+      correctShare,
+      payoff: round2(correctShare - timeShare),
+    };
+  });
+}
+
+/** How much of each kind of paper has been sat in this mode. A scope missing here is a blind spot. */
+export function volumeByScope(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+): { scope: TestScope; attempted: number }[] {
+  return TEST_SCOPES.map((scope) => ({
+    scope,
+    attempted: subjects.reduce(
+      (sum, subject) => sum + measureOf(subject.tallies, mode, scope).attempted,
+      0,
+    ),
+  }));
+}
+
+const gapBetween = (mine: number | null, theirs: number | null): number | null =>
+  mine === null || theirs === null ? null : round2(mine - theirs);
 
 /** Every scope sat IN THIS MODE: one sat only in practice must not be offered to a ranked chart. */
 export const scopesSat = (

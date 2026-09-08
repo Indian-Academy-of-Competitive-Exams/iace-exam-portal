@@ -55,10 +55,12 @@ export {
 } from './performance-figures';
 export {
   DispositionFigure,
+  ModeGapFigure,
   ModeTiles,
   ScoreTrendFigure,
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
+  TimeReturnFigure,
   type SubjectView,
 } from './overview-figures';
 export { ProtectedRoute } from './protected-route';

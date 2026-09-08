@@ -27,6 +27,7 @@ const NO_SITTINGS: StudentOverview['standing'] = {
   avgPercentile: null,
   bestPercentile: null,
   avgScore: null,
+  sumTimeSec: 0,
   lastAttemptAt: null,
 };
 
@@ -85,6 +86,7 @@ export class StudentOverviewService {
               avgPercentile: perSitting(Number(stat.sumPercentile), stat.testsEvaluated),
               bestPercentile: numberOrNull(stat.bestPercentile),
               avgScore: perSitting(Number(stat.sumScore), stat.testsEvaluated),
+              sumTimeSec: Number(stat.sumTimeSec),
               lastAttemptAt: stat.lastAttemptAt?.toISOString() ?? null,
             },
       disposition:
