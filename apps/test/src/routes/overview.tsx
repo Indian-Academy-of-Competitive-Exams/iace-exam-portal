@@ -29,9 +29,12 @@ import {
   EVALUATION_MODES,
   INSTITUTE_TIME_ZONE,
   TEST_SCOPE_LABELS,
+  civilDate,
+  todayISO,
   bestSitting,
   effortPerSitting,
   scopesSat,
+  volumeByScope,
   standingTiles,
   type EvaluationMode,
   type PerformancePoint,
@@ -81,6 +84,12 @@ export function OverviewPage() {
   const sat = newestFirst(trend.data?.points ?? []);
   const scopes = overview.data ? scopesSat(overview.data.subjects, mode) : [];
   const chosen = scope !== null && scopes.includes(scope) ? scope : null;
+  const volume = new Map(
+    (overview.data ? volumeByScope(overview.data.subjects, mode) : []).map((row) => [
+      row.scope,
+      row.attempted,
+    ]),
+  );
 
   return (
     <PageFrame
@@ -106,7 +115,11 @@ export function OverviewPage() {
                   onChange={(next) => setScope(next === ANY_SCOPE ? null : (next as TestScope))}
                   items={[
                     { value: ANY_SCOPE, label: 'Every scope' },
-                    ...scopes.map((value) => ({ value, label: TEST_SCOPE_LABELS[value] })),
+                    ...scopes.map((value) => ({
+                      value,
+                      label: TEST_SCOPE_LABELS[value],
+                      hint: plural(volume.get(value) ?? 0, 'question'),
+                    })),
                   ]}
                   className={PICKER_WIDTH.SCOPE}
                 />
@@ -199,7 +212,7 @@ function Body({
 
       <TileGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
         {standingTiles(overview.standing, overview.byMode[mode], mode).map((tile) => (
-          <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} />
+          <StatTile key={tile.key} label={tile.label} value={tile.value ?? DASH} foot={tile.foot} />
         ))}
       </TileGrid>
 
@@ -248,16 +261,29 @@ function headlineOf(
   );
 }
 
-const satOn = (overview: StudentOverview) =>
-  overview.standing.lastAttemptAt === null
-    ? undefined
-    : `Last sat ${WHEN.format(new Date(overview.standing.lastAttemptAt))}`;
+function satOn(overview: StudentOverview): string | undefined {
+  const at = overview.standing.lastAttemptAt;
+  if (at === null) return undefined;
+  const days = daysSince(at);
+  const ago = days === 0 ? 'today' : plural(days, 'day') + ' ago';
+  return `Last sat ${WHEN.format(new Date(at))} · ${ago}`;
+}
+
+/** Whole institute days between two civil dates — never a UTC subtraction on a stored instant. */
+function daysSince(at: string): number {
+  const then = Date.parse(`${civilDate(new Date(at))}T00:00:00Z`);
+  const today = Date.parse(`${todayISO()}T00:00:00Z`);
+  return Math.max(0, Math.round((today - then) / 86_400_000));
+}
 
 /** The average alone is half the story; the best is what a student is actually chasing. */
-const bestLine = (overview: StudentOverview) =>
-  overview.standing.bestPercentile === null
-    ? 'average percentile'
-    : `average percentile · best ${overview.standing.bestPercentile}`;
+function bestLine(overview: StudentOverview): string {
+  const { avgPercentile, bestPercentile } = overview.standing;
+  if (bestPercentile === null) return 'average percentile';
+  const spread =
+    avgPercentile === null ? '' : ` · ${Math.round(bestPercentile - avgPercentile)} above it`;
+  return `average percentile · best ${bestPercentile}${spread}`;
+}
 
 /** Which sitting of the paper this was, and the day it was sat — in the institute's own zone. */
 function sittingHint(point: PerformancePoint): string {

@@ -182,6 +182,8 @@ export interface StandingTile {
   key: string;
   label: string;
   value: number | null;
+  /** The split behind the headline, where one number hides two. */
+  foot?: string;
 }
 
 /** Percentile, score and marking need an evaluated RANKED sitting; practice answers differently. */
@@ -202,7 +204,12 @@ export function standingTiles(
     { key: 'score', label: 'Average score', value: standing.avgScore },
     { key: 'marked', label: 'Tests marked', value: standing.testsEvaluated },
     // Sittings, not tests: `testsAttempted` counts every one, so six retakes of a paper are six.
-    { key: 'sittings', label: 'Sittings', value: standing.testsAttempted },
+    {
+      key: 'sittings',
+      label: 'Sittings',
+      value: standing.testsAttempted,
+      foot: standing.practiceAttempts > 0 ? `${standing.practiceAttempts} in practice` : undefined,
+    },
   ];
 }
 
@@ -334,6 +341,23 @@ export function volumeByScope(
       0,
     ),
   }));
+}
+
+/** The same gap over every subject at once: how the whole reader changes when the paper counts. */
+export function overallModeGap(
+  subjects: readonly SubjectStanding[],
+  scope: TestScope | null = null,
+) {
+  const tallies = subjects.flatMap((subject) => subject.tallies);
+  const ranked = measureOf(tallies, EVALUATION_MODE.RANKED, scope);
+  const practice = measureOf(tallies, EVALUATION_MODE.PRACTICE, scope);
+
+  return {
+    ranked,
+    practice,
+    accuracyGap: gapBetween(ranked.accuracy, practice.accuracy),
+    paceGap: gapBetween(ranked.pace, practice.pace),
+  };
 }
 
 const gapBetween = (mine: number | null, theirs: number | null): number | null =>

@@ -97,6 +97,8 @@ export function CohortFigure({
   if (cohort.topperScore !== null) {
     markers.push({ key: 'topper', label: 'Topper', value: cohort.topperScore, tone: 'good' });
   }
+  // The floor of the spread, so "you are 40 marks off the top" reads against a range, not a point.
+  const lowest = cohort.bands[0]?.from ?? null;
 
   return (
     <ChartFigure
@@ -115,12 +117,26 @@ export function CohortFigure({
         height={PLOT_HEIGHT}
         bands={cohort.bands}
         markers={markers}
-        min={cohort.bands[0]?.from ?? 0}
+        min={lowest ?? 0}
         max={cohort.bands.at(-1)?.to ?? cohort.score}
         axisSuffix="marks"
         countLabel="Sittings"
         aria-label="Where this sitting sits in the spread of scores"
       />
+      {cohort.topperScore === null ? null : (
+        <div className="flex flex-col gap-1 border-t border-border pt-3">
+          <StatRow label="Behind the topper" value={round(cohort.topperScore - cohort.score)} />
+          {cohort.averageScore === null ? null : (
+            <StatRow
+              label="Against the average"
+              value={signed(cohort.score - cohort.averageScore)}
+            />
+          )}
+          {lowest === null ? null : (
+            <StatRow label="Spread" value={`${lowest} to ${cohort.topperScore}`} />
+          )}
+        </div>
+      )}
     </ChartFigure>
   );
 }
@@ -359,5 +375,7 @@ export function TimeFigure({
     </ChartFigure>
   );
 }
+
+const signed = (value: number) => (value > 0 ? `+${round(value)}` : String(round(value)));
 
 const round = (value: number) => Math.round(value * 100) / 100;

@@ -21,6 +21,7 @@ import {
   dispositionRates,
   measureOf,
   percentLabel,
+  overallModeGap,
   subjectModeGaps,
   subjectShares,
   type Disposition,
@@ -104,6 +105,15 @@ export function ScoreTrendFigure({
   );
 }
 
+/** Seconds a question slower or faster when it counts — the clock half of the same gap. */
+function paceNote(paceGap: number | null): string {
+  if (paceGap === null || Math.round(paceGap) === 0) return '';
+  const seconds = Math.abs(Math.round(paceGap));
+  return ` · ${seconds}s ${paceGap > 0 ? 'slower' : 'faster'} when ranked`;
+}
+
+const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
+
 /** Nothing sat and one sitting are different facts: only one of them is asking for a retake. */
 const NoTrend = ({ sittings }: Readonly<{ sittings: number }>) =>
   sittings === 0 ? (
@@ -177,17 +187,28 @@ export function ModeGapFigure({
   className?: string;
 }>) {
   const gaps = subjectModeGaps(subjects, scope).filter((gap) => gap.accuracyGap !== null);
+  const overall = overallModeGap(subjects, scope);
   const items: DivergingItem[] = gaps.map((gap) => ({
     key: gap.subjectId,
     label: gap.name,
     value: gap.accuracyGap === null ? null : Math.round(gap.accuracyGap),
-    caption: `${percentLabel(gap.ranked.accuracy, UNMEASURED)} ranked · ${percentLabel(gap.practice.accuracy, UNMEASURED)} practice`,
+    caption: `${percentLabel(gap.ranked.accuracy, UNMEASURED)} ranked · ${percentLabel(gap.practice.accuracy, UNMEASURED)} practice${paceNote(gap.paceGap)}`,
   }));
 
   return (
     <ChartFigure
       title="Ranked against practice"
       meta={plural(items.length, 'subject')}
+      figure={
+        overall.accuracyGap === null ? undefined : (
+          <Metric
+            size="sm"
+            label="Overall"
+            value={signed(Math.round(overall.accuracyGap))}
+            unit="points"
+          />
+        )
+      }
       className={cn('min-w-0', className)}
     >
       {items.length === 0 ? (

@@ -10,6 +10,7 @@ import {
   dispositionRates,
   distractorThatWon,
   effortPerSitting,
+  overallModeGap,
   questionReportInsights,
   scopesSat,
   standingTiles,
@@ -496,5 +497,65 @@ describe('distractorThatWon', () => {
       null,
     );
     assert.equal(distractorThatWon({ optionCounts: [] } as unknown as QuestionReportRow), null);
+  });
+});
+
+describe('overallModeGap', () => {
+  const subjects: SubjectStanding[] = [
+    {
+      subjectId: 'sub_q',
+      name: 'Quantitative Aptitude',
+      tallies: [
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.RANKED,
+          attempted: 100,
+          correct: 40,
+          sumTimeSec: 1_000,
+        },
+        {
+          scope: TEST_SCOPE.FULL,
+          evaluationMode: EVALUATION_MODE.PRACTICE,
+          attempted: 100,
+          correct: 70,
+          sumTimeSec: 500,
+        },
+      ],
+    },
+  ];
+
+  it('measures the whole reader, not one subject at a time', () => {
+    const gap = overallModeGap(subjects);
+
+    assert.equal(gap.ranked.accuracy, 40);
+    assert.equal(gap.practice.accuracy, 70);
+    assert.equal(gap.accuracyGap, -30);
+    assert.equal(gap.paceGap, 5);
+  });
+
+  /** Nothing sat in one mode leaves no gap: a missing side is not a side that scored zero. */
+  it('reports no gap where one mode was never sat', () => {
+    assert.equal(overallModeGap([]).accuracyGap, null);
+  });
+});
+
+describe('standingTiles names the split behind the sitting count', () => {
+  it('says how many of the sittings were practice', () => {
+    const tiles = standingTiles(
+      {
+        testsAttempted: 9,
+        testsEvaluated: 2,
+        practiceAttempts: 7,
+        avgPercentile: 50,
+        bestPercentile: 60,
+        avgScore: 40,
+        sumTimeSec: 100,
+        lastAttemptAt: null,
+      },
+      { attempted: 10, correct: 5, accuracy: 50, sumTimeSec: 100, pace: 10 },
+      EVALUATION_MODE.RANKED,
+    );
+
+    assert.equal(tiles.at(-1)?.foot, '7 in practice');
   });
 });
