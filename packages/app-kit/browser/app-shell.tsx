@@ -16,6 +16,7 @@ import {
 } from '@iace/ui';
 import { filterNavByPermission, type NavItem } from '../src';
 import { SidebarNav } from './app-shell/sidebar-nav';
+import { NavBadgeProvider, type NavBadges } from './app-shell/nav-badges';
 import { NavPanel } from './app-shell/nav-panel';
 import { UserMenu } from './app-shell/user-menu';
 import { DESKTOP_QUERY, useMediaQuery } from './app-shell/use-media-query';
@@ -48,6 +49,8 @@ export interface AppShellProps {
   homeTo?: string;
   /** Optional: an app with no permissions passes nothing and every section shows. */
   can?: (featureKey: FeatureKey) => boolean;
+  /** Counts a nav row wears, keyed by route — an unread tally belongs on its row, not in the bar. */
+  navBadges?: NavBadges;
   width?: ShellWidth;
 }
 
@@ -68,6 +71,7 @@ export function AppShell({
   headerEnd,
   homeTo = '/',
   can,
+  navBadges,
   width = 'wide',
 }: Readonly<AppShellProps>) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
@@ -93,128 +97,130 @@ export function AppShell({
 
   return (
     // dvh, not vh: mobile browser chrome would crop the bottom of the frame.
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      {immersive ? null : (
-        <header className="flex-none border-b border-border bg-surface">
-          <div className="flex items-center gap-3 px-4 py-2">
-            {/* Below the rail there is no nav in the page at all, so the button is the only
+    <NavBadgeProvider badges={navBadges ?? {}}>
+      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        {immersive ? null : (
+          <header className="flex-none border-b border-border bg-surface">
+            <div className="flex items-center gap-3 px-4 py-2">
+              {/* Below the rail there is no nav in the page at all, so the button is the only
               way in. Above it the rail is present and the toggle lives on its edge. */}
-            {hasNav && !isDesktop ? (
-              <Button
-                variant="ghost"
-                size="iconSm"
+              {hasNav && !isDesktop ? (
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  aria-label="Open navigation"
+                  aria-expanded={panelOpen}
+                  onClick={() => setPanelOpen(true)}
+                >
+                  <Menu aria-hidden />
+                </Button>
+              ) : null}
+
+              {home}
+              {brandSuffix}
+
+              <div className="flex flex-1 items-center justify-end gap-1">
+                {headerEnd}
+                <ThemeToggle />
+                <UserMenu
+                  label={userLabel}
+                  avatar={userAvatar}
+                  items={userMenuItems}
+                  onSignOut={onSignOut}
+                />
+              </div>
+            </div>
+          </header>
+        )}
+
+        <div className="flex min-h-0 flex-1">
+          {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
+            a complementary one announces the same region twice. */}
+          {/* The rail is the only nav IN the flow, and its width never changes — which is what
+            keeps the content region a constant. Expanding opens the panel over the top. */}
+          {isDesktop && hasNav ? (
+            <div
+              className={cn(
+                // `relative` positions the expand toggle that hangs off the edge.
+                'relative flex h-full w-[--sidebar-w-rail] shrink-0 flex-col',
+                'border-r border-border bg-surface p-[--sidebar-rail-pad]',
+              )}
+            >
+              {/* mt-8 clears the toggle below, which hangs off the right edge at top-3 and is
+                24px tall: without it the first nav row reads as attached to that button. */}
+              <nav aria-label="Sections" className="mt-8 min-h-0 flex-1 overflow-y-auto">
+                <SidebarNav items={items} pathname={pathname} collapsed />
+              </nav>
+
+              <button
+                type="button"
                 aria-label="Open navigation"
                 aria-expanded={panelOpen}
                 onClick={() => setPanelOpen(true)}
+                className={cn(
+                  'absolute -right-3 top-3 grid size-6 place-items-center rounded-full',
+                  'border border-border bg-surface text-muted-foreground shadow-sm',
+                  'hover:bg-muted hover:text-foreground',
+                  'focus-visible:shadow-focus focus-visible:outline-none',
+                  'z-[--z-sticky]',
+                )}
               >
-                <Menu aria-hidden />
-              </Button>
-            ) : null}
-
-            {home}
-            {brandSuffix}
-
-            <div className="flex flex-1 items-center justify-end gap-1">
-              {headerEnd}
-              <ThemeToggle />
-              <UserMenu
-                label={userLabel}
-                avatar={userAvatar}
-                items={userMenuItems}
-                onSignOut={onSignOut}
-              />
+                <ChevronRight className="size-3.5" aria-hidden />
+              </button>
             </div>
-          </div>
-        </header>
-      )}
+          ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        {/* A div, not an aside: the nav inside is the landmark, and wrapping it in
-            a complementary one announces the same region twice. */}
-        {/* The rail is the only nav IN the flow, and its width never changes — which is what
-            keeps the content region a constant. Expanding opens the panel over the top. */}
-        {isDesktop && hasNav ? (
-          <div
-            className={cn(
-              // `relative` positions the expand toggle that hangs off the edge.
-              'relative flex h-full w-[--sidebar-w-rail] shrink-0 flex-col',
-              'border-r border-border bg-surface p-[--sidebar-rail-pad]',
-            )}
-          >
-            {/* mt-8 clears the toggle below, which hangs off the right edge at top-3 and is
-                24px tall: without it the first nav row reads as attached to that button. */}
-            <nav aria-label="Sections" className="mt-8 min-h-0 flex-1 overflow-y-auto">
-              <SidebarNav items={items} pathname={pathname} collapsed />
-            </nav>
-
-            <button
-              type="button"
-              aria-label="Open navigation"
-              aria-expanded={panelOpen}
-              onClick={() => setPanelOpen(true)}
-              className={cn(
-                'absolute -right-3 top-3 grid size-6 place-items-center rounded-full',
-                'border border-border bg-surface text-muted-foreground shadow-sm',
-                'hover:bg-muted hover:text-foreground',
-                'focus-visible:shadow-focus focus-visible:outline-none',
-                'z-[--z-sticky]',
-              )}
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {/* No padding and no cap while immersive: the page asked for the window, not a column in it. */}
+            <div
+              className={
+                workspace === null
+                  ? cn(PAGE_CONTENT_CLASS, WIDTHS[width])
+                  : 'flex min-h-0 w-full flex-1 flex-col overflow-hidden'
+              }
             >
-              <ChevronRight className="size-3.5" aria-hidden />
-            </button>
-          </div>
-        ) : null}
+              <WorkspaceContext.Provider value={setWorkspace}>{children}</WorkspaceContext.Provider>
+            </div>
+          </main>
+        </div>
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* No padding and no cap while immersive: the page asked for the window, not a column in it. */}
-          <div
-            className={
-              workspace === null
-                ? cn(PAGE_CONTENT_CLASS, WIDTHS[width])
-                : 'flex min-h-0 w-full flex-1 flex-col overflow-hidden'
-            }
-          >
-            <WorkspaceContext.Provider value={setWorkspace}>{children}</WorkspaceContext.Provider>
-          </div>
-        </main>
-      </div>
-
-      {/* Every breakpoint, not just the small one. A Sheet rather than a hand-rolled panel: it
+        {/* Every breakpoint, not just the small one. A Sheet rather than a hand-rolled panel: it
           owns the focus trap, Escape, the scroll lock and the return of focus to whatever
           opened it, and being portalled is what keeps the content region from ever reflowing. */}
-      {hasNav ? (
-        <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
-          {/* aria-describedby={undefined}: the panel is a list of links and has
+        {hasNav ? (
+          <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+            {/* aria-describedby={undefined}: the panel is a list of links and has
               nothing to describe. Radix otherwise warns in dev that a dialog
               without a description is probably missing one. */}
-          <SheetContent side="left" showClose={false} aria-describedby={undefined}>
-            {/* The lockup is a heading, not the first row of the list. */}
-            <div className="mb-5 flex items-center justify-between border-b border-border pb-3">
-              <Link to={homeTo} onClick={closePanel} className="rounded-md">
-                <Brandmark />
-              </Link>
-              {/* The heading a screen reader announces on arrival. Hidden
+            <SheetContent side="left" showClose={false} aria-describedby={undefined}>
+              {/* The lockup is a heading, not the first row of the list. */}
+              <div className="mb-5 flex items-center justify-between border-b border-border pb-3">
+                <Link to={homeTo} onClick={closePanel} className="rounded-md">
+                  <Brandmark />
+                </Link>
+                {/* The heading a screen reader announces on arrival. Hidden
                   because the logo beside it is the visible one. */}
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SheetClose asChild>
-                <Button variant="ghost" size="iconSm" aria-label="Close navigation">
-                  <X aria-hidden />
-                </Button>
-              </SheetClose>
-            </div>
+                <SheetTitle className="sr-only">Navigation</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="iconSm" aria-label="Close navigation">
+                    <X aria-hidden />
+                  </Button>
+                </SheetClose>
+              </div>
 
-            <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
-              <NavPanel
-                items={items}
-                pathname={pathname}
-                drilldown={!isDesktop}
-                onNavigate={closePanel}
-              />
-            </nav>
-          </SheetContent>
-        </Sheet>
-      ) : null}
-    </div>
+              <nav aria-label="Sections" className="min-h-0 flex-1 overflow-y-auto">
+                <NavPanel
+                  items={items}
+                  pathname={pathname}
+                  drilldown={!isDesktop}
+                  onNavigate={closePanel}
+                />
+              </nav>
+            </SheetContent>
+          </Sheet>
+        ) : null}
+      </div>
+    </NavBadgeProvider>
   );
 }
 

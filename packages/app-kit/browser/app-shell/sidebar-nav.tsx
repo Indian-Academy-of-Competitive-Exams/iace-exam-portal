@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { NavBadge, useNavBadge } from './nav-badges';
 import * as Popover from '@radix-ui/react-popover';
 import { ChevronRight } from 'lucide-react';
 import { cn, Tooltip, TooltipContent, TooltipTrigger } from '@iace/ui';
@@ -67,17 +68,23 @@ function Leaf({
   // Plain Link, not NavLink: NavLink decides `isActive` by prefix and would both
   // stamp its own aria-current and append its own class token over the top.
   const isActive = item.to !== undefined && item.to === activePath;
+  const count = useNavBadge(item.to);
+  const label = count > 0 ? `${item.label}, ${count} unread` : item.label;
 
   return (
-    <RailTooltip label={item.label} collapsed={collapsed}>
+    <RailTooltip label={label} collapsed={collapsed}>
       <Link
         to={item.to ?? '#'}
         onClick={onNavigate}
         aria-current={isActive ? 'page' : undefined}
         className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE, collapsed && ROW_RAIL)}
       >
-        <Glyph item={item} collapsed={collapsed} />
-        {collapsed ? <span className="sr-only">{item.label}</span> : <span>{item.label}</span>}
+        <span className="relative flex shrink-0 items-center">
+          <Glyph item={item} collapsed={collapsed} />
+          {collapsed ? <NavBadge count={count} collapsed /> : null}
+        </span>
+        {collapsed ? <span className="sr-only">{label}</span> : <span>{item.label}</span>}
+        {collapsed ? null : <NavBadge count={count} collapsed={false} />}
       </Link>
     </RailTooltip>
   );

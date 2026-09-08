@@ -3,10 +3,16 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Avatar, PageFrame, PageHeader } from '@iace/ui';
 import { AppShell as Shell } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { NAV_ITEMS, PROFILE_QUERY_KEY, ROUTES, USER_MENU_ITEMS } from '../lib/constants';
+import {
+  NAV_ITEMS,
+  PROFILE_QUERY_KEY,
+  ROUTES,
+  UNREAD_POLL_MS,
+  UNREAD_QUERY_KEY,
+  USER_MENU_ITEMS,
+} from '../lib/constants';
 import { useAuth } from '../providers/auth';
 import { ChangePinCard } from '../routes/account';
-import { NotificationBell } from './notification-bell';
 
 /** The student's shell. Same width as the admin's, so neither wastes the screen it is on. */
 export function AppShell() {
@@ -14,6 +20,12 @@ export function AppShell() {
   // Shared cache entry with the profile screens, so a new photo shows in the
   // header the moment it uploads rather than on the next reload.
   const me = useQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: () => api.me.profile() });
+  // One row is asked for because the answer wanted is `meta.total`, not the rows.
+  const unread = useQuery({
+    queryKey: UNREAD_QUERY_KEY,
+    queryFn: () => api.me.notifications({ unreadOnly: 'true', page: 1, pageSize: 1 }),
+    refetchInterval: UNREAD_POLL_MS,
+  });
 
   return (
     <Shell
@@ -22,8 +34,8 @@ export function AppShell() {
       homeTo={ROUTES.HOME}
       onSignOut={() => void signOut()}
       userMenuItems={USER_MENU_ITEMS}
+      navBadges={{ [ROUTES.NOTIFICATIONS]: unread.data?.total ?? 0 }}
       userLabel={student?.fullName ?? `+91 ${student?.mobile ?? ''}`}
-      headerEnd={<NotificationBell />}
       userAvatar={
         <Avatar
           src={me.data?.profile?.photoUrl}
