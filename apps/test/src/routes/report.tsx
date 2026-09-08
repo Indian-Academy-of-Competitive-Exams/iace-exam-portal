@@ -36,7 +36,7 @@ import {
 const UNTITLED = 'Untitled test';
 
 /** Dense, single-body tabs stay one contained surface; the rest float their cards on the page. */
-const PANEL_TABS = new Set(['solutions', 'questions']);
+const PANEL_TABS = new Set(['questions']);
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,

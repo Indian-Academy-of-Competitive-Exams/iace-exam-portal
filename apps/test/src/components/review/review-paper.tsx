@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   Alert,
   Badge,
+  Button,
+  Card,
   RichContent,
   SectionHeading,
   Tabs,
@@ -63,42 +66,53 @@ export function ReviewPaper({
   const inSection = questions.filter((row) => row.baseConfigSectionId === sectionId);
   const [openId, setOpenId] = useState(inSection[0]?.questionId ?? '');
   const open = inSection.find((row) => row.questionId === openId) ?? inSection[0];
+  const at = open ? inSection.indexOf(open) : -1;
+
+  const step = (by: number) => {
+    const next = inSection[at + by];
+    if (next) setOpenId(next.questionId);
+  };
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
       {notice}
 
-      {sections.length > 1 ? (
-        <Tabs
-          value={sectionId}
-          onValueChange={(next) => {
-            setSectionId(next);
-            setOpenId('');
-          }}
-        >
-          <TabsList>
-            {sections.map((section) => (
-              <TabsTrigger key={section.id} value={section.id}>
-                {section.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-      ) : null}
+      {/* The paper is the box: the report's own strip stays outside it, this one sits within. */}
+      <Card className="flex min-h-0 flex-col gap-4 p-4">
+        {sections.length > 1 ? (
+          <Tabs
+            value={sectionId}
+            onValueChange={(next) => {
+              setSectionId(next);
+              setOpenId('');
+            }}
+          >
+            <TabsList>
+              {sections.map((section) => (
+                <TabsTrigger key={section.id} value={section.id}>
+                  {section.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        ) : null}
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[1fr_16rem]">
-        {open ? (
-          <ReviewQuestion
-            question={open}
-            index={inSection.indexOf(open)}
-            languages={languages}
-            languageMode={languageMode}
-          />
-        ) : (
-          <Alert variant="info">Nothing was served in this section.</Alert>
-        )}
-        <ReviewPalette questions={inSection} openId={open?.questionId ?? ''} onOpen={setOpenId} />
-      </div>
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[1fr_16rem]">
+          {open ? (
+            <ReviewQuestion
+              question={open}
+              index={at}
+              total={inSection.length}
+              languages={languages}
+              languageMode={languageMode}
+              onStep={step}
+            />
+          ) : (
+            <Alert variant="info">Nothing was served in this section.</Alert>
+          )}
+          <ReviewPalette questions={inSection} openId={open?.questionId ?? ''} onOpen={setOpenId} />
+        </div>
+      </Card>
     </div>
   );
 }
@@ -106,21 +120,27 @@ export function ReviewPaper({
 function ReviewQuestion({
   question,
   index,
+  total,
   languages,
   languageMode,
+  onStep,
 }: Readonly<{
   question: ReviewedQuestion;
   index: number;
+  total: number;
   languages: readonly LanguageCode[];
   languageMode: LanguageMode;
+  onStep: (by: number) => void;
 }>) {
   const shown = shownLanguages(languages, languageMode);
   const verdict = verdictOf(question);
 
   return (
-    <div className="flex min-h-0 flex-col gap-4 overflow-y-auto rounded-lg border border-border p-4">
+    <div className="flex min-h-0 flex-col gap-4 rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">Question {index + 1}</span>
+        <span className="text-sm font-semibold text-foreground">
+          Question {index + 1} of {total}
+        </span>
         <span className="flex items-center gap-2">
           <Badge variant={verdict === VERDICT.RIGHT ? 'success' : 'neutral'}>
             {VERDICT_LABEL[verdict]}
@@ -128,7 +148,7 @@ function ReviewQuestion({
           <Badge variant="neutral">
             {question.marksAwarded ?? 0} / {question.marks}
           </Badge>
-          <Badge variant="neutral">{question.timeSpentSec}s</Badge>
+          <Badge variant="neutral">Time spent: {question.timeSpentSec}s</Badge>
         </span>
       </div>
 
@@ -160,6 +180,18 @@ function ReviewQuestion({
           ))}
         </div>
       ) : null}
+
+      {/* The palette jumps anywhere; these two walk the paper the way it was sat. */}
+      <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+        <Button variant="outline" size="sm" disabled={index <= 0} onClick={() => onStep(-1)}>
+          <ChevronLeft aria-hidden />
+          Previous
+        </Button>
+        <Button variant="outline" size="sm" disabled={index >= total - 1} onClick={() => onStep(1)}>
+          Next
+          <ChevronRight aria-hidden />
+        </Button>
+      </div>
     </div>
   );
 }
