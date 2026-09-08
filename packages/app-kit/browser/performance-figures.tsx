@@ -125,11 +125,45 @@ export function CohortFigure({
   );
 }
 
+/** What the crowd and the best of it did with the same paper, read under the reader's own bar. */
+export interface Benchmark {
+  average: number | null;
+  topper: number | null;
+}
+
+/** Three values on one line: a comparison is taken in at a glance or it is not taken in. */
+function BenchmarkRow({
+  mine,
+  benchmark,
+  format,
+}: Readonly<{ mine: number; benchmark: Benchmark; format: (value: number) => string }>) {
+  const rows = [
+    { key: 'you', label: 'You', value: format(mine) },
+    { key: 'average', label: 'Cohort average', value: at(benchmark.average, format) },
+    { key: 'topper', label: 'Topper', value: at(benchmark.topper, format) },
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3">
+      {rows.map((row) => (
+        <span key={row.key} className="flex items-baseline gap-1.5 text-sm">
+          <span className="text-muted-foreground">{row.label}</span>
+          <span className="font-medium tabular-nums text-foreground">{row.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const at = (value: number | null, format: (value: number) => string) =>
+  value === null ? UNMEASURED : format(value);
+
 /** The three shares partition the paper's marks; the penalty is charged out of what was earned. */
 export function MarksFigure({
   composition,
   counts,
-}: Readonly<{ composition: MarkComposition; counts: PaperCounts }>) {
+  benchmark,
+}: Readonly<{ composition: MarkComposition; counts: PaperCounts; benchmark?: Benchmark }>) {
   const segments: CompositionSegment[] = [
     {
       key: 'earned',
@@ -163,6 +197,9 @@ export function MarksFigure({
       }
     >
       <CompositionBar segments={segments} aria-label="Where this sitting's marks came from" />
+      {benchmark ? (
+        <BenchmarkRow mine={composition.net} benchmark={benchmark} format={String} />
+      ) : null}
     </ChartFigure>
   );
 }
@@ -253,7 +290,13 @@ export function TimeFigure({
   time,
   counts,
   paceIndex = null,
-}: Readonly<{ time: TimeUse; counts: PaperCounts; paceIndex?: number | null }>) {
+  benchmark,
+}: Readonly<{
+  time: TimeUse;
+  counts: PaperCounts;
+  paceIndex?: number | null;
+  benchmark?: Benchmark;
+}>) {
   const onCorrect = Math.round(time.avgOnCorrectSec * counts.correct);
   const onWrong = Math.round(time.avgOnWrongSec * counts.wrong);
   const rest = Math.max(0, time.totalSec - onCorrect - onWrong - time.spentOnUnattemptedSec);
@@ -310,6 +353,9 @@ export function TimeFigure({
       }
     >
       <CompositionBar segments={segments} aria-label="How the clock was spent" />
+      {benchmark ? (
+        <BenchmarkRow mine={time.totalSec} benchmark={benchmark} format={minutes} />
+      ) : null}
     </ChartFigure>
   );
 }

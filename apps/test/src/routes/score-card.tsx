@@ -1,45 +1,24 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, DataTable, Metric, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
+import { Alert, Metric, cn } from '@iace/ui';
 import {
   CohortFigure,
-  DifficultyFigure,
   MarksFigure,
   TimeFigure,
   TrajectoryFigure,
+  type Benchmark,
 } from '@iace/app-kit/browser';
 import {
   PERFORMANCE_SCOPES,
   paperCounts,
+  type CohortCurve,
   type PerformanceReport,
   type ScoreCard,
-  type ScoreCardSection,
+  type SectionalStanding,
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
-import {
-  Hero,
-  HeroFigure,
-  PageBody,
-  ReportSkeleton,
-  Section,
-  StatTile,
-  TileGrid,
-} from '../components/ui';
-
-const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
-  {
-    key: 'name',
-    header: 'Section',
-    className: 'max-w-[16rem]',
-    cell: (row) => <TruncatedText>{row.name}</TruncatedText>,
-  },
-  { key: 'marks', header: 'Marks', cell: (row) => `${row.score} / ${row.maxMarks}` },
-  { key: 'correct', header: 'Correct', numeric: true, cell: (row) => row.correctCount },
-  { key: 'wrong', header: 'Wrong', numeric: true, cell: (row) => row.wrongCount },
-  { key: 'left', header: 'Unattempted', numeric: true, cell: (row) => row.unattemptedCount },
-  { key: 'time', header: 'Time', cell: (row) => minutes(row.timeSpentSec) },
-];
+import { Hero, HeroFigure, PageBody, ReportSkeleton, StatTile, TileGrid } from '../components/ui';
 
 export function ScoreCardPanel() {
   const { attemptId = '' } = useParams();
@@ -89,7 +68,7 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
         </Alert>
       )}
 
-      <TileGrid>
+      <TileGrid className="lg:grid-cols-6 xl:grid-cols-6">
         <StatTile label="Correct" value={card.correctCount} />
         <StatTile label="Wrong" value={card.wrongCount} />
         <StatTile label="Unattempted" value={card.unattemptedCount} />
@@ -103,27 +82,24 @@ function Result({ card, report }: Readonly<{ card: ScoreCard; report: Performanc
       </TileGrid>
 
       {report === null ? null : (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <DifficultyFigure difficulty={report.difficulty} />
+        <div className={cn('grid items-start gap-4', curve === null ? null : 'lg:grid-cols-2')}>
+          {/* Marks and Time read as one column against the crowd standing beside them. */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <MarksFigure
+              composition={report.composition}
+              counts={paperCounts(report.sections)}
+              benchmark={marksAgainst(curve)}
+            />
+            <TimeFigure
+              time={report.time}
+              counts={paperCounts(report.sections)}
+              paceIndex={report.paceIndex}
+              benchmark={timeAgainst(report.sections)}
+            />
+          </div>
           {curve === null ? null : <CohortFigure cohort={curve} />}
-          <MarksFigure composition={report.composition} counts={paperCounts(report.sections)} />
-          <TimeFigure
-            time={report.time}
-            counts={paperCounts(report.sections)}
-            paceIndex={report.paceIndex}
-          />
         </div>
       )}
-
-      <Section title="Sections" meta={plural(card.sections.length, 'section')}>
-        <DataTable
-          columns={SECTION_COLUMNS}
-          rows={card.sections}
-          rowKey={(row) => row.baseConfigSectionId}
-          isLoading={false}
-          empty="This paper had no sections."
-        />
-      </Section>
 
       {trajectory.length > 1 ? <TrajectoryFigure trajectory={trajectory} /> : null}
     </PageBody>
@@ -164,6 +140,27 @@ function Beside({ card, accuracy }: Readonly<{ card: ScoreCard; accuracy: number
 function beaten(card: ScoreCard): string {
   if (card.rank === null || card.cohortSize === null) return 'percentile';
   return `percentile · better than ${card.cohortSize - card.rank} of ${card.cohortSize}`;
+}
+
+/** The paper's own marks against the crowd's — the two figures a result is actually read against. */
+const marksAgainst = (curve: CohortCurve | null) =>
+  curve === null ? undefined : { average: curve.averageScore, topper: curve.topperScore };
+
+/** The topper's clock is only ever known per SECTION, so their paper is the sum of those. */
+function timeAgainst(sections: readonly SectionalStanding[]): Benchmark | undefined {
+  const measured = sections.filter((section) => section.topperTimeSec !== null);
+  if (measured.length === 0) return undefined;
+
+  return {
+    average: sumOrNull(sections.map((section) => section.cohortAverageTimeSec)),
+    topper: measured.reduce((total, section) => total + (section.topperTimeSec ?? 0), 0),
+  };
+}
+
+/** One unmeasured section makes the total a guess, so the whole comparison stands down. */
+function sumOrNull(values: readonly (number | null)[]): number | null {
+  if (values.includes(null)) return null;
+  return values.reduce((total: number, value) => total + (value ?? 0), 0);
 }
 
 /** Seconds read as minutes on a result screen; nobody counts a paper in seconds. */

@@ -48,6 +48,7 @@ export {
   CohortFigure,
   DifficultyFigure,
   MarksFigure,
+  type Benchmark,
   SectionsFigure,
   TimeFigure,
   TrajectoryFigure,
