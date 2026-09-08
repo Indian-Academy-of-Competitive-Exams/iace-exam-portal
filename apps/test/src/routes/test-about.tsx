@@ -7,6 +7,7 @@ import {
   DataTable,
   Metric,
   PageFrame,
+  PageHeader,
   StatRow,
   TruncatedText,
   linkVariants,
@@ -37,7 +38,6 @@ import {
 import {
   BandSkeleton,
   BlockPairSkeleton,
-  Hero,
   PageBody,
   Section,
   StatBand,
@@ -88,9 +88,17 @@ export function TestAboutPage() {
   return (
     <PageFrame
       header={
-        <PageCrumbs
-          nav={NAV_ITEMS}
-          tail={[{ label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) }]}
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[{ label: brief.data?.title ?? 'Test', to: ROUTES.TEST_ABOUT(testId) }]}
+            />
+          }
+          size="display"
+          title={brief.data?.title ?? 'Test'}
+          meta={series?.name}
+          action={listed ? <Window test={listed} /> : undefined}
         />
       }
     >
@@ -104,12 +112,6 @@ export function TestAboutPage() {
 
         {brief.data ? (
           <>
-            <Hero
-              eyebrow={series?.name}
-              title={brief.data.title ?? 'Test'}
-              aside={listed ? <Window test={listed} /> : undefined}
-            />
-
             {listed ? <Shut test={listed} now={now} /> : null}
 
             <StatBand>

@@ -18,6 +18,9 @@ export const PAGE_CONTENT_CLASS = [
 /** Every ancestor between the frame and the table has to shrink, or the page takes the scroll. */
 const FILLS = 'flex min-h-0 flex-1 flex-col';
 
+/** Bled back out to the content region so the bar rides its edge, not the text it sits beside. */
+const REGION_BLEED = '-mx-5 px-5 xl:-mx-8 xl:px-8 2xl:-mx-10 2xl:px-10 [scrollbar-gutter:stable]';
+
 const TableFrameContext = React.createContext(false);
 
 /** The spec a screen declares and the state driving it — one shape, whichever frame renders it. */
@@ -48,7 +51,7 @@ export function PageFrame({
   className,
 }: Readonly<PageFrameProps>) {
   // `relative`, because an absolutely positioned descendant of a static scroller escapes it.
-  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto pr-2', className);
+  const scroller = cn('relative min-h-0 flex-1 overflow-y-auto', REGION_BLEED, className);
 
   const body = tabs ? (
     <>
@@ -71,7 +74,6 @@ export function PageFrame({
       ))}
     </>
   ) : (
-    // `pr-2` keeps right-aligned content clear of the scrollbar this very element draws.
     <div className={scroller}>{children}</div>
   );
 

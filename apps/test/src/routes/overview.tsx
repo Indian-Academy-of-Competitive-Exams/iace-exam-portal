@@ -2,7 +2,16 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList } from 'lucide-react';
-import { Alert, Button, Combobox, EmptyState, Field, PageFrame, SegmentedControl } from '@iace/ui';
+import {
+  Alert,
+  Button,
+  Combobox,
+  EmptyState,
+  Field,
+  PageFrame,
+  PageHeader,
+  SegmentedControl,
+} from '@iace/ui';
 import {
   DispositionFigure,
   ModeTiles,
@@ -34,7 +43,6 @@ import {
 } from '../lib/constants';
 import {
   BlockPairSkeleton,
-  Hero,
   HeroFigure,
   PageBody,
   Section,
@@ -64,21 +72,14 @@ export function OverviewPage() {
   const sat = newestFirst(trend.data?.points ?? []);
 
   return (
-    <PageFrame header={<PageCrumbs nav={NAV_ITEMS} />}>
-      <PageBody>
-        <Hero
+    <PageFrame
+      header={
+        <PageHeader
+          breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
+          size="display"
           title="Performance"
           meta={overview.data ? satOn(overview.data) : undefined}
-          figure={
-            overview.data && overview.data.standing.testsEvaluated > 0 ? (
-              <HeroFigure
-                value={overview.data.standing.avgPercentile ?? '—'}
-                unit={overview.data.standing.avgPercentile === null ? undefined : 'th'}
-                caption={bestLine(overview.data)}
-              />
-            ) : undefined
-          }
-          aside={
+          action={
             sat.length > 0 ? (
               <Combobox
                 value=""
@@ -96,6 +97,16 @@ export function OverviewPage() {
             ) : undefined
           }
         />
+      }
+    >
+      <PageBody>
+        {overview.data && overview.data.standing.testsEvaluated > 0 ? (
+          <HeroFigure
+            value={overview.data.standing.avgPercentile ?? '—'}
+            unit={overview.data.standing.avgPercentile === null ? undefined : 'th'}
+            caption={bestLine(overview.data)}
+          />
+        ) : null}
 
         {overview.isLoading ? (
           <>

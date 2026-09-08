@@ -7,6 +7,7 @@ import {
   LinePlot,
   Metric,
   PageFrame,
+  PageHeader,
   Skeleton,
   cn,
   linkVariants,
@@ -26,7 +27,6 @@ import { PreTestPrompt } from '../components/pre-test-prompt';
 import {
   DividedList,
   DividedRow,
-  Hero,
   PageBody,
   Section,
   StatBand,
@@ -84,17 +84,20 @@ export function DashboardPage() {
   const recent = newestFirst(trend.data?.points ?? []).slice(0, RECENT_RESULTS);
 
   return (
-    <PageFrame>
-      <PageBody>
-        <Hero
+    <PageFrame
+      header={
+        <PageHeader
+          size="display"
           title={greetingFor(now, student?.fullName)}
-          aside={
+          action={
             <Button asChild variant="outline">
               <Link to={ROUTES.PERFORMANCE}>See your performance</Link>
             </Button>
           }
         />
-
+      }
+    >
+      <PageBody>
         <PreTestPrompt preTestReady={student?.preTestReady ?? true} />
 
         <NextUp catalog={catalog} waiting={waiting} now={now} />

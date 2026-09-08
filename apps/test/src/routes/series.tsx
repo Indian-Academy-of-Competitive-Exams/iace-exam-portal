@@ -7,6 +7,7 @@ import {
   Button,
   DataTable,
   PageFrame,
+  PageHeader,
   Skeleton,
   TruncatedText,
   linkVariants,
@@ -34,7 +35,6 @@ import {
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
 import {
   BlockSkeleton,
-  Hero,
   PageBody,
   Section,
   StatTile,
@@ -85,9 +85,21 @@ export function SeriesPage() {
   return (
     <PageFrame
       header={
-        <PageCrumbs
-          nav={NAV_ITEMS}
-          tail={[{ label: 'Tests', to: ROUTES.TESTS }, { label: series?.name ?? 'Series' }]}
+        <PageHeader
+          breadcrumbs={
+            <PageCrumbs
+              nav={NAV_ITEMS}
+              tail={[{ label: 'Tests', to: ROUTES.TESTS }, { label: series?.name ?? 'Series' }]}
+            />
+          }
+          size="display"
+          title={series?.name ?? 'Series'}
+          meta={progress ? `${progress.done} of ${plural(progress.total, 'test')} done` : undefined}
+          action={
+            <Button asChild variant="outline">
+              <Link to={ROUTES.PERFORMANCE}>Your standing</Link>
+            </Button>
+          }
         />
       }
     >
@@ -104,17 +116,6 @@ export function SeriesPage() {
 
         {series && progress ? (
           <>
-            <Hero
-              eyebrow={series.examStage?.name}
-              title={series.name}
-              meta={`${progress.done} of ${plural(progress.total, 'test')} done`}
-              aside={
-                <Button asChild variant="outline">
-                  <Link to={ROUTES.PERFORMANCE}>Your standing</Link>
-                </Button>
-              }
-            />
-
             <Standing trend={trend} progress={progress} sat={sat} />
 
             {series.sequentialTests ? (
