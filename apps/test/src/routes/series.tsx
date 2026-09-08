@@ -6,7 +6,6 @@ import {
   Badge,
   Button,
   DataTable,
-  LoadingState,
   PageFrame,
   Skeleton,
   TruncatedText,
@@ -33,7 +32,15 @@ import {
   performanceReportQueryKey,
 } from '../lib/constants';
 import { MasteryFigure, RampFigure } from '../components/performance/progression-figures';
-import { Hero, PageBody, Section, StatTile, TileGrid } from '../components/ui';
+import {
+  BlockSkeleton,
+  Hero,
+  PageBody,
+  Section,
+  StatTile,
+  TileGrid,
+  TilesSkeleton,
+} from '../components/ui';
 import { averageAccuracy, bestRank, seriesProgress, type SeriesProgress } from '../lib/catalog';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
@@ -85,7 +92,12 @@ export function SeriesPage() {
       }
     >
       <PageBody>
-        {catalog.isLoading ? <LoadingState /> : null}
+        {catalog.isLoading ? (
+          <>
+            <TilesSkeleton count={3} />
+            <BlockSkeleton />
+          </>
+        ) : null}
         {catalog.data && !series ? (
           <Alert variant="warning">This series is not one you reach.</Alert>
         ) : null}
@@ -120,7 +132,7 @@ export function SeriesPage() {
                 columns={episodeColumns(now)}
                 rows={series.tests}
                 rowKey={(row) => row.id}
-                isLoading={false}
+                isLoading={catalog.isLoading}
                 empty="Nothing has been put in this series yet."
               />
             </Section>

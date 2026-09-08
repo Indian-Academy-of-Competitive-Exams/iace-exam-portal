@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, LoadingState } from '@iace/ui';
+import { Alert } from '@iace/ui';
 import { ComparisonCards, type ComparisonItem } from '@iace/ui';
 import {
   LEADERBOARD_SCOPES,
@@ -15,7 +15,7 @@ import {
   leaderboardQueryKey,
   performanceReportQueryKey,
 } from '../lib/constants';
-import { PageBody, Section } from '../components/ui';
+import { PageBody, ReportSkeleton, RowsSkeleton, Section } from '../components/ui';
 import { AttemptCompare } from '../components/performance/attempt-compare';
 import { Podium, Standings } from '../components/leaderboard/board';
 
@@ -36,7 +36,7 @@ export function ComparePanel() {
     enabled: ranked && testId !== '',
   });
 
-  if (report.isLoading) return <LoadingState />;
+  if (report.isLoading) return <ReportSkeleton />;
   if (!report.data) return null;
 
   const sittings = (trend.data?.points ?? []).filter((point) => point.testId === testId);
@@ -51,7 +51,7 @@ export function ComparePanel() {
 
       {ranked ? (
         <Section title="Leaderboard">
-          {board.isLoading ? <LoadingState /> : null}
+          {board.isLoading ? <RowsSkeleton rows={5} /> : null}
           {board.data ? (
             <>
               <Podium rows={board.data.podium} />

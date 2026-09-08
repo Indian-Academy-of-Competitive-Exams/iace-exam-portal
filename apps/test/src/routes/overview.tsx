@@ -2,16 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList } from 'lucide-react';
-import {
-  Alert,
-  Button,
-  Combobox,
-  EmptyState,
-  Field,
-  LoadingState,
-  PageFrame,
-  SegmentedControl,
-} from '@iace/ui';
+import { Alert, Button, Combobox, EmptyState, Field, PageFrame, SegmentedControl } from '@iace/ui';
 import {
   DispositionFigure,
   ModeTiles,
@@ -41,7 +32,16 @@ import {
   PICKER_WIDTH,
   ROUTES,
 } from '../lib/constants';
-import { Hero, HeroFigure, PageBody, Section, StatTile, TileGrid } from '../components/ui';
+import {
+  BlockPairSkeleton,
+  Hero,
+  HeroFigure,
+  PageBody,
+  Section,
+  StatTile,
+  TileGrid,
+  TilesSkeleton,
+} from '../components/ui';
 
 const UNTITLED = 'Untitled test';
 
@@ -97,7 +97,12 @@ export function OverviewPage() {
           }
         />
 
-        {overview.isLoading ? <LoadingState /> : null}
+        {overview.isLoading ? (
+          <>
+            <TilesSkeleton count={3} />
+            <BlockPairSkeleton />
+          </>
+        ) : null}
         {overview.isError ? <Alert variant="danger">Your performance did not load.</Alert> : null}
         {overview.data ? <Body overview={overview.data} /> : null}
       </PageBody>

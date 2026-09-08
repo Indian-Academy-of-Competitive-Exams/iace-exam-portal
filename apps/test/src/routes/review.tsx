@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, LoadingState } from '@iace/ui';
+import { Alert } from '@iace/ui';
+import { BlockSkeleton } from '../components/ui';
 import {
   AppException,
   ErrorCodes,
@@ -32,7 +33,7 @@ export function SolutionPanel() {
 
   return (
     <>
-      {card.isLoading || solutions.isLoading ? <LoadingState /> : null}
+      {card.isLoading || solutions.isLoading ? <BlockSkeleton className="h-96" /> : null}
       {card.data ? (
         <ReviewPaper
           sections={sectionsOf(card.data, solutions.data)}

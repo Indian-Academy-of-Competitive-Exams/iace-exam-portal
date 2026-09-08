@@ -6,7 +6,6 @@ import {
   Button,
   Combobox,
   EmptyState,
-  LoadingState,
   PageHeader,
   PanelFrame,
   plural,
@@ -34,7 +33,7 @@ import {
   leaderboardQueryKey,
 } from '../lib/constants';
 import { Podium, Standings } from '../components/leaderboard/board';
-import { Section } from '../components/ui';
+import { RowsSkeleton, Section } from '../components/ui';
 
 // TEST is the empty row, not a labelled one, so an unset URL shows the board it actually defaults to.
 const SCOPE_ITEMS = [
@@ -168,7 +167,7 @@ function Body({
   tests: readonly SatTest[];
   onSeries: boolean;
 }>) {
-  if (trend.isLoading) return <LoadingState />;
+  if (trend.isLoading) return <RowsSkeleton rows={6} />;
   if (trend.isError) return <Alert variant="danger">Your tests did not load.</Alert>;
   if (tests.length === 0) {
     return (
@@ -190,7 +189,7 @@ function Body({
   }
 
   if (board.isError) return <Alert variant="danger">This leaderboard did not load.</Alert>;
-  if (!board.data) return <LoadingState />;
+  if (!board.data) return <RowsSkeleton rows={6} />;
 
   return <Board board={board.data} />;
 }

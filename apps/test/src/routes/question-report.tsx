@@ -5,7 +5,6 @@ import {
   Alert,
   Badge,
   ListView,
-  LoadingState,
   MeasureBars,
   Metric,
   MetricGroup,
@@ -25,6 +24,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { questionReportQueryKey } from '../lib/constants';
+import { ReportSkeleton } from '../components/ui';
 
 const DASH = '—';
 
@@ -66,7 +66,7 @@ export function QuestionReportPanel() {
 
   return (
     <>
-      {report.isLoading ? <LoadingState /> : null}
+      {report.isLoading ? <ReportSkeleton /> : null}
       {report.data ? <Body report={report.data} filter={filter} onFilter={setFilter} /> : null}
     </>
   );

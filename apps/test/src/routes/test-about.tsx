@@ -5,7 +5,6 @@ import {
   Alert,
   Button,
   DataTable,
-  LoadingState,
   Metric,
   PageFrame,
   StatRow,
@@ -35,7 +34,15 @@ import {
   ROUTES,
   briefQueryKey,
 } from '../lib/constants';
-import { Hero, PageBody, Section, StatBand, SurfaceCard } from '../components/ui';
+import {
+  BandSkeleton,
+  BlockPairSkeleton,
+  Hero,
+  PageBody,
+  Section,
+  StatBand,
+  SurfaceCard,
+} from '../components/ui';
 
 const WHEN = new Intl.DateTimeFormat('en-IN', {
   timeZone: INSTITUTE_TIME_ZONE,
@@ -88,7 +95,12 @@ export function TestAboutPage() {
       }
     >
       <PageBody>
-        {brief.isLoading ? <LoadingState /> : null}
+        {brief.isLoading ? (
+          <>
+            <BandSkeleton />
+            <BlockPairSkeleton />
+          </>
+        ) : null}
 
         {brief.data ? (
           <>
@@ -117,7 +129,7 @@ export function TestAboutPage() {
                   columns={SECTION_COLUMNS}
                   rows={brief.data.sections}
                   rowKey={(row) => row.id}
-                  isLoading={false}
+                  isLoading={brief.isLoading}
                   empty="This paper has no sections."
                 />
               </SurfaceCard>
@@ -141,7 +153,7 @@ export function TestAboutPage() {
                   columns={PAST_COLUMNS}
                   rows={past}
                   rowKey={(row) => row.attemptId}
-                  isLoading={false}
+                  isLoading={trend.isLoading}
                   empty="You have not sat this test yet."
                 />
               </Section>

@@ -1,14 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  DataTable,
-  LoadingState,
-  Metric,
-  TruncatedText,
-  plural,
-  type DataTableColumn,
-} from '@iace/ui';
+import { Alert, DataTable, Metric, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import {
   CohortFigure,
   DifficultyFigure,
@@ -25,7 +17,15 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey, scoreCardQueryKey } from '../lib/constants';
-import { Hero, HeroFigure, PageBody, Section, StatTile, TileGrid } from '../components/ui';
+import {
+  Hero,
+  HeroFigure,
+  PageBody,
+  ReportSkeleton,
+  Section,
+  StatTile,
+  TileGrid,
+} from '../components/ui';
 
 const SECTION_COLUMNS: readonly DataTableColumn<ScoreCardSection>[] = [
   {
@@ -52,7 +52,7 @@ export function ScoreCardPanel() {
     queryFn: () => api.me.performanceReport({ scope: PERFORMANCE_SCOPES.ATTEMPT, attemptId }),
   });
 
-  if (card.isLoading) return <LoadingState />;
+  if (card.isLoading) return <ReportSkeleton />;
   if (!card.data) return null;
 
   return <Result card={card.data} report={report.data ?? null} />;

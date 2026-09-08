@@ -9,7 +9,6 @@ import {
   Brandmark,
   ChartFigure,
   DistributionPlot,
-  LoadingState,
   MeasureBars,
   Metric,
   PageHeader,
@@ -20,7 +19,7 @@ import {
 } from '@iace/ui';
 import { api } from '../lib/api';
 import { sharedReportQueryKey } from '../lib/constants';
-import { PageBody, StatBand } from '../components/ui';
+import { PageBody, ReportSkeleton, StatBand } from '../components/ui';
 
 const UNMEASURED = '—';
 
@@ -65,7 +64,7 @@ function Body({
 }: Readonly<{
   query: { isLoading: boolean; isError: boolean; error: unknown; data?: SharedReport };
 }>) {
-  if (query.isLoading) return <LoadingState />;
+  if (query.isLoading) return <ReportSkeleton />;
 
   if (query.isError || !query.data) {
     const refusal = AppException.is(query.error) ? query.error : null;

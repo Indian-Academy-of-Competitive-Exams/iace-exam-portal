@@ -1,14 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  Badge,
-  DataTable,
-  LoadingState,
-  TruncatedText,
-  plural,
-  type DataTableColumn,
-} from '@iace/ui';
+import { Alert, Badge, DataTable, TruncatedText, plural, type DataTableColumn } from '@iace/ui';
 import { SectionsFigure } from '@iace/app-kit/browser';
 import {
   PERFORMANCE_SCOPES,
@@ -17,7 +9,7 @@ import {
 } from '@iace/contracts';
 import { api } from '../lib/api';
 import { performanceReportQueryKey } from '../lib/constants';
-import { PageBody, Section } from '../components/ui';
+import { PageBody, ReportSkeleton, Section } from '../components/ui';
 
 const DASH = '—';
 
@@ -38,7 +30,7 @@ export function SubjectPanel() {
 
   return (
     <>
-      {report.isLoading ? <LoadingState /> : null}
+      {report.isLoading ? <ReportSkeleton /> : null}
       {report.data ? <Body report={report.data} /> : null}
     </>
   );
