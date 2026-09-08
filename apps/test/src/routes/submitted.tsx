@@ -36,7 +36,7 @@ export function SubmittedPage() {
     if (marked) navigate(ROUTES.SCORE_CARD(attemptId), { replace: true });
   }, [marked, attemptId, navigate]);
 
-  const failed = card.isError && !isPending(card.error);
+  const failed = card.isError;
 
   return (
     <PageFrame
