@@ -17,21 +17,21 @@ const WHEN = new Intl.DateTimeFormat('en-IN', {
 /** The wash is scanned across a shelf; the pill is read. Held under the pill so it stays legible. */
 const STATES = {
   DONE: {
-    wash: 'from-success-subtle/60',
+    wash: 'from-success-subtle/30',
     pill: 'bg-success-subtle text-success-ink',
     label: 'Done',
   },
   LIVE: {
-    wash: 'from-primary-subtle/60',
+    wash: 'from-primary-subtle/30',
     pill: 'bg-primary-subtle text-primary-ink',
     label: 'Open now',
   },
   RUNNING: {
-    wash: 'from-warning-subtle/60',
+    wash: 'from-warning-subtle/30',
     pill: 'bg-warning-subtle text-warning-ink',
     label: 'In progress',
   },
-  SHUT: { wash: 'from-muted/70', pill: 'bg-muted text-muted-foreground', label: 'Scheduled' },
+  SHUT: { wash: 'from-muted/40', pill: 'bg-muted text-muted-foreground', label: 'Scheduled' },
 } as const;
 
 /** The tile's body opens what the test IS; its foot does the one thing there is to do. */
@@ -45,7 +45,7 @@ export function TestTile({
   return (
     <Card
       className={cn(
-        'flex w-72 shrink-0 snap-start flex-col bg-gradient-to-b to-card to-70%',
+        'flex w-72 shrink-0 snap-start flex-col bg-gradient-to-b to-card to-45%',
         state.wash,
       )}
     >
