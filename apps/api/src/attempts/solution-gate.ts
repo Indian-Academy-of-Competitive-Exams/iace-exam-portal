@@ -1,18 +1,17 @@
 /**
- * The one rule the answer key rides on. A key released while somebody can still sit the paper is
- * a key released to them, so a ranked test waits until entry has shut everywhere and the last
- * sitting that could have started has ended. Nothing else here decides anything.
+ * The one rule the answer key rides on. A ranked test whose entry is CAPPED waits until the last
+ * sitting that could have started has ended, so the key is never released to somebody who can
+ * still sit. Uncapped, there is no such instant, so the key opens on the student's own evaluated
+ * sitting — a deliberate trade: entry that never shuts would otherwise hold solutions for ever.
  */
 import { EVALUATION_MODE, type EvaluationMode } from '@iace/contracts';
 import { lastSittingEndsAt } from './attempt-report';
 
-/** SHUT is not "later": it is a ranked test nobody has capped entry on, so no date can be named. */
-export const SOLUTIONS_OPENING = { NOW: 'NOW', AT: 'AT', SHUT: 'SHUT' } as const;
+/** NOW is the student's own evaluated sitting; AT is an instant a capped test can name. */
+export const SOLUTIONS_OPENING = { NOW: 'NOW', AT: 'AT' } as const;
 
 export type SolutionsOpening =
-  | { state: typeof SOLUTIONS_OPENING.NOW }
-  | { state: typeof SOLUTIONS_OPENING.AT; at: string }
-  | { state: typeof SOLUTIONS_OPENING.SHUT };
+  { state: typeof SOLUTIONS_OPENING.NOW } | { state: typeof SOLUTIONS_OPENING.AT; at: string };
 
 export interface SolutionGateFacts {
   evaluationMode: EvaluationMode;
@@ -39,13 +38,13 @@ export function solutionsOpening(facts: SolutionGateFacts): SolutionsOpening {
   if (facts.evaluationMode === EVALUATION_MODE.PRACTICE) return { state: SOLUTIONS_OPENING.NOW };
 
   const at = lastSittingEndsAt(facts.closesAt, facts.durationSec, facts.extraTimeSec);
-  return at === null ? { state: SOLUTIONS_OPENING.SHUT } : { state: SOLUTIONS_OPENING.AT, at };
+  return at === null ? { state: SOLUTIONS_OPENING.NOW } : { state: SOLUTIONS_OPENING.AT, at };
 }
 
 export function solutionsAreOpen(facts: SolutionGateFacts, now: Date): boolean {
   const opening = solutionsOpening(facts);
   if (opening.state === SOLUTIONS_OPENING.NOW) return true;
-  if (opening.state === SOLUTIONS_OPENING.SHUT) return false;
+
   return Date.parse(opening.at) <= now.getTime();
 }
 
@@ -55,9 +54,7 @@ export function solutionsOpenAt(facts: SolutionGateFacts): string | null {
   return opening.state === SOLUTIONS_OPENING.AT ? opening.at : null;
 }
 
-/** What a student is told while it is shut. It never names a date the gate cannot keep. */
-export function solutionsClosedReason(facts: SolutionGateFacts): string {
-  return solutionsOpenAt(facts) === null
-    ? 'Solutions open once this test has closed for everyone sitting it.'
-    : 'Solutions open once the last sitting of this test has finished.';
+/** Only a capped test can be closed now, and it always has a date, so this never guesses. */
+export function solutionsClosedReason(_facts: SolutionGateFacts): string {
+  return 'Solutions open once the last sitting of this test has finished.';
 }

@@ -47,13 +47,20 @@ describe('the solution gate', () => {
     assert.equal(solutionsAreOpen(facts({ closesAt, extraTimeSec: 900 }), NOW), false);
   });
 
-  it('refuses a scheduled paper nobody has capped entry on, and names no date it cannot keep', () => {
+  /** The ordinary case: no cutoff means no instant to wait for, so waiting would be for ever. */
+  it('opens a paper nobody has capped entry on, since no instant can ever be named', () => {
     const uncapped = facts({ closesAt: null });
 
-    assert.equal(solutionsOpening(uncapped).state, SOLUTIONS_OPENING.SHUT);
-    assert.equal(solutionsAreOpen(uncapped, NOW), false);
-    assert.equal(solutionsOpenAt(uncapped), null);
-    assert.match(solutionsClosedReason(uncapped), /closed for everyone/);
+    assert.equal(solutionsOpening(uncapped).state, SOLUTIONS_OPENING.NOW);
+    assert.equal(solutionsAreOpen(uncapped, NOW), true);
+    assert.equal(solutionsOpenAt(uncapped), null, 'there is still no date to count down to');
+  });
+
+  /** Capping entry is what buys the protection back, so a capped test must still be held shut. */
+  it('still holds a capped paper shut, so setting a closing time means something', () => {
+    const capped = facts({ closesAt: new Date(NOW.getTime() + HOUR).toISOString() });
+
+    assert.equal(solutionsAreOpen(capped, NOW), false);
   });
 
   it('names the instant it will open where one exists', () => {

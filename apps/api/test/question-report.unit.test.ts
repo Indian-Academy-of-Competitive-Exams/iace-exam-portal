@@ -251,10 +251,13 @@ describe('QuestionReportService — the cohort half, which needs no gate', () =>
 });
 
 describe('QuestionReportService — the half the answer key rides on', () => {
-  it('withholds the key and the option split until the gate opens', async () => {
-    const { service } = bench();
+  /** Capped entry is the only thing that can hold the key back now, so the gate is shut with one. */
+  const SHUT = { closesAt: '2026-08-24T05:00:00.000Z', now: new Date('2026-08-24T00:00:00.000Z') };
 
-    const report = await service.forAttempt(STUDENT, ATTEMPT);
+  it('withholds the key and the option split until the gate opens', async () => {
+    const { service } = bench({}, schedule(SHUT.closesAt));
+
+    const report = await service.forAttempt(STUDENT, ATTEMPT, SHUT.now);
 
     assert.equal(report.solutionsOpen, false);
     assert.notEqual(report.closedReason, null);
@@ -266,9 +269,9 @@ describe('QuestionReportService — the half the answer key rides on', () => {
   });
 
   it('carries no answer key and no option on the payload the gate has shut', async () => {
-    const { service } = bench();
+    const { service } = bench({}, schedule(SHUT.closesAt));
 
-    const payload = JSON.stringify(await service.forAttempt(STUDENT, ATTEMPT));
+    const payload = JSON.stringify(await service.forAttempt(STUDENT, ATTEMPT, SHUT.now));
 
     assert.equal(payload.includes('answerKey'), false);
     assert.equal(payload.includes('isCorrect":true'), true);

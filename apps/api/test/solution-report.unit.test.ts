@@ -192,14 +192,15 @@ describe('the Solution Report', () => {
     assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, RIGHT);
   });
 
-  it('refuses a scheduled paper nobody has capped entry on', async () => {
+  /** The institute caps no ranked test, so this is the ordinary path, not a corner of it. */
+  it('serves a paper nobody has capped entry on, off the student’s own evaluated sitting', async () => {
     const attempt = scored();
     const uncapped = { closesAt: null, extraTimeSec: 0 };
 
-    await assert.rejects(
-      () => review(attempt, uncapped).solutions(STUDENT, attempt.id, NOW),
-      (error: AppException) => error.code === ErrorCodes.FORBIDDEN,
-    );
+    const report = await review(attempt, uncapped).solutions(STUDENT, attempt.id, NOW);
+
+    assert.equal(report.attemptId, attempt.id);
+    assert.equal(report.openedAt, null, 'there is no instant to name, and none is invented');
   });
 
   it('names the instant the key opened, so a screen can say when it did', async () => {
