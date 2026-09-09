@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { useImportScreen, type ImportScreenState } from '../browser/use-import-screen';
 
-/** gcTime 0 and an explicit clear: react-query's default 5-minute timer outlives the run. */
+/** gcTime 0 on BOTH: an unmounted mutation schedules a 5-minute gc that outlives the run. */
 const client = new QueryClient({
-  defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { retry: false } },
+  defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0, retry: false } },
 });
 
 afterEach(() => {
