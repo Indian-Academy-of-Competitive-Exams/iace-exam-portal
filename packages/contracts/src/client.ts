@@ -180,12 +180,14 @@ import {
   questionReportSchema,
   satSeriesListSchema,
   studentOverviewSchema,
+  testAnalyticsSchema,
   type PerformanceReport,
   type PracticeCalendar,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
   type StudentOverview,
+  type TestAnalytics,
 } from './stats';
 import {
   LEADERBOARD_ROUTES,
@@ -1216,6 +1218,10 @@ export function createApiClient(options: ApiClientOptions) {
 
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+        /** How the cohort did on it: the three rollups, read whole and derived from. */
+        analytics: (id: string): Promise<TestAnalytics> =>
+          request(ADMIN_TEST_ROUTES.analytics(id), { schema: testAnalyticsSchema }),
 
         /** The draft paper, as it stands: drawn at finalize, then edited a question at a time. */
         readPaper: (id: string, variant?: number): Promise<TestPaper> =>

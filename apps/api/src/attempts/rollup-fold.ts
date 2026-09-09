@@ -8,6 +8,7 @@ import {
   type AttemptSectionScore,
   type CohortBand,
   type EvaluationMode,
+  type QuestionOption,
   type TestScope,
 } from '@iace/contracts';
 import { bandIndexOf, type ScoreCount } from './performance-analytics';
@@ -251,6 +252,11 @@ export function optionCountsIn(stored: unknown): Record<string, number> {
     if (typeof count === 'number' && Number.isFinite(count)) counts[option] = count;
   }
   return counts;
+}
+
+/** A `questionVersion`'s options read back off its `Json` column. Anything else has none at all. */
+export function optionsIn(stored: unknown): QuestionOption[] {
+  return Array.isArray(stored) ? (stored as QuestionOption[]) : [];
 }
 
 /** The stored row plus this sitting's delta, written whole under the test's row lock. */

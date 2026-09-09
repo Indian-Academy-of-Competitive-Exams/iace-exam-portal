@@ -21,6 +21,8 @@ import {
   MeQuestionReportController,
 } from './question-report.controller';
 import { QuestionReportService } from './question-report.service';
+import { AdminTestAnalyticsController } from './test-analytics.controller';
+import { TestAnalyticsService } from './test-analytics.service';
 import { PerformanceShareService } from './performance-share.service';
 import { LeaderboardViewService } from './leaderboard-view.service';
 import { PerformanceAnalyticsService } from './performance.service';
@@ -55,6 +57,7 @@ import { SubmitService } from './submit.service';
     AdminPerformanceShareController,
     MeQuestionReportController,
     AdminQuestionReportController,
+    AdminTestAnalyticsController,
   ],
   providers: [
     AttemptsService,
@@ -67,6 +70,7 @@ import { SubmitService } from './submit.service';
     PerformanceShareService,
     StudentOverviewService,
     QuestionReportService,
+    TestAnalyticsService,
     LeaderboardRebuildProcessor,
     RollupOutbox,
     RollupProcessor,

@@ -89,6 +89,9 @@ export const ROUTES = {
   /** The paper on its own screen: the extra segment outranks `/tests/:id`. */
   TEST_PAPER: (id: string) => `/tests/${id}/paper`,
   TEST_PAPER_PATTERN: '/tests/:id/paper',
+  /** How the cohort did on it, off the rollups. Same shape of segment as the paper. */
+  TEST_ANALYTICS: (id: string) => `/tests/${id}/analytics`,
+  TEST_ANALYTICS_PATTERN: '/tests/:id/analytics',
   /** The unit of offering: a test reaches a student only through a series. */
   TEST_SERIES_NEW: '/tests/series/new',
   TEST_SERIES_DETAIL: (id: string) => `/tests/series/${id}`,
@@ -450,6 +453,7 @@ export const QUERY_KEYS = {
   STUDENTS: [ADMIN, 'students'],
   SUBJECTS: [ADMIN, 'subjects'],
   TEST: [ADMIN, 'test'],
+  TEST_ANALYTICS: [ADMIN, 'test-analytics'],
   TEST_PAPER: [ADMIN, 'test-paper'],
   TEST_SERIES: [ADMIN, 'test-series'],
   TEST_SERIES_LINKS: [ADMIN, 'test-series-links'],

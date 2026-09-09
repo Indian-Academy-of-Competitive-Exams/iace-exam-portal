@@ -13,12 +13,11 @@ import {
   PAPER_QUESTION_STATUS,
   QUESTION_TYPE,
   type AnswerKey,
-  type QuestionOption,
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessResolverService } from '../access';
-import { optionCountsIn } from './rollup-fold';
+import { optionCountsIn, optionsIn } from './rollup-fold';
 import { gateFacts, solutionsAreOpen, solutionsClosedReason } from './solution-gate';
 import { topperOf, type TopperTimes } from './topper';
 import {
@@ -251,10 +250,6 @@ function toSat(row: ReportRow['questions'][number]): SatQuestion {
     timeSpentSec: row.timeSpentSec,
     predefinedDifficulty: row.question.difficulty,
   };
-}
-
-function optionsIn(stored: Prisma.JsonValue): QuestionOption[] {
-  return Array.isArray(stored) ? (stored as unknown as QuestionOption[]) : [];
 }
 
 /** The first answer the key accepts. A typed question has no option to point at instead. */

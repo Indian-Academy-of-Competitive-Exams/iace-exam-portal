@@ -660,6 +660,8 @@ export const ADMIN_TEST_ROUTES = {
   detail: (id: string) => `/admin/tests/${id}`,
   update: (id: string) => `/admin/tests/${id}`,
   remove: (id: string) => `/admin/tests/${id}`,
+  /** The cohort rollups this test folded, read whole. Served by the attempts module. */
+  analytics: (id: string) => `/admin/tests/${id}/analytics`,
 } as const;
 
 // ============================================================================
