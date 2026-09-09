@@ -118,3 +118,8 @@ docs/05-question-bank-follow-ups.md
 # Local patches to the installed superpowers plugin — this machine's tooling,
 # not the platform's source.
 docs/superpowers/patches/
+
+# Superset workspace scripts: the port labels setup writes for THIS worktree, and a
+# developer's own before/after extensions to the shared lifecycle scripts.
+.superset/ports.json
+.superset/config.local.json
