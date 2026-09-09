@@ -5,3 +5,6 @@ build
 pnpm-lock.yaml
 prisma/migrations
 docs/design/design-system.html
+
+# Rewritten by the graft CLI on every session, in its own style — prettier fights it forever.
+.claude/helpers/

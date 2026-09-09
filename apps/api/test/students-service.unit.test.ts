@@ -39,6 +39,14 @@ class FakeExams {
     return Promise.resolve();
   }
 
+  namesByCode(codes: readonly string[]): Promise<Map<string, string>> {
+    return Promise.resolve(
+      new Map(
+        codes.filter((code) => this.usable.includes(code)).map((code) => [code, `${code} name`]),
+      ),
+    );
+  }
+
   asService(): ExamsService {
     return this as unknown as ExamsService;
   }
@@ -74,6 +82,44 @@ function serviceWith(
     ),
   };
 }
+
+describe('StudentsService.enrolmentOf — what a student reads on their own profile', () => {
+  it('resolves every code the student carries to the catalog name for it', async () => {
+    const { service } = serviceWith([
+      makeStudent({
+        enrolledExams: ['SSC CGL'],
+        programs: ['SSC CGL FOUNDATION'],
+        currentBranchId: 'br_1',
+      }),
+    ]);
+
+    const enrolment = await service.enrolmentOf({
+      enrolledExams: ['SSC CGL'],
+      programs: ['SSC CGL FOUNDATION'],
+      currentBranchId: 'br_1',
+    });
+
+    assert.deepEqual(enrolment.exams, [{ code: 'SSC CGL', name: 'SSC CGL name' }]);
+    assert.deepEqual(enrolment.programs, [
+      { code: 'SSC CGL FOUNDATION', name: 'SSC CGL FOUNDATION name' },
+    ]);
+    assert.equal(enrolment.branch, makeBranch({ id: 'br_1' }).name);
+  });
+
+  /** The failure this prevents: a catalog row deleted under the student blanking their own row. */
+  it('falls back to the code itself when the catalog no longer holds it', async () => {
+    const { service } = serviceWith();
+
+    const enrolment = await service.enrolmentOf({
+      enrolledExams: ['SSC CHSL'],
+      programs: [],
+      currentBranchId: null,
+    });
+
+    assert.deepEqual(enrolment.exams, [{ code: 'SSC CHSL', name: 'SSC CHSL' }]);
+    assert.equal(enrolment.branch, null);
+  });
+});
 
 const PHYSICAL = makeBranch({ id: 'br_1', name: 'AMEERPET' });
 const ONLINE_BRANCH = makeBranch({ id: 'br_online', name: 'ONLINE', type: BRANCH_TYPE.VIRTUAL });

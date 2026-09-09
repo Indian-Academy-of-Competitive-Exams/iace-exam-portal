@@ -63,6 +63,7 @@ export {
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
   TimeReturnFigure,
+  WeakestSubjectsFigure,
   type SubjectView,
 } from './overview-figures';
 export { StreakFigure } from './streak-figure';

@@ -142,7 +142,8 @@ export class AccessResolverService {
   /** Cached WITH the catalog, not read per request: starting and submitting are what bust it. */
   private async sittings(studentId: string): Promise<ReadonlyMap<string, AttemptStatus>> {
     const attempts = await this.prisma.attempt.findMany({
-      where: { studentId },
+      // A voided sitting did not happen: it must not hide the real one under it.
+      where: { studentId, status: { not: ATTEMPT_STATUS.VOIDED } },
       select: { testId: true, status: true },
       orderBy: { attemptNo: 'asc' },
     });

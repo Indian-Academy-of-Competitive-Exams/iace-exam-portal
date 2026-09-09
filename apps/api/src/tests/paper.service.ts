@@ -19,8 +19,8 @@ import {
   type SectionAvailability,
   type SectionQuota,
   type AddPaperQuestionBody,
-  type PaperQuestionStatus,
   type ReplacePaperQuestionBody,
+  type SetPaperQuestionStatusBody,
   type TestPaper,
   type LocalizedContent,
   type TestScope,
@@ -374,7 +374,7 @@ export class PaperService {
   async setQuestionStatus(
     testId: string,
     rowId: string,
-    status: PaperQuestionStatus,
+    { status, reason }: SetPaperQuestionStatusBody,
   ): Promise<TestPaper> {
     const test = await this.requireTest(testId);
     if (!test.isLocked) {
@@ -398,7 +398,10 @@ export class PaperService {
     // Only on a real change, and against the ROW: "test updated" cannot settle a dispute later.
     if (asked) {
       this.auditContext.setEntityId(rowId);
-      this.auditContext.setChanged({ status: { from: row.status, to: status } });
+      this.auditContext.setChanged({
+        status: { from: row.status, to: status },
+        reason: { from: null, to: reason },
+      });
       this.logger.log(
         `Question ${row.questionId} on test ${testId} is ${status} across ${asked.rows} paper rows; ${asked.sittings} sittings to re-score`,
       );

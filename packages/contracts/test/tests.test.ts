@@ -18,6 +18,9 @@ import {
   testBuilderStepOf,
   owesAPaper,
   paperQuestionSchema,
+  setPaperQuestionStatusSchema,
+  DISPOSITION_REASON_MAX,
+  PAPER_QUESTION_STATUS,
   updateTestSchema,
   type TestScope,
   type TestScopeRef,
@@ -440,5 +443,37 @@ describe('owesAPaper', () => {
     assert.equal(owesAPaper(half), true);
     assert.equal(testBuilderStepOf(fixed), TEST_BUILDER_STEP.OFFER);
     assert.equal(owesAPaper(fixed), false);
+  });
+});
+
+describe('what a disposition change has to say for itself', () => {
+  const dropped = { status: PAPER_QUESTION_STATUS.DROPPED };
+
+  /** THE failure this prevents: published ranks moving with an audit row that cannot say why. */
+  it('refuses a change with no reason at all', () => {
+    assert.equal(setPaperQuestionStatusSchema.safeParse(dropped).success, false);
+  });
+
+  it('refuses a reason that is only whitespace', () => {
+    assert.equal(
+      setPaperQuestionStatusSchema.safeParse({ ...dropped, reason: '   ' }).success,
+      false,
+    );
+  });
+
+  it('trims the reason it keeps, so the audit row holds the words and not the padding', () => {
+    assert.deepEqual(setPaperQuestionStatusSchema.parse({ ...dropped, reason: '  key wrong  ' }), {
+      status: PAPER_QUESTION_STATUS.DROPPED,
+      reason: 'key wrong',
+    });
+  });
+
+  it('refuses a reason longer than the column takes', () => {
+    const tooLong = 'x'.repeat(DISPOSITION_REASON_MAX + 1);
+
+    assert.equal(
+      setPaperQuestionStatusSchema.safeParse({ ...dropped, reason: tooLong }).success,
+      false,
+    );
   });
 });

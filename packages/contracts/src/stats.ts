@@ -418,6 +418,47 @@ export function subjectShares(
   });
 }
 
+/** One subject read at one mode and scope, which is the unit every ranking below sorts. */
+export interface RankedSubject {
+  subjectId: string;
+  name: string;
+  measure: SubjectMeasure;
+}
+
+/** Weakest first, and what is still too thin to rank — a subject is never branded off five questions. */
+export interface SubjectRanking {
+  /** Ascending by accuracy, each one past the floor. */
+  weakest: RankedSubject[];
+  /** Answered, but under the floor: shown as "not enough data yet" rather than ranked. */
+  thin: RankedSubject[];
+}
+
+/** The weakest-first read of the rollup. Nothing here proposes a paper — a student cannot sit one they made. */
+export function rankSubjectsByWeakness(
+  subjects: readonly SubjectStanding[],
+  mode: EvaluationMode,
+  scope: TestScope | null = null,
+  floor: number = SUBJECT_SAMPLE_FLOOR,
+): SubjectRanking {
+  const measured = subjects
+    .map((subject) => ({
+      subjectId: subject.subjectId,
+      name: subject.name,
+      measure: measureOf(subject.tallies, mode, scope),
+    }))
+    .filter((row) => row.measure.attempted > 0);
+
+  const byAccuracy = (a: RankedSubject, b: RankedSubject) =>
+    (a.measure.accuracy ?? 0) - (b.measure.accuracy ?? 0);
+
+  return {
+    weakest: measured.filter((row) => row.measure.attempted >= floor).sort(byAccuracy),
+    thin: measured
+      .filter((row) => row.measure.attempted < floor)
+      .sort((a, b) => b.measure.attempted - a.measure.attempted),
+  };
+}
+
 /** Served and never answered — the rows every other figure filters out, which is what hides them. */
 export function untouchedSubjects(
   subjects: readonly SubjectStanding[],

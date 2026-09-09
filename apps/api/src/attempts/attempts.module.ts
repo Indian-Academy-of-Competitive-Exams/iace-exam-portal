@@ -8,6 +8,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AccessModule } from '../access';
 import { NotificationsModule } from '../notifications';
 import { AttemptsController } from './attempts.controller';
+import { AdminLiveOpsController } from './live-ops.controller';
 import { AdminPerformanceController, MePerformanceController } from './performance.controller';
 import { AdminOverviewController, MeOverviewController } from './overview.controller';
 import { MeLeaderboardController } from './leaderboard.controller';
@@ -28,6 +29,8 @@ import { LeaderboardViewService } from './leaderboard-view.service';
 import { PerformanceAnalyticsService } from './performance.service';
 import { StudentOverviewService } from './overview.service';
 import { AttemptsService } from './attempts.service';
+import { AttemptResolutionService } from './attempt-resolution.service';
+import { LiveOpsService } from './live-ops.service';
 import { AttemptPaperService } from './attempt-paper.service';
 import { AttemptReportService } from './attempt-report.service';
 import { AttemptStateService } from './attempt-state.service';
@@ -47,6 +50,7 @@ import { SubmitService } from './submit.service';
   imports: [PrismaModule, RedisModule, QueueModule, AccessModule, NotificationsModule],
   controllers: [
     AttemptsController,
+    AdminLiveOpsController,
     MePerformanceController,
     AdminPerformanceController,
     MeOverviewController,
@@ -61,6 +65,8 @@ import { SubmitService } from './submit.service';
   ],
   providers: [
     AttemptsService,
+    AttemptResolutionService,
+    LiveOpsService,
     AttemptPaperService,
     AttemptReportService,
     AttemptStateService,

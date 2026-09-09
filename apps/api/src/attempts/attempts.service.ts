@@ -22,7 +22,9 @@ import {
   displayOrder,
   languagesFor,
   retakeBlocker,
+  slotsAfter,
   testStartBlocker,
+  type SittingSlots,
 } from './attempt-rules';
 import { sectionScoresIn } from './score-paper';
 
@@ -93,14 +95,16 @@ export class AttemptsService {
 
     const test = this.assertSittable(await this.requireTest(testId));
 
-    const finished = await this.prisma.attempt.count({
+    const ended = await this.prisma.attempt.findMany({
       where: { testId, studentId, status: { not: LIVE } },
+      select: { status: true, isGraded: true },
     });
-    this.assertRetakeAllowed(test.maxRetakes, finished);
+    const slots = slotsAfter(ended);
+    this.assertRetakeAllowed(test.maxRetakes, slots.finished);
     const extraTimeSec = await this.access.extraTimeSecFor(studentId, testId);
 
     try {
-      const started = await this.create(studentId, test, finished, input.languages, extraTimeSec);
+      const started = await this.create(studentId, test, slots, input.languages, extraTimeSec);
       await this.state.open(started);
       // The catalog caches where this student has got to, and starting is one of two things that move it.
       await this.access.invalidateStudent(studentId);
@@ -120,21 +124,20 @@ export class AttemptsService {
   private async create(
     studentId: string,
     test: SittableTest,
-    finished: number,
+    slots: SittingSlots,
     picked: readonly LanguageCode[] | undefined,
     extraTimeSec: number,
   ) {
     const startedAt = new Date();
-    const attemptNo = finished + 1;
 
     return this.prisma.$transaction(async (tx) => {
       const attempt = await tx.attempt.create({
         data: {
           testId: test.id,
           studentId,
-          attemptNo,
-          // Counts toward a cohort: one attempt per student, the first, and never on a practice paper.
-          isGraded: attemptNo === 1 && test.evaluationMode === EVALUATION_MODE.RANKED,
+          attemptNo: slots.attemptNo,
+          // Counts toward a cohort: the one sitting holding the ranked slot, never on a practice paper.
+          isGraded: slots.ranksAgain && test.evaluationMode === EVALUATION_MODE.RANKED,
           startedAt,
           endsAt: deadlineFrom(startedAt, sittingSeconds(test) + extraTimeSec),
           shuffleSeed: randomInt(SEED_CEILING),
