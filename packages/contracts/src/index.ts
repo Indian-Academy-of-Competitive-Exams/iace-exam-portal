@@ -21,5 +21,6 @@ export * from './imports';
 export * from './questions';
 export * from './question-rules';
 export * from './authoring';
+export * from './dashboard';
 export * from './health';
 export * from './client';

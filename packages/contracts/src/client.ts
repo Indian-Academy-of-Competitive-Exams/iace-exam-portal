@@ -61,6 +61,7 @@ import {
   type UpdateAdminInput,
 } from './admins';
 import { CSV_SEPARATOR } from './common';
+import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from './dashboard';
 import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
@@ -1564,6 +1565,12 @@ export function createApiClient(options: ApiClientOptions) {
             body: { importLogId, status },
             schema: questionImportResultSchema,
           }),
+      },
+
+      /** The landing screen. One payload, carrying only the bands the caller may see. */
+      dashboard: {
+        get: (): Promise<Dashboard> =>
+          request(ADMIN_DASHBOARD_ROUTES.get, { schema: dashboardSchema }),
       },
 
       audit: {

@@ -438,6 +438,7 @@ export const QUERY_KEYS = {
   BASE_CONFIG: [ADMIN, 'base-config'],
   BASE_CONFIGS: [ADMIN, 'base-configs'],
   BRANCHES: [ADMIN, 'branches'],
+  DASHBOARD: [ADMIN, 'dashboard'],
   EVENTS: [ADMIN, 'events'],
   EXAM_STAGES: [ADMIN, 'exam-stages'],
   EXAMS: [ADMIN, 'exams'],

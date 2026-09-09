@@ -7,6 +7,8 @@ import { Prisma } from '@prisma/client';
 export const PRISMA_ERROR_CODES = {
   UNIQUE_CONSTRAINT_VIOLATION: 'P2002',
   RECORD_NOT_FOUND: 'P2025',
+  /** The migration that creates it has not been deployed to THIS database yet. */
+  TABLE_NOT_FOUND: 'P2021',
 } as const;
 
 /**
@@ -17,5 +19,13 @@ export function isUniqueViolation(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION
+  );
+}
+
+/** A table a not-yet-deployed migration creates, so an optional read can stand down rather than 500. */
+export function isMissingTable(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === PRISMA_ERROR_CODES.TABLE_NOT_FOUND
   );
 }

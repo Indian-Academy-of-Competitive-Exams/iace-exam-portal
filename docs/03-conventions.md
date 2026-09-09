@@ -103,6 +103,11 @@ A module is a **bounded context**. Six rules make it extraction-ready:
 - `tests` reads `TestSeries` to take the mode a test is judged by — the series decides it, and it is
   denormalised onto `Test` so the composite foreign key holds the two together. Only the read
   crosses; the copy lands on the test's own row.
+- `dashboard` counts across `Student`, `Question`, `Test`, `TestSeries`, `Branch`, `Program`,
+  `Exam` and `QuestionFlag`, and reads the `TestStat` rollup. It writes nothing and is the admin
+  landing screen's read model: a facade call per table would be eight new count methods on eight
+  modules, each existing for one screen. The audit feed, which has scoping rules of its own, does
+  go through `AuditService`.
 - `me` aggregates `students`, `auth`, `access` and `notifications`. This is the one to copy —
   everything arrives through a module barrel.
 
@@ -128,7 +133,7 @@ erodes.
 | audit         | `RowActionLog`, `ImportLog`                                                                                                                                                |
 | notifications | `Notification`                                                                                                                                                             |
 
-`auth`, `imports`, `me` and `health` own no table. The rollups belong to `attempts` because the
+`auth`, `imports`, `me`, `dashboard` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that
 owns the sitting owns the derivation.
 
@@ -220,12 +225,12 @@ Rule: any cross-module _reaction_ goes through this catalog as an event, not a d
 
 ## 7. Service tiers — deploy few, design many
 
-| Tier                                  | Modules                                                                                                        | Scales on              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| **Core / admin** (one deployable)     | auth, admins, students, branches, access, events, imports, questions, configs, tests, audit, me, notifications | admin traffic, modest  |
-| **Exam service** (autoscale)          | attempts — the sitting engine only                                                                             | concurrent test-takers |
-| **Worker service(s)** (autoscale)     | scoring, rollups, import processing, leaderboard, drop/bonus recompute                                         | BullMQ queue depth     |
-| **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                       | —                      |
+| Tier                                  | Modules                                                                                                                   | Scales on              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Core / admin** (one deployable)     | auth, admins, students, branches, access, events, imports, questions, configs, tests, audit, me, dashboard, notifications | admin traffic, modest  |
+| **Exam service** (autoscale)          | attempts — the sitting engine only                                                                                        | concurrent test-takers |
+| **Worker service(s)** (autoscale)     | scoring, rollups, import processing, leaderboard, drop/bonus recompute                                                    | BullMQ queue depth     |
+| **Shared libraries** (never services) | prisma, redis, queue, storage, common, config, contracts                                                                  | —                      |
 
 Today everything ships as core plus the worker. Attempts is the first extraction candidate: its
 request path is Redis-first, so it is stateless and cheap to autoscale.
