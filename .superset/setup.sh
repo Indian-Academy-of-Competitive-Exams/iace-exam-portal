@@ -19,6 +19,7 @@ UNTRACKED_FROM_ROOT=(
   '.claude/settings.local.json'
   '.superset/config.local.json'
   'docs/05-question-bank-follow-ups.md'
+  'docs/superpowers/plans'
 )
 
 say 'Node toolchain'
