@@ -7,11 +7,11 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AppException, ErrorCodes } from '@iace/contracts';
-import { Alert, LoadingState, Metric, PageFrame, PageHeader } from '@iace/ui';
+import { Alert, LoadingState, PageFrame, PageHeader, plural } from '@iace/ui';
 import { pollDelayMs, shouldKeepPolling } from '@iace/app-kit';
 import { PageCrumbs } from '@iace/app-kit/browser';
 import { api } from '../lib/api';
-import { PageBody, Section, StatBand } from '../components/ui';
+import { DividedList, DividedRow, PageBody, Section } from '../components/ui';
 import { NAV_ITEMS, ROUTES, scoreCardQueryKey } from '../lib/constants';
 import { type EndedSitting } from '../components/exam/engine/use-exam-view';
 
@@ -65,10 +65,16 @@ export function SubmittedPage() {
 /** Their own paper, not the cohort's: nothing here needs the marking to have run. */
 function OwnEffort({ sitting }: Readonly<{ sitting: EndedSitting }>) {
   return (
-    <StatBand>
-      <Metric label="Answered" value={sitting.answered} unit={`of ${sitting.total}`} size="sm" />
-      <Metric label="Left" value={sitting.unanswered} size="sm" />
-      <Metric label="Marked for review" value={sitting.markedForReview} size="sm" />
-    </StatBand>
+    <Section title="Your paper">
+      <DividedList>
+        {sitting.sections.map((section) => (
+          <DividedRow
+            key={section.id}
+            title={section.name}
+            meta={`${plural(section.total, 'question')} · ${section.attempted} attempted · ${section.unattempted} unattempted`}
+          />
+        ))}
+      </DividedList>
+    </Section>
   );
 }

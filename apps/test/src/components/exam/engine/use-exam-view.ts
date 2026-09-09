@@ -13,9 +13,11 @@ import {
   nextQuestionId,
   openSections,
   paletteCounts,
+  sectionEffort,
   TIMER_TEMPLATE,
   type ExamClock,
   type ExamPaper,
+  type SectionEffort,
 } from '@iace/contracts';
 import { useFullscreen } from '@iace/app-kit/browser';
 import { api } from '../../../lib/api';
@@ -30,6 +32,7 @@ export interface EndedSitting {
   unanswered: number;
   markedForReview: number;
   total: number;
+  sections: SectionEffort[];
 }
 
 export interface ExamSitting {
@@ -82,6 +85,7 @@ export function useExamView({
       await fullscreen.exit();
       onEnded({
         attemptId: submitted.attemptId,
+        sections: sectionEffort(paper.sections, paper.questions, state.answers),
         answered: counts[ANSWER_STATE.ANSWERED] + counts[ANSWER_STATE.ANSWERED_MARKED],
         unanswered: counts[ANSWER_STATE.NOT_ANSWERED] + counts[ANSWER_STATE.NOT_VISITED],
         markedForReview: counts[ANSWER_STATE.MARKED_REVIEW] + counts[ANSWER_STATE.ANSWERED_MARKED],
