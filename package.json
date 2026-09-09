@@ -18,6 +18,7 @@
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
     "docs:check": "node scripts/check-docs.mjs",
+    "ws:merge": "node scripts/merge-to-main.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
