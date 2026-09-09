@@ -1,18 +1,28 @@
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '@iace/ui';
 import { BlockSkeleton } from '../components/ui';
 import {
   AppException,
   ErrorCodes,
   LANGUAGE_MODE,
+  SAVED_QUESTION_KIND,
   type ExamSection,
   type ScoreCard,
   type SolutionReport,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { scoreCardQueryKey, solutionsQueryKey } from '../lib/constants';
-import { ReviewPaper, type ReviewedQuestion } from '../components/review/review-paper';
+import {
+  bookmarksInAttemptQueryKey,
+  savedQueryKey,
+  scoreCardQueryKey,
+  solutionsQueryKey,
+} from '../lib/constants';
+import {
+  ReviewPaper,
+  type BookmarkControl,
+  type ReviewedQuestion,
+} from '../components/review/review-paper';
 
 export function SolutionPanel() {
   const { attemptId = '' } = useParams();
@@ -30,6 +40,8 @@ export function SolutionPanel() {
 
   const refusal = AppException.is(solutions.error) ? solutions.error : null;
   const shut = refusal?.code === ErrorCodes.FORBIDDEN;
+  // Only past the gate: the star rides the same rule the answer key does.
+  const bookmark = useBookmarks(attemptId, solutions.data !== undefined);
 
   return (
     <>
@@ -40,6 +52,7 @@ export function SolutionPanel() {
           questions={merged(card.data, solutions.data)}
           languages={solutions.data?.languages ?? ['EN']}
           languageMode={LANGUAGE_MODE.SINGLE}
+          bookmark={bookmark}
           notice={
             shut ? (
               /* ui-copy-ok: consequence */
@@ -50,6 +63,41 @@ export function SolutionPanel() {
       ) : null}
     </>
   );
+}
+
+/** One read for the whole sitting's stars, and one mutation that toggles whichever was pressed. */
+function useBookmarks(attemptId: string, isOpen: boolean): BookmarkControl | undefined {
+  const queryClient = useQueryClient();
+
+  const stars = useQuery({
+    queryKey: bookmarksInAttemptQueryKey(attemptId),
+    queryFn: () => api.me.bookmarksInAttempt(attemptId),
+    enabled: isOpen,
+  });
+
+  const savedIdOf = new Map(
+    (stars.data?.bookmarks ?? []).map((row) => [row.questionId, row.savedId]),
+  );
+
+  const toggle = useMutation({
+    mutationFn: (questionId: string) => {
+      const savedId = savedIdOf.get(questionId);
+      return savedId === undefined
+        ? api.me.bookmarkQuestion({ attemptId, questionId })
+        : api.me.removeSavedQuestion(savedId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: bookmarksInAttemptQueryKey(attemptId) });
+      void queryClient.invalidateQueries({ queryKey: savedQueryKey(SAVED_QUESTION_KIND.BOOKMARK) });
+    },
+  });
+
+  if (!isOpen) return undefined;
+  return {
+    saved: new Set(savedIdOf.keys()),
+    onToggle: (questionId) => toggle.mutate(questionId),
+    pendingId: toggle.isPending ? (toggle.variables ?? null) : null,
+  };
 }
 
 /** The solutions carry the paper's own sections; before the gate the score card's stand in. */

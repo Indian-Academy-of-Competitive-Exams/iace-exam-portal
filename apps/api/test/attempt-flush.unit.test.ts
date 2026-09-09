@@ -7,7 +7,7 @@ import {
   type AnswerChange,
   type AttemptStatus,
 } from '@iace/contracts';
-import { rowsToFlush } from '../src/attempts/attempt-flush';
+import { answersFromRows, rowsToFlush } from '../src/attempts/attempt-flush';
 import { AttemptFlushProcessor } from '../src/attempts/attempt-flush.processor';
 import { AttemptStateService } from '../src/attempts/attempt-state.service';
 import {
@@ -107,6 +107,13 @@ describe('rowsToFlush', () => {
 
     assert.equal(unanswered?.data.answeredAt, null);
     assert.equal(unanswered?.data.state, ANSWER_STATE.NOT_ANSWERED);
+  });
+
+  /** The failure this prevents: a rebuilt live key handing the student back an empty paper. */
+  it('reads back into the same answers a lost key is put together from', () => {
+    const durable = rowsToFlush(held).map((row) => ({ questionId: row.questionId, ...row.data }));
+
+    assert.deepEqual(answersFromRows(durable), held.answers);
   });
 });
 

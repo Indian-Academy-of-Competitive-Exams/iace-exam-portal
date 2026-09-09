@@ -23,6 +23,7 @@ import {
   SpeedAccuracyFigure,
   SubjectStrengthFigure,
   TimeReturnFigure,
+  WeakestSubjectsFigure,
 } from '@iace/app-kit/browser';
 import { newestFirst } from '@iace/app-kit';
 import {
@@ -221,6 +222,7 @@ function Body({
       <BlindSpots subjects={overview.subjects} mode={mode} scope={scope} />
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <WeakestSubjectsFigure {...view} className="lg:col-span-2" />
         <ScoreTrendFigure points={sittings} className="lg:col-span-2" />
         <DispositionFigure
           disposition={overview.disposition}

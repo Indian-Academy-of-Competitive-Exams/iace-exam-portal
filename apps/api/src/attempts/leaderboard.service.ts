@@ -62,6 +62,20 @@ export class LeaderboardService {
     await this.redis.client.expire(key, BOARD_TTL_SEC);
   }
 
+  /** A voided sitting leaves the board at once; every other rank re-reads correct on the next look. */
+  async forget(testId: string, attemptId: string): Promise<void> {
+    await this.redis.client.zrem(redisKeys.testLeaderboard(testId), attemptId);
+  }
+
+  /** A rebuild somebody asked for rather than a cold board asking for itself. One job per test. */
+  async askForRebuild(testId: string): Promise<void> {
+    await this.rebuilds.add(
+      QUEUE_NAMES.LEADERBOARD_REBUILD,
+      { testId },
+      { jobId: rebuildJobId(testId), removeOnComplete: true },
+    );
+  }
+
   /** Null when this sitting is not on the board — ungraded, unscored, or a board being rebuilt. */
   async standing(testId: string, attemptId: string): Promise<Standing | null> {
     const key = redisKeys.testLeaderboard(testId);
@@ -187,11 +201,7 @@ export class LeaderboardService {
   /** True when the board was empty — a wiped or expired Redis, repaired by a job and not by a read. */
   private async askForRebuildIfCold(testId: string): Promise<boolean> {
     if ((await this.redis.client.zcard(redisKeys.testLeaderboard(testId))) > 0) return false;
-    await this.rebuilds.add(
-      QUEUE_NAMES.LEADERBOARD_REBUILD,
-      { testId },
-      { jobId: rebuildJobId(testId), removeOnComplete: true },
-    );
+    await this.askForRebuild(testId);
     return true;
   }
 }

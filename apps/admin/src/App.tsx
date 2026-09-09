@@ -31,6 +31,7 @@ import { AdminsPage } from './routes/admins';
 import { PermissionsPage } from './routes/permissions';
 import { AuditActivityPage, AuditImportsPage } from './routes/audit';
 import { AnnouncementsPage } from './routes/announcements';
+import { LiveOpsPage } from './routes/live-ops';
 import { ROUTES } from './lib/constants';
 
 /** ProtectedRoute is the outer gate; AppShell is the layout inside it. */
@@ -86,6 +87,7 @@ export function App() {
           <Route path={ROUTES.TEST_NEW} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PATTERN} element={<TestBuilderPage />} />
           <Route path={ROUTES.TEST_PAPER_PATTERN} element={<TestPaperPage />} />
+          <Route path={ROUTES.LIVE_OPS} element={<LiveOpsPage />} />
           {/* Super-admin screens. The route exists for everyone — the page
               itself refuses, so a pasted URL gets a sentence rather than a
               redirect that looks like a broken link. */}
