@@ -20,6 +20,7 @@ export * from './shares';
 export * from './imports';
 export * from './questions';
 export * from './question-rules';
+export * from './question-flags';
 export * from './authoring';
 export * from './health';
 export * from './client';

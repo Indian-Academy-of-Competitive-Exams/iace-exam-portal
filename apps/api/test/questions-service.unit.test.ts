@@ -21,6 +21,7 @@ import {
   FakeQuestionBankPrisma,
   FakeStorage,
   makeQuestion,
+  makeQuestionFlag,
   makeSubject,
   makeTopic,
   rowAt,
@@ -903,5 +904,91 @@ describe('bulkSetStatus', () => {
     });
 
     assert.equal(result.updated, 1);
+  });
+});
+
+describe('QuestionsService — an open proof-reading flag blocks the way into circulation', () => {
+  const refused = (error: unknown) => AppException.is(error) && error.code === ErrorCodes.CONFLICT;
+
+  const flag = (prisma: ReturnType<typeof build>['prisma'], questionId: string, over = {}) =>
+    prisma.flags.push(makeQuestionFlag({ id: `qfl_${questionId}`, questionId, ...over }));
+
+  it('refuses a single approval while a flag is open, and lets it through once settled', async () => {
+    const { questions, prisma } = build([
+      makeQuestion({ id: 'q1', status: QUESTION_STATUS.DRAFT }),
+    ]);
+    flag(prisma, 'q1');
+
+    await assert.rejects(
+      () => questions.setStatus('q1', { status: QUESTION_STATUS.ACTIVE }),
+      refused,
+    );
+    assert.equal(prisma.questions[0]?.status, QUESTION_STATUS.DRAFT);
+
+    prisma.flags.splice(0, 1, makeQuestionFlag({ questionId: 'q1', status: 'RESOLVED' }));
+    const approved = await questions.setStatus('q1', { status: QUESTION_STATUS.ACTIVE });
+
+    assert.equal(approved.status, QUESTION_STATUS.ACTIVE);
+  });
+
+  /** The bulk screen is the other way in, so the same gate has to hold there. */
+  it('refuses a batch holding one flagged question, and leaves every row where it was', async () => {
+    const { questions, prisma } = build([
+      makeQuestion({ id: 'q_clean', status: QUESTION_STATUS.DRAFT }),
+      makeQuestion({ id: 'q_flagged', status: QUESTION_STATUS.DRAFT, stemHash: 'hash_2' }),
+    ]);
+    flag(prisma, 'q_flagged');
+
+    await assert.rejects(
+      () =>
+        questions.bulkSetStatus({ ids: ['q_clean', 'q_flagged'], status: QUESTION_STATUS.ACTIVE }),
+      refused,
+    );
+    assert.deepEqual(
+      prisma.questions.map((row) => row.status),
+      [QUESTION_STATUS.DRAFT, QUESTION_STATUS.DRAFT],
+    );
+  });
+
+  it('lets a batch through once every flag on it has been settled', async () => {
+    const { questions, prisma } = build([
+      makeQuestion({ id: 'q1', status: QUESTION_STATUS.DRAFT }),
+      makeQuestion({ id: 'q2', status: QUESTION_STATUS.DRAFT, stemHash: 'hash_2' }),
+    ]);
+    flag(prisma, 'q1', { status: 'DISMISSED' });
+
+    const result = await questions.bulkSetStatus({
+      ids: ['q1', 'q2'],
+      status: QUESTION_STATUS.ACTIVE,
+    });
+
+    assert.equal(result.updated, 2);
+  });
+
+  /** Authors fix, reviewers settle: a flag must not lock the question it was raised against. */
+  it('still lets an author save a question that is already active and flagged', async () => {
+    const { questions, prisma } = build();
+    const created = await questions.create(draft({ status: QUESTION_STATUS.ACTIVE }), ADMIN);
+    flag(prisma, created.id);
+
+    const edited = await questions.update(
+      created.id,
+      draft({ status: QUESTION_STATUS.ACTIVE, stem: { en: 'What is 25% of 200?', hi: 'x' } }),
+      ADMIN,
+    );
+
+    assert.equal(edited.status, QUESTION_STATUS.ACTIVE);
+    assert.equal(edited.openFlags, 1);
+  });
+
+  /** The count is what the approvals screen shows, so the block is never a surprise. */
+  it('counts only the open flags on a listed question', async () => {
+    const { questions, prisma } = build([makeQuestion({ id: 'q1' })]);
+    flag(prisma, 'q1');
+    prisma.flags.push(makeQuestionFlag({ id: 'qfl_2', questionId: 'q1', status: 'RESOLVED' }));
+
+    const page = await questions.list(listQuery());
+
+    assert.equal(page.items[0]?.openFlags, 1);
   });
 });

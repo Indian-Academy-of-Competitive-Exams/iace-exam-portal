@@ -316,6 +316,15 @@ import {
   type UpdateSubjectInput,
   type UpdateTopicInput,
 } from './questions';
+import {
+  ADMIN_PROOFREADING_ROUTES,
+  proofreadQuestionSchema,
+  questionFlagSchema,
+  type CreateQuestionFlagInput,
+  type ProofreadQuestion,
+  type QuestionFlag,
+  type SettleQuestionFlagInput,
+} from './question-flags';
 
 /** Drops empty and undefined keys, so an unset filter never becomes `?q=undefined`. */
 export function queryString(params: Record<string, unknown>): string {
@@ -1472,6 +1481,29 @@ export function createApiClient(options: ApiClientOptions) {
             schema: questionImageSchema,
           });
         },
+      },
+
+      /** The proof-reading document, and the flags raised on it. */
+      proofreading: {
+        document: (query: QuestionListQueryInput = {}): Promise<Paginated<ProofreadQuestion>> =>
+          requestPaginated(`${ADMIN_PROOFREADING_ROUTES.document}${queryString({ ...query })}`, {
+            schema: proofreadQuestionSchema.array(),
+          }),
+
+        raise: (questionId: string, input: CreateQuestionFlagInput): Promise<QuestionFlag> =>
+          request(ADMIN_PROOFREADING_ROUTES.raise(questionId), {
+            method: 'POST',
+            body: input,
+            schema: questionFlagSchema,
+          }),
+
+        /** Resolved or dismissed — either one clears the block on going ACTIVE. */
+        settle: (flagId: string, input: SettleQuestionFlagInput): Promise<QuestionFlag> =>
+          request(ADMIN_PROOFREADING_ROUTES.settle(flagId), {
+            method: 'PATCH',
+            body: input,
+            schema: questionFlagSchema,
+          }),
       },
 
       imports: {

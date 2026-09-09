@@ -4,6 +4,7 @@ import {
   PenLine,
   CheckCheck,
   ClipboardList,
+  FileText,
   FolderTree,
   GraduationCap,
   History,
@@ -13,6 +14,7 @@ import {
   Route,
   ShieldCheck,
   SlidersHorizontal,
+  SpellCheck,
   Upload,
   Users,
 } from 'lucide-react';
@@ -35,6 +37,8 @@ import {
   type AnswerMode,
   type NavigationPolicy,
   type PaperBinding,
+  type QuestionFlagCategory,
+  type QuestionFlagStatus,
   type QuestionStatus,
   type QuestionType,
   PERFORMANCE_SCOPES,
@@ -67,6 +71,7 @@ export const ROUTES = {
   QUESTIONS: '/questions',
   QUESTION_NEW: '/questions/new',
   QUESTION_APPROVALS: '/questions/approvals',
+  PROOFREADING: '/questions/proofreading',
   IMPORT_QUESTIONS: '/questions/import',
   TAXONOMY: '/questions/taxonomy',
   QUESTION: (id: string) => `/questions/${id}`,
@@ -143,6 +148,30 @@ export const QUESTION_STATUS_VARIANT: Readonly<Record<QuestionStatus, 'neutral' 
   DRAFT: 'neutral',
   ACTIVE: 'success',
   ARCHIVED: 'neutral',
+};
+
+/** What a proof-reader is calling out. The enum's own words, cased for reading. */
+export const QUESTION_FLAG_CATEGORY_LABELS: Readonly<Record<QuestionFlagCategory, string>> = {
+  AWKWARD: 'Awkward wording',
+  INVALID: 'Invalid',
+  TOO_DIFFICULT: 'Too difficult',
+  INSUFFICIENT_DATA: 'Insufficient data',
+  OTHER: 'Other',
+};
+
+export const QUESTION_FLAG_STATUS_LABELS: Readonly<Record<QuestionFlagStatus, string>> = {
+  OPEN: 'Open',
+  RESOLVED: 'Resolved',
+  DISMISSED: 'Dismissed',
+};
+
+/** Open is what still costs somebody something; a settled flag is only history. */
+export const QUESTION_FLAG_STATUS_VARIANT: Readonly<
+  Record<QuestionFlagStatus, 'warning' | 'success' | 'neutral'>
+> = {
+  OPEN: 'warning',
+  RESOLVED: 'success',
+  DISMISSED: 'neutral',
 };
 
 /** Harder reads as more urgent, so a page of them scans by colour. */
@@ -374,6 +403,13 @@ export const NAV_ITEMS: readonly AdminNavItem[] = [
       { to: ROUTES.TAXONOMY, label: 'Subjects and topics', icon: FolderTree },
     ],
   },
+  /** Its own section, on a key of its own: a reviewer reads and flags, and edits nothing. */
+  {
+    label: 'Proof-reading',
+    icon: SpellCheck,
+    featureKey: FEATURE_KEYS.QUESTION_PROOFREAD,
+    children: [{ to: ROUTES.PROOFREADING, label: 'Reader', icon: FileText }],
+  },
   /** Its own section, on a key of its own: a typist gets this and not the bank above it. */
   {
     label: 'Authoring',
@@ -444,6 +480,7 @@ export const QUERY_KEYS = {
   FEATURES: [ADMIN, 'features'],
   ME: ['auth', 'me'],
   PROGRAMS: [ADMIN, 'programs'],
+  PROOFREADING: [ADMIN, 'proofreading'],
   QUESTION: [ADMIN, 'question'],
   QUESTIONS: [ADMIN, 'questions'],
   STUDENT: [ADMIN, 'student'],

@@ -510,6 +510,8 @@ export const questionSummarySchema = z.object({
   author: questionAuthorSchema.nullable(),
   /** Whether a paper, an attempt or a stat points at it — what decides if it can still be undone. */
   inUse: z.boolean(),
+  /** Open proof-reading flags. Above zero, the question cannot be approved into ACTIVE. */
+  openFlags: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

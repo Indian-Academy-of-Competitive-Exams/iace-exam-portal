@@ -121,7 +121,7 @@ erodes.
 | branches      | `Branch`                                                                                                                                                                   |
 | access        | `Program`, `TestSeries`, `StudentGrant`                                                                                                                                    |
 | events        | `Event`, `EventCandidate`                                                                                                                                                  |
-| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`                                                                                                                          |
+| questions     | `Subject`, `Topic`, `Question`, `QuestionVersion`, `QuestionFlag`                                                                                                          |
 | configs       | `Exam`, `ExamStage`, `BaseConfig`, `BaseConfigModule`, `BaseConfigSection`                                                                                                 |
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                                               |
 | attempts      | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |

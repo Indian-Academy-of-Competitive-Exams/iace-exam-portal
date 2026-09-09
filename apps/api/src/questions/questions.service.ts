@@ -5,6 +5,7 @@ import {
   AppException,
   ErrorCodes,
   FORM_LEVEL_FIELD,
+  QUESTION_FLAG_STATUS,
   QUESTION_STATUS,
   fieldDiff,
   plainTextOf,
@@ -52,7 +53,14 @@ const QUESTION_INCLUDE = {
   createdBy: { select: { id: true, fullName: true, email: true } },
   currentVersion: true,
   // Counted in the row's own query, so a page of questions costs one round trip, not one each.
-  _count: { select: { paperQuestions: true, attemptItems: true, questionStats: true } },
+  _count: {
+    select: {
+      paperQuestions: true,
+      attemptItems: true,
+      questionStats: true,
+      flags: { where: { status: QUESTION_FLAG_STATUS.OPEN } },
+    },
+  },
 } as const satisfies Prisma.QuestionInclude;
 
 type QuestionRow = Prisma.QuestionGetPayload<{ include: typeof QUESTION_INCLUDE }>;
@@ -90,8 +98,16 @@ export class QuestionsService {
 
   /** Signs every image the content quotes, in one pass — a stem and its options share images. */
   private async signed(detail: QuestionDetail): Promise<QuestionDetail> {
-    const keys = new Set(mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn));
-    if (keys.size === 0) return detail;
+    const [only] = await this.signedAll([detail]);
+    return only ?? detail;
+  }
+
+  /** One signing pass for a whole page: a document of twenty questions is not twenty passes. */
+  private async signedAll(details: QuestionDetail[]): Promise<QuestionDetail[]> {
+    const keys = new Set(
+      details.flatMap((detail) => mapQuestionHtml(detail, (html) => html).flatMap(imageKeysIn)),
+    );
+    if (keys.size === 0) return details;
 
     const urls = new Map(
       await Promise.all(
@@ -102,7 +118,9 @@ export class QuestionsService {
       ),
     );
 
-    return rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls));
+    return details.map((detail) =>
+      rewriteQuestionHtml(detail, (html) => applyImageUrls(html, urls)),
+    );
   }
 
   /** Hands back the KEY that content quotes, plus a url that only shows what was just picked. */
@@ -120,11 +138,26 @@ export class QuestionsService {
     query: QuestionListQuery,
     scope?: Prisma.QuestionWhereInput,
   ): Promise<Paginated<QuestionSummary>> {
+    const [rows, total] = await this.pageOf(query, scope);
+    return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
+  }
+
+  /** The same page in FULL, images signed together — a document to read, not a table to scan. */
+  async page(query: QuestionListQuery): Promise<Paginated<QuestionDetail>> {
+    const [rows, total] = await this.pageOf(query);
+    const items = await this.signedAll(rows.map(toDetail));
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  private async pageOf(
+    query: QuestionListQuery,
+    scope?: Prisma.QuestionWhereInput,
+  ): Promise<[QuestionRow[], number]> {
     const matchedIds = query.q ? await this.searchIds(query.q) : null;
     const filtered = questionWhere(query, matchedIds);
     const where = scope ? { AND: [filtered, scope] } : filtered;
 
-    const [rows, total] = await this.prisma.$transaction([
+    return this.prisma.$transaction([
       this.prisma.question.findMany({
         where,
         include: QUESTION_INCLUDE,
@@ -134,13 +167,6 @@ export class QuestionsService {
       }),
       this.prisma.question.count({ where }),
     ]);
-
-    return {
-      items: rows.map(toSummary),
-      page: query.page,
-      pageSize: query.pageSize,
-      total,
-    };
   }
 
   /** Counted in the database, because a page of a hundred is not what a section can draw from. */
@@ -387,8 +413,19 @@ export class QuestionsService {
     to: QuestionStatus | undefined,
   ): Promise<void> {
     assertWasInCirculation(from, to);
+    if (to === QUESTION_STATUS.ACTIVE && from !== QUESTION_STATUS.ACTIVE) {
+      await this.assertFlagsSettled(tx, id);
+    }
     if (to !== QUESTION_STATUS.DRAFT || from === QUESTION_STATUS.DRAFT) return;
     if (await this.isUsed(tx, id)) throw stillInUse('returned to draft');
+  }
+
+  /** A reviewer's outstanding objection outranks an approval, whichever screen the approval came from. */
+  private async assertFlagsSettled(tx: Prisma.TransactionClient, id: string): Promise<void> {
+    const open = await tx.questionFlag.count({
+      where: { questionId: id, status: QUESTION_FLAG_STATUS.OPEN },
+    });
+    if (open > 0) throw stillFlagged(open);
   }
 
   /** Every table that keys on the question, so the rule refuses before a foreign key does. */
@@ -406,6 +443,21 @@ export class QuestionsService {
 
   private isUsed(tx: Prisma.TransactionClient, questionId: string): Promise<boolean> {
     return this.anyUsed(tx, [questionId]);
+  }
+
+  /** The same gate over a batch, counted by QUESTION: one flagged row refuses the whole decision. */
+  private async assertBatchFlagsSettled(
+    tx: Prisma.TransactionClient,
+    ids: string[],
+  ): Promise<void> {
+    const flagged = await tx.question.count({
+      where: {
+        id: { in: ids },
+        status: { not: QUESTION_STATUS.ACTIVE },
+        flags: { some: { status: QUESTION_FLAG_STATUS.OPEN } },
+      },
+    });
+    if (flagged > 0) throw batchStillFlagged(flagged);
   }
 
   /** One decision over many rows: one statement, so a half-applied batch is not a state. */
@@ -432,6 +484,7 @@ export class QuestionsService {
     ids: string[],
     status: QuestionStatus,
   ): Promise<void> {
+    if (status === QUESTION_STATUS.ACTIVE) await this.assertBatchFlagsSettled(tx, ids);
     if (status === QUESTION_STATUS.ARCHIVED) {
       const drafts = await tx.question.findMany({
         where: { id: { in: ids }, status: QUESTION_STATUS.DRAFT },
@@ -585,6 +638,23 @@ function assertWasInCirculation(from: QuestionStatus, to: QuestionStatus | undef
   );
 }
 
+/** Settling the flag lifts the block; nothing here changes a status on its own. */
+const stillFlagged = (open: number) =>
+  refused(
+    open === 1
+      ? 'This question has 1 open proof-reading flag. Resolve or dismiss it before it can go active.'
+      : `This question has ${open} open proof-reading flags. Resolve or dismiss them before it can go active.`,
+    'Open proof-reading flags',
+  );
+
+const batchStillFlagged = (flagged: number) =>
+  refused(
+    flagged === 1
+      ? '1 of these questions has open proof-reading flags. Resolve or dismiss them before it can go active.'
+      : `${flagged} of these questions have open proof-reading flags. Resolve or dismiss them before they can go active.`,
+    'Open proof-reading flags',
+  );
+
 /** Back to a working copy only while it is nobody's question but its author's. */
 const stillInUse = (what: string) =>
   refused(
@@ -724,6 +794,7 @@ function toSummary(row: QuestionRow): QuestionSummary {
       ? { id: row.createdBy.id, name: row.createdBy.fullName ?? row.createdBy.email }
       : null,
     inUse: isReferenced(row),
+    openFlags: row._count.flags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

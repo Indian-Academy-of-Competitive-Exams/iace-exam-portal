@@ -8,6 +8,8 @@ import { AuthoringController } from './authoring.controller';
 import { AuthoringService } from './authoring.service';
 import { QuestionImportController } from './question-import.controller';
 import { QuestionImportService } from './question-import.service';
+import { ProofreadingController } from './proofreading.controller';
+import { ProofreadingService } from './proofreading.service';
 import { QuestionsController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 import { TaxonomyController } from './taxonomy.controller';
@@ -34,8 +36,15 @@ import { TaxonomyService } from './taxonomy.service';
     TaxonomyController,
     QuestionImportController,
     AuthoringController,
+    ProofreadingController,
   ],
-  providers: [QuestionsService, TaxonomyService, QuestionImportService, AuthoringService],
+  providers: [
+    QuestionsService,
+    TaxonomyService,
+    QuestionImportService,
+    AuthoringService,
+    ProofreadingService,
+  ],
   exports: [QuestionsService, TaxonomyService],
 })
 export class QuestionsModule {}

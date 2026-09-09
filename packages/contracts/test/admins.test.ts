@@ -53,6 +53,7 @@ describe('shared vocabularies', () => {
         'NOTIFICATION_MANAGEMENT',
         'QUESTION_AUTHORING',
         'QUESTION_MANAGEMENT',
+        'QUESTION_PROOFREAD',
         'STUDENT_MANAGEMENT',
         'STUDENT_PERFORMANCE',
         'TEST_MANAGEMENT',

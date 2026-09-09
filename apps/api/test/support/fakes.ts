@@ -2831,6 +2831,37 @@ export function makeQuestion(overrides: Partial<FakeQuestionRow> = {}): FakeQues
   };
 }
 
+export interface FakeQuestionFlagRow {
+  id: string;
+  questionId: string;
+  versionId: string | null;
+  category: string;
+  comment: string;
+  status: string;
+  raisedById: string;
+  resolvedById: string | null;
+  resolvedAt: Date | null;
+  createdAt: Date;
+}
+
+export function makeQuestionFlag(
+  overrides: Partial<FakeQuestionFlagRow> = {},
+): FakeQuestionFlagRow {
+  return {
+    id: 'qfl_1',
+    questionId: 'qst_1',
+    versionId: null,
+    category: 'INVALID',
+    comment: 'The answer key is wrong.',
+    status: 'OPEN',
+    raisedById: 'adm_1',
+    resolvedById: null,
+    resolvedAt: null,
+    createdAt: FIXED_NOW,
+    ...overrides,
+  };
+}
+
 /** Version 1 of a question, which is what a seeded row normally has. */
 export function makeQuestionVersion(
   overrides: Partial<FakeQuestionVersionRow> = {},
@@ -2851,6 +2882,7 @@ export function makeQuestionVersion(
 interface FakeQuestionWhere {
   AND?: FakeQuestionWhere[];
   OR?: FakeQuestionWhere[];
+  flags?: { some: { status: string } };
   id?: string | { in?: string[]; not?: string };
   subjectId?: KeyFilter;
   topicId?: KeyFilter;
@@ -2945,6 +2977,64 @@ export class FakeQuestionBankPrisma {
 
   readonly importLogs: Array<Record<string, unknown>> = [];
   readonly rowActionLogs: Array<Record<string, unknown>> = [];
+  /** Pushed by a test rather than passed in: the flag gate is the only thing that reads them. */
+  readonly flags: FakeQuestionFlagRow[] = [];
+  readonly admins: Array<{ id: string; fullName: string | null; email: string }> = [];
+
+  readonly questionFlag = {
+    count: ({ where }: { where: { questionId: string; status?: string } }) =>
+      Promise.resolve(this.openFor(where).length),
+
+    findMany: ({ where }: { where: { questionId: { in: string[] } } }) =>
+      Promise.resolve(
+        this.flags
+          .filter((row) => where.questionId.in.includes(row.questionId))
+          .map((row) => ({ ...row })),
+      ),
+
+    findUnique: ({ where }: { where: { id: string } }) => {
+      const row = this.flags.find((flag) => flag.id === where.id);
+      if (!row) return Promise.resolve(null);
+      const question = this.questions.find((candidate) => candidate.id === row.questionId);
+      return Promise.resolve({
+        ...row,
+        question: { currentVersionId: question?.currentVersionId ?? null },
+      });
+    },
+
+    create: ({ data }: { data: Partial<FakeQuestionFlagRow> & { questionId: string } }) => {
+      const row = makeQuestionFlag({ ...data, id: this.id('qfl') });
+      this.flags.push(row);
+      return Promise.resolve({ ...row });
+    },
+
+    updateMany: ({
+      where,
+      data,
+    }: {
+      where: { id: string; status?: string };
+      data: Record<string, unknown>;
+    }) => {
+      const rows = this.flags.filter(
+        (row) => row.id === where.id && (where.status === undefined || row.status === where.status),
+      );
+      for (const row of rows) Object.assign(row, data);
+      return Promise.resolve({ count: rows.length });
+    },
+  };
+
+  readonly admin = {
+    findMany: ({ where }: { where: { id: { in: string[] } } }) =>
+      Promise.resolve(this.admins.filter((row) => where.id.in.includes(row.id))),
+  };
+
+  private openFor(where: { questionId: string; status?: string }): FakeQuestionFlagRow[] {
+    return this.flags.filter(
+      (row) =>
+        row.questionId === where.questionId &&
+        (where.status === undefined || row.status === where.status),
+    );
+  }
 
   /** What a question sheet's two steps touch: the preview opens the run, the commit closes it. */
   readonly importLog = {
@@ -3213,12 +3303,15 @@ export class FakeQuestionBankPrisma {
         paperQuestions: countRefs(this.paperRefs, { questionId: row.id }),
         attemptItems: countRefs(this.attemptRefs, { questionId: row.id }),
         questionStats: countRefs(this.statRefs, { questionId: row.id }),
+        flags: this.openFor({ questionId: row.id, status: 'OPEN' }).length,
       },
     };
   }
 
   private matching(where: FakeQuestionWhere | undefined): FakeQuestionRow[] {
-    return this.questions.filter((row) => matches(row, where));
+    const flagged = (questionId: string, status: string) =>
+      this.openFor({ questionId, status }).length > 0;
+    return this.questions.filter((row) => matches(row, where, flagged));
   }
 }
 
@@ -3252,6 +3345,7 @@ const QUESTION_FIELD_CHECKS: readonly QuestionFieldCheck[] = [
 const QUESTION_WHERE_KEYS = [
   'AND',
   'OR',
+  'flags',
   'id',
   'createdById',
   'createdAt',
@@ -3266,11 +3360,16 @@ const QUESTION_WHERE_KEYS = [
   'updatedAt',
 ] as const;
 
-function matches(row: FakeQuestionRow, where: FakeQuestionWhere | undefined): boolean {
+function matches(
+  row: FakeQuestionRow,
+  where: FakeQuestionWhere | undefined,
+  flagged: (questionId: string, status: string) => boolean,
+): boolean {
   if (!where) return true;
   return matchesTree(where, (clause) => {
     onlyUnderstands(clause, QUESTION_WHERE_KEYS, 'The question fake');
     return (
+      (clause.flags === undefined || flagged(row.id, clause.flags.some.status)) &&
       idMatches(row, clause.id) &&
       stemHashMatches(row, clause.stemHash) &&
       (clause.createdById === undefined || row.createdById === clause.createdById) &&

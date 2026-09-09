@@ -73,5 +73,6 @@ export { useMediaQuery, DESKTOP_QUERY } from './app-shell/use-media-query';
 export { useFilterSpec, type FilterSpecState, type ListValues } from './use-filter-spec';
 export { useImportScreen, type ImportScreenState } from './use-import-screen';
 export { useListScreen } from './use-list-screen';
+export { usePrint } from './use-print';
 export { useScrollList } from './use-scroll-list';
 export { useLocalFilters, type FilterStore } from './use-local-filters';

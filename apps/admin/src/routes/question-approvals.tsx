@@ -118,6 +118,17 @@ function approvalColumns(): DataTableColumn<QuestionSummary>[] {
       ),
     },
     {
+      key: 'flags',
+      header: 'Open flags',
+      numeric: true,
+      cell: (question) =>
+        question.openFlags > 0 ? (
+          <Badge variant="warning">{question.openFlags}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       key: 'actions',
       header: '',
       cell: (question) => <ApprovalActions question={question} />,
@@ -219,7 +230,11 @@ export function QuestionApprovalsPage() {
 
   return (
     <TableFrame header={header}>
-      <BulkApproval selected={chosen} onDone={() => setSelected(new Set())} />
+      <BulkApproval
+        selected={chosen}
+        flagged={questions.rows.filter((row) => chosen.has(row.id) && row.openFlags > 0).length}
+        onDone={() => setSelected(new Set())}
+      />
 
       <ListView
         list={questions}
@@ -234,11 +249,19 @@ export function QuestionApprovalsPage() {
   );
 }
 
+/** What the count of flagged rows adds to the bar, and nothing at all when none of them are. */
+function blockedBy(flagged: number): string {
+  if (flagged === 0) return '';
+  const carry = flagged === 1 ? 'has' : 'have';
+  return ` ${plural(flagged, 'question')} still ${carry} open proof-reading flags, so none of them can be approved until those are settled.`;
+}
+
 /** Only when something is chosen: a bar that is always there is a bar nobody reads. */
 function BulkApproval({
   selected,
+  flagged,
   onDone,
-}: Readonly<{ selected: ReadonlySet<string>; onDone: () => void }>) {
+}: Readonly<{ selected: ReadonlySet<string>; flagged: number; onDone: () => void }>) {
   const { can } = useAuth();
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
@@ -261,11 +284,12 @@ function BulkApproval({
 
   if (count === 0 || !can(FEATURE_KEYS.QUESTION_MANAGEMENT, PERMISSION_LEVELS.WRITE)) return null;
 
+  // A batch is one decision, so one flagged row refuses all of it — say so before they press it.
   return (
-    <Alert variant="info" className="mb-4">
+    <Alert variant={flagged > 0 ? 'warning' : 'info'} className="mb-4">
       <span className="flex flex-wrap items-center justify-between gap-3">
-        <span>{plural(count, 'question')} selected.</span>
-        <Button size="sm" onClick={() => setAsking(true)}>
+        <span>{`${plural(count, 'question')} selected.${blockedBy(flagged)}`}</span>
+        <Button size="sm" disabled={flagged > 0} onClick={() => setAsking(true)}>
           <Check aria-hidden />
           Approve selected
         </Button>

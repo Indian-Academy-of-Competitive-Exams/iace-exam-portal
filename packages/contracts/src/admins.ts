@@ -21,6 +21,7 @@ export const FEATURE_KEYS = {
   STUDENT_MANAGEMENT: 'STUDENT_MANAGEMENT',
   QUESTION_MANAGEMENT: 'QUESTION_MANAGEMENT',
   QUESTION_AUTHORING: 'QUESTION_AUTHORING',
+  QUESTION_PROOFREAD: 'QUESTION_PROOFREAD',
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
   STUDENT_PERFORMANCE: 'STUDENT_PERFORMANCE',
@@ -43,6 +44,10 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.QUESTION_AUTHORING]: {
     label: 'Authoring',
     description: 'Entering questions, and the author\u2019s own drafts.',
+  },
+  [FEATURE_KEYS.QUESTION_PROOFREAD]: {
+    label: 'Proof-reading',
+    description: 'Reading questions and flagging quality issues.',
   },
   [FEATURE_KEYS.TEST_MANAGEMENT]: {
     label: 'Tests',
