@@ -309,6 +309,63 @@ export type NotificationListQuery = z.infer<typeof notificationListQuerySchema>;
 export type NotificationListQueryInput = z.input<typeof notificationListQuerySchema>;
 
 // ============================================================================
+// How the platform reaches one student. The bell is the floor; an absent preference is the default.
+// ============================================================================
+
+/** Mirrors `DeliveryChannel` in prisma/schema.prisma — the two are edited together. */
+export const DELIVERY_CHANNEL = {
+  IN_APP: 'IN_APP',
+  WEB_PUSH: 'WEB_PUSH',
+  EMAIL: 'EMAIL',
+  SMS: 'SMS',
+  WHATSAPP: 'WHATSAPP',
+} as const;
+export const deliveryChannelSchema = z.enum(DELIVERY_CHANNEL);
+export type DeliveryChannel = z.infer<typeof deliveryChannelSchema>;
+
+/** One channel as the student's own screen shows it. `locked` is the bell, which has no switch. */
+export const notificationPreferenceSchema = z.object({
+  channel: deliveryChannelSchema,
+  enabled: z.boolean(),
+  locked: z.boolean(),
+  /** False where nothing is configured to carry it — a row to show as unavailable, not as off. */
+  available: z.boolean(),
+});
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+
+/** The screen's whole read. The VAPID public key rides along so nothing is configured twice. */
+export const notificationPreferencesSchema = z.object({
+  channels: z.array(notificationPreferenceSchema),
+  webPushPublicKey: z.string().nullable(),
+});
+export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
+
+export const setNotificationPreferenceSchema = z.object({
+  channel: deliveryChannelSchema,
+  enabled: z.boolean(),
+});
+export type SetNotificationPreferenceInput = z.input<typeof setNotificationPreferenceSchema>;
+export type SetNotificationPreferenceBody = z.infer<typeof setNotificationPreferenceSchema>;
+
+/** What `pushManager.subscribe` hands back, flattened — the browser's own endpoint and its keys. */
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().min(1),
+  p256dh: z.string().min(1),
+  auth: z.string().min(1),
+  userAgent: z.string().optional(),
+});
+export type PushSubscriptionInput = z.input<typeof pushSubscriptionSchema>;
+export type PushSubscriptionBody = z.infer<typeof pushSubscriptionSchema>;
+
+/** Where a push lands: the bell, which already carries every notification's own way in. */
+export const NOTIFICATION_INBOX_PATH = '/notifications';
+
+/** Unsubscribing names the endpoint, because a browser may hold several across devices. */
+export const dropPushSubscriptionSchema = z.object({ endpoint: z.string().min(1) });
+export type DropPushSubscriptionInput = z.input<typeof dropPushSubscriptionSchema>;
+export type DropPushSubscriptionBody = z.infer<typeof dropPushSubscriptionSchema>;
+
+// ============================================================================
 // When a test opens. `unlockAt` belongs to the series-test link — one time for
 // every branch, because a rank only means something if the cohort sat together.
 // `lateEntrySec` is the branch's own, counted FROM that unlock so it can never

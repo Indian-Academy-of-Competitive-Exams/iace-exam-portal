@@ -84,13 +84,27 @@ describe('NotificationsService — one student’s own bell', () => {
 });
 
 describe('Writing a notification books what may be spent on it', () => {
-  it('books the channel the policy leads with', async () => {
+  /** No IN_APP row either: the notification itself IS that delivery, and mirroring it doubles the table. */
+  it('books nothing at all for any kind, because no kind pays by default', async () => {
+    const { service, prisma } = build();
+
+    for (const type of Object.values(NOTIFICATION_TYPE)) {
+      await service.create({ studentId: 'stu_1', type, title: 'Something happened' });
+    }
+
+    assert.equal(prisma.rows.length, Object.values(NOTIFICATION_TYPE).length);
+    assert.equal(prisma.deliveries.length, 0, 'in-app first: paying is a per-send decision');
+  });
+
+  /** The one way money is spent now: an admin chose it for this send, and the chain is honoured. */
+  it('books the channel an override leads with', async () => {
     const { service, prisma } = build();
 
     await service.create({
       studentId: 'stu_1',
-      type: NOTIFICATION_TYPE.RESULT_READY,
-      title: 'Your result is ready',
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Branch closed tomorrow',
+      escalate: [DeliveryChannel.WHATSAPP],
     });
 
     assert.deepEqual(
@@ -105,8 +119,9 @@ describe('Writing a notification books what may be spent on it', () => {
 
     await service.create({
       studentId: 'stu_1',
-      type: NOTIFICATION_TYPE.TEST_ASSIGNED,
-      title: 'A test has been assigned',
+      type: NOTIFICATION_TYPE.GENERIC,
+      title: 'Branch closed tomorrow',
+      escalate: [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS],
     });
 
     assert.deepEqual(
@@ -114,20 +129,6 @@ describe('Writing a notification books what may be spent on it', () => {
       [DeliveryChannel.WHATSAPP],
       'SMS is what WhatsApp falls back TO, not something sent beside it',
     );
-  });
-
-  /** No IN_APP row: the notification itself IS that delivery, and mirroring it doubles the table. */
-  it('books nothing for a kind that never justifies paying', async () => {
-    const { service, prisma } = build();
-
-    await service.create({
-      studentId: 'stu_1',
-      type: NOTIFICATION_TYPE.ENROLLMENT_ADDED,
-      title: 'You have been enrolled',
-    });
-
-    assert.equal(prisma.rows.length, 1);
-    assert.equal(prisma.deliveries.length, 0);
   });
 
   /** What makes the outbox safe to redeliver: the loser reads back the row it lost to. */
@@ -138,6 +139,7 @@ describe('Writing a notification books what may be spent on it', () => {
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
       dedupeKey: 'result:att_1',
+      escalate: [DeliveryChannel.WHATSAPP],
     };
 
     const first = await service.create(fact);

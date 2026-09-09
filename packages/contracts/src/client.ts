@@ -116,6 +116,11 @@ import {
   notificationSchema,
   type Notification,
   type NotificationListQueryInput,
+  notificationPreferencesSchema,
+  type NotificationPreferences,
+  type SetNotificationPreferenceInput,
+  type PushSubscriptionInput,
+  type DropPushSubscriptionInput,
   studentCatalogSchema,
   type StudentCatalog,
   type StudentGrantRow,
@@ -671,6 +676,34 @@ export function createApiClient(options: ApiClientOptions) {
 
       readNotification: (id: string): Promise<Notification> =>
         request(ME_ROUTES.readNotification(id), { method: 'PATCH', schema: notificationSchema }),
+
+      /** Every channel and whether it is on, plus the key this browser subscribes to push with. */
+      notificationPreferences: (): Promise<NotificationPreferences> =>
+        request(ME_ROUTES.notificationPreferences, { schema: notificationPreferencesSchema }),
+
+      /** Returns the whole set back, so the screen never reassembles it from one row. */
+      setNotificationPreference: (
+        input: SetNotificationPreferenceInput,
+      ): Promise<NotificationPreferences> =>
+        request(ME_ROUTES.notificationPreferences, {
+          method: 'PUT',
+          body: input,
+          schema: notificationPreferencesSchema,
+        }),
+
+      subscribeToPush: (input: PushSubscriptionInput): Promise<NoContent> =>
+        request(ME_ROUTES.pushSubscription, {
+          method: 'POST',
+          body: input,
+          schema: noContentSchema,
+        }),
+
+      unsubscribeFromPush: (input: DropPushSubscriptionInput): Promise<NoContent> =>
+        request(ME_ROUTES.pushSubscription, {
+          method: 'DELETE',
+          body: input,
+          schema: noContentSchema,
+        }),
 
       /** What the student reads before the clock starts. */
       testBrief: (testId: string): Promise<ExamBrief> =>

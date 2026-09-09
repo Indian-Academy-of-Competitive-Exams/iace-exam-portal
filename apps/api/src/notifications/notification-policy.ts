@@ -26,6 +26,21 @@ export const OUTBOUND_CHANNEL = {
 
 export type PaidChannel = keyof typeof OUTBOUND_CHANNEL;
 
+/** What the delivery queue may be handed. A free channel is sent where it is booked, not there. */
+export const PAID_CHANNELS = Object.keys(OUTBOUND_CHANNEL) as PaidChannel[];
+
+/** What a channel does for a student who has never said. Free ones lead; a paid one is opted into. */
+export const CHANNEL_DEFAULT = {
+  [DeliveryChannel.IN_APP]: true,
+  [DeliveryChannel.WEB_PUSH]: true,
+  [DeliveryChannel.EMAIL]: false,
+  [DeliveryChannel.SMS]: false,
+  [DeliveryChannel.WHATSAPP]: false,
+} as const satisfies Record<DeliveryChannel, boolean>;
+
+/** The bell is the floor: a request to turn it off is refused, never quietly written. */
+export const LOCKED_CHANNEL = DeliveryChannel.IN_APP;
+
 /** How long a student gets to open the app before we start paying to reach them. */
 const DEFER_SEC = 600;
 
@@ -40,17 +55,12 @@ interface Policy {
   deferSec: number;
 }
 
-/** WhatsApp leads: a DLT template cannot carry a deep link, so SMS asks them to go and look. */
+/** In-app first: no KIND buys a message, so paid delivery is a deliberate per-send override. */
 export const NOTIFICATION_POLICY = {
-  [NOTIFICATION_TYPE.RESULT_READY]: { escalate: [DeliveryChannel.WHATSAPP], deferSec: DEFER_SEC },
-  [NOTIFICATION_TYPE.TEST_ASSIGNED]: {
-    escalate: [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS],
-    deferSec: DEFER_SEC,
-  },
-  [NOTIFICATION_TYPE.GRANT_ADDED]: { escalate: [DeliveryChannel.WHATSAPP], deferSec: DEFER_SEC },
-  // Access a student did not ask for and cannot lose. The bell is the whole of it.
+  [NOTIFICATION_TYPE.RESULT_READY]: { escalate: [], deferSec: DEFER_SEC },
+  [NOTIFICATION_TYPE.TEST_ASSIGNED]: { escalate: [], deferSec: DEFER_SEC },
+  [NOTIFICATION_TYPE.GRANT_ADDED]: { escalate: [], deferSec: DEFER_SEC },
   [NOTIFICATION_TYPE.ENROLLMENT_ADDED]: { escalate: [], deferSec: DEFER_SEC },
-  // An announcement pays only when an admin says so, which the console has yet to be able to say.
   [NOTIFICATION_TYPE.GENERIC]: { escalate: [], deferSec: DEFER_SEC },
 } as const satisfies Record<NotificationType, Policy>;
 

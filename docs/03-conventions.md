@@ -126,7 +126,7 @@ erodes.
 | tests         | `Test`, `PaperQuestion`, `TestProgramUnlock`                                                                                                                               |
 | attempts      | `Attempt`, `AttemptQuestion`, `PerformanceShare`, `OutboxEvent`, `ProcessedRollup`, `StudentStat`, `StudentSubjectStat`, `TestStat`, `TestSectionStat`, `TestQuestionStat` |
 | audit         | `RowActionLog`, `ImportLog`                                                                                                                                                |
-| notifications | `Notification`                                                                                                                                                             |
+| notifications | `Notification`, `NotificationDelivery`, `NotificationPreference`, `PushSubscription`, `Announcement`                                                                       |
 
 `auth`, `imports`, `me` and `health` own no table. The rollups belong to `attempts` because the
 scoring path is what writes them — every aggregate is derived from a sitting, so the module that

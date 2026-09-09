@@ -68,6 +68,13 @@ import {
   type MessageSender,
   type OutboundMessage,
 } from '../../src/common/messaging';
+import {
+  PUSH_OUTCOMES,
+  type PushOutcome,
+  type PushPayload,
+  type PushSender,
+  type PushTarget,
+} from '../../src/notifications/web-push.sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
 import { type PinService } from '../../src/auth/pin/pin.service';
@@ -4247,6 +4254,7 @@ export interface FakeNotificationRow {
   data?: unknown;
   dedupeKey?: string | null;
   actBy?: Date | null;
+  announcementId?: string | null;
   testId: string | null;
   testSeriesId: string | null;
   isRead: boolean;
@@ -4288,13 +4296,21 @@ export class FakeNotificationsPrisma {
   constructor(
     readonly rows: FakeNotificationRow[] = [],
     private readonly mobiles: Record<string, string> = {},
+    private readonly emails: Record<string, string> = {},
   ) {}
 
-  /** Only what `mobileOf` asks for: a live student's number, or nothing. */
+  /** Only what `mobileOf` and the preference resolver ask for: a live student, or nothing. */
   readonly student = {
     findFirst: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.mobiles[where.id] ? { mobile: this.mobiles[where.id] } : null),
+      Promise.resolve(
+        this.mobiles[where.id]
+          ? { mobile: this.mobiles[where.id], profile: { email: this.emails[where.id] ?? null } }
+          : null,
+      ),
   };
+
+  /** The chosen chain a fallback reads back: only an announcement records one on the row. */
+  readonly announcements: { id: string; paidChannels: DeliveryChannel[] }[] = [];
 
   asService(): PrismaService {
     return this as unknown as PrismaService;
@@ -4315,21 +4331,29 @@ export class FakeNotificationsPrisma {
     upsert: ({
       where,
       create,
+      update = {},
     }: {
       where: { notificationId_channel: { notificationId: string; channel: DeliveryChannel } };
-      create: { notificationId: string; channel: DeliveryChannel };
+      create: { notificationId: string; channel: DeliveryChannel } & Partial<FakeDeliveryRow>;
+      update?: Partial<FakeDeliveryRow>;
     }) => {
       const key = where.notificationId_channel;
       const held = this.deliveries.find(
         (row) => row.notificationId === key.notificationId && row.channel === key.channel,
       );
-      return held ? Promise.resolve(held) : this.notificationDelivery.create({ data: create });
+      if (!held) return this.notificationDelivery.create({ data: create });
+
+      Object.assign(held, update);
+      return Promise.resolve(held);
     },
 
-    create: ({ data }: { data: { notificationId: string; channel: DeliveryChannel } }) => {
+    create: ({
+      data,
+    }: {
+      data: { notificationId: string; channel: DeliveryChannel } & Partial<FakeDeliveryRow>;
+    }) => {
       this.deliverySeq += 1;
       const row: FakeDeliveryRow = {
-        ...data,
         id: `dlv_${this.deliverySeq}`,
         status: 'PENDING' as DeliveryStatus,
         skipReason: null,
@@ -4337,17 +4361,32 @@ export class FakeNotificationsPrisma {
         lastError: null,
         sentAt: null,
         failedAt: null,
+        ...data,
       };
       this.deliveries.push(row);
       return Promise.resolve(row);
     },
 
-    findUnique: ({ where }: { where: { id: string } }) => {
-      const row = this.deliveries.find((candidate) => candidate.id === where.id);
+    findUnique: ({
+      where,
+    }: {
+      where: {
+        id?: string;
+        notificationId_channel?: { notificationId: string; channel: DeliveryChannel };
+      };
+    }) => {
+      const key = where.notificationId_channel;
+      const row = this.deliveries.find((candidate) =>
+        key
+          ? candidate.notificationId === key.notificationId && candidate.channel === key.channel
+          : candidate.id === where.id,
+      );
       if (!row) return Promise.resolve(null);
 
       const notification = this.rows.find((held) => held.id === row.notificationId);
-      return Promise.resolve({ ...row, notification });
+      const announcement =
+        this.announcements.find((held) => held.id === notification?.announcementId) ?? null;
+      return Promise.resolve({ ...row, notification: { ...notification, announcement } });
     },
 
     findMany: ({ where = {} }: { where?: { notificationId?: string; status?: string } } = {}) =>
@@ -4412,11 +4451,173 @@ export class FakeNotificationsPrisma {
     },
   };
 
+  readonly preferences: FakePreferenceRow[] = [];
+
+  private preferenceSeq = 0;
+
+  /** Enough for the resolver: the null-type rows a student's own screen writes, plus per-type ones. */
+  readonly notificationPreference = {
+    findMany: ({
+      where,
+    }: {
+      where: {
+        studentId: string;
+        channel?: DeliveryChannel;
+        type?: null;
+        OR?: { type: NotificationType | null }[];
+      };
+    }) =>
+      Promise.resolve(
+        this.preferences.filter(
+          (row) =>
+            row.studentId === where.studentId &&
+            (where.channel === undefined || row.channel === where.channel) &&
+            (where.type === undefined || row.type === where.type) &&
+            (where.OR === undefined || where.OR.some((clause) => clause.type === row.type)),
+        ),
+      ),
+
+    deleteMany: ({
+      where,
+    }: {
+      where: { studentId: string; channel: DeliveryChannel; type: null };
+    }) => {
+      const kept = this.preferences.filter(
+        (row) =>
+          !(
+            row.studentId === where.studentId &&
+            row.channel === where.channel &&
+            row.type === where.type
+          ),
+      );
+      const count = this.preferences.length - kept.length;
+      this.preferences.splice(0, this.preferences.length, ...kept);
+      return Promise.resolve({ count });
+    },
+
+    create: ({
+      data,
+    }: {
+      data: {
+        studentId: string;
+        channel: DeliveryChannel;
+        type?: NotificationType | null;
+        enabled: boolean;
+      };
+    }) => {
+      this.preferenceSeq += 1;
+      const row: FakePreferenceRow = {
+        id: `pref_${this.preferenceSeq}`,
+        type: null,
+        ...data,
+        updatedAt: new Date(),
+      };
+      this.preferences.push(row);
+      return Promise.resolve(row);
+    },
+  };
+
+  readonly subscriptions: FakePushSubscriptionRow[] = [];
+
+  private subscriptionSeq = 0;
+
+  readonly pushSubscription = {
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(this.subscriptions.filter((row) => row.studentId === where.studentId)),
+
+    upsert: ({
+      where,
+      create,
+      update,
+    }: {
+      where: { endpoint: string };
+      create: FakePushSubscriptionInput;
+      update: Partial<FakePushSubscriptionRow>;
+    }) => {
+      const held = this.subscriptions.find((row) => row.endpoint === where.endpoint);
+      if (held) {
+        Object.assign(held, update);
+        return Promise.resolve(held);
+      }
+      this.subscriptionSeq += 1;
+      const row: FakePushSubscriptionRow = {
+        userAgent: null,
+        ...create,
+        id: `psb_${this.subscriptionSeq}`,
+        lastSeenAt: new Date(),
+      };
+      this.subscriptions.push(row);
+      return Promise.resolve(row);
+    },
+
+    deleteMany: ({
+      where,
+    }: {
+      where: { studentId?: string; endpoint?: string | { in: string[] } };
+    }) => {
+      const gone = (endpoint: string) =>
+        typeof where.endpoint === 'string'
+          ? where.endpoint === endpoint
+          : (where.endpoint?.in.includes(endpoint) ?? true);
+      const kept = this.subscriptions.filter(
+        (row) =>
+          !(
+            (where.studentId === undefined || row.studentId === where.studentId) &&
+            gone(row.endpoint)
+          ),
+      );
+      const count = this.subscriptions.length - kept.length;
+      this.subscriptions.splice(0, this.subscriptions.length, ...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
   private readonly outbox = fakeOutboxTable();
 
   readonly outboxEvents = this.outbox.rows;
 
   readonly outboxEvent = this.outbox.api;
+}
+
+export interface FakePreferenceRow {
+  id: string;
+  studentId: string;
+  channel: DeliveryChannel;
+  type: NotificationType | null;
+  enabled: boolean;
+  updatedAt: Date;
+}
+
+interface FakePushSubscriptionInput {
+  studentId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string | null;
+}
+
+export interface FakePushSubscriptionRow extends FakePushSubscriptionInput {
+  id: string;
+  lastSeenAt: Date;
+}
+
+/** Records what would have gone out, and pretends any endpoint named is dead or unreachable. */
+export class FakePushSender implements PushSender {
+  readonly sent: { endpoint: string; payload: PushPayload }[] = [];
+
+  constructor(
+    readonly isConfigured = true,
+    private readonly gone: readonly string[] = [],
+    private readonly failing: readonly string[] = [],
+  ) {}
+
+  send(target: PushTarget, payload: PushPayload): Promise<PushOutcome> {
+    if (this.gone.includes(target.endpoint)) return Promise.resolve(PUSH_OUTCOMES.GONE);
+    if (this.failing.includes(target.endpoint)) return Promise.resolve(PUSH_OUTCOMES.FAILED);
+
+    this.sent.push({ endpoint: target.endpoint, payload });
+    return Promise.resolve(PUSH_OUTCOMES.SENT);
+  }
 }
 
 // --------------------------------------------------------------------------- announcements

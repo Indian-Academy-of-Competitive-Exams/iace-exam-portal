@@ -17,7 +17,8 @@ import {
   type NotificationJobData,
 } from '../queue/queues';
 import { NotificationsService } from './notifications.service';
-import { escalationFor } from './notification-policy';
+import { PAID_CHANNELS, escalationFor } from './notification-policy';
+import { PushService } from './push.service';
 import { NotificationOutbox, parseIntent, type NotificationIntent } from './notification-outbox';
 
 const MILLISECONDS_PER_SECOND = 1000;
@@ -33,6 +34,7 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly outbox: NotificationOutbox,
+    private readonly push: PushService,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
   ) {
@@ -66,6 +68,13 @@ export class NotificationsProcessor extends WorkerHost {
     }
 
     const written = await this.notifications.create(intent);
+    // Before the window opens, not inside it: the free channels are what the paid one waits on.
+    await this.push.deliver({
+      notificationId: written.id,
+      studentId: intent.studentId,
+      type: intent.type,
+      title: intent.title,
+    });
     await this.schedule(written.id, intent);
   }
 
@@ -73,7 +82,8 @@ export class NotificationsProcessor extends WorkerHost {
   private async schedule(notificationId: string, intent: NotificationIntent): Promise<void> {
     // The BOOKED rows are the truth about what may be spent; policy only says how long to wait.
     const booked = await this.prisma.notificationDelivery.findMany({
-      where: { notificationId, status: DeliveryStatus.PENDING },
+      // Paid only: a free channel is sent where it is booked, and has no fallback chain to walk.
+      where: { notificationId, status: DeliveryStatus.PENDING, channel: { in: PAID_CHANNELS } },
       select: { id: true },
     });
     if (booked.length === 0) return;

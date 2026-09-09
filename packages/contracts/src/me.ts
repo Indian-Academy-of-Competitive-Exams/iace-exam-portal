@@ -74,6 +74,9 @@ export const ME_ROUTES = {
   catalog: '/me/catalog',
   notifications: '/me/notifications',
   readNotification: (id: string) => `/me/notifications/${id}/read`,
+  notificationPreferences: '/me/notification-preferences',
+  /** POST subscribes this browser, DELETE drops the endpoint it names. */
+  pushSubscription: '/me/push-subscription',
   /** The kind is in the path — see DOCUMENT_KINDS. */
   document: (kind: DocumentKind) => `/me/documents/${kind}`,
   consent: '/me/consent',

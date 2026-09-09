@@ -15,9 +15,16 @@ import { FakeMessageSender, FakeNotificationsPrisma, FakeQueue } from './support
 
 const MOBILES = { stu_1: '9876543210' };
 
+const ANNOUNCEMENT_ID = 'ann_1';
+
+/** No KIND pays by default any more, so every send here is one an admin chose for that message. */
+const CHOSEN = [DeliveryChannel.WHATSAPP, DeliveryChannel.SMS];
+
+/** Every send is an announcement's: its `paidChannels` is the only place a fallback reads a chain. */
 async function build(
-  type: NotificationType = NOTIFICATION_TYPE.RESULT_READY,
+  escalate: DeliveryChannel[] = [DeliveryChannel.WHATSAPP],
   unreachable: string[] = [],
+  type: NotificationType = NOTIFICATION_TYPE.GENERIC,
 ) {
   const prisma = new FakeNotificationsPrisma([], MOBILES);
   const queue = new FakeQueue();
@@ -30,7 +37,14 @@ async function build(
     queue.asQueue(),
   );
 
-  await service.create({ studentId: 'stu_1', type, title: 'Something happened' });
+  prisma.announcements.push({ id: ANNOUNCEMENT_ID, paidChannels: escalate });
+  await service.create({
+    studentId: 'stu_1',
+    type,
+    title: 'Something happened',
+    announcementId: ANNOUNCEMENT_ID,
+    escalate: escalate as never,
+  });
   return { prisma, queue, sender, processor, deliveryId: prisma.deliveries[0]?.id ?? '' };
 }
 
@@ -71,6 +85,7 @@ describe('Spending on a notification', () => {
       studentId: 'stu_gone',
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
+      escalate: [DeliveryChannel.WHATSAPP],
     });
 
     await processor.deliver(prisma.deliveries[0]?.id ?? '', 1);
@@ -93,9 +108,7 @@ describe('Spending on a notification', () => {
 describe('When a channel will not take it', () => {
   /** Under the cap the SAME channel is retried, which is what BullMQ's backoff is for. */
   it('rethrows below the attempt cap rather than falling back early', async () => {
-    const { processor, prisma, deliveryId } = await build(NOTIFICATION_TYPE.TEST_ASSIGNED, [
-      MESSAGE_CHANNELS.WHATSAPP,
-    ]);
+    const { processor, prisma, deliveryId } = await build(CHOSEN, [MESSAGE_CHANNELS.WHATSAPP]);
 
     await assert.rejects(processor.deliver(deliveryId, 1));
 
@@ -106,7 +119,7 @@ describe('When a channel will not take it', () => {
 
   /** Out of retries, so the chain moves on — WhatsApp to SMS, which is the last resort. */
   it('books the next channel once the attempts are spent', async () => {
-    const { processor, queue, prisma, deliveryId } = await build(NOTIFICATION_TYPE.TEST_ASSIGNED, [
+    const { processor, queue, prisma, deliveryId } = await build(CHOSEN, [
       MESSAGE_CHANNELS.WHATSAPP,
     ]);
 
@@ -119,9 +132,10 @@ describe('When a channel will not take it', () => {
 
   /** A kind with nothing left in its chain stops, rather than looping on the last channel. */
   it('stops when the chain runs out', async () => {
-    const { processor, queue, prisma, deliveryId } = await build(NOTIFICATION_TYPE.RESULT_READY, [
-      MESSAGE_CHANNELS.WHATSAPP,
-    ]);
+    const { processor, queue, prisma, deliveryId } = await build(
+      [DeliveryChannel.WHATSAPP],
+      [MESSAGE_CHANNELS.WHATSAPP],
+    );
 
     await processor.deliver(deliveryId, 4);
 
@@ -148,6 +162,7 @@ describe('A channel with no template registered', () => {
       studentId: 'stu_1',
       type: NOTIFICATION_TYPE.RESULT_READY,
       title: 'Your result is ready',
+      escalate: [DeliveryChannel.WHATSAPP],
     });
 
     await processor.deliver(prisma.deliveries[0]?.id ?? '', 1);

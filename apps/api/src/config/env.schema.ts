@@ -173,6 +173,11 @@ export const envSchema = z.object({
   // The wall a mistargeted broadcast hits instead of an invoice.
   NOTIFICATION_MAX_RECIPIENTS: z.coerce.number().int().positive().default(50000),
 
+  // Web push, all three or none: any one missing and the channel reports itself unavailable.
+  VAPID_PUBLIC_KEY: optional,
+  VAPID_PRIVATE_KEY: optional,
+  VAPID_SUBJECT: optional,
+
   // WhatsApp, as a shape rather than a vendor: Meta's Cloud API direct, or Interakt in front of it.
   WHATSAPP_PROVIDER: z.enum(WHATSAPP_PROVIDERS).default(WHATSAPP_PROVIDERS.NONE),
   // The language a template was REGISTERED in. A mismatch is rejected, not translated.
