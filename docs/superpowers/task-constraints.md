@@ -43,28 +43,6 @@ session. Node 22 in the committing shell (`source ~/.nvm/nvm.sh && nvm use 22`).
 
 </commit>
 
-<landing>
-
-A Superset workspace is a worktree on its own branch. When the task is DONE and committed, land it:
-
-```
-git merge main        # only if main has moved; then run the gates again
-pnpm ws:merge
-```
-
-`pnpm ws:merge` runs the gates, takes a lock every workspace of this clone shares, fast-forwards
-`main` **in the main checkout** so its files really move, then deletes this workspace — worktree,
-branch and all. The lock is the point: two agents landing at once is the race it exists to stop, so
-a second one waits rather than interleaving. `--keep` merges without removing the workspace.
-
-It refuses rather than improvising, and every refusal leaves `main` untouched: uncommitted changes
-here, a red gate, nothing to land, a dirty main checkout, or `main` ahead of this branch. That last
-one is the common case and it is deliberate — fold `main` in HERE and re-run the gates, so the tree
-that passed is the tree `main` ends up with. Never merge by hand to get around it, and never land
-work whose gates you have not seen green.
-
-</landing>
-
 <docs>
 
 **A plan is not a deliverable.** Implementation plans, task briefs, the specs behind them, research
