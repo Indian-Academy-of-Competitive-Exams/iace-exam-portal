@@ -49,6 +49,9 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   [NOTIFICATION_TYPE.GRANT_ADDED]: 'Access',
   [NOTIFICATION_TYPE.ENROLLMENT_ADDED]: 'Enrolment',
   [NOTIFICATION_TYPE.GENERIC]: 'Notice',
+  [NOTIFICATION_TYPE.RESULT_UPDATED]: 'Result',
+  [NOTIFICATION_TYPE.PIN_CHANGED]: 'Security',
+  [NOTIFICATION_TYPE.WELCOME]: 'Welcome',
 };
 
 const FILTERS = [

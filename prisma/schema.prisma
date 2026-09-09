@@ -170,6 +170,11 @@ enum NotificationType {
   ENROLLMENT_ADDED
   GRANT_ADDED
   GENERIC
+  // A re-score moved marks a student had already been shown.
+  RESULT_UPDATED
+  // Their PIN changed, which is the one security fact the bell carries.
+  PIN_CHANGED
+  WELCOME
 }
 
 // Mirrors MESSAGE_CHANNELS in apps/api/src/common/messaging — the two are edited together.
@@ -516,6 +521,8 @@ model Test {
   seriesOrder        Int?
   // A test opens and never shuts, and that instant is the whole of its timing.
   opensAt            DateTime?      @db.Timestamptz(3)
+  // When students were told it had opened. The sweep's watermark: set once, never read as a date.
+  announcedAt        DateTime?      @db.Timestamptz(3)
 
   baseConfig     BaseConfig          @relation(fields: [baseConfigId, examStageId], references: [id, examStageId], onDelete: Restrict, onUpdate: NoAction)
   examStage      ExamStage           @relation(fields: [examStageId], references: [id])

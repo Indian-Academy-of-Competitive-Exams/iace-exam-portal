@@ -103,10 +103,18 @@ export function rollupRebuildJobId(testId: string): string {
 export const ROLLUP_REBUILD_DELAY_MS = 60 * 1000;
 
 /** Writing one request, or sweeping up whatever a crash left unrelayed. */
-export const NOTIFICATION_JOBS = { WRITE: 'write-notification', SWEEP: 'relay-sweep' } as const;
+export const NOTIFICATION_JOBS = {
+  WRITE: 'write-notification',
+  SWEEP: 'relay-sweep',
+  /** Finds tests that have opened since anybody was last told, and tells whoever reaches them. */
+  TESTS_OPENED: 'tests-opened-sweep',
+} as const;
 
 /** Sweep only, unlike scoring: nothing here is latency-sensitive beside a ten-minute window. */
 export const NOTIFICATION_SWEEP_EVERY_MS = 60 * 1000;
+
+/** A test opening is not to the minute; five is soon enough and a fifth of the wake-ups. */
+export const TESTS_OPENED_SWEEP_EVERY_MS = 5 * 60 * 1000;
 
 /** Ids only, like every other job: the worker re-reads the outbox row it is about to act on. */
 export interface NotificationJobData {

@@ -158,6 +158,21 @@ export class AccessResolverService {
     if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
   }
 
+  /** Everyone one series reaches, which is the catalog read backwards. Ids only: the caller fans out. */
+  async studentsReaching(testSeriesId: string): Promise<string[]> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: AUDIENCE_SELECT,
+    });
+    if (series === null || !series.isEnabled) return [];
+
+    const students = await this.prisma.student.findMany({
+      where: audienceOf(series),
+      select: { id: true },
+    });
+    return students.map((student) => student.id);
+  }
+
   async invalidateStudent(studentId: string): Promise<void> {
     await this.redis.client.incr(redisKeys.catalogStudentEpoch(studentId));
   }
@@ -263,6 +278,52 @@ export function reachableBy(
 
   return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
 }
+
+/** What a series reaches, as a STUDENT filter. The mirror of `reachableBy`; edit the two together. */
+function audienceOf(
+  series: Readonly<{
+    id: string;
+    kind: TestSeriesKind;
+    programCode: string | null;
+    branchIds: string[];
+    eventId: string | null;
+    examStage: { exam: { course: ExamCourse } } | null;
+  }>,
+): Prisma.StudentWhereInput {
+  return {
+    deletedAt: null,
+    isActive: true,
+    // A grant overrides every kind, exactly as it does reading the other way.
+    OR: [{ grants: { some: { testSeriesId: series.id } } }, ...automaticAudience(series)],
+  };
+}
+
+function automaticAudience(series: Parameters<typeof audienceOf>[0]): Prisma.StudentWhereInput[] {
+  if (series.kind === TEST_SERIES_KIND.FREE) return [{}];
+  if (series.kind === TEST_SERIES_KIND.EVENT) {
+    return series.eventId === null
+      ? []
+      : [{ eventCandidacies: { some: { eventId: series.eventId } } }];
+  }
+  if (series.kind === TEST_SERIES_KIND.PROGRAM) {
+    return series.programCode === null ? [] : [{ programs: { has: series.programCode } }];
+  }
+  // STANDARD: the branches it runs in, narrowed to who is enrolled on the stage's course.
+  const course = series.examStage?.exam.course;
+  if (series.branchIds.length === 0 || course === undefined) return [];
+
+  return [{ currentBranchId: { in: series.branchIds }, enrolledCourses: { has: course } }];
+}
+
+const AUDIENCE_SELECT = {
+  id: true,
+  isEnabled: true,
+  kind: true,
+  programCode: true,
+  branchIds: true,
+  eventId: true,
+  examStage: { select: { exam: { select: { course: true } } } },
+} as const;
 
 function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus>): ResolvedSeries {
   return {

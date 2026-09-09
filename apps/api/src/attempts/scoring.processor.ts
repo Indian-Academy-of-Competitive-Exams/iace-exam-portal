@@ -25,6 +25,8 @@ const SCORING_SELECT = {
   testId: true,
   studentId: true,
   status: true,
+  // What they were shown last. A re-score that lands on the same number is not news.
+  score: true,
   isGraded: true,
   startedAt: true,
   submittedAt: true,
@@ -137,7 +139,10 @@ export class ScoringProcessor extends WorkerHost {
         },
       });
       // The claim's row count IS the signal: one row means nothing had evaluated this before.
-      return claimed.count === 1 ? this.announce(tx, attempt) : null;
+      if (claimed.count === 1) return this.announce(tx, attempt);
+
+      await this.announceCorrection(tx, attempt, scored.score);
+      return null;
     });
   }
 
@@ -168,6 +173,25 @@ export class ScoringProcessor extends WorkerHost {
     });
 
     return row.id;
+  }
+
+  /** A re-score, which only a drop or a bonus causes. Silent where the marks did not actually move. */
+  private async announceCorrection(
+    tx: Prisma.TransactionClient,
+    attempt: ScoringRow,
+    score: number,
+  ): Promise<void> {
+    if (Number(attempt.score ?? 0) === score) return;
+
+    await this.notifications.request(tx, {
+      studentId: attempt.studentId,
+      type: NOTIFICATION_TYPE.RESULT_UPDATED,
+      title: 'Your result has been updated',
+      body: 'A question on this paper was reviewed, so your marks and rank have been worked out again.',
+      // Keyed on the NEW total: a second correction that moves them again is its own news.
+      dedupeKey: `result-updated:${attempt.id}:${score}`,
+      testId: attempt.testId,
+    });
   }
 
   /** One statement per distinct outcome, not per question: a 100-mark paper has a handful. */

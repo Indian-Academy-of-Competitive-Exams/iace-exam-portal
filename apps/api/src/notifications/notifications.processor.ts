@@ -19,6 +19,7 @@ import {
 import { NotificationsService } from './notifications.service';
 import { PAID_CHANNELS, escalationFor } from './notification-policy';
 import { PushService } from './push.service';
+import { TestOpeningService } from './test-opening.service';
 import { NotificationOutbox, parseIntent, type NotificationIntent } from './notification-outbox';
 
 const MILLISECONDS_PER_SECOND = 1000;
@@ -35,6 +36,7 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly notifications: NotificationsService,
     private readonly outbox: NotificationOutbox,
     private readonly push: PushService,
+    private readonly openings: TestOpeningService,
     @InjectQueue(QUEUE_NAMES.NOTIFICATION_DELIVERY)
     private readonly deliveries: Queue<NotificationDeliveryJobData>,
   ) {
@@ -44,6 +46,10 @@ export class NotificationsProcessor extends WorkerHost {
   async process(job: Job<NotificationJobData>): Promise<void> {
     if (job.name === NOTIFICATION_JOBS.SWEEP) {
       await this.outbox.relay();
+      return;
+    }
+    if (job.name === NOTIFICATION_JOBS.TESTS_OPENED) {
+      await this.openings.sweep();
       return;
     }
     if (job.data.eventId) await this.write(job.data.eventId);

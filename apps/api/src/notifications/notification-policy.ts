@@ -62,6 +62,9 @@ export const NOTIFICATION_POLICY = {
   [NOTIFICATION_TYPE.GRANT_ADDED]: { escalate: [], deferSec: DEFER_SEC },
   [NOTIFICATION_TYPE.ENROLLMENT_ADDED]: { escalate: [], deferSec: DEFER_SEC },
   [NOTIFICATION_TYPE.GENERIC]: { escalate: [], deferSec: DEFER_SEC },
+  [NOTIFICATION_TYPE.RESULT_UPDATED]: { escalate: [], deferSec: DEFER_SEC },
+  [NOTIFICATION_TYPE.PIN_CHANGED]: { escalate: [], deferSec: DEFER_SEC },
+  [NOTIFICATION_TYPE.WELCOME]: { escalate: [], deferSec: DEFER_SEC },
 } as const satisfies Record<NotificationType, Policy>;
 
 export interface EscalationPlan {

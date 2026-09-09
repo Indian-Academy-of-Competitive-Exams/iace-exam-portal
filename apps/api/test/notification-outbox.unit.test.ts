@@ -7,6 +7,7 @@ import { NotificationsProcessor } from '../src/notifications/notifications.proce
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { NotificationPreferencesService } from '../src/notifications/notification-preferences.service';
 import { PushService } from '../src/notifications/push.service';
+import { TestOpeningService } from '../src/notifications/test-opening.service';
 import { FakeConfig, FakeNotificationsPrisma, FakePushSender, FakeQueue } from './support/fakes';
 
 /** The durable path: the fact and the intent commit together, and the queue is a later step. */
@@ -32,6 +33,9 @@ function build() {
     new FakeConfig().asService(),
   );
   const push = new PushService(prisma.asService(), preferences, new FakePushSender(false));
+  // Nothing here opens a test, so the audience it would fan out to is deliberately empty.
+  const access = { studentsReaching: () => Promise.resolve([]) } as never;
+  const openings = new TestOpeningService(prisma.asService(), access, outbox);
   return {
     prisma,
     queue,
@@ -42,6 +46,7 @@ function build() {
       service,
       outbox,
       push,
+      openings,
       deliveries.asQueue(),
     ),
   };

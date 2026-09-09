@@ -4572,11 +4572,69 @@ export class FakeNotificationsPrisma {
     },
   };
 
+  /** Enough Test for the opening sweep: the watermark, the status and the clock it reads. */
+  readonly tests: FakeOpeningTestRow[] = [];
+
+  readonly test = {
+    findMany: ({
+      where,
+      take,
+    }: {
+      where: {
+        status: string;
+        announcedAt: null;
+        OR: ({ opensAt: null } | { opensAt: { lte: Date } })[];
+      };
+      take?: number;
+    }) => {
+      const open = (row: FakeOpeningTestRow, now: Date) =>
+        row.opensAt === null || row.opensAt.getTime() <= now.getTime();
+      const at = where.OR.find((clause) => 'opensAt' in clause && clause.opensAt !== null);
+      const now = at && at.opensAt !== null ? at.opensAt.lte : new Date();
+
+      return Promise.resolve(
+        this.tests
+          .filter(
+            (row) => row.status === where.status && row.announcedAt === null && open(row, now),
+          )
+          .slice(0, take),
+      );
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: { announcedAt: Date } }) => {
+      const row = this.tests.find((held) => held.id === where.id);
+      if (!row) throw new Error(`no test ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
   private readonly outbox = fakeOutboxTable();
 
   readonly outboxEvents = this.outbox.rows;
 
   readonly outboxEvent = this.outbox.api;
+}
+
+export interface FakeOpeningTestRow {
+  id: string;
+  title: string | null;
+  testSeriesId: string;
+  status: string;
+  opensAt: Date | null;
+  announcedAt: Date | null;
+}
+
+export function makeOpeningTest(overrides: Partial<FakeOpeningTestRow> = {}): FakeOpeningTestRow {
+  return {
+    id: 'tst_1',
+    title: 'Mock 1',
+    testSeriesId: 'srs_1',
+    status: 'ACTIVE',
+    opensAt: null,
+    announcedAt: null,
+    ...overrides,
+  };
 }
 
 export interface FakePreferenceRow {

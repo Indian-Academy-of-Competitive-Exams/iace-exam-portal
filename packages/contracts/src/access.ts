@@ -30,6 +30,9 @@ export const NOTIFICATION_TYPE = {
   ENROLLMENT_ADDED: 'ENROLLMENT_ADDED',
   GRANT_ADDED: 'GRANT_ADDED',
   GENERIC: 'GENERIC',
+  RESULT_UPDATED: 'RESULT_UPDATED',
+  PIN_CHANGED: 'PIN_CHANGED',
+  WELCOME: 'WELCOME',
 } as const;
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
