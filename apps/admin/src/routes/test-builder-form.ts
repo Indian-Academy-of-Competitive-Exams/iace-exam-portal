@@ -32,7 +32,6 @@ export interface TestFormValues {
   paperBinding: PaperBinding;
   /** Null until the admin picks one — the config's default stands in until they do. */
   examTemplate: ExamTemplate | null;
-  maxRetakes: string;
   variantCount: string;
 }
 
@@ -57,7 +56,6 @@ export function valuesOf(
     evaluationMode: detail?.evaluationMode ?? fromSeries?.evaluationMode ?? '',
     paperBinding: detail?.paperBinding ?? PAPER_BINDING.FIXED,
     examTemplate: detail?.examTemplate ?? null,
-    maxRetakes: detail?.maxRetakes === null || detail === null ? '' : String(detail.maxRetakes),
     variantCount: String(detail?.variantCount ?? DEFAULT_PAPER_VARIANTS),
   };
 }
@@ -73,16 +71,12 @@ export function scopeRefOf(values: TestFormValues): TestScopeRef | null {
   return null;
 }
 
-export const RETAKES_NOT_A_NUMBER =
-  'Give a whole number of retakes, or leave it blank for unlimited';
-
 /** The keys the server answers with. `scopeRef` has no control of its own — see `SCOPE_FIELDS`. */
 export const SERVER_FIELDS = [
   'baseConfigId',
   'testSeriesId',
   'title',
   'paperBinding',
-  'maxRetakes',
   'variantCount',
   'scopeRef',
 ] as const;
@@ -100,7 +94,6 @@ export function applyServerErrors(error: unknown, form: TestForm, scope: TestSco
     'testSeriesId',
     'title',
     'paperBinding',
-    'maxRetakes',
     'variantCount',
   ]);
   const field = SCOPE_FIELDS[scope];

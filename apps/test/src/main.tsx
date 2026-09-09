@@ -12,9 +12,14 @@ import { mountApp } from '@iace/app-kit/browser';
 
 import { AuthProvider } from './providers/auth';
 import { App } from './App';
+import { captureInstallPrompt, registerServiceWorker } from './lib/pwa';
 
 /** One place every mutation failure is announced. Field-level messages still land on fields. */
 const queryClient = createAppQueryClient({ notify: toast });
+
+// Before mount: the browser fires `beforeinstallprompt` early, and an unheard one is gone for good.
+captureInstallPrompt();
+registerServiceWorker();
 
 mountApp(
   <AuthProvider>

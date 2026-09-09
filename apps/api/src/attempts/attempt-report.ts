@@ -26,22 +26,6 @@ export function marksBySection(
   return totals;
 }
 
-/** When the LAST sitting can still be running: entry closes, then the whole paper after it. */
-export function lastSittingEndsAt(
-  closesAt: string | null,
-  durationSec: number,
-  extraTimeSec: number | null,
-): string | null {
-  if (closesAt === null) return null;
-  const granted = (durationSec + (extraTimeSec ?? 0)) * MS_PER_SECOND;
-  return new Date(Date.parse(closesAt) + granted).toISOString();
-}
-
-/** A standing is provisional while anybody can still sit the paper and move it. */
-export function isProvisional(lastEndsAt: string | null, now: Date): boolean {
-  return lastEndsAt === null || Date.parse(lastEndsAt) > now.getTime();
-}
-
 /** The one piece of clock arithmetic a sitting needs; what an unfinished one means is per caller. */
 export function elapsedSeconds(from: Date, to: Date): number {
   return Math.max(0, Math.round((to.getTime() - from.getTime()) / MS_PER_SECOND));

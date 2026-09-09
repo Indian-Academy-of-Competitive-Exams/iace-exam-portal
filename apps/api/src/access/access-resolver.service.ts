@@ -13,7 +13,6 @@ import {
   TEST_STATUS,
   type TestSeriesKind,
   testIsOpen,
-  testWindow,
   scopedSections,
   scopedDurationSec,
   type TestScopeRef,
@@ -44,8 +43,6 @@ const catalogInclude = (programs: string[]) =>
         title: true,
         seriesOrder: true,
         opensAt: true,
-        lateEntrySec: true,
-        extraTimeSec: true,
         scope: true,
         scopeRef: true,
         baseConfig: {
@@ -82,13 +79,10 @@ interface ResolvedTest {
   totalQuestions: number;
   totalMarks: number;
   order: number | null;
-  /** The window, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
+  /** The opening, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
-  closesAt: string | null;
   /** Where this student got to. Cached, and busted when a sitting starts or ends. */
   attemptStatus: AttemptStatus | null;
-  /** This test's, in seconds, so the deadline is computed from one duration and not two. */
-  extraTimeSec: number | null;
 }
 
 /** What is cached: everything the clock does NOT decide. */
@@ -101,19 +95,6 @@ interface ResolvedSeries {
   kind: TestSeriesKind;
   sequentialTests: boolean;
   tests: ResolvedTest[];
-}
-
-/** How a test is offered institute-wide. `closesAt` null means somebody can always still enter. */
-export interface TestSchedule {
-  closesAt: string | null;
-  extraTimeSec: number;
-}
-
-/** When one test opens and shuts FOR THIS STUDENT, and what the test adds to the clock. */
-export interface StudentTestWindow {
-  opensAt: string | null;
-  closesAt: string | null;
-  extraTimeSec: number | null;
 }
 
 interface ResolvedCatalog {
@@ -142,7 +123,8 @@ export class AccessResolverService {
   /** Cached WITH the catalog, not read per request: starting and submitting are what bust it. */
   private async sittings(studentId: string): Promise<ReadonlyMap<string, AttemptStatus>> {
     const attempts = await this.prisma.attempt.findMany({
-      where: { studentId },
+      // A voided sitting did not happen: it must not hide the real one under it.
+      where: { studentId, status: { not: ATTEMPT_STATUS.VOIDED } },
       select: { testId: true, status: true },
       orderBy: { attemptNo: 'asc' },
     });
@@ -177,32 +159,19 @@ export class AccessResolverService {
     if (!reaches) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
   }
 
-  /** What this TEST adds to the clock here — from the catalog the gate just read. */
-  async extraTimeSecFor(studentId: string, testId: string): Promise<number> {
-    return (await this.windowFor(studentId, testId))?.extraTimeSec ?? 0;
-  }
-
-  /** How this test is offered to the whole institute — not to one branch, and not to one student. */
-  async testSchedule(testId: string): Promise<TestSchedule> {
-    const test = await this.prisma.test.findUnique({
-      where: { id: testId },
-      select: { opensAt: true, lateEntrySec: true, extraTimeSec: true },
+  /** Everyone one series reaches, which is the catalog read backwards. Ids only: the caller fans out. */
+  async studentsReaching(testSeriesId: string): Promise<string[]> {
+    const series = await this.prisma.testSeries.findUnique({
+      where: { id: testSeriesId },
+      select: AUDIENCE_SELECT,
     });
-    if (test === null) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
+    if (series === null || !series.isEnabled) return [];
 
-    const { closesAt } = testWindow({
-      unlockAt: test.opensAt?.toISOString() ?? null,
-      lateEntrySec: test.lateEntrySec,
+    const students = await this.prisma.student.findMany({
+      where: audienceOf(series),
+      select: { id: true },
     });
-    return { closesAt, extraTimeSec: test.extraTimeSec ?? 0 };
-  }
-
-  /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */
-  async windowFor(studentId: string, testId: string): Promise<StudentTestWindow | null> {
-    const resolved = await this.resolved(studentId);
-    const test = resolved.series.flatMap((series) => series.tests).find((row) => row.id === testId);
-    if (!test) return null;
-    return { opensAt: test.opensAt, closesAt: test.closesAt, extraTimeSec: test.extraTimeSec };
+    return students.map((student) => student.id);
   }
 
   async invalidateStudent(studentId: string): Promise<void> {
@@ -311,6 +280,52 @@ export function reachableBy(
   return { isEnabled: true, OR: [{ grants: { some: { studentId } } }, ...automatic] };
 }
 
+/** What a series reaches, as a STUDENT filter. The mirror of `reachableBy`; edit the two together. */
+function audienceOf(
+  series: Readonly<{
+    id: string;
+    kind: TestSeriesKind;
+    programCode: string | null;
+    branchIds: string[];
+    eventId: string | null;
+    examStage: { exam: { course: ExamCourse } } | null;
+  }>,
+): Prisma.StudentWhereInput {
+  return {
+    deletedAt: null,
+    isActive: true,
+    // A grant overrides every kind, exactly as it does reading the other way.
+    OR: [{ grants: { some: { testSeriesId: series.id } } }, ...automaticAudience(series)],
+  };
+}
+
+function automaticAudience(series: Parameters<typeof audienceOf>[0]): Prisma.StudentWhereInput[] {
+  if (series.kind === TEST_SERIES_KIND.FREE) return [{}];
+  if (series.kind === TEST_SERIES_KIND.EVENT) {
+    return series.eventId === null
+      ? []
+      : [{ eventCandidacies: { some: { eventId: series.eventId } } }];
+  }
+  if (series.kind === TEST_SERIES_KIND.PROGRAM) {
+    return series.programCode === null ? [] : [{ programs: { has: series.programCode } }];
+  }
+  // STANDARD: the branches it runs in, narrowed to who is enrolled on the stage's course.
+  const course = series.examStage?.exam.course;
+  if (series.branchIds.length === 0 || course === undefined) return [];
+
+  return [{ currentBranchId: { in: series.branchIds }, enrolledCourses: { has: course } }];
+}
+
+const AUDIENCE_SELECT = {
+  id: true,
+  isEnabled: true,
+  kind: true,
+  programCode: true,
+  branchIds: true,
+  eventId: true,
+  examStage: { select: { exam: { select: { course: true } } } },
+} as const;
+
 function toResolved(row: CatalogRow, sittings: ReadonlyMap<string, AttemptStatus>): ResolvedSeries {
   return {
     id: row.id,
@@ -347,11 +362,6 @@ function toResolvedTest(
   test: CatalogRow['tests'][number],
   sittings: ReadonlyMap<string, AttemptStatus>,
 ): ResolvedTest {
-  // From the test's OWN opening, so a program cohort gets a longer window and not a shifted one.
-  const { closesAt } = testWindow({
-    unlockAt: test.opensAt?.toISOString() ?? null,
-    lateEntrySec: test.lateEntrySec,
-  });
   const scoped = scopedSections(
     test.baseConfig.sections,
     test.scope,
@@ -374,9 +384,7 @@ function toResolvedTest(
     ),
     order: test.seriesOrder,
     opensAt: opensFor(test)?.toISOString() ?? null,
-    closesAt,
     attemptStatus: sittings.get(test.id) ?? null,
-    extraTimeSec: test.extraTimeSec,
   };
 }
 
@@ -402,20 +410,14 @@ const NONE_WAITING = -1;
 
 /** The clock is read HERE and never cached, so a test opens on time without anything busting a key. */
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
-  const { extraTimeSec: _extraTimeSec, ...shown } = test;
-  // A sat test stays startable: `maxRetakes` decides whether it may be sat again, not this.
-  return { ...shown, canStart: reachable && testIsOpen(test, now), sittingCount: null };
+  // A sat test stays startable: a paper may always be sat again, and Done is only where it sorts.
+  return { ...test, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
 }
 
-/** Why a sitting may not begin: a shut window is a different fact from having no access at all. */
+/** Why a sitting may not begin: not open YET is a different fact from having no access at all. */
 function refusalFor(test: StudentCatalogTest | undefined, now: Date): string {
-  const at = now.getTime();
-  if (test && test.opensAt !== null && Date.parse(test.opensAt) > at) {
-    return 'This test has not opened yet';
-  }
-  if (test && test.closesAt !== null && Date.parse(test.closesAt) <= at) {
-    return 'Entry to this test has closed';
-  }
+  if (test && !testIsOpen(test.opensAt, now)) return 'This test has not opened yet';
+
   return 'This test is not open to you right now';
 }
 

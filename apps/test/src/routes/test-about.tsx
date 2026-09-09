@@ -112,7 +112,7 @@ export function TestAboutPage() {
 
         {brief.data ? (
           <>
-            {listed ? <Shut test={listed} now={now} /> : null}
+            {listed ? <Shut test={listed} /> : null}
 
             <StatBand>
               <Metric label="Questions" value={brief.data.totalQuestions} size="sm" />
@@ -195,28 +195,21 @@ function Window({ test }: Readonly<{ test: StudentCatalogTest }>) {
       <span className="text-md font-semibold text-foreground">
         {test.opensAt === null ? 'Any time' : WHEN.format(new Date(test.opensAt))}
       </span>
-      {test.closesAt === null ? null : (
-        <span className="text-sm text-muted-foreground">
-          {`Entry closes ${WHEN.format(new Date(test.closesAt))}`}
-        </span>
-      )}
     </div>
   );
 }
 
-/** A shut window is a consequence, so it is an Alert — the variant carries half of it. */
-function Shut({ test, now }: Readonly<{ test: StudentCatalogTest; now: Date }>) {
-  const bucket = testBucket(test, now);
+/** Not open YET is a consequence, so it is an Alert — nothing else can keep a paper shut. */
+function Shut({ test }: Readonly<{ test: StudentCatalogTest }>) {
+  const bucket = testBucket(test);
   if (bucket === TEST_BUCKET.OPEN || bucket === TEST_BUCKET.DONE) return null;
 
   return (
     /* ui-copy-ok: consequence */
-    <Alert variant={bucket === TEST_BUCKET.MISSED ? 'warning' : 'info'}>
+    <Alert variant="info">
       <span className="flex items-center gap-2">
         <CalendarClock aria-hidden />
-        {bucket === TEST_BUCKET.MISSED
-          ? 'Entry has closed for this paper; your past attempts stay here.'
-          : 'This paper has not opened yet. Nothing can be started until it does.'}
+        This paper has not opened yet. Nothing can be started until it does.
       </span>
     </Alert>
   );
@@ -257,7 +250,6 @@ function Exits({
 
 function shutReason(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) return 'Not open yet';
-  if (test.closesAt !== null && Date.parse(test.closesAt) <= now.getTime()) return 'Entry closed';
   return 'Waiting its turn';
 }
 

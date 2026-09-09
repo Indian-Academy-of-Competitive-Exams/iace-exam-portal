@@ -9,7 +9,6 @@ import {
   testAction,
   testBucket,
   testIsOpen,
-  testWindow,
   type StudentCatalogTest,
 } from '../src/access';
 import { ME_ROUTES } from '../src/me';
@@ -67,50 +66,22 @@ describe('studentCatalogSeriesSchema', () => {
   });
 });
 
-describe('testWindow', () => {
-  const UNLOCK = '2026-09-01T04:30:00.000Z';
-
-  it('opens when the link says and never closes on its own', () => {
-    assert.deepEqual(testWindow({ unlockAt: UNLOCK, lateEntrySec: null }), {
-      opensAt: UNLOCK,
-      closesAt: null,
-    });
-  });
-
-  it('closes a branch cutoff after the unlock, not after the wall clock', () => {
-    const window = testWindow({ unlockAt: UNLOCK, lateEntrySec: 30 * 60 });
-
-    assert.equal(window.closesAt, '2026-09-01T05:00:00.000Z');
-  });
-
-  /** The failure this prevents: a cutoff counted from nothing, shutting a test that never opened. */
-  it('is no cutoff at all when the test has no unlock time', () => {
-    assert.deepEqual(testWindow({ unlockAt: null, lateEntrySec: 1800 }), {
-      opensAt: null,
-      closesAt: null,
-    });
-  });
-});
-
 describe('testIsOpen', () => {
   const at = (iso: string) => new Date(iso);
-  const window = testWindow({ unlockAt: '2026-09-01T04:30:00.000Z', lateEntrySec: 1800 });
+  const OPENS = '2026-09-01T04:30:00.000Z';
 
   it('is shut a millisecond before it opens and open at the instant it does', () => {
-    assert.equal(testIsOpen(window, at('2026-09-01T04:29:59.999Z')), false);
-    assert.equal(testIsOpen(window, at('2026-09-01T04:30:00.000Z')), true);
+    assert.equal(testIsOpen(OPENS, at('2026-09-01T04:29:59.999Z')), false);
+    assert.equal(testIsOpen(OPENS, at('2026-09-01T04:30:00.000Z')), true);
   });
 
-  it('is open a millisecond before entry closes and shut at the instant it does', () => {
-    assert.equal(testIsOpen(window, at('2026-09-01T04:59:59.999Z')), true);
-    assert.equal(testIsOpen(window, at('2026-09-01T05:00:00.000Z')), false);
+  /** The guarantee the whole model now rests on: nothing shuts a test once it has opened. */
+  it('stays open however long after, because nothing closes it', () => {
+    assert.equal(testIsOpen(OPENS, at('2029-01-01T00:00:00.000Z')), true);
   });
 
-  it('is open at any instant when the test has no window', () => {
-    assert.equal(
-      testIsOpen({ opensAt: null, closesAt: null }, at('1999-01-01T00:00:00.000Z')),
-      true,
-    );
+  it('is open at any instant when the test has no opening time', () => {
+    assert.equal(testIsOpen(null, at('1999-01-01T00:00:00.000Z')), true);
   });
 });
 
@@ -123,7 +94,6 @@ describe('ME_ROUTES.catalog', () => {
 });
 
 describe('testBucket', () => {
-  const NOW = new Date('2026-09-01T10:00:00.000Z');
   const test = (over: Partial<StudentCatalogTest> = {}): StudentCatalogTest => ({
     id: 'tst_1',
     title: 'Mock 1',
@@ -132,7 +102,6 @@ describe('testBucket', () => {
     totalMarks: 200,
     order: 1,
     opensAt: null,
-    closesAt: null,
     attemptStatus: null,
     canStart: true,
     sittingCount: null,
@@ -140,43 +109,36 @@ describe('testBucket', () => {
   });
 
   it('is open when the student may start it now', () => {
-    assert.equal(testBucket(test(), NOW), TEST_BUCKET.OPEN);
+    assert.equal(testBucket(test()), TEST_BUCKET.OPEN);
   });
 
   it('is later when it has not opened yet', () => {
     const upcoming = test({ canStart: false, opensAt: '2026-09-02T04:30:00.000Z' });
 
-    assert.equal(testBucket(upcoming, NOW), TEST_BUCKET.LATER);
+    assert.equal(testBucket(upcoming), TEST_BUCKET.LATER);
   });
 
   /** Waiting its turn in a sequential series has no window at all — it is still Later, not Missed. */
   it('is later when it is waiting its turn', () => {
-    assert.equal(testBucket(test({ canStart: false }), NOW), TEST_BUCKET.LATER);
-  });
-
-  /** The failure this prevents: a chance that has gone filed under "not yet". */
-  it('is missed once entry has closed and nothing was sat', () => {
-    const gone = test({ canStart: false, closesAt: '2026-09-01T09:00:00.000Z' });
-
-    assert.equal(testBucket(gone, NOW), TEST_BUCKET.MISSED);
+    assert.equal(testBucket(test({ canStart: false })), TEST_BUCKET.LATER);
   });
 
   it('is done once a sitting was submitted, even with a retake left', () => {
     const sat = test({ attemptStatus: 'SUBMITTED', canStart: true });
 
-    assert.equal(testBucket(sat, NOW), TEST_BUCKET.DONE);
+    assert.equal(testBucket(sat), TEST_BUCKET.DONE);
     assert.equal(testAction(sat), 'START');
   });
 
   it('counts an evaluated sitting as done too', () => {
-    assert.equal(testBucket(test({ attemptStatus: 'EVALUATED' }), NOW), TEST_BUCKET.DONE);
+    assert.equal(testBucket(test({ attemptStatus: 'EVALUATED' })), TEST_BUCKET.DONE);
   });
 
   /** A running sitting is resumed, never started a second time. */
   it('offers Resume for a sitting still in progress', () => {
     const live = test({ attemptStatus: 'IN_PROGRESS' });
 
-    assert.equal(testBucket(live, NOW), TEST_BUCKET.OPEN);
+    assert.equal(testBucket(live), TEST_BUCKET.OPEN);
     assert.equal(testAction(live), 'RESUME');
   });
 

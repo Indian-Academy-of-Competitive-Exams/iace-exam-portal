@@ -6,6 +6,7 @@ import {
   type AttemptSectionScore,
   AppException,
   type AttemptStatus,
+  type SavedQuestionKind,
   BRANCH_TYPE,
   type BranchType,
   DIFFICULTY_LEVEL,
@@ -36,6 +37,7 @@ import {
   type PaperQuestionStatus,
   type PermissionLevel,
   QUESTION_TYPE,
+  type QuestionStatus,
   type QuestionType,
   STAGE_DISPOSITION,
   STUDENT_TYPE,
@@ -61,6 +63,7 @@ import { type Env } from '../../src/config/env.schema';
 import { type AppConfigService } from '../../src/config/app-config.service';
 import { type RedisService } from '../../src/redis/redis.service';
 import { type MetricsService } from '../../src/common/metrics';
+import { PRISMA_ERROR_CODES } from '../../src/common/prisma-errors';
 import { type PrismaService } from '../../src/prisma/prisma.service';
 import { type StorageService } from '../../src/storage/storage.service';
 import {
@@ -68,6 +71,13 @@ import {
   type MessageSender,
   type OutboundMessage,
 } from '../../src/common/messaging';
+import {
+  PUSH_OUTCOMES,
+  type PushOutcome,
+  type PushPayload,
+  type PushSender,
+  type PushTarget,
+} from '../../src/notifications/web-push.sender';
 import { type DeviceContext } from '../../src/auth/auth.types';
 import { StartingPinService } from '../../src/auth/pin/starting-pin.service';
 import { type PinService } from '../../src/auth/pin/pin.service';
@@ -77,7 +87,7 @@ import {
   type DomainEventPayloads,
 } from '../../src/common/events';
 import { type EventsService } from '../../src/events';
-import { type ProgramsService } from '../../src/access';
+import { type AccessResolverService, type ProgramsService } from '../../src/access';
 
 /** Test doubles for the three things the auth services touch: Redis, config and Postgres. */
 
@@ -310,6 +320,26 @@ export class FakeRedis {
   getJson<T>(key: string): Promise<T | null> {
     const raw = this.text(key);
     return Promise.resolve(raw === undefined ? null : (JSON.parse(raw) as T));
+  }
+
+  mgetJson<T>(keys: readonly string[]): Promise<(T | null)[]> {
+    return Promise.resolve(
+      keys.map((key) => {
+        const raw = this.text(key);
+        return raw === undefined ? null : (JSON.parse(raw) as T);
+      }),
+    );
+  }
+
+  getRaw(key: string): Promise<string | null> {
+    return Promise.resolve(this.text(key) ?? null);
+  }
+
+  /** One thread, so the compare and the set are already atomic — the real one needs a script. */
+  async replaceJson(key: string, was: string, value: unknown, ttlSec: number): Promise<boolean> {
+    if (this.text(key) !== was) return false;
+    await this.setJson(key, value, ttlSec);
+    return true;
   }
 
   async del(...keys: string[]): Promise<void> {
@@ -1573,6 +1603,20 @@ export interface FakeAttemptRow {
   createdAt: Date;
 }
 
+/** The two set-shaped status filters the access catalog asks with. */
+function statusAsked(status: string, asked?: { in: string[] } | { not: string }): boolean {
+  if (asked === undefined) return true;
+  return 'in' in asked ? asked.in.includes(status) : status !== asked.not;
+}
+
+/** Prisma reads a bare value as equality and `{ not }` as its negation; the fake reads both. */
+function statusMatches(
+  status: AttemptStatus,
+  asked: AttemptStatus | { not: AttemptStatus },
+): boolean {
+  return typeof asked === 'string' ? status === asked : status !== asked.not;
+}
+
 export function makeAttempt(overrides: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   const startedAt = overrides.startedAt ?? new Date('2026-08-24T04:00:00.000Z');
   return {
@@ -1995,7 +2039,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       take,
     }: {
       where: {
-        status: AttemptStatus;
+        testId?: string;
+        studentId?: string;
+        status: AttemptStatus | { not: AttemptStatus };
         endsAt?: { lt: Date };
         score?: null;
         submittedAt?: { lt: Date };
@@ -2006,7 +2052,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
         this.attemptRows
           .filter(
             (row) =>
-              row.status === where.status &&
+              (where.testId === undefined || row.testId === where.testId) &&
+              (where.studentId === undefined || row.studentId === where.studentId) &&
+              statusMatches(row.status, where.status) &&
               (where.endsAt === undefined || row.endsAt < where.endsAt.lt) &&
               (where.score === undefined || row.score === null) &&
               (where.submittedAt === undefined ||
@@ -2175,8 +2223,9 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       return Promise.resolve(created);
     },
 
+    // Detached, as Prisma hands them over: a live reference lets a later write rewrite the read.
     findUnique: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.paperQuestions.find((row) => row.id === where.id) ?? null),
+      Promise.resolve(copyOf(this.paperQuestions.find((row) => row.id === where.id))),
 
     findFirst: ({
       where,
@@ -2184,12 +2233,14 @@ export class FakeTestsPrisma extends FakeConfigPrisma {
       where: { testId: string; questionId: string; id?: { not: string } };
     }) =>
       Promise.resolve(
-        this.paperQuestions.find(
-          (row) =>
-            row.testId === where.testId &&
-            row.questionId === where.questionId &&
-            row.id !== where.id?.not,
-        ) ?? null,
+        copyOf(
+          this.paperQuestions.find(
+            (row) =>
+              row.testId === where.testId &&
+              row.questionId === where.questionId &&
+              row.id !== where.id?.not,
+          ),
+        ),
       ),
 
     update: ({ where, data }: { where: { id: string }; data: Partial<FakePaperRow> }) => {
@@ -2921,8 +2972,8 @@ const touched = () => {
   return { updatedAt: new Date(FIXED_NOW.getTime() + writes) };
 };
 
-const copyOf = (row: FakeQuestionVersionRow | undefined): FakeQuestionVersionRow | null =>
-  row ? { ...row } : null;
+/** What every Prisma read hands back: a detached copy, never the row the store still holds. */
+const copyOf = <TRow>(row: TRow | undefined): TRow | null => (row ? { ...row } : null);
 
 /** A reference is looked up by one question or by a batch of them, and sometimes by version too. */
 interface FakeRefWhere {
@@ -4117,14 +4168,18 @@ export class FakeCatalogPrisma {
     findMany: async ({
       where,
     }: {
-      where: { studentId: string; testId?: { in: string[] }; status?: { in: string[] } };
+      where: {
+        studentId: string;
+        testId?: { in: string[] };
+        status?: { in: string[] } | { not: string };
+      };
     }) => {
       await this.record('attempt.findMany');
       return this.data.attempts.filter(
         (row) =>
           row.studentId === where.studentId &&
           (where.testId === undefined || where.testId.in.includes(row.testId)) &&
-          (where.status === undefined || where.status.in.includes(row.status)),
+          statusAsked(row.status, where.status),
       );
     },
   };
@@ -4332,6 +4387,15 @@ export class FakeCodeCatalog {
     return Promise.resolve();
   }
 
+  /** Names for the codes it knows; an unknown one is absent, which is what the resolver falls back on. */
+  namesByCode(codes: readonly string[]): Promise<Map<string, string>> {
+    return Promise.resolve(
+      new Map(
+        codes.filter((code) => this.usable.includes(code)).map((code) => [code, `${code} name`]),
+      ),
+    );
+  }
+
   asService<T>(): T {
     return this as unknown as T;
   }
@@ -4346,6 +4410,7 @@ export interface FakeNotificationRow {
   data?: unknown;
   dedupeKey?: string | null;
   actBy?: Date | null;
+  announcementId?: string | null;
   testId: string | null;
   testSeriesId: string | null;
   isRead: boolean;
@@ -4387,13 +4452,21 @@ export class FakeNotificationsPrisma {
   constructor(
     readonly rows: FakeNotificationRow[] = [],
     private readonly mobiles: Record<string, string> = {},
+    private readonly emails: Record<string, string> = {},
   ) {}
 
-  /** Only what `mobileOf` asks for: a live student's number, or nothing. */
+  /** Only what `mobileOf` and the preference resolver ask for: a live student, or nothing. */
   readonly student = {
     findFirst: ({ where }: { where: { id: string } }) =>
-      Promise.resolve(this.mobiles[where.id] ? { mobile: this.mobiles[where.id] } : null),
+      Promise.resolve(
+        this.mobiles[where.id]
+          ? { mobile: this.mobiles[where.id], profile: { email: this.emails[where.id] ?? null } }
+          : null,
+      ),
   };
+
+  /** The chosen chain a fallback reads back: only an announcement records one on the row. */
+  readonly announcements: { id: string; paidChannels: DeliveryChannel[] }[] = [];
 
   asService(): PrismaService {
     return this as unknown as PrismaService;
@@ -4414,21 +4487,29 @@ export class FakeNotificationsPrisma {
     upsert: ({
       where,
       create,
+      update = {},
     }: {
       where: { notificationId_channel: { notificationId: string; channel: DeliveryChannel } };
-      create: { notificationId: string; channel: DeliveryChannel };
+      create: { notificationId: string; channel: DeliveryChannel } & Partial<FakeDeliveryRow>;
+      update?: Partial<FakeDeliveryRow>;
     }) => {
       const key = where.notificationId_channel;
       const held = this.deliveries.find(
         (row) => row.notificationId === key.notificationId && row.channel === key.channel,
       );
-      return held ? Promise.resolve(held) : this.notificationDelivery.create({ data: create });
+      if (!held) return this.notificationDelivery.create({ data: create });
+
+      Object.assign(held, update);
+      return Promise.resolve(held);
     },
 
-    create: ({ data }: { data: { notificationId: string; channel: DeliveryChannel } }) => {
+    create: ({
+      data,
+    }: {
+      data: { notificationId: string; channel: DeliveryChannel } & Partial<FakeDeliveryRow>;
+    }) => {
       this.deliverySeq += 1;
       const row: FakeDeliveryRow = {
-        ...data,
         id: `dlv_${this.deliverySeq}`,
         status: 'PENDING' as DeliveryStatus,
         skipReason: null,
@@ -4436,17 +4517,32 @@ export class FakeNotificationsPrisma {
         lastError: null,
         sentAt: null,
         failedAt: null,
+        ...data,
       };
       this.deliveries.push(row);
       return Promise.resolve(row);
     },
 
-    findUnique: ({ where }: { where: { id: string } }) => {
-      const row = this.deliveries.find((candidate) => candidate.id === where.id);
+    findUnique: ({
+      where,
+    }: {
+      where: {
+        id?: string;
+        notificationId_channel?: { notificationId: string; channel: DeliveryChannel };
+      };
+    }) => {
+      const key = where.notificationId_channel;
+      const row = this.deliveries.find((candidate) =>
+        key
+          ? candidate.notificationId === key.notificationId && candidate.channel === key.channel
+          : candidate.id === where.id,
+      );
       if (!row) return Promise.resolve(null);
 
       const notification = this.rows.find((held) => held.id === row.notificationId);
-      return Promise.resolve({ ...row, notification });
+      const announcement =
+        this.announcements.find((held) => held.id === notification?.announcementId) ?? null;
+      return Promise.resolve({ ...row, notification: { ...notification, announcement } });
     },
 
     findMany: ({ where = {} }: { where?: { notificationId?: string; status?: string } } = {}) =>
@@ -4511,11 +4607,231 @@ export class FakeNotificationsPrisma {
     },
   };
 
+  readonly preferences: FakePreferenceRow[] = [];
+
+  private preferenceSeq = 0;
+
+  /** Enough for the resolver: the null-type rows a student's own screen writes, plus per-type ones. */
+  readonly notificationPreference = {
+    findMany: ({
+      where,
+    }: {
+      where: {
+        studentId: string;
+        channel?: DeliveryChannel;
+        type?: null;
+        OR?: { type: NotificationType | null }[];
+      };
+    }) =>
+      Promise.resolve(
+        this.preferences.filter(
+          (row) =>
+            row.studentId === where.studentId &&
+            (where.channel === undefined || row.channel === where.channel) &&
+            (where.type === undefined || row.type === where.type) &&
+            (where.OR === undefined || where.OR.some((clause) => clause.type === row.type)),
+        ),
+      ),
+
+    deleteMany: ({
+      where,
+    }: {
+      where: { studentId: string; channel: DeliveryChannel; type: null };
+    }) => {
+      const kept = this.preferences.filter(
+        (row) =>
+          !(
+            row.studentId === where.studentId &&
+            row.channel === where.channel &&
+            row.type === where.type
+          ),
+      );
+      const count = this.preferences.length - kept.length;
+      this.preferences.splice(0, this.preferences.length, ...kept);
+      return Promise.resolve({ count });
+    },
+
+    create: ({
+      data,
+    }: {
+      data: {
+        studentId: string;
+        channel: DeliveryChannel;
+        type?: NotificationType | null;
+        enabled: boolean;
+      };
+    }) => {
+      this.preferenceSeq += 1;
+      const row: FakePreferenceRow = {
+        id: `pref_${this.preferenceSeq}`,
+        type: null,
+        ...data,
+        updatedAt: new Date(),
+      };
+      this.preferences.push(row);
+      return Promise.resolve(row);
+    },
+  };
+
+  readonly subscriptions: FakePushSubscriptionRow[] = [];
+
+  private subscriptionSeq = 0;
+
+  readonly pushSubscription = {
+    findMany: ({ where }: { where: { studentId: string } }) =>
+      Promise.resolve(this.subscriptions.filter((row) => row.studentId === where.studentId)),
+
+    upsert: ({
+      where,
+      create,
+      update,
+    }: {
+      where: { endpoint: string };
+      create: FakePushSubscriptionInput;
+      update: Partial<FakePushSubscriptionRow>;
+    }) => {
+      const held = this.subscriptions.find((row) => row.endpoint === where.endpoint);
+      if (held) {
+        Object.assign(held, update);
+        return Promise.resolve(held);
+      }
+      this.subscriptionSeq += 1;
+      const row: FakePushSubscriptionRow = {
+        userAgent: null,
+        ...create,
+        id: `psb_${this.subscriptionSeq}`,
+        lastSeenAt: new Date(),
+      };
+      this.subscriptions.push(row);
+      return Promise.resolve(row);
+    },
+
+    deleteMany: ({
+      where,
+    }: {
+      where: { studentId?: string; endpoint?: string | { in: string[] } };
+    }) => {
+      const gone = (endpoint: string) =>
+        typeof where.endpoint === 'string'
+          ? where.endpoint === endpoint
+          : (where.endpoint?.in.includes(endpoint) ?? true);
+      const kept = this.subscriptions.filter(
+        (row) =>
+          !(
+            (where.studentId === undefined || row.studentId === where.studentId) &&
+            gone(row.endpoint)
+          ),
+      );
+      const count = this.subscriptions.length - kept.length;
+      this.subscriptions.splice(0, this.subscriptions.length, ...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
+  /** Enough Test for the opening sweep: the watermark, the status and the clock it reads. */
+  readonly tests: FakeOpeningTestRow[] = [];
+
+  readonly test = {
+    findMany: ({
+      where,
+      take,
+    }: {
+      where: {
+        status: string;
+        announcedAt: null;
+        OR: ({ opensAt: null } | { opensAt: { lte: Date } })[];
+      };
+      take?: number;
+    }) => {
+      const open = (row: FakeOpeningTestRow, now: Date) =>
+        row.opensAt === null || row.opensAt.getTime() <= now.getTime();
+      const at = where.OR.find((clause) => 'opensAt' in clause && clause.opensAt !== null);
+      const now = at && at.opensAt !== null ? at.opensAt.lte : new Date();
+
+      return Promise.resolve(
+        this.tests
+          .filter(
+            (row) => row.status === where.status && row.announcedAt === null && open(row, now),
+          )
+          .slice(0, take),
+      );
+    },
+
+    update: ({ where, data }: { where: { id: string }; data: { announcedAt: Date } }) => {
+      const row = this.tests.find((held) => held.id === where.id);
+      if (!row) throw new Error(`no test ${where.id}`);
+      Object.assign(row, data);
+      return Promise.resolve(row);
+    },
+  };
+
   private readonly outbox = fakeOutboxTable();
 
   readonly outboxEvents = this.outbox.rows;
 
   readonly outboxEvent = this.outbox.api;
+}
+
+export interface FakeOpeningTestRow {
+  id: string;
+  title: string | null;
+  testSeriesId: string;
+  status: string;
+  opensAt: Date | null;
+  announcedAt: Date | null;
+}
+
+export function makeOpeningTest(overrides: Partial<FakeOpeningTestRow> = {}): FakeOpeningTestRow {
+  return {
+    id: 'tst_1',
+    title: 'Mock 1',
+    testSeriesId: 'srs_1',
+    status: 'ACTIVE',
+    opensAt: null,
+    announcedAt: null,
+    ...overrides,
+  };
+}
+
+export interface FakePreferenceRow {
+  id: string;
+  studentId: string;
+  channel: DeliveryChannel;
+  type: NotificationType | null;
+  enabled: boolean;
+  updatedAt: Date;
+}
+
+interface FakePushSubscriptionInput {
+  studentId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string | null;
+}
+
+export interface FakePushSubscriptionRow extends FakePushSubscriptionInput {
+  id: string;
+  lastSeenAt: Date;
+}
+
+/** Records what would have gone out, and pretends any endpoint named is dead or unreachable. */
+export class FakePushSender implements PushSender {
+  readonly sent: { endpoint: string; payload: PushPayload }[] = [];
+
+  constructor(
+    readonly isConfigured = true,
+    private readonly gone: readonly string[] = [],
+    private readonly failing: readonly string[] = [],
+  ) {}
+
+  send(target: PushTarget, payload: PushPayload): Promise<PushOutcome> {
+    if (this.gone.includes(target.endpoint)) return Promise.resolve(PUSH_OUTCOMES.GONE);
+    if (this.failing.includes(target.endpoint)) return Promise.resolve(PUSH_OUTCOMES.FAILED);
+
+    this.sent.push({ endpoint: target.endpoint, payload });
+    return Promise.resolve(PUSH_OUTCOMES.SENT);
+  }
 }
 
 // --------------------------------------------------------------------------- announcements
@@ -4525,6 +4841,8 @@ export interface FakeAnnouncementRow {
   id: string;
   title: string;
   body: string;
+  /** The filter as sent, which "Send again" reads back — so the fake carries it like the column. */
+  audience: unknown;
   paidChannels: string[];
   recipientCount: number;
   estimatedCostPaise: number;
@@ -4862,11 +5180,14 @@ export class FakeScoringPrisma {
       where,
       data,
     }: {
-      where: { id: string; evaluatedAt: null };
-      data: { evaluatedAt: Date };
+      where: { id: string; evaluatedAt?: null; status?: { in: AttemptStatus[] } };
+      data: Partial<FakeAttemptRow>;
     }) => {
       const matched = this.attempts.filter(
-        (row) => row.id === where.id && row.evaluatedAt === null,
+        (row) =>
+          row.id === where.id &&
+          (where.evaluatedAt === undefined || row.evaluatedAt === null) &&
+          (where.status === undefined || where.status.in.includes(row.status)),
       );
       for (const row of matched) Object.assign(row, data);
       return Promise.resolve({ count: matched.length });
@@ -5725,6 +6046,15 @@ export interface FakeProcessedRollupRow {
   rollupType: string;
 }
 
+/** A row the fold writes to the student's own two lists. */
+export interface FakeSavedQuestionRow {
+  studentId: string;
+  questionId: string;
+  kind: string;
+  attemptId: string | null;
+  paperQuestionId: string | null;
+}
+
 /** The test the fold reads its bucketing off — a rollup never needs more of one than this. */
 export interface FakeRollupTest {
   id: string;
@@ -5876,7 +6206,7 @@ interface FakeRollupAttemptWhere {
   testId?: string;
   studentId?: string;
   isGraded?: boolean;
-  status?: AttemptStatus;
+  status?: AttemptStatus | { in: AttemptStatus[] };
   attemptNo?: { lt?: number; gt?: number };
   evaluatedAt?: Date | { lt: Date } | null;
   test?: { evaluationMode: EvaluationMode };
@@ -6038,6 +6368,28 @@ export class FakeRollupPrisma {
     },
   };
 
+  readonly savedQuestions: FakeSavedQuestionRow[] = [];
+
+  /** Guarded on `(studentId, questionId, kind)`, so `skipDuplicates` is what makes a re-fold safe. */
+  readonly savedQuestion = {
+    createMany: ({
+      data,
+      skipDuplicates,
+    }: {
+      data: FakeSavedQuestionRow[];
+      skipDuplicates?: boolean;
+    }) => {
+      const fresh = data.filter(
+        (row) => !this.savedQuestions.some((held) => savedKey(held) === savedKey(row)),
+      );
+      if (fresh.length < data.length && skipDuplicates !== true) {
+        throw uniqueViolation('studentId_questionId_kind');
+      }
+      this.savedQuestions.push(...fresh);
+      return Promise.resolve({ count: fresh.length });
+    },
+  };
+
   /** Both selects at once: the scorer's answer key and the fold's subjects off one row. */
   private joined(row: FakeAttemptRow) {
     const test = this.tests.find((candidate) => candidate.id === row.testId) ?? makeRollupTest();
@@ -6066,10 +6418,13 @@ export class FakeRollupPrisma {
       [where.testId, row.testId],
       [where.studentId, row.studentId],
       [where.isGraded, row.isGraded],
-      [where.status, row.status],
       [where.test?.evaluationMode, this.modeOf(row)],
     ];
-    return asked.every(([wanted, held]) => wanted === undefined || wanted === held);
+    if (!asked.every(([wanted, held]) => wanted === undefined || wanted === held)) return false;
+    if (where.status === undefined) return true;
+    return typeof where.status === 'string'
+      ? row.status === where.status
+      : where.status.in.includes(row.status);
   }
 
   private matches(row: FakeAttemptRow, where: FakeRollupAttemptWhere): boolean {
@@ -6171,6 +6526,7 @@ export class FakeRollupPrisma {
       this.testStat.rows,
       this.testSectionStat.rows,
       this.testQuestionStat.rows,
+      this.savedQuestions,
     ];
   }
 
@@ -6197,6 +6553,8 @@ export class FakeRollupPrisma {
     return this as unknown as PrismaService;
   }
 }
+
+const savedKey = (row: FakeSavedQuestionRow) => `${row.studentId}|${row.questionId}|${row.kind}`;
 
 /** The seam an evaluated sitting reaches the rollup queue through. */
 export function fakeRollupOutbox(
@@ -6385,4 +6743,413 @@ export class FakeMetrics {
   asService(): MetricsService {
     return this as unknown as MetricsService;
   }
+}
+
+// ---------------------------------------------------------------------------
+// SavedQuestionsService — the two lists, the sitting they were starred from,
+// and the bank row a list draws its preview off.
+// ---------------------------------------------------------------------------
+
+export interface FakeSavedRow {
+  id: string;
+  studentId: string;
+  questionId: string;
+  kind: SavedQuestionKind;
+  attemptId: string | null;
+  paperQuestionId: string | null;
+  createdAt: Date;
+}
+
+export interface FakeSavedAttempt {
+  id: string;
+  studentId: string;
+  testId: string;
+  status: AttemptStatus;
+  evaluationMode: EvaluationMode;
+  durationSec: number;
+  questionIds: readonly string[];
+}
+
+export function makeSavedAttempt(overrides: Partial<FakeSavedAttempt> = {}): FakeSavedAttempt {
+  return {
+    id: 'att_1',
+    studentId: 'stu_1',
+    testId: 'tst_1',
+    status: ATTEMPT_STATUS.EVALUATED,
+    evaluationMode: EVALUATION_MODE.PRACTICE,
+    durationSec: 3_600,
+    questionIds: ['q_1', 'q_2'],
+    ...overrides,
+  };
+}
+
+/** One bank row per question id, carrying only what a saved row shows — never options or a key. */
+const savedQuestionRow = (questionId: string) => ({
+  subject: { name: 'Reasoning' },
+  topic: { name: 'Series' },
+  currentVersion: {
+    content: { en: { stem: [{ type: 'TEXT', text: `<p>Stem for ${questionId}</p>` }] } },
+  },
+});
+
+export class FakeSavedPrisma {
+  private seq = 0;
+
+  constructor(
+    readonly rows: FakeSavedRow[] = [],
+    readonly attempts: FakeSavedAttempt[] = [makeSavedAttempt()],
+  ) {}
+
+  private served(attemptId: string, studentId?: string) {
+    const attempt = this.attempts.find(
+      (row) => row.id === attemptId && (studentId === undefined || row.studentId === studentId),
+    );
+    return attempt ?? null;
+  }
+
+  readonly attemptQuestion = {
+    findFirst: ({
+      where,
+    }: {
+      where: { attemptId: string; questionId: string; attempt: { studentId: string } };
+    }) => {
+      const attempt = this.served(where.attemptId, where.attempt.studentId);
+      if (!attempt?.questionIds.includes(where.questionId)) return Promise.resolve(null);
+      return Promise.resolve({
+        paperQuestionId: `pq_${where.questionId}`,
+        attempt: {
+          testId: attempt.testId,
+          status: attempt.status,
+          test: {
+            evaluationMode: attempt.evaluationMode,
+            baseConfig: { durationSec: attempt.durationSec },
+          },
+        },
+      });
+    },
+
+    findMany: ({ where }: { where: { attemptId: string; attempt: { studentId: string } } }) => {
+      const attempt = this.served(where.attemptId, where.attempt.studentId);
+      return Promise.resolve((attempt?.questionIds ?? []).map((questionId) => ({ questionId })));
+    },
+  };
+
+  private matches(row: FakeSavedRow, where: FakeSavedWhere): boolean {
+    return (
+      (where.id === undefined || row.id === where.id) &&
+      (where.studentId === undefined || row.studentId === where.studentId) &&
+      (where.kind === undefined || row.kind === where.kind) &&
+      (where.questionId === undefined || where.questionId.in.includes(row.questionId))
+    );
+  }
+
+  readonly savedQuestion = {
+    findMany: ({
+      where = {},
+      skip = 0,
+      take,
+    }: {
+      where?: FakeSavedWhere;
+      orderBy?: unknown;
+      skip?: number;
+      take?: number;
+      select?: unknown;
+    } = {}) => {
+      const matched = this.rows
+        .filter((row) => this.matches(row, where))
+        .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return Promise.resolve(
+        matched.slice(skip, take === undefined ? undefined : skip + take).map(withQuestion),
+      );
+    },
+
+    count: ({ where = {} }: { where?: FakeSavedWhere } = {}) =>
+      Promise.resolve(this.rows.filter((row) => this.matches(row, where)).length),
+
+    create: ({ data }: { data: Omit<FakeSavedRow, 'id' | 'createdAt'> }) => {
+      const clash = this.rows.some(
+        (row) =>
+          row.studentId === data.studentId &&
+          row.questionId === data.questionId &&
+          row.kind === data.kind,
+      );
+      if (clash) throw uniqueViolation('studentId_questionId_kind');
+      this.seq += 1;
+      const created: FakeSavedRow = {
+        ...data,
+        id: `svq_${this.seq}`,
+        createdAt: new Date(this.seq),
+      };
+      this.rows.push(created);
+      return Promise.resolve(created);
+    },
+
+    findUniqueOrThrow: ({
+      where,
+    }: {
+      where: {
+        studentId_questionId_kind: {
+          studentId: string;
+          questionId: string;
+          kind: SavedQuestionKind;
+        };
+      };
+    }) => {
+      const key = where.studentId_questionId_kind;
+      const row = this.rows.find(
+        (held) =>
+          held.studentId === key.studentId &&
+          held.questionId === key.questionId &&
+          held.kind === key.kind,
+      );
+      if (!row) throw new Error('no saved row');
+      return Promise.resolve(withQuestion(row));
+    },
+
+    deleteMany: ({ where }: { where: { id: string; studentId: string } }) => {
+      const kept = this.rows.filter(
+        (row) => !(row.id === where.id && row.studentId === where.studentId),
+      );
+      const count = this.rows.length - kept.length;
+      this.rows.length = 0;
+      this.rows.push(...kept);
+      return Promise.resolve({ count });
+    },
+  };
+
+  $transaction<T>(work: Promise<T>[]): Promise<T[]> {
+    return Promise.all(work);
+  }
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}
+
+interface FakeSavedWhere {
+  id?: string;
+  studentId?: string;
+  kind?: SavedQuestionKind;
+  questionId?: { in: string[] };
+}
+
+const withQuestion = (row: FakeSavedRow) => ({
+  ...row,
+  question: savedQuestionRow(row.questionId),
+});
+
+/** The schedule the star's gate reads. `closesAt` null is a ranked test nobody has capped entry on. */
+export function fakeTestSchedule(closesAt: string | null): AccessResolverService {
+  return { testSchedule: () => Promise.resolve({ closesAt, extraTimeSec: 0 }) } as never;
+}
+
+// ============================================================================
+// The admin dashboard. Deliberately holds NO `attempt` delegate: the sittings
+// series reads folded `TestStat` rows, so a scan that crept in would throw here
+// rather than pass quietly.
+// ============================================================================
+
+export interface FakeDashboardStudent {
+  isActive: boolean;
+  deletedAt: Date | null;
+}
+
+export interface FakeDashboardQuestion {
+  status: QuestionStatus;
+  subjectId: string;
+  difficulty: DifficultyLevel;
+}
+
+export interface FakeDashboardTest {
+  id: string;
+  title: string | null;
+  status: TestStatus;
+  opensAt: Date | null;
+  seriesName: string;
+  seriesEnabled: boolean;
+  attemptCount: number;
+  evaluatedCount: number;
+}
+
+export interface FakeDashboardData {
+  students?: FakeDashboardStudent[];
+  branches?: number;
+  programs?: number;
+  exams?: number;
+  questions?: FakeDashboardQuestion[];
+  subjects?: { id: string; name: string }[];
+  tests?: FakeDashboardTest[];
+  series?: number;
+  /** A number, or the P2021 a database without Lane E's migration answers with. */
+  openFlags?: number | 'missing-table';
+}
+
+type CountWhere = { where?: Record<string, unknown> };
+
+export function makeDashboardTest(overrides: Partial<FakeDashboardTest> = {}): FakeDashboardTest {
+  return {
+    id: 'tst_1',
+    title: 'Mock 1',
+    status: TEST_STATUS.ACTIVE,
+    opensAt: new Date('2026-09-01T04:30:00.000Z'),
+    seriesName: 'SSC CGL Mocks',
+    seriesEnabled: true,
+    attemptCount: 0,
+    evaluatedCount: 0,
+    ...overrides,
+  };
+}
+
+export class FakeDashboardPrisma {
+  /** Which delegates a request touched - how a band nobody may see is proved never to run. */
+  readonly touched: string[] = [];
+
+  constructor(private readonly data: FakeDashboardData = {}) {}
+
+  private saw<T>(delegate: string, value: T): Promise<T> {
+    this.touched.push(delegate);
+    return Promise.resolve(value);
+  }
+
+  private liveTests(): FakeDashboardTest[] {
+    return (this.data.tests ?? []).filter((test) => test.status === TEST_STATUS.ACTIVE);
+  }
+
+  readonly student = {
+    count: ({ where = {} }: CountWhere = {}) =>
+      this.saw(
+        'student',
+        (this.data.students ?? []).filter(
+          (row) =>
+            row.deletedAt === null &&
+            (where.isActive === undefined || row.isActive === where.isActive),
+        ).length,
+      ),
+  };
+
+  readonly branch = { count: () => this.saw('branch', this.data.branches ?? 0) };
+
+  readonly program = { count: () => this.saw('program', this.data.programs ?? 0) };
+
+  readonly exam = { count: () => this.saw('exam', this.data.exams ?? 0) };
+
+  readonly testSeries = { count: () => this.saw('testSeries', this.data.series ?? 0) };
+
+  readonly questionFlag = {
+    count: () => {
+      this.touched.push('questionFlag');
+      if (this.data.openFlags !== 'missing-table') return Promise.resolve(this.data.openFlags ?? 0);
+      return Promise.reject(
+        new Prisma.PrismaClientKnownRequestError('The table does not exist', {
+          code: PRISMA_ERROR_CODES.TABLE_NOT_FOUND,
+          clientVersion: 'test',
+        }),
+      );
+    },
+  };
+
+  readonly subject = {
+    findMany: () =>
+      this.saw(
+        'subject',
+        [...(this.data.subjects ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+      ),
+  };
+
+  readonly question = {
+    count: ({ where = {} }: CountWhere = {}) =>
+      this.saw(
+        'question',
+        (this.data.questions ?? []).filter((row) => row.status === where.status).length,
+      ),
+
+    groupBy: ({
+      by,
+      where = {},
+    }: {
+      by: readonly ('status' | 'subjectId' | 'difficulty')[];
+      where?: { status?: QuestionStatus };
+    }) => {
+      const rows = (this.data.questions ?? []).filter(
+        (row) => where.status === undefined || row.status === where.status,
+      );
+      return this.saw('question', groupRows(rows, by));
+    },
+  };
+
+  readonly test = {
+    groupBy: ({ by }: { by: readonly 'status'[] }) =>
+      this.saw('test', groupRows(this.data.tests ?? [], by)),
+
+    findMany: ({
+      where = {},
+      orderBy,
+      take,
+    }: {
+      where?: { testSeries?: { isEnabled: boolean }; OR?: unknown[]; opensAt?: { gt: Date } };
+      orderBy: { opensAt: 'asc' | { sort: 'desc' } };
+      take: number;
+    }) => {
+      const anySeries = where.testSeries === undefined;
+      const rows = this.liveTests()
+        .filter((test) => anySeries || test.seriesEnabled)
+        .filter((test) => matchesWindow(test, where))
+        .sort(byOpensAt(orderBy.opensAt === 'asc'))
+        .slice(0, take)
+        .map((test) => ({
+          id: test.id,
+          title: test.title,
+          opensAt: test.opensAt,
+          testSeries: { name: test.seriesName },
+          stat: { attemptCount: test.attemptCount, evaluatedCount: test.evaluatedCount },
+        }));
+      return this.saw('test', rows);
+    },
+  };
+
+  asService(): PrismaService {
+    return this as unknown as PrismaService;
+  }
+}
+
+/** Prisma's `_count: true` shape: one row per distinct combination of the grouped columns. */
+function groupRows<T extends object>(
+  rows: readonly T[],
+  by: readonly (keyof T & string)[],
+): (Partial<T> & { _count: number })[] {
+  const held = new Map<string, Partial<T> & { _count: number }>();
+  for (const row of rows) {
+    const key = by.map((column) => String(row[column])).join(' ');
+    const seen = held.get(key);
+    if (seen) {
+      seen._count += 1;
+      continue;
+    }
+    held.set(key, {
+      ...Object.fromEntries(by.map((column) => [column, row[column]])),
+      _count: 1,
+    } as Partial<T> & { _count: number });
+  }
+  return [...held.values()];
+}
+
+/** `opensAt: null` is a test that opened with its series, so it is always already open. */
+function matchesWindow(
+  test: FakeDashboardTest,
+  where: { OR?: unknown[]; opensAt?: { gt: Date } },
+): boolean {
+  if (where.opensAt) return test.opensAt !== null && test.opensAt > where.opensAt.gt;
+  if (!where.OR) return true;
+  const [, upperBound] = where.OR as [unknown, { opensAt: { lte: Date } }];
+  return test.opensAt === null || test.opensAt <= upperBound.opensAt.lte;
+}
+
+/** Nulls last either way, matching the `{ sort, nulls: 'last' }` the service asks Postgres for. */
+function byOpensAt(ascending: boolean) {
+  return (a: FakeDashboardTest, b: FakeDashboardTest): number => {
+    if (a.opensAt === null) return b.opensAt === null ? 0 : 1;
+    if (b.opensAt === null) return -1;
+    const gap = a.opensAt.getTime() - b.opensAt.getTime();
+    return ascending ? gap : -gap;
+  };
 }

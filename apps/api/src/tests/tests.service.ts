@@ -81,7 +81,6 @@ export const AUDITED_TEST_FIELDS = [
   'scope',
   'paperBinding',
   'examTemplate',
-  'maxRetakes',
   'status',
 ] as const;
 
@@ -152,7 +151,6 @@ export class TestsService {
         scopeRef: toJson(scopeRef),
         evaluationMode: series.evaluationMode,
         paperBinding,
-        maxRetakes: input.maxRetakes ?? null,
         variantCount,
         questionPoolFilter: toJson(input.questionPoolFilter ?? null),
         createdById,
@@ -221,7 +219,6 @@ export class TestsService {
           ...(input.scopeRef === undefined ? {} : { scopeRef: toJson(input.scopeRef ?? null) }),
           ...(input.examTemplate === undefined ? {} : { examTemplate: input.examTemplate }),
           ...(input.paperBinding === undefined ? {} : { paperBinding: input.paperBinding }),
-          ...(input.maxRetakes === undefined ? {} : { maxRetakes: input.maxRetakes ?? null }),
           ...(variantCount === test.variantCount ? {} : { variantCount }),
           ...(input.questionPoolFilter === undefined
             ? {}
@@ -341,7 +338,6 @@ function toTest(row: TestRow): Test {
     evaluationMode: row.evaluationMode,
     paperBinding: row.paperBinding,
     examTemplate: row.examTemplate,
-    maxRetakes: row.maxRetakes,
     variantCount: row.variantCount,
     questionPoolFilter: (row.questionPoolFilter as DrawSpec | null) ?? null,
     status: row.status,
@@ -361,8 +357,6 @@ function toTestSchedule(row: TestRow): Omit<TestDetail, keyof Test | 'baseConfig
   return {
     seriesOrder: row.seriesOrder,
     opensAt: row.opensAt?.toISOString() ?? null,
-    lateEntrySec: row.lateEntrySec,
-    extraTimeSec: row.extraTimeSec,
     programUnlocks: row.programUnlocks.map((unlock) => ({
       programCode: unlock.programCode,
       opensAt: unlock.opensAt.toISOString(),

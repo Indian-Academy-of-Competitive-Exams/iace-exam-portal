@@ -12,6 +12,7 @@ import {
   distractorThatWon,
   longestStreak,
   practiceWindow,
+  rankSubjectsByWeakness,
   shiftCivilDate,
   startOfLastMonth,
   effortPerSitting,
@@ -711,6 +712,72 @@ describe('subjectShares names the share of answers too', () => {
     assert.equal(a?.attemptedShare, 75);
     assert.equal(b?.attemptedShare, 25);
     assert.equal(b?.timeShare, 75);
+  });
+});
+
+describe('rankSubjectsByWeakness', () => {
+  const subject = (
+    subjectId: string,
+    name: string,
+    attempted: number,
+    correct: number,
+  ): SubjectStanding => ({
+    subjectId,
+    name,
+    tallies: [
+      {
+        scope: TEST_SCOPE.FULL,
+        evaluationMode: EVALUATION_MODE.RANKED,
+        attempted,
+        correct,
+        sumTimeSec: attempted * 30,
+      },
+    ],
+  });
+
+  const subjects = [
+    subject('sub_g', 'General Awareness', 40, 34),
+    subject('sub_q', 'Quantitative Aptitude', 40, 12),
+    subject('sub_r', 'Reasoning', 40, 24),
+  ];
+
+  it('puts the weakest first, which is the whole point of the panel', () => {
+    const { weakest } = rankSubjectsByWeakness(subjects, EVALUATION_MODE.RANKED);
+
+    assert.deepEqual(
+      weakest.map((row) => row.name),
+      ['Quantitative Aptitude', 'Reasoning', 'General Awareness'],
+    );
+    assert.equal(weakest[0]?.measure.accuracy, 30);
+  });
+
+  /** The failure this prevents: two questions and one miss branding a subject as somebody's worst. */
+  it('holds a subject under the floor out of the ranking rather than ranking it bottom', () => {
+    const thin = subject('sub_e', 'English', SUBJECT_SAMPLE_FLOOR - 1, 0);
+    const ranking = rankSubjectsByWeakness([...subjects, thin], EVALUATION_MODE.RANKED);
+
+    assert.ok(!ranking.weakest.some((row) => row.name === 'English'));
+    assert.deepEqual(
+      ranking.thin.map((row) => row.name),
+      ['English'],
+    );
+    assert.equal(ranking.weakest[0]?.name, 'Quantitative Aptitude');
+  });
+
+  /** Served and never answered is a blind spot, not a weakness — it has no accuracy to rank on. */
+  it('leaves out a subject nothing was answered in', () => {
+    const ranking = rankSubjectsByWeakness(
+      [...subjects, subject('sub_e', 'English', 0, 0)],
+      EVALUATION_MODE.RANKED,
+    );
+
+    assert.equal(ranking.weakest.length + ranking.thin.length, 3);
+  });
+
+  it('reads the mode the dashboard is showing, never both at once', () => {
+    const ranking = rankSubjectsByWeakness(subjects, EVALUATION_MODE.PRACTICE);
+
+    assert.deepEqual(ranking, { weakest: [], thin: [] });
   });
 });
 

@@ -32,13 +32,13 @@ export interface Sittable {
   action: 'START' | 'RESUME' | null;
 }
 
-export function sittablesOf(series: readonly StudentCatalogSeries[], now: Date): Sittable[] {
+export function sittablesOf(series: readonly StudentCatalogSeries[]): Sittable[] {
   return series.flatMap((one) =>
     one.tests.map((test) => ({
       test,
       seriesId: one.id,
       seriesName: one.name,
-      bucket: testBucket(test, now),
+      bucket: testBucket(test),
       action: testAction(test),
     })),
   );
@@ -49,11 +49,9 @@ export function continueWith(rows: readonly Sittable[]): Sittable | undefined {
   return rows.find((row) => row.test.attemptStatus === ATTEMPT_STATUS.IN_PROGRESS);
 }
 
-/** Open now, soonest to close first — a test with no closing time waits behind one that has. */
+/** Open now, in the order the institute set them: nothing shuts, so nothing is more urgent. */
 export function openNow(rows: readonly Sittable[]): Sittable[] {
-  return rows
-    .filter((row) => row.bucket === TEST_BUCKET.OPEN)
-    .sort((a, b) => closesAt(a) - closesAt(b));
+  return rows.filter((row) => row.bucket === TEST_BUCKET.OPEN);
 }
 
 /** What opens next, soonest first. */
@@ -73,8 +71,6 @@ export function matching(rows: readonly Sittable[], term: string): Sittable[] {
 }
 
 const FAR_FUTURE = Number.MAX_SAFE_INTEGER;
-const closesAt = (row: Sittable) =>
-  row.test.closesAt === null ? FAR_FUTURE : Date.parse(row.test.closesAt);
 const opensAt = (row: Sittable) =>
   row.test.opensAt === null ? FAR_FUTURE : Date.parse(row.test.opensAt);
 

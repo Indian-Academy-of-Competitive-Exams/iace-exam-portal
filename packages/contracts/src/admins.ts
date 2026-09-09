@@ -24,6 +24,7 @@ export const FEATURE_KEYS = {
   QUESTION_PROOFREAD: 'QUESTION_PROOFREAD',
   TEST_MANAGEMENT: 'TEST_MANAGEMENT',
   BRANCH_TEST_MANAGEMENT: 'BRANCH_TEST_MANAGEMENT',
+  TEST_OPERATIONS: 'TEST_OPERATIONS',
   STUDENT_PERFORMANCE: 'STUDENT_PERFORMANCE',
   NOTIFICATION_MANAGEMENT: 'NOTIFICATION_MANAGEMENT',
 } as const;
@@ -56,6 +57,10 @@ export const FEATURES: Readonly<Record<FeatureKey, { label: string; description:
   [FEATURE_KEYS.BRANCH_TEST_MANAGEMENT]: {
     label: 'Branch access',
     description: 'Which branches a test series runs for.',
+  },
+  [FEATURE_KEYS.TEST_OPERATIONS]: {
+    label: 'Live operations',
+    description: 'Watching live sittings, and resolving the ones that broke.',
   },
   [FEATURE_KEYS.STUDENT_PERFORMANCE]: {
     label: 'Student performance',

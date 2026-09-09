@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInfinitePages } from '@iace/app-kit';
 import { PageCrumbs, useFilterSpec } from '@iace/app-kit/browser';
-import { BellOff, SearchX } from 'lucide-react';
+import { BellOff, SearchX, Settings } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -49,6 +49,9 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   [NOTIFICATION_TYPE.GRANT_ADDED]: 'Access',
   [NOTIFICATION_TYPE.ENROLLMENT_ADDED]: 'Enrolment',
   [NOTIFICATION_TYPE.GENERIC]: 'Notice',
+  [NOTIFICATION_TYPE.RESULT_UPDATED]: 'Result',
+  [NOTIFICATION_TYPE.PIN_CHANGED]: 'Security',
+  [NOTIFICATION_TYPE.WELCOME]: 'Welcome',
 };
 
 const FILTERS = [
@@ -86,6 +89,14 @@ export function NotificationsPage() {
           breadcrumbs={<PageCrumbs nav={NAV_ITEMS} />}
           title="Notifications"
           meta={plural(list.total, 'notification')}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link to={ROUTES.NOTIFICATION_SETTINGS}>
+                <Settings />
+                Settings
+              </Link>
+            </Button>
+          }
         />
       }
       filters={{ spec: FILTERS, state: filters }}

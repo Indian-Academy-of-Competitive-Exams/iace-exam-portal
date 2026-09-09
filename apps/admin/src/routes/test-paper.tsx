@@ -4,8 +4,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { SlidersHorizontal } from 'lucide-react';
 import {
   AppException,
+  FEATURE_KEYS,
   FORM_LEVEL_FIELD,
   PAPER_BINDING,
+  PERMISSION_LEVELS,
   TEST_BUILDER_STEP,
   sectionQuota,
   scopedSections,
@@ -36,6 +38,7 @@ import {
   type BreadcrumbItem,
 } from '@iace/ui';
 import { api } from '../lib/api';
+import { useAuth } from '../providers/auth';
 import { DrawSpecEditor } from '../components/draw-spec';
 import { PaperQuestions } from '../components/paper-questions';
 import { QuestionChooser, type QuestionPicks } from '../components/question-picker';
@@ -66,6 +69,10 @@ const ADD_ERROR_FIELDS = ['questionId', 'questionIds', FORM_LEVEL_FIELD] as cons
 
 /** The Offer step's own words, so both screens name one price for the same edit. */
 const THAWS_THE_TEST = 'Editing the paper takes the test back out until it is offered again.';
+
+/** The rebuild is a delayed, deduped job — no screen can say it is done, so none of them claims it. */
+const RE_SCORING_RUNS =
+  'Every sitting that served a question you changed is being scored again, and the standings rebuilt after them. Scores, ranks and percentiles settle when that finishes.';
 
 export function TestPaperPage() {
   const { id } = useParams();
@@ -137,6 +144,9 @@ function TestPaperScreen({
   const openSectionId = filters.get('section') || (sections[0]?.id ?? '');
   const [draft, setDraft] = useState<DrawSpec | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
+  // Sticky for the life of the screen: the rebuild is delayed and deduped, so there is nothing to poll.
+  const [rescoring, setRescoring] = useState(false);
+  const canWrite = useAuth().can(FEATURE_KEYS.TEST_MANAGEMENT, PERMISSION_LEVELS.WRITE);
 
   const held = useMemo(() => {
     const counts = new Map<string, number>();
@@ -174,6 +184,8 @@ function TestPaperScreen({
   const canEditPaper = unsat && byHand;
   // Saving the pool moves the paper, so on a frozen test it would thaw the finalize away.
   const canSaveSpec = unsat && !detail.isLocked;
+  // The service refuses it on a draft, so the menu is absent rather than there and refused.
+  const canDispose = detail.isLocked && canWrite;
   const openSection = sections.find((section) => section.id === openSectionId) ?? sections[0];
   const title = detail.title ?? 'Untitled test';
   const chosen = [...held.values()].reduce((sum, count) => sum + count, 0);
@@ -214,13 +226,10 @@ function TestPaperScreen({
 
   const thaws = canEditPaper && detail.isLocked;
   // The screen owns these, not any one section, so they ride the toolbar above the strip.
-  const banners =
-    paperExists && !thaws ? undefined : (
-      <div className="flex flex-col gap-4 pb-4">
-        {paperExists ? null : <DrawnAtOffer detail={detail} />}
-        {thaws ? <Alert variant="warning">{THAWS_THE_TEST}</Alert> : null}
-      </div>
-    );
+  const quiet = paperExists && !thaws && !rescoring;
+  const banners = quiet ? undefined : (
+    <PaperBanners detail={detail} paperExists={paperExists} thaws={thaws} rescoring={rescoring} />
+  );
 
   const stripAction = (
     <StripActions
@@ -262,7 +271,11 @@ function TestPaperScreen({
               }
               held={onThePaper}
               editable={canEditPaper}
+              disposable={canDispose}
+              attemptCount={detail.attemptCount}
+              variantCount={detail.variantCount}
               loading={loading}
+              onRescoring={() => setRescoring(true)}
               poolDirty={draft !== null}
               onChanged={refresh}
             />
@@ -281,6 +294,22 @@ const CHIP_VARIANT = {
   SHORT: 'warning',
   FULL: 'success',
 } as const;
+
+/** What the screen says about the paper as a whole, above the section strip. */
+function PaperBanners({
+  detail,
+  paperExists,
+  thaws,
+  rescoring,
+}: Readonly<{ detail: TestDetail; paperExists: boolean; thaws: boolean; rescoring: boolean }>) {
+  return (
+    <div className="flex flex-col gap-4 pb-4">
+      {paperExists ? null : <DrawnAtOffer detail={detail} />}
+      {thaws ? <Alert variant="warning">{THAWS_THE_TEST}</Alert> : null}
+      {rescoring ? <Alert variant="info">{RE_SCORING_RUNS}</Alert> : null}
+    </div>
+  );
+}
 
 /** A tab names its section and says how far off it is, because only one section is open. */
 function SectionTab({
@@ -430,9 +459,13 @@ function SectionWorkspace({
   rows,
   held,
   editable,
+  disposable,
+  attemptCount,
+  variantCount,
   loading,
   poolDirty,
   onChanged,
+  onRescoring,
 }: Readonly<{
   testId: string;
   section: BaseConfigSection;
@@ -441,11 +474,16 @@ function SectionWorkspace({
   /** Every question the whole paper holds, since one sits on it once wherever it was put. */
   held: ReadonlySet<string>;
   editable: boolean;
+  /** A finalized paper's one permitted change, and only for somebody who may write tests. */
+  disposable: boolean;
+  attemptCount: number;
+  variantCount: number;
   /** True while `rows` still belongs to the paper picked before this one. */
   loading: boolean;
   /** Both writes draw from the stored pool, so an unsaved one has to stop them. */
   poolDirty: boolean;
   onChanged: (next: TestPaper) => Promise<void>;
+  onRescoring: () => void;
 }>) {
   const [picked, setPicked] = useState<QuestionPicks>(NO_PICKS);
 
@@ -535,6 +573,7 @@ function SectionWorkspace({
           rows={rows}
           spec={spec}
           editable={editable}
+          disposition={disposable ? { attemptCount, variantCount, onRescoring } : undefined}
           isLoading={loading}
           action={fillAction}
           banner={shortfallBanner}

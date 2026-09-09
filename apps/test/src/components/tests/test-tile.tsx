@@ -51,7 +51,7 @@ export function TestTile({
     >
       <div className="flex flex-1 flex-col gap-3 p-4">
         <span className={cn('w-fit rounded-full px-2 py-0.5 text-xs font-semibold', state.pill)}>
-          {pillOf(row, state.label, result)}
+          {pillOf(state.label, result)}
         </span>
 
         <Link to={ROUTES.TEST_ABOUT(row.test.id)} className="flex min-w-0 flex-col gap-1">
@@ -114,9 +114,8 @@ function stateOf(row: Sittable): keyof typeof STATES {
 }
 
 /** A finished paper's pill carries its percentile, which is the fact the reader came for. */
-function pillOf(row: Sittable, label: string, result?: TestResult): string {
+function pillOf(label: string, result?: TestResult): string {
   if (result?.percentile != null) return `${label} · ${result.percentile}th`;
-  if (row.bucket === TEST_BUCKET.MISSED) return 'Entry closed';
   return label;
 }
 
@@ -129,13 +128,10 @@ const paperLine = (test: StudentCatalogTest) =>
     .filter((part) => part !== null)
     .join(' · ');
 
+/** A test opens and never shuts, so there are only two things to say about when. */
 function whenLine(test: StudentCatalogTest, now: Date): string {
   if (test.opensAt !== null && Date.parse(test.opensAt) > now.getTime()) {
     return `Opens ${WHEN.format(new Date(test.opensAt))}`;
-  }
-  if (test.closesAt !== null) {
-    const closed = Date.parse(test.closesAt) <= now.getTime();
-    return `${closed ? 'Entry closed' : 'Entry closes'} ${WHEN.format(new Date(test.closesAt))}`;
   }
   return 'Any time';
 }

@@ -109,3 +109,30 @@ describe('Sending an announcement', () => {
     }
   });
 });
+
+describe('Sending the same notice again', () => {
+  /** "Send again" rebuilds nothing: it reads back the filter the first send recorded. */
+  it('reads the audience back off a sent announcement', async () => {
+    const { service } = build();
+
+    const sent = await service.send(draft(), 'adm_1');
+    const page = await service.list({ page: 1, pageSize: 20 });
+
+    assert.deepEqual(sent.audience, AUDIENCE);
+    assert.deepEqual(
+      page.items[0]?.audience,
+      AUDIENCE,
+      'and the list carries it, not just the detail',
+    );
+  });
+
+  /** Each send is its own row, so the history stays honest about who was told what, and when. */
+  it('records a second row rather than editing the first', async () => {
+    const { service, prisma } = build();
+
+    await service.send(draft(), 'adm_1');
+    await service.send(draft(), 'adm_1');
+
+    assert.equal(prisma.announcements.length, 2);
+  });
+});

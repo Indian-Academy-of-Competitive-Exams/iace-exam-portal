@@ -185,7 +185,8 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   order the student sees. Sections keep the config's order; questions shuffle within a section.
 - The whole served paper is written as `AttemptQuestion` rows at start, not only what the student
   touches, so scoring reads its marks from the paper row it already has.
-- `Attempt.isGraded` is true only for the **first** sitting of a `RANKED` test. A practice sitting
+- `Attempt.isGraded` marks the **one sitting holding the student's ranked slot** on a `RANKED` test —
+  normally the first, and a later one only where a void handed the slot back (§8). A practice sitting
   and a retake never enter a cohort.
 - `SINGLE` serves the one language picked, narrowed to what the config actually offers; `DUAL` serves
   every language it offers and there is nothing to toggle.
@@ -222,6 +223,15 @@ Scheduling belongs to the **test**, and a series has no availability of its own.
   time per question and per section — so analytics derive later without re-instrumenting.
 - `PerformanceShare` is the only unauthenticated door onto a report: a random token rather than a
   walkable id, revocable and expirable.
+- **A void is an archive, never a delete.** The support console stands a sitting down — `VOIDED`,
+  with who did it and why — and it then counts nowhere: every fold, board and cohort read selects
+  `EVALUATED`, which the status no longer is. Voiding one already marked asks for the test's cohort
+  rollup, that student's own rollup and the board to be built again, so ranks and percentiles
+  re-settle without it. Voiding is also what un-blocks a re-sit: the retake cap does not count a
+  sitting that was stood down.
+- **The ranked slot is spent unless it is handed back.** `isGraded` stays on the voided sitting, so
+  a re-sit is practice; voiding with "regrant ranked attempt" clears it, and the next sitting ranks
+  because no sitting holds the slot. Either way at most one sitting per (student, test) is graded.
 
 ## 9. Rollups
 

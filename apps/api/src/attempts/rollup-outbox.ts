@@ -16,6 +16,7 @@ import {
   ROLLUP_REBUILD_DELAY_MS,
   rollupJobId,
   rollupRebuildJobId,
+  rollupRebuildStudentJobId,
   type RollupJobData,
 } from '../queue/queues';
 
@@ -56,12 +57,25 @@ export class RollupOutbox {
     }
   }
 
-  /** The id is the TEST's and the delay outlasts its re-scores, so 500 of them ask for one rebuild. */
+  /** One id per test, dropped on completion: a retained one would swallow the next hour's rebuild. */
   async rebuild(testId: string): Promise<void> {
     await this.rollup.add(
       ROLLUP_JOBS.REBUILD_TEST,
       { testId },
-      { jobId: rollupRebuildJobId(testId), delay: ROLLUP_REBUILD_DELAY_MS },
+      { jobId: rollupRebuildJobId(testId), delay: ROLLUP_REBUILD_DELAY_MS, removeOnComplete: true },
+    );
+  }
+
+  /** One student's two tables, for a void that took a sitting out of their own history. */
+  async rebuildStudent(studentId: string): Promise<void> {
+    await this.rollup.add(
+      ROLLUP_JOBS.REBUILD_STUDENT,
+      { studentId },
+      {
+        jobId: rollupRebuildStudentJobId(studentId),
+        delay: ROLLUP_REBUILD_DELAY_MS,
+        removeOnComplete: true,
+      },
     );
   }
 

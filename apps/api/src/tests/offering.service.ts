@@ -12,7 +12,6 @@ import {
   type SetProgramUnlockBody,
   type SetTestSeriesBody,
   type TestProgramUnlock,
-  type TestSchedule,
   type TestSeriesLink,
   type TestStatus,
 } from '@iace/contracts';
@@ -76,35 +75,6 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   const message = testOpensAt === null ? TEST_HAS_NO_OPENING : OPENS_BEFORE_THE_TEST_DOES;
   throw new AppException(ErrorCodes.VALIDATION_ERROR, message, {
     fieldErrors: { opensAt: [message] },
-  });
-}
-
-const LATE_ENTRY_NEEDS_AN_OPENING =
-  'Late entry is counted from the moment the test opens, and this test has no opening time. Give it one, or leave late entry blank.';
-
-/** Without an opening there is nothing to count from, so a cap would silently never close entry. */
-function assertLateEntryHasAnOpening(opensAt: Date | null, lateEntrySec: number | null): void {
-  if (lateEntrySec === null || opensAt !== null) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, LATE_ENTRY_NEEDS_AN_OPENING, {
-    fieldErrors: { lateEntrySec: [LATE_ENTRY_NEEDS_AN_OPENING] },
-  });
-}
-
-const WINDOW_IS_RANKED_ONLY =
-  'A practice test opens at its time and never shuts, so it takes no late entry and no extra time. Make this test ranked, or leave both blank.';
-
-/** The CHECK on the table in service form, so the admin reads a sentence and not a driver error. */
-function assertWindowIsRanked(evaluationMode: EvaluationMode, input: TestSchedule): void {
-  if (allowsCohortScheduling(evaluationMode)) return;
-
-  const refused = (['lateEntrySec', 'extraTimeSec'] as const).filter(
-    (field) => input[field] !== null,
-  );
-  if (refused.length === 0) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, WINDOW_IS_RANKED_ONLY, {
-    fieldErrors: Object.fromEntries(refused.map((field) => [field, [WINDOW_IS_RANKED_ONLY]])),
   });
 }
 
@@ -278,18 +248,6 @@ export class OfferingService {
       select: { code: true },
     });
     if (!program) throw new AppException(ErrorCodes.NOT_FOUND, 'No such program');
-  }
-
-  /** The test's own clock, written where the resolver reads it. No branch row collapses onto it. */
-  async setSchedule(testId: string, input: TestSchedule): Promise<TestSchedule> {
-    const test = await this.requireTest(testId);
-    assertWindowIsRanked(test.evaluationMode, input);
-    assertLateEntryHasAnOpening(test.opensAt, input.lateEntrySec);
-
-    await this.prisma.test.update({ where: { id: testId }, data: input });
-
-    this.announce(test);
-    return input;
   }
 
   /** Filed against the test, and the series carrying it loses its cached catalog. */

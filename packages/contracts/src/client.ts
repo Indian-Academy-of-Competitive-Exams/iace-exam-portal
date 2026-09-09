@@ -61,6 +61,7 @@ import {
   type UpdateAdminInput,
 } from './admins';
 import { CSV_SEPARATOR } from './common';
+import { ADMIN_DASHBOARD_ROUTES, dashboardSchema, type Dashboard } from './dashboard';
 import { healthResponseSchema, type HealthResponse } from './health';
 import {
   DOCUMENT_FILE_FIELD,
@@ -80,6 +81,15 @@ import {
   type Me,
   type UpdateMeInput,
 } from './me';
+import {
+  SAVED_ROUTES,
+  bookmarkedInAttemptSchema,
+  savedQuestionSchema,
+  type BookmarkQuestionInput,
+  type BookmarkedInAttempt,
+  type SavedListQueryInput,
+  type SavedQuestion,
+} from './saved';
 import {
   ADMIN_BRANCH_ROUTES,
   branchSchema,
@@ -116,6 +126,11 @@ import {
   notificationSchema,
   type Notification,
   type NotificationListQueryInput,
+  notificationPreferencesSchema,
+  type NotificationPreferences,
+  type SetNotificationPreferenceInput,
+  type PushSubscriptionInput,
+  type DropPushSubscriptionInput,
   studentCatalogSchema,
   type StudentCatalog,
   type StudentGrantRow,
@@ -180,12 +195,14 @@ import {
   questionReportSchema,
   satSeriesListSchema,
   studentOverviewSchema,
+  testAnalyticsSchema,
   type PerformanceReport,
   type PracticeCalendar,
   type QuestionReport,
   type PerformanceReportQueryInput,
   type SatSeries,
   type StudentOverview,
+  type TestAnalytics,
 } from './stats';
 import {
   LEADERBOARD_ROUTES,
@@ -193,6 +210,20 @@ import {
   type Leaderboard,
   type LeaderboardQueryInput,
 } from './leaderboard';
+import {
+  ADMIN_LIVE_OPS_ROUTES,
+  liveOpsBoardSchema,
+  liveOpsTestSchema,
+  resolvedAttemptSchema,
+  type ExtendAttemptInput,
+  type ForceSubmitAttemptInput,
+  type LiveOpsBoard,
+  type LiveOpsTest,
+  type LiveOpsTestQueryInput,
+  type ResetAttemptInput,
+  type ResolvedAttempt,
+  type VoidAttemptInput,
+} from './live-ops';
 import {
   PERFORMANCE_SHARE_ROUTES,
   performanceShareSchema,
@@ -213,7 +244,6 @@ import {
   offerResultSchema,
   seriesTestRowSchema,
   testProgramUnlockSchema,
-  testScheduleSchema,
   testSeriesLinkSchema,
   testStatusSchema,
   type AddPaperQuestionInput,
@@ -232,8 +262,6 @@ import {
   type SeriesTestRow,
   type SetSeriesTestUnlockInput,
   type TestProgramUnlock,
-  type TestSchedule,
-  type TestScheduleInput,
   type TestSeriesLink,
   type TestStatus,
   type UpdateTestInput,
@@ -681,6 +709,34 @@ export function createApiClient(options: ApiClientOptions) {
       readNotification: (id: string): Promise<Notification> =>
         request(ME_ROUTES.readNotification(id), { method: 'PATCH', schema: notificationSchema }),
 
+      /** Every channel and whether it is on, plus the key this browser subscribes to push with. */
+      notificationPreferences: (): Promise<NotificationPreferences> =>
+        request(ME_ROUTES.notificationPreferences, { schema: notificationPreferencesSchema }),
+
+      /** Returns the whole set back, so the screen never reassembles it from one row. */
+      setNotificationPreference: (
+        input: SetNotificationPreferenceInput,
+      ): Promise<NotificationPreferences> =>
+        request(ME_ROUTES.notificationPreferences, {
+          method: 'PUT',
+          body: input,
+          schema: notificationPreferencesSchema,
+        }),
+
+      subscribeToPush: (input: PushSubscriptionInput): Promise<NoContent> =>
+        request(ME_ROUTES.pushSubscription, {
+          method: 'POST',
+          body: input,
+          schema: noContentSchema,
+        }),
+
+      unsubscribeFromPush: (input: DropPushSubscriptionInput): Promise<NoContent> =>
+        request(ME_ROUTES.pushSubscription, {
+          method: 'DELETE',
+          body: input,
+          schema: noContentSchema,
+        }),
+
       /** What the student reads before the clock starts. */
       testBrief: (testId: string): Promise<ExamBrief> =>
         request(ME_ATTEMPT_ROUTES.brief(testId), { schema: examBriefSchema }),
@@ -779,9 +835,73 @@ export function createApiClient(options: ApiClientOptions) {
           method: 'POST',
           schema: performanceShareSchema,
         }),
+
+      /** One of the two lists, newest first. The kind is required — there is no combined list. */
+      savedQuestions: (query: SavedListQueryInput): Promise<Paginated<SavedQuestion>> =>
+        requestPaginated(`${SAVED_ROUTES.list}${queryString({ ...query })}`, {
+          schema: savedQuestionSchema.array(),
+        }),
+
+      /** Idempotent: starring a question already starred returns the row it already had. */
+      bookmarkQuestion: (input: BookmarkQuestionInput): Promise<SavedQuestion> =>
+        request(SAVED_ROUTES.bookmark, {
+          method: 'POST',
+          body: input,
+          schema: savedQuestionSchema,
+        }),
+
+      /** Drops one saved row. A dismissed mistake comes back only if they get it wrong again. */
+      removeSavedQuestion: (id: string): Promise<NoContent> =>
+        request(SAVED_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
+
+      /** Which questions of one sitting are already starred — what the review draws its stars from. */
+      bookmarksInAttempt: (attemptId: string): Promise<BookmarkedInAttempt> =>
+        request(SAVED_ROUTES.inAttempt(attemptId), { schema: bookmarkedInAttemptSchema }),
     },
 
     admin: {
+      /** Watching one test's sittings, and resolving the ones that broke. */
+      liveOps: {
+        tests: (query: LiveOpsTestQueryInput = {}): Promise<Paginated<LiveOpsTest>> =>
+          requestPaginated(`${ADMIN_LIVE_OPS_ROUTES.tests}${queryString({ ...query })}`, {
+            schema: liveOpsTestSchema.array(),
+          }),
+
+        board: (testId: string): Promise<LiveOpsBoard> =>
+          request(ADMIN_LIVE_OPS_ROUTES.board(testId), { schema: liveOpsBoardSchema }),
+
+        forceSubmit: (
+          attemptId: string,
+          input: ForceSubmitAttemptInput,
+        ): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.forceSubmit(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        extend: (attemptId: string, input: ExtendAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.extend(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        reset: (attemptId: string, input: ResetAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.reset(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+
+        void: (attemptId: string, input: VoidAttemptInput): Promise<ResolvedAttempt> =>
+          request(ADMIN_LIVE_OPS_ROUTES.void(attemptId), {
+            method: 'POST',
+            body: input,
+            schema: resolvedAttemptSchema,
+          }),
+      },
+
       /** What an admin says to a cohort, and what reaching them cost. */
       announcements: {
         list: (query: AnnouncementListQueryInput = {}): Promise<Paginated<AnnouncementSummary>> =>
@@ -1226,6 +1346,10 @@ export function createApiClient(options: ApiClientOptions) {
         remove: (id: string): Promise<NoContent> =>
           request(ADMIN_TEST_ROUTES.remove(id), { method: 'DELETE', schema: noContentSchema }),
 
+        /** How the cohort did on it: the three rollups, read whole and derived from. */
+        analytics: (id: string): Promise<TestAnalytics> =>
+          request(ADMIN_TEST_ROUTES.analytics(id), { schema: testAnalyticsSchema }),
+
         /** The draft paper, as it stands: drawn at finalize, then edited a question at a time. */
         readPaper: (id: string, variant?: number): Promise<TestPaper> =>
           request(`${ADMIN_TEST_PAPER_ROUTES.read(id)}${queryString({ variant })}`, {
@@ -1289,14 +1413,6 @@ export function createApiClient(options: ApiClientOptions) {
 
         offer: (id: string): Promise<OfferResult> =>
           request(ADMIN_TEST_PAPER_ROUTES.offer(id), { method: 'POST', schema: offerResultSchema }),
-
-        /** The test's own late entry and extra time. Both null is the plain rules. */
-        setSchedule: (id: string, input: TestScheduleInput): Promise<TestSchedule> =>
-          request(ADMIN_TEST_PAPER_ROUTES.schedule(id), {
-            method: 'PUT',
-            body: input,
-            schema: testScheduleSchema,
-          }),
 
         moveToSeries: (id: string, input: SetTestSeriesInput): Promise<TestSeriesLink> =>
           request(ADMIN_TEST_PAPER_ROUTES.series(id), {
@@ -1596,6 +1712,12 @@ export function createApiClient(options: ApiClientOptions) {
             body: { importLogId, status },
             schema: questionImportResultSchema,
           }),
+      },
+
+      /** The landing screen. One payload, carrying only the bands the caller may see. */
+      dashboard: {
+        get: (): Promise<Dashboard> =>
+          request(ADMIN_DASHBOARD_ROUTES.get, { schema: dashboardSchema }),
       },
 
       audit: {

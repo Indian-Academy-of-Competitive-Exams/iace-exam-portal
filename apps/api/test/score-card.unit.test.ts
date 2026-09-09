@@ -18,7 +18,6 @@ import {
 
 const STUDENT = 'stu_1';
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
-const NOW = new Date('2026-09-01T09:00:00.000Z');
 
 /** The option that WOULD have been right. It must not appear anywhere in a score card payload. */
 const RIGHT_ANSWER = 'o_never_shown';
@@ -126,12 +125,7 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   });
 }
 
-/** How the test is offered institute-wide, which is what a final standing waits for. */
-type Schedule = { closesAt: string | null; extraTimeSec: number };
-
-const OPEN_ENDED: Schedule = { closesAt: null, extraTimeSec: 0 };
-
-function report(attempts: FakeAttemptRow[], schedule: Schedule = OPEN_ENDED) {
+function report(attempts: FakeAttemptRow[]) {
   const prisma = new FakeScoringPrisma(attempts, answers(), SHAPE);
   const redis = new FakeRedis();
   const leaderboard = new LeaderboardService(
@@ -139,17 +133,11 @@ function report(attempts: FakeAttemptRow[], schedule: Schedule = OPEN_ENDED) {
     redis.asService(),
     new FakeQueue().asQueue(),
   );
-  const access = { testSchedule: () => Promise.resolve(schedule) } as never;
   return {
     prisma,
     redis,
     leaderboard,
-    service: new AttemptReportService(
-      prisma.asService(),
-      access,
-      leaderboard,
-      new FakeStorage() as never,
-    ),
+    service: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
   };
 }
 
@@ -159,7 +147,7 @@ describe('the Score Card', () => {
     const attempt = scored();
     const { service } = report([attempt]);
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
     const missed = card.questions.find((row) => row.questionId === 'q2');
 
     assert.equal(missed?.isCorrect, false);
@@ -174,7 +162,7 @@ describe('the Score Card', () => {
     const attempt = scored();
     const { service } = report([attempt]);
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
 
     assert.equal(card.score, 1.5);
     assert.equal(card.maxMarks, 8);
@@ -187,7 +175,7 @@ describe('the Score Card', () => {
     const attempt = scored();
     const { service } = report([attempt]);
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
 
     assert.deepEqual(
       card.sections.map((section) => [section.name, section.score, section.unattemptedCount]),
@@ -214,7 +202,7 @@ describe('the Score Card', () => {
     await leaderboard.record({ ...attempt, score: 1.5 });
     await leaderboard.record({ ...rival, score: 6 });
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
 
     assert.equal(card.rank, 2);
     assert.equal(card.percentile, 25);
@@ -226,45 +214,11 @@ describe('the Score Card', () => {
     const attempt = scored({ lastRank: 7, lastPercentile: 62.5 });
     const { service } = report([attempt]);
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
 
     assert.equal(card.rank, 7);
     assert.equal(card.percentile, 62.5);
     assert.equal(card.cohortSize, null);
-  });
-
-  it('calls the standing provisional while anybody can still sit the paper', async () => {
-    const attempt = scored();
-    const open = report([attempt], {
-      closesAt: new Date(NOW.getTime() + 60_000).toISOString(),
-      extraTimeSec: 0,
-    });
-    const shut = report([attempt], {
-      closesAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(),
-      extraTimeSec: 0,
-    });
-
-    assert.equal((await open.service.scoreCard(STUDENT, attempt.id, NOW)).provisional, true);
-    assert.equal((await shut.service.scoreCard(STUDENT, attempt.id, NOW)).provisional, false);
-  });
-
-  /** Entry closes, but whoever walked in at that instant still has the whole paper after it. */
-  it('keeps it provisional until the last sitting that could have started has ended', async () => {
-    const attempt = scored();
-    const { service } = report([attempt], {
-      closesAt: new Date(NOW.getTime() - 30 * 60_000).toISOString(),
-      extraTimeSec: 0,
-    });
-
-    assert.equal((await service.scoreCard(STUDENT, attempt.id, NOW)).provisional, true);
-  });
-
-  /** The failure this prevents: telling one branch a rank is final while another is still sitting. */
-  it('never calls a standing final while entry is uncapped somewhere', async () => {
-    const attempt = scored();
-    const { service } = report([attempt], OPEN_ENDED);
-
-    assert.equal((await service.scoreCard(STUDENT, attempt.id, NOW)).provisional, true);
   });
 
   /** The failure this prevents: a Redis outage taking the whole score card down with it. */
@@ -273,7 +227,7 @@ describe('the Score Card', () => {
     const { redis, service } = report([attempt]);
     redis.client.zcard = () => Promise.reject(new Error('redis unreachable'));
 
-    const card = await service.scoreCard(STUDENT, attempt.id, NOW);
+    const card = await service.scoreCard(STUDENT, attempt.id);
 
     assert.equal(card.rank, 4);
     assert.equal(card.percentile, 80);
@@ -284,7 +238,7 @@ describe('the Score Card', () => {
     const { service } = report([attempt]);
 
     await assert.rejects(
-      () => service.scoreCard(STUDENT, attempt.id, NOW),
+      () => service.scoreCard(STUDENT, attempt.id),
       (error: AppException) => error.code === ErrorCodes.CONFLICT,
     );
   });
@@ -294,7 +248,7 @@ describe('the Score Card', () => {
     const { service } = report([attempt]);
 
     await assert.rejects(
-      () => service.scoreCard('stu_someone_else', attempt.id, NOW),
+      () => service.scoreCard('stu_someone_else', attempt.id),
       (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
     );
   });

@@ -25,6 +25,8 @@ const SCORING_SELECT = {
   testId: true,
   studentId: true,
   status: true,
+  // What they were shown last. A re-score that lands on the same number is not news.
+  score: true,
   isGraded: true,
   startedAt: true,
   submittedAt: true,
@@ -45,6 +47,12 @@ const SCORING_SELECT = {
 
 type ScoringRow = Prisma.AttemptGetPayload<{ select: typeof SCORING_SELECT }>;
 type ServedRow = ScoringRow['questions'][number];
+
+/** What the write did: whether the marks landed at all, and the event a FIRST evaluation raised. */
+interface Written {
+  applied: boolean;
+  evaluation: string | null;
+}
 
 /** Ended, however it ended. Re-scoring an EVALUATED sitting is how a dropped question is applied. */
 const SCORABLE = new Set<AttemptStatus>([ATTEMPT_STATUS.SUBMITTED, ATTEMPT_STATUS.EVALUATED]);
@@ -85,7 +93,11 @@ export class ScoringProcessor extends WorkerHost {
     }
 
     const scored = scorePaper(attempt.questions.map(toScorable));
-    const evaluation = await this.persist(attempt, scored);
+    const written = await this.persist(attempt, scored);
+    // Stood down while this ran: ranking it now would put a void sitting back on the board.
+    if (!written.applied) return null;
+
+    const evaluation = written.evaluation;
     await this.leaderboard.rank({
       id: attempt.id,
       testId: attempt.testId,
@@ -117,16 +129,17 @@ export class ScoringProcessor extends WorkerHost {
   }
 
   /** One transaction: a sitting whose totals and per-question marks disagree is worse than neither. */
-  private async persist(attempt: ScoringRow, scored: PaperScore): Promise<string | null> {
+  private async persist(attempt: ScoringRow, scored: PaperScore): Promise<Written> {
     return this.prisma.$transaction(async (tx) => {
       await this.markQuestions(tx, attempt.id, scored);
       // Claimed, never rewritten: two racing workers must not disagree about when this was scored.
       const claimed = await tx.attempt.updateMany({
-        where: { id: attempt.id, evaluatedAt: null },
+        where: { id: attempt.id, evaluatedAt: null, status: { in: [...SCORABLE] } },
         data: { evaluatedAt: new Date() },
       });
-      await tx.attempt.update({
-        where: { id: attempt.id },
+      // Guarded on the status this run READ: a void landing mid-score must not be written back.
+      const marked = await tx.attempt.updateMany({
+        where: { id: attempt.id, status: { in: [...SCORABLE] } },
         data: {
           status: ATTEMPT_STATUS.EVALUATED,
           score: scored.score,
@@ -136,8 +149,14 @@ export class ScoringProcessor extends WorkerHost {
           sectionScores: scored.sections,
         },
       });
+      if (marked.count === 0) return { applied: false, evaluation: null };
       // The claim's row count IS the signal: one row means nothing had evaluated this before.
-      return claimed.count === 1 ? this.announce(tx, attempt) : null;
+      if (claimed.count === 1) {
+        return { applied: true, evaluation: await this.announce(tx, attempt) };
+      }
+
+      await this.announceCorrection(tx, attempt, scored.score);
+      return { applied: true, evaluation: null };
     });
   }
 
@@ -168,6 +187,25 @@ export class ScoringProcessor extends WorkerHost {
     });
 
     return row.id;
+  }
+
+  /** A re-score, which only a drop or a bonus causes. Silent where the marks did not actually move. */
+  private async announceCorrection(
+    tx: Prisma.TransactionClient,
+    attempt: ScoringRow,
+    score: number,
+  ): Promise<void> {
+    if (Number(attempt.score ?? 0) === score) return;
+
+    await this.notifications.request(tx, {
+      studentId: attempt.studentId,
+      type: NOTIFICATION_TYPE.RESULT_UPDATED,
+      title: 'Your result has been updated',
+      body: 'A question on this paper was reviewed, so your marks and rank have been worked out again.',
+      // Keyed on the NEW total: a second correction that moves them again is its own news.
+      dedupeKey: `result-updated:${attempt.id}:${score}`,
+      testId: attempt.testId,
+    });
   }
 
   /** One statement per distinct outcome, not per question: a 100-mark paper has a handful. */

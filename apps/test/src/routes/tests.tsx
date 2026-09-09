@@ -21,7 +21,7 @@ import {
   type StudentCatalogSeries,
 } from '@iace/contracts';
 import { api } from '../lib/api';
-import { CATALOG_QUERY_KEY, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
+import { CATALOG_QUERY_KEY, courseLabel, NAV_ITEMS, PERFORMANCE_QUERY_KEY } from '../lib/constants';
 import {
   matching,
   resultsByTest,
@@ -31,9 +31,6 @@ import {
 } from '../lib/catalog';
 import { SeriesShelf } from '../components/tests/series-shelf';
 import { PageBody } from '../components/ui';
-
-/** AP_TS_POLICE reads as AP/TS POLICE. The underscore is a storage detail. */
-const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 const ANY_FAMILY = '';
 const SKELETON_KEYS = ['a', 'b', 'c'];
@@ -84,7 +81,7 @@ export function TestsPage() {
     .filter((row) => course === ANY_FAMILY || row.examStage?.course === course)
     .filter((row) => chosenSeries === ANY_FAMILY || row.id === chosenSeries);
   const rows = inState(
-    matching(sittablesOf(series, now), filters.values.q),
+    matching(sittablesOf(series), filters.values.q),
     filters.values.state || ANY_FAMILY,
   );
   const emptiness = emptyReason(reaches.length, rows.length);
@@ -192,7 +189,6 @@ const STATE_ITEMS = [
   { value: TEST_BUCKET.OPEN, label: 'Open now' },
   { value: TEST_BUCKET.LATER, label: 'Scheduled' },
   { value: TEST_BUCKET.DONE, label: 'Done' },
-  { value: TEST_BUCKET.MISSED, label: 'Entry closed' },
 ] as const;
 
 const inState = (rows: readonly Sittable[], state: string) =>

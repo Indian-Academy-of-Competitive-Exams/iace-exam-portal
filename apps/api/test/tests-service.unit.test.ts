@@ -181,7 +181,6 @@ describe('TestsService — creating a draft from a config', () => {
     assert.equal(created.scope, TEST_SCOPE.FULL);
     assert.equal(created.evaluationMode, EVALUATION_MODE.RANKED);
     assert.equal(created.paperBinding, PAPER_BINDING.FIXED);
-    assert.equal(created.maxRetakes, null);
   });
 
   /** The failure this prevents: a practice series holding a test the leaderboard then ranks. */

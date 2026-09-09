@@ -1,19 +1,22 @@
-import { BarChart3, Bell, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
+import { BarChart3, Bell, Bookmark, ClipboardList, KeyRound, Trophy, User } from 'lucide-react';
 import { type NavItem } from '@iace/app-kit';
 import { type BadgeProps } from '@iace/ui';
 import {
   ANSWER_STATE,
+  DELIVERY_CHANNEL,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
   MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
   sharedReportPath,
   type AnswerState,
+  type DeliveryChannel,
   type LanguageCode,
   type LeaderboardMeasure,
   type LeaderboardScope,
   type MasteryTrend,
   type PerformanceScope,
+  type SavedQuestionKind,
 } from '@iace/contracts';
 /** App-level string vocabularies. Cross-app ones live in `@iace/contracts`. */
 
@@ -49,7 +52,11 @@ export const ROUTES = {
   /** Public: no session, no nav, one student's own report opened by a token. */
   SHARED_REPORT_PATTERN: sharedReportPath(':token'),
   LEADERBOARD: '/leaderboard',
+  /** Both lists, tabbed: what they starred, and what they got wrong. */
+  SAVED: '/saved',
   NOTIFICATIONS: '/notifications',
+  /** Under the bell, so the trail reads Notifications > Settings and the rail stays on the bell. */
+  NOTIFICATION_SETTINGS: '/notifications/settings',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -60,8 +67,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.TESTS, label: 'Tests', icon: ClipboardList },
   { to: ROUTES.PERFORMANCE, label: 'Performance', icon: BarChart3 },
   { to: ROUTES.LEADERBOARD, label: 'Leaderboard', icon: Trophy },
+  { to: ROUTES.SAVED, label: 'Saved questions', icon: Bookmark },
   { to: ROUTES.NOTIFICATIONS, label: 'Notifications', icon: Bell },
 ];
+
+/** `AP_TS_POLICE` is read aloud as AP/TS Police — the underscore is storage, not a name. */
+export const courseLabel = (course: string) => course.replaceAll('_', '/');
 
 /** A header picker is sized to its own label; left to itself a Combobox takes the whole header. */
 export const PICKER_WIDTH = { REPORT: 'w-[26rem]', SCOPE: 'w-44' } as const;
@@ -83,6 +94,26 @@ export const UNREAD_POLL_MS = 60_000;
 
 /** One page of the bell, and the page size the header count is asked for. */
 export const NOTIFICATIONS_PAGE_SIZE = 20;
+
+/** Every channel and whether it is on, under one key: the screen reads and writes the whole set. */
+export const NOTIFICATION_PREFERENCES_QUERY_KEY = ['me', 'notification-preferences'] as const;
+
+/** What a student calls each way of being reached. `available` decides whether a row can be tuned. */
+export const CHANNEL_LABELS: Readonly<Record<DeliveryChannel, string>> = {
+  [DELIVERY_CHANNEL.IN_APP]: 'In-app',
+  [DELIVERY_CHANNEL.WEB_PUSH]: 'Push',
+  [DELIVERY_CHANNEL.WHATSAPP]: 'WhatsApp',
+  [DELIVERY_CHANNEL.EMAIL]: 'Email',
+  [DELIVERY_CHANNEL.SMS]: 'SMS',
+};
+/** One page of either saved list. The same feed shape as the bell, so the same page. */
+export const SAVED_PAGE_SIZE = 20;
+
+export const savedQueryKey = (kind: SavedQuestionKind) => ['me', 'saved', kind] as const;
+
+/** What the review reads to draw its stars — one read per sitting, not one per question. */
+export const bookmarksInAttemptQueryKey = (attemptId: string) =>
+  ['me', 'saved', 'attempts', attemptId] as const;
 
 /** One sitting's marks, and the worked solutions the gate may still be holding back. */
 export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];

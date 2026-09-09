@@ -7,6 +7,7 @@ import {
   educationEntrySchema,
   fieldDiff,
   pastExamEntrySchema,
+  type EnrolmentStanding,
   type ExamCourse,
   type Gender,
   type CreateStudentBody,
@@ -134,6 +135,25 @@ export class StudentsService {
       currentBranchId: student.currentBranchId,
       updatedAt: student.updatedAt.toISOString(),
       profile: student.profile ? await this.toProfileView(student.profile) : null,
+    };
+  }
+
+  /** Codes to catalog names for the profile screen; one whose row has gone keeps its own code. */
+  async enrolmentOf(student: {
+    programs: readonly string[];
+    enrolledExams: readonly string[];
+    currentBranchId: string | null;
+  }): Promise<EnrolmentStanding> {
+    const [programs, exams, branch] = await Promise.all([
+      this.programs.namesByCode(student.programs),
+      this.exams.namesByCode(student.enrolledExams),
+      student.currentBranchId === null ? null : this.branches.nameOf(student.currentBranchId),
+    ]);
+
+    return {
+      programs: student.programs.map((code) => ({ code, name: programs.get(code) ?? code })),
+      exams: student.enrolledExams.map((code) => ({ code, name: exams.get(code) ?? code })),
+      branch,
     };
   }
 

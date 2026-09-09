@@ -16,7 +16,6 @@ const test = (id: string): StudentCatalogTest => ({
   totalMarks: 200,
   order: 1,
   opensAt: null,
-  closesAt: null,
   attemptStatus: null,
   canStart: true,
   sittingCount: null,

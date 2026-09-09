@@ -68,6 +68,8 @@ export const announcementSummarySchema = z.object({
   title: z.string(),
   body: z.string(),
   paidChannels: z.array(announcementChannelSchema),
+  /** The filter as it was written, so the same notice can be sent again without rebuilding it. */
+  audience: announcementAudienceSchema,
   recipientCount: z.number(),
   estimatedCostPaise: z.number(),
   createdBy: z.object({ id: z.string(), fullName: z.string().nullable(), email: z.string() }),
