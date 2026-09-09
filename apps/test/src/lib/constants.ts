@@ -3,12 +3,14 @@ import { type NavItem } from '@iace/app-kit';
 import { type BadgeProps } from '@iace/ui';
 import {
   ANSWER_STATE,
+  DELIVERY_CHANNEL,
   LEADERBOARD_MEASURES,
   LEADERBOARD_SCOPES,
   MASTERY_TRENDS,
   PERFORMANCE_SCOPES,
   sharedReportPath,
   type AnswerState,
+  type DeliveryChannel,
   type LanguageCode,
   type LeaderboardMeasure,
   type LeaderboardScope,
@@ -50,6 +52,8 @@ export const ROUTES = {
   SHARED_REPORT_PATTERN: sharedReportPath(':token'),
   LEADERBOARD: '/leaderboard',
   NOTIFICATIONS: '/notifications',
+  /** Under the bell, so the trail reads Notifications > Settings and the rail stays on the bell. */
+  NOTIFICATION_SETTINGS: '/notifications/settings',
   PROFILE: '/profile',
   ACCOUNT: '/account',
   /** React Router's catch-all. */
@@ -83,6 +87,18 @@ export const UNREAD_POLL_MS = 60_000;
 
 /** One page of the bell, and the page size the header count is asked for. */
 export const NOTIFICATIONS_PAGE_SIZE = 20;
+
+/** Every channel and whether it is on, under one key: the screen reads and writes the whole set. */
+export const NOTIFICATION_PREFERENCES_QUERY_KEY = ['me', 'notification-preferences'] as const;
+
+/** What a student calls each way of being reached. `available` decides whether a row can be tuned. */
+export const CHANNEL_LABELS: Readonly<Record<DeliveryChannel, string>> = {
+  [DELIVERY_CHANNEL.IN_APP]: 'In-app',
+  [DELIVERY_CHANNEL.WEB_PUSH]: 'Push',
+  [DELIVERY_CHANNEL.WHATSAPP]: 'WhatsApp',
+  [DELIVERY_CHANNEL.EMAIL]: 'Email',
+  [DELIVERY_CHANNEL.SMS]: 'SMS',
+};
 
 /** One sitting's marks, and the worked solutions the gate may still be holding back. */
 export const scoreCardQueryKey = (attemptId: string) => ['me', 'attempts', attemptId, 'score-card'];
