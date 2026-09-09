@@ -17,9 +17,7 @@ import {
   type QuestionReport,
 } from '@iace/contracts';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessResolverService } from '../access';
 import { optionCountsIn } from './rollup-fold';
-import { gateFacts, solutionsAreOpen, solutionsClosedReason } from './solution-gate';
 import { topperOf, type TopperTimes } from './topper';
 import {
   paceIndexOf,
@@ -87,16 +85,9 @@ type ReportRow = Prisma.AttemptGetPayload<{ select: typeof REPORT_SELECT }>;
 
 @Injectable()
 export class QuestionReportService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly access: AccessResolverService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async forAttempt(
-    studentId: string,
-    attemptId: string,
-    now: Date = new Date(),
-  ): Promise<QuestionReport> {
+  async forAttempt(studentId: string, attemptId: string): Promise<QuestionReport> {
     const attempt = await this.prisma.attempt.findFirst({
       where: { id: attemptId, studentId },
       select: REPORT_SELECT,
@@ -106,24 +97,18 @@ export class QuestionReportService {
       throw new AppException(ErrorCodes.CONFLICT, NOT_MARKED);
     }
 
-    const facts = gateFacts(attempt, await this.access.testSchedule(attempt.testId));
-    const open = solutionsAreOpen(facts, now);
     const [cohort, paper, topper, keyed] = await Promise.all([
       this.cohortItems(attempt.testId),
       this.paperTotals(attempt.testId),
       topperOf(this.prisma, attempt.testId),
-      open ? this.keyOf(attempt.id) : Promise.resolve(new Map<string, KeyedQuestion>()),
+      this.keyOf(attempt.id),
     ]);
 
-    return this.assemble(attempt, { cohort, paper, topper, keyed, open, facts });
+    return this.assemble(attempt, { cohort, paper, topper, keyed });
   }
 
   /** The same payload the student reads, for any student the admin's branches reach. */
-  async forStudent(
-    studentId: string,
-    attemptId: string,
-    now: Date = new Date(),
-  ): Promise<QuestionReport> {
+  async forStudent(studentId: string, attemptId: string): Promise<QuestionReport> {
     const student = await this.prisma.student.findFirst({
       where: {
         id: studentId,
@@ -132,7 +117,7 @@ export class QuestionReportService {
       select: { id: true },
     });
     if (!student) throw new AppException(ErrorCodes.NOT_FOUND, NO_STUDENT);
-    return this.forAttempt(studentId, attemptId, now);
+    return this.forAttempt(studentId, attemptId);
   }
 
   private assemble(
@@ -142,8 +127,6 @@ export class QuestionReportService {
       paper: { evaluatedCount: number; sumTimeSec: number };
       topper: TopperTimes;
       keyed: ReadonlyMap<string, KeyedQuestion>;
-      open: boolean;
-      facts: Parameters<typeof solutionsClosedReason>[0];
     },
   ): QuestionReport {
     const questions = attempt.questions.map((row) =>
@@ -162,8 +145,6 @@ export class QuestionReportService {
       attemptId: attempt.id,
       testId: attempt.testId,
       testTitle: attempt.test.title,
-      solutionsOpen: held.open,
-      closedReason: held.open ? null : solutionsClosedReason(held.facts),
       cohortSize: held.paper.evaluatedCount,
       paceIndex: paceIndexOf(yourTimeSec, held.paper.sumTimeSec, held.paper.evaluatedCount),
       sections: attempt.test.baseConfig.sections,

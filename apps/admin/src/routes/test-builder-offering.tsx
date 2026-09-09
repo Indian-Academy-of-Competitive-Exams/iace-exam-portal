@@ -177,7 +177,6 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
       }
       if (changes.timing) {
         await api.admin.tests.setSchedule(detail.id, {
-          lateEntrySec: toSeconds(held.lateEntry),
           extraTimeSec: toSeconds(held.extraTime),
         });
       }
@@ -206,12 +205,9 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
     },
   });
 
-  const setField = (field: 'lateEntry' | 'extraTime', value: string) =>
-    setDraft({ ...held, [field]: value });
+  const setField = (field: 'extraTime', value: string) => setDraft({ ...held, [field]: value });
 
-  // A cap counted from an opening cannot outlive it, so clearing one clears the other.
-  const setOpensAt = (opensAt: string) =>
-    setDraft({ ...held, opensAt, ...(opensAt === '' ? { lateEntry: '' } : {}) });
+  const setOpensAt = (opensAt: string) => setDraft({ ...held, opensAt });
 
   const setProgram = (programCode: string, opensAt: string) =>
     setDraft({
@@ -241,8 +237,6 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
     );
   }
 
-  // Late entry is counted from the opening, so the server refuses one without it.
-  const hasAnOpening = held.opensAt !== '';
   const ranked = allowsCohortScheduling(detail.evaluationMode);
 
   return (
@@ -266,35 +260,16 @@ export function ScheduleStep({ detail }: Readonly<{ detail: TestDetail }>) {
         </Field>
 
         {ranked ? (
-          <>
-            <Field
-              htmlFor="test-late-entry"
-              label="Late entry (minutes)"
-              className="w-44"
-              /* ui-copy-ok: rule */ hint="Counted from the opening, so the test needs one."
-            >
-              {(control) => (
-                <NumericInput
-                  {...control}
-                  placeholder="None"
-                  disabled={!hasAnOpening}
-                  value={held.lateEntry}
-                  onChange={(event) => setField('lateEntry', digitsOnly(event.target.value))}
-                />
-              )}
-            </Field>
-
-            <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
-              {(control) => (
-                <NumericInput
-                  {...control}
-                  placeholder="None"
-                  value={held.extraTime}
-                  onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
-                />
-              )}
-            </Field>
-          </>
+          <Field htmlFor="test-extra-time" label="Extra time (minutes)" className="w-44">
+            {(control) => (
+              <NumericInput
+                {...control}
+                placeholder="None"
+                value={held.extraTime}
+                onChange={(event) => setField('extraTime', digitsOnly(event.target.value))}
+              />
+            )}
+          </Field>
         ) : null}
       </div>
 

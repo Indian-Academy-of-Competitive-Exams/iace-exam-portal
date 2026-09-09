@@ -333,39 +333,28 @@ describe('OfferingService — a series and the tests it holds', () => {
 describe('OfferingService — the test carries its own clock', () => {
   const opened = () => makeTest({ id: 'tst_1', opensAt: OPENS_AT });
 
-  it('stores late entry and extra time on the test itself, in seconds', async () => {
+  it('stores extra time on the test itself, in seconds', async () => {
     const { service, prisma } = serviceWith(opened());
 
-    const saved = await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
+    const saved = await service.setSchedule('tst_1', { extraTimeSec: 600 });
 
-    assert.deepEqual(saved, { lateEntrySec: 1800, extraTimeSec: 600 });
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+    assert.deepEqual(saved, { extraTimeSec: 600 });
+    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
   });
 
   /** The failure this prevents: the old writer went through the branches, so none meant no write. */
   it('stores the clock of a test no branch reaches', async () => {
     const { service, prisma } = serviceWith(opened());
 
-    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 900 });
+    await service.setSchedule('tst_1', { extraTimeSec: 900 });
 
     assert.equal(prisma.tests[0]?.extraTimeSec, 900);
-  });
-
-  /** The failure this prevents: a cap counted from nothing would silently never close entry. */
-  it('refuses late entry on a test with no opening', async () => {
-    const { service, prisma } = serviceWith();
-
-    await assert.rejects(
-      () => service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: null }),
-      AppException.is,
-    );
-    assert.equal(prisma.tests[0]?.lateEntrySec, null);
   });
 
   it('takes extra time on a test with no opening, which needs nothing to count from', async () => {
     const { service, prisma } = serviceWith();
 
-    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 300 });
+    await service.setSchedule('tst_1', { extraTimeSec: 300 });
 
     assert.equal(prisma.tests[0]?.extraTimeSec, 300);
   });
@@ -378,42 +367,31 @@ describe('OfferingService — a practice test opens at its time and never shuts'
   const refusedField = (field: string) => (error: unknown) =>
     AppException.is(error) && error.fieldErrors?.[field] !== undefined;
 
-  /** The failure this prevents: a cutoff shutting entry to a paper no rank ever reads. */
-  it('refuses late entry on a practice test, under the field that carries it', async () => {
-    const { service, prisma } = serviceWith(practice());
-
-    await assert.rejects(
-      () => service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: null }),
-      refusedField('lateEntrySec'),
-    );
-    assert.equal(prisma.tests[0]?.lateEntrySec, null);
-  });
-
   /** The failure this prevents: an allowance compensating for a rank a practice sitting never enters. */
   it('refuses extra time on a practice test, under the field that carries it', async () => {
     const { service, prisma } = serviceWith(practice());
 
     await assert.rejects(
-      () => service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: 600 }),
+      () => service.setSchedule('tst_1', { extraTimeSec: 600 }),
       refusedField('extraTimeSec'),
     );
     assert.equal(prisma.tests[0]?.extraTimeSec, null);
   });
 
-  it('still takes a schedule that asks for neither', async () => {
+  it('still takes a schedule that asks for none', async () => {
     const { service, prisma } = serviceWith(practice());
 
-    await service.setSchedule('tst_1', { lateEntrySec: null, extraTimeSec: null });
+    await service.setSchedule('tst_1', { extraTimeSec: null });
 
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [null, null]);
+    assert.equal(prisma.tests[0]?.extraTimeSec, null);
   });
 
-  it('leaves a ranked test able to carry both', async () => {
+  it('leaves a ranked test able to carry it', async () => {
     const { service, prisma } = serviceWith(makeTest({ id: 'tst_1', opensAt: OPENS_AT }));
 
-    await service.setSchedule('tst_1', { lateEntrySec: 1800, extraTimeSec: 600 });
+    await service.setSchedule('tst_1', { extraTimeSec: 600 });
 
-    assert.deepEqual([prisma.tests[0]?.lateEntrySec, prisma.tests[0]?.extraTimeSec], [1800, 600]);
+    assert.equal(prisma.tests[0]?.extraTimeSec, 600);
   });
 
   /** The failure this prevents: one cohort put ahead of another on a paper that ranks neither. */

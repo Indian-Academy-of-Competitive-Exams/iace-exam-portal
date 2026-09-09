@@ -491,8 +491,6 @@ export const testDetailSchema = testSchema.extend({
   seriesOrder: z.number().int().nullable(),
   /** When this test opens. Null opens with the series it sits in. */
   opensAt: z.string().nullable(),
-  /** Seconds after `opensAt` a student may still begin. Null is any time it is open. */
-  lateEntrySec: z.number().int().nullable(),
   /** Seconds added to every sitting's clock. Null is the duration its section gives everyone. */
   extraTimeSec: z.number().int().nullable(),
   /** Per-program staggers on top of `opensAt`. Empty is no program-specific delay. */
@@ -728,9 +726,8 @@ export const setProgramUnlockSchema = z.object({ opensAt: z.iso.datetime() });
 export type SetProgramUnlockInput = z.input<typeof setProgramUnlockSchema>;
 export type SetProgramUnlockBody = z.infer<typeof setProgramUnlockSchema>;
 
-/** The test's own clock. Both null is the plain rules: start any time it is open, on its duration. */
+/** The test's own clock. Null is the plain rule: sit it any time after it opens, on its duration. */
 export const testScheduleSchema = z.object({
-  lateEntrySec: z.number().int().min(0).nullable(),
   extraTimeSec: z.number().int().min(0).nullable(),
 });
 export type TestScheduleInput = z.input<typeof testScheduleSchema>;

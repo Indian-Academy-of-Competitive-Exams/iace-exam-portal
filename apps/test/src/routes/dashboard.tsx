@@ -89,7 +89,7 @@ export function DashboardPage() {
   });
 
   const now = new Date();
-  const waiting = waitingOn(sittablesOf(catalog.data?.series ?? [], now));
+  const waiting = waitingOn(sittablesOf(catalog.data?.series ?? []));
   const recent = newestFirst(trend.data?.points ?? []).slice(0, RECENT_RESULTS);
 
   return (
@@ -387,11 +387,10 @@ const resultLine = (point: PerformancePoint) =>
     .join(' · ');
 
 function whenLine(row: Sittable, now: Date): string | null {
-  const { opensAt, closesAt } = row.test;
-  if (opensAt !== null && Date.parse(opensAt) > now.getTime()) {
-    return `opens ${WHEN_EXACT.format(new Date(opensAt))}`;
-  }
-  return closesAt === null ? null : `closes ${WHEN_EXACT.format(new Date(closesAt))}`;
+  const { opensAt } = row.test;
+  if (opensAt === null || Date.parse(opensAt) <= now.getTime()) return null;
+
+  return `opens ${WHEN_EXACT.format(new Date(opensAt))}`;
 }
 
 function greetingFor(now: Date, name: string | null | undefined): string {

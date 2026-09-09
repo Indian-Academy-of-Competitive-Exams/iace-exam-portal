@@ -152,11 +152,6 @@ function Notices({ notices }: Readonly<{ notices: readonly string[] }>) {
 /** Each one is a CONSEQUENCE the figures cannot show: what can still move it, and what it misses. */
 function noticesFor(card: ScoreCard): string[] {
   const notices: string[] = [];
-  if (card.provisional) {
-    notices.push(
-      'This standing can still move: others can still sit this test. It settles once the test has closed for everyone.',
-    );
-  }
   if (!card.isGraded) {
     notices.push('This was a retake, so it is marked but it does not carry a rank.');
   }

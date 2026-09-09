@@ -1026,10 +1026,6 @@ export const questionReportSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
   testTitle: z.string().nullable(),
-  /** True once the key may be shown. The gated fields above are populated only then. */
-  solutionsOpen: z.boolean(),
-  /** What to say while it is shut, in the Solution Report's own words. Null once open. */
-  closedReason: z.string().nullable(),
   /** Sittings behind the cohort columns. Zero means no rollup has run, not an empty cohort. */
   cohortSize: z.number().int(),
   /** This paper's time against the cohort's average: above 1 is slower, below 1 is faster. */

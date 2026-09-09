@@ -23,8 +23,6 @@ import {
 
 const STUDENT = 'stu_1';
 const STARTED = new Date('2026-09-01T05:00:00.000Z');
-const NOW = new Date('2026-09-01T12:00:00.000Z');
-const HOUR = 3_600_000;
 
 const RIGHT = 'o_right';
 const WORKING = 'Because 7 × 6 is 42.';
@@ -86,11 +84,7 @@ function scored(over: Partial<FakeAttemptRow> = {}): FakeAttemptRow {
   });
 }
 
-function bench(
-  attempt: FakeAttemptRow,
-  schedule: { closesAt: string | null; extraTimeSec: number },
-  shape: FakeScoredTest = SHAPE,
-) {
+function bench(attempt: FakeAttemptRow, shape: FakeScoredTest = SHAPE) {
   const prisma = new FakeScoringPrisma([attempt], served(), shape);
   const redis = new FakeRedis();
   const leaderboard = new LeaderboardService(
@@ -98,31 +92,21 @@ function bench(
     redis.asService(),
     new FakeQueue().asQueue(),
   );
-  const access = { testSchedule: () => Promise.resolve(schedule) } as never;
   const storage = new FakeStorage();
   return {
     prisma,
     storage,
-    service: new AttemptReportService(prisma.asService(), access, leaderboard, storage as never),
+    service: new AttemptReportService(prisma.asService(), leaderboard, storage as never),
   };
 }
 
 const review = (...args: Parameters<typeof bench>) => bench(...args).service;
 
-const CLOSED_LONG_AGO = {
-  closesAt: new Date(NOW.getTime() - 4 * HOUR).toISOString(),
-  extraTimeSec: 0,
-};
-const STILL_OPEN = {
-  closesAt: new Date(NOW.getTime() + HOUR).toISOString(),
-  extraTimeSec: 0,
-};
-
 describe('the Solution Report', () => {
   it('serves the right answer and the working once the test has closed for everyone', async () => {
     const attempt = scored();
 
-    const report = await review(attempt, CLOSED_LONG_AGO).solutions(STUDENT, attempt.id, NOW);
+    const report = await review(attempt).solutions(STUDENT, attempt.id);
     const missed = report.questions[0];
 
     assert.equal(missed?.options.find((option) => option.isCorrect)?.id, RIGHT);
@@ -132,15 +116,15 @@ describe('the Solution Report', () => {
     assert.ok(JSON.stringify(missed?.content).includes(WORKING), 'the working must be shown');
   });
 
-  /** The failure this prevents: one student reading the key while another is still writing. */
-  it('refuses while the test can still be sat, without ever having fetched the key', async () => {
-    const attempt = scored();
-    const { prisma, service } = bench(attempt, STILL_OPEN);
+  /** The failure this prevents: a refusal that had already loaded the key it was refusing. */
+  it('refuses an unmarked sitting without ever having fetched the key', async () => {
+    const attempt = scored({ status: ATTEMPT_STATUS.SUBMITTED, score: null });
+    const { prisma, service } = bench(attempt);
 
     await assert.rejects(
-      () => service.solutions(STUDENT, attempt.id, NOW),
+      () => service.solutions(STUDENT, attempt.id),
       (error: AppException) => {
-        assert.equal(error.code, ErrorCodes.FORBIDDEN);
+        assert.equal(error.code, ErrorCodes.CONFLICT);
         const thrown = JSON.stringify({ ...error, message: error.message });
         assert.ok(!thrown.includes(RIGHT), 'the refusal must not carry the correct option');
         assert.ok(!thrown.includes(WORKING), 'the refusal must not carry the working');
@@ -148,7 +132,7 @@ describe('the Solution Report', () => {
       },
     );
 
-    // One read is the gate's. A second would be the one that loads the key.
+    // One read is the status check's. A second would be the one that loads the key.
     assert.equal(prisma.reads, 1);
   });
 
@@ -156,11 +140,7 @@ describe('the Solution Report', () => {
     const attempt = scored({ shuffleSeed: 12345 });
     const shuffled = makeScoredTest({ ...SHAPE, shuffleOptions: true });
 
-    const report = await review(attempt, CLOSED_LONG_AGO, shuffled).solutions(
-      STUDENT,
-      attempt.id,
-      NOW,
-    );
+    const report = await review(attempt, shuffled).solutions(STUDENT, attempt.id);
 
     // Whatever the order, the pair is intact: their answer and the right one are both in it.
     const ids = report.questions[0]?.options.map((option) => option.id) ?? [];
@@ -169,53 +149,42 @@ describe('the Solution Report', () => {
 
   it('keeps only the languages the sitting was taken in, and signs the images in them', async () => {
     const attempt = scored({ languages: ['EN'] });
-    const { storage, service } = bench(attempt, CLOSED_LONG_AGO);
+    const { storage, service } = bench(attempt);
     await storage.upload('figures/x.png', Buffer.from('png'));
 
-    const report = await service.solutions(STUDENT, attempt.id, NOW);
+    const report = await service.solutions(STUDENT, attempt.id);
     const shown = JSON.stringify(report.questions[0]);
 
     assert.ok(shown.includes('What is 7'), 'the English stem must be there');
     assert.ok(!shown.includes('saat guna chhah'), 'a language nobody sat must not be');
   });
 
-  it('serves a practice paper the moment it is marked, whatever the schedule says', async () => {
+  it('serves a practice paper the moment it is marked', async () => {
     const attempt = scored();
     const practice = makeScoredTest({
       ...SHAPE,
       evaluationMode: EVALUATION_MODE.PRACTICE,
     });
 
-    const report = await review(attempt, STILL_OPEN, practice).solutions(STUDENT, attempt.id, NOW);
+    const report = await review(attempt, practice).solutions(STUDENT, attempt.id);
 
-    assert.equal(report.openedAt, null);
     assert.equal(report.questions[0]?.options.find((option) => option.isCorrect)?.id, RIGHT);
   });
 
-  /** The institute caps no ranked test, so this is the ordinary path, not a corner of it. */
-  it('serves a paper nobody has capped entry on, off the student’s own evaluated sitting', async () => {
+  /** Nothing shuts a test, so the student's own marked sitting is the whole of the gate. */
+  it('serves the key off the student’s own evaluated sitting', async () => {
     const attempt = scored();
-    const uncapped = { closesAt: null, extraTimeSec: 0 };
 
-    const report = await review(attempt, uncapped).solutions(STUDENT, attempt.id, NOW);
+    const report = await review(attempt).solutions(STUDENT, attempt.id);
 
     assert.equal(report.attemptId, attempt.id);
-    assert.equal(report.openedAt, null, 'there is no instant to name, and none is invented');
   });
 
-  it('names the instant the key opened, so a screen can say when it did', async () => {
-    const attempt = scored();
-
-    const report = await review(attempt, CLOSED_LONG_AGO).solutions(STUDENT, attempt.id, NOW);
-
-    assert.equal(report.openedAt, new Date(NOW.getTime() - 3 * HOUR).toISOString());
-  });
-
-  it('refuses a paper nobody has marked yet, before the gate is even consulted', async () => {
+  it('refuses a paper nobody has marked yet', async () => {
     const attempt = scored({ status: ATTEMPT_STATUS.SUBMITTED, score: null });
 
     await assert.rejects(
-      () => review(attempt, CLOSED_LONG_AGO).solutions(STUDENT, attempt.id, NOW),
+      () => review(attempt).solutions(STUDENT, attempt.id),
       (error: AppException) => error.code === ErrorCodes.CONFLICT,
     );
   });
@@ -224,7 +193,7 @@ describe('the Solution Report', () => {
     const attempt = scored();
 
     await assert.rejects(
-      () => review(attempt, CLOSED_LONG_AGO).solutions('stu_someone_else', attempt.id, NOW),
+      () => review(attempt).solutions('stu_someone_else', attempt.id),
       (error: AppException) => error.code === ErrorCodes.NOT_FOUND,
     );
   });

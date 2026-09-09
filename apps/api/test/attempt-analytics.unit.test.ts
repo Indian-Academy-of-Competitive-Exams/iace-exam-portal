@@ -244,18 +244,12 @@ function bench() {
     redis.asService(),
     new FakeQueue().asQueue(),
   );
-  const access = { testSchedule: () => Promise.resolve(null) } as never;
   return {
     prisma,
     leaderboard,
     mine,
     rival,
-    service: new AttemptReportService(
-      prisma.asService(),
-      access,
-      leaderboard,
-      new FakeStorage() as never,
-    ),
+    service: new AttemptReportService(prisma.asService(), leaderboard, new FakeStorage() as never),
   };
 }
 

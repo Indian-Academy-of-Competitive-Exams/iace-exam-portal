@@ -268,11 +268,12 @@ describe('AccessResolverService — a blocked student', () => {
 });
 
 describe('AccessResolverService — when a test opens', () => {
-  const testAt = async (opensAt: Date | null, lateEntrySec: number | null = null) =>
+  const testAt = async (opensAt: Date | null) =>
     (
-      await build(
-        reachable({ tests: [testIn('tst_1', 1, { opensAt, lateEntrySec })] }),
-      ).resolver.catalog('stu_1', NOW)
+      await build(reachable({ tests: [testIn('tst_1', 1, { opensAt })] })).resolver.catalog(
+        'stu_1',
+        NOW,
+      )
     ).series[0]?.tests[0];
 
   it('is listed but not startable before it opens', async () => {
@@ -295,27 +296,13 @@ describe('AccessResolverService — when a test opens', () => {
     const test = await testAt(null);
 
     assert.equal(test?.canStart, true);
-    assert.deepEqual([test?.opensAt, test?.closesAt], [null, null]);
+    assert.equal(test?.opensAt, null);
   });
 
-  it('shuts again once the late-entry cutoff has passed', async () => {
-    const test = await testAt(new Date('2026-06-01T09:00:00.000Z'), 30 * 60);
+  /** The guarantee the model rests on: an opened test stays startable however long ago it opened. */
+  it('stays startable long after it opened, because nothing shuts it', async () => {
+    const test = await testAt(new Date('2020-01-01T00:00:00.000Z'));
 
-    assert.equal(test?.closesAt, '2026-06-01T09:30:00.000Z');
-    assert.equal(test?.canStart, false);
-  });
-
-  it('is still startable inside the cutoff', async () => {
-    const opened = new Date(NOW.getTime() - 60 * 1000);
-
-    assert.equal((await testAt(opened, 30 * 60))?.canStart, true);
-  });
-
-  /** A cutoff counted from nothing must not shut a test that was never scheduled. */
-  it('ignores a cutoff on a test with no opening time', async () => {
-    const test = await testAt(null, 30 * 60);
-
-    assert.equal(test?.closesAt, null);
     assert.equal(test?.canStart, true);
   });
 });
@@ -365,15 +352,6 @@ describe('AccessResolverService — when a test opens for one program', () => {
 
     assert.equal(both?.opensAt, EARLIER.toISOString());
   });
-
-  /** A program cohort gets a LONGER window, never a shifted one: entry shuts once, for everyone. */
-  it('shares one closing time across every cohort', async () => {
-    const holder = await seenBy([PROGRAM], [early]);
-    const outsider = await seenBy([], [early]);
-
-    assert.equal(holder?.closesAt, '2026-07-01T01:00:00.000Z');
-    assert.equal(outsider?.closesAt, holder?.closesAt);
-  });
 });
 
 describe('AccessResolverService.testSchedule', () => {
@@ -382,35 +360,29 @@ describe('AccessResolverService.testSchedule', () => {
       'tst_1',
     );
 
-  it('shuts entry at the test’s own late-entry cutoff', async () => {
+  it('carries the allowance the test grants every sitting', async () => {
     const schedule = await scheduleOf({
       testSeriesId: 'srs_1',
       opensAt: new Date('2026-06-01T09:00:00.000Z'),
-      lateEntrySec: 30 * 60,
       extraTimeSec: 300,
     });
 
-    assert.deepEqual(schedule, { closesAt: '2026-06-01T09:30:00.000Z', extraTimeSec: 300 });
+    assert.deepEqual(schedule, { extraTimeSec: 300 });
   });
 
-  /** The failure this prevents: a test with no cutoff reading as one whose entry has closed. */
-  it('leaves a test with no cutoff open to enter', async () => {
-    assert.deepEqual(await scheduleOf({ testSeriesId: 'srs_1' }), {
-      closesAt: null,
-      extraTimeSec: 0,
-    });
+  it('reads no allowance as none, never as undefined', async () => {
+    assert.deepEqual(await scheduleOf({ testSeriesId: 'srs_1' }), { extraTimeSec: 0 });
   });
 });
 
 describe('AccessResolverService — what the paper is', () => {
-  /** THE failure this prevents: a shut window must not blank out what the paper itself is. */
-  it('reports duration, questions and marks though the window has shut', async () => {
+  /** THE failure this prevents: an unstartable test must not blank out what the paper itself is. */
+  it('reports duration, questions and marks though it cannot be started yet', async () => {
     const { resolver } = build(
       reachable({
         tests: [
           testIn('tst_1', 1, {
-            opensAt: new Date('2026-05-01T00:00:00.000Z'),
-            lateEntrySec: HOUR_SEC,
+            opensAt: new Date('2027-05-01T00:00:00.000Z'),
             durationSec: 5400,
             totalQuestions: 90,
             totalMarks: 180,

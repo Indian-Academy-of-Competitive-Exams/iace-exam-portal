@@ -84,7 +84,7 @@ export function TestsPage() {
     .filter((row) => course === ANY_FAMILY || row.examStage?.course === course)
     .filter((row) => chosenSeries === ANY_FAMILY || row.id === chosenSeries);
   const rows = inState(
-    matching(sittablesOf(series, now), filters.values.q),
+    matching(sittablesOf(series), filters.values.q),
     filters.values.state || ANY_FAMILY,
   );
   const emptiness = emptyReason(reaches.length, rows.length);
@@ -192,7 +192,6 @@ const STATE_ITEMS = [
   { value: TEST_BUCKET.OPEN, label: 'Open now' },
   { value: TEST_BUCKET.LATER, label: 'Scheduled' },
   { value: TEST_BUCKET.DONE, label: 'Done' },
-  { value: TEST_BUCKET.MISSED, label: 'Entry closed' },
 ] as const;
 
 const inState = (rows: readonly Sittable[], state: string) =>

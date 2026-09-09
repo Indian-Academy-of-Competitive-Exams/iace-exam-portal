@@ -13,7 +13,6 @@ import {
   TEST_STATUS,
   type TestSeriesKind,
   testIsOpen,
-  testWindow,
   scopedSections,
   scopedDurationSec,
   type TestScopeRef,
@@ -44,7 +43,6 @@ const catalogInclude = (programs: string[]) =>
         title: true,
         seriesOrder: true,
         opensAt: true,
-        lateEntrySec: true,
         extraTimeSec: true,
         scope: true,
         scopeRef: true,
@@ -82,9 +80,8 @@ interface ResolvedTest {
   totalQuestions: number;
   totalMarks: number;
   order: number | null;
-  /** The window, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
+  /** The opening, resolved once. `canStart` is derived from the CLOCK on every read, never cached. */
   opensAt: string | null;
-  closesAt: string | null;
   /** Where this student got to. Cached, and busted when a sitting starts or ends. */
   attemptStatus: AttemptStatus | null;
   /** This test's, in seconds, so the deadline is computed from one duration and not two. */
@@ -103,16 +100,14 @@ interface ResolvedSeries {
   tests: ResolvedTest[];
 }
 
-/** How a test is offered institute-wide. `closesAt` null means somebody can always still enter. */
+/** How a test is offered institute-wide. Nothing shuts it, so only the allowance is left. */
 export interface TestSchedule {
-  closesAt: string | null;
   extraTimeSec: number;
 }
 
-/** When one test opens and shuts FOR THIS STUDENT, and what the test adds to the clock. */
+/** When one test opens FOR THIS STUDENT, and what the test adds to the clock. */
 export interface StudentTestWindow {
   opensAt: string | null;
-  closesAt: string | null;
   extraTimeSec: number | null;
 }
 
@@ -186,15 +181,11 @@ export class AccessResolverService {
   async testSchedule(testId: string): Promise<TestSchedule> {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },
-      select: { opensAt: true, lateEntrySec: true, extraTimeSec: true },
+      select: { extraTimeSec: true },
     });
     if (test === null) throw new AppException(ErrorCodes.NOT_FOUND, 'No such test');
 
-    const { closesAt } = testWindow({
-      unlockAt: test.opensAt?.toISOString() ?? null,
-      lateEntrySec: test.lateEntrySec,
-    });
-    return { closesAt, extraTimeSec: test.extraTimeSec ?? 0 };
+    return { extraTimeSec: test.extraTimeSec ?? 0 };
   }
 
   /** This student's window on one test, as the catalog resolved it. Null when they cannot reach it. */
@@ -202,7 +193,7 @@ export class AccessResolverService {
     const resolved = await this.resolved(studentId);
     const test = resolved.series.flatMap((series) => series.tests).find((row) => row.id === testId);
     if (!test) return null;
-    return { opensAt: test.opensAt, closesAt: test.closesAt, extraTimeSec: test.extraTimeSec };
+    return { opensAt: test.opensAt, extraTimeSec: test.extraTimeSec };
   }
 
   async invalidateStudent(studentId: string): Promise<void> {
@@ -347,11 +338,6 @@ function toResolvedTest(
   test: CatalogRow['tests'][number],
   sittings: ReadonlyMap<string, AttemptStatus>,
 ): ResolvedTest {
-  // From the test's OWN opening, so a program cohort gets a longer window and not a shifted one.
-  const { closesAt } = testWindow({
-    unlockAt: test.opensAt?.toISOString() ?? null,
-    lateEntrySec: test.lateEntrySec,
-  });
   const scoped = scopedSections(
     test.baseConfig.sections,
     test.scope,
@@ -374,7 +360,6 @@ function toResolvedTest(
     ),
     order: test.seriesOrder,
     opensAt: opensFor(test)?.toISOString() ?? null,
-    closesAt,
     attemptStatus: sittings.get(test.id) ?? null,
     extraTimeSec: test.extraTimeSec,
   };
@@ -404,18 +389,13 @@ const NONE_WAITING = -1;
 function projectTest(test: ResolvedTest, reachable: boolean, now: Date): StudentCatalogTest {
   const { extraTimeSec: _extraTimeSec, ...shown } = test;
   // A sat test stays startable: `maxRetakes` decides whether it may be sat again, not this.
-  return { ...shown, canStart: reachable && testIsOpen(test, now), sittingCount: null };
+  return { ...shown, canStart: reachable && testIsOpen(test.opensAt, now), sittingCount: null };
 }
 
-/** Why a sitting may not begin: a shut window is a different fact from having no access at all. */
+/** Why a sitting may not begin: not open YET is a different fact from having no access at all. */
 function refusalFor(test: StudentCatalogTest | undefined, now: Date): string {
-  const at = now.getTime();
-  if (test && test.opensAt !== null && Date.parse(test.opensAt) > at) {
-    return 'This test has not opened yet';
-  }
-  if (test && test.closesAt !== null && Date.parse(test.closesAt) <= at) {
-    return 'Entry to this test has closed';
-  }
+  if (test && !testIsOpen(test.opensAt, now)) return 'This test has not opened yet';
+
   return 'This test is not open to you right now';
 }
 

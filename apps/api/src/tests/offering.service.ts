@@ -79,32 +79,15 @@ function assertOpensNoLaterThanTheTest(testOpensAt: Date | null, opensAt: Date):
   });
 }
 
-const LATE_ENTRY_NEEDS_AN_OPENING =
-  'Late entry is counted from the moment the test opens, and this test has no opening time. Give it one, or leave late entry blank.';
-
-/** Without an opening there is nothing to count from, so a cap would silently never close entry. */
-function assertLateEntryHasAnOpening(opensAt: Date | null, lateEntrySec: number | null): void {
-  if (lateEntrySec === null || opensAt !== null) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, LATE_ENTRY_NEEDS_AN_OPENING, {
-    fieldErrors: { lateEntrySec: [LATE_ENTRY_NEEDS_AN_OPENING] },
-  });
-}
-
-const WINDOW_IS_RANKED_ONLY =
-  'A practice test opens at its time and never shuts, so it takes no late entry and no extra time. Make this test ranked, or leave both blank.';
+const EXTRA_TIME_IS_RANKED_ONLY =
+  'Extra time is an allowance against a rank, and this test is practice. Make it ranked, or leave extra time blank.';
 
 /** The CHECK on the table in service form, so the admin reads a sentence and not a driver error. */
 function assertWindowIsRanked(evaluationMode: EvaluationMode, input: TestSchedule): void {
-  if (allowsCohortScheduling(evaluationMode)) return;
+  if (allowsCohortScheduling(evaluationMode) || input.extraTimeSec === null) return;
 
-  const refused = (['lateEntrySec', 'extraTimeSec'] as const).filter(
-    (field) => input[field] !== null,
-  );
-  if (refused.length === 0) return;
-
-  throw new AppException(ErrorCodes.VALIDATION_ERROR, WINDOW_IS_RANKED_ONLY, {
-    fieldErrors: Object.fromEntries(refused.map((field) => [field, [WINDOW_IS_RANKED_ONLY]])),
+  throw new AppException(ErrorCodes.VALIDATION_ERROR, EXTRA_TIME_IS_RANKED_ONLY, {
+    fieldErrors: { extraTimeSec: [EXTRA_TIME_IS_RANKED_ONLY] },
   });
 }
 
@@ -284,7 +267,6 @@ export class OfferingService {
   async setSchedule(testId: string, input: TestSchedule): Promise<TestSchedule> {
     const test = await this.requireTest(testId);
     assertWindowIsRanked(test.evaluationMode, input);
-    assertLateEntryHasAnOpening(test.opensAt, input.lateEntrySec);
 
     await this.prisma.test.update({ where: { id: testId }, data: input });
 
